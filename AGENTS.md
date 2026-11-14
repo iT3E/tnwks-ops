@@ -305,8 +305,11 @@ and `task aws:ra-profile`; see
 
 ### Talos
 
-`talos/wsl/cluster-config.yaml` is a `--config-patch` consumed by
-`talosctl cluster create docker`. `talos/ms-01/{controlplane,worker}.yaml`
+`01-talos-bootstrap.yml` gives `talosctl cluster create docker` the patches
+that `talos_clusters` lists, in the multi-document form. `homelab-wsl`'s live
+node keeps its v1alpha1 files (`talos/wsl/cluster-config.yaml` and
+`talos/wsl/patches/`) for `talosctl patch mc` until its conversion
+(`talos/README.md`). `talos/ms-01/{controlplane,worker}.yaml`
 plus `talos/ms-01/patches/` are applied with `talosctl apply-config`.
 
 ## Conventions
@@ -349,8 +352,10 @@ comments, reviews and review comments.
 - Use neutral keys (`adult1`, `kid1`) in IDs. Real display names go in a
   SOPS Secret and reach the app at runtime (Home Assistant: `!env_var`).
 - `bin/privacy-check` (`task privacy:check`) checks a denylist kept in
-  `.github/privacy-terms.sops.yaml`. After editing the list
-  (`task privacy:edit`), run `task privacy:sync`.
+  `.github/privacy-terms.sops.yaml`. Edit it with `task privacy:edit`: when
+  the list changed, it copies it to the `PRIVACY_TERMS` secret of every
+  repository that has one (CI checks against those). If that copy fails,
+  `task privacy:sync` retries it.
   - Commits: `task precommit:init` installs a pre-commit hook (staged files
     and git identity) and a commit-msg hook (the message).
   - PRs: `.github/workflows/privacy.yaml` (required) checks the tree, the

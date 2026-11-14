@@ -1,5 +1,6 @@
-"""The audit policy of each cluster (talos/<cluster>/patches/audit-policy.yaml) keeps
-what talos/README.md says it keeps.
+"""The audit policy of each cluster (talos/<cluster>/patches/audit-policy*.yaml) keeps
+what talos/README.md says it keeps. homelab-wsl has two files: the v1alpha1 form for its
+live node, and the multi-document form for a new cluster. Each file has the same rules.
 
 The API server takes the first rule that matches a request. `level_of` below does
 the same for the fields that the policy uses, so a sample request gets the level
@@ -11,7 +12,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-FILES = sorted(ROOT.glob("talos/*/patches/audit-policy.yaml"))
+FILES = sorted(ROOT.glob("talos/*/patches/audit-policy*.yaml"))
 
 LEVELS = {"None", "Metadata", "Request", "RequestResponse"}
 STAGES = {"RequestReceived", "ResponseStarted", "ResponseComplete", "Panic"}
@@ -165,12 +166,21 @@ def test_each_cluster_has_an_audit_policy():
     assert {path.parts[-3] for path in FILES} == CLUSTERS
 
 
+def test_homelab_wsl_has_the_policy_in_both_forms():
+    forms = {}
+    for path in FILES:
+        if path.parts[-3] == "wsl":
+            documents = [d for d in yaml.safe_load_all(path.read_text()) if isinstance(d, dict)]
+            forms[path.name] = "document" if any(d.get("kind") == "KubeAuditPolicyConfig" for d in documents) else "v1alpha1"
+    assert forms == {"audit-policy.yaml": "v1alpha1", "audit-policy-multidoc.yaml": "document"}
+
+
 def test_each_cluster_has_the_same_policy():
     policies = [policy_of(path) for path in FILES]
     assert all(policy == policies[0] for policy in policies)
 
 
-@pytest.mark.parametrize("path", FILES, ids=lambda path: path.parts[-3])
+@pytest.mark.parametrize("path", FILES, ids=lambda path: f"{path.parts[-3]}/{path.name}")
 def test_the_policy_has_the_form_of_the_api_server(path):
     policy = policy_of(path)
     assert policy["apiVersion"] == "audit.k8s.io/v1"
@@ -186,25 +196,25 @@ def test_the_policy_has_the_form_of_the_api_server(path):
             assert isinstance(entry.get("group", ""), str)
 
 
-@pytest.mark.parametrize("path", FILES, ids=lambda path: path.parts[-3])
+@pytest.mark.parametrize("path", FILES, ids=lambda path: f"{path.parts[-3]}/{path.name}")
 def test_the_policy_writes_no_body_of_a_request(path):
     """Metadata has no body. A higher level would put the data of a Secret in the log."""
     assert {rule["level"] for rule in policy_of(path)["rules"]} <= {"None", "Metadata"}
 
 
-@pytest.mark.parametrize("path", FILES, ids=lambda path: path.parts[-3])
+@pytest.mark.parametrize("path", FILES, ids=lambda path: f"{path.parts[-3]}/{path.name}")
 @pytest.mark.parametrize("name,request_", KEPT, ids=[name for name, _ in KEPT])
 def test_the_policy_keeps(path, name, request_):
     assert level_of(policy_of(path), request_) == "Metadata", name
 
 
-@pytest.mark.parametrize("path", FILES, ids=lambda path: path.parts[-3])
+@pytest.mark.parametrize("path", FILES, ids=lambda path: f"{path.parts[-3]}/{path.name}")
 @pytest.mark.parametrize("name,request_", NOT_KEPT, ids=[name for name, _ in NOT_KEPT])
 def test_the_policy_does_not_keep(path, name, request_):
     assert level_of(policy_of(path), request_) == "None", name
 
 
-@pytest.mark.parametrize("path", FILES, ids=lambda path: path.parts[-3])
+@pytest.mark.parametrize("path", FILES, ids=lambda path: f"{path.parts[-3]}/{path.name}")
 def test_each_request_on_a_secret_is_kept_whoever_asks(path):
     policy = policy_of(path)
     for user in (KUBELET, ACCOUNT, CONTROLLERS, SCHEDULER, API_SERVER, PERSON, NOBODY):

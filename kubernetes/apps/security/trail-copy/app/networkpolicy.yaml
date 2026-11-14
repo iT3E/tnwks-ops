@@ -1,0 +1,46 @@
+---
+# The trail copy job. Out: the trail bucket by its own host name, this site's
+# Loki gateway, and DNS through Cilium's DNS proxy. Nothing else: no API
+# server, no other bucket's host name, no other namespace. Nothing calls it.
+# default-deny (../../namespace.yaml) denies the rest.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: trail-copy
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: trail-copy
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    # The bucket of the trail, in its Region (virtual-hosted style).
+    - toFQDNs:
+        - matchName: ${SECURITY_TRAIL_BUCKET}.s3.us-west-2.amazonaws.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # The gateway pods of the loki HelmRelease: the Service loki-gateway is
+    # port 80, and its pods listen on 8080.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: loki
+            app.kubernetes.io/component: gateway
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

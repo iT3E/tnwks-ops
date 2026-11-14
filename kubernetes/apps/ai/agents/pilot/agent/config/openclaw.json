@@ -16,7 +16,7 @@
   "session": {"dmScope": "per-channel-peer"},
   "tools": {
     "elevated": {"enabled": false},
-    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway"]
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"]
   },
   "agents": {
     "defaults": {

@@ -1,0 +1,39 @@
+---
+# Only this cluster's ops runner pods (the tnwks-ops-runner-${CLUSTER_NAME}
+# scale set: ARC labels each runner pod app.kubernetes.io/component=runner
+# and actions.github.com/scale-set-name=<scale set>) and this cluster's
+# Prometheus connect to 9091, plus the host for the kubelet's probes. The
+# runner pushes (terraform.yaml's drift job), Prometheus scrapes. What a push
+# can turn into in Prometheus is limited at the scrape (the ServiceMonitor in
+# helmrelease.yaml), not here.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: pushgateway
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-pushgateway
+      app.kubernetes.io/instance: pushgateway
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: tools
+            app.kubernetes.io/component: runner
+            actions.github.com/scale-set-name: tnwks-ops-runner-${CLUSTER_NAME}
+            # Both WSL clusters are one Cilium Cluster Mesh: name this one.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "9091"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "9091"
+              protocol: TCP

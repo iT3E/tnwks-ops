@@ -3,6 +3,98 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.127.0 - 2026-11-14
+
+### Added
+
+* security: Trivy Operator 0.36.1 on homelab-wsl-02 (`kubernetes/apps/security/trivy-operator`), the source `trivy` of the security registry. It checks the workloads, the roles, the control plane pods, the controls of the CIS Kubernetes Benchmark that read the API server, and the images for vulnerabilities with a fix, one scan job at a time. The node collector is off, the images are pinned by digest, the version check and the usage data of Trivy are off, and a network policy names each registry host that a scan job can reach. The operator creates its scan jobs and reads their logs in `security` only, and a scan job runs as `nobody`
+
+## v2.126.0 - 2026-11-14
+
+### Added
+
+* security: the copy of the AWS trail on homelab-wsl-02 (`kubernetes/apps/security/trail-copy`). A CronJob copies the new files of the trail bucket to a volume every 15 minutes, keeps them 7 days, and sends each event to the Loki of the site as the stream `security_stream="cloudtrail"`, one stream for each account and Region. A file with a line that Loki refuses fails the run and is not sent again. A quiet Region is listed each 4 hours. The AWS systems of the registry have `stream` as a source, so the rule for a late result watches the trail
+
+## v2.125.0 - 2026-11-14
+
+### Changed
+
+* privacy: task privacy:edit copies the denylist to the PRIVACY_TERMS secret when the editor closes, if the list changed and still decrypts; an aborted or failed edit copies nothing. The copy goes to every repository of the account that already has the secret, found through the API (bin/privacy-terms), and names only public ones. task privacy:sync stays as the retry
+
+## v2.124.0 - 2026-11-14
+
+### Added
+
+* security: homelab-wsl-02 starts the AWS credential refresher (`kubernetes/apps/security/aws-credentials`). The cluster settings get the two Roles Anywhere profiles, the two client certificates come as SOPS Secrets that end on 2027-11-14, and the cluster lists its Flux Kustomization. Every 30 minutes it writes a 4-hour read-only session to `aws-security-audit-sts` and `aws-security-trail-sts`, and the end of each certificate to its Lease for `SecurityCertificateExpiring`
+
+## v2.123.0 - 2026-11-14
+
+### Added
+
+* ci: a nightly drift check for the Terraform roots with drift = true in domains.toml, on for the github root. terraform-drift.yaml plans main in the root's lock group on homelab-wsl's ops runner and never applies; the result goes to a new Pushgateway on homelab-wsl, and TerraformDrift (changes, or a failed check) and TerraformDriftCheckStale (no result for 30h) alert on it. The conformance check now covers every workflow that runs actions/terraform: the mask first, the root's lock, plan mode for a drift job
+
+## v2.122.0 - 2026-11-14
+
+### Added
+
+* aws: the AWS parts of the security platform in `modules/aws/security`, called by the prod root. An organization trail in the management account (management events, every Region, log file validation) writes to a private bucket in the prod account that deletes each object after 90 days. Two read-only IAM Roles Anywhere roles, each for one certificate CN: an audit role for Prowler and a reader of the trail bucket. An audit role in the management account that the audit role of the prod account can assume. Each plan warns while an account lists another trail
+
+## v2.121.0 - 2026-11-14
+
+### Changed
+
+* talos: the patch lists of homelab-wsl name a multi-document set (patches/cluster.yaml, patches/controlplane.yaml, patches/audit-policy-multidoc.yaml), so a rebuild with the pinned Talos gets the settings of the live node's patch files, the audit policy among them. The live node keeps its v1alpha1 files for its patch commands until its conversion, and a test holds the two forms equal, field by field. The defaults that Talos 1.14 generates and an older release did not are not compared. CI now has the pinned talosctl build and validate each Docker cluster's machine configs from its lists, with throwaway secrets. A merge applies nothing to a running node
+
+## v2.120.0 - 2026-11-14
+
+### Removed
+
+* terraform: the GitHub root's import blocks for the Flux webhook and the openclaw-hooks variables (imports.tf), now that an apply has imported them; docs/operations/github.md keeps how to adopt something that already exists on GitHub
+
+### Security
+
+* ci: sops-mask.py refuses a value shorter than 6 characters, naming its file and key path. The runner masks a value of any length, also inside longer words, so a short value showed as *** in ordinary text and could be read off. The GitHub root keeps such a value in unmasked.sops.yaml, which CI decrypts but does not mask, and the docs state what the mask guarantees
+
+## v2.119.0 - 2026-11-14
+
+### Added
+
+* monitoring: homelab-wsl lists the audit reader, so the audit log of its API server is the security stream `k8s-audit` of that cluster in the Loki of homelab-wsl-02. The registry of the security platform lists the stream as a source of homelab-wsl
+
+### Changed
+
+* monitoring: the memory limit of the audit reader is 192 MiB on each cluster that lists it, up from 128 MiB. On homelab-wsl-02 the reader used 115.6 MiB at its peak while it sent its first backlog of about 880,000 lines
+
+## v2.118.0 - 2026-11-14
+
+### Added
+
+* terraform/github: the root adopts the Flux webhook of tnwks-ops and the three variables of its openclaw-hooks environment. The webhook URL and the variable values are in the new tnwks-ops.sops.yaml, which CI masks. Terraform never updates a webhook, so it cannot remove the secret of the Flux receiver. The secrets that only the owner holds stay by hand
+
+## v2.117.0 - 2026-11-14
+
+### Added
+
+* terraform: every repository of the GitHub root has archive_on_destroy, so a destroy that ever gets past prevent_destroy archives instead of deleting; the apply is one in-place update per repository that resends its current settings
+
+## v2.116.0 - 2026-11-14
+
+### Removed
+
+* terraform: the GitHub root's import blocks (imports.tf), now that the first apply has imported all 36 objects; docs/operations/github.md keeps how to adopt something that already exists on GitHub
+
+## v2.115.2 - 2026-11-14
+
+### Security
+
+* agents: the pilot denies the tool github_publish, so its outward paths rest on a written rule
+
+## v2.115.1 - 2026-11-13
+
+### Fixed
+
+* talos: the control plane patch list of each WSL cluster (controlplane_patches in talos_clusters) names its audit policy. A rebuild of homelab-wsl-02 gets the policy from the list. The patches of homelab-wsl are in the v1alpha1 form, which the pinned Talos refuses at create, so its rebuild needs them in the multi-document form first. A change under talos/ now runs CI: each file parses, and each YAML file of a cluster is in its lists or is no patch. A merge applies nothing to a running node; talos/README.md says how the policy reaches one
+
 ## v2.115.0 - 2026-11-13
 
 ### Added
