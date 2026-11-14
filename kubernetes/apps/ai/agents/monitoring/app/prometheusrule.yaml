@@ -1,8 +1,9 @@
 ---
 # The alerts of the agent platform (docs/apps/agent-platform.md, "Alerts").
-# Each one reads kube-state-metrics, except WorkflowAppDrift, which reads the
-# time of the newest `app-drift result=drift` line that the Vector
-# aggregator serves (kubernetes/apps/monitoring/vector/aggregator).
+# Most read kube-state-metrics. WorkflowAppDrift, AgentInstructionFileChanged,
+# AgentInstructionCheckStale and ModelBridgeRateLimited read the time of the
+# newest line of a kind that the Vector aggregator serves
+# (kubernetes/apps/monitoring/vector/aggregator).
 # Already covered elsewhere, so not here: a failed or late snapshot of a
 # state volume (the kopiur chart's rules, KopiurLastBackupFailed and
 # KopiurBackupStale, match each SnapshotPolicy), and a crash loop (the
@@ -198,3 +199,57 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
             summary: "The daily archive of {{ $labels.namespace }}/{{ $labels.pod }} failed, and its backup container started again."
             description: "kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c backup --previous shows the daily-backup line and the error of the backup command."
+
+        - alert: AgentInstructionFileChanged
+          # An instruction file of the workspace of a personal agent (AGENTS.md,
+          # SOUL.md, USER.md, IDENTITY.md or a file under skills/) is new,
+          # changed or gone since the day before. The backup container checks
+          # once a day (config/scripts/daily-backup.sh) and logs one
+          # `instruction-check file=<name> change=<change>` line for each.
+          # The agent can write these files, so a change it was not asked for
+          # can be an instruction it took from what it read. It fires for 20
+          # minutes after the line, as WorkflowAppDrift does.
+          expr: |
+            time() - max by (pod_namespace, result) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+", check="instruction-file"}[20m])) < 20 * 60
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "An instruction file of the agent in {{ $labels.pod_namespace }} is {{ $labels.result }} since the day before."
+            description: "The instruction-check lines in Loki ({namespace=\"{{ $labels.pod_namespace }}\", app=\"agent\"} |= \"instruction-check\") name each file; read the change in the daily archive before the agent runs on it."
+
+        - alert: AgentInstructionCheckStale
+          # No `instruction-check result=` line from the backup container of
+          # the pilot's agent pod in 26 hours: a day plus room. Only the pilot's
+          # agent pod ships its log (docs/apps/agent-platform.md, "Logs"). The
+          # check runs once a day, and not again when a new container finds
+          # the archive of the day there, so the rule waits until the backup
+          # container has run for 26 hours too.
+          expr: |
+            (time() - max by (namespace) (kube_pod_container_state_started{namespace="agents-pilot", container="backup"})) > 26 * 3600
+            unless on (namespace)
+            label_replace(max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", check="instruction-check"}[26h])), "namespace", "$1", "pod_namespace", "(.+)")
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The instruction check of the agent in {{ $labels.namespace }} has not run in 26 hours."
+            description: "kubectl -n {{ $labels.namespace }} logs deploy/agent -c backup shows the last daily-backup and instruction-check lines; a backup that waits on a gateway that is not ready logs nothing."
+
+        - alert: ModelBridgeRateLimited
+          # The model bridge in `ai` logged an engine_error line with the kind
+          # rate_limit: the limit of the Claude plan stopped a call of a trust
+          # domain. The calls of that domain fail until the limit resets. It
+          # fires for 20 minutes after the newest such line.
+          expr: |
+            time() - max by (domain) (max_over_time(homelab_model_bridge_engine_error_timestamp_seconds{kind="rate_limit"}[20m])) < 20 * 60
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The limit of the Claude plan stopped a call of the {{ $labels.domain }} trust domain."
+            description: "The engine_error lines of the bridge are in Loki ({namespace=\"ai\", app=\"model-bridge\"} |= \"engine_error\"); the calls of that trust domain fail until the limit resets."

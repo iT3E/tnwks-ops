@@ -1,0 +1,120 @@
+# The aggregator's gauges for the instruction files of an agent pod and for
+# the errors of the model bridge. Each test feeds a line made up here.
+config: kubernetes/apps/monitoring/vector/aggregator/config/vector.yaml
+tests:
+  - name: a changed instruction file becomes the check instruction-file, with no file name
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "instruction-check file=skills/example/SKILL.md change=changed"
+          timestamp: "2026-11-14T00:04:10Z"
+          kubernetes.pod_namespace: agents-pilot
+          kubernetes.pod_labels.app: agent
+    outputs:
+      - extract_from: agent_platform_results
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.check, "instruction-file")
+              assert_eq!(.result, "changed")
+              assert_eq!(.pod_namespace, "agents-pilot")
+              assert_eq!(.time, 1794614650)
+              assert_eq!(keys(.), ["app", "check", "pod_namespace", "result", "time"])
+
+  - name: the summary line of the instruction check keeps its own check
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "instruction-check result=ok files=4 changed=1 since=2026-11-13"
+          kubernetes.pod_namespace: agents-pilot
+    outputs:
+      - extract_from: agent_platform_results
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.check, "instruction-check")
+              assert_eq!(.result, "ok")
+
+  - name: an instruction line with another change word is not counted
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "instruction-check file=AGENTS.md change=renamed"
+          kubernetes.pod_namespace: agents-pilot
+    no_outputs_from:
+      - agent_platform_results
+
+  - name: a rate limit of the bridge becomes a gauge by domain and kind
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: '{"ts":"2026-11-14T03:00:00.000Z","event":"engine_error","domain":"workflows","conversation":"abc123","kind":"rate_limit"}'
+          timestamp: "2026-11-14T03:00:00Z"
+          kubernetes.pod_namespace: ai
+          kubernetes.pod_labels.app: model-bridge
+    outputs:
+      - extract_from: model_bridge_errors
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(., {"domain": "workflows", "kind": "rate_limit", "time": 1794625200})
+      - extract_from: model_bridge_error_metrics
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.name, "model_bridge_engine_error_timestamp_seconds")
+              assert_eq!(.namespace, "homelab")
+              assert_eq!(.tags, {"domain": "workflows", "kind": "rate_limit"})
+
+  - name: a kind that is not a short name goes on as other
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: '{"event":"engine_error","domain":"pilot","kind":"Some Long Text: with words"}'
+          kubernetes.pod_namespace: ai
+          kubernetes.pod_labels.app: model-bridge
+    outputs:
+      - extract_from: model_bridge_errors
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.kind, "other")
+              assert_eq!(.domain, "pilot")
+
+  - name: a call line of the bridge is not counted
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: '{"event":"call","domain":"workflows","status":200}'
+          kubernetes.pod_namespace: ai
+          kubernetes.pod_labels.app: model-bridge
+    no_outputs_from:
+      - model_bridge_errors
+
+  - name: an engine_error line of another app is not counted
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: '{"event":"engine_error","domain":"workflows","kind":"rate_limit"}'
+          kubernetes.pod_namespace: ai
+          kubernetes.pod_labels.app: litellm
+    no_outputs_from:
+      - model_bridge_errors
+
+  - name: a line of the bridge that is not JSON is not counted
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "engine_error rate_limit"
+          kubernetes.pod_namespace: ai
+          kubernetes.pod_labels.app: model-bridge
+    no_outputs_from:
+      - model_bridge_errors

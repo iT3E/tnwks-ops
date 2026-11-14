@@ -1,0 +1,96 @@
+# Cases for the alerts that read the lines the Vector aggregator turns into
+# gauges. The aggregator serves each sample with the time of its line, so a
+# series holds one sample for each line and nothing between them.
+rule_files:
+  - kubernetes/apps/ai/agents/monitoring/app/prometheusrule.yaml
+evaluation_interval: 1m
+tests:
+  - name: a changed instruction file fires for 20 minutes; an ok summary never
+    interval: 1m
+    input_series:
+      # One line at 5m.
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="instruction-file", result="changed"}
+        values: _x5 300 _x40
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="instruction-check", result="ok"}
+        values: _x5 300 _x40
+    alert_rule_test:
+      - alertname: AgentInstructionFileChanged
+        eval_time: 4m
+        exp_alerts: []
+      - alertname: AgentInstructionFileChanged
+        eval_time: 6m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-pilot, result: changed}
+      - alertname: AgentInstructionFileChanged
+        eval_time: 24m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-pilot, result: changed}
+      - alertname: AgentInstructionFileChanged
+        eval_time: 26m
+        exp_alerts: []
+
+  - name: a line re-read with an old time does not fire
+    interval: 1m
+    input_series:
+      # The line came in at 60m with the time of 10m (an agent that read a
+      # file again from its start).
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="instruction-file", result="new"}
+        values: _x60 600 _x10
+    alert_rule_test:
+      - alertname: AgentInstructionFileChanged
+        eval_time: 61m
+        exp_alerts: []
+
+  - name: no instruction check in 26 hours fires, once the container has run that long
+    # A 2m step, as kube-state-metrics is scraped often: a series with a
+    # longer step drops out between its samples.
+    interval: 2m
+    input_series:
+      # The backup container started at 0; its check lines came at 1h and
+      # 25h, then none.
+      - series: kube_pod_container_state_started{namespace="agents-pilot", pod="agent-1", container="backup"}
+        values: 0x1700
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="instruction-check", result="ok"}
+        values: _x30 3600 _x719 90000 _x900
+      # A container of another trust domain whose log does not ship.
+      - series: kube_pod_container_state_started{namespace="agents-main", pod="agent-2", container="backup"}
+        values: 0x1700
+    alert_rule_test:
+      - alertname: AgentInstructionCheckStale
+        eval_time: 50h
+        exp_alerts: []
+      - alertname: AgentInstructionCheckStale
+        eval_time: 52h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+
+  - name: a new backup container waits 26 hours before the check counts as late
+    interval: 2m
+    input_series:
+      # The pod started again at 10h; the old lines are out of the window.
+      - series: kube_pod_container_state_started{namespace="agents-pilot", pod="agent-3", container="backup"}
+        values: _x300 36000x1000
+    alert_rule_test:
+      - alertname: AgentInstructionCheckStale
+        eval_time: 35h
+        exp_alerts: []
+      - alertname: AgentInstructionCheckStale
+        eval_time: 37h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+
+  - name: a rate limit of the bridge fires for 20 minutes, for its trust domain only
+    interval: 1m
+    input_series:
+      - series: homelab_model_bridge_engine_error_timestamp_seconds{domain="workflows", kind="rate_limit"}
+        values: _x5 300 _x40
+      - series: homelab_model_bridge_engine_error_timestamp_seconds{domain="pilot", kind="success"}
+        values: _x5 300 _x40
+    alert_rule_test:
+      - alertname: ModelBridgeRateLimited
+        eval_time: 6m
+        exp_alerts:
+          - exp_labels: {severity: warning, domain: workflows}
+      - alertname: ModelBridgeRateLimited
+        eval_time: 26m
+        exp_alerts: []

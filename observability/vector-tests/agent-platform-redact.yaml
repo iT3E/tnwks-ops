@@ -1,0 +1,80 @@
+# What the Vector agent drops from the lines of the agent platform before
+# they leave the node (agent_platform_redact). Each test feeds a line made up
+# here, not one copied from a cluster.
+config: kubernetes/apps/monitoring/vector/agent/config/vector.yaml
+tests:
+  - name: the command preview of the gateway goes, with its colour codes
+    inputs:
+      - insert_at: agent_platform_redact
+        type: log
+        log_fields:
+          message: "\e[2m2026-11-14T04:47:14.504246Z\e[0m \e[32m INFO\e[0m \e[2mopenshell_server::grpc::sandbox\e[0m\e[2m:\e[0m ExecSandbox (relay): command started \e[3msandbox_id\e[0m\e[2m=\e[0m11111111-2222-3333-4444-555555555555 \e[3mcommand_len\e[0m\e[2m=\e[0m42 \e[3mstdin_len\e[0m\e[2m=\e[0m0 \e[3mcommand_preview\e[0m\e[2m=\e[0mcat /secret/file && echo private words here"
+    outputs:
+      - extract_from: agent_platform_redact
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "2026-11-14T04:47:14.504246Z  INFO openshell_server::grpc::sandbox: ExecSandbox (relay): command started sandbox_id=11111111-2222-3333-4444-555555555555 command_len=42 stdin_len=0 command_preview=(dropped)")
+              assert!(!contains(string!(.message), "private"))
+              assert!(!match(string!(.message), r'\x1b'))
+
+  - name: a preview with no colour codes goes too
+    inputs:
+      - insert_at: agent_platform_redact
+        type: log
+        log_fields:
+          message: "INFO ExecSandbox (relay): command started command_len=9 stdin_len=0 command_preview=git push origin secret-branch"
+    outputs:
+      - extract_from: agent_platform_redact
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "INFO ExecSandbox (relay): command started command_len=9 stdin_len=0 command_preview=(dropped)")
+
+  - name: the query string of a URL and of an op path goes, the path stays
+    inputs:
+      - insert_at: agent_platform_redact
+        type: log
+        log_fields:
+          message: "2026-11-14T05:00:00.000Z OCSF HTTP:GET [INFO] ALLOWED curl(42) -> GET https://api.example.com/search/issues?q=private+words&page=2 [policy:example op:/search/issues?q=private+words]"
+    outputs:
+      - extract_from: agent_platform_redact
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF HTTP:GET [INFO] ALLOWED curl(42) -> GET https://api.example.com/search/issues?(dropped) [policy:example op:/search/issues?(dropped)]")
+
+  - name: the command line of a process event goes
+    inputs:
+      - insert_at: agent_platform_redact
+        type: log
+        log_fields:
+          message: "2026-11-14T05:00:00.000Z OCSF PROC:LAUNCH [INFO] python3(42) [cmd:python3 /app/main.py --token private]"
+    outputs:
+      - extract_from: agent_platform_redact
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF PROC:LAUNCH [INFO] python3(42) [cmd:(dropped)]")
+
+  - name: a full OCSF JSON record does not ship
+    inputs:
+      - insert_at: agent_platform_redact
+        type: log
+        log_fields:
+          message: '{"class_uid":4002,"actor":{"process":{"cmd_line":"curl -H private"}}}'
+    no_outputs_from:
+      - agent_platform_redact
+
+  - name: a line with no URL, preview or command stays as it is
+    inputs:
+      - insert_at: agent_platform_redact
+        type: log
+        log_fields:
+          message: "INFO run_receiver: run run-abc1234 of renovate-reviewer: created. Ready? yes"
+    outputs:
+      - extract_from: agent_platform_redact
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "INFO run_receiver: run run-abc1234 of renovate-reviewer: created. Ready? yes")

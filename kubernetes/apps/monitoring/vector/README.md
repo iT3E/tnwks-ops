@@ -6,7 +6,7 @@ listens and what it reports about itself.
 | Part | Directory | Runs on | What it does |
 | --- | --- | --- | --- |
 | The aggregator | `aggregator/` (`ks.yaml`) | Each cluster, one pod | Takes in pod logs and the router's syslog, and writes them to the Loki of its cluster. Takes in the audit log of the API server, and writes the security streams |
-| The agent | `agent/` (`ks-agent.yaml`) | Each cluster that lists it, one pod on each node | Reads pod logs on its node and sends them to the aggregator. On the WSL clusters, Job pods only (`VECTOR_AGENT_POD_SELECTOR`), and the long-running pods of a namespace labeled `logs.home.arpa/ship=true` (the source `kubernetes_logs_opt_in`) |
+| The agent | `agent/` (`ks-agent.yaml`) | Each cluster that lists it, one pod on each node | Reads pod logs on its node and sends them to the aggregator. On the WSL clusters, Job pods only (`VECTOR_AGENT_POD_SELECTOR`), plus an allowlist: a long-running pod whose template has the label `logs.home.arpa/ship=true`, and the sandbox supervisors of a namespace labeled `logs.home.arpa/ship-supervisors=true`. It drops command previews, query strings and colour codes from those lines before they leave the node (`docs/apps/agent-platform.md`, "Logs") |
 | The audit reader | `audit-reader/` (`ks-audit-reader.yaml`) | Each cluster that lists it, one pod on the control plane node | Reads the audit log of the API server on its node and sends it to the audit source of the aggregator |
 
 The config of the aggregator is one file, `aggregator/config/vector.yaml`,
@@ -132,13 +132,20 @@ transform or the sink in `vector.yaml`.
 | `vector_buffer_discarded_events_total` | The events that the buffer of a sink dropped because it was full |
 | `vector_http_client_responses_total` | The answers that a sink got, by HTTP `status` |
 
-The sink also serves one series that is not Vector's own:
-`homelab_agent_platform_result_timestamp_seconds{pod_namespace, app, check,
-result}`, the time of the newest result line of a pod in a namespace
-`agents-*` (a line that starts with `<check> result=<result>`). The
-transforms `agent_platform_results` and `agent_platform_result_metrics` make
-it, and the alert `WorkflowAppDrift` reads it
-(`docs/apps/agent-platform.md`, "Alerts"). Each sample carries the time of
+The sink also serves two series that are not Vector's own:
+
+- `homelab_agent_platform_result_timestamp_seconds{pod_namespace, app, check,
+  result}`, the time of the newest result line of a pod in a namespace
+  `agents-*` (a line that starts with `<check> result=<result>`, or an
+  `instruction-check file=<name> change=<change>` line as the check
+  `instruction-file`). The transforms `agent_platform_results` and
+  `agent_platform_result_metrics` make it.
+- `homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}`, the
+  time of the newest `engine_error` line of the model bridge in `ai`. The
+  transforms `model_bridge_errors` and `model_bridge_error_metrics` make it.
+
+The alerts of the agent platform read them (`docs/apps/agent-platform.md`,
+"Alerts"), and the tests of the transforms are in `observability/vector-tests/`. Each sample carries the time of
 its line, so Prometheus holds it for 5 minutes, its lookback, and the sink
 drops the series a minute after its last line. A rule on it reads
 `max_over_time` over a window longer than the time between two lines.

@@ -24,6 +24,9 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: run-receiver
+        # Its log goes to Loki: the record of each run it made and kept
+        # (kubernetes/apps/monitoring/vector/agent/config/vector.yaml).
+        logs.home.arpa/ship: "true"
     spec:
       serviceAccountName: run-receiver
       # The receiver calls the Kubernetes API with the token of its service
