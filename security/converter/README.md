@@ -74,8 +74,13 @@ selector of each entry. Today it gives:
 
 So the part that writes the audit log of a cluster to Loki sets two labels:
 `security_stream="k8s-audit"`, and `k8s_cluster` with the name of the
-cluster in `systems.yaml`. The trail of the organization is one stream, and
-it is the evidence for each AWS account.
+cluster in `systems.yaml`. The trail copy writes one Loki stream for each
+account and Region of the trail, with the labels `aws_account` and
+`aws_region` next to `security_stream="cloudtrail"`
+(`kubernetes/apps/security/trail-copy/README.md`). The selector
+`{security_stream="cloudtrail"}` reads each of them, and their newest line is
+the evidence for each AWS account. The converter checks only the labels that
+its selector names, so the two more labels do not change its answer.
 
 To change the label, or to give a stream one line of Loki for each system,
 change `system_label` in `sources.yaml`, run the generator and commit its

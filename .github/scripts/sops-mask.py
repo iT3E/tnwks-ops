@@ -14,10 +14,17 @@ Each file is decrypted with sops (SOPS_AGE_KEY from the runner's env) and
 every non-empty string value, at any depth, is printed as one
 `::add-mask::<line>` per non-blank line, trimmed. Nothing else goes to stdout.
 
+The runner masks a value of any length, wherever it occurs, also inside
+longer words (actions/runner SecretMasker.AddValue has no minimum). A short
+value occurs inside other text: the log then shows `***` in the middle of
+ordinary words, often next to the same text printed unmasked before this
+step, and the value can be read off. So a line shorter than MIN_LENGTH is
+refused: a root keeps such a value in a SOPS file that isn't in mask_sops.
+
 Fails closed (exit 1, nothing printed to stdout) when sops is missing, a file
-is missing, is not a *.sops.yaml file, does not decrypt, or has no string
-value. Errors name the file only: never a value, and never sops's own
-output.
+is missing, is not a *.sops.yaml file, does not decrypt, has no string
+value, or has a line shorter than MIN_LENGTH. Errors name the file and key
+path only: never a value, and never sops's own output.
 
 Stdlib only.
 """
@@ -30,6 +37,11 @@ import sys
 from pathlib import Path
 
 
+# Shortest line masked. Not a runner limit (there is none): values of a few
+# characters turn up inside ordinary words, paths and IDs in a job's log.
+MIN_LENGTH = 6
+
+
 class MaskError(Exception):
     pass
 
@@ -39,22 +51,28 @@ def escape(value: str) -> str:
     return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
-def strings(node) -> list[str]:
+def strings(node, path: str = "") -> list[tuple[str, str]]:
+    """(key path, value) for every string, at any depth."""
     if isinstance(node, str):
-        return [node]
+        return [(path, node)]
     if isinstance(node, dict):
-        return [s for v in node.values() for s in strings(v)]
+        return [s for k, v in node.items() for s in strings(v, f"{path}.{k}" if path else str(k))]
     if isinstance(node, list):
-        return [s for v in node for s in strings(v)]
+        return [s for i, v in enumerate(node) for s in strings(v, f"{path}[{i}]")]
     return []
 
 
-def lines(values: list[str]) -> list[str]:
+def lines(file: str, values: list[tuple[str, str]]) -> list[str]:
     out: list[str] = []
-    for value in values:
+    for path, value in values:
         for line in value.splitlines():
             line = line.strip()
-            if line and line not in out:
+            if not line:
+                continue
+            if len(line) < MIN_LENGTH:
+                raise MaskError(f"{file}: {path or '(root)'} has a line shorter than {MIN_LENGTH} "
+                                f"characters, too short to mask: keep it in a SOPS file outside mask_sops")
+            if line not in out:
                 out.append(line)
     return out
 
@@ -84,7 +102,7 @@ def masks(sops: str, files: list[str]) -> list[str]:
         raise MaskError("no files to mask")
     out: list[str] = []
     for path in files:
-        found = lines(strings(decrypt(sops, path)))
+        found = lines(path, strings(decrypt(sops, path)))
         if not found:
             raise MaskError(f"{path}: no values to mask")
         out.extend(line for line in found if line not in out)

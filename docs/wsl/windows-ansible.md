@@ -218,6 +218,11 @@ The off-site healthchecks.io checks are deliberately limited to the router
 and the monitoring stack ([external-monitoring.md](../operations/external-monitoring.md)),
 so this uses Prometheus.
 
+The Terraform roots that opt in get the same kind of nightly check, with
+alerts `TerraformDrift` and `TerraformDriftCheckStale`. Its runner has no
+way to the Windows host, so it reports through a Pushgateway instead
+([ci.md](../operations/ci.md#terraform-drift)).
+
 ## Next migrations
 
 Host config that still lives outside this playbook, roughly in order:

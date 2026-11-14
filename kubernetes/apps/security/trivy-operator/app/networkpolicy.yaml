@@ -1,0 +1,97 @@
+---
+# The operator, on top of default-deny (../../namespace.yaml). In: Prometheus
+# of this cluster scrapes its metrics port, and the kubelet's probes come from
+# the host. Out: the API server only. It reads the workloads, the roles and
+# the pods of the control plane, and it writes the reports and the scan jobs.
+# With the node collector off and the embedded checks, it calls no host
+# outside the cluster.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: trivy-operator
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: trivy-operator
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+---
+# A scan job (trivyOperator.scanJobPodTemplateLabels in helmrelease.yaml). It
+# reads the image of a workload from its registry, and the vulnerability
+# database from mirror.gcr.io. Nothing calls it. The hosts are the registries
+# of the images that run on the two clusters, and the hosts where each
+# registry sends the layers. A new registry in the clusters needs a line here,
+# or the scan of its images fails (README.md, "When a scan fails").
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: trivy-scan-job
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: trivy-scan-job
+  egress:
+    # DNS through Cilium's DNS proxy, so that the rule below can name hosts.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        # The vulnerability database, and the images on the mirror of Google.
+        - matchName: mirror.gcr.io
+        # GitHub's registry and its layer host.
+        - matchName: ghcr.io
+        - matchName: pkg-containers.githubusercontent.com
+        # Docker Hub: the registry, its token service and its layer host.
+        - matchName: docker.io
+        - matchName: index.docker.io
+        - matchName: registry-1.docker.io
+        - matchName: auth.docker.io
+        - matchName: production.cloudfront.docker.com
+        # Quay and its layer hosts (cdn01.quay.io and the others).
+        - matchName: quay.io
+        - matchPattern: "*.quay.io"
+        # The Kubernetes registry. It redirects a manifest to Artifact
+        # Registry (<region>-docker.pkg.dev, the region depends on the
+        # client) and a layer to its CDN host. One `*` matches one label.
+        - matchName: registry.k8s.io
+        - matchPattern: "*-docker.pkg.dev"
+        - matchName: cdn.registry.k8s.io
+        # Codeberg serves its layers from the same host.
+        - matchName: codeberg.org
+        # The public registry of AWS, with its layers on CloudFront.
+        - matchName: public.ecr.aws
+        - matchPattern: "*.cloudfront.net"
+        # The Microsoft registry and its regional layer hosts.
+        - matchName: mcr.microsoft.com
+        - matchPattern: "*.data.mcr.microsoft.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

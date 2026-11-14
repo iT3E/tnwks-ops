@@ -87,8 +87,9 @@ To restore from the repo copy instead: `sops -d talos/wsl/talosconfig.sops.yaml
 
 ### Applied machine-config patches
 
-`cluster-config.yaml` is used at cluster creation. Changes to it reach the
-running cluster only when patched in, e.g.:
+The live node has a v1alpha1 config, from an older talosctl. Its settings
+are in `cluster-config.yaml` and `patches/`, in the v1alpha1 form, and a
+change reaches the running cluster only when patched in, e.g.:
 
 ```bash
 talosctl --talosconfig ~/.talos/config-homelab-wsl -n 10.5.0.2 patch machineconfig \
@@ -99,6 +100,14 @@ talosctl --talosconfig ~/.talos/config-homelab-wsl -n 10.5.0.2 patch machineconf
 the control plane; the command is in the file.
 `patches/kubelet-image-gc.yaml` (delete images unused for a week) is applied
 to all three nodes; the command and the reason are in the file.
+`patches/audit-policy.yaml` (the audit policy) is applied to the control
+plane; the command is in the file.
+
+A new cluster gets the settings of these files in the multi-document form,
+which talosctl 1.14 needs: `patches/cluster.yaml`, `patches/controlplane.yaml` and
+`patches/audit-policy-multidoc.yaml`, from `talos_clusters`. A change to a
+setting goes into both forms; `talos/README.md`, "The audit policy", says
+how CI holds them equal. The conversion of the live node ends the double set.
 
 ## Upgrades
 
