@@ -218,6 +218,47 @@ does. Its value is the site whose Prometheus runs the rules. The label
 | The AWS trail | `stream`, check `cloudtrail` | 15 minutes | 2 hours |
 | Wazuh | `wazuh` | 12 hours | 30 minutes, and 7 days for a laptop |
 
+## The host check
+
+The source `host-check` runs on each host of both sites, with the same
+settings. It writes a `.prom` file for the textfile collector of
+`windows_exporter` (`infrastructure/ansible/roles/windows_monitoring`).
+homelab-wsl scrapes the exporter of both Windows hosts, and `peer-federate`
+of homelab-wsl-02 brings the two series of the registry to its rules.
+
+| Where | What runs | File |
+| --- | --- | --- |
+| Each Windows host | The SYSTEM scheduled task `tnwks-host-check`, every 6 hours and 10 minutes after boot (role `windows_host_check`) | `textfile_inputs\tnwks_security_host_check.prom` |
+
+Each check gives the number of items that fail it, and 0 is a pass:
+
+| Check | What it reads | What fails |
+| --- | --- | --- |
+| `defender-enabled` | `Get-MpComputerStatus` | Each of the Defender service, the antivirus and real-time protection that is off |
+| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date |
+| `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off |
+| `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) |
+
+The file also has series of the host check itself, which no rule of the
+registry reads: each protection and profile, the time of the signatures and
+of the newest scan, the count of pending updates, the time of the newest
+install, a restart that an update waits for, and
+`homelab_security_host_check_failed_queries`.
+
+**A query that fails gives no result.** When one query of a check fails,
+the run writes no result series and no time, and
+`homelab_security_host_check_failed_queries` says how many failed. The rules
+then read each line of the host as "No evidence", and
+`SecurityResultLate` fires for the host. The run never writes 0 for a check
+that it could not do. A fact that no check reads (the newest install, a
+pending restart) only leaves out its own series when its query fails.
+
+To run it now on a host: `Start-ScheduledTask -TaskName tnwks-host-check`.
+The way back (Design Doc 0004, section 4.3): set `host_check_state: absent`
+in the defaults of the role, which removes the task, the script and the
+files on each host, and remove `host-check` from `sources` of the hosts in
+`systems.yaml`, in the same pull request.
+
 ## The generator
 
 `generate.py` reads the registry and writes six outputs. It uses the Python
