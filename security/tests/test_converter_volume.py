@@ -127,11 +127,9 @@ def readers(run, tmp_path, text):
     `prowler` that it accepts, or "refused" when the list gives no entry."""
     path = tmp_path / "accepted.json"
     path.write_bytes(text.encode("utf-8", "surrogatepass") if isinstance(text, str) else text)
-    registry = generate.converter_registry(generate.load())
-    try:
-        served, skipped = converter.accepted_entries(path.read_bytes().decode("utf-8"),
-                                                     set(registry["sources"]), set(registry["systems"]))
-    except (converter.Unreadable, UnicodeDecodeError):
+    # The reader of the service as it runs: its limit of size, its old key, its faults.
+    served, skipped, read = converter.AcceptedList(path, generate.converter_registry(generate.load())).read()
+    if not read:
         served, skipped = "refused", None
     found_run, found_converter, run_skipped = {}, {}, None
     for day in DAYS:
@@ -173,11 +171,10 @@ ITEMS = {
     "a check that ends in a line feed": entry(check="check_open\n"),
     "the last day a date holds": entry(until="9999-12-31"),
 }
-# The run does not know the registry or the form of a check ID: there the converter
-# skips an entry that the run takes, which mutes less. A run mutes only its own system
-# and `prowler`, so only the check shows the difference in what is muted.
-CONVERTER_ACCEPTS_LESS = {"a source not in the registry", "a system not in the registry",
-                          "a check that is not a check ID", "a check that ends in a line feed"}
+# The run does not know the registry: there the converter skips an entry that the run
+# takes, which mutes less. A run mutes only its own system and `prowler`, so this shows
+# in the count of skipped entries, not in what is muted.
+CONVERTER_ACCEPTS_LESS = {"a source not in the registry", "a system not in the registry"}
 # An entry that fits: both take it, and add one more accepted finding to the good one.
 BOTH_ACCEPT = {"the last day a date holds"}
 
@@ -193,8 +190,6 @@ def test_the_run_and_the_converter_skip_the_same_items(run, tmp_path, name):
         assert found <= found_run[key], "the converter never accepts what the run does not"
     if name in CONVERTER_ACCEPTS_LESS:
         assert run_skipped == 0 and skipped == 1
-        if name in {"a check that is not a check ID", "a check that ends in a line feed"}:
-            assert any(found_converter[key] != found_run[key] for key in found_run)
     elif name in BOTH_ACCEPT:
         assert found_run == found_converter and run_skipped == skipped == 0
         assert any("check_open" in found for found in found_converter.values())
@@ -209,6 +204,7 @@ LISTS_THAT_GIVE_NO_ENTRY = {
                        ' "reason": "An invented reason.", "check": "check_late"}]',
     "an array that does not end": "[" + json.dumps(entry()), "an empty file": "",
     "not UTF-8": b"[\xff]", "arrays too deep": "[" * 100_000 + "]" * 100_000,
+    "a number of 5000 digits": "[" + "1" * 5000 + "]",
 }
 
 
@@ -223,3 +219,24 @@ def test_an_empty_array_and_no_file_accept_nothing_in_both(run, tmp_path):
     assert all(found == set() for found in [*found_run.values(), *found_converter.values()])
     assert run_skipped == skipped == 0
     assert run.accepted_checks(tmp_path / "no-list.json", "aws-prod", DAYS[0]) == ({}, 0)
+
+
+def test_a_list_over_the_limit_is_refused_by_the_converter_only(run, tmp_path):
+    """The converter reads 1 MiB at most; the run has no limit. The converter accepts
+    less: it mutes nothing of that list, and alerts."""
+    text = json.dumps([entry(until="2027-02-01", reason="x" * converter.MAX_LIST_BYTES)])
+    found_run, found_converter, _, _ = readers(run, tmp_path, text)
+    assert set(found_converter.values()) == {"refused"}
+    assert "refused" not in found_run.values()
+
+
+@pytest.mark.parametrize("check, longer", [
+    ("check_open", "check_open_more"), ("check_open", "xcheck_open"), ("k8s-cis-1.23/1.2.3", "k8s-cis-1x23/1.2.3")])
+def test_an_accepted_check_mutes_that_check_only_in_the_run(run, tmp_path, check, longer):
+    """Prowler reads a key of the mutelist as a regex (re.search): the run writes each
+    key so that it matches the whole check, not a longer check that holds it."""
+    found_run, found_converter, _, _ = readers(run, tmp_path, json.dumps([entry(check=check, until="2027-02-01")]))
+    assert found_run == found_converter and found_run[(DAYS[0], "aws-prod")] == {check}
+    keys = run.mutelist({check: "2027-02-01"})["Mutelist"]["Accounts"]["*"]["Checks"]
+    assert [key for key in keys if re.search(key, check)] == list(keys)
+    assert not any(re.search(key, longer) for key in keys)

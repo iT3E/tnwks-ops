@@ -403,7 +403,8 @@ a YAML parser:
   and why, never a value.
 
 The converter also skips an entry whose source or system is not in the
-registry, or whose check is not a check ID, and it alerts on both cases
+registry, and gives no entry for a list larger than 1 MiB. The Prowler runs
+take both, so there the converter accepts less. It alerts on both cases
 (`converter/README.md`, "The list of accepted findings").
 
 This is the form of the file before encryption. The values are invented:
