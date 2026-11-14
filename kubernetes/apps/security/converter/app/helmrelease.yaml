@@ -84,7 +84,8 @@ spec:
           - path: /config
             readOnly: true
       # The list of accepted findings (security/README.md, "Accepted
-      # findings"): the Secret that Flux decrypts. Optional: before the owner
+      # findings"): the Secret that Flux decrypts, with the JSON array in its
+      # key accepted.json, read at /accepted/accepted.json. Optional: before the owner
       # makes the first list, the Secret does not exist and the list is empty.
       # The chart's secret type has no `optional`, so the volume is custom.
       accepted:
