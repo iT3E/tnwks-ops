@@ -535,7 +535,8 @@ with the status `Suppressed`, which the list of accepted findings muted.
   file, and then sends them no more. A new file of the system is a new set
   of lines. The converter sends the newest file only: when a newer file
   comes while the lines of an older one wait for Loki, the older lines are
-  not sent. The file stays on the volume for 14 days.
+  not sent, also when Loki took the first batches of that file: the rest of
+  it is not sent. The file stays on the volume for 14 days.
 - **After a start** the converter sends the newest file of each system again,
   with the same times and the same text. A query of Loki gives each line one
   time.
