@@ -5,6 +5,9 @@
 
 Each domain and group is an output of ci.yaml's `changes` job and has a job
 gated on it, and Build Success needs every job and runs unless cancelled.
+In terraform.yaml, every job that runs github-workflows' actions/terraform
+first runs .github/scripts/sops-mask.py, gated on matrix.mask_sops (the
+public log masks a root's SOPS values before Terraform can quote them).
 Fails (exit 1) with a GitHub annotation per violation.
 
 The general workflow conventions (timeouts, runner labels, pins,
@@ -70,9 +73,29 @@ def check_ci(root: Path) -> None:
         err(path, "Build Success must run with if: ${{ !cancelled() }}")
 
 
+TERRAFORM_ACTION = "iT3E/github-workflows/actions/terraform@"
+MASK_SCRIPT = ".github/scripts/sops-mask.py"
+
+
+def check_terraform_masks(root: Path) -> None:
+    path = root / ".github/workflows/terraform.yaml"
+    jobs = load(path)["jobs"]
+    for name, job in sorted(jobs.items()):
+        steps = job.get("steps") or []
+        tf = [i for i, s in enumerate(steps) if str(s.get("uses", "")).startswith(TERRAFORM_ACTION)]
+        if not tf:
+            continue
+        mask = [i for i, s in enumerate(steps) if MASK_SCRIPT in str(s.get("run", ""))]
+        if not mask or mask[0] > tf[0]:
+            err(path, f"job {name}: no {MASK_SCRIPT} step before actions/terraform")
+        elif "matrix.mask_sops" not in str(steps[mask[0]].get("if", "")):
+            err(path, f"job {name}: the {MASK_SCRIPT} step is not gated on matrix.mask_sops")
+
+
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     check_ci(root)
+    check_terraform_masks(root)
     for e in errors:
         print(e.replace(f"file={root}/", "file="))
     print(f"{len(errors)} violation(s)", file=sys.stderr)

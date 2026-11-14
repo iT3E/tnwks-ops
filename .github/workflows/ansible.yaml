@@ -3,7 +3,9 @@ name: "Ansible"
 
 # Syntax-checks every playbook and runs ansible-lint, on the same pinned
 # controller the workstation uses (infrastructure/ansible/pyproject.toml,
-# uv.lock) and the pinned collections (requirements.yml). Needs no host or
+# uv.lock) and the pinned collections (requirements.yml). Checks the Talos
+# patches that 01-talos-bootstrap.yml gives a new cluster
+# (tests/test_talos_patches.py). Needs no host or
 # secret; what a change would do to the hosts is the Ansible Check workflow's
 # job (docs/operations/ansible.md).
 
@@ -52,6 +54,11 @@ jobs:
           for p in playbooks/*.yml; do
             uv run --locked ansible-playbook --syntax-check "$p"
           done
+
+      # Each file under talos/ parses, and each site's patch lists name each
+      # of its patch files. No talosctl: no machine config is built.
+      - name: Talos patches
+        run: uv run --locked python -m unittest discover -s tests -p test_talos_patches.py -v
 
       - name: ansible-lint
         run: uv run --locked ansible-lint --nocolor

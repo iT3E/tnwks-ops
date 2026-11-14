@@ -1,0 +1,63 @@
+private1:
+    name: ENC[AES256_GCM,data:IrJJfYHC+H6xFA==,iv:lzySrqIZQnFTZD+BcSqpk/5h2vGCIfqqtF6ucK72pEI=,tag:EbGQRFxasaDFhSAhY2wTmA==,type:str]
+private2:
+    name: ENC[AES256_GCM,data:Maw+tYeaCw==,iv:+vujljm+Na+C/0LM6HYKJPaxOz9LaZRJPCOOxLAY+RE=,tag:RxLG/62nom0HxFLJEWT3Nw==,type:str]
+private3:
+    name: ENC[AES256_GCM,data:uhP+p26yKG+XbiSFrWz7,iv:yhBxSP5Fz0Cgy3AyHP5cxow7CJQmYSoueLOlDdGPhm0=,tag:RaWXZW1ZMnfOiyUH5Pc9aA==,type:str]
+private4:
+    name: ENC[AES256_GCM,data:90pztx7R865L/R5EuuH4km4SHPh9,iv:SxAzF9EXU3ZSPhD0UTfthmx9zJQqqPpvofmXilcffpI=,tag:EKtA2t1X4fnlleOJT2o5Vg==,type:str]
+    description: ENC[AES256_GCM,data:f11fMxDJcXwo5tRIUUuxjNFQun4KFrI0ilDgDrCGpOoahWQGM26gcE0=,iv:p4KvXWjeHd+H5ghSbHXGP9J8Cb5ZE32q5iVXvRYxJ+I=,tag:V51C8+jmtbuOR2hPPJji0Q==,type:str]
+private5:
+    name: ENC[AES256_GCM,data:EqmxALJpiGGz1Ie/cNrhG2DzzcogUso=,iv:Vl2G2MuazUkNZebmQkmHGoY+HW/gLeRSJUSiYUODY8o=,tag:FUuGJ7WoM0AtdiBxqofVPA==,type:str]
+sops:
+    kms:
+        - arn: arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc
+          role: arn:aws:iam::654654220436:role/iam-role-sops
+          created_at: "2026-11-13T07:50:32Z"
+          enc: AQICAHhNDAK0Is+rGNAlNYnav2FEvs37O7WQwrCmqkcTMDWNIQHIkCTAyblOdQUY7OsB6FXvAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMZQNRlQRr0BhbiDhYAgEQgDvXqzM41IYws0BiEZy/DlesxBQbXm2IViAhvl4kfycFY1hH8OGOzlr5NcQi5uTqUzBCrxchdybxFZeDtg==
+          aws_profile: ""
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBvbzR5c3M5Tmc3UDc2dVJW
+            Nm1uZlZOU0Z5a0xESUlZR1VydkdmL1RzQVFjCnRkcTNEWnhpa0RJV1RWRkdzeGdV
+            R2pIMHVjeWxTTXdBWTJPZ3kvR05EcmsKLS0tIDBjNi9YYmtZcjhxemVQUm5wcVJ2
+            Z003bHp6aHdEV0tWSmozUGpZSThtVnMKUi8UtBLKOz0dX+XohmWL/5ksqxsXRPai
+            jTnB4JBxl68Yn7K0QXeFysfbHavgIUWLq6KA77vMiLxit+KSIGvYVQ==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAyUUFEeEx6UUJ3RjdKRWxp
+            N0RoVzVubEpiSVd1TzdXcTMyelFwVkgrNlNRCkZGZSsrb0JLMTJUN21KaW5ZQ2xE
+            aDF5clJYeUxVVzEvdmZoalBDbXhHTG8KLS0tIENUc1AzQjMvVUxDVXJCUlE0U2lY
+            SC9BOUJLcjVMM2ZPVldwbWxZTXE3emcKFmkYCHey0gR4fRqlwZ9qSa9mVrgYk8aA
+            JVFLEielWAw3tu63ZYr3TqyMrm5/fPAaU0lXJM/PNfaQfemZHk1GwA==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAra3RiVHpRaEo0RFozZFZO
+            NUtRNkpyclZrL0JrV3ZydGw1VHBkZ2ZjU1hFCnd4UDY3azNCV09UV3B5eEpqd202
+            U0dEL1VUZm1lRE9BOFN5ZUtYZmlyUmcKLS0tIEdhVXhlWGVmSEVwU1dpcTZYUlpu
+            SkZDNVN2b05RbUNUbVVXOXdvaDA2bU0KCBjbwOROsF7QXGEhrDgPf/AcrKHBS7uZ
+            vJ4c1NsZwjoeN7EdQEThPV2ZBV6M7tmf4BlNLWL3ZVdIGWgNmJJTtA==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age10s9j786hfegtvdv45thwh0u7czj75pep48f6x96uk6t496vd4quqtumfy6
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBUMnJsVG90eDM4QmdHdFNY
+            WnFBTTVzK2p3dURzVW1ob0tZZUhuSGNyQ2dNCjUrT0VNR1dmU2VsREdGZEExODdQ
+            K1pnMEcrS1B2b1dITkRmVWorYjdlekUKLS0tIGZUU0V4ZHlQQnEwYXE1c0FMcjYz
+            UXV1OVlReTZqRm1BR0RmMHNhUVRjUDAKHlWyg4OBmgVCgXWz/C/nMODYfDc9ZBTL
+            IHcg+kMeaczLrHdExfRoKs8Pf7j7PCrNDAYkHSFNSlLkeT7VkONLpw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-13T07:50:33Z"
+    mac: ENC[AES256_GCM,data:fCKRJvHgvZeY/N7H1XnJh4YtvE8igdSB1hRuY4/eFPnj9ohMndIc705qe6vEZWuuoGeGKcx/vUi1jOVGNPPD6VDQFeA/IWevcvF2rImk49JYvORlHVe1dvAGV0YqhFrbDj0F87gcEMWYktibmmAOuHIC4ODXg1xG0/yATfONgTI=,iv:ZFX/5py1v4ESYtjQulxnsE5hQ3PB0ALrOBcL4MLLnrk=,tag:sXO7m9alCv2rPSW/5REX6A==,type:str]
+    pgp: []
+    unencrypted_suffix: _unencrypted
+    version: 3.7.3
