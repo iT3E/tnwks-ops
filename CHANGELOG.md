@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.140.0 - 2026-11-14
+
+### Added
+
+* security: the API checks on homelab-wsl-02 (`kubernetes/apps/security/api-checks`, source `api-check`). A CronJob tests each day whether the router runs the newest stable release of RouterOS, from the series of mktxp and the release feed of the vendor (safeguard 12.1), and, once the owner adds its token, whether the Terraform Cloud organization requires two factors (safeguards 6.3 and 6.5). It keeps each newest release it sees, so a router two releases behind fails too. It writes the result file that the converter reads. A test that does not run has no entry. A follow-up adds `api-check` to the sources of the router after its first result
+
 ## v2.139.0 - 2026-11-14
 
 ### Added
