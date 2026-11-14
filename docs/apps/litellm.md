@@ -119,6 +119,34 @@ as one text (the bridge README).
 - The `router_settings` that the admin UI can save in the database merge
   over this file. Don't save any there; the master key is the owner's.
 
+### One attempt to the bridge
+
+Each bridge entry has `num_retries: 0` (a decision of the owner,
+2026-11-14), so the gateway sends a request to the bridge one time and gives
+the caller the answer of the bridge, an error too. Every other entry keeps
+the router default of 2 retries (3 attempts).
+
+- **Why.** At the usage limit of the plan the bridge answers 429. With the
+  default, each request reached the bridge 3 times, and each attempt starts
+  an engine and sends one more refused request to the plan. The caller tries
+  again by itself (the Anthropic SDK 2 times, an agent framework more), so
+  the retries of the gateway multiplied the attempts.
+- **Every error.** The value counts for a 429, a 5xx, a timeout, and an
+  error event of a stream before its content. No `retry_policy` or
+  `model_group_retry_policy` is set, so no error class has a count of its
+  own.
+- **It follows the entry, not the name.** A name moved to
+  `claude-opus-bedrock` gets the retries of that entry (the default). The
+  router reads `model_group_retry_policy` by the name in the request (the
+  alias or the entry), so that knob would follow a name, and it is not used.
+- **A request can change it.** `num_retries` in the body of a request comes
+  before the value of the entry (LiteLLM `router_python_core.py`,
+  `async_function_with_retries`). The agents don't send it. A request with
+  `"num_retries": 2` gets 3 attempts again.
+- **What changes for a caller.** A 503 of the bridge during its drain now
+  reaches the caller at once. The Anthropic SDK of the caller tries it again
+  (2 times), and the new bridge pod answers.
+
 ### Test a name
 
 With the master key in a variable and never on the screen:

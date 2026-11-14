@@ -1,0 +1,3 @@
+kind: Changed
+body: 'ai: the model gateway sends each request to the model bridge one time (`num_retries: 0` on the three bridge entries). At the usage limit of the plan a call no longer reaches the bridge 3 times from the gateway alone. The Bedrock entry and every other entry keep the router default of 2 retries'
+time: 2026-11-14T12:00:00.000000000Z
