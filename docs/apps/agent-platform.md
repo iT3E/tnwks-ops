@@ -322,6 +322,40 @@ the sandbox plugin copies the workspace only.
     on. The start of the pod doesn't need the model gateway.
   - To check: `openclaw memory status` in the `agent` container shows the
     provider, the model and the count of indexed files.
+- **Web search.** The agent searches the web with `web_search`, through the
+  Brave Search API (the plugin `@openclaw/brave-plugin` of the agent image,
+  `tools.web.search` in the config). The gateway process of the agent pod
+  makes the call, not a sandbox.
+  - What goes to the vendor: the query that the model writes for the tool,
+    and its filters (count, country, language, dates), with the key. The
+    conversation does not go. The answer is a list of titles, URLs and
+    snippets.
+  - The vendor keeps the query logs for up to 90 days on its self-serve
+    plans, and its terms allow only transient storage of the results.
+  - What the pod keeps: the gateway caches a result in memory for 15
+    minutes. The query and the result are also in the session store
+    (`state/agents/main/agent/openclaw-agent.sqlite`), like each tool call,
+    so the archives, the daily backup and the nightly copy hold them
+    ([State, archives and backups](#state-archives-and-backups)).
+  - The traces hold no query: the config doesn't set
+    `diagnostics.otel.captureContent`.
+  - The product leaves `web_search` out of a sandboxed session by default,
+    so `tools.sandbox.tools.alsoAllow` names it. `web_fetch` stays out.
+  - **The key** is `BRAVE_API_KEY` in the Secret `agent-search-secret`
+    (`kubernetes/apps/ai/agents/pilot/agent/app/secret-search.sops.yaml`).
+    Only the `agent` container gets it, as an env var: not the init
+    containers, not the backup container, and no sandbox. It is one key, shared with an OpenClaw
+    deployment outside the cluster. So a leak or a rotation touches both,
+    and the usage counts of the vendor are for both.
+  - **Rotate:** make a new key at the vendor, put it in the file with
+    `sops <file>` (the file above) in a PR, merge, and change the other
+    deployment too. Reloader starts the pod again when the Secret
+    changes. Then revoke the old key.
+  - **Turn off:** set `tools.web.search.enabled` to `false` in
+    `openclaw.json` and take `web_search` out of `alsoAllow`. To remove it,
+    also take out the plugin path, the plugin entry, the network rule and
+    the Secret. With a wrong key, the gateway starts and each search fails
+    with an error from the vendor (401).
 - **Secret** `agent-secret` (env vars of the pod):
 
   | Key | Value |
@@ -351,9 +385,10 @@ the sandbox plugin copies the workspace only.
   `Ready`. A sandbox stopped by hand starts again within a minute; delete it
   to keep it down.
 - **Network policy.** No pod comes in. Out: the model gateway, the sandbox
-  gateway of this namespace, alloy, and
-  `api.telegram.org`. The Signal daemon takes the agent pod only (and the
-  kubelet's probes), and reaches `*.signal.org` only.
+  gateway of this namespace, alloy, `api.telegram.org` and
+  `api.search.brave.com`, each on its one port. The Signal daemon takes the
+  agent pod only (and the kubelet's probes), and reaches `*.signal.org`
+  only.
 
 ### State, archives and backups
 

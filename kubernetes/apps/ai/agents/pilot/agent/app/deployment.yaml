@@ -14,8 +14,8 @@ metadata:
   labels:
     app.kubernetes.io/name: agent
   annotations:
-    # Start the pod again when agent-config, agent-scripts or agent-secret
-    # changes.
+    # Start the pod again when agent-config, agent-scripts, agent-secret or
+    # agent-search-secret changes.
     reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
@@ -209,7 +209,14 @@ spec:
           image: *image
           imagePullPolicy: IfNotPresent
           env: *env
-          envFrom: *secrets
+          envFrom:
+            - secretRef:
+                name: agent-secret
+            # BRAVE_API_KEY, for the web search of the gateway. This
+            # container only: not the init containers, not the backup
+            # container, and no sandbox (autoProviders is off).
+            - secretRef:
+                name: agent-search-secret
           ports:
             - name: gateway
               containerPort: 18789
