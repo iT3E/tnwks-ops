@@ -5,17 +5,14 @@ labels of the contract, and nothing else of the list. Each list here is invented
 import calendar
 import datetime
 import json
-import random
 import re
 import sys
-import textwrap
 import threading
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
-import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "converter"))
@@ -44,7 +41,7 @@ class Clock:
 
 
 def accepted_for(tmp_path, text, clock=None):
-    path = tmp_path / "accepted.yaml"
+    path = tmp_path / "accepted.json"
     if text is not None:
         path.write_bytes(text if isinstance(text, bytes) else text.encode())
     clock = clock or Clock()
@@ -60,345 +57,145 @@ def served(text, name):
     return found
 
 
-def as_pyyaml(text):
-    """What PyYAML reads, with each value as text: the form that the scanners read."""
-    return [{key: None if value is None else str(value) for key, value in entry.items()}
-            for entry in yaml.safe_load(text) or []]
+def entry(**changes):
+    """One invented entry that fits, with `changes`; a value of None takes the key away."""
+    item = {"source": "prowler", "check": "check_a", "system": "system-one", "until": "2027-01-31",
+            "reason": "An invented reason."} | changes
+    return {key: value for key, value in item.items() if value is not None}
 
 
-# --- The reader takes the block form, as PyYAML reads it --------------------------------
-
-README_EXAMPLE = re.search(r"  accepted\.yaml: \|\n((?:    .*\n)+)", (ROOT / "security/README.md").read_text())
-
-TAKEN = [
-    textwrap.dedent(README_EXAMPLE[1]) if README_EXAMPLE else "",
-    """\
----
-# Invented entries.
-- source: prowler
-  check: example_check_id   # a comment
-  system: system-one
-  reason: 'An invented reason, with a quote: ''here''.'
-  until: 2027-01-31
-
-- source: "trivy"
-  check: "k8s-cis-1.23/1.2.3"
-  system: system-two
-  reason: >
-    An invented reason
-    on two lines.
-  until: "2027-02-28"
--
-  source: api-check
-  check: 26001
-  system: system-one
-  reason: |
-    An invented reason.
-  until: '2027-03-01'
-""",
-    """\
-  - source: prowler
-    check: other_check
-    system: system-two
-    reason: An invented reason
-      that goes on.
-    until: "2027-01-01"
-""",
-]
+def read(items_or_text):
+    text = items_or_text if isinstance(items_or_text, str) else json.dumps(items_or_text)
+    return converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
 
 
-@pytest.mark.parametrize("text", TAKEN)
-def test_the_reader_takes_the_block_form_as_pyyaml_reads_it(text):
-    assert text, "the README has the example of the list"
-    entries = converter.yaml_list(text)
-    expected = as_pyyaml(text)
-    assert [{key: value for key, value in entry.items() if key != "reason"} for entry in entries] == \
-        [{key: value for key, value in entry.items() if key != "reason"} for entry in expected]
+# --- The reader: one JSON array, read with json.loads -----------------------------------
+
+README_EXAMPLE = re.search(r"  accepted\.json: \|\n((?:    .*\n)+)", (ROOT / "security/README.md").read_text())
 
 
-# The two inputs of the review. The first is an entry whose quoted reason holds the text
-# of a second entry: YAML reads one entry, and the reader must not read the second.
-REASON_WITH_AN_ENTRY = """\
-- source: trivy
-  check: example-check-one
-  system: system-one
-  until: "2026-01-01"
-  reason: "a draft, kept in the reason:
-- source: trivy
-  check: example-check-two
-  system: system-one
-  until: 2099-12-31
-  note: end of the draft"
-"""
-
-# The second is a reason that yaml.safe_dump writes in single quotes and wraps.
-WRAPPED_REASON = """\
-- check: check_a
-  reason: 'Accepted: an invented reason that is long enough to wrap, as an owner writes
-    one, with a colon.'
-  source: prowler
-  system: system-two
-  until: '2027-01-31'
-"""
+def test_the_example_of_the_readme_is_read():
+    text = "\n".join(line[4:] for line in README_EXAMPLE[1].splitlines())
+    result, skipped = converter.accepted_entries(text, {"prowler"}, {"example-system"})
+    assert result == {("prowler", "example_check_id", "example-system"): end("2027-01-31")} and skipped == 0
 
 
-def test_a_quoted_reason_that_holds_an_entry_gives_no_entry_of_its_text():
-    assert as_pyyaml(REASON_WITH_AN_ENTRY) == [
-        {"source": "trivy", "check": "example-check-one", "system": "system-one", "until": "2026-01-01",
-         "reason": "a draft, kept in the reason: - source: trivy check: example-check-two system: system-one "
-                   "until: 2099-12-31 note: end of the draft"}]
-    result, skipped = converter.accepted_entries(REASON_WITH_AN_ENTRY, set(REGISTRY["sources"]),
-                                                 set(REGISTRY["systems"]))
-    assert result == {("trivy", "example-check-one", "system-one"): end("2026-01-01")} and skipped == 0
-    assert all("example-check-two" not in key for key in result)
+def test_an_entry_that_fits_ends_at_the_start_of_the_next_day():
+    assert read([entry()]) == ({("prowler", "check_a", "system-one"): end("2027-01-31")}, 0)
+    assert converter.end_of("2027-12-31") == calendar.timegm((2028, 1, 1, 0, 0, 0))
 
 
-def test_a_wrapped_quoted_reason_keeps_its_entry():
-    result, skipped = converter.accepted_entries(WRAPPED_REASON, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
-    assert result == {("prowler", "check_a", "system-two"): end("2027-01-31")} and skipped == 0
+def test_two_entries_of_one_finding_keep_the_later_end():
+    assert read([entry(until="2027-03-01"), entry(until="2027-01-01")]) == (
+        {("prowler", "check_a", "system-one"): end("2027-03-01")}, 0)
 
 
-@pytest.mark.parametrize("key", ["check", "system", "source", "until"])
-def test_a_field_other_than_the_reason_in_quotes_on_more_lines_skips_its_entry(key):
-    fields = {"source": "prowler", "check": "check_b", "system": "system-one", "until": "2027-01-31"}
-    lines = [f"  {name}: '{value}'" for name, value in fields.items()]
-    index = list(fields).index(key)
-    lines[index] = f"  {key}: '{fields[key]}\n    more'"
-    text = WRAPPED_REASON + "-" + "\n".join(lines)[1:] + "\n"
-    result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
-    assert result == {("prowler", "check_a", "system-two"): end("2027-01-31")} and skipped == 1
+def test_an_empty_array_gives_no_entry_and_is_read(tmp_path):
+    assert read("[]") == ({}, 0)
+    source = accepted_for(tmp_path, " [ ]\n")
+    source.cycle()
+    assert served(source.render().decode(), converter.ACCEPTED_READ) == {(): 1.0}
 
 
 NOT_READ = {
-    "a flow mapping": "- {source: prowler, check: a, system: system-one, until: 2027-01-01}\n",
-    "an anchor": "- source: &s prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "a tag": "- source: !!str prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "a tab": "- source: prowler\n\tcheck: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "a key that is there two times": "- source: prowler\n  source: trivy\n  check: a\n  system: system-one\n"
-                                     "  reason: invented\n  until: 2027-01-01\n",
-    "a line at a column of no key": "- source: prowler\n check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "a file that ends inside a quote": "- source: prowler\n  check: a\n  system: system-one\n"
-                                       "  reason: 'a reason\n  until: 2027-01-01\n",
-    "text after a quote": "- source: prowler\n  check: 'a' b\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "a list in a mapping": "accepted:\n  - source: prowler\n",
-    "a character that YAML does not hold": "- source: prowler\x0c\n  check: a\n",
-    "a date that is no day": "- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-02-30\n",
+    "a comma at the end": '[{"source": "prowler"},]',
+    "a comment": '// an invented comment\n[]',
+    "a byte order mark": "﻿[]",
+    "a key two times": '[{"source": "prowler", "check": "check_a", "system": "system-one", "until": "2027-01-31",'
+                       ' "reason": "An invented reason.", "check": "check_b"}]',
+    "an object at the top": json.dumps(entry()),
+    "a YAML list": "- source: prowler\n  check: check_a\n",
+    "two arrays": "[] []",
+    "an array that does not end": json.dumps([entry()])[:-1],
+    "an empty file": "",
+    "arrays in arrays too deep for the decoder": "[" * 100_000 + "]" * 100_000,
 }
 
 
 @pytest.mark.parametrize("text", NOT_READ.values(), ids=NOT_READ.keys())
-def test_a_line_of_another_form_makes_the_whole_file_give_no_entry(tmp_path, caplog, text):
-    good = "- source: prowler\n  check: good\n  system: system-two\n  reason: invented\n  until: 2027-01-01\n"
+def test_a_list_that_is_not_one_json_array_gives_no_entry(tmp_path, caplog, text):
     with pytest.raises(converter.Unreadable):
-        converter.yaml_list(good + text)
-    source = accepted_for(tmp_path, good + text)
+        read(text)
+    source = accepted_for(tmp_path, text)
     with caplog.at_level("DEBUG"):
         source.cycle()
-    served_text = source.render().decode()
-    assert served(served_text, SERIES) == {}
-    assert served(served_text, converter.ACCEPTED_READ) == {(): 0.0}
-    assert "gives no entry" in caplog.text and "prowler" not in caplog.text
-
-
-# --- The reader and PyYAML can not drift ------------------------------------------------
-
-FIELDS = {"source": ["prowler", "trivy"], "check": ["check_a", "k8s-cis-1.23/1.2.3", "26001", "AVD-KSV-0001"],
-          "system": ["system-one", "system-two"], "until": ["2027-01-31", "2026-12-01"]}
-REASONS = [
-    "short", "Accepted: a reason with a colon.", "it's quoted", 'a "double" quote', "a # hash", "- source: trivy",
-    "line one\nline two\n- source: trivy\n  check: example-check-two", "café, invented", "tab\there",
-    "a reason long enough to wrap at the width of a line, " * 4 + "with: a colon", "  leading space",
-    "trailing space ", "'", '"', "\\ back slash", "yes", "2099-12-31", "", "\x85next", "end\n",
-]
-FRAGMENTS = [
-    "- source: trivy", "  check: example-check-two", "  system: system-one", "  until: 2099-12-31",
-    "  reason: 'open", "  reason: \"open", "close'", "close\"", "  more text", "    deeper: x", "#", "  # c",
-    "", "---", "...", "  - nested", "-", "  reason: |", "  reason: >-", "      block line", "\tcheck: x",
-    "  check: \"a\\", "  check: 'a''", "  reason: plain", "   odd: column", "  check: 'x' # c",
-    "  until: 2027-01-31 # c", "  check: [a]", "  check: yes", "  check: 0x1A", "- check: c", "  ''",
-]
-
-
-def assert_no_drift(text):
-    """Each field that the reader takes is the text that PyYAML gives, in an entry of the
-    same place; and the reader takes nothing of a file that PyYAML does not read."""
-    try:
-        expected = yaml.safe_load(text)
-    except yaml.YAMLError:
-        expected = yaml.YAMLError
-    try:
-        entries = converter.yaml_list(text)
-    except converter.Unreadable:
-        return False
-    assert expected is not yaml.YAMLError, "the reader takes a file that PyYAML does not read"
-    expected = expected or []
-    assert isinstance(expected, list) and len(entries) == len(expected)
-    for ours, theirs in zip(entries, expected, strict=True):
-        if theirs is None:  # a dash with nothing after it
-            assert ours == {}
-            continue
-        assert isinstance(theirs, dict) and set(ours) == set(theirs)
-        for key, value in ours.items():
-            if isinstance(value, str):
-                assert str(theirs[key]) == value, (key, value, theirs[key])
-            if value and not (isinstance(value, converter.Undecoded) and not value.text):
-                # What the reader takes as a value, the Prowler job takes as one too.
-                assert theirs[key], (key, value, theirs[key])
-    return True
-
-
-def test_the_reader_takes_what_yaml_safe_dump_writes_as_pyyaml_reads_it():
-    chance = random.Random(2145)
-    for width in (20, 80, 200):
-        for _ in range(300):
-            entries = [{key: chance.choice(values) for key, values in FIELDS.items()} for _ in range(3)]
-            for entry in entries:
-                entry["reason"] = chance.choice(REASONS) + chance.choice(REASONS)
-            text = yaml.safe_dump(entries, width=width, allow_unicode=chance.random() < 0.5,
-                                  sort_keys=chance.random() < 0.5)
-            assert assert_no_drift(text), text
-            result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
-            kept = [entry for entry in entries if entry["reason"]]
-            assert skipped == len(entries) - len(kept) and result == {
-                (entry["source"], entry["check"], entry["system"]): end(entry["until"])
-                for entry in sorted(kept, key=lambda entry: entry["until"])}
-
-
-def test_the_reader_and_pyyaml_do_not_drift_on_invented_lists():
-    """Lists of yaml.safe_dump with lines put in, lines moved to another column, and
-    characters put in."""
-    chance = random.Random(2170)
-    taken = 0
-    for _ in range(6000):
-        lines = yaml.safe_dump([{key: chance.choice(values) for key, values in FIELDS.items()}
-                                | {"reason": chance.choice(REASONS)} for _ in range(2)],
-                               width=chance.choice([20, 80])).splitlines()
-        for _ in range(chance.randint(1, 3)):
-            change, at = chance.random(), chance.randrange(len(lines))
-            if change < 0.6:
-                lines.insert(at, chance.choice(FRAGMENTS))
-            elif change < 0.8:
-                lines[at] = " " * chance.randint(0, 5) + lines[at].lstrip(" ")
-            else:
-                column = chance.randint(0, len(lines[at]))
-                lines[at] = lines[at][:column] + chance.choice("'\"#:- \\|>") + lines[at][column:]
-        taken += assert_no_drift("\n".join(lines) + chance.choice(["\n", ""]))
-    assert taken > 500, "the corpus has lists that the reader takes"
-
-
-def test_a_check_that_is_not_a_check_id_is_skipped_and_a_lone_surrogate_stops_nothing(tmp_path):
-    text = ('- source: prowler\n  check: "a\\ud800"\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n'
-            '- source: prowler\n  check: "a b"\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n'
-            '- source: prowler\n  check: good\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n')
-    source = accepted_for(tmp_path, text)
-    source.cycle()
     rendered = source.render().decode()
-    assert len(served(rendered, SERIES)) == 1
-    assert served(rendered, converter.ACCEPTED_SKIPPED) == {(): 2.0}
-    metrics = converter.Metrics()
-    metrics.add("a", 1, check="a\ud800")
-    assert metrics.render() == b'a{check="a\\\\ud800"} 1\n'
+    assert served(rendered, SERIES) == {}
+    assert served(rendered, converter.ACCEPTED_READ) == {(): 0.0}
+    assert "gives no entry" in caplog.text and "invented" not in caplog.text and "check_b" not in caplog.text
 
 
-# --- The entries ------------------------------------------------------------------------
-
-
-def test_the_end_is_the_start_of_the_day_after_the_end_date():
-    assert converter.end_of("2027-01-31") == calendar.timegm((2027, 2, 1, 0, 0, 0))
-    assert converter.end_of("2027-12-31") == calendar.timegm((2028, 1, 1, 0, 0, 0))
-
-
-@pytest.mark.parametrize("entry", [
-    "- check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: ''\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: soon\n",
-    "- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: '2027-02-30'\n",
-    "- source: prowler\n  check: a\n  system: not-in-the-registry\n  reason: invented\n  until: 2027-01-01\n",
-    "- source: not-a-source\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: >\n    a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: a\n    b\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: " + "a" * 201 + "\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
-], ids=["no source", "an empty check", "no date", "a day that is not", "a system not in the registry",
-        "a source not in the registry", "a check in a block", "a check on two lines", "a long check"])
-def test_an_entry_that_does_not_fit_is_skipped_and_counted(entry):
-    good = "- source: trivy\n  check: good\n  system: system-two\n  reason: invented\n  until: 2027-01-01\n"
-    result, skipped = converter.accepted_entries(good + entry, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
-    assert result == {("trivy", "good", "system-two"): end("2027-01-01")}
-    assert skipped == 1
-
-
-NO_REASON = {
-    "no reason key": "",
-    "an empty reason": "  reason:\n",
-    "an empty quoted reason": "  reason: ''\n",
-    "an empty double-quoted reason": '  reason: ""\n',
-    "a reason of null": "  reason: null\n",
-    "a reason of false": "  reason: false\n",
-    "a reason of 0": "  reason: 0\n",
-    "an empty block": "  reason: |\n",
+SKIPPED = {
+    "not an object": ["check_a"],
+    "a nested array": [[entry()]],
+    "a field missing": entry(reason=None),
+    "a key that is not a field": entry(note="An invented note."),
+    "a number": entry(check=26001),
+    "null": entry(reason=None) | {"reason": None},
+    "true": entry(reason=True),
+    "NaN": '{"source": "prowler", "check": "check_a", "system": "system-one", "until": "2027-01-31", "reason": NaN}',
+    "Infinity": '{"source": "prowler", "check": "check_a", "system": "system-one", "until": Infinity,'
+                ' "reason": "An invented reason."}',
+    "an empty reason": entry(reason=""),
+    "a reason of space": entry(reason=" \t\n "),
+    "an empty check": entry(check=""),
+    "a source not in the registry": entry(source="not-a-source"),
+    "a system not in the registry": entry(system="not-in-the-registry"),
+    "a check that is not a check ID": entry(check="a b"),
+    "a long check": entry(check="a" * 201),
+    "a lone surrogate escape in the check": '{"source": "prowler", "check": "check_\\ud800", "system": "system-one",'
+                                            ' "until": "2027-01-31", "reason": "An invented reason."}',
+    "a date that is no day": entry(until="2027-02-30"),
+    "a date that is not a date": entry(until="soon"),
+    "a date with a time": entry(until="2027-01-31T10:00:00"),
 }
 
 
-@pytest.mark.parametrize("reason", NO_REASON.values(), ids=NO_REASON.keys())
-def test_an_entry_with_no_reason_is_skipped_and_counted(tmp_path, reason):
-    """Design Doc 4.1.2: an accepted finding has a reason. The file stays readable."""
-    good = "- source: trivy\n  check: good\n  system: system-two\n  reason: invented\n  until: 2027-01-01\n"
-    text = good + "- source: prowler\n  check: a\n  system: system-one\n" + reason + "  until: 2027-01-01\n"
-    result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
-    assert result == {("trivy", "good", "system-two"): end("2027-01-01")} and skipped == 1
-    assert not (yaml.safe_load(text)[1].get("reason")), "the Prowler job skips it too"
-    source = accepted_for(tmp_path, text)
-    source.cycle()
-    rendered = source.render().decode()
-    assert served(rendered, converter.ACCEPTED_SKIPPED) == {(): 1.0}
-    assert served(rendered, converter.ACCEPTED_READ) == {(): 1.0}
+@pytest.mark.parametrize("item", SKIPPED.values(), ids=SKIPPED.keys())
+def test_an_item_that_does_not_fit_is_skipped_and_counted(item):
+    text = "[" + json.dumps(entry(check="good")) + ", " + (item if isinstance(item, str) else json.dumps(item)) + "]"
+    result, skipped = read(text)
+    assert result == {("prowler", "good", "system-one"): end("2027-01-31")} and skipped == 1
 
 
-def test_a_reason_of_space_only_on_two_lines_counts_as_none():
-    """PyYAML folds it to one space, which the Prowler job takes. The reader does not fold
-    a value, so it takes only a reason with a character that is not space: it mutes less."""
-    text = "- source: prowler\n  check: a\n  system: system-one\n  reason: '\n    '\n  until: 2027-01-01\n"
-    assert yaml.safe_load(text)[0]["reason"] == " "
-    assert converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"])) == ({}, 1)
+def test_a_value_that_is_not_a_string_is_skipped_also_when_it_is_nan_or_infinity():
+    """json.loads reads NaN and Infinity as numbers, as the Prowler job does: their entry
+    has a value that is not a string, so it is skipped and the file stays readable."""
+    text = '[{"source": "prowler", "check": "check_a", "system": "system-one", "until": "2027-01-31", "reason": NaN}]'
+    assert read(text) == ({}, 1)
+    assert read(text.replace("NaN", "-Infinity")) == ({}, 1)
 
 
 @pytest.mark.parametrize("reason", [
-    "  reason: yes\n", "  reason: '0'\n", "  reason: |\n    An invented reason.\n",
-    "  reason: 'An invented reason,\n    on two lines.'\n", '  reason: "caf\\xE9, invented"\n',
-    "  reason: 26001\n"])
-def test_a_reason_in_another_form_counts(reason):
-    text = "- source: prowler\n  check: a\n  system: system-one\n" + reason + "  until: 2027-01-01\n"
-    result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
-    assert result == {("prowler", "a", "system-one"): end("2027-01-01")} and skipped == 0
-    assert yaml.safe_load(text)[0]["reason"]
+    "An invented reason. " * 2000, "Ein erfundener Grund, café, 日本語の理由.", 'With "quotes", a \\ and a\nnew line.',
+    "\ud800 a lone surrogate in an invented reason", "x"])
+def test_a_reason_of_each_text_counts_and_stays_in_the_file(tmp_path, reason):
+    items = [entry(reason=reason)]
+    for text in (json.dumps(items), json.dumps(items, ensure_ascii=False)):
+        if "\ud800" in reason and "\ud800" in text:
+            continue  # a lone surrogate can not be UTF-8: a list holds it as an escape only
+        assert read(text) == ({("prowler", "check_a", "system-one"): end("2027-01-31")}, 0)
+    source = accepted_for(tmp_path, json.dumps(items))
+    source.cycle()
+    rendered = source.render().decode()
+    assert len(served(rendered, SERIES)) == 1
+    assert "invented" not in rendered and "café" not in rendered
 
 
-def test_two_entries_of_one_finding_keep_the_later_end():
-    text = ("- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-03-01\n"
-            "- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n")
-    result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
-    assert result == {("prowler", "a", "system-one"): end("2027-03-01")} and skipped == 0
+def test_a_list_larger_than_the_limit_gives_no_entry(tmp_path):
+    source = accepted_for(tmp_path, json.dumps([entry(reason="x" * converter.MAX_LIST_BYTES)]))
+    source.cycle()
+    assert served(source.render().decode(), converter.ACCEPTED_READ) == {(): 0.0}
 
 
 # --- What the converter serves ----------------------------------------------------------
 
-LIST = """\
-- source: prowler
-  check: example_check_id
-  system: system-one
-  reason: An invented reason that names-a-resource.
-  until: "2027-01-31"
-- source: trivy
-  check: k8s-cis-1.23/1.2.3
-  system: system-two
-  reason: Another invented reason.
-  until: "2026-11-01"
-- source: prowler
-  check: other
-  system: not-in-the-registry
-  reason: An invented reason.
-  until: "2027-01-31"
-"""
+LIST = json.dumps([
+    entry(check="example_check_id", reason="An invented reason that names-a-resource."),
+    entry(source="trivy", check="k8s-cis-1.23/1.2.3", system="system-two", reason="Another invented reason.",
+          until="2026-11-01"),
+    entry(check="other", system="not-in-the-registry"),
+], indent=2)
 
 
 def test_the_end_of_each_accepted_finding_with_the_three_labels_and_no_reason(tmp_path, caplog):
@@ -427,7 +224,7 @@ def test_with_no_secret_the_list_is_empty(tmp_path):
     assert served(text, converter.ACCEPTED_READ) == {(): 1.0}
 
 
-@pytest.mark.parametrize("raw", [b"\xff\xfe- source: prowler\n", b"- a: b\n" * 200_000])
+@pytest.mark.parametrize("raw", [b"[\xff]", b"[" + b"[]," * 400_000 + b"[]]"])
 def test_a_file_that_can_not_be_read_serves_no_entry_and_is_counted(tmp_path, raw):
     source = accepted_for(tmp_path, raw)
     source.cycle()
@@ -441,7 +238,7 @@ def test_a_new_list_counts_from_the_next_cycle_and_an_old_result_goes_away(tmp_p
     source = accepted_for(tmp_path, LIST, clock=clock)
     source.cycle()
     assert len(served(source.render().decode(), SERIES)) == 2
-    (tmp_path / "accepted.yaml").write_text(LIST.split("- source: trivy")[0])
+    (tmp_path / "accepted.json").write_text(json.dumps(json.loads(LIST)[:1]))
     source.cycle()
     assert len(served(source.render().decode(), SERIES)) == 1
     clock.elapsed = 2 * converter.INTERVAL_SECONDS + 1
@@ -484,7 +281,7 @@ class FailsLater(converter.AcceptedList):
 
 def test_a_part_whose_cycle_failed_serves_nothing_of_an_older_cycle(tmp_path):
     clock = Clock()
-    path = tmp_path / "accepted.yaml"
+    path = tmp_path / "accepted.json"
     path.write_text(LIST)
     part = FailsLater(path, REGISTRY, clock=clock.time, monotonic=clock.monotonic)
     whole = converter.Converter([part], clock=clock.time, monotonic=clock.monotonic)

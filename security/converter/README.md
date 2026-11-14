@@ -156,7 +156,7 @@ the contract of the registry.
 The owner keeps the accepted findings in an encrypted list
 ([`../README.md`](../README.md), "Accepted findings"). Flux decrypts it to
 the Secret `security-accepted-findings`, and the pod mounts the Secret at
-`/accepted`. Each 5 minutes the converter reads `accepted.yaml` and serves one
+`/accepted`. Each 5 minutes the converter reads `accepted.json` and serves one
 series for each entry:
 
 ```text
@@ -186,79 +186,56 @@ restart the pod.
 
 ### The form that the converter reads
 
-The Python image of the converter has no YAML library, so the converter
-reads the block form of the example in `../README.md`, and the form that
-`yaml.safe_dump` writes, and no other form:
-
-- A YAML list, one entry for each item `- `, with one `key: value` on each
-  line. A comment, a blank line and `---` before the list are no problem.
-- A value is plain, in single quotes or in double quotes. A quoted value can
-  go on over more lines, to its closing quote, as `yaml.safe_dump` writes a
-  long `reason`. A block (`|` or `>`) and a plain value can go on over the
-  lines that are more indented than the key. The converter reads no key in
-  the lines of a value.
-- No flow form (`{ }`, `[ ]`), no anchor, no alias, no tag, no tab in the
-  indentation, no key two times in one entry.
-
-The reader mutes too little rather than too much. After a line that it does
-not understand, it can not know where the next entry starts, so one such
-line makes the whole file give no entry. An entry that it reads but that
-does not fit is skipped, and the other entries are served.
-
-The tests hold the reader to PyYAML 6. Each field that the converter takes
-is the text that PyYAML gives for it, in the entry of the same place, and
-the converter takes no entry of a file that PyYAML does not read. The tests
-check this on the example of `../README.md`, on lists of `yaml.safe_dump`
-with long and wrapped reasons, and on some thousand invented lists with
-lines and characters put in.
+The list is one JSON array, with one object for each accepted finding
+(`../README.md`, "Accepted findings"). The converter reads it with
+`json.loads` of the Python standard library, as the Prowler job does, so the
+two read each list the same way. It reads no YAML.
 
 ### An entry that the converter skips
 
-The converter skips an entry, and counts it in
+The converter skips an item of the array, and counts it in
 `homelab_security_converter_accepted_skipped_entries`, when:
 
-- `source`, `check`, `system` or `until` is missing or empty, or goes on
-  over more lines.
-- `reason` is missing or empty. An accepted finding has a reason (Design
-  Doc, section 4.1.2), and the Prowler job skips such an entry too. A reason
-  that PyYAML reads as null, false or 0 is empty. A reason on more lines
-  counts when it has a character that is not space. The reason stays in the
-  file: the converter checks only that it is there.
+- It is not an object (a string, a number, a nested array).
+- A key of the five is missing, or the object has a key that is not one of
+  the five. A key that is not a field is most often a field with a typo, so
+  the converter does not guess.
+- A value is not a JSON string: a number, `true`, `null`, an array, and
+  also `NaN` and `Infinity`, which `json.loads` reads as numbers.
+- A value is empty, or `reason` holds only space. An accepted finding has a
+  reason (Design Doc, section 4.1.2). The reason stays in the file: the
+  converter checks only that it is there.
 - The source or the system is not in the registry.
 - The check is not a check ID: a letter or a digit, then letters, digits and
-  `_./:-`, 200 characters at most. So no text of another form reaches a
-  label.
-- PyYAML reads the plain value of a field as a number, a bool or null, and
-  its text is not the same: `0`, `012`, `0x1A`, `1.5`, `yes`, `~`. Put such
-  a value in quotes. A decimal number other than 0 is the same text.
-- `until` is not a date that Python's `datetime.date.fromisoformat` reads.
-  The Prowler job (`run.py` of the Prowler app) reads it with the same
-  function, so the two agree. It reads `2027-12-31`, and since Python 3.11
-  also `20271231` and `'2027-W52-5'`. Write `YYYY-MM-DD`, as in
-  `../README.md`.
+  `_./:-`, 200 characters at most. So no text of another form, and no lone
+  surrogate of a `\ud800` escape, reaches a label.
+- `until` is not a date that `datetime.date.fromisoformat` reads. The
+  Prowler job reads it with the same function. It reads `2027-12-31`, and
+  since Python 3.11 also `20271231` and `2027-W52-5`. Write `YYYY-MM-DD`.
 
 The other entries are served. A skipped entry has no series, so the board
 does not show it, and the rule of Trivy Operator does not mute it: the
-finding shows as a fail.
+finding shows as a fail. `SecurityAcceptedEntriesSkipped` fires when an
+entry is skipped for one hour.
 
 ### A file that gives no entry
 
 The converter serves no entry, sets
-`homelab_security_converter_accepted_list_read` to 0, and logs the number
-of the line and the kind of its form (no text of the file), when the list:
+`homelab_security_converter_accepted_list_read` to 0, and logs the kind of
+the fault and its line (no text of the file), when the list:
 
-- Has a line of a form that the converter does not read, or a key two times
-  in one entry.
-- Ends inside a quoted value.
-- Has a character that YAML does not let a file hold, an escape that YAML
-  does not have, a plain date that is no day (`2027-02-30`), or a plain `=`
-  or `<<`. PyYAML stops on each of them, and so does `run.py`.
-- Has a plain value with a date and a time of day, which the reader does
-  not check. Put it in quotes.
+- Is not JSON for `json.loads`: a comma at the end, a comment, a byte order
+  mark, an array that does not end, an empty file, arrays in arrays deeper
+  than the decoder goes.
+- Is not one array at the top: an object, or two arrays.
+- Has a key two times in one object. `json.loads` would keep the last value
+  with no word, so the converter refuses the file, and the Prowler job does
+  the same.
 - Can not be read, is not UTF-8, or is larger than 1 MiB.
 
-With no list (the Secret does not exist) the converter serves no entry and
-the value is 1.
+`SecurityAcceptedListUnread` fires when this lasts 30 minutes. With no list
+(the Secret does not exist) the converter serves no entry, the value is 1,
+and no alert fires.
 
 ## The loop of the parts
 

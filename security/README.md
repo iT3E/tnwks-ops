@@ -377,17 +377,28 @@ merges.
 | File | `kubernetes/apps/security/accepted-findings/app/accepted.sops.yaml` |
 | Flux Kustomization | `security-accepted-findings` (`kubernetes/apps/security/accepted-findings/ks.yaml`). It decrypts the file with the age key of the cluster |
 | Secret | `security-accepted-findings`, in the namespace `security` of homelab-wsl-02 |
-| Key of the Secret | `accepted.yaml`: a YAML list with one entry for each accepted finding |
+| Key of the Secret | `accepted.json`: one JSON array, with one object for each accepted finding |
 
-Each entry has five fields:
+Each object has these five keys and no other, and each value is a JSON
+string. Each reader of the list (the security converter, the Prowler job,
+the API checks job) reads it with `json.loads`, never with a YAML parser:
+
 
 | Field | Value |
 | --- | --- |
 | `source` | The `name` of the source in `sources.yaml` |
 | `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
 | `system` | The `name` of the system in `systems.yaml` |
-| `reason` | Why the owner accepts the finding |
-| `until` | The end date, as `YYYY-MM-DD`. The finding is past its end date from the start of the next day, UTC |
+| `reason` | Why the owner accepts the finding. Not empty, and not only space |
+| `until` | The end date, as `YYYY-MM-DD` (`datetime.date.fromisoformat`). The finding is past its end date from the start of the next day, UTC |
+
+A reader skips and counts an item that is not an object, a key that is
+missing or is not one of the five, a value that is not a string, and an
+entry whose value does not fit. A list that is not one JSON array (a comma
+at the end, a comment, a byte order mark, a key two times in one object)
+gives no entry at all: the converter then serves none, and a Prowler run
+fails and mutes nothing. `security/converter/README.md`, "The list of
+accepted findings", has each rule and the alerts.
 
 This is the form of the file before encryption. The values are invented:
 
@@ -399,12 +410,16 @@ metadata:
   name: security-accepted-findings
 type: Opaque
 stringData:
-  accepted.yaml: |
-    - source: prowler
-      check: example_check_id
-      system: example-system
-      reason: An invented reason, for the form only.
-      until: "2027-01-31"
+  accepted.json: |
+    [
+      {
+        "source": "prowler",
+        "check": "example_check_id",
+        "system": "example-system",
+        "reason": "An invented reason, for the form only.",
+        "until": "2027-01-31"
+      }
+    ]
 ```
 
 The rule for `kubernetes/` in `.sops.yaml` encrypts the whole of
