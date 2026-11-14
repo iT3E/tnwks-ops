@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.150.0 - 2026-11-14
+
+### Removed
+
+* tools: the runner scale set of the agent image repo, which goes public; its jobs run on GitHub-hosted runners
+
 ## v2.149.0 - 2026-11-14
 
 ### Added
