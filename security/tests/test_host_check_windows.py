@@ -395,17 +395,16 @@ def test_the_task_runs_the_script_with_the_name_of_the_host_and_the_limits_of_th
     assert defaults["host_check_updates_max_age_days"] == 14, "Design Doc 0004, section 4.1.4"
 
 
-def test_each_windows_host_of_the_inventory_is_a_system_with_the_checks_of_the_host_check():
-    """A system lists the source in `sources` only after its first result is on site 2
-    (a follow-up pull request): before that, the rule for a late result would fire. The
-    result series reach the lines of the registry without it."""
+def test_each_windows_host_of_the_inventory_lists_the_host_check_in_the_registry():
+    """Each host lists the source since its first result was on site 2, so the rule for a
+    late result watches it."""
     hosts = yaml.safe_load((ANSIBLE / "inventory/hosts.yml").read_text())
     windows = set(hosts["all"]["children"]["windows_hosts"]["hosts"])
     systems = yaml.safe_load((REGISTRY / "systems.yaml").read_text())
     of_type = {system["name"]: system for system in systems if system["type"] == "windows-host"}
     assert set(of_type) == windows
     for system in of_type.values():
-        assert "host-check" not in system.get("sources", []), system["name"]
+        assert "host-check" in system.get("sources", []), system["name"]
     controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
     named = {item["check"] for line in controls for item in line["checks"].get("windows-host", [])
              if item["source"] == "host-check"}

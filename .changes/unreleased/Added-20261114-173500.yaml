@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: both Windows hosts and both WSL distros list `host-check` in their sources, now that each has its first result on homelab-wsl-02, so `SecurityResultLate` watches them'
+time: 2026-11-14T09:35:00.000000000-08:00
