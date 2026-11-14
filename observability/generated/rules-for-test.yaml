@@ -427,6 +427,7 @@ groups:
       summary: Entries of the list of accepted findings on {{ $labels.k8s_cluster }} are skipped
       dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
       description: '{{ $value }} entries of the list of accepted findings do not fit, so the security converter
-        and the Prowler runs skip them: their findings show as fails. The log of the converter has the number of
-        each entry and why. security/converter/README.md, "An entry that the converter skips", has the rules. The
-        alert ends in the cycle after the list is fixed.'
+        skips them: their findings show as fails on the board. The Prowler runs skip the entries that are not in
+        the form, and take an entry whose source or system is not in the registry. The log of the converter has
+        the number of each entry and why. security/converter/README.md, "An entry that the converter skips", has
+        the rules. The alert ends in the cycle after the list is fixed.'

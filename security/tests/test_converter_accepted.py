@@ -26,7 +26,8 @@ REGISTRY = {"series": {"accepted": SERIES}, "sources": ["prowler", "trivy", "api
 
 
 def end(day):
-    return calendar.timegm((datetime.date.fromisoformat(day) + datetime.timedelta(days=1)).timetuple())
+    """The start of the next day, UTC, counted in days: a date has no day after 9999-12-31."""
+    return ((datetime.date.fromisoformat(day) - datetime.date(1970, 1, 1)).days + 1) * 86400
 
 
 class Clock:
@@ -153,6 +154,9 @@ SKIPPED = {
     "a date with a line end": entry(until="2027-01-31\n"),
     "a date of other digits": entry(until="\u0662\u0660\u0662\u0667-\u0660\u0661-\u0663\u0661"),
     "a date with space": entry(until=" 2027-01-31"),
+    "a year 0": entry(until="0000-01-01"),
+    "a day 29 of a year with no leap day": entry(until="2027-02-29"),
+    "a check that ends in a line feed": entry(check="check_a\n"),
 }
 
 
@@ -161,6 +165,22 @@ def test_an_item_that_does_not_fit_is_skipped_and_counted(item):
     text = "[" + json.dumps(entry(check="good")) + ", " + (item if isinstance(item, str) else json.dumps(item)) + "]"
     result, skipped = read(text)
     assert result == {("prowler", "good", "system-one"): end("2027-01-31")} and skipped == 1
+
+
+@pytest.mark.parametrize("day, ends", [
+    ("9999-12-31", 253_402_300_800), ("0001-01-01", -62_135_510_400), ("2028-02-29", 1_835_481_600),
+    ("1970-01-01", 86_400)])
+def test_each_day_that_a_date_can_hold_ends_at_the_start_of_the_next_day(tmp_path, day, ends):
+    """The day is added in seconds: 9999-12-31 has no next date, and once ended the whole
+    list (OverflowError) with no series to alert on."""
+    assert converter.end_of(day) == end(day) == ends
+    source = accepted_for(tmp_path, json.dumps([entry(until=day), entry(check="check_b")]))
+    source.cycle()
+    text = source.render().decode()
+    assert served(text, SERIES) == {
+        (("check", "check_a"), ("source", "prowler"), ("system", "system-one")): float(ends),
+        (("check", "check_b"), ("source", "prowler"), ("system", "system-one")): float(end("2027-01-31"))}
+    assert served(text, converter.ACCEPTED_READ) == {(): 1.0}
 
 
 def test_a_value_that_is_not_a_string_is_skipped_also_when_it_is_nan_or_infinity():
@@ -236,6 +256,38 @@ def test_a_file_that_can_not_be_read_serves_no_entry_and_is_counted(tmp_path, ra
     text = source.render().decode()
     assert served(text, SERIES) == {}
     assert served(text, converter.ACCEPTED_READ) == {(): 0.0}
+
+
+@pytest.mark.parametrize("fault", [OverflowError, RuntimeError, KeyError, MemoryError])
+def test_a_fault_of_the_reader_is_a_list_not_read_never_no_list(tmp_path, monkeypatch, caplog, fault):
+    """Each fault in the reader serves read 0, so SecurityAcceptedListUnread
+    (read == 0) fires. Without a series it would stay quiet."""
+    def broken(*_):
+        raise fault("an invented fault")
+    monkeypatch.setattr(converter, "accepted_entries", broken)
+    clock = Clock()
+    whole = converter.Converter([accepted_for(tmp_path, LIST, clock=clock)], clock=clock.time,
+                                monotonic=clock.monotonic)
+    whole.cycle()
+    text = whole.render().decode()
+    assert served(text, SERIES) == {}
+    assert served(text, converter.ACCEPTED_READ) == {(): 0.0}
+    assert served(text, converter.ACCEPTED_SKIPPED) == {(): 0.0}
+    assert "an invented fault" not in caplog.text and fault.__name__ in caplog.text
+
+
+def test_a_list_in_the_old_key_only_is_a_list_not_read(tmp_path, caplog):
+    """A Secret with accepted.yaml and no accepted.json: no reader reads it, so it must
+    alert, not look like no list."""
+    (tmp_path / "accepted.yaml").write_text("- source: prowler\n")
+    source = accepted_for(tmp_path, None)
+    source.cycle()
+    assert served(source.render().decode(), converter.ACCEPTED_READ) == {(): 0.0}
+    assert "accepted.yaml" in caplog.text
+    (tmp_path / "accepted.json").write_text(LIST)
+    source.cycle()
+    text = source.render().decode()
+    assert served(text, converter.ACCEPTED_READ) == {(): 1.0} and len(served(text, SERIES)) == 2
 
 
 def test_a_new_list_counts_from_the_next_cycle_and_an_old_result_goes_away(tmp_path):
