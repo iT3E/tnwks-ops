@@ -7,6 +7,7 @@ The script is loaded as a module, and each query gets a fake answer.
 
 import importlib.util
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -39,7 +40,7 @@ def load():
 check = load()
 
 
-def run(state=None, packages=(), lists=NOW - 3600, reboot=False, **limits):
+def run(state=None, packages=(), lists=NOW - 3600, reboot=False, writes=None, **limits):
     def fake_packages():
         if isinstance(packages, Exception):
             raise packages
@@ -55,9 +56,13 @@ def run(state=None, packages=(), lists=NOW - 3600, reboot=False, **limits):
             raise reboot
         return reboot
 
+    def fake_writes():
+        if isinstance(writes, Exception):
+            raise writes
+
     measured = check.measure(NOW, limits.get("days", 14), limits.get("hours", 72),
                              {} if state is None else state,
-                             packages=fake_packages, lists=fake_lists, reboot=fake_reboot)
+                             packages=fake_packages, lists=fake_lists, reboot=fake_reboot, writes=fake_writes)
     return measured, textfile.parse(check.render(SYSTEM, measured, NOW))
 
 
@@ -91,6 +96,7 @@ BROKEN = {
     "no package lists": {"lists": check.QueryError("no Release file")},
     "old package lists": {"lists": NOW - 73 * 3600},
     "an unreadable state file": {"state": "unreadable"},
+    "a write to the textfile directory that succeeds": {"writes": check.QueryError("the write succeeded")},
 }
 
 
@@ -250,7 +256,7 @@ def fake_apt(tmp_path, stdout, code=0):
     return bin_dir
 
 
-def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW):
+def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW, writes=None):
     monkeypatch.setenv("PATH", f"{fake_apt(tmp_path, SIMULATION, code)}:/usr/bin:/bin")
     monkeypatch.setattr(check.time, "time", lambda: now)
     lists = tmp_path / "lists"
@@ -258,8 +264,14 @@ def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW):
     release(lists, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", lists_date)
     out = tmp_path / "textfile"
     out.mkdir(exist_ok=True)
+    tried = []
+    if writes is None:
+        # The host refuses the write: the pass.
+        monkeypatch.setattr(check, "write_test", tried.append)
     rc = check.main(["--system", SYSTEM, "--textfile-dir", str(out), "--state-file", str(tmp_path / "state.json"),
+                     "--write-test-dir", str(writes or tmp_path / "host"),
                      "--lists-dir", str(lists), "--reboot-file", str(tmp_path / "reboot-required")])
+    assert writes is not None or tried == [tmp_path / "host"]
     return rc, out
 
 
@@ -306,6 +318,135 @@ def test_the_first_run_writes_the_state(tmp_path, monkeypatch):
     rc, _ = main(tmp_path, monkeypatch)
     assert rc == 0
     assert json.loads((tmp_path / "state.json").read_text())["version"] == 1
+
+
+def refuse(monkeypatch):
+    """The host refuses each new file, as Windows does for an account with no right."""
+    real = os.open
+
+    def fake(path, flags, *args, **kwargs):
+        if flags & os.O_CREAT:
+            raise PermissionError(13, "Permission denied", str(path))
+        return real(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(check.os, "open", fake)
+
+
+def test_a_refused_write_to_a_directory_that_can_be_listed_is_the_pass(tmp_path, monkeypatch):
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    (host / "tnwks_security_host_check.prom").write_text("x 1\n")
+    refuse(monkeypatch)
+    check.write_test(host)
+    assert sorted(p.name for p in host.iterdir()) == ["tnwks_security_host_check.prom"]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the mode of a directory")
+def test_a_directory_that_the_user_can_not_change_is_the_pass(tmp_path):
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    host.chmod(0o555)
+    try:
+        check.write_test(host)
+    finally:
+        host.chmod(0o755)
+    assert list(host.iterdir()) == []
+
+
+def test_a_write_that_succeeds_is_a_failed_query_and_removes_only_its_own_file(tmp_path):
+    host = tmp_path / "textfile_inputs"
+    (host / "wsl-distro").mkdir(parents=True)
+    kept = {"tnwks_security_host_check.prom": "a 1\n", ".tnwks-write-test-0000000000000000.tmp": "b\n",
+            "wsl-distro/tnwks_security_host_check_distro.prom": "c 1\n"}
+    for name, text in kept.items():
+        (host / name).write_text(text)
+    with pytest.raises(check.QueryError, match="succeeded"):
+        check.write_test(host)
+    assert {str(p.relative_to(host)): p.read_text() for p in host.rglob("*") if p.is_file()} == kept
+
+
+def test_the_file_of_the_write_test_is_not_a_file_that_the_exporter_reads(tmp_path, monkeypatch):
+    made = []
+    real = os.open
+
+    def spy(path, flags, *args, **kwargs):
+        made.append(Path(path))
+        return real(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(check.os, "open", spy)
+    with pytest.raises(check.QueryError):
+        check.write_test(tmp_path)
+    (path,) = made
+    assert path.parent == tmp_path
+    assert not path.name.endswith(".prom")
+
+
+@pytest.mark.parametrize("case", ["gone", "a file", "not listed"])
+def test_a_refusal_counts_only_when_the_directory_is_there_and_can_be_listed(tmp_path, monkeypatch, case):
+    """Reviewer's note 3: a directory that is gone or moved is not a pass."""
+    host = tmp_path / "textfile_inputs"
+    if case == "a file":
+        host.write_text("")
+    elif case == "not listed":
+        host.mkdir()
+
+        def no_list(path):
+            raise PermissionError(13, "Permission denied", str(path))
+
+        monkeypatch.setattr(check.os, "listdir", no_list)
+    refuse(monkeypatch)
+    with pytest.raises(check.QueryError, match="can not be listed"):
+        check.write_test(host)
+
+
+def test_a_write_that_fails_in_another_way_is_not_a_pass(tmp_path, monkeypatch):
+    def full(path, flags, *args, **kwargs):
+        raise OSError(28, "No space left on device", str(path))
+
+    monkeypatch.setattr(check.os, "open", full)
+    with pytest.raises(check.QueryError, match="neither"):
+        check.write_test(tmp_path)
+
+
+def test_the_write_test_runs_first_and_a_success_gives_no_result():
+    order = []
+
+    def writes():
+        order.append("writes")
+        raise check.QueryError("the write succeeded")
+
+    measured = check.measure(NOW, 14, 72, {}, packages=lambda: order.append("packages") or [],
+                             lists=lambda: order.append("lists") or NOW, reboot=lambda: False, writes=writes)
+    assert order == ["writes", "lists", "packages"]
+    assert measured["failed"] == ["textfile-write"]
+    families = textfile.parse(check.render(SYSTEM, measured, NOW))
+    assert RESULT not in families and LAST not in families
+    assert textfile.value(families, FAILED, system=SYSTEM) == 1
+
+
+def test_a_run_whose_write_succeeds_writes_no_result_and_leaves_no_file(tmp_path, monkeypatch):
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    rc, out = main(tmp_path, monkeypatch, writes=host)
+    assert rc == 1
+    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    assert RESULT not in families and LAST not in families
+    assert textfile.value(families, FAILED, system=SYSTEM) == 1
+    assert list(host.iterdir()) == []
+
+
+def test_the_write_test_alone_exits_0_on_a_refusal_and_1_on_a_write(tmp_path, monkeypatch, capsys):
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    argv = ["--system", SYSTEM, "--textfile-dir", str(tmp_path / "out"), "--write-test-dir", str(host),
+            "--write-test-only"]
+    assert check.main(argv) == 1
+    assert "succeeded" in capsys.readouterr().out
+    assert list(host.iterdir()) == []
+    assert not (tmp_path / "out").exists()
+    refuse(monkeypatch)
+    assert check.main(argv) == 0
+    assert check.main([*argv[:-2], str(tmp_path / "gone"), "--write-test-only"]) == 1
 
 
 def test_a_label_value_is_escaped():
@@ -367,18 +508,49 @@ def test_the_role_changes_nothing_in_a_check_run():
     """The pull request runs the role with --check on each distro
     (.github/workflows/ansible-hosts.yaml). No task may run in a check run, the handler
     starts a run only in an apply, and a check run does not start a timer whose unit it
-    did not write."""
+    did not write. The one command is the write test, which a check run skips."""
     tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
     handlers = yaml.safe_load((ROLE / "handlers/main.yml").read_text())
     for task in tasks + handlers:
         assert task.get("check_mode") is not False, task["name"]
-        for key in ("ansible.builtin.command", "ansible.builtin.shell"):
-            assert key not in task, task["name"]
+        assert "ansible.builtin.shell" not in task, task["name"]
+        if "ansible.builtin.command" in task:
+            assert task["name"] == "Write test of the textfile directory"
+            assert not {"creates", "removes"} & set(task["ansible.builtin.command"]), "a check run would run it"
     run_now = next(task for task in handlers if task["name"] == "Run the host check")
     assert run_now["when"] == "not ansible_check_mode"
     assert run_now["ansible.builtin.systemd"]["no_block"] is True
     timer = next(task for task in tasks if task["name"] == "Host check timer is enabled and running")
     assert "ansible_check_mode" in timer["when"]
+
+
+def test_the_last_task_of_the_role_tries_the_write_as_root_and_as_the_distro_user():
+    """Design Doc 0004, section 5.9: the effective right, not the entry."""
+    present = yaml.safe_load((ROLE / "tasks/main.yml").read_text())[0]["block"]
+    write, verdict = present[-2:]
+    assert write["name"] == "Write test of the textfile directory"
+    argv = write["ansible.builtin.command"]["argv"]
+    assert argv[0] == "/usr/local/bin/{{ wsl_host_check_name }}"
+    assert argv[argv.index("--write-test-dir") + 1] == "{{ wsl_host_check_write_test_dir }}"
+    assert argv[-1] == "--write-test-only"
+    assert write["become_user"] == "{{ item }}"
+    assert write["loop"] == ["root", "{{ wsl_distro_user }}"]
+    assert write["changed_when"] is False
+    assert "wsl_host_check_write_test_fails_play" in verdict["failed_when"]
+    assert verdict["when"] == "not ansible_check_mode"
+
+
+def test_the_write_test_tries_the_textfile_directory_of_the_host():
+    """The directory above the one that the distro may change: the exporter reads each
+    .prom file under it."""
+    windows = yaml.safe_load((WINDOWS / "defaults/main.yml").read_text())
+    distro = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
+    textfile_dir = windows["host_check_textfile_dir"]
+    assert distro["wsl_host_check_write_test_dir"] == "/mnt/c/" + textfile_dir[3:].replace("\\", "/")
+    assert distro["wsl_host_check_textfile_dir"].startswith(distro["wsl_host_check_write_test_dir"] + "/")
+    unit = (ROLE / "templates/tnwks-host-check.service.j2").read_text()
+    assert '--write-test-dir "{{ wsl_host_check_write_test_dir }}"' in unit
+    assert distro["wsl_host_check_write_test_fails_play"] is False, "on with the start of each distro with no elevation"
 
 
 def test_the_way_back_stops_the_timer_before_the_files_go():

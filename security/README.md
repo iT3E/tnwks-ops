@@ -284,6 +284,19 @@ Users may read. A file below it with a rule of its own, or another owner,
 gets the rules of the directory again. The account of the WSL distro may
 write only its own directory of the textfile collector.
 
+**The write test of a distro.** The distro must not be able to change the
+textfile directory of its host, because the exporter reads each `.prom` file
+under it and can not tell who wrote it (Design Doc 0004, section 5.9). So
+each run of the distro check starts with a try to make a file there, above
+its own directory, with a name that does not end in `.prom`. A refusal is the
+pass, and it counts only when the directory is there and can be listed. A
+write that succeeds, or a directory that is gone, is the failed query
+`textfile-write`: the run removes the file that it made, and nothing else,
+and gives no result. The last task of role `wsl_host_check` runs the same try
+as root and as the distro user, and prints each answer. A check run skips
+it. It fails the play only with `wsl_host_check_write_test_fails_play`,
+which stays off until each distro starts with no elevation.
+
 **The first result, then the source.** A host or a distro lists `host-check` in
 `sources` of `systems.yaml` only after its first result is on the board of
 homelab-wsl-02, in a pull request of its own. Before that, the rule for a

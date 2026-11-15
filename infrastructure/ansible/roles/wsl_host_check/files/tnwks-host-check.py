@@ -32,6 +32,18 @@ leaves it as it is, so it does not start the clock of each upgrade again.
 The file goes to its place in one step, so windows_exporter never reads
 half a file.
 
+The write test comes first in each run (Design Doc 0004, section 5.9). The
+check tries to make a file in the textfile directory of the host, above the
+directory of the distro, with a name that does not end in .prom, so the
+exporter never reads it. The account of the distro has no right to change
+that directory, so a refusal is the pass. A write that succeeds shows that
+the processes of the distro carry the admin rights of the host: the run
+removes the file that it made, and nothing else, and counts the failed
+query textfile-write. A refusal counts only when the directory is there and
+can be listed, so a directory that is gone or moved is a failed query too,
+not a pass. With --write-test-only, the script runs this test alone, for the
+last task of the role.
+
 The result carries the label severity: high, as Design Doc 0004, section
 4.1.4, alerts for updates pending for more than 14 days.
 
@@ -48,6 +60,7 @@ import email.utils
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -137,6 +150,30 @@ def lists_time(lists_dir: Path) -> float:
     return oldest
 
 
+def write_test(directory: Path) -> None:
+    """Try to make a file in the textfile directory of the host. A refusal is the pass,
+    and it counts only when the directory is there and can be listed. A file that the
+    test made goes again, and the test touches no other file."""
+    try:
+        os.listdir(directory)
+    except OSError as error:
+        raise QueryError(f"the textfile directory {directory} can not be listed: {error}") from error
+    # Not .prom: windows_exporter reads .prom files only, so it never reads this one.
+    path = directory / f".tnwks-write-test-{secrets.token_hex(8)}.tmp"
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except PermissionError:
+        return
+    except OSError as error:
+        raise QueryError(f"a write to {directory} gave neither a file nor a refusal: {error}") from error
+    os.close(fd)
+    try:
+        path.unlink()
+    except OSError as error:
+        raise QueryError(f"a write to {directory} succeeded, and {path.name} could not go: {error}") from error
+    raise QueryError(f"a write to {directory} succeeded: the distro can change the textfile directory")
+
+
 def read_state(path: Path) -> dict[str, float]:
     """The time at which the check first saw each pending upgrade."""
     if not path.exists():
@@ -171,12 +208,20 @@ def measure(
     packages=pending_packages,
     lists=lists_time,
     reboot=lambda: False,
+    writes=lambda: None,
 ) -> dict:
-    """Run each query. state is None when the state file could not be read."""
+    """Run each query. state is None when the state file could not be read. writes is the
+    write test, and it runs first."""
     results: dict[str, int] = {}
     details: list[tuple[str, dict[str, str], float]] = []
     failed: list[str] = []
     new_state = dict(state or {})
+
+    try:
+        writes()
+    except QueryError as error:
+        failed.append("textfile-write")
+        print(f"textfile-write: {error}", file=sys.stderr)
 
     if state is None:
         failed.append("state")
@@ -243,14 +288,29 @@ def render(system: str, measured: dict, now: float) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--system", required=True, help="the name of this distro in security/registry/systems.yaml")
-    parser.add_argument("--textfile-dir", type=Path, required=True)
+    parser.add_argument("--textfile-dir", type=Path, required=True, help="the directory of the .prom file")
+    parser.add_argument("--write-test-dir", type=Path, required=True,
+                        help="the textfile directory of the host, which the distro must not be able to change")
+    parser.add_argument("--write-test-only", action="store_true",
+                        help="run the write test alone: exit 0 on a refusal, 1 otherwise")
     parser.add_argument("--file-name", default="tnwks_security_host_check_distro.prom")
-    parser.add_argument("--state-file", type=Path, required=True)
+    parser.add_argument("--state-file", type=Path)
     parser.add_argument("--updates-max-age-days", type=int, default=14)
     parser.add_argument("--lists-max-age-hours", type=int, default=72)
     parser.add_argument("--lists-dir", type=Path, default=Path("/var/lib/apt/lists"))
     parser.add_argument("--reboot-file", type=Path, default=Path("/var/run/reboot-required"))
     args = parser.parse_args(argv)
+
+    if args.write_test_only:
+        try:
+            write_test(args.write_test_dir)
+        except QueryError as error:
+            print(f"write test of {args.system}: {error}")
+            return 1
+        print(f"write test of {args.system}: {args.write_test_dir} refused the write")
+        return 0
+    if args.state_file is None:
+        parser.error("--state-file is required")
 
     now = time.time()
     try:
@@ -264,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         state,
         lists=lambda: lists_time(args.lists_dir),
         reboot=args.reboot_file.exists,
+        writes=lambda: write_test(args.write_test_dir),
     )
     write_atomic(args.textfile_dir / args.file_name, render(args.system, measured, now))
     # A state file that is there and can not be read stays as it is: a new one would

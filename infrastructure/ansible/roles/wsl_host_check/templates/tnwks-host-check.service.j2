@@ -8,7 +8,9 @@ User={{ wsl_distro_user }}
 # The first time each pending upgrade was seen.
 StateDirectory={{ wsl_host_check_name }}
 StateDirectoryMode=0700
-# It reads, and writes only its state and its .prom file.
+# It reads, and writes only its state and its .prom file. The write test
+# makes a file in the textfile directory only if the distro has the right,
+# and then removes it.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=full
@@ -21,6 +23,7 @@ TimeoutStartSec=15min
 ExecStart=/usr/local/bin/{{ wsl_host_check_name }} \
   --system "{{ inventory_hostname }}" \
   --textfile-dir "{{ wsl_host_check_textfile_dir }}" \
+  --write-test-dir "{{ wsl_host_check_write_test_dir }}" \
   --file-name "{{ wsl_host_check_file }}" \
   --state-file "/var/lib/{{ wsl_host_check_name }}/state.json" \
   --updates-max-age-days {{ wsl_host_check_updates_max_age_days }} \
