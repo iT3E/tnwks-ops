@@ -1,8 +1,7 @@
 ---
 # The AWS sessions of the security platform (README.md): a CronJob turns each
 # IAM Roles Anywhere certificate into a 4-hour session in a Secret of the
-# namespace security. homelab-wsl-02 only, and that cluster lists this file
-# once the owner has made the two certificates (README.md, "To start it").
+# namespace security. homelab-wsl-02 only (README.md, "How it started").
 # yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/kustomize.toolkit.fluxcd.io/kustomization_v1.json
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

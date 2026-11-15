@@ -94,6 +94,11 @@
     - role: windows_power
       when: power_no_sleep | default(false) | bool
       tags: [power]
+    # The host check of the security platform: Defender, the updates and the
+    # firewall, to the textfile collector of windows_monitoring. The same on
+    # each host (security/README.md, the source host-check).
+    - role: windows_host_check
+      tags: [host-check]
     # Check-only by default (an sshd_config rewrite restarts sshd under the
     # session). Like host-settings, near the end: a failed assertion stops
     # nothing else.

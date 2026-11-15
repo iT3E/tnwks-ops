@@ -1,0 +1,8 @@
+{
+  "cloudflare": [
+    "zone_automatic_https_rewrites_enabled",
+    "zone_https_redirect_enabled",
+    "zone_min_tls_version_secure",
+    "zone_ssl_strict"
+  ]
+}

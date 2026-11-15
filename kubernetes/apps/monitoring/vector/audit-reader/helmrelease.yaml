@@ -87,8 +87,9 @@ spec:
               requests:
                 cpu: 10m
                 memory: 64Mi
+              # The peak during a first backlog (README.md), with headroom.
               limits:
-                memory: 128Mi
+                memory: 192Mi
     persistence:
       config:
         type: configMap

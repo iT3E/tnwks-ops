@@ -1,0 +1,19 @@
+---
+# The log agent of the agent platform (agent-platform/, README.md): the
+# long-running pods on its allowlist and the sandbox supervisors of
+# agents-workflows, with content dropped on the node. homelab-wsl lists it.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: vector-agent-platform
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: "./kubernetes/apps/monitoring/vector/agent-platform"
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  dependsOn:
+    - name: vector-aggregator

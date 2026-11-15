@@ -3,6 +3,342 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.157.0 - 2026-11-15
+
+### Added
+
+* security: the alert SecurityImagesScannedByTag (warning) fires when containers on a cluster with Trivy Operator have matched their vulnerability report by reference only, not by digest, for 7 days: the tag moved after the node pulled it, so the report is of another image; restart the workload or pin a digest. An entry of the accepted list with the check images-scanned-by-tag mutes it for the cluster
+
+### Fixed
+
+* security: a vulnerability report of Trivy Operator counts for a running container by its digest, or, when no report has that digest, by the same namespace, container and image reference, so an image whose pod and report show different digests of the same reference (a tag that moved, or an image index and a platform image) is not counted as not scanned, and its critical vulnerabilities count once in image-vulnerabilities (when two reports have the reference and neither has the running digest, the one with the most critical vulnerabilities); the security board shows the number of containers matched by reference only
+
+## v2.156.3 - 2026-11-15
+
+### Fixed
+
+* agents: the pilot config names no Brave plugin path any more (the plugin is a verified official install from the agent image since 0.4.0), so the gateway logs no load path warning at each start
+
+## v2.156.2 - 2026-11-15
+
+### Security
+
+* agents: the pilot agent loads only the plugins that it names in plugins.allow (brave, diagnostics-otel, memory-core, openshell, telegram), not each plugin that the product finds in its state directory or bundles
+
+## v2.156.1 - 2026-11-15
+
+### Fixed
+
+* agents: web search works in the sandboxed sessions of the pilot agent: the Brave plugin is a verified official install from the agent image 0.4.0 (the official-plugins init container, which installs it again at each start and stops the start on a plugin in the state that the image did not put there), not a plugin from plugins.load.paths, which a sandboxed session refuses
+
+## v2.156.0 - 2026-11-15
+
+### Added
+
+* security: the router lists `api-check` in its sources, now that the API checks have its first result on homelab-wsl-02, so `SecurityResultLate` watches it
+
+## v2.155.0 - 2026-11-15
+
+### Added
+
+* github: the client ID of the release App on the agent image repository, for its releases
+
+## v2.154.2 - 2026-11-15
+
+### Fixed
+
+* security: each Prowler run of an AWS account has a memory limit of 1536 MiB and a request of 1024 MiB (was 768 and 512): the first runs ended OOMKilled, as Prowler takes about 725 MiB before it keeps any resource; the README of prowler has the measure and the ways to bring the peak down, and the budget of homelab-wsl-02 counts the new limit
+
+## v2.154.1 - 2026-11-15
+
+### Fixed
+
+* agents: the sandbox probe removes a Sandbox record of its own name that an earlier run left before it creates its sandbox, and fails a run whose own record is still there at its end, so a delete that the sandbox gateway answered and did not do no longer blocks the next runs
+
+## v2.154.0 - 2026-11-15
+
+### Added
+
+* agents: alerts when the memory index step of the pilot fails at a start, and when the admission rule refuses a ConfigMap write of a backup mover in a trust domain (homelab-wsl keeps that one API server counter)
+
+## v2.153.0 - 2026-11-15
+
+### Added
+
+* agents: web search for the pilot agent through the Brave Search API, with its key for the agent container only
+
+## v2.152.0 - 2026-11-15
+
+### Changed
+
+* github: secret scanning and push protection on the agent image repository
+
+## v2.151.0 - 2026-11-15
+
+### Changed
+
+* github: the agent image repository is public
+
+## v2.150.2 - 2026-11-15
+
+### Fixed
+
+* agents: the pilot pod rebuilds a stale memory index at each start (an init container after doctor), so a new embedding model needs no step by hand
+
+## v2.150.1 - 2026-11-14
+
+### Security
+
+* privacy: bin/privacy-check reads the denylist in two forms, the plain list and one opaque line that `bin/privacy-check --encode` makes from it; a value that reads as neither stops the check. Hits print as "hit: <where>" with every term in it replaced by "[term]", case is ignored outside ASCII too whatever the locale, paths print as they are rather than as escapes, and a failed search stops the check. task privacy:sync gives a repository the opaque line once its bin/privacy-check reads it and its comment check pins the fixed shared workflow, and the plain list until then, and says which. Tests in .github/scripts/test_privacy_terms.py.
+
+## v2.150.0 - 2026-11-14
+
+### Removed
+
+* tools: the runner scale set of the agent image repo, which goes public; its jobs run on GitHub-hosted runners
+
+## v2.149.0 - 2026-11-14
+
+### Added
+
+* ai: memory search for the pilot agent. Its embeddings come from a new entry of the model gateway, agents-pilot-embeddings, on the Ollama of the host (docs/apps/agent-platform.md).
+
+## v2.148.1 - 2026-11-14
+
+### Security
+
+* agents: an admission rule refuses each ConfigMap write of a backup mover in the namespaces of the agent trust domains
+
+## v2.148.0 - 2026-11-14
+
+### Changed
+
+* github: Owner label is a required check of the main ruleset, from GitHub Actions. An impact/high or impact/critical PR merges only with the label of the owner (docs/operations/renovate.md).
+
+## v2.147.0 - 2026-11-14
+
+### Added
+
+* ci: the Owner label check (.github/scripts/owner-label-check.py, with its tests). It passes an impact/high PR only when the owner added owner/review, and an impact/critical PR only when the owner added owner/approved, after the push of the head commit. A label from a bot, a GitHub App or a workflow token fails it. Every other PR passes, so the automerge tiers keep merging. The workflow that runs it and the ruleset entry come from the owner (docs/operations/renovate.md).
+
+## v2.146.0 - 2026-11-14
+
+### Added
+
+* ai: a runbook of the agent platform (docs/apps/agent-platform-runbook.md), with a section for each of its alerts, the restore of the state of an agent, the fast stop of the workflow agent, the move to Bedrock by hand and the steps at a limit of the Claude plan. Each rule of the platform links to its own section, and a test checks that each runbook link into this repository has its section
+
+## v2.145.0 - 2026-11-14
+
+### Added
+
+* security: both Windows hosts and both WSL distros list `host-check` in their sources, now that each has its first result on homelab-wsl-02, so `SecurityResultLate` watches them
+
+## v2.144.0 - 2026-11-14
+
+### Added
+
+* security: the host check in each WSL distro (Ansible role `wsl_host_check`, source `host-check`). A systemd timer simulates an upgrade with apt-get every 6 hours and writes the result into a directory of the Windows host for its windows_exporter. An upgrade fails the check after it has waited 14 days. The result carries the severity high. The age of the lists is the oldest list of the updates and the security fixes of the distribution, and over 72 hours, a query that fails or a state file that can not be read gives no result. A follow-up adds `host-check` to the sources of the distros after their first result
+
+## v2.143.0 - 2026-11-14
+
+### Changed
+
+* ai: the model gateway sends each request to the model bridge one time (`num_retries: 0` on the three bridge entries). At the usage limit of the plan a call no longer reaches the bridge 3 times from the gateway alone. The Bedrock entry and every other entry keep the router default of 2 retries
+
+## v2.142.0 - 2026-11-14
+
+### Added
+
+* security: the host check on each Windows host (Ansible role `windows_host_check`, source `host-check`). A SYSTEM scheduled task reads Defender, the updates and the firewall every 6 hours and writes the result for the textfile collector of windows_exporter. Each result carries a severity, so a failed check of Defender, the firewall or the updates alerts. Only SYSTEM and the Administrators may change the directory of the script. A query that fails gives no result. A follow-up adds `host-check` to the sources of the hosts after their first result
+
+## v2.141.0 - 2026-11-14
+
+### Added
+
+* tools: runner scale sets for the checks of two private app repos, with no Docker; their image jobs stay on GitHub-hosted runners
+
+## v2.140.0 - 2026-11-14
+
+### Added
+
+* security: the API checks on homelab-wsl-02 (`kubernetes/apps/security/api-checks`, source `api-check`). A CronJob tests each day whether the router runs the newest stable release of RouterOS, from the series of mktxp and the release feed of the vendor (safeguard 12.1), and, once the owner adds its token, whether the Terraform Cloud organization requires two factors (safeguards 6.3 and 6.5). It keeps each newest release it sees, so a router two releases behind fails too. It writes the result file that the converter reads. A test that does not run has no entry. A follow-up adds `api-check` to the sources of the router after its first result
+
+## v2.139.0 - 2026-11-14
+
+### Added
+
+* security: `peer-federate` of homelab-wsl-02 brings the two series of the registry of the host check (`host-check`) from homelab-wsl, which scrapes the textfile collector of both Windows hosts. Nothing writes the series yet: the Ansible roles of the host check start it
+
+## v2.138.1 - 2026-11-14
+
+### Fixed
+
+* monitoring: the platform log agent (vector-agent-platform) sends to the aggregator over plain HTTP. Its sink address had no scheme, which Vector 0.61 reads as https, so no line of the agent platform reached Loki. A container test now sends one event through each vector sink to the aggregator.
+
+## v2.138.0 - 2026-11-14
+
+### Added
+
+* ai: a daily check that Tempo has a completed heartbeat run of each personal agent in the last 26 hours (CronJob agent-heartbeat-check, which asks up to 3 times and retries a failed pod once), with the alerts AgentHeartbeatMissing and AgentHeartbeatCheckStale.
+
+## v2.137.0 - 2026-11-14
+
+### Added
+
+* monitoring: the logs of some long-running pods of the agent platform go to Loki, on an allowlist (the pod label logs.home.arpa/ship=true): the run receiver and the sandbox gateway of the workflows trust domain, its sandbox supervisors, the backup, sandbox-start and init containers of the pilot agent pod, and the model bridge. A new Vector DaemonSet on homelab-wsl only (vector-agent-platform) reads them, drops command text and query strings from the gateway lines, keeps only known line types of the supervisors, and serves the gauges of the new alerts AgentInstructionFileChanged and ModelBridgeRateLimited. The new alert AgentInstructionCheckStale reads the result gauge of the aggregator. The shared Vector agent and the aggregator do not change.
+
+## v2.136.0 - 2026-11-14
+
+### Added
+
+* ai: alerts of the agent platform: a workload that is not ready, a failed last run and a stale run of its CronJobs (the providers job after 35 minutes, the daily checks after 26 hours), a drift of the GitHub App of the reviewer, an old run sandbox, a failed run, and a failed daily archive. The Vector aggregator serves the time of the newest result line of the platform, for the drift alert.
+
+## v2.135.0 - 2026-11-14
+
+### Added
+
+* security: the Prowler run for Cloudflare (`kubernetes/apps/security/prowler`), each day with the scan list of the registry, and a network policy for `api.cloudflare.com`. It does not run until the owner adds its read-only token as a SOPS Secret and names it in the app; the README has the steps and the least scope of the token. The new alert `SecurityTokenExpiring` fires 30 days before the end date that the owner writes to the Lease of a token. GitHub has no Prowler run, as it would fail each day on a personal account: the API checks take its lines of the registry
+
+## v2.134.0 - 2026-11-14
+
+### Added
+
+* security: the Prowler runs of the AWS accounts start on homelab-wsl-02: `prowler-aws-prod` each day at 03:17 UTC and `prowler-aws-management` at 05:17 UTC, now that the AWS session Secret exists
+
+## v2.133.0 - 2026-11-14
+
+### Added
+
+* security: the result series of Trivy Operator (`observability/rules.py`): `homelab_security_check_result` for each control of `k8s-cis-1.23` that has an input on these clusters and for `image-vulnerabilities` (a fail stays, and a pass is no evidence, while a running image has had no report for an hour; the new alert `SecurityImagesNotScanned` fires after 36 hours of that), and the time of the last result from the compliance report through kube-state-metrics. An accepted finding of `trivy` gives 0 until its end, also while its series is gone for less than a day. The new alert `SecurityFindingNew` fires when a result of high or critical severity is above 0 and above each value of the day before, or was 0 one hour before, or had no value in the day before, with one value for each check from a recording rule. homelab-wsl-02 lists `stream` and `trivy` in its sources, and a test fails if a cluster runs an app of a source that its line does not list, so the late alert watches it
+
+## v2.132.0 - 2026-11-14
+
+### Added
+
+* security: the converter mounts the volume `security-results` read-only at `/results`, so it reads the OCSF files of the Prowler runs and the result file of the API checks
+
+## v2.131.0 - 2026-11-14
+
+### Added
+
+* security: Prowler 5.49.0 for the AWS accounts (`kubernetes/apps/security/prowler`): a CronJob each day for `aws-prod` and one for `aws-management`, with the scan list of the registry, an OCSF file for the converter on the new claim `security-results`, the accepted findings (now the JSON key `accepted.json` of the Secret) as its only mutelist, nothing sent to the vendor, and a network policy that names the AWS API domains. No run starts until the owner names the CronJobs in the app, after the AWS sessions exist. `security/generate.py` writes the scan list of each provider for the app
+
+## v2.130.0 - 2026-11-14
+
+### Added
+
+* security: the converter sends each finding that fails in the newest file of a system as one line of the security stream `findings` in the Loki of homelab-wsl-02 (labels `security_stream`, `source`, `system`; kept 90 days by the rule of the security streams). A line is a part of the OCSF record: what failed, where and why, with no data, tag or label of a resource. The lines of a file go one time, wait for the next cycle when Loki does not answer, and `homelab_security_converter_findings_pending` shows them. A batch is 1 MiB at most in bytes on the wire, a 413 waits too, and one stream does not stop the others
+
+## v2.129.1 - 2026-11-14
+
+### Fixed
+
+* security: Trivy Operator gets 512 MiB on each cluster (it was 256 MiB, too low for a burst of scans), a request of 256 MiB, and `GOMEMLIMIT` at 460 MiB. On homelab-wsl-02 the operator pod restarts once
+
+## v2.129.0 - 2026-11-14
+
+### Added
+
+* security: the converter reads the files of results: the newest OCSF file of each system that Prowler writes, and the result file of the API checks. It serves `homelab_security_check_result` (the number of resources that fail, with a lowercase `severity` label; a finding that the accepted list muted does not fail) and the time of the newest whole file of each system. A file that does not fit gives no result and no time for its system, so the late alert fires, and `homelab_security_converter_files_skipped` counts it. It reads an OCSF file one record at a time, opens only a regular file, and takes only a check ID as a check. The ServiceMonitor drops the labels of the pod, so a restart makes no new series. Nothing is read before the converter mounts the volume `security-results`
+
+## v2.128.0 - 2026-11-14
+
+### Added
+
+* security: the list of accepted findings is one JSON array (the key `accepted.json` of the Secret `security-accepted-findings`), with five string fields for each entry. The converter reads it with `json.loads` (the Secret mounted read-only and optional) and serves `homelab_security_accepted_until_timestamp_seconds` with `source`, `check` and `system` for each entry, so the board counts the accepted findings and `SecurityAcceptedFindingExpired` can fire. No reason leaves the Secret. A list that is not one JSON array, or has a key two times in an object, gives no entry, and `homelab_security_converter_accepted_list_read` says so; so does a list left in the old key `accepted.yaml`, and a fault of the reader itself. An entry with a missing or extra key, a value that is not a string, no reason, or an end date not of the form `YYYY-MM-DD` is skipped. The alerts `SecurityAcceptedListUnread` (no entry for 30 minutes) and `SecurityAcceptedEntriesSkipped` (skipped entries for one hour) make both loud. Its parts now run in one loop, and a fault of one part does not stop the others. `security/generate.py` writes the names of the registry for the converter (`registry.json`)
+
+## v2.127.0 - 2026-11-14
+
+### Added
+
+* security: Trivy Operator 0.36.1 on homelab-wsl-02 (`kubernetes/apps/security/trivy-operator`), the source `trivy` of the security registry. It checks the workloads, the roles, the control plane pods, the controls of the CIS Kubernetes Benchmark that read the API server, and the images for vulnerabilities with a fix, one scan job at a time. The node collector is off, the images are pinned by digest, the version check and the usage data of Trivy are off, and a network policy names each registry host that a scan job can reach. The operator creates its scan jobs and reads their logs in `security` only, and a scan job runs as `nobody`
+
+## v2.126.0 - 2026-11-14
+
+### Added
+
+* security: the copy of the AWS trail on homelab-wsl-02 (`kubernetes/apps/security/trail-copy`). A CronJob copies the new files of the trail bucket to a volume every 15 minutes, keeps them 7 days, and sends each event to the Loki of the site as the stream `security_stream="cloudtrail"`, one stream for each account and Region. A file with a line that Loki refuses fails the run and is not sent again. A quiet Region is listed each 4 hours. The AWS systems of the registry have `stream` as a source, so the rule for a late result watches the trail
+
+## v2.125.0 - 2026-11-14
+
+### Changed
+
+* privacy: task privacy:edit copies the denylist to the PRIVACY_TERMS secret when the editor closes, if the list changed and still decrypts; an aborted or failed edit copies nothing. The copy goes to every repository of the account that already has the secret, found through the API (bin/privacy-terms), and names only public ones. task privacy:sync stays as the retry
+
+## v2.124.0 - 2026-11-14
+
+### Added
+
+* security: homelab-wsl-02 starts the AWS credential refresher (`kubernetes/apps/security/aws-credentials`). The cluster settings get the two Roles Anywhere profiles, the two client certificates come as SOPS Secrets that end on 2027-11-14, and the cluster lists its Flux Kustomization. Every 30 minutes it writes a 4-hour read-only session to `aws-security-audit-sts` and `aws-security-trail-sts`, and the end of each certificate to its Lease for `SecurityCertificateExpiring`
+
+## v2.123.0 - 2026-11-14
+
+### Added
+
+* ci: a nightly drift check for the Terraform roots with drift = true in domains.toml, on for the github root. terraform-drift.yaml plans main in the root's lock group on homelab-wsl's ops runner and never applies; the result goes to a new Pushgateway on homelab-wsl, and TerraformDrift (changes, or a failed check) and TerraformDriftCheckStale (no result for 30h) alert on it. The conformance check now covers every workflow that runs actions/terraform: the mask first, the root's lock, plan mode for a drift job
+
+## v2.122.0 - 2026-11-14
+
+### Added
+
+* aws: the AWS parts of the security platform in `modules/aws/security`, called by the prod root. An organization trail in the management account (management events, every Region, log file validation) writes to a private bucket in the prod account that deletes each object after 90 days. Two read-only IAM Roles Anywhere roles, each for one certificate CN: an audit role for Prowler and a reader of the trail bucket. An audit role in the management account that the audit role of the prod account can assume. Each plan warns while an account lists another trail
+
+## v2.121.0 - 2026-11-14
+
+### Changed
+
+* talos: the patch lists of homelab-wsl name a multi-document set (patches/cluster.yaml, patches/controlplane.yaml, patches/audit-policy-multidoc.yaml), so a rebuild with the pinned Talos gets the settings of the live node's patch files, the audit policy among them. The live node keeps its v1alpha1 files for its patch commands until its conversion, and a test holds the two forms equal, field by field. The defaults that Talos 1.14 generates and an older release did not are not compared. CI now has the pinned talosctl build and validate each Docker cluster's machine configs from its lists, with throwaway secrets. A merge applies nothing to a running node
+
+## v2.120.0 - 2026-11-14
+
+### Removed
+
+* terraform: the GitHub root's import blocks for the Flux webhook and the openclaw-hooks variables (imports.tf), now that an apply has imported them; docs/operations/github.md keeps how to adopt something that already exists on GitHub
+
+### Security
+
+* ci: sops-mask.py refuses a value shorter than 6 characters, naming its file and key path. The runner masks a value of any length, also inside longer words, so a short value showed as *** in ordinary text and could be read off. The GitHub root keeps such a value in unmasked.sops.yaml, which CI decrypts but does not mask, and the docs state what the mask guarantees
+
+## v2.119.0 - 2026-11-14
+
+### Added
+
+* monitoring: homelab-wsl lists the audit reader, so the audit log of its API server is the security stream `k8s-audit` of that cluster in the Loki of homelab-wsl-02. The registry of the security platform lists the stream as a source of homelab-wsl
+
+### Changed
+
+* monitoring: the memory limit of the audit reader is 192 MiB on each cluster that lists it, up from 128 MiB. On homelab-wsl-02 the reader used 115.6 MiB at its peak while it sent its first backlog of about 880,000 lines
+
+## v2.118.0 - 2026-11-14
+
+### Added
+
+* terraform/github: the root adopts the Flux webhook of tnwks-ops and the three variables of its openclaw-hooks environment. The webhook URL and the variable values are in the new tnwks-ops.sops.yaml, which CI masks. Terraform never updates a webhook, so it cannot remove the secret of the Flux receiver. The secrets that only the owner holds stay by hand
+
+## v2.117.0 - 2026-11-14
+
+### Added
+
+* terraform: every repository of the GitHub root has archive_on_destroy, so a destroy that ever gets past prevent_destroy archives instead of deleting; the apply is one in-place update per repository that resends its current settings
+
+## v2.116.0 - 2026-11-14
+
+### Removed
+
+* terraform: the GitHub root's import blocks (imports.tf), now that the first apply has imported all 36 objects; docs/operations/github.md keeps how to adopt something that already exists on GitHub
+
+## v2.115.2 - 2026-11-14
+
+### Security
+
+* agents: the pilot denies the tool github_publish, so its outward paths rest on a written rule
+
+## v2.115.1 - 2026-11-13
+
+### Fixed
+
+* talos: the control plane patch list of each WSL cluster (controlplane_patches in talos_clusters) names its audit policy. A rebuild of homelab-wsl-02 gets the policy from the list. The patches of homelab-wsl are in the v1alpha1 form, which the pinned Talos refuses at create, so its rebuild needs them in the multi-document form first. A change under talos/ now runs CI: each file parses, and each YAML file of a cluster is in its lists or is no patch. A merge applies nothing to a running node; talos/README.md says how the policy reaches one
+
 ## v2.115.0 - 2026-11-13
 
 ### Added

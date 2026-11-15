@@ -2,11 +2,11 @@
 ## REPOSITORIES
 ## One github_repository per entry in var.repositories.
 ##
-## Never deleted by Terraform: prevent_destroy refuses any plan that would.
-## archive_on_destroy (archive instead of delete, should the guard ever be
-## lifted) is not set yet: GitHub never reports it, so an import can't fill it
-## in and it would show as an in-place update of every repository. It comes in
-## its own change after the first apply (docs/operations/github.md).
+## Never deleted by Terraform: prevent_destroy refuses any plan that would,
+## and archive_on_destroy archives instead of deleting should the guard ever
+## be lifted. GitHub never reports archive_on_destroy, so it lives only in the
+## state and an import can't fill it in: a repository imported later plans as
+## an import plus an in-place update for it (docs/operations/github.md).
 ## No template, fork or source_* arguments: on an existing repository they
 ## force a replacement, which is a delete. The deprecated private,
 ## default_branch, vulnerability_alerts, pages and has_downloads arguments stay
@@ -31,6 +31,9 @@ resource "github_repository" "this" {
   has_discussions = each.value.has_discussions
   is_template     = each.value.is_template
   archived        = each.value.archived
+
+  # Archive, never delete, if a destroy ever gets past prevent_destroy.
+  archive_on_destroy = true
 
   allow_merge_commit          = each.value.allow_merge_commit
   allow_squash_merge          = each.value.allow_squash_merge

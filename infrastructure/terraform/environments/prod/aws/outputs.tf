@@ -146,3 +146,38 @@ output "rolesanywhere_backups_site_role_arns" {
   description = "Role per backup site, assumed through Roles Anywhere."
   value       = module.aws.rolesanywhere_backups_site_role_arns
 }
+
+output "security_trail_bucket" {
+  description = "S3 bucket of the organization trail."
+  value       = module.security.trail_bucket
+}
+
+output "security_trail_arn" {
+  description = "ARN of the organization trail."
+  value       = module.security.trail_arn
+}
+
+output "rolesanywhere_security_audit_profile_arn" {
+  description = "Roles Anywhere profile of the security audit role (RA_SECURITY_AUDIT_PROFILE_ARN on homelab-wsl-02)."
+  value       = module.security.rolesanywhere_audit_profile_arn
+}
+
+output "rolesanywhere_security_audit_role_arn" {
+  description = "The security audit role of the prod account, assumed through Roles Anywhere."
+  value       = module.security.rolesanywhere_audit_role_arn
+}
+
+output "rolesanywhere_security_trail_profile_arn" {
+  description = "Roles Anywhere profile of the trail reader role (RA_SECURITY_TRAIL_PROFILE_ARN on homelab-wsl-02)."
+  value       = module.security.rolesanywhere_trail_profile_arn
+}
+
+output "rolesanywhere_security_trail_role_arn" {
+  description = "The trail reader role, assumed through Roles Anywhere."
+  value       = module.security.rolesanywhere_trail_role_arn
+}
+
+output "security_audit_management_role_arn" {
+  description = "The security audit role of the management account, assumed from the audit role of the prod account."
+  value       = module.security.audit_management_role_arn
+}

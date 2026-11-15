@@ -142,7 +142,14 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: 900
+      # The worst case, in seconds (scripts/platform_checks.py): the CLI
+      # fetch 120, the gateway add 120, the leftover removal 165 (a gateway
+      # delete 60, then a read and a delete 30, a wait 60 and its last read
+      # 15), the create 300, the probe 450 (300, a last exec 120, the pod
+      # reads 30), the cleanup 225 (a gateway delete 60, a wait 45 and its
+      # last read 15, a removal 105). That is 1380, so the cleanup always
+      # ends before 1500.
+      activeDeadlineSeconds: 1500
       template:
         metadata:
           labels: *labels

@@ -127,13 +127,27 @@ resources:
   # The security platform's namespace (kubernetes/apps/security/README.md):
   # baseline Pod Security, deny by default. Its apps join one by one.
   - ../../../apps/security/namespace.yaml
+  # The AWS sessions of the security platform: two certificates for IAM Roles
+  # Anywhere -> two read-only sessions in Secrets (security/aws-credentials/README.md).
+  - ../../../apps/security/aws-credentials/ks.yaml
   # The converter (security/converter/README.md): the time of the newest line
   # of each security stream in this site's Loki, as the time of the last result.
   - ../../../apps/security/converter/ks.yaml
+  # The copy of the AWS trail (apps/security/trail-copy/README.md): the new
+  # files of the trail bucket, to a volume and to this site's Loki.
+  - ../../../apps/security/trail-copy/ks.yaml
   # Trivy Operator (kubernetes/apps/security/trivy-operator/README.md): the
   # checks of this cluster and of its images. Each cluster runs it with the
   # same values.
   - ../../../apps/security/trivy-operator/ks.yaml
+  # Prowler (kubernetes/apps/security/prowler/README.md): a CronJob for each
+  # cloud and SaaS account. A provider starts when the owner names its CronJob
+  # in the app, after its credentials exist.
+  - ../../../apps/security/prowler/ks.yaml
+  # The API checks (kubernetes/apps/security/api-checks/README.md): the
+  # firmware of the router and the settings of Terraform Cloud, each day, as
+  # a result file for the converter.
+  - ../../../apps/security/api-checks/ks.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml
@@ -233,9 +247,16 @@ patches:
                         - 'cnpg_pg_stat_archiver_last_archived_wal_start_lsn'
                         - 'cnpg_pg_replication_in_recovery'
                         # The two series of the security registry from the
-                        # sources of homelab-wsl (security/README.md, "What a
-                        # source must do"): the rules of the registry run
-                        # here only. Its own series, not a copy of this site's.
+                        # host check (security/README.md, "What a source
+                        # must do"). homelab-wsl scrapes the textfile
+                        # collector of both Windows hosts, and each distro
+                        # writes to the directory of its host. The rules of
+                        # the registry run here only. Its own series, not a
+                        # copy of this site's.
+                        - 'homelab_security_check_result{source="host-check",source_site=""}'
+                        - 'homelab_security_last_result_timestamp_seconds{source="host-check",source_site=""}'
+                        # The same two series from Trivy Operator of
+                        # homelab-wsl (kubernetes/apps/security/trivy-operator/README.md).
                         - 'homelab_security_check_result{source="trivy",source_site=""}'
                         - 'homelab_security_last_result_timestamp_seconds{source="trivy",source_site=""}'
                     static_configs:

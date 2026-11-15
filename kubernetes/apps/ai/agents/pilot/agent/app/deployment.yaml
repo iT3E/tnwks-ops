@@ -14,8 +14,8 @@ metadata:
   labels:
     app.kubernetes.io/name: agent
   annotations:
-    # Start the pod again when agent-config, agent-scripts or agent-secret
-    # changes.
+    # Start the pod again when agent-config, agent-scripts, agent-secret or
+    # agent-search-secret changes.
     reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
@@ -31,6 +31,14 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: agent
+        # The logs of this pod go to Loki, but the agent container's: its
+        # log can hold chat content. What ships is the record of the backup,
+        # of the instruction check, of the sandbox start and of each start
+        # of the pod
+        # (kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml).
+        logs.home.arpa/ship: "true"
+      annotations:
+        vector.dev/exclude-containers: agent
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -63,7 +71,7 @@ spec:
         # on this cluster the kubelet can't reach the local-path directory,
         # so it would make a subPath directory as root (talos/wsl/README.md).
         - name: prepare
-          image: &image ghcr.io/it3e/tnwks-agent-image:0.2.0@sha256:d0fef0cc4ab0270f74e9cc8a19ab27bc569d359949b24ce6d7ade50cf0428a40
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.0@sha256:43ee2f3a1a11dff2294795250091c685ac8b7b8b988a9eeb93c1adffef6f971d
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -143,6 +151,42 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
+        # The official plugins step of the image (the image README, "The
+        # official plugins"): it installs the Brave plugin from the npm cache
+        # of the image, with no network, as a verified official install, in
+        # the state directory. A sandboxed session uses a search provider
+        # only when it is bundled or a verified official install, and each
+        # session of the pilot is sandboxed. It runs before doctor, which
+        # would try to install a missing configured plugin from the npm
+        # registry. It installs the plugin again at each start, and stops
+        # the start on a plugin in the state that the image did not put
+        # there. It prints `official-plugins id=brave version=...
+        # result=installed|failed` or `official-plugins result=failed
+        # reason=...`, and a failure stops the start.
+        # It needs no secret.
+        - name: official-plugins
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["install-official-plugins"]
+          env: *env
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
         # Doctor of the product, on a copy of the config (the image README):
         # it migrates the state for a new release.
         - name: doctor
@@ -194,6 +238,58 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
+        # The memory index step (scripts/memory-index.sh in ../config): a
+        # stale index (a new embedding provider or model) gets a full rebuild,
+        # a valid one an incremental pass, before the gateway owns the state.
+        # It prints one line, memory-index result=ok|failed, and never stops
+        # the start: a failure or the time limit leaves search as it was.
+        # Its one secret is the key of the model gateway, for the
+        # embeddings.
+        - name: memory-index
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/memory-index.sh"]
+          env:
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: LITELLM_API_KEY
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
       containers:
         # The gateway of the product, on loopback only: no pod comes in. It
         # reaches the channels, the model gateway and the sandbox gateway.
@@ -201,7 +297,14 @@ spec:
           image: *image
           imagePullPolicy: IfNotPresent
           env: *env
-          envFrom: *secrets
+          envFrom:
+            - secretRef:
+                name: agent-secret
+            # BRAVE_API_KEY, for the web search of the gateway. This
+            # container only: not the init containers, not the backup
+            # container, and no sandbox (autoProviders is off).
+            - secretRef:
+                name: agent-search-secret
           ports:
             - name: gateway
               containerPort: 18789

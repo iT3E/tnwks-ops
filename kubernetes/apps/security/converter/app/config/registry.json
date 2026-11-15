@@ -1,0 +1,45 @@
+{
+  "series": {
+    "result": "homelab_security_check_result",
+    "last_result": "homelab_security_last_result_timestamp_seconds",
+    "accepted": "homelab_security_accepted_until_timestamp_seconds"
+  },
+  "sources": [
+    "prowler",
+    "trivy",
+    "host-check",
+    "api-check",
+    "stream",
+    "wazuh"
+  ],
+  "systems": [
+    "aws-management",
+    "aws-prod",
+    "cloudflare",
+    "iT3E",
+    "tnwks-ops",
+    "homelab-wsl",
+    "homelab-wsl-02",
+    "DESKTOP-HKE05KI",
+    "WSL-02",
+    "DESKTOP-HKE05KI-ubuntu",
+    "WSL-02-ubuntu",
+    "sce-rtr01",
+    "sce-ep01",
+    "SW03",
+    "unifi",
+    "healthchecks"
+  ],
+  "prowler": {
+    "aws": [
+      "aws-management",
+      "aws-prod"
+    ],
+    "cloudflare": [
+      "cloudflare"
+    ],
+    "github": [
+      "iT3E"
+    ]
+  }
+}

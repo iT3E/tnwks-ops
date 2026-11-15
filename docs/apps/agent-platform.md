@@ -15,6 +15,7 @@ these parts.
 | Trust domain of the workflow agents, and their run receiver | `agents-workflows` | `workflows/` |
 | Pilot of a personal agent, on test accounts | `agents-pilot` | `pilot/` |
 | Model bridge, next to the model gateway | `ai` | `../model-bridge/` |
+| Alert rules of the platform, and the heartbeat check | `monitoring` | `monitoring/` |
 
 ## Trust domains
 
@@ -109,6 +110,40 @@ charts make have no cluster label; they stay local because Cilium 1.19 sets
 HelmRelease (`kubernetes/apps/kube-system/cilium/app/helmrelease.yaml`) does
 not change it.
 
+## The backup mover and ConfigMaps
+
+The mover roles of kopiur give `get` and `patch` on each ConfigMap of the
+namespace where a mover runs. In a trust domain that reaches the config and
+the scripts of the agent pod, and Reloader starts the pod again on a change.
+At kopiur 0.10.20 a mover writes a ConfigMap only for the result of a
+repository bootstrap or discovery run, and those runs go in `kopiur-system`.
+A snapshot or a restore writes none.
+
+So the admission rule `agents-backup-mover-configmaps`
+(`kubernetes/apps/ai/agents/admission/`) refuses each create, change or
+delete of a ConfigMap by a mover ServiceAccount (`kopiur-mover`,
+`kopiur-snapshot-replication-mover`, `kopiur-stream-mover`) in a namespace
+with the label `agents.home.arpa/trust-domain`. Reads, and the status writes
+of the mover, are not affected. A namespaced `Repository` in a trust domain
+would bootstrap there and need a change of the rule.
+
+What the rule does not change: the mover still runs with the credentials of
+the shared repository that kopiur projects before each run
+(`docs/operations/backups.md`, "Credentials"). A repository of their own for
+the trust domains is a later step.
+
+A refusal fires `AgentBackupMoverConfigMapDenied` ([Alerts](#alerts)). The
+API server counts the refusals of a policy
+(`apiserver_validating_admission_policy_check_total`), and the scrape of the
+API server on homelab-wsl keeps the series of this policy with
+`enforcement_action="deny"` and no other
+(`kubernetes/clusters/wsl/apps/kustomization.yaml`).
+
+To check: `kubectl get validatingadmissionpolicy agents-backup-mover-configmaps`,
+and after the next snapshot of a trust domain,
+`kubectl -n agents-pilot get snapshots.kopiur.home-operations.com` shows the
+newest one `Succeeded`.
+
 ## The model path
 
 Every model call of an agent goes to the model gateway (LiteLLM,
@@ -135,6 +170,16 @@ agent (key agents-<name>) -> model gateway, name agents-<name>
   line, by a person, in a pull request, and a revert is the way back. The
   finance agent follows the main agent in the same pull request.
   `docs/apps/litellm.md` ("The agent platform") has the steps.
+- **One attempt at the gateway.** The gateway sends a call to the bridge
+  one time, with no retry of its own (a decision of the owner, 2026-11-14;
+  `docs/apps/litellm.md`, "One attempt to the bridge"). The caller retries:
+  the Anthropic SDK 2 times for a 429 or a 5xx, and an agent framework can
+  retry on top of it (Strands retries a 429 up to 6 attempts in all, from
+  4 s to 64 s apart).
+  At the usage limit of the plan one model call of a workflow agent reaches
+  the bridge 18 times at most in one run (3 by the SDK times 6 by Strands).
+  Before this change it was 54. A caller that makes its 3 attempts for one
+  review starts 3 runs, so one review can still reach 54 over the three.
 - **No fallback.** The gateway config has none. Each key lists its one name,
   so a call to any other name, or a fallback in a request, gets 403. The
   config of each agent names its one model, with no fallback list.
@@ -176,8 +221,8 @@ homelab-wsl lists it next to `agents/`.
   domain, not starting with `sk-ant-`). The model gateway gets the same
   three keys for its entries, in `litellm-secret`.
 - **Stop:** a `preStop` sleep of 5 s, then SIGTERM. The bridge drains:
-  `/health` answers 503, a new call gets a 503 that a
-  caller retries, and the calls in work run to their end for up to
+  `/health` answers 503, a new call gets a 503 that the
+  SDK of the caller retries (the gateway does not), and the calls in work run to their end for up to
   `BRIDGE_DRAIN_SECONDS` (75 s). The grace period is 90 s. A rollout starts
   the new pod before it stops the old one (`maxSurge: 1`,
   `maxUnavailable: 0`).
@@ -198,7 +243,8 @@ README has the contract of the pod.
 daemon stays in the repository but out of `pilot/kustomization.yaml`, and
 the config of the agent has no Signal channel. When the test Signal number
 exists, one change turns it on: the daemon in the kustomization, the
-`dependsOn` of the agent, the channel and its plugin in `openclaw.json`,
+`dependsOn` of the agent, the channel, its plugin and its id in
+`plugins.allow` in `openclaw.json`,
 the rule to the daemon in the agent's network policy, and the two Signal
 keys in the secret. Then link the number (below).
 
@@ -227,14 +273,36 @@ the sandbox plugin copies the workspace only.
   keeps the prompt cache, and it sends the effort as set. Change it in the
   same PR as a move of the name to a different model. The tools `code_execution`,
   `file_fetch`, `file_write`, `dir_list`, `dir_fetch` and `gateway` (the
-  agent's own reads and changes of its config) are denied. The agent has
-  no `message` tool: the product leaves it out of a sandboxed session by
+  agent's own reads and changes of its config) are denied, and so is
+  `github_publish`. The product puts that tool in a sandboxed session by
+  default, and it opens a draft pull request from the session's
+  repository. It would exist only with a repository workspace in the
+  session, a GitHub credential on the gateway and a route to GitHub, and
+  the pilot has none of these. The deny keeps the pilot's outward paths
+  (R4) on a written rule, not on a missing credential and a network rule.
+  The agent has no `message` tool: the product leaves it out of a sandboxed session by
   default (`tools.sandbox.tools`), and every session of the pilot is
   sandboxed. So the agent answers in the chat that wrote to it, and can't
   send to an address that it names. Adding `message` to that list is a
   design change: the exec approvals of the product cover host commands
   only, so a hold of an outward message needs a plugin hook
   (`before_tool_call` with `requireApproval`).
+  **Plugins.** `plugins.allow` names the plugins that the agent loads:
+  `brave` (web search), `diagnostics-otel` (the traces), `memory-core`
+  (memory search), `openshell` (the sandbox backend) and `telegram` (the
+  channel). Without the list, the product enables each plugin that it finds
+  by default: the bundled ones, and any plugin in the state directory
+  (`state/extensions`, or an install record in the state database)
+  (`src/plugins/config-activation-shared.ts:138` and `:170` at 2026.11.3). With it, a plugin that is not in the list does not
+  load, in `doctor` or in the gateway. The list leaves out 13 bundled
+  plugins that loaded before it: the model providers `anthropic`, `openai`,
+  `xai` and `ollama` (the model and the embeddings go through the model
+  gateway, with the product's own clients), and `browser`, `canvas`,
+  `cua-computer`, `device-pair`, `file-transfer`, `geolocation`, `github`,
+  `linux-node` and `talk-voice`, which give no tool to a sandboxed session
+  or are denied (`file-transfer`). A sandboxed session offers and finds the
+  same tools with and without the list. A new plugin needs its id in the
+  list, in the same change.
   `autoProviders` of the sandbox plugin is off, so no credential of the pod
   goes to a sandbox as a provider. Each channel takes messages from its one
   allowed sender, and no group. The config can't be changed from a chat
@@ -247,7 +315,124 @@ the sandbox plugin copies the workspace only.
 - **The scheduled turn** is the heartbeat of the product
   (`agents.defaults.heartbeat`): once a day, a turn in its own session with
   one shell command in a sandbox, and no message to a channel. Its traces go
-  to the collector (alloy, OTLP).
+  to the collector (alloy, OTLP). The CronJob `agent-heartbeat-check` in
+  `monitoring` asks Tempo each morning for a completed heartbeat in the last
+  26 hours ([Alerts](#alerts)).
+- **Memory search.** The agent searches its memory files (`MEMORY.md` and
+  `memory/*.md` in its workspace) with `memory_search`, and reads a part of
+  one with `memory_get` (`memory.search` in the config). The embeddings come
+  from the model gateway: provider `openai-compatible`, base URL
+  `http://litellm-app.ai.svc.cluster.local:4000/v1`, the key `agents-pilot`,
+  and the entry `agents-pilot-embeddings`, which runs on the Ollama of the
+  host ([litellm.md](litellm.md#the-entries)). So the text of the memory
+  goes to no vendor.
+  - The gateway process of the agent pod makes these calls, not a sandbox.
+    The network policy already lets the pod reach the model gateway on port
+    4000, so the search needs no new rule.
+  - The text sent is the memory files, in chunks, when they change, and the
+    query of each `memory_search`. Past conversations are not sent:
+    `sources` is `["memory"]` and `rememberAcrossConversations` is false.
+  - The index is in `state/agents/main/agent/openclaw-agent.sqlite` on the
+    volume `agent-state`, so the archives and the nightly copy hold it
+    ([State, archives and backups](#state-archives-and-backups)). It holds
+    the text of the chunks as well as their vectors.
+  - The product leaves the two tools out of a sandboxed session by default,
+    so `tools.sandbox.tools.alsoAllow` names them. It names the two tools
+    and not `group:memory`, because at this release that group also gives
+    `personal_instructions`.
+  - The traces hold no tool input or output: the config doesn't set
+    `diagnostics.otel.captureContent`.
+  - If the model gateway is down, a search finds nothing and the chat goes
+    on. The start of the pod doesn't need the model gateway.
+  - **The index at each start.** At this release the product does not
+    rebuild the index by itself when the embedding provider or model
+    changes. It records the provider and model in the index, and a
+    mismatch with the config only marks the index stale: each search
+    returns `stale` and no result ("index was built for model ...,
+    expected ..."). It does this by design, so that no change of config
+    starts a cost that nobody asked for. Its rebuild command
+    (`openclaw memory index`) refuses to run while the gateway owns the
+    state, so it can't run in the `agent` container.
+  - So the `memory-index` init container
+    (`agent/config/scripts/memory-index.sh`) runs `memory index --agent
+    main` at each start of the pod, after `doctor` and before the gateway.
+    A stale index gets a full rebuild. A valid one gets an incremental
+    pass, which embeds only the changed files. The product keeps a cache
+    of embeddings, so a rebuild embeds only text that it has not seen.
+    The step has a limit of 180 seconds. Its only secret is
+    `LITELLM_API_KEY`. It prints one line, `memory-index result=ok` or
+    `memory-index result=failed`, and nothing of the CLI's own output.
+  - A later change of the embedding model needs no step by hand: the
+    config change restarts the pod (Reloader), and the step rebuilds.
+  - When the step fails (the model gateway or the host's Ollama is down,
+    or the limit fires), the pod still starts. The index stays as it was,
+    so a stale index stays stale until the next start that ends with
+    `memory-index result=ok`. To check:
+    `kubectl -n agents-pilot logs deploy/agent -c memory-index`. A
+    `result=failed` line fires `AgentMemoryIndexFailed` until that start.
+  - To check a search with no chunk text, in the `agent` container (the
+    gateway answers it): `openclaw memory search "<word>" --agent main
+    --json`, keeping only `path`, `score` and `vectorScore` of each
+    result. A ready index gives results with a `vectorScore`; a stale one
+    gives `stale: true` and a warning.
+- **Web search.** The agent searches the web with `web_search`, through the
+  Brave Search API (the plugin `@openclaw/brave-plugin` of the agent image,
+  `tools.web.search` in the config). The gateway process of the agent pod
+  makes the call, not a sandbox.
+  - **A verified official install.** A sandboxed session uses a search
+    provider only when it is bundled with the product or is a verified
+    official install, and each session of the pilot is sandboxed. A plugin
+    from `plugins.load.paths` is neither, and the Brave plugin is not
+    bundled. So the image holds the plugin in an npm cache, and the
+    `official-plugins` init container installs it from there with the
+    product's own installer, with no network, before `doctor`. The install
+    record in the state database makes it a verified official install, and
+    its code is in `state/npm/`. The config enables it in
+    `plugins.entries` (the image README, "The official plugins"), and
+    `plugins.load.paths` names no path for it.
+  - **The code on the state volume is replaced at each start.** The
+    gateway runs as the same user and can write the state volume, and the
+    product checks no hash of installed code at a start: the trust comes
+    from the install record alone, which the gateway can write too. So the
+    step removes `state/npm/` and installs the plugin again from the image
+    at each start (some 8 seconds), and the record with it. A restored
+    archive does not bring back old code either. The step also stops the
+    start when the state holds an install record of another plugin or a
+    file in `state/extensions` (the runbook, "The official plugins step
+    fails").
+  - What goes to the vendor: the query that the model writes for the tool,
+    and its filters (count, country, language, dates), with the key. The
+    conversation does not go. The answer is a list of titles, URLs and
+    snippets.
+  - The vendor keeps the query logs for up to 90 days on its self-serve
+    plans, and its terms allow only transient storage of the results.
+  - What the pod keeps: the gateway caches a result in memory for 15
+    minutes. The query and the result are also in the session store
+    (`state/agents/main/agent/openclaw-agent.sqlite`), like each tool call,
+    so the archives, the daily backup and the nightly copy hold them
+    ([State, archives and backups](#state-archives-and-backups)). The
+    owner accepted this for the pilot, which runs on test accounts. A
+    trust domain with real accounts needs that decision again.
+  - The traces hold no query: the config doesn't set
+    `diagnostics.otel.captureContent`.
+  - The product leaves `web_search` out of a sandboxed session by default,
+    so `tools.sandbox.tools.alsoAllow` names it. `web_fetch` stays out.
+  - **The key** is `BRAVE_API_KEY` in the Secret `agent-search-secret`
+    (`kubernetes/apps/ai/agents/pilot/agent/app/secret-search.sops.yaml`).
+    Only the `agent` container gets it, as an env var: not the init
+    containers (`memory-index` included), not the backup container, and no
+    sandbox. It is one key, shared with an OpenClaw deployment outside the
+    cluster. So a leak or a rotation touches both, and the usage counts of
+    the vendor are for both.
+  - **Rotate:** make a new key at the vendor, put it in the file with
+    `sops <file>` (the file above) in a PR, merge, and change the other
+    deployment too. Reloader starts the pod again when the Secret
+    changes. Then revoke the old key.
+  - **Turn off:** set `tools.web.search.enabled` to `false` in
+    `openclaw.json` and take `web_search` out of `alsoAllow`. To remove it,
+    also take out the plugin entry, the network rule and
+    the Secret. With a wrong key, the gateway starts and each search fails
+    with an error from the vendor (401).
 - **Secret** `agent-secret` (env vars of the pod):
 
   | Key | Value |
@@ -277,15 +462,16 @@ the sandbox plugin copies the workspace only.
   `Ready`. A sandbox stopped by hand starts again within a minute; delete it
   to keep it down.
 - **Network policy.** No pod comes in. Out: the model gateway, the sandbox
-  gateway of this namespace, alloy, and
-  `api.telegram.org`. The Signal daemon takes the agent pod only (and the
-  kubelet's probes), and reaches `*.signal.org` only.
+  gateway of this namespace, alloy, `api.telegram.org` and
+  `api.search.brave.com`, each on its one port. The Signal daemon takes the
+  agent pod only (and the kubelet's probes), and reaches `*.signal.org`
+  only.
 
 ### State, archives and backups
 
 | When | What | Kept |
 | --- | --- | --- |
-| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `doctor` migrates the state, on a copy of the config | 14 days |
+| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `official-plugins` installs the Brave plugin again from the image (it stops the start on a plugin in the state that the image did not put there), `doctor` migrates the state, on a copy of the config, and `memory-index` brings the memory index up to date (see "The index at each start" above) | 14 days |
 | Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): once the gateway is ready, `openclaw backup create --verify` to `archives/daily/`. The command checks that the gateway owns the state, and it can only see the gateway process in the same PID namespace, so the pod shares one (`shareProcessNamespace: true`) | The last 7 |
 | Each day, after that backup | The same container: the SHA-256 of `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md` and each file under `skills/`, compared with the list of the day before (`archives/instruction-files/`). One log line for each file that is new, changed or gone, then `instruction-check result=...` | 30 days of lists |
 | Each start of the Signal daemon | `archive` init container: a `tar.gz` of `data` in `archives/start/`, with the signal-cli release | 14 days |
@@ -312,9 +498,10 @@ curl -s localhost:8080/api/v1/rpc -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"finishLink","params":{"deviceLinkUri":"<uri>","deviceName":"agents-pilot"}}'
 ```
 
-Then start the agent pod again
-(`kubectl -n agents-pilot rollout restart deploy/agent`), so the Signal
-channel finds the account.
+Then start the agent pod again by a delete of the pod
+(`kubectl -n agents-pilot delete pod -l app.kubernetes.io/name=agent`), so
+the Signal channel finds the account. Not `rollout restart`: Flux removes
+its annotation at the next reconcile, which starts the pod one more time.
 
 ## The run receiver
 
@@ -354,20 +541,28 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
     stays as a record. The agent must be safe to run twice for the same
     work: the Renovate reviewer posts one comment for each head.
 - **The answer of a run stays with its Job.** The answer is the last line
-  of the log of the run pod, and the pod GC of this cluster
-  (`terminated-pod-gc-threshold: 1`, `talos/wsl/cluster-config.yaml`) deletes
-  that pod soon after the Job ends: 35 s on the first run. So the receiver
-  keeps the answer in the annotation `workflow-agents/result` of the Job when
-  it first reads it, on a call or in a loop every 10 s over the ended Jobs
-  with no kept answer (`RUN_RECEIVER_RECORD_SECONDS`). A later call with
-  the same key reads the annotation.
-  - An answer of more than 64 KiB is kept without its `output`.
-  - If the pod went before the receiver read it (the receiver was down for
-    that time), the answer is the state of the Job (`succeeded`, `failed` or
+  of the log of the run pod. The pod GC of this cluster
+  (`terminated-pod-gc-threshold: 1`, `talos/wsl/cluster-config.yaml`) checks
+  every 20 s and deletes each terminated pod of the whole cluster but the one
+  created last (Kubernetes `pkg/controller/podgc`). A run pod can go seconds
+  after it ends, for example when another pod started at the same second (the
+  providers job at :07) or a CronJob of another namespace ends.
+  - So the receiver follows the log of each running run as it is written
+    (`follow=true`), from the call that makes or finds the run, and from its
+    loop every 10 s (`RUN_RECEIVER_RECORD_SECONDS`) for a run that no call
+    started. The run job writes the result line last, and the pod GC deletes
+    only a pod that has ended, so the line is in hand before the pod can go.
+    This needs no right beyond `pods`: `list` and `pods/log`: `get`.
+  - The receiver keeps the answer in the annotation `workflow-agents/result`
+    of the Job. A later call with the same key reads the annotation.
+  - An answer of more than 64 KiB is kept, and answered, without its
+    `output`.
+  - If the receiver was down for the whole end of a run and the pod went,
+    the answer is the state of the Job (`succeeded`, `failed` or
     `timed_out`), with `"output_kept": false`.
-  - For this, the Role of the receiver has `jobs`: `list` and `patch`. The
-    patch changes only the annotations, and the admission policy checks it
-    as it checks a new Job (it matches `UPDATE` too).
+  - For the annotation, the Role of the receiver has `jobs`: `list` and
+    `patch`. The patch changes only the annotations, and the admission
+    policy checks it as it checks a new Job (it matches `UPDATE` too).
 - **The Renovate reviewer** is the one agent. It reviews pull requests of
   `iT3E/tnwks-ops` only (`REVIEWER_REPOSITORIES`), and posts one comment for
   each head: it never merges, approves, pushes or changes a label. It calls
@@ -493,17 +688,94 @@ curl -s localhost:8080/healthz
 curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8080/runs -d '{}'
 ```
 
+## Logs
+
+Loki has the logs of each Job pod of the platform (the run jobs, the
+providers job, the sweep and the checks), and of the long-running pods on an
+allowlist. A pod ships only when its pod template has the label
+`logs.home.arpa/ship: "true"`; a new pod in the same namespace stays out
+until its manifest has the label too. The sandbox supervisors are made by the
+gateway, so their namespace opts in instead
+(`logs.home.arpa/ship-supervisors: "true"`, `agents-workflows` only), and
+only pods with the labels `openshell.ai/component: supervisor` and
+`openshell.ai/boundary-role: supervisor` ship. A pod with
+`openshell.ai/boundary-role: workload` never ships, even with the allowlist
+label.
+
+A Vector agent of its own reads them: the platform agent, a DaemonSet that
+only homelab-wsl runs (`kubernetes/apps/monitoring/vector/agent-platform/`,
+the sources `allowlist` and `supervisors` of its `config/vector.yaml`). The
+shared Vector agent and the aggregator stay the same on each cluster. Query
+the lines by namespace and app, for example
+`{namespace="agents-workflows", app="run-receiver"} |= "result kept"`.
+
+Before a line leaves the node, the platform agent changes it as follows (its
+tests are in `observability/vector-tests/agent-platform-logs.yaml`):
+
+- **The sandbox gateway** (`openshell-gateway`). The colour codes go. From
+  the first field that can hold a command, or its input or output, to the
+  end of the line, the line becomes `(dropped)`: a `[cmd:` context, or a key
+  that ends in `preview`, `stdin`, `stdout`, `stderr`, `input`, `output` or
+  `body`, or `cmd`, `cmd_line`, `cmdline`, `command`, `args`, `argv` or
+  `env`, before `=` or `:`, in any case. An `error=` or `detail=` field
+  ships: the gateway writes its own error text there. The gateway logs the first 120 or
+  so characters of each command it relays to a sandbox (`command_preview=`),
+  and Loki gets `command_preview=(dropped)`. The query string of each URL,
+  path or host becomes `?(dropped)`. A JSON OCSF record (it holds
+  `class_uid`) becomes `(dropped: OCSF JSON record)`: it is off by default,
+  and can hold the command line of a process.
+- **A sandbox supervisor** (`supervisor`). The same, and then the line
+  stays only when it is a known line type of OpenShell 0.1.8 (SSH, NET,
+  HTTP, CONFIG, an SSH relay EVENT, LIFECYCLE, PROC, or a plain log line of
+  the supervisor) and holds only the characters and fields that type allows:
+  an SSH auth field is one of the labels of the format, a CONFIG field is
+  one the format writes (version, hash, source and the like, never
+  `rejection_reason`), and a LIFECYCLE line names an `openshell` program.
+  Any other line becomes `(dropped: unknown line type)`. A new release that
+  logs a new kind of line shows the marker, and a test of the new line
+  moves it to the list.
+
+  What still ships by design: the host and port of each connection out of
+  the sandbox; the method, host and path of each HTTP request (a token
+  inside a path ships; the query string does not); and the short text (up
+  to 120 characters) of a CONFIG line or a plain log line.
+- **Every other container** (the run receiver, the model bridge and the
+  pilot's pod) ships its line as it is. Their lines are the program's own
+  (below), and the bridge's JSON lines stay whole.
+
+| Pod | What its log holds | About a day |
+| --- | --- | --- |
+| The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
+| The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
+| A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
+| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory) and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
+| The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
+
+Not in Loki, on purpose:
+
+- **The agent container of an agent pod.** The pilot's pod excludes it with
+  the annotation `vector.dev/exclude-containers: agent`: its log can hold
+  chat content and the name of its bot.
+- **Every other pod of the trust domains**: the gateways and supervisors of
+  `agents-pilot`, `agents-main` and `agents-finance`, the agent pods of main
+  and finance, and the Signal daemon (its log holds phone numbers). Read
+  them with `kubectl logs`; a pod's log is gone when the pod goes.
+- **The workload pod of a sandbox** (`openshell.ai/boundary-role: workload`):
+  the code that an agent runs. The run job logs the result of a run.
+- **The other pods of `ai`**: the model gateway and the browser tool.
+
 ## Checks
 
 Two CronJobs in each trust domain test the boundaries every day
 (`checks/app/`, shared by the trust domains; each `<name>/checks/ks.yaml`
 applies it to its namespace). A failed check fails its Job, and the Job
-pod's log goes to Loki.
+pod's log goes to Loki. `AgentPlatformCronJobFailed` and
+`AgentPlatformCheckStale` alert on them ([Alerts](#alerts)).
 
 | CronJob | Schedule | What must hold |
 | --- | --- | --- |
 | `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
-| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox |
+| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox. Before the create it removes a sandbox of its own name that an earlier run left (a `leftover sandbox` line), and at its end it fails when its Sandbox record is still there (a `sandbox removed` line), after it removes it |
 
 - The check pods may try every trust domain's gateway on port 8080, so the
   isolation check tests each gateway's own policy, not the check pod's.
@@ -515,8 +787,91 @@ pod's log goes to Loki.
   (label `openshell.ai/sandbox-name`), whose `openshell.ai/sandbox-id` the
   two pods carry in lower case as `openshell.ai/boundary-pair`. A Role lets
   it get and list `Sandbox` records and pods in its own namespace, and
-  nothing more.
+  delete its own record `default--platform-probe` (the name that OpenShell
+  0.1.8 gives the sandbox `platform-probe`), and nothing more. It deletes
+  that record only when it has the labels of OpenShell for this probe.
 - Nothing places the two pods of a sandbox: the scheduler picks each node
   on its own, so they can share a node. The probe logs `nodes` and
   `different_nodes` and doesn't fail on one node.
 - To run one now: `kubectl -n agents-<name> create job --from=cronjob/platform-check-isolation check-now`.
+
+## Alerts
+
+The rules are in `monitoring/app/prometheusrule.yaml` and
+`monitoring/app/heartbeat-prometheusrule.yaml` (the Flux Kustomization
+`agents-monitoring`, homelab-wsl only). Each alert goes to the
+War Room, the default Telegram route of Alertmanager, with severity
+`warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
+`AgentInstructionFileChanged`, `AgentInstructionCheckStale`,
+`AgentMemoryIndexFailed` and `ModelBridgeRateLimited` read lines of the logs,
+as gauges of Vector: the aggregator for the `<check> result=` lines
+(`WorkflowAppDrift`, `AgentInstructionCheckStale`, `AgentMemoryIndexFailed`),
+the platform agent for the `instruction-check file=` lines and the bridge
+(`AgentInstructionFileChanged`, `ModelBridgeRateLimited`) ([Logs](#logs)).
+`AgentBackupMoverConfigMapDenied` reads a counter of the API server.
+
+[`agent-platform-runbook.md`](agent-platform-runbook.md) has a section for
+each alert (what it means, the first checks, what was seen so far, the fix),
+and each rule's `runbook_url` links to it. It also has the restore of the
+state of an agent, the fast stop of the workflow agent, the move to Bedrock
+by hand, and the steps at a limit of the Claude plan.
+
+| Alert | Fires when | `for` | First step |
+| --- | --- | --- | --- |
+| `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive`, `official-plugins` or `doctor` init container, or a lock on the state volume. Revert the last image if it came with an update |
+| `AgentPlatformCronJobFailed` | The last run of a CronJob of a trust domain failed, and no run passed since: the providers job, the sweep, a daily check. It resolves at the next good run | none | Its log in Loki (below). A `result=failed` line of the providers job names the step |
+| `WorkflowProvidersStale` | No good run of `workflow-providers` in 35 minutes, or the CronJob is gone. A token of the reviewer lives one hour, so about 25 minutes are left | 5m | `kubectl -n agents-workflows get cronjob,jobs`, then the log of the last run |
+| `WorkflowAppDrift` | An `app-drift result=drift` line in the last 20 minutes: the App or its installation has more permissions than the list in git | none | The `detail=` of the line names each one. Set the App back, or change the list by a pull request |
+| `AgentHeartbeatMissing` | The daily `agent-heartbeat-check` (06:33 UTC) found no completed heartbeat run of an agent in Tempo in the last 26 hours, or could not ask Tempo. It asks 3 times, 60 seconds apart, and a failed pod gets one more try, so one short break of Tempo does not fire. It resolves at the next good run | none | Its log in Loki (`{namespace="monitoring", app="agent-heartbeat-check"}`): `result=missing` names the service, `result=error` is Tempo. Then the agent pod and its traces |
+| `AgentHeartbeatCheckStale` | The heartbeat check itself was not scheduled in 26 hours, or its CronJob is gone | 15m | `kubectl -n monitoring get cronjob agent-heartbeat-check` |
+| `AgentPlatformCheckStale` | A daily check (`platform-check-isolation` or `platform-check-probe`) of a trust domain has not passed in 26 hours, or never passed once a run was due | 15m | The CronJob (suspended?) and its Jobs |
+| `AgentRunSandboxTooOld` | A run sandbox (`default--run-*`) in `agents-workflows` is older than 80 minutes: the run job and the sweep both failed to delete it | 10m | The CronJob `workflow-sweep`, then delete the sandbox through the gateway |
+| `AgentWorkflowRunFailed` | A run job failed, for 2 hours from its start | none | The annotation `workflow-agents/result` of the Job, and the run log in Loki. A 502 from the model gateway can be the limit of the Claude plan |
+| `AgentDailyArchiveFailed` | The `backup` container of an agent pod started again in the last 2 hours after an exit with an error: the daily archive failed. A restart of the node (reason `Unknown`) does not count | none | `kubectl -n <namespace> logs <pod> -c backup --previous` |
+| `AgentInstructionFileChanged` | An `instruction-check file=<name> change=<change>` line in the last 20 minutes: an instruction file of the agent's workspace (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `skills/`) is new, changed or gone since the day before | none | The lines in Loki name each file. Compare it with the daily archive, and find what made the change before the agent runs on it |
+| `AgentInstructionCheckStale` | No `instruction-check result=` line of the pilot's agent pod in 26 hours, once its `backup` container has run for 26 hours | 15m | `kubectl -n agents-pilot logs deploy/agent -c backup`. A backup that waits on a gateway that is not ready logs nothing |
+| `AgentMemoryIndexFailed` | The newest `memory-index result=` line of the pilot's agent pod is `result=failed`, and it is not older than the start of the newest agent pod. It clears at a start that ends ok. A new pod that has not run the step yet, or no pod, does not fire | none | `kubectl -n agents-pilot logs deploy/agent -c memory-index`. When the model gateway and the model server of the host answer, start the pod again |
+| `AgentBackupMoverConfigMapDenied` | The admission rule `agents-backup-mover-configmaps` refused a ConfigMap write of a backup mover in a trust domain ([The backup mover and ConfigMaps](#the-backup-mover-and-configmaps)). It fires for one to two hours after each denial (`keep_firing_for: 1h`) | none | The audit lines of that hour in Loki name the namespace, the ConfigMap and the ServiceAccount, and the events of the namespace name the mover Job. Suspend the snapshots of that namespace |
+| `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |
+
+- **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,
+  `{namespace="agents-workflows", app="workflow-run"}`, and
+  `{namespace="agents-<name>", app="platform-checks"}`. Job pods ship
+  logs on this cluster, and the long-running pods of the allowlist
+  ([Logs](#logs)).
+- **A failed Job.** The chart rule `KubeJobFailed` also fires for each
+  failed Job, and keeps firing while the Job is kept: a run job for 7 days,
+  a failed CronJob run until three newer runs fail. Read
+  `AgentPlatformCronJobFailed` for the state of now.
+- **The drift line.** The Vector aggregator turns each line of a pod in a
+  namespace `agents-*` that starts with `<check> result=<result>` into the
+  gauge `homelab_agent_platform_result_timestamp_seconds{pod_namespace, app,
+  check, result}`: the time of the newest such line. No other word of the
+  line becomes a label. Each sample carries the time of its line, so
+  Prometheus holds it for 5 minutes only: a rule reads it with
+  `max_over_time` over a window longer than the time between two lines
+  (20 minutes for the drift line, which comes every 15). A line
+  `instruction-check file=<name> change=<change>` becomes the check
+  `instruction-file` with the change as its result; the file name stays in
+  Loki. A kind or domain of the bridge outside a short pattern becomes
+  `other`. The bridge's `engine_error` lines become
+  `homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}` the
+  same way. A line read again from the start of its file keeps its old time,
+  so it does not fire an alert again. The aggregator makes the gauge of
+  each `<check> result=` line; the platform agent makes the gauge of the
+  `instruction-check file=` lines and of the bridge, on its own port
+  (`homelab-wsl` only).
+- **The snapshots** of a state volume have the kopiur chart's rules,
+  which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`,
+  `KopiurBackupStale` (48 hours), `KopiurSnapshotFailed`,
+  `KopiurBackupConsecutiveFailures`, and `KopiurRestoreFailed` for a restore.
+  They have no runbook link; the runbook has a section for each.
+- **The heartbeat check** reads one span of each agent's heartbeat trace:
+  `openclaw.run` with `openclaw.trigger=heartbeat` and
+  `openclaw.outcome=completed`, for each service in its env `SERVICES`
+  (`openclaw-agents-pilot` now). Add a service when a trust domain gets its
+  agent; a domain with no agent is not in the list, so it never alerts.
+  `KubeJobFailed` also fires for a failed run of the check.
+- **Not alerted yet.** The age of the agent image against the upstream
+  releases (a check of the agent image's repository), an `engine_error` of
+  another kind than `rate_limit`, and a Sandbox record with no pod.

@@ -389,6 +389,35 @@ spec:
   - name: homelab.security
     interval: 1m
     rules:
+    - record: homelab:security_trivy_running_containers:info
+      expr: label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"), "image_ref", "$1", "image_spec", "(.+)"), "image_ref", "$1$2:latest",
+        "image_ref", "([^@]*/)?([^/:@]+)"), "image_ref", "$1", "image_ref", "([^@]+:[^@/]+)@.+"), "image_ref", "",
+        "image_ref", "[^@]*@.*"), "image_ref", "index.docker.io/library/$1", "image_ref", "([^/]+)"), "image_ref",
+        "index.docker.io/$1", "image_ref", "([^/.:]+/.+)"), "image_ref", "$1", "image_ref", "index[.]docker[.]io/(localhost/.+)"),
+        "image_ref", "index.docker.io/$1", "image_ref", "docker[.]io/(.+)"), "image_ref", "index.docker.io/library/$1",
+        "image_ref", "index[.]docker[.]io/([^/]+)") or label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"), "image_ref", "$1", "image_spec", "(.+)"), "image_ref", "$1$2:latest",
+        "image_ref", "([^@]*/)?([^/:@]+)"), "image_ref", "$1", "image_ref", "([^@]+:[^@/]+)@.+"), "image_ref", "",
+        "image_ref", "[^@]*@.*"), "image_ref", "index.docker.io/library/$1", "image_ref", "([^/]+)"), "image_ref",
+        "index.docker.io/$1", "image_ref", "([^/.:]+/.+)"), "image_ref", "$1", "image_ref", "index[.]docker[.]io/(localhost/.+)"),
+        "image_ref", "index.docker.io/$1", "image_ref", "docker[.]io/(.+)"), "image_ref", "index.docker.io/library/$1",
+        "image_ref", "index[.]docker[.]io/([^/]+)")
+    - record: homelab:security_trivy_reports:max
+      expr: label_join(label_join(label_replace(label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+        "digest", "$1", "image_digest", "(.+)"), "container", "$1", "container_name", "(.+)"), "image_ref", "/",
+        "image_registry", "image_repository"), "image_ref", ":", "image_ref", "image_tag")
+    - record: homelab:security_trivy_reports_of_running:max
+      expr: (homelab:security_trivy_reports:max{source_site=""} and on (k8s_cluster, digest) count by (k8s_cluster,
+        digest) (homelab:security_trivy_running_containers:info{source_site=""})) or (topk by (k8s_cluster, namespace,
+        container, image_ref, severity) (1, (homelab:security_trivy_reports:max{source_site=""} and on (k8s_cluster,
+        namespace, container, image_ref) group by (k8s_cluster, namespace, container, image_ref) (homelab:security_trivy_running_containers:info{source_site=""})))
+        unless on (k8s_cluster, namespace, container, image_ref) (homelab:security_trivy_reports:max{source_site=""}
+        and on (k8s_cluster, digest) count by (k8s_cluster, digest) (homelab:security_trivy_running_containers:info{source_site=""})))
+    - record: homelab:security_trivy_unscanned_digests:count
+      expr: count by (k8s_cluster, digest) ((homelab:security_trivy_running_containers:info{source_site=""}) unless
+        on (k8s_cluster, digest) (homelab:security_trivy_reports:max{source_site=""}) unless on (k8s_cluster, namespace,
+        container, image_ref) (homelab:security_trivy_reports:max{source_site=""}))
     - record: homelab_security_check_result
       expr: ((max by (k8s_cluster, system, check, severity) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(max
         by (k8s_cluster, compliance_id, severity) (trivy_compliance_info{source_site="",title="CIS Kubernetes Benchmarks
@@ -397,51 +426,30 @@ spec:
         "k8s-cis-1.23/$1", "compliance_id", "(.+)"), "system", "$1", "k8s_cluster", "(.+)"), "severity", "critical",
         "severity", "CRITICAL"), "severity", "high", "severity", "HIGH"), "severity", "medium", "severity", "MEDIUM"),
         "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace((sum
-        by (k8s_cluster) (max by (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]),
-        "digest", "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
-        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)")))) > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, digest)
-        (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]), "digest",
-        "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
-        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)")))) unless on (k8s_cluster) (count by (k8s_cluster, digest)
-        (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
-        "digest", "$1", "image_digest", "(.+)")))), "check", "image-vulnerabilities", "", ""), "severity", "critical",
-        "", ""), "system", "$1", "k8s_cluster", "(.+)")) unless on (check, system) (last_over_time(homelab_security_accepted_until_timestamp_seconds{source="trivy"}[1d])
-        > time())) or 0 * (max by (k8s_cluster, system, check, severity) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(max
+        by (k8s_cluster) (max by (k8s_cluster, digest) (homelab:security_trivy_reports_of_running:max{source_site="",severity="Critical"}))
+        or on (k8s_cluster) 0 * count by (k8s_cluster) (homelab:security_trivy_reports:max{source_site=""}) and
+        on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (homelab:security_trivy_running_containers:info{source_site=""})))
+        > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, digest) (homelab:security_trivy_reports_of_running:max{source_site="",severity="Critical"}))
+        or on (k8s_cluster) 0 * count by (k8s_cluster) (homelab:security_trivy_reports:max{source_site=""}) and
+        on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (homelab:security_trivy_running_containers:info{source_site=""})))
+        unless on (k8s_cluster) (homelab:security_trivy_unscanned_digests:count{source_site=""})), "check", "image-vulnerabilities",
+        "", ""), "severity", "critical", "", ""), "system", "$1", "k8s_cluster", "(.+)")) unless on (check, system)
+        (last_over_time(homelab_security_accepted_until_timestamp_seconds{source="trivy"}[1d]) > time())) or 0 *
+        (max by (k8s_cluster, system, check, severity) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(max
         by (k8s_cluster, compliance_id, severity) (trivy_compliance_info{source_site="",title="CIS Kubernetes Benchmarks
         v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Fail"} or 0 * trivy_compliance_info{source_site="",title="CIS
         Kubernetes Benchmarks v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Pass"}), "check",
         "k8s-cis-1.23/$1", "compliance_id", "(.+)"), "system", "$1", "k8s_cluster", "(.+)"), "severity", "critical",
         "severity", "CRITICAL"), "severity", "high", "severity", "HIGH"), "severity", "medium", "severity", "MEDIUM"),
         "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace((sum
-        by (k8s_cluster) (max by (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]),
-        "digest", "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
-        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)")))) > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, digest)
-        (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]), "digest",
-        "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
-        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)")))) unless on (k8s_cluster) (count by (k8s_cluster, digest)
-        (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
-        "digest", "$1", "image_digest", "(.+)")))), "check", "image-vulnerabilities", "", ""), "severity", "critical",
-        "", ""), "system", "$1", "k8s_cluster", "(.+)"))
+        by (k8s_cluster) (max by (k8s_cluster, digest) (homelab:security_trivy_reports_of_running:max{source_site="",severity="Critical"}))
+        or on (k8s_cluster) 0 * count by (k8s_cluster) (homelab:security_trivy_reports:max{source_site=""}) and
+        on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (homelab:security_trivy_running_containers:info{source_site=""})))
+        > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, digest) (homelab:security_trivy_reports_of_running:max{source_site="",severity="Critical"}))
+        or on (k8s_cluster) 0 * count by (k8s_cluster) (homelab:security_trivy_reports:max{source_site=""}) and
+        on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (homelab:security_trivy_running_containers:info{source_site=""})))
+        unless on (k8s_cluster) (homelab:security_trivy_unscanned_digests:count{source_site=""})), "check", "image-vulnerabilities",
+        "", ""), "severity", "critical", "", ""), "system", "$1", "k8s_cluster", "(.+)"))
       labels:
         source: trivy
     - record: homelab_security_last_result_timestamp_seconds
@@ -449,6 +457,12 @@ spec:
         "system", "$1", "k8s_cluster", "(.+)"))
       labels:
         source: trivy
+    - record: homelab:security_trivy_containers_by_reference:count
+      expr: (count by (k8s_cluster) (((homelab:security_trivy_running_containers:info{source_site=""}) unless on
+        (k8s_cluster, digest) (homelab:security_trivy_reports:max{source_site=""})) and on (k8s_cluster, namespace,
+        container, image_ref) (homelab:security_trivy_reports:max{source_site=""})) or on (k8s_cluster) 0 * count
+        by (k8s_cluster) (homelab:security_trivy_running_containers:info{source_site=""})) and on (k8s_cluster)
+        group by (k8s_cluster) (homelab_trivy_compliance_report_update_timestamp_seconds{source_site=""})
     - record: homelab:security_check_result_high:max
       expr: max by (k8s_cluster, source, check, system) (homelab_security_check_result{source_site="",severity=~"high|critical"})
     - alert: SecurityFindingNew
@@ -468,11 +482,9 @@ spec:
           finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
           alert ends after 1 hour.'
     - alert: SecurityImagesNotScanned
-      expr: count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
-        "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
-        "digest", "$1", "image_digest", "(.+)"))) > 0 and on (k8s_cluster) group by (k8s_cluster) (homelab_trivy_compliance_report_update_timestamp_seconds{source_site=""})
-        unless on (k8s_cluster) label_replace(last_over_time(homelab_security_accepted_until_timestamp_seconds{source="trivy",check="images-not-scanned"}[1d])
+      expr: count by (k8s_cluster) (homelab:security_trivy_unscanned_digests:count{source_site=""}) > 0 and on (k8s_cluster)
+        group by (k8s_cluster) (homelab_trivy_compliance_report_update_timestamp_seconds{source_site=""}) unless
+        on (k8s_cluster) label_replace(last_over_time(homelab_security_accepted_until_timestamp_seconds{source="trivy",check="images-not-scanned"}[1d])
         > time(), "k8s_cluster", "$1", "system", "(.+)")
       for: 36h
       labels:
@@ -486,6 +498,23 @@ spec:
           a pass. kubernetes/apps/security/trivy-operator/README.md (When a scan fails) has the steps. For an image
           that no scan can read, an entry of the accepted list with the check images-not-scanned mutes the alert
           of the cluster until its end.'
+    - alert: SecurityImagesScannedByTag
+      expr: max by (k8s_cluster) (homelab:security_trivy_containers_by_reference:count{source_site=""}) > 0 unless
+        on (k8s_cluster) label_replace(last_over_time(homelab_security_accepted_until_timestamp_seconds{source="trivy",check="images-scanned-by-tag"}[1d])
+        > time(), "k8s_cluster", "$1", "system", "(.+)")
+      for: 7d
+      labels:
+        severity: warning
+      annotations:
+        summary: '{{ $value }} running containers on {{ $labels.k8s_cluster }} have a Trivy report of their tag,
+          not of the image that runs'
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        description: 'For a week, containers on this cluster have run an image that no report has: the tag was pushed
+          again after the node pulled it, and the report is of the image that the tag points to now. The check image-vulnerabilities
+          counts that report. Restart the workload, so that it pulls the image of the tag, or pin a digest in its
+          pod spec. The board (Sources, Images scanned by tag only) has the count, and kubernetes/apps/security/trivy-operator/README.md
+          (The digest of a report) the detail. An entry of the accepted list with the check images-scanned-by-tag
+          mutes the alert of the cluster until its end.'
     - alert: SecurityCertificateExpiring
       expr: min by (k8s_cluster, namespace, lease) (kube_lease_renew_time{namespace="security",lease=~"aws-security-.+-certificate"})
         - time() < 30 * 86400
@@ -499,6 +528,18 @@ spec:
         description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
           when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
           has the steps. The alert ends at the next run of the refresher.'
+    - alert: SecurityTokenExpiring
+      expr: min by (k8s_cluster, namespace, lease) (kube_lease_renew_time{namespace="security",lease=~"prowler-.+-token"})
+        - time() < 30 * 86400
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: 'An API token of Prowler on {{ $labels.k8s_cluster }} ends within 30 days: {{ $labels.lease }}'
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        description: 'The daily Prowler run of one provider reads with this token, and fails when it ends. Make
+          a new token, put it in its SOPS Secret, and write its end date to its Lease: kubernetes/apps/security/prowler/README.md
+          has the steps. The alert ends when the Lease has the new date.'
     - alert: SecurityAuditLinesRefused
       expr: sum by (k8s_cluster, component_id) (increase(vector_component_errors_total{component_id="loki_security_audit"}[15m])
         > 0 or (vector_component_errors_total{component_id="loki_security_audit"} > 0 unless vector_component_errors_total{component_id="loki_security_audit"}
@@ -512,3 +553,28 @@ spec:
           a request in the last 15 minutes, and Vector does not send it again. Loki refuses a line that is older
           than 7 days, or more than one hour older than the newest line of its stream. The log of the aggregator
           pod has the answer of Loki, and vector_component_discarded_events_total has the number of lines.
+    - alert: SecurityAcceptedListUnread
+      expr: max by (k8s_cluster) (homelab_security_converter_accepted_list_read{source_site=""}) == 0
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: The list of accepted findings on {{ $labels.k8s_cluster }} gives no entry
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        description: 'The security converter can not read the list of accepted findings in the Secret security-accepted-findings,
+          so it serves no accepted finding: the board shows none, and the rule of Trivy Operator mutes none. The
+          log of the converter has the number of the line and the kind of its form. security/converter/README.md,
+          "The form that the converter reads", has the form. The alert ends in the cycle after the list is fixed.'
+    - alert: SecurityAcceptedEntriesSkipped
+      expr: max by (k8s_cluster) (homelab_security_converter_accepted_skipped_entries{source_site=""}) > 0
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: Entries of the list of accepted findings on {{ $labels.k8s_cluster }} are skipped
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        description: '{{ $value }} entries of the list of accepted findings do not fit, so the security converter
+          skips them: their findings show as fails on the board. The Prowler runs skip the entries that are not
+          in the form, and take an entry whose source or system is not in the registry. The log of the converter
+          has the number of each entry and why. security/converter/README.md, "An entry that the converter skips",
+          has the rules. The alert ends in the cycle after the list is fixed.'

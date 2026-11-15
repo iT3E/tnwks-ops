@@ -1,0 +1,55 @@
+# homelab-wsl: all nodes, in the multi-document form that talosctl >= 1.14
+# generates (talos/wsl-02/README.md, "Patches need talosctl >= 1.14").
+# 01-talos-bootstrap.yml gives it to a new cluster. The live node keeps its
+# v1alpha1 config (cluster-config.yaml, patches/kubelet-image-gc.yaml) until
+# its conversion, and infrastructure/ansible/tests/test_talos_patches.py holds
+# the two forms equal.
+#
+# The pod and service ranges are only the Node objects' podCIDR: Cilium's
+# cluster-pool IPAM hands out 10.46.0.0/16 (cluster-config.yaml has the
+# history).
+apiVersion: v1alpha1
+kind: KubeNetworkConfig
+podSubnets: [10.42.0.0/16]
+serviceSubnets: [10.43.0.0/16]
+---
+# No CNI from Talos: Cilium is installed by 02-cni-bootstrap.yml, then Flux.
+apiVersion: v1alpha1
+kind: KubeFlannelCNIConfig
+$patch: delete
+---
+# Cilium replaces kube-proxy. The document goes, and the v1alpha1 key below
+# turns kube-proxy off (talos/wsl-02/patches/cluster.yaml has why both).
+apiVersion: v1alpha1
+kind: KubeProxyConfig
+$patch: delete
+---
+# No external discovery service (discovery.talos.dev). Talos 1.14 has no
+# document for the Kubernetes registry, so it stays in the v1alpha1 key
+# below, which Talos accepts once this document is gone.
+apiVersion: v1alpha1
+kind: DiscoveryServiceConfig
+name: default
+$patch: delete
+---
+cluster:
+  proxy:
+    disabled: true
+  discovery:
+    enabled: true
+    registries:
+      kubernetes:
+        disabled: false
+      service:
+        disabled: true
+---
+# KubePrism on localhost:7445, which Cilium uses.
+apiVersion: v1alpha1
+kind: KubePrismConfig
+port: 7445
+---
+# Delete images unused for a week (patches/kubelet-image-gc.yaml has why).
+apiVersion: v1alpha1
+kind: KubeletConfig
+config:
+  imageMaximumGCAge: 168h

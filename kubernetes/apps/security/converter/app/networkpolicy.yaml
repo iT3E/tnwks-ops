@@ -1,6 +1,7 @@
 ---
 # The converter. In: Prometheus scrapes its metrics port, and the kubelet's
-# probes come from the host. Out: this site's Loki gateway, and DNS through
+# probes come from the host. Out: this site's Loki gateway (the queries of the
+# stream source, and the push of the stream findings), and DNS through
 # Cilium's DNS proxy. Nothing else: no API server, no other namespace, no
 # host outside the cluster. default-deny (../../namespace.yaml) denies the rest.
 apiVersion: cilium.io/v2

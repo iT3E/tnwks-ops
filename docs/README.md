@@ -66,6 +66,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | | |
 | --- | --- |
 | [`apps/agent-platform.md`](apps/agent-platform.md) | Agent platform: the sandbox controller, one namespace and sandbox gateway for each trust domain, their network policies and checks |
+| [`apps/agent-platform-runbook.md`](apps/agent-platform-runbook.md) | Agent platform runbook: each alert, the restore of an agent's state, the fast stop of the workflow agent, the move to Bedrock by hand, a limit of the Claude plan |
 | [`apps/changedetection.md`](apps/changedetection.md) | changedetection.io: the watched pages (AI labs' misalignment reports), its login and API, and the alert path to an OpenClaw agent |
 | [`apps/home-assistant.md`](apps/home-assistant.md) | Home Assistant |
 | [`apps/immich.md`](apps/immich.md) | Immich: photo library for the kitchen screensaver, its storage, login and break-glass |

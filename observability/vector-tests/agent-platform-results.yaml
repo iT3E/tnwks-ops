@@ -1,0 +1,66 @@
+# The aggregator's result lines of the agent platform
+# (agent_platform_results and agent_platform_result_metrics). Each test feeds
+# a line made up here.
+config: kubernetes/apps/monitoring/vector/aggregator/config/vector.yaml
+tests:
+  - name: drift line becomes a gauge with only check and result
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "app-drift result=drift detail=extra:app:administration"
+          timestamp: "2026-11-14T02:22:03Z"
+          kubernetes.pod_namespace: agents-workflows
+          kubernetes.pod_labels.app: workflow-providers
+    outputs:
+      - extract_from: agent_platform_results
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.check, "app-drift")
+              assert_eq!(.result, "drift")
+              assert_eq!(.app, "workflow-providers")
+              assert_eq!(.pod_namespace, "agents-workflows")
+              assert_eq!(.time, 1794622923)
+              assert!(!exists(.message))
+      - extract_from: agent_platform_result_metrics
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.name, "agent_platform_result_timestamp_seconds")
+              assert_eq!(.namespace, "homelab")
+              assert_eq!(.tags.check, "app-drift")
+              assert_eq!(.tags.result, "drift")
+              assert_eq!(.kind, "absolute")
+  - name: providers ok line
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "workflow-providers result=ok"
+          kubernetes.pod_namespace: agents-workflows
+    outputs:
+      - extract_from: agent_platform_results
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.check, "workflow-providers")
+              assert_eq!(.result, "ok")
+  - name: a line of another namespace is not counted
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "app-drift result=drift detail=x"
+          kubernetes.pod_namespace: production
+    no_outputs_from:
+      - agent_platform_results
+  - name: free text is not counted
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "a user said result=drift"
+          kubernetes.pod_namespace: agents-pilot
+    no_outputs_from:
+      - agent_platform_results

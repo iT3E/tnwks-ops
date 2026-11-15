@@ -7383,6 +7383,31 @@
   },
   {
     "dashboard": "tnwks-security",
+    "tab": "Sources",
+    "panel": "Images scanned by tag only",
+    "query": "sum(homelab:security_trivy_containers_by_reference:count{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_trivy_containers_by_reference:count"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_trivy_containers_by_reference:count",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
     "tab": "Accepted findings",
     "panel": "Accepted findings",
     "query": "count(max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}))",

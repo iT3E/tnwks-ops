@@ -7,6 +7,7 @@ listens and what it reports about itself.
 | --- | --- | --- | --- |
 | The aggregator | `aggregator/` (`ks.yaml`) | Each cluster, one pod | Takes in pod logs and the router's syslog, and writes them to the Loki of its cluster. Takes in the audit log of the API server, and writes the security streams |
 | The agent | `agent/` (`ks-agent.yaml`) | Each cluster that lists it, one pod on each node | Reads pod logs on its node and sends them to the aggregator. On the WSL clusters, Job pods only (`VECTOR_AGENT_POD_SELECTOR`) |
+| The platform agent | `agent-platform/` (`ks-agent-platform.yaml`) | homelab-wsl, one pod on each node | Reads the logs of the long-running pods of the agent platform on an allowlist (pod label `logs.home.arpa/ship=true`) and of the sandbox supervisors of a namespace labeled `logs.home.arpa/ship-supervisors=true`. Drops what can hold content from the gateway's and the supervisors' lines on the node, and sends the rest to the aggregator. Serves two gauges for the alerts of the platform on its port 9598 (`docs/apps/agent-platform.md`, "Logs") |
 | The audit reader | `audit-reader/` (`ks-audit-reader.yaml`) | Each cluster that lists it, one pod on the control plane node | Reads the audit log of the API server on its node and sends it to the audit source of the aggregator |
 
 The config of the aggregator is one file, `aggregator/config/vector.yaml`,
@@ -30,8 +31,9 @@ on it only when a sender outside the cluster needs it.
 ## The security streams
 
 A security stream is a log that the security platform reads
-(`security/README.md`). The aggregator of each cluster writes each one to the
-Loki of homelab-wsl-02, which keeps a stream with the label `security_stream`
+(`security/README.md`). The aggregator of each cluster writes the audit log
+and the router log to the Loki of homelab-wsl-02, and the security converter
+writes the findings there, which keeps a stream with the label `security_stream`
 for 90 days. This section is the contract for a part that sends such a log or
 reads it.
 
@@ -39,14 +41,19 @@ reads it.
 | --- | --- | --- |
 | The audit log of an API server | `security_stream="k8s-audit"`, `k8s_cluster="<cluster>"` | One audit event, the JSON line as the API server wrote it. The time of the line is the `stageTimestamp` of the event |
 | The router log | `security_stream="routeros"`, `k8s_cluster="<cluster>"` | One syslog message as JSON, the same as in the stream `job="routeros"` |
+| The findings of Prowler and the API checks | `security_stream="findings"`, `source="<prowler or api-check>"`, `system="<system>"` | One finding that fails, a part of its OCSF record as JSON. The security converter of homelab-wsl-02 sends it, not Vector. Its contract is `security/converter/README.md`, "The stream `findings`" |
 
 `k8s_cluster` is the name of the cluster that the log comes from
 (`CLUSTER_NAME`: `homelab-wsl`, `homelab-wsl-02`), also for a line of
-homelab-wsl that rests in the Loki of homelab-wsl-02. A security stream has
-these two labels and no other, so each one is two streams in Loki at most.
+homelab-wsl that rests in the Loki of homelab-wsl-02. A security stream of
+Vector has these two labels and no other, so each one is two streams in Loki
+at most. The stream `findings` has no `k8s_cluster`: its `system` is a name of
+`security/registry/systems.yaml`, and it is one stream for each source and
+system.
 
 | What | Address |
 | --- | --- |
+| The pod-log source, for the platform agent | `http://vector-aggregator.monitoring.svc.cluster.local:6000` (the Vector protocol, version 2). The scheme is needed from Vector 0.61 on: with none, the sink speaks https, and every request fails to connect. Before 0.61 a missing scheme meant http, so the shared agent (0.34.1) works without one |
 | The audit source, for the audit reader of the same cluster | `http://vector-aggregator-audit.monitoring.svc.cluster.local:6010` (the Vector protocol, version 2) |
 | The Loki of the security streams, from homelab-wsl-02 | `http://loki-gateway.monitoring.svc.cluster.local` |
 | The same Loki, from homelab-wsl | `https://security-loki.monitoring.svc.cluster.local`, with the client certificate `security-loki-client` (`../security-loki-proxy/README.md`) |
@@ -54,8 +61,8 @@ these two labels and no other, so each one is two streams in Loki at most.
 The aggregator takes the Loki address from `SECURITY_LOKI_ENDPOINT` of
 `cluster-settings`. A cluster that does not set it writes to its own Loki.
 
-The two streams behave in two ways when that Loki is away, and each way is on
-purpose:
+The two streams of Vector behave in two ways when that Loki is away, and
+each way is on purpose:
 
 | Stream | Path in `vector.yaml` | When Loki is away |
 | --- | --- | --- |
@@ -91,7 +98,7 @@ line to `vector-aggregator-audit:6010`.
 | Audit files | The host path `/var/log/audit/kube`, read-only |
 | Positions | The host path `/var/lib/vector-audit`. An init container gives the directory to user 65534: it runs as root with the capability `CHOWN` only |
 | Sending | 200 events in a batch, one request at a time, a buffer of 200 events, 2 threads |
-| Memory | A request of 64 MiB and a limit of 128 MiB |
+| Memory | A request of 64 MiB and a limit of 192 MiB. On homelab-wsl-02 the reader used 115.6 MiB at its peak while it sent its first backlog of about 880,000 lines |
 
 The audit files on the node are the buffer of the path. The reader moves its
 position in a file only when Loki took the line, so when the aggregator or
@@ -126,6 +133,33 @@ transform or the sink in `vector.yaml`.
 | `vector_component_discarded_events_total` | The events that a component dropped. `intentional="false"` is a loss |
 | `vector_buffer_discarded_events_total` | The events that the buffer of a sink dropped because it was full |
 | `vector_http_client_responses_total` | The answers that a sink got, by HTTP `status` |
+
+The sink also serves one series that is not Vector's own:
+`homelab_agent_platform_result_timestamp_seconds{pod_namespace, app, check,
+result}`, the time of the newest result line of a pod in a namespace
+`agents-*` (a line that starts with `<check> result=<result>`). The
+transforms `agent_platform_results` and `agent_platform_result_metrics` make
+it, and the alert `WorkflowAppDrift` reads it
+(`docs/apps/agent-platform.md`, "Alerts"). Each sample carries the time of
+its line, so Prometheus holds it for 5 minutes, its lookback, and the sink
+drops the series a minute after its last line. A rule on it reads
+`max_over_time` over a window longer than the time between two lines.
+
+The platform agent serves two more series of the same kind on its own port
+9598, through the PodMonitor `vector-agent-platform`, so that the aggregator
+stays the same on each cluster:
+
+- `homelab_agent_platform_result_timestamp_seconds{check="instruction-file"}`,
+  the time of the newest `instruction-check` line of a backup container in a
+  namespace `agents-*`. The alert `AgentInstructionFileChanged` reads it.
+  (`AgentInstructionCheckStale` reads the aggregator's gauge of the
+  `instruction-check result=` line.)
+- `homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}`, the
+  time of the newest `engine_error` line of the model bridge. The alert
+  `ModelBridgeRateLimited` reads it.
+
+The tests of the platform agent are in
+`observability/vector-tests/agent-platform-logs.yaml`.
 
 Two settings shape these series:
 

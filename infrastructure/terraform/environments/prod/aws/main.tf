@@ -1,6 +1,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## MAIN
-## Cognito, SES and the supporting IAM for the prod account.
+## Cognito, SES and the supporting IAM for the prod account, and the AWS parts
+## of the security platform across both accounts of the organization.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 module "aws" {
@@ -34,4 +35,21 @@ module "aws" {
     }
   }
   sops_role_arn = "arn:aws:iam::654654220436:role/iam-role-sops"
+}
+
+# The AWS parts of the security platform (modules/aws/security): the
+# organization trail and the audit role of the management account, the trail
+# bucket in the prod account, and the two read-only Roles Anywhere roles that
+# homelab-wsl-02 gets its sessions from. Each role trusts one certificate CN.
+module "security" {
+  source = "../../../modules/aws/security"
+
+  providers = {
+    aws            = aws
+    aws.management = aws.management
+  }
+
+  rolesanywhere_trust_anchor_arn   = module.aws.rolesanywhere_trust_anchor_arn
+  rolesanywhere_audit_common_names = ["homelab-wsl-02-security-audit"]
+  rolesanywhere_trail_common_names = ["homelab-wsl-02-security-trail"]
 }

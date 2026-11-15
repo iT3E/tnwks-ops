@@ -1,0 +1,63 @@
+---
+# The nightly Terraform drift check (docs/operations/ci.md#terraform-drift):
+# .github/workflows/terraform-drift.yaml plans main for each root with
+# `drift = true` in .github/ci/domains.toml, on homelab-wsl's ops runner, and
+# pushes per root (`root` label) to this site's Pushgateway
+# (apps/monitoring/pushgateway):
+#   tnwks_terraform_drift_check_timestamp_seconds  when the check finished
+#   tnwks_terraform_drift_check_drifted            1: the plan has changes
+#   tnwks_terraform_drift_check_changed            addresses that would change
+#   tnwks_terraform_drift_check_failed             1: the plan didn't run
+# The Pushgateway keeps nothing across a restart, so TerraformDrift reads the
+# last value within 30h (a day's run plus slack). TerraformDriftCheckStale
+# fires on a root whose result the Pushgateway still serves but is over 30h
+# old, or when no root has reported for 30h while the Pushgateway is up.
+# Silent where no Pushgateway runs.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: terraform-drift-alerts
+spec:
+  groups:
+    - name: terraform-drift
+      rules:
+        - alert: TerraformDrift
+          expr: >-
+            max by (root) (
+              last_over_time(tnwks_terraform_drift_check_drifted[30h]) > 0
+              or last_over_time(tnwks_terraform_drift_check_failed[30h]) > 0
+            )
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/ci.md#terraform-drift"
+            summary: "Terraform root differs from tnwks-ops main, or its drift check failed"
+            description: >-
+              The nightly plan of main for the Terraform root {{ $labels.root }} reported
+              {{ with printf "max(last_over_time(tnwks_terraform_drift_check_changed{root='%s'}[30h]))" $labels.root | query }}{{ . | first | value }}{{ end }} address(es) to change
+              (drifted: {{ with printf "max(last_over_time(tnwks_terraform_drift_check_drifted{root='%s'}[30h]))" $labels.root | query }}{{ . | first | value }}{{ end }},
+              failed: {{ with printf "max(last_over_time(tnwks_terraform_drift_check_failed{root='%s'}[30h]))" $labels.root | query }}{{ . | first | value }}{{ end }}).
+              The addresses, or the error, are in the latest Terraform drift run (GitHub Actions).
+              Put the change in code, or apply main over it (dispatch Deploy with roots={{ $labels.root }});
+              then dispatch Terraform drift to clear this.
+
+        - alert: TerraformDriftCheckStale
+          expr: >-
+            (time() - max by (root) (tnwks_terraform_drift_check_timestamp_seconds) > 30 * 3600)
+            or (max(up{job="pushgateway"}) == 1
+                unless on () count(last_over_time(tnwks_terraform_drift_check_timestamp_seconds[30h])))
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/ci.md#terraform-drift"
+            summary: "The Terraform drift check hasn't reported for over a day"
+            description: >-
+              No drift-check result for {{ with $labels.root }}the root {{ . }}{{ else }}any root{{ end }}
+              for more than 30h, while the Pushgateway is up. Check the scheduled runs
+              of the Terraform drift workflow (GitHub Actions), that homelab-wsl's ops runner
+              (tnwks-ops-runner-homelab-wsl, tools namespace) is up, the root's enabled_var,
+              and the Pushgateway in monitoring.

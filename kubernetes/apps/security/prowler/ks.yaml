@@ -1,0 +1,24 @@
+---
+# Prowler (README.md): a CronJob for each system of the cloud and SaaS
+# accounts, each day, with the scan lists of the security registry. Its OCSF
+# files go to the volume of results, which the converter reads. homelab-wsl-02
+# only, where the rules of the registry and the AWS sessions are.
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: security-prowler
+  namespace: flux-system
+spec:
+  dependsOn:
+    # The claim security-results is in the app of the converter.
+    - name: security-converter
+  path: ./kubernetes/apps/security/prowler/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

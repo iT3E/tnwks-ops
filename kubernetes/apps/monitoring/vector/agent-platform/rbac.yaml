@@ -1,0 +1,31 @@
+---
+# The platform agent reads pods, namespaces and nodes to find the log files
+# it selects, as the pod-log agent does (../agent/rbac.yaml). The chart
+# makes the ServiceAccount (helmrelease.yaml).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vector-agent-platform
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+      - nodes
+      - pods
+    verbs:
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vector-agent-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vector-agent-platform
+subjects:
+  - kind: ServiceAccount
+    name: vector-agent-platform
+    namespace: monitoring

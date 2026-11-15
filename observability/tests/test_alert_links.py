@@ -40,3 +40,37 @@ def test_every_alert_links_to_a_generated_board_scoped_to_its_site():
         assert match and match[1] in boards, (str(path), rule["alert"], url)
         checked += 1
     assert checked > 80
+
+
+REPO_DOC = re.compile(r"https://github\.com/iT3E/tnwks-ops/blob/main/(docs/[^#]+\.md)#([a-z0-9-]+)")
+
+
+def github_anchors(text):
+    """The anchors GitHub makes for the headings of a Markdown file."""
+    anchors, seen, fence = set(), {}, False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            fence = not fence
+        if fence or not line.startswith("#"):
+            continue
+        title = line.lstrip("#").strip().lower()
+        slug = re.sub(r"[^a-z0-9 _-]", "", title).replace(" ", "-")
+        n = seen.get(slug, 0)
+        seen[slug] = n + 1
+        anchors.add(slug if n == 0 else f"{slug}-{n}")
+    return anchors
+
+
+def test_every_runbook_in_this_repo_has_its_section():
+    checked = 0
+    for path, rule in alerts():
+        url = (rule.get("annotations") or {}).get("runbook_url", "")
+        match = REPO_DOC.fullmatch(url)
+        if not url.startswith("https://github.com/iT3E/tnwks-ops/"):
+            continue
+        assert match, (str(path), rule["alert"], url)
+        doc = ROOT / match[1]
+        assert doc.is_file(), (str(path), rule["alert"], url)
+        assert match[2] in github_anchors(doc.read_text()), (str(path), rule["alert"], url)
+        checked += 1
+    assert checked >= 15

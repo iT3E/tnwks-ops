@@ -1,11 +1,11 @@
 ---
 # The run receiver makes a Job in this namespace and reads it back: the Job,
 # its pod and the log of the pod (the answer of the run is the last line of
-# the log). The pod GC of this cluster (terminated-pod-gc-threshold 1)
-# deletes the pod of an ended Job within a minute or so, and the Job stays 7
-# days, so the receiver keeps the answer in the annotation
-# workflow-agents/result of the Job (list and patch): a merge patch of the
-# annotations only. It can't delete a Job, or touch any other object. A
+# the log). The pod GC of this cluster (terminated-pod-gc-threshold 1) can
+# delete a run pod seconds after it ends, and the Job stays 7 days, so the
+# receiver follows the log while the run runs (pods/log, follow=true) and
+# keeps the answer in the annotation workflow-agents/result of the Job (list
+# and patch): a merge patch of the annotations only. It can't delete a Job, or touch any other object. A
 # right to make or patch a Job is a right to read each secret here, because
 # the Job sets its pod: the admission policy (../admission/) admits only a
 # Job from the template of an agent, on CREATE and on UPDATE.

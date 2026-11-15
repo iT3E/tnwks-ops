@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+resources:
+  - ./pvc.yaml
+  - ./networkpolicy.yaml
+  - ./cronjob.yaml
+configMapGenerator:
+  - name: trail-copy-scripts
+    files:
+      - ./scripts/trail_copy.py
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled
+labels:
+  - pairs:
+      app.kubernetes.io/name: trail-copy
+      app.kubernetes.io/instance: trail-copy

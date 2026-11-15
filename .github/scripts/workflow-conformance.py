@@ -5,9 +5,13 @@
 
 Each domain and group is an output of ci.yaml's `changes` job and has a job
 gated on it, and Build Success needs every job and runs unless cancelled.
-In terraform.yaml, every job that runs github-workflows' actions/terraform
+In every workflow, every job that runs github-workflows' actions/terraform
 first runs .github/scripts/sops-mask.py, gated on matrix.mask_sops (the
-public log masks a root's SOPS values before Terraform can quote them).
+public log masks a root's SOPS values before Terraform can quote them), and
+keys its concurrency on matrix.lock (a root's plans, applies and drift
+checks never overlap). A drift job (gated on inputs.mode == 'drift') runs the
+action in plan mode only, and reports with .github/scripts/terraform-drift.py
+after it.
 Fails (exit 1) with a GitHub annotation per violation.
 
 The general workflow conventions (timeouts, runner labels, pins,
@@ -75,11 +79,11 @@ def check_ci(root: Path) -> None:
 
 TERRAFORM_ACTION = "iT3E/github-workflows/actions/terraform@"
 MASK_SCRIPT = ".github/scripts/sops-mask.py"
+DRIFT_SCRIPT = ".github/scripts/terraform-drift.py"
 
 
-def check_terraform_masks(root: Path) -> None:
-    path = root / ".github/workflows/terraform.yaml"
-    jobs = load(path)["jobs"]
+def check_terraform_jobs(path: Path) -> None:
+    jobs = load(path).get("jobs") or {}
     for name, job in sorted(jobs.items()):
         steps = job.get("steps") or []
         tf = [i for i, s in enumerate(steps) if str(s.get("uses", "")).startswith(TERRAFORM_ACTION)]
@@ -90,6 +94,21 @@ def check_terraform_masks(root: Path) -> None:
             err(path, f"job {name}: no {MASK_SCRIPT} step before actions/terraform")
         elif "matrix.mask_sops" not in str(steps[mask[0]].get("if", "")):
             err(path, f"job {name}: the {MASK_SCRIPT} step is not gated on matrix.mask_sops")
+        concurrency = job.get("concurrency")
+        group = concurrency.get("group") if isinstance(concurrency, dict) else concurrency
+        if "matrix.lock" not in str(group or ""):
+            err(path, f"job {name}: actions/terraform without the root's lock (a concurrency group on matrix.lock)")
+        if "inputs.mode == 'drift'" in str(job.get("if", "")):
+            if any((steps[i].get("with") or {}).get("mode") != "plan" for i in tf):
+                err(path, f"job {name}: a drift job runs actions/terraform in plan mode only")
+            report = [i for i, s in enumerate(steps) if DRIFT_SCRIPT in str(s.get("run", ""))]
+            if not report or report[0] < tf[-1]:
+                err(path, f"job {name}: no {DRIFT_SCRIPT} step after actions/terraform")
+
+
+def check_terraform_masks(root: Path) -> None:
+    for path in sorted((root / ".github/workflows").glob("*.y*ml")):
+        check_terraform_jobs(path)
 
 
 def main() -> int:

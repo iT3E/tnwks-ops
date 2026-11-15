@@ -28,6 +28,14 @@ talos_clusters:
   #                             gives every worker memory_workers, so
   #                             06-talos-node-memory.yml sets these on the
   #                             node containers, while they run.
+  # The two patch lists are read only when 01-talos-bootstrap.yml creates a
+  # cluster, which it does only when the cluster has no control plane
+  # container. A change to them applies nothing to a running node
+  # (talos/README.md, "The audit policy"). CI checks that each YAML file in
+  # talos/<target>/ is in one of them or is named as no patch
+  # (infrastructure/ansible/tests/test_talos_patches.py), and has Talos build
+  # and validate each Docker cluster's config from its lists, with throwaway
+  # secrets (.github/workflows/ansible.yaml).
   # homelab-wsl on DESKTOP-HKE05KI.
   wsl:
     provisioner: docker
@@ -44,8 +52,11 @@ talos_clusters:
     cpus_workers: "4.0"
     memory_controlplanes: 4GiB
     memory_workers: 13GiB
-    config_patches: [cluster-config.yaml, patches/kubelet-image-gc.yaml]
-    controlplane_patches: [patches/talos-api-access.yaml]
+    # The multi-document form, which the pinned Talos needs at create. The
+    # live node keeps its v1alpha1 config until its conversion, so the
+    # v1alpha1 files stay for its `talosctl patch mc` commands (talos/README.md).
+    config_patches: [patches/cluster.yaml]
+    controlplane_patches: [patches/controlplane.yaml, patches/audit-policy-multidoc.yaml]
     worker2_augment: true
   # homelab-wsl-02 on WSL-02 (talos/wsl-02/README.md): Cilium, the
   # multi-document patches (talosctl >= 1.14), no USB. Worker 1 has 18 GiB
@@ -69,7 +80,7 @@ talos_clusters:
     memory_nodes:
       worker-1: 18GiB
     config_patches: [patches/cluster.yaml]
-    controlplane_patches: [patches/controlplane.yaml]
+    controlplane_patches: [patches/controlplane.yaml, patches/audit-policy.yaml]
     # Flux from the committed flux-system/ manifests (public repo, HTTPS,
     # no deploy key) instead of `flux bootstrap github` (04-flux-install.yml).
     flux_install: manifests

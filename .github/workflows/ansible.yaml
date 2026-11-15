@@ -3,7 +3,10 @@ name: "Ansible"
 
 # Syntax-checks every playbook and runs ansible-lint, on the same pinned
 # controller the workstation uses (infrastructure/ansible/pyproject.toml,
-# uv.lock) and the pinned collections (requirements.yml). Needs no host or
+# uv.lock) and the pinned collections (requirements.yml). Checks the Talos
+# patches that 01-talos-bootstrap.yml gives a new cluster
+# (tests/test_talos_patches.py), and has the pinned talosctl build and
+# validate each Docker cluster's machine config from them. Needs no host or
 # secret; what a change would do to the hosts is the Ansible Check workflow's
 # job (docs/operations/ansible.md).
 
@@ -51,6 +54,57 @@ jobs:
         run: |
           for p in playbooks/*.yml; do
             uv run --locked ansible-playbook --syntax-check "$p"
+          done
+
+      # Each file under talos/ parses, each directory is a cluster, each YAML
+      # file of a cluster is in its patch lists or is named as no patch, and
+      # homelab-wsl's lists hold the same settings as its live node's v1alpha1
+      # files.
+      - name: Talos patches
+        run: uv run --locked python -m unittest discover -s tests -p test_talos_patches.py -v
+
+      # What `talosctl cluster create docker` in 01-talos-bootstrap.yml would
+      # build: for each Docker cluster in talos_clusters, the machine configs
+      # from its patch lists, on its pinned Talos and Kubernetes versions
+      # (talos/<target>/versions.yaml), validated for container mode. The
+      # secrets are throwaway ones that gen config makes. The configs stay in
+      # $RUNNER_TEMP: nothing is uploaded, and only file names and the verdict
+      # are printed.
+      - name: Talos machine configs
+        working-directory: .
+        env:
+          INVENTORY: infrastructure/ansible/inventory/group_vars/all/talos.yml
+        run: |
+          set -euo pipefail
+          mapfile -t targets < <(yq '.talos_clusters | to_entries | .[] | select(.value.provisioner == "docker") | .key' "$INVENTORY")
+          for target in "${targets[@]}"; do
+            export TARGET="$target"
+            talos="$(yq '.talos' "talos/$target/versions.yaml")"
+            kubernetes="$(yq '.kubernetes' "talos/$target/versions.yaml")"
+            ip="$(yq '.talos_clusters[strenv(TARGET)].controlplane_ip' "$INVENTORY")"
+            bin="$RUNNER_TEMP/talosctl-$talos"
+            if [ ! -x "$bin" ]; then
+              dl="$RUNNER_TEMP/talosctl-download-$talos"
+              base="https://github.com/siderolabs/talos/releases/download/${talos}"
+              mkdir -p "$dl"
+              curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o "$dl/talosctl-linux-amd64" "${base}/talosctl-linux-amd64"
+              curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o "$dl/sha256sum.txt" "${base}/sha256sum.txt"
+              (cd "$dl" && grep ' talosctl-linux-amd64$' sha256sum.txt | sha256sum -c -)
+              install -m 0755 "$dl/talosctl-linux-amd64" "$bin"
+            fi
+            args=()
+            mapfile -t patches < <(yq '.talos_clusters[strenv(TARGET)].config_patches // [] | .[]' "$INVENTORY")
+            for p in "${patches[@]}"; do args+=(--config-patch "@talos/$target/$p"); done
+            mapfile -t patches < <(yq '.talos_clusters[strenv(TARGET)].controlplane_patches // [] | .[]' "$INVENTORY")
+            for p in "${patches[@]}"; do args+=(--config-patch-control-plane "@talos/$target/$p"); done
+            out="$RUNNER_TEMP/talos-config-$target"
+            echo "homelab-$target: Talos $talos, Kubernetes $kubernetes, ${args[*]}"
+            "$bin" gen config "homelab-$target" "https://$ip:6443" \
+              --talos-version "$talos" --kubernetes-version "${kubernetes#v}" "${args[@]}" \
+              --with-docs=false --with-examples=false --output-types controlplane,worker --output "$out"
+            for type in controlplane worker; do
+              "$bin" validate --config "$out/$type.yaml" --mode container
+            done
           done
 
       - name: ansible-lint

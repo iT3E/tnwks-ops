@@ -1,0 +1,24 @@
+---
+# The API checks (README.md): a CronJob, each day, tests what no scanner
+# reads (the firmware of the router, the settings of Terraform Cloud) and
+# writes one result file to the volume of results, which the converter reads.
+# homelab-wsl-02 only, where the rules of the registry are.
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: security-api-checks
+  namespace: flux-system
+spec:
+  dependsOn:
+    # The claim security-results is in the app of the converter.
+    - name: security-converter
+  path: ./kubernetes/apps/security/api-checks/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

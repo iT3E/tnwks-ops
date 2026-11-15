@@ -1,0 +1,69 @@
+# homelab-wsl: the audit policy of the API server, in the multi-document form,
+# for a new cluster. Control plane only.
+#
+# 01-talos-bootstrap.yml gives this file to a new cluster. The live node has a
+# v1alpha1 config, and Talos refuses this document there: the policy reaches
+# the live node from patches/audit-policy.yaml, with the command at its top.
+# The rules are the same in each file (security/tests/test_audit_policy.py),
+# and talos/README.md, "The audit policy", says what they keep.
+apiVersion: v1alpha1
+kind: KubeAuditPolicyConfig
+configuration:
+  apiVersion: audit.k8s.io/v1
+  kind: Policy
+  # One line for each request, when its answer is complete.
+  omitStages:
+    - RequestReceived
+  rules:
+    # 1. Each request on a Secret, a read too, by each user: a person, a
+    # service account, a kubelet, a part of the control plane.
+    - level: Metadata
+      resources:
+        - group: ""
+          resources: ["secrets"]
+    # 2. Each command in a pod, each attach, each forwarded port and each
+    # request through the proxy of a pod, a Service or a node.
+    - level: Metadata
+      resources:
+        - group: ""
+          resources:
+            - pods/exec
+            - pods/attach
+            - pods/portforward
+            - pods/proxy
+            - services/proxy
+            - nodes/proxy
+    # 3. Not kept: the writes of leases and of events: the heartbeat of each
+    # component, and the notes that each component writes about its work.
+    - level: None
+      verbs: ["create", "update", "patch"]
+      resources:
+        - group: coordination.k8s.io
+          resources: ["leases"]
+        - group: ""
+          resources: ["events"]
+        - group: events.k8s.io
+          resources: ["events"]
+    # 4. Not kept: the health and the version of the API server.
+    - level: None
+      nonResourceURLs:
+        - /healthz*
+        - /livez*
+        - /readyz*
+        - /version
+    # 5. Not kept: the reads of the control plane itself.
+    - level: None
+      verbs: ["get", "list", "watch"]
+      users:
+        - system:apiserver
+        - system:kube-controller-manager
+        - system:kube-scheduler
+    # 6. Not kept: the reads of a kubelet and of a service account. The rules
+    # 1 and 2 are before this one, so their reads of a Secret stay.
+    - level: None
+      verbs: ["get", "list", "watch"]
+      userGroups:
+        - system:nodes
+        - system:serviceaccounts
+    # 7. Each other request: each write, and each read of a person.
+    - level: Metadata

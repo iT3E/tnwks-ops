@@ -26,8 +26,12 @@
 #
 # This file is in the v1alpha1 form, which Talos rejects when the config comes
 # from talosctl >= 1.14 ("cluster network config is already set in the
-# v1alpha1 config"): recreate homelab-wsl with talosctl < 1.14, or move it to
-# the multi-document form of talos/wsl-02/patches/.
+# v1alpha1 config"). It holds settings of the live node, which keeps its
+# v1alpha1 config until its conversion. A new cluster gets the settings of
+# this file in the multi-document form from patches/cluster.yaml and
+# patches/controlplane.yaml (talos_clusters
+# in infrastructure/ansible/inventory/group_vars/all/talos.yml); the usage
+# above is the old create.
 #
 # No kube-proxy: Cilium replaces it (kube-proxy replacement, since the move
 # from Flannel on 2026-11-06). A running cluster gets this with `talosctl

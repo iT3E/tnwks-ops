@@ -1,0 +1,15 @@
+---
+# The local copies of the trail files, 7 days of them (scripts/trail_copy.py
+# deletes the older ones). A copy with its final name is a file whose events
+# this site's Loki has, so the volume is also the place where the job knows
+# what it has done.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trail-copy
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      storage: 2Gi

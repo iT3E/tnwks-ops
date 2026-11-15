@@ -17,3 +17,10 @@ provider "aws" {
     role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
   }
 }
+
+# The management account of the organization. The workspace's own credentials
+# belong to it, so this provider assumes no role. For the organization trail
+# and the audit role there (modules/aws/security).
+provider "aws" {
+  alias = "management"
+}

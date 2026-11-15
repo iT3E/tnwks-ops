@@ -51,6 +51,11 @@ WSL-02, which has that cluster's kubeconfig
   homelab-wsl-02 ends. Its series is `kube_lease_renew_time`: the credential
   refresher writes the end of each certificate to a Lease
   (`kubernetes/apps/security/aws-credentials/README.md` has the renewal).
+- **API tokens of Prowler:** `SecurityTokenExpiring` (group
+  `homelab.security`) fires 30 days before the token of the Prowler run for
+  Cloudflare ends. The owner writes the end date to the renew time
+  of the token's Lease (`kubernetes/apps/security/prowler/README.md`, "When a
+  token ends").
 - **Audit lines refused:** `SecurityAuditLinesRefused`, of the group
   `homelab.security` (`observability/rules.py`). The sink
   `loki_security_audit` of a Vector aggregator dropped a request that Loki
@@ -61,6 +66,14 @@ WSL-02, which has that cluster's kubeconfig
   and `vector_component_discarded_events_total` of the sink has the number
   of lines. A request that got no answer is not in this alert: Vector sends
   it again (`kubernetes/apps/monitoring/vector/README.md`).
+- **The list of accepted findings:** `SecurityAcceptedListUnread` and
+  `SecurityAcceptedEntriesSkipped`, of the group `homelab.security`
+  (`observability/rules.py`). The first fires when the security converter
+  on homelab-wsl-02 gets no entry from a list that is there, for 30
+  minutes; the second when entries of the list are skipped, for one hour.
+  With no list at all, neither fires. The log of the converter has the
+  number of the line or the entry and why, and no text of the list
+  (`security/converter/README.md`, "The list of accepted findings").
 - **Evidence collector:** stateless. A restart loses nothing, and its panels
   read Unknown until it reports again. Peer-dependent prerequisites, such as
   the fence, need the other site's collector too.

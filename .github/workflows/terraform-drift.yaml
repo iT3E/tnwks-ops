@@ -1,0 +1,76 @@
+---
+name: "Terraform drift"
+
+# Nightly drift check of the Terraform roots with `drift = true` in
+# .github/ci/domains.toml (docs/operations/ci.md#terraform-drift): plans each
+# at main through terraform.yaml in drift mode, never applies, and reports to
+# Prometheus (TerraformDrift, TerraformDriftCheckStale). Each root plans in its
+# own lock group, so never beside its PR plans or applies.
+#
+# Logs are public: as for a PR plan, only counts and addresses, and a root's
+# mask_sops values are masked before Terraform runs.
+on:
+  schedule:
+    # 05:15 Pacific standard time, after the Ansible host check (12:30 UTC).
+    - cron: "15 13 * * *"
+  workflow_dispatch:
+    inputs:
+      roots:
+        description: Roots to check, comma-separated (empty = every root with drift on)
+        type: string
+        required: false
+
+permissions: {}
+
+jobs:
+  roots:
+    name: Roots
+    # main only: a dispatch from another branch would plan that branch.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      terraform: ${{ steps.roots.outputs.terraform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            bin
+            .github/ci
+
+      - name: Roots
+        id: roots
+        env:
+          ROOTS: ${{ inputs.roots }}
+        run: |
+          terraform="$(bin/ci-changes --all | sed -n 's/^terraform=//p')"
+          terraform="$(jq -c --arg want "$ROOTS" '
+            map(select(.drift == true))
+            | if $want == "" then . else
+                ($want | split(",") | map(gsub("^ +| +$"; ""))) as $w | map(select(.name | IN($w[])))
+              end' <<<"$terraform")"
+          if [ "$terraform" = "[]" ]; then
+            echo "::warning::no root with drift = true${ROOTS:+ among: $ROOTS}"
+          fi
+          echo "terraform=$terraform" | tee -a "$GITHUB_OUTPUT"
+
+  terraform:
+    needs: roots
+    if: needs.roots.outputs.terraform != '[]' && needs.roots.outputs.terraform != ''
+    # GitHub checks every called job's permissions against these when the run
+    # starts, skipped jobs included, so this covers the plan jobs' PR comment
+    # (as in deploy.yaml). The drift job's own block keeps its token at
+    # contents: read.
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/terraform.yaml
+    with:
+      roots: ${{ needs.roots.outputs.terraform }}
+      mode: drift
+    secrets:
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}

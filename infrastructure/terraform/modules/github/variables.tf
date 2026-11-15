@@ -7,7 +7,7 @@ variable "repositories" {
     Repositories of the account, by name. The settings default to what GitHub
     gives a new repository, so an entry lists only where a repository differs.
     The optional parts (vulnerability_alerts, actions, workflow_permissions,
-    variables, environments, rulesets) are only managed where they are set:
+    variables, environments, webhooks, rulesets) are only managed where they are set:
     null or empty leaves them alone. security_and_analysis and rulesets need a
     public repository on this account's plan. name defaults to the key; set it
     (from SOPS) where the real name must stay out of the code, under a
@@ -68,6 +68,8 @@ variable "repositories" {
 
     # Deployment environments by name. reviewer_users are numeric user IDs.
     # branch_patterns need deployment_branch_policy.custom_branch_policies.
+    # variables are the environment's Actions variables by name: never a
+    # secret, but the root may pass values from SOPS that stay out of the code.
     environments = optional(map(object({
       can_admins_bypass   = optional(bool, true)
       prevent_self_review = optional(bool, false)
@@ -78,6 +80,18 @@ variable "repositories" {
         custom_branch_policies = bool
       }))
       branch_patterns = optional(list(string), [])
+      variables       = optional(map(string), {})
+    })), {})
+
+    # Repository webhooks by a key of our own (GitHub gives them no name).
+    # No secret, and never updated: a webhook is created with these settings
+    # or imported, and a change after that is made on GitHub (webhooks.tf).
+    webhooks = optional(map(object({
+      url          = string
+      events       = list(string)
+      content_type = optional(string, "form")
+      insecure_ssl = optional(bool, false)
+      active       = optional(bool, true)
     })), {})
 
     # Branch rulesets by name. bypass_actors: RepositoryRole 5 is admin,

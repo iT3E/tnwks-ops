@@ -9,7 +9,8 @@ infrastructure** (`cognito.tf`, `ses.tf`, `iam_policies.tf`, `iam_roles.tf`, ...
 modules/
 ├── aws/                 # prod account infra: cognito, ses, iam, acm
 │   ├── oidc/            # IAM OIDC provider + role that TFC workspaces assume
-│   └── identity/        # organizations, identity center, kms for sops
+│   ├── identity/        # organizations, identity center, kms for sops
+│   └── security/        # organization trail, its bucket, read-only audit roles
 ├── tfc/                 # Terraform Cloud project, workspaces, variable set
 ├── cloudflare/          # one zone + its settings, WAF ruleset and DNS records
 ├── github/              # the GitHub account's repositories, rulesets, environments
@@ -19,6 +20,7 @@ modules/
 | Module | Called by | Provisions |
 | --- | --- | --- |
 | `aws/` | `environments/prod/aws` | Cognito user pool, groups, seeded users, app clients, custom hosted-UI domain, SES domain identity + DKIM, SMTP IAM user, ACM cert for the auth domain |
+| `aws/security/` | `environments/prod/aws` | The AWS parts of the security platform, across the management and the prod account: the organization trail, its bucket, and the read-only roles of its two readers (its README) |
 | `aws/oidc/` | `environments/bootstrap/aws-init` | IAM OIDC provider trusting Terraform Cloud and the role its workspaces assume |
 | `tfc/` | `environments/bootstrap/aws-init` | Terraform Cloud project, the workspaces the other environments run in, and the project variable set carrying AWS credentials |
 | `aws/identity/` | `environments/bootstrap/aws-identity` | AWS Organizations prod account, Identity Center users/groups/permission sets, KMS key backing SOPS |

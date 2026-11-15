@@ -1,0 +1,38 @@
+---
+# windows_host_check: the host check of the security platform on each Windows
+# host (security/README.md, the source host-check). The SYSTEM scheduled task
+# tnwks-host-check runs files/Invoke-TnwksHostCheck.ps1 every 6 hours and at
+# boot. It reads the state of Defender, the updates and the firewall, and
+# writes the result to the textfile collector of windows_exporter (role
+# windows_monitoring). homelab-wsl scrapes both hosts, and the peer-federate
+# job of homelab-wsl-02 brings the series to the rules of the registry.
+#
+# Each WSL distro writes its own check (role wsl_host_check) to a directory
+# of its own under the textfile directory. windows_exporter reads the
+# subdirectories too. This role makes that directory, and lets the account
+# that owns the distro write there and nowhere else.
+#
+# Both hosts get the same settings: nothing here is set in host_vars
+# (security/tests/test_host_check_windows.py fails if it is).
+
+# present, or absent: the way back (Design Doc 0004, section 4.3). absent
+# removes the task, the script and the files of the host and of its distro.
+# Run the role of the distro with absent first, so its timer stops writing.
+host_check_state: present
+
+host_check_dir: 'C:\ProgramData\tnwks-host-check'
+host_check_task: tnwks-host-check
+host_check_script: Invoke-TnwksHostCheck.ps1
+# The textfile collector reads <windows_exporter>\textfile_inputs and each
+# directory under it.
+host_check_textfile_dir: 'C:\Program Files\windows_exporter\textfile_inputs'
+host_check_file: tnwks_security_host_check.prom
+host_check_distro_dir: '{{ host_check_textfile_dir }}\wsl-distro'
+# The Windows account that owns the WSL distro, as which the distro writes to
+# drvfs (/mnt/c).
+host_check_distro_account: "{{ windows_desktop_user }}"
+
+# The limits of the checks (Design Doc 0004, section 4.1.4). Defender counts
+# signatures as out of date after 7 days by default.
+host_check_signature_max_age_days: 7
+host_check_updates_max_age_days: 14

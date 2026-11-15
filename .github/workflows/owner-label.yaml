@@ -1,0 +1,53 @@
+---
+name: "Owner label"
+
+# A required check of the main ruleset ("Owner label", from GitHub Actions).
+# An impact/high PR passes only when the owner added owner/review, and an
+# impact/critical PR only when the owner added owner/approved, after the push
+# of its head commit. A label from a bot, a GitHub App or a workflow token
+# fails it. Every other PR passes at once, so the automerge tiers keep
+# merging. The rules and the logic are in .github/scripts/owner-label-check.py
+# (docs/operations/renovate.md).
+#
+# pull_request_target runs main's copy of this file and of the script, so a
+# PR can't change what decides. The job checks out only the script, from
+# main, runs no PR code, holds no secret, and its token can only read. PR
+# text (title, branch, label names) never reaches a shell: the script reads
+# it from the API and prints it filtered.
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] only main's script runs; no PR code is checked out or run
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions: {}
+
+# One run at a time per PR, in event order; each reads the PR as it is then.
+concurrency:
+  group: owner-label-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: "Owner label"
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read # the script from main, and the activity API
+      issues: read # the PR's issue events
+      pull-requests: read # the PR
+    steps:
+      # No ref: pull_request_target checks out the default branch.
+      - name: Checkout the script from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts/owner-label-check.py
+          sparse-checkout-cone-mode: false
+
+      - name: Check who added the label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          OWNER_ID: ${{ github.repository_owner_id }}
+        run: python3 -I .github/scripts/owner-label-check.py

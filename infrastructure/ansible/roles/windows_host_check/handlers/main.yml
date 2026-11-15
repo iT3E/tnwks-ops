@@ -1,0 +1,13 @@
+---
+# A new or changed check runs at once, so its result does not wait up to 6
+# hours for the first trigger.
+- name: Run the host check
+  ansible.windows.win_powershell:
+    parameters:
+      TaskName: "{{ host_check_task }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$TaskName)
+      if ($PSCmdlet.ShouldProcess($TaskName, 'start')) {
+          Start-ScheduledTask -TaskPath '\' -TaskName $TaskName
+      }

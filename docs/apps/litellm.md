@@ -13,6 +13,7 @@ Manifests: `kubernetes/apps/ai/litellm/`. Its state (keys, spend) is the cnpg
 | `claude-sonnet` | Bedrock, `us.anthropic.claude-sonnet-5-5` (Converse API, us-east-1) |
 | `claude-opus-bridge-main`, `claude-opus-bridge-finance`, `claude-opus-bridge-workflows` | The model bridge (`claude-opus-5-5` on the Claude plan), each with the bridge key of its trust domain |
 | `claude-opus-bedrock` | Bedrock, `us.anthropic.claude-opus-5-5` (Invoke API, us-east-1) |
+| `agents-pilot-embeddings` | Ollama on the WSL host (`embeddinggemma-300m-q8`, `/api/embed`): the embeddings of the pilot agent's memory search |
 | `agents-main`, `agents-finance`, `agents-workflows`, `agents-pilot` | Names, not entries: each points at one `claude-opus-*` entry ([The agent platform](#the-agent-platform)) |
 
 ## Prompt caching
@@ -54,6 +55,7 @@ name from one to the other, by one line in git.
 | `claude-opus-bridge-finance` | The same | `BRIDGE_KEY_FINANCE` |
 | `claude-opus-bridge-workflows` | The same | `BRIDGE_KEY_WORKFLOWS` |
 | `claude-opus-bedrock` | Bedrock, `bedrock/invoke/us.anthropic.claude-opus-5-5` (cross-region inference profile, us-east-1) | The Bedrock credentials of the pod |
+| `agents-pilot-embeddings` | Ollama on the WSL host, `ollama/embeddinggemma-300m-q8` with `api_base` `OLLAMA_BASE_URL` | None |
 
 - **The bridge entries.** The model bridge
   (`http://model-bridge.ai.svc.cluster.local:8080`, `POST /v1/messages`)
@@ -70,7 +72,15 @@ name from one to the other, by one line in git.
   format as it came (tools, thinking, cache marks), while a
   `bedrock/converse/` model goes through its chat-completion translation.
   The agents call `/v1/messages`.
+- **The embedding entry** serves `/v1/embeddings` for the memory search of
+  the pilot agent ([agent-platform.md](agent-platform.md#the-pilot-agent)).
+  It is on the Ollama of the host, so no vendor gets the text of the
+  memory. It is an entry, not a name in `model_group_alias`, and it doesn't
+  move with a name. It sets no `num_retries`, as the other entries that
+  aren't the bridge: the router default (2 retries) applies.
 - Agent keys can't call an entry by its own name; only the master key can.
+  The one exception is `agents-pilot-embeddings`, which the key
+  `agents-pilot` lists.
 
 ### The names
 
@@ -118,6 +128,34 @@ as one text (the bridge README).
 - The config of each agent names one model and has no fallback list.
 - The `router_settings` that the admin UI can save in the database merge
   over this file. Don't save any there; the master key is the owner's.
+
+### One attempt to the bridge
+
+Each bridge entry has `num_retries: 0` (a decision of the owner,
+2026-11-14), so the gateway sends a request to the bridge one time and gives
+the caller the answer of the bridge, an error too. Every other entry keeps
+the router default of 2 retries (3 attempts).
+
+- **Why.** At the usage limit of the plan the bridge answers 429. With the
+  default, each request reached the bridge 3 times, and each attempt starts
+  an engine and sends one more refused request to the plan. The caller tries
+  again by itself (the Anthropic SDK 2 times, an agent framework more), so
+  the retries of the gateway multiplied the attempts.
+- **Every error.** The value counts for a 429, a 5xx, a timeout, and an
+  error event of a stream before its content. No `retry_policy` or
+  `model_group_retry_policy` is set, so no error class has a count of its
+  own.
+- **It follows the entry, not the name.** A name moved to
+  `claude-opus-bedrock` gets the retries of that entry (the default). The
+  router reads `model_group_retry_policy` by the name in the request (the
+  alias or the entry), so that knob would follow a name, and it is not used.
+- **A request can change it.** `num_retries` in the body of a request comes
+  before the value of the entry (LiteLLM `router_python_core.py`,
+  `async_function_with_retries`). The agents don't send it. A request with
+  `"num_retries": 2` gets 3 attempts again.
+- **What changes for a caller.** A 503 of the bridge during its drain now
+  reaches the caller at once. The Anthropic SDK of the caller tries it again
+  (2 times), and the new bridge pod answers.
 
 ### Test a name
 
@@ -183,7 +221,8 @@ To add one: generate a value (`sk-<app>-` and random hex), add the entry to
 
 Each trust domain of the agent platform (`docs/apps/agent-platform.md`) gets
 one key of its own, whose model list is the name of that trust domain and
-nothing else, and no key serves two trust domains. The agents of a trust
+nothing else, and no key serves two trust domains. The pilot's key also
+lists its embedding entry. The agents of a trust
 domain call `http://litellm-app.ai.svc.cluster.local:4000` with it (the chart
 names the Service `litellm-app`).
 
@@ -192,7 +231,7 @@ names the Service `litellm-app`).
 | `agents-main` | `["agents-main"]` | `agents-main` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 | `agents-finance` | `["agents-finance"]` | `agents-finance` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 | `agents-workflows` | `["agents-workflows"]` | `agents-workflows` | Secret `workflow-providers-secret`, key `MODEL_GATEWAY_KEY`: the provider `model-gateway` of the sandbox gateway holds it, and a sandbox gets a placeholder ([agent-platform.md](agent-platform.md#the-run-receiver)) |
-| `agents-pilot` | `["agents-pilot"]` | `agents-pilot` | Secret `agent-secret`, key `LITELLM_API_KEY` |
+| `agents-pilot` | `["agents-pilot", "agents-pilot-embeddings"]` | `agents-pilot` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 
 - The owner adds each entry to `keys.json`, with its value
   (`sk-agents-<name>-` and random hex), when the agent of that trust domain

@@ -1,0 +1,16 @@
+---
+# The volume of results (security/converter/README.md, "The files of
+# results"): the Prowler jobs and the API checks job write their files here,
+# and the converter reads them. The class puts the volume on the node of its
+# first pod, and each pod that mounts it has the node selector of
+# SECURITY_NODE. A file of results never goes to git.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: security-results
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      storage: 1Gi

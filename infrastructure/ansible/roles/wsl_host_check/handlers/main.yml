@@ -1,0 +1,13 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+# Starts a run and does not wait for it: a run that fails shows in its
+# series, not in the play. A check run has no unit to start.
+- name: Run the host check
+  ansible.builtin.systemd:
+    name: "{{ wsl_host_check_name }}.service"
+    state: started
+    no_block: true
+  when: not ansible_check_mode
