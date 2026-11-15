@@ -1,3 +1,0 @@
-kind: Security
-body: 'agents: the pilot agent loads only the plugins that it names in plugins.allow (brave, diagnostics-otel, memory-core, openshell, telegram), not each plugin that the product finds in its state directory or bundles'
-time: 2026-11-15T09:00:00.000000000-08:00

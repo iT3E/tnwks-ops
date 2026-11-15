@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.156.2 - 2026-11-15
+
+### Security
+
+* agents: the pilot agent loads only the plugins that it names in plugins.allow (brave, diagnostics-otel, memory-core, openshell, telegram), not each plugin that the product finds in its state directory or bundles
+
 ## v2.156.1 - 2026-11-15
 
 ### Fixed
