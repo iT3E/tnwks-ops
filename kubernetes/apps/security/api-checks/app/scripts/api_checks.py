@@ -253,7 +253,11 @@ def read_releases(path: Path) -> tuple[dict[str, float], float | None]:
 def first_date(published: datetime.datetime, last_read: float | None, now: datetime.datetime) -> float:
     """The date of a release that the job sees first. It came out after the last read of
     the feed, so that time, or the date of the feed if that is earlier. With no last read,
-    the date of the feed, or now if the feed gives a later one."""
+    the date of the feed, or now if the feed gives a later one. A last read after now
+    comes from a clock that was ahead: it bounds nothing, so the age is not known, and
+    counts as old (the time 0)."""
+    if last_read is not None and last_read > now.timestamp():
+        return 0.0
     return min(published.timestamp(), now.timestamp() if last_read is None else last_read)
 
 

@@ -22,9 +22,11 @@ router is open to the CI runners only.
 **A test that does not run has no entry**, never a 0. That is the case when
 Prometheus has no series of the router (mktxp did not read it in the last 5
 minutes) or two versions of it, when the feed has no stable release with a
-date, and when HCP Terraform does not answer 200. The run then fails, which
-raises `KubeJobFailed`, and the system reads as late after 36 hours
-(`SecurityResultLate`). With no token, the test of Terraform Cloud does not
+date, and when HCP Terraform does not answer 200. The run still writes
+`api-check/results.json`, with no entry for that test, and fails, which
+raises `KubeJobFailed`. The converter then serves no time of the last result
+for that system, and `SecurityResultLate` fires about 20 minutes after the
+converter reads the file. With no token, the test of Terraform Cloud does not
 run, and the run does not fail for it.
 
 The feed holds the newest release only. So the job keeps each newest
@@ -42,7 +44,9 @@ section 5.6).
   day early. After a stop of the job, it moves a fail up to the length of the
   stop early, and never late. With no last read (the first run, or a list of
   the old form), the date is the one of the feed, or the time of the run if
-  the feed gives a later one.
+  the feed gives a later one. A last read later than the time of the run
+  comes from a clock that was ahead. It bounds nothing, so such a release
+  gets the time 0, and a router behind it fails at once.
 - **A router behind each release of the list.** The list starts at the
   first run, so a release between the router and the oldest release of the
   list is not in it. A router that runs a version older than each release of
@@ -51,7 +55,13 @@ section 5.6).
   that it publishes them.
 
 A list that is there and can not be read gives no result for the router, and
-the run leaves it as it is, so no date is lost. The converter reads
+the run leaves it as it is, so no date is lost. A release that the vendor
+withdraws stays in the list, so a router below it fails until it runs a
+newer version.
+
+**The way back for a damaged list.** Delete `api-check/routeros-releases.json`
+from the volume of results. The next run starts a new list, and a router
+behind the newest release then fails at once, as its age is not known. The converter reads
 `api-check/results.json` only, so it does not read the list.
 
 **The first result, then the source.** A system lists `api-check` in

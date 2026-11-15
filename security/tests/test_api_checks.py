@@ -261,6 +261,19 @@ def test_a_stop_of_the_job_never_moves_the_fail_late(tmp_path, monkeypatch, back
         assert run_at(tmp_path, monkeypatch, 14.01, "7.90.3", 8) == 1
 
 
+def test_a_last_read_from_a_clock_that_was_ahead_dates_a_new_release_as_old(tmp_path, monkeypatch):
+    """The clock reads day 30 at the run of day 0, so the list keeps a last read of day
+    30. The clock is set right, and the job stops. B comes out on day 2 and C on day 8,
+    and the job is back on day 10. The feed date of C (day 8) is earlier than that last
+    read, so it would date C, and a router on A would pass until day 22, after the grace
+    of B. A last read after now bounds nothing: C counts as old, and the router fails."""
+    assert run_at(tmp_path, monkeypatch, 30, "7.90.1", -30) == 0
+    assert run_at(tmp_path, monkeypatch, 10, "7.90.3", 8) == 1
+    seen = json.loads(releases_file(tmp_path).read_text())
+    assert seen["first_seen"]["7.90.3"] == 0.0
+    assert seen["last_read"] == (NOW + datetime.timedelta(days=10)).timestamp()
+
+
 def test_in_daily_runs_a_new_release_is_dated_no_more_than_a_day_early(tmp_path, monkeypatch):
     assert run_at(tmp_path, monkeypatch, 0, "7.90.1", -30) == 0
     assert run_at(tmp_path, monkeypatch, 1, "7.90.1", -30) == 0
