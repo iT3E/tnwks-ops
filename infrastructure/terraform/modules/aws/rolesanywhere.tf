@@ -239,3 +239,96 @@ resource "aws_rolesanywhere_profile" "backups_site" {
   role_arns        = [aws_iam_role.rolesanywhere_backups_site[each.key].arn]
   duration_seconds = 14400
 }
+
+## ---------------------------------------------------------------------------------------------------------------------
+## Backups kept to one prefix (rolesanywhere_backups_prefixed): same trust anchor, one role and profile each. The role
+## lists, reads, writes and deletes only under its prefix, and nothing else in the bucket. For the backups of the agent
+## trust domains (docs/apps/agent-platform.md): their backup operator copies the session into the namespace of a
+## trust domain before each run, so the session there reaches only that repository.
+## ---------------------------------------------------------------------------------------------------------------------
+
+locals {
+  rolesanywhere_backups_prefixed = local.rolesanywhere_enabled ? var.rolesanywhere_backups_prefixed : {}
+}
+
+data "aws_iam_policy_document" "rolesanywhere_backups_prefixed_trust" {
+  for_each = local.rolesanywhere_backups_prefixed
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"]
+    principals {
+      type        = "Service"
+      identifiers = ["rolesanywhere.amazonaws.com"]
+    }
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_rolesanywhere_trust_anchor.tnwks[0].arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:PrincipalTag/x509Subject/CN"
+      values   = each.value.common_names
+    }
+  }
+}
+
+data "aws_iam_policy_document" "rolesanywhere_backups_prefixed" {
+  for_each = local.rolesanywhere_backups_prefixed
+
+  statement {
+    sid       = "BucketLocation"
+    actions   = ["s3:GetBucketLocation"]
+    resources = [aws_s3_bucket.homelab_backups.arn]
+  }
+  # A list names only keys under the prefix.
+  statement {
+    sid       = "ListOwnPrefix"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.homelab_backups.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = [each.value.prefix, "${each.value.prefix}*"]
+    }
+  }
+  statement {
+    sid = "OwnPrefixObjects"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts",
+    ]
+    resources = ["${aws_s3_bucket.homelab_backups.arn}/${each.value.prefix}*"]
+  }
+}
+
+resource "aws_iam_role" "rolesanywhere_backups_prefixed" {
+  for_each = local.rolesanywhere_backups_prefixed
+
+  name                 = "tnwks-rolesanywhere-backups-${each.key}"
+  description          = "Roles Anywhere role for the ${each.key} backups: list, read and write under ${each.value.prefix} only"
+  assume_role_policy   = data.aws_iam_policy_document.rolesanywhere_backups_prefixed_trust[each.key].json
+  max_session_duration = 14400
+}
+
+resource "aws_iam_role_policy" "rolesanywhere_backups_prefixed" {
+  for_each = local.rolesanywhere_backups_prefixed
+
+  name   = "homelab-backups-prefix-${each.key}"
+  role   = aws_iam_role.rolesanywhere_backups_prefixed[each.key].id
+  policy = data.aws_iam_policy_document.rolesanywhere_backups_prefixed[each.key].json
+}
+
+# Same 4-hour sessions as the other backup profiles.
+resource "aws_rolesanywhere_profile" "backups_prefixed" {
+  for_each = local.rolesanywhere_backups_prefixed
+
+  name             = "tnwks-ops-backups-${each.key}"
+  enabled          = true
+  role_arns        = [aws_iam_role.rolesanywhere_backups_prefixed[each.key].arn]
+  duration_seconds = 14400
+}

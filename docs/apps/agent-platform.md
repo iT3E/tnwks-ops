@@ -127,10 +127,10 @@ with the label `agents.home.arpa/trust-domain`. Reads, and the status writes
 of the mover, are not affected. A namespaced `Repository` in a trust domain
 would bootstrap there and need a change of the rule.
 
-What the rule does not change: the mover still runs with the credentials of
-the shared repository that kopiur projects before each run
-(`docs/operations/backups.md`, "Credentials"). A repository of their own for
-the trust domains is a later step.
+What the rule does not change: the mover still gets the credentials that
+kopiur projects before each run. Those are the session and the password of the
+repository of the agent trust domains, which reach `kopiur-agents/` only
+([Backups of the agent trust domains](#backups-of-the-agent-trust-domains)).
 
 A refusal fires `AgentBackupMoverConfigMapDenied` ([Alerts](#alerts)). The
 API server counts the refusals of a policy
@@ -143,6 +143,48 @@ To check: `kubectl get validatingadmissionpolicy agents-backup-mover-configmaps`
 and after the next snapshot of a trust domain,
 `kubectl -n agents-pilot get snapshots.kopiur.home-operations.com` shows the
 newest one `Succeeded`.
+
+## Backups of the agent trust domains
+
+The snapshots of the trust domains go to a Kopia repository of their own, not
+to the shared repository of the other apps
+(`kubernetes/apps/kopiur-system/agents-repository/`, homelab-wsl only):
+
+| Part | Value |
+| --- | --- |
+| ClusterRepository | `agents`, prefix `kopiur-agents/` of the backup bucket. `allowedNamespaces`: `kopiur-system` and the trust domains with a policy (`agents-pilot` now) |
+| Password | `kopiur-system/kopiur-repository-agents` (SOPS), its own value, on the off-site media |
+| S3 session | CronJob `aws-backup-credentials-agents`: certificate CN `homelab-wsl-agent-backups` to the role `tnwks-rolesanywhere-backups-agents`, which lists, reads and writes `kopiur-agents/` and nothing else (`rolesanywhere_backups_prefixed` in `environments/prod/aws/main.tf`). Secret `aws-backup-sts-agents` |
+| Policies | `agents-pilot`: `agent-state-v2` (the agent) and `signal-state` (the Signal daemon), in `pilot/*/app/backup.yaml` |
+
+kopiur copies this session and this password into the namespace of the trust
+domain before each mover run. So a mover there, and anything that reads the
+Secrets of that namespace, reaches the snapshots of the trust domains and no
+other snapshot: not those of the household apps in `kopiur/`, and not the
+password that decrypts them. The shared repository no longer allows
+`agents-pilot`.
+
+One repository holds every trust domain for now. A mover of one trust domain
+can still reach the snapshots of the other trust domains in it. One repository
+for each trust domain (one more entry of `rolesanywhere_backups_prefixed`, one
+more directory like `agents-repository/`) is the stricter form, before a second
+trust domain gets a policy.
+
+The snapshots of the pilot agent from before the move (policy `agent-state`)
+stay in the shared repository. The policy was replaced, not edited: kopiur
+deleted its Snapshot objects with it and kept the snapshots
+(`deletion.onPolicyDelete: Retain`, the default). The runbook restores one by
+its kopia identity ("A snapshot from before the move").
+
+The alerts of these backups: a failed run of the refresher is
+`KubeJobFailed`; a repository in `Failed` or `Degraded` is
+`KopiurRepositoryNotReady` (the chart, critical); a repository that stays
+`Pending` or `Initializing` is `AgentBackupRepositoryNotReady` ([Alerts](#alerts));
+a failed first snapshot is `KopiurSnapshotFailed` and `KopiurLastBackupFailed`.
+
+To check: `kubectl get clusterrepository agents` is `Ready`, and
+`kubectl -n agents-pilot get snapshotpolicies,snapshots.kopiur.home-operations.com`
+shows the newest snapshot of `agent-state-v2` `Succeeded`.
 
 ## The model path
 
@@ -475,7 +517,7 @@ the sandbox plugin copies the workspace only.
 | Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): once the gateway is ready, `openclaw backup create --verify` to `archives/daily/`. The command checks that the gateway owns the state, and it can only see the gateway process in the same PID namespace, so the pod shares one (`shareProcessNamespace: true`) | The last 7 |
 | Each day, after that backup | The same container: the SHA-256 of `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md` and each file under `skills/`, compared with the list of the day before (`archives/instruction-files/`). One log line for each file that is new, changed or gone, then `instruction-check result=...` | 30 days of lists |
 | Each start of the Signal daemon | `archive` init container: a `tar.gz` of `data` in `archives/start/`, with the signal-cli release | 14 days |
-| Nightly | kopiur copies each volume, with its archives (`*/app/backup.yaml`, `docs/operations/backups.md`) | As the other volumes |
+| Nightly | kopiur copies each volume, with its archives, to the repository of the agent trust domains (`*/app/backup.yaml`, [Backups of the agent trust domains](#backups-of-the-agent-trust-domains)) | As the other volumes |
 
 A failed archive step stops the start of its pod. A failed daily backup ends
 the `backup` container, so the restart shows on the pod. The first archive
@@ -808,7 +850,8 @@ as gauges of Vector: the aggregator for the `<check> result=` lines
 (`WorkflowAppDrift`, `AgentInstructionCheckStale`, `AgentMemoryIndexFailed`),
 the platform agent for the `instruction-check file=` lines and the bridge
 (`AgentInstructionFileChanged`, `ModelBridgeRateLimited`) ([Logs](#logs)).
-`AgentBackupMoverConfigMapDenied` reads a counter of the API server.
+`AgentBackupMoverConfigMapDenied` reads a counter of the API server, and
+`AgentBackupRepositoryNotReady` the phase gauge of the backup operator.
 
 [`agent-platform-runbook.md`](agent-platform-runbook.md) has a section for
 each alert (what it means, the first checks, what was seen so far, the fix),
@@ -832,6 +875,7 @@ by hand, and the steps at a limit of the Claude plan.
 | `AgentInstructionCheckStale` | No `instruction-check result=` line of the pilot's agent pod in 26 hours, once its `backup` container has run for 26 hours | 15m | `kubectl -n agents-pilot logs deploy/agent -c backup`. A backup that waits on a gateway that is not ready logs nothing |
 | `AgentMemoryIndexFailed` | The newest `memory-index result=` line of the pilot's agent pod is `result=failed`, and it is not older than the start of the newest agent pod. It clears at a start that ends ok. A new pod that has not run the step yet, or no pod, does not fire | none | `kubectl -n agents-pilot logs deploy/agent -c memory-index`. When the model gateway and the model server of the host answer, start the pod again |
 | `AgentBackupMoverConfigMapDenied` | The admission rule `agents-backup-mover-configmaps` refused a ConfigMap write of a backup mover in a trust domain ([The backup mover and ConfigMaps](#the-backup-mover-and-configmaps)). It fires for one to two hours after each denial (`keep_firing_for: 1h`) | none | The audit lines of that hour in Loki name the namespace, the ConfigMap and the ServiceAccount, and the events of the namespace name the mover Job. Suspend the snapshots of that namespace |
+| `AgentBackupRepositoryNotReady` | The backup repository of the trust domains (`agents`) is `Pending` or `Initializing`: it never got `Ready`, so no snapshot of a trust domain runs. `Failed` and `Degraded` are the chart rule `KopiurRepositoryNotReady` | 1h | `kubectl get clusterrepository agents -o yaml`, then the refresher of its session ([Backups of the agent trust domains](#backups-of-the-agent-trust-domains)) |
 | `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,
@@ -862,7 +906,7 @@ by hand, and the steps at a limit of the Claude plan.
   `instruction-check file=` lines and of the bridge, on its own port
   (`homelab-wsl` only).
 - **The snapshots** of a state volume have the kopiur chart's rules,
-  which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`,
+  which match each SnapshotPolicy, `agent-state-v2` too: `KopiurLastBackupFailed`,
   `KopiurBackupStale` (48 hours), `KopiurSnapshotFailed`,
   `KopiurBackupConsecutiveFailures`, and `KopiurRestoreFailed` for a restore.
   They have no runbook link; the runbook has a section for each.

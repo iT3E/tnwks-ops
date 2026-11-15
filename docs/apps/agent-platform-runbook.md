@@ -520,6 +520,30 @@ denial of this policy since it was added on 2026-11-14
 
 Not tested.
 
+### AgentBackupRepositoryNotReady
+
+**What it means.** The backup repository of the agent trust domains
+(ClusterRepository `agents`) has been `Pending` or `Initializing` for an
+hour. It never got `Ready`, so no snapshot of a trust domain runs, and the
+policies have no failure to show. `Failed` or `Degraded` is the chart rule
+`KopiurRepositoryNotReady` instead.
+
+**First checks.**
+
+```sh
+kubectl get clusterrepository agents -o yaml          # the Ready condition
+kubectl -n kopiur-system get cronjob aws-backup-credentials-agents
+kubectl -n kopiur-system get secret aws-backup-sts-agents -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
+kubectl -n kopiur-system get jobs | grep agents
+```
+
+**Seen so far.** Never.
+
+**Fix.** A session that is not there or has expired: run the refresher once
+(`docs/operations/backups.md`, "Credentials"). A `suspend: true` on the
+repository: remove it by a pull request. Anything else: the condition
+message and the log of the discovery Job.
+
 ### ModelBridgeRateLimited
 
 **What it means.** The model bridge logged an `engine_error` line with the
@@ -583,14 +607,20 @@ git.
 ### KopiurLastBackupFailed
 
 **What it means.** A rule of the kopiur chart: the last snapshot of a
-SnapshotPolicy failed. On the platform the policies are `agent-state` (and
-`signal-state` when Signal is on) in `agents-pilot`.
+SnapshotPolicy failed. On the platform the policies are `agent-state-v2` (and
+`signal-state` when Signal is on) in `agents-pilot`. They write to the
+repository of the agent trust domains, ClusterRepository `agents`
+([`agent-platform.md`](agent-platform.md#backups-of-the-agent-trust-domains)).
 
 **First checks.**
 
 ```sh
 kubectl -n agents-pilot get snapshotpolicies,snapshots
 kubectl -n agents-pilot describe snapshot <snapshot>
+kubectl get clusterrepository agents
+kubectl -n kopiur-system get cronjob aws-backup-credentials-agents
+kubectl -n kopiur-system get pods -l app.kubernetes.io/name=aws-backup-credentials-agents
+kubectl -n kopiur-system get secret aws-backup-sts-agents -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
 ```
 
 **Seen so far.** The first snapshot of the pilot's state volume failed on
@@ -600,7 +630,11 @@ not allow it (`5e219085`). The first scheduled snapshot after the fix
 passed the same day.
 
 **Fix.** Fix the policy or the network rule in git. The schedule `H 2 * * *`
-runs in local time, not in UTC. [`backups.md`](../operations/backups.md) has
+runs in local time, not in UTC. An S3 error of access names the session of
+the agents repository: its refresher, its certificate, or the role kept to
+`kopiur-agents/` (a policy of the agents repository that names another prefix
+fails here by design). A repository in `Failed` after a session error: run the
+refresher once (`docs/operations/backups.md`, "Credentials"). [`backups.md`](../operations/backups.md) has
 the rest.
 
 ### KopiurBackupStale
@@ -1056,23 +1090,31 @@ steps is tested.
 
 The backup container makes the daily archive of a UTC day in the first hour
 of that day, or at the first start of the pod that day: it checks once an
-hour (`agent/config/scripts/daily-backup.sh`). The snapshot runs each day at
-10:30 UTC, so the snapshot of a day holds the daily archive of that day when
-the pod ran.
+hour (`agent/config/scripts/daily-backup.sh`). The snapshot runs each day
+between 02:00 and 03:00 local time, at a minute that kopiur derives from the
+schedule object (`H 2 * * *`; 10:30 UTC for `agent-state`, read
+`kubectl -n agents-pilot get snapshots` for `agent-state-v2`). So the snapshot
+of a day holds the daily archive of that day when the pod ran.
 
 1. **Read the state of the backups and of the volume.** Read only.
    ```sh
    kubectl -n agents-pilot get snapshots --sort-by=.metadata.creationTimestamp
+   kubectl get clusterrepository agents
    kubectl -n agents-pilot get pvc agent-state
    kubectl get pv "$(kubectl -n agents-pilot get pvc agent-state -o jsonpath='{.spec.volumeName}')" \
      -o jsonpath='{.spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values}'
    kubectl get nodes
    ```
    Pick the snapshot by its name, from before the fault, with phase
-   `Succeeded`. Not the newest by default: the schedule runs each day at
-   10:30 UTC during an outage too, so the newest can be a copy of an empty
-   or broken volume. The read of 2026-11-14 showed one snapshot each day,
-   each `Succeeded` from 2026-11-12.
+   `Succeeded`. Not the newest by default: the schedule runs each day
+   during an outage too, so the newest can be a copy of an empty or broken
+   volume. The read of 2026-11-14 showed one snapshot each day, each
+   `Succeeded` from 2026-11-12.
+   These are the snapshots of the policy `agent-state-v2`, in the repository
+   `agents`. The snapshots from before the move (policy `agent-state`) are in
+   the shared repository `s3` and have no Snapshot object any more: kopiur
+   deleted the objects with the old policy and kept the snapshots. Restore
+   one by [the steps for a snapshot from before the move](#a-snapshot-from-before-the-move).
 2. **Decide the node and the volume first.** This decides each step after
    it. A `local-path` volume lives on one node (its PV has a node affinity,
    and the class binds at the first pod: `WaitForFirstConsumer`). The agent
@@ -1119,7 +1161,7 @@ the pod ran.
    on this cluster.
 3. **Stop the agent and the snapshots.** Owner approval. One pull request
    sets `replicas: 0` in `pilot/agent/app/deployment.yaml`, and
-   `suspend: true` in the SnapshotSchedule `agent-state` of `backup.yaml`, so
+   `suspend: true` in the SnapshotSchedule `agent-state-v2` of `backup.yaml`, so
    no new snapshot copies the broken volume. For B and C it also takes
    `./pvc.yaml` out of `kustomization.yaml`, and for C it changes the
    `nodeSelector`. After the merge, wait until
@@ -1161,6 +1203,44 @@ the pod ran.
    Wait for the phase `Completed` of the Restore
    (`kubectl -n agents-pilot get restores`). `KopiurRestoreFailed` fires on
    a failed one.
+
+   #### A snapshot from before the move
+
+   The shared repository `s3` no longer allows `agents-pilot`, so the
+   pull request of this step also adds `agents-pilot` back to
+   `allowedNamespaces` in
+   `kubernetes/apps/kopiur-system/kopiur/repository/clusterrepository.yaml`,
+   and the Restore names the repository and the kopia identity of the old
+   policy instead of `source.snapshotRef`. The identity is fixed by the
+   `identityDefaults` of `s3` (host: the namespace; user: the namespace, a
+   dash and the policy name) and the source path of the PVC, as the old
+   Snapshot objects showed it:
+
+   ```yaml
+   spec:
+     repository:
+       kind: ClusterRepository
+       name: s3
+     source:
+       identity:
+         username: agents-pilot-agent-state
+         hostname: agents-pilot
+         sourcePath: /pvc/agent-state
+         # One of the three:
+         asOf: "2026-11-14T12:00:00Z"   # the newest snapshot at or before this time
+         # offset: 0                    # 0 the newest, 1 the one before
+         # snapshotID: <ID>             # from the list kept at the move
+   ```
+
+   `asOf` with a time from before the fault is the usual pick. A
+   `snapshotID` comes from the list that the owner kept at the move
+   (`kubectl -n agents-pilot get snapshots.kopiur.home-operations.com
+   -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,END:.status.timing.endTime,ID:.status.snapshot.kopiaSnapshotID`,
+   run before the merge). For that restore the mover gets the session and
+   the password of the shared repository, which reach every snapshot of the
+   household apps. So the pull request of step 6 removes `agents-pilot` from
+   that list again, and no snapshot schedule of the pilot names `s3`. Not
+   tested.
 5. **Restore the daily archive.** Owner approval. The snapshot copies the
    live files of a running pod, so its database can be torn; the daily
    archive in it is the consistent copy. A pull request removes the list
@@ -1178,7 +1258,9 @@ the pod ran.
    retry names the archive of the day before.
 6. **Start the agent and the snapshots.** Owner approval. A pull request
    removes the Restore and the Job, sets `replicas: 1`, and removes
-   `suspend: true`. For B and C, keep `dataSourceRef` in `pvc.yaml`: the
+   `suspend: true` from the SnapshotSchedule `agent-state-v2`. After a
+   snapshot from before the move, it also removes `agents-pilot` from the
+   `allowedNamespaces` of `s3` again. For B and C, keep `dataSourceRef` in `pvc.yaml`: the
    field cannot change on a PVC that exists, so a removal fails the apply.
    The `archive` init container makes an archive of the restored state, and
    `doctor` checks it.
