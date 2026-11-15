@@ -124,6 +124,25 @@ spec:
       # Only the vulnerabilities that have a fixed version: the check
       # image-vulnerabilities is safeguard 7.4, the patching of applications.
       ignoreUnfixed: true
+      # Only the critical vulnerabilities in a report: the check
+      # image-vulnerabilities counts those (observability/rules.py). With
+      # every severity, the report of an image with many fixed vulnerabilities
+      # is larger than the API server stores in one object ("etcdserver:
+      # request is too large"), and that image has no report. Not
+      # trivy.severity: the operator also drops each config audit, RBAC and
+      # infra result whose severity that key does not list, and k8s-cis reads
+      # those, so it keeps the chart's default. The policy reaches the scan
+      # containers only (TRIVY_IGNORE_POLICY), and a finding with a
+      # VulnerabilityID only (README.md, "Severities").
+      ignorePolicy: |
+        package trivy
+
+        default ignore = false
+
+        ignore {
+          input.VulnerabilityID
+          input.Severity != "CRITICAL"
+        }
       # No call to a package index (such as the one of Maven) for a file that
       # the database does not know. The scan reads the registries and the
       # database, and the network policy names only those hosts.
