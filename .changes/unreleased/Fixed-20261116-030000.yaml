@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Security: the host check of each WSL distro reads the answer of the write test of root only from a regular file, and opens it without waiting, so a FIFO in its place is "not done" at once and does not hold the run.'
-time: 2026-11-16T03:00:00.000000000Z
