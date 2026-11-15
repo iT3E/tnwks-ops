@@ -555,7 +555,8 @@ the type, so nothing else changes.
    result (Trivy Operator: its first scans and compliance report) joins in
    a pull request after that result is on the board, or the late alert
    fires at the merge. Until then, `FIRST_RESULT_PENDING` of
-   `security/tests/test_generate.py` names the system and the source.
+   `security/tests/test_generate.py` names the system and the source, with
+   the last day of the wait: the test fails after that day.
 5. Run the generator, and commit its outputs.
 
 A text in this repository says what a part does. It never names a finding

@@ -98,9 +98,9 @@ each site runs them for its own series. The rules of the registry run on
 homelab-wsl-02 only, so the job `peer-federate` there brings the two series
 of homelab-wsl (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`).
 homelab-wsl lists `trivy` in its `sources` (`security/registry/systems.yaml`)
-from the pull request after its first result, so the late alert does not
-fire before the first scans. From then, when homelab-wsl or that scrape is
-down, its last sample leaves the 10-minute window of the rule, and
+since the pull request after its first result (the compliance report of
+2026-11-15, 18:00 UTC), so the late alert did not fire before the first
+scans. When homelab-wsl or that scrape is down, its last sample leaves the 10-minute window of the rule, and
 `SecurityResultLate` fires for `trivy` on homelab-wsl 10 minutes after that
 (`for: 10m`), about 20 minutes after the last sample, next to the alert of
 the lost site. That is the federation, not a fault of the operator. The rules give
