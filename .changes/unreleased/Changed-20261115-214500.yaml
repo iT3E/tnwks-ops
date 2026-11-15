@@ -1,3 +1,0 @@
-kind: Changed
-body: 'security: the memory limit of the Trivy Operator raises from 512 to 640 MiB on both sites, with GOMEMLIMIT at 576 MiB (90%): on homelab-wsl the first cycle peaked at 473 MiB, under 8% below the old limit'
-time: 2026-11-15T21:45:00.000000000Z

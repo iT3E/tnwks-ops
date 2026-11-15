@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.162.0 - 2026-11-15
+
+### Changed
+
+* security: the memory limit of the Trivy Operator raises from 512 to 640 MiB on both sites, with GOMEMLIMIT at 576 MiB (90%): on homelab-wsl the first cycle peaked at 473 MiB, under 8% below the old limit
+
 ## v2.161.3 - 2026-11-15
 
 ### Fixed
