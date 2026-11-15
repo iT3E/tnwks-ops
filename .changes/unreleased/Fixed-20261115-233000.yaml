@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'security: a Trivy scan reads the layers of an image one at a time (scan.parallel 1), not 5, so a scan container of a large image no longer reaches its limit of 512 MiB and is killed with no report; the limit stays'
-time: 2026-11-15T23:30:00.000000000Z
