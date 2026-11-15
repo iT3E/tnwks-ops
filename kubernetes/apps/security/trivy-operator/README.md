@@ -302,8 +302,9 @@ them, so the operator can take more there; its limit leaves 196 MiB above
 the peak of homelab-wsl-02. The owner kept the limits with that measure,
 for homelab-wsl too (2026-11-15). That cycle ran with the scan cache in
 files on `trivy-cache`: one container of a job took the lock of the cache
-and scanned, and the others stopped after 5 seconds ("When a scan fails").
-So 97 MiB is about one container that scans, not a job.
+and scanned, and the others stopped within 5 seconds ("When a scan fails").
+So 97 MiB is the sum of the pod while one container scanned and the others
+had stopped, not the sum of a job whose containers all scan.
 
 The scan cache (what Trivy found in each layer of an image) is now in the
 memory of each scan. So all the containers of a job scan at the same time,
@@ -311,12 +312,14 @@ and each reads each layer of its image again, each day: its peak is the one
 of a first scan, and it downloads the layers again. The estimate line comes
 from a local test in Docker, with the pinned Trivy and the settings of this
 app, which measured each container alone. In jobs of 6 containers, the
-largest container peaked at 172 MiB in one job, and at 262 MiB in another
-with critical vulnerabilities only. With every severity, as these values
-have, one container of a large old image peaked at 468 MiB, and at 512 MiB
-in a run with the file cache: at its limit. The test did not sum a job, so the
-estimate of a job is 6 times its largest container, and the operator counts
-at its limit, as the budget counts it. It is an estimate, not a measure. The
+largest container peaked at 172 MiB in one job, and at 262 MiB in another.
+That 262 MiB, the top of the range (6 x 262 = 1572 MiB), was measured with
+critical vulnerabilities only, while these values keep every severity. With
+every severity, one container of a large old image peaked at 468 MiB, and at
+512 MiB in a run with the file cache: at its limit. That case gives the top
+end (6 x 468 = 2808 MiB). The test did not sum a job, so the estimate of a
+job is 6 times its largest container, and the operator counts at its limit,
+as the budget counts it. It is an estimate, not a measure. The
 first full cycle after the change measures it on each cluster (step 10 of
 "Tests"), and the owner decides the line of `../README.md` with it.
 

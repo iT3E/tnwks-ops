@@ -86,7 +86,8 @@ largest scan job, 97 MiB, in a full cycle on homelab-wsl-02
 (`trivy-operator/README.md`, "Tests", step 9): 609 MiB, under the 1 GiB of
 homelab-wsl. The owner chose the count of the measure, and kept the limits
 as they are, for homelab-wsl too, on 2026-11-15. That cycle ran while one
-container of a job scanned at a time, so 97 MiB is about one container.
+container of a job scanned at a time, so 97 MiB is the sum of the pod
+while one container scanned and the others had stopped within 5 seconds.
 With the scan cache in memory, all the containers of a job scan at once. By
 the estimate of a local test, Trivy then takes 1544 to 2084 MiB while a pod
 of 6 containers has its scan, up to 3320 MiB with large old images, and
