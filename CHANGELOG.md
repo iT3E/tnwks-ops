@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.158.0 - 2026-11-15
+
+### Added
+
+* terraform: a Roles Anywhere backup role and profile kept to one prefix of the backup bucket (list, read, write and delete under it, nothing else), with its own certificate CN, for the Kopia repository of the agent trust domains
+
 ## v2.157.0 - 2026-11-15
 
 ### Added
