@@ -142,7 +142,9 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: 900
+      # The create (300 s), the probe (up to 420 s), and the deletes before
+      # and after them with their checks (up to 480 s) fit.
+      activeDeadlineSeconds: 1200
       template:
         metadata:
           labels: *labels
