@@ -1,7 +1,8 @@
 # Agent platform runbook
 
 What to do when an alert of the agent platform fires, when an agent does
-not answer on its channel or a sandbox does not start, how to restore the
+not answer on its channel, a sandbox does not start, web search does not
+work or memory search finds nothing, how to restore the
 state of an agent, how to stop the workflow agent fast, how to move a trust
 domain to Bedrock by hand, and what to do at a limit of the Claude plan. The
 parts and their config are in [`agent-platform.md`](agent-platform.md); this
@@ -714,6 +715,92 @@ workflow agent ends with exit 3.
    [AgentPlatformWorkloadNotReady](#agentplatformworkloadnotready). Else
    read the `result=failed` lines and the events of the sandbox pods, and
    fix the cause in git.
+
+## Web search does not work
+
+The pilot's agent says that a web search failed, or that it has no search
+tool. The parts are in [agent-platform.md](agent-platform.md), "Web
+search". The tool runs in the gateway process of the agent pod. At this
+release the product makes one request for each search, with no retry, and
+a limit of 30 seconds. The model gets one of the errors below; the
+gateway's log gets no line for a failed search. So the signs are the answer
+in the chat and the `web_search` tool span of the turn in Tempo (service
+`openclaw-agents-pilot`), which carries the error but no query and no
+result.
+
+| What the model gets | Cause |
+| --- | --- |
+| `provider_error: Search failed (HTTP 401)` or `(HTTP 403)`, "Check this search provider's credentials and access" | A wrong, revoked or expired key |
+| `provider_error: Search failed (HTTP 429)`, "Check this search provider's quota or try again later" | The vendor's rate limit or the plan's quota. The key is shared with another deployment of the owner, and the vendor counts both |
+| `provider_error: Search failed (HTTP 5xx)`, "Check this search provider's configuration and connection" | The vendor is down |
+| `Search timed out after 30s` | No answer in 30 seconds: the vendor is slow, or the network policy drops the flow (below) |
+| No `web_search` tool at all | The tool is not in the allow list of a sandboxed session, or the plugin did not load (below) |
+
+(The messages come from `src/web-search/runtime-error.ts:36-70` of the
+product at 2026.11.3.)
+
+1. **Read only.** The pod and its start:
+   ```sh
+   kubectl -n agents-pilot get pods -l app.kubernetes.io/name=agent
+   kubectl -n agents-pilot get deploy agent -o jsonpath='{.spec.template.spec.containers[0].image}'
+   ```
+   The image must be 0.3.0 or later: earlier images have no Brave plugin.
+2. **Read only, by the owner.** The start lines of the `agent` container
+   (`kubectl -n agents-pilot logs deploy/agent -c agent | grep -E 'http server listening|plugins\]'`).
+   - `http server listening (18 plugins: ... brave ...)` means the plugin
+     loaded. With no `brave` in that list, check the plugin path and the
+     entry `plugins.entries.brave` in `openclaw.json`.
+   - A line `OpenClaw can't verify where this plugin came from. Review it
+     with 'openclaw plugins inspect brave'` is expected. The product says it
+     for each plugin that loads from a path, and the config names that path
+     in `plugins.load.paths`. The same line comes for `openshell`.
+   - `WEB_SEARCH_PROVIDER_INVALID_AUTODETECT` means the provider `brave`
+     is set but no plugin gives it: the plugin did not load.
+3. **Read only.** The allow list of a sandboxed session: each session of
+   the pilot is sandboxed, and the product leaves `web_search` out of one
+   by default. It must be in `tools.sandbox.tools.alsoAllow`, and
+   `tools.web.search.enabled` must be `true`:
+   ```sh
+   kubectl -n agents-pilot get configmap agent-config -o jsonpath='{.data.openclaw\.json}' | jq '.tools'
+   ```
+4. **Read only.** The network path: a dropped flow to the vendor shows in
+   Hubble, through a read-only port-forward to `hubble-relay` in
+   `kube-system`:
+   ```sh
+   hubble observe --namespace agents-pilot --to-fqdn api.search.brave.com --since 30m
+   hubble observe --namespace agents-pilot --verdict DROPPED --since 30m
+   ```
+   A search makes one flow from the agent pod to `api.search.brave.com:443`,
+   `FORWARDED`. A `DROPPED` flow means that the rule of
+   `pilot/agent/app/networkpolicy.yaml` does not match. A flow from any
+   other pod of the namespace must stay `DROPPED`.
+5. **Fix, through a merge.**
+   - **A wrong or revoked key:** the owner makes a new key at the vendor,
+     puts it in `kubernetes/apps/ai/agents/pilot/agent/app/secret-search.sops.yaml`
+     (`sops <file>`) in a pull request, and changes the other deployment
+     that shares the key too. The merge changes the Secret, and Reloader
+     starts the pod again.
+   - **A rate limit or the vendor down:** wait. Nothing in the cluster
+     changes it.
+   - **The allow list, the plugin or the network rule:** a pull request
+     that puts back the lines of [agent-platform.md](agent-platform.md),
+     "Web search".
+6. **Turn search off,** through a merge: set `tools.web.search.enabled` to
+   `false` in `openclaw.json` and take `web_search` out of
+   `tools.sandbox.tools.alsoAllow`. The change of the config starts the pod
+   again. Then the agent has no search tool, and nothing goes to the
+   vendor.
+
+## Memory search finds nothing
+
+A memory search of the pilot returns `stale: true` and no result, or only
+old results. The index did not come up to date at the last start of the
+pod, because its embedding call failed: the model gateway, or the model
+server of the host behind it, did not answer, or the step ran over its
+limit. The step's line is `memory-index result=failed`, and the alert is
+[AgentMemoryIndexFailed](#agentmemoryindexfailed), which has the checks and
+the fix. How the step works is in [agent-platform.md](agent-platform.md),
+"The index at each start".
 
 ## Restore the state of an agent
 

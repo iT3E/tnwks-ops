@@ -211,6 +211,19 @@ The provider has no resource for these:
 - immutable releases;
 - code scanning default setup.
 
+`tnwks-agent-image` is public since 2026-11-15. Two of these were set by
+hand on it that day, through the REST API. No Terraform resource holds
+them, so read them with these commands:
+
+- The approval of workflows from fork PRs: approval for all outside
+  contributors (`all_external_contributors`). Read it with
+  `gh api repos/iT3E/tnwks-agent-image/actions/permissions/fork-pr-contributor-approval`.
+- Private vulnerability reporting: on. Read it with
+  `gh api repos/iT3E/tnwks-agent-image/private-vulnerability-reporting`.
+
+It also has 8 old runs of 2026-11-11 that show as queued. They have no job
+and no log, and the API can not cancel or delete them.
+
 Left alone on purpose:
 
 - **The Flux deploy key** on `tnwks-ops`. `flux bootstrap` creates and
