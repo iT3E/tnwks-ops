@@ -9,10 +9,12 @@ has none.
 
 import base64
 import datetime
+import json
 import os
 import re
 import shutil
 import subprocess
+import types
 from pathlib import Path
 
 import pytest
@@ -341,8 +343,9 @@ def test_the_role_changes_nothing_in_a_check_run():
         if "ansible.windows.win_powershell" in task:
             assert "SupportsShouldProcess" in task["ansible.windows.win_powershell"]["script"], task["name"]
             assert "ShouldProcess(" in task["ansible.windows.win_powershell"]["script"], task["name"]
-    acl = next(task for task in tasks if "ansible.windows.win_acl" in task)
-    assert "ansible_check_mode" in acl["when"], "a check run has no new directory to read an ACL of"
+    for task in tasks:
+        if "Get-Acl" in task.get("ansible.windows.win_powershell", {}).get("script", ""):
+            assert "ansible_check_mode" in task["when"], "a check run has no new directory to read an ACL of"
 
 
 def test_only_system_and_the_administrators_may_change_the_directory_of_the_script():
@@ -372,11 +375,67 @@ def test_only_system_and_the_administrators_may_change_the_directory_of_the_scri
     assert "GetAccessRules($false, $true, $sid)" in reset, "inherited rules that do not come from the directory"
     assert "$Ansible.Changed" in reset
     assert "ansible_check_mode" in files["when"]
+    assert not any("ansible.windows.win_acl" in task for task in tasks), "no right on the textfile directory"
+
+
+def test_the_distro_gets_no_right_on_the_textfile_directory_and_its_old_directory_goes():
+    """Design Doc 0004, section 5.9: the distro writes its inbox, not the textfile
+    directory, where the exporter can not tell its files from the host's."""
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    gone = next(task for task in tasks if task["name"] == "No directory of the distro under the textfile directory")
+    assert gone["ansible.windows.win_file"] == {"path": "{{ host_check_distro_dir }}", "state": "absent"}
     for task in tasks:
-        if "ansible.windows.win_acl" in task:
-            assert task["ansible.windows.win_acl"]["path"] == "{{ host_check_distro_dir }}", task["name"]
+        text = yaml.safe_dump(task)
+        if "host_check_distro_account" in text:
+            assert task["name"].startswith("Only SYSTEM, the Administrators and the account of the distro"), task["name"]
     defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
-    assert not defaults["host_check_distro_dir"].startswith(defaults["host_check_dir"])
+    assert defaults["host_check_distro_dir"] == "{{ host_check_textfile_dir }}\\wsl-distro"
+    assert not defaults["host_check_inbox_dir"].startswith(defaults["host_check_textfile_dir"])
+    assert defaults["host_check_inbox_dir"].startswith("C:\\ProgramData\\")
+
+
+def test_the_inbox_has_no_inherited_rule_and_three_rules():
+    """Only SYSTEM, the Administrators and the account of the distro may change the
+    inbox. It does not inherit the rights of C:\\ProgramData, where each user may make
+    files."""
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    names = [task["name"] for task in tasks]
+    lock = next(task for task in tasks if task["name"].startswith("Only SYSTEM, the Administrators and the account"))
+    assert names.index("Inbox of the distro") < names.index(lock["name"])
+    task = lock["ansible.windows.win_powershell"]
+    assert task["parameters"] == {"Path": "{{ host_check_inbox_dir }}", "Account": "{{ host_check_distro_account }}"}
+    script = task["script"]
+    assert "SetAccessRuleProtection($true, $false)" in script, "no inherited rule"
+    assert "$acl.SetOwner($admins)" in script and "'S-1-5-32-544'" in script
+    want = script[script.index("$want = @("):script.index("\n)", script.index("$want = @("))]
+    assert re.findall(r"@\((.+), '([^']+)'\)", want) == [
+        ("(New-Object $sid 'S-1-5-18')", "FullControl"), ("$admins", "FullControl"), ("$distro", "Modify, Synchronize")]
+    assert "NTAccount $Account).Translate($sid)" in script
+    assert "GetAccessRules($true, $true, $sid)" in script, "an inherited rule is a change"
+    assert "$Ansible.Changed" in script and "ShouldProcess(" in script
+    assert "ansible_check_mode" in lock["when"]
+
+
+def test_the_relay_task_runs_the_relay_as_system_each_hour_for_the_distro_of_the_host():
+    template = (ROLE / "templates/host-check-relay.xml.j2").read_text()
+    arguments = re.search(r"<Arguments>(.*)</Arguments>", template)[1]
+    assert "-Relay" in arguments
+    assert '-System "{{ host_check_distro_system | e }}"' in arguments
+    assert '-TextfileDir "{{ host_check_textfile_dir | e }}"' in arguments
+    for name in re.findall(r"\{\{ (\w+)", arguments):
+        assert name.startswith("host_check_"), name
+    assert "<UserId>S-1-5-18</UserId>" in template
+    assert "<Interval>PT1H</Interval>" in template, "Design Doc 0004, section 5.9: each hour"
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    relay = next(task for task in tasks if task.get("tnwks_win_scheduled_task", {}).get("name") == "{{ host_check_relay_task }}")
+    assert "notify" not in relay, "the play of the distro writes the first document, after this play"
+    defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
+    expression = defaults["host_check_distro_system"]
+    assert "wsl_distro_windows_host" in expression and "inventory_hostname" in expression
+    hosts = yaml.safe_load((ANSIBLE / "inventory/hosts.yml").read_text())
+    for distro in hosts["all"]["children"]["wsl_distros"]["hosts"]:
+        windows = yaml.safe_load((ANSIBLE / f"inventory/host_vars/{distro}/main.yml").read_text())["wsl_distro_windows_host"]
+        assert windows in hosts["all"]["children"]["windows_hosts"]["hosts"], distro
 
 
 @needs_pwsh
@@ -386,7 +445,7 @@ def test_the_powershell_of_the_tasks_and_handlers_parses():
     handlers = yaml.safe_load((ROLE / "handlers/main.yml").read_text())
     scripts = [task["ansible.windows.win_powershell"]["script"] for task in tasks + handlers
                if "ansible.windows.win_powershell" in task]
-    assert len(scripts) == 3
+    assert len(scripts) == 4
     for script in scripts:
         encoded = base64.b64encode(script.encode()).decode()
         result = pwsh(
@@ -402,6 +461,8 @@ def test_the_way_back_removes_the_task_before_the_files():
     assert [block["when"] for block in blocks] == ["host_check_state == 'present'", "host_check_state == 'absent'"]
     absent = blocks[1]["block"]
     assert absent[0]["tnwks_win_scheduled_task"]["state"] == "absent"
+    assert absent[0]["loop"] == ["{{ host_check_task }}", "{{ host_check_relay_task }}"]
+    assert {"{{ host_check_inbox_dir }}", "{{ host_check_distro_dir }}"} <= set(absent[1]["loop"])
     assert yaml.safe_load((ROLE / "defaults/main.yml").read_text())["host_check_state"] == "present"
 
 
@@ -443,3 +504,151 @@ def test_each_windows_host_of_the_inventory_lists_the_host_check_in_the_registry
     assert named == set(CHECKS)
     sources = {source["name"]: source for source in yaml.safe_load((REGISTRY / "sources.yaml").read_text())}
     assert (sources["host-check"]["cycle"], sources["host-check"]["late_after"]) == ("6h", "12h")
+
+
+# --- The relay of the WSL distro (Design Doc 0004, section 5.9) ---------------------------
+
+DISTRO = "WSL-02-ubuntu"
+INBOX_FILE = "tnwks_security_host_check_distro.json"
+DISTRO_FILE = "tnwks_security_host_check_distro.prom"
+
+
+def load_distro_check():
+    path = ANSIBLE / "roles/wsl_host_check/files/tnwks-host-check.py"
+    module = types.ModuleType("tnwks_host_check_for_the_relay")
+    exec(compile(path.read_text(), str(path), "exec"), module.__dict__)  # noqa: S102
+    return module
+
+
+def good_document(**changes) -> dict:
+    document = {"version": 1, "system": DISTRO, "time": int(NOW.timestamp()) - 600,
+                "results": {"updates-pending": 1, "updates-held": 0}, "failed": [], "details": [
+                    {"name": "homelab_security_host_package_lists_timestamp_seconds", "labels": {},
+                     "value": NOW.timestamp() - 7200},
+                    {"name": "homelab_security_host_updates_pending", "labels": {}, "value": 3},
+                    {"name": "homelab_security_host_write_test_result", "labels": {"uid": "0"}, "value": 0},
+                    {"name": "homelab_security_host_write_test_result", "labels": {"uid": "1000"}, "value": 2}]}
+    document.update(changes)
+    return document
+
+
+def relay(tmp_path, document=None, raw=None, system=DISTRO):
+    """Run the relay of the script on one document; give its exit code, its output and
+    the families of the .prom file of the distro."""
+    inbox, out = tmp_path / "inbox", tmp_path / "textfile"
+    inbox.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
+    out.chmod(0o777)
+    if raw is not None:
+        (inbox / INBOX_FILE).write_bytes(raw)
+    elif document is not None:
+        (inbox / INBOX_FILE).write_text(json.dumps(document))
+    result = pwsh(f"""$now = [datetime]::SpecifyKind([datetime]'2026-11-13T12:00:00', 'Utc')
+Invoke-TnwksRelay -System '{system}' -InboxDir '{inbox}' -InboxFile '{INBOX_FILE}' -TextfileDir '{out}' `
+    -FileName '{DISTRO_FILE}' -Now $now
+""", check=False)
+    return result.returncode, result.stdout, textfile.parse((out / DISTRO_FILE).read_text())
+
+
+def assert_no_result(families):
+    assert RESULT not in families and LAST not in families
+    assert textfile.value(families, FAILED, system=DISTRO) == 1
+
+
+@needs_pwsh
+def test_the_relay_writes_the_result_of_the_distro_with_its_name_and_its_time(tmp_path):
+    code, output, families = relay(tmp_path, good_document())
+    assert code == 0, output
+    assert textfile.series(families, RESULT) == {
+        (("check", "updates-held"), ("severity", "high"), ("source", "host-check"), ("system", DISTRO)): 0,
+        (("check", "updates-pending"), ("severity", "high"), ("source", "host-check"), ("system", DISTRO)): 1}
+    assert textfile.value(families, LAST, source="host-check", system=DISTRO) == NOW.timestamp() - 600
+    assert textfile.value(families, FAILED, system=DISTRO) == 0
+    assert textfile.value(families, "homelab_security_host_write_test_result", system=DISTRO, uid="1000") == 2
+    help_block = SCRIPT.read_text()
+    for name, family in families.items():
+        assert family["help"] and f"{name} " in help_block, name
+
+
+@needs_pwsh
+def test_a_failed_run_of_the_distro_gives_the_count_of_failed_queries_and_no_result(tmp_path):
+    code, _, families = relay(tmp_path, good_document(results={}, failed=["package-lists", "textfile-write"]))
+    assert code == 1
+    assert RESULT not in families and LAST not in families
+    assert textfile.value(families, FAILED, system=DISTRO) == 2
+
+
+BAD_DOCUMENTS = {
+    "no document": None,
+    "it names the host": good_document(system="WSL-02"),
+    "it has a check of the host": good_document(results={"updates-pending": 0, "updates-held": 0,
+                                                         "defender-enabled": 0}),
+    "a time 10 minutes ahead": good_document(time=int(NOW.timestamp()) + 600),
+    "a result that is not a whole number of 0 or more": good_document(results={"updates-pending": -1,
+                                                                               "updates-held": 0}),
+    "a result that is true": good_document(results={"updates-pending": True, "updates-held": 0}),
+    "a result missing with no failed query": good_document(results={"updates-pending": 0}),
+    "a failed query and a result": good_document(failed=["state"]),
+    "a series of the host": good_document(details=[{"name": "homelab_security_host_defender_enabled",
+                                                    "labels": {"protection": "service"}, "value": 1}]),
+    "a label that is not a uid": good_document(details=[{"name": "homelab_security_host_write_test_result",
+                                                         "labels": {"uid": "0\"} 1\nx{a=\""}, "value": 0}]),
+    "another field": good_document(source="host-check"),
+    "another version": good_document(version=2),
+    "not JSON": "not json",
+}
+
+
+@needs_pwsh
+@pytest.mark.parametrize("case", BAD_DOCUMENTS)
+def test_a_document_that_does_not_fit_gives_no_result(tmp_path, case):
+    document = BAD_DOCUMENTS[case]
+    if isinstance(document, str):
+        code, output, families = relay(tmp_path, raw=document.encode())
+    else:
+        code, output, families = relay(tmp_path, document)
+    assert code == 1
+    assert "relay" in output
+    assert_no_result(families)
+
+
+@needs_pwsh
+def test_a_document_over_64_kib_gives_no_result(tmp_path):
+    code, output, families = relay(tmp_path, raw=json.dumps(good_document()).encode() + b" " * 65536)
+    assert code == 1 and "larger than 65536 bytes" in output
+    assert_no_result(families)
+    at_limit = json.dumps(good_document()).encode()
+    code, _, families = relay(tmp_path, raw=at_limit + b" " * (65536 - len(at_limit)))
+    assert code == 0 and RESULT in families
+
+
+@needs_pwsh
+def test_a_document_that_is_a_link_gives_no_result(tmp_path):
+    target = tmp_path / "elsewhere.json"
+    target.write_text(json.dumps(good_document()))
+    (tmp_path / "inbox").mkdir()
+    (tmp_path / "inbox" / INBOX_FILE).symlink_to(target)
+    code, output, families = relay(tmp_path)
+    assert code == 1 and "link" in output
+    assert_no_result(families)
+
+
+@needs_pwsh
+def test_the_relay_writes_what_the_tests_of_the_distro_expect_of_it(tmp_path):
+    """The tests of the distro read its documents through a model of the relay
+    (textfile.relayed). The relay itself gives the same series for the documents of the
+    distro script: a run with each result, and a run with failed queries."""
+    distro = load_distro_check()
+    measured = distro.measure(
+        NOW.timestamp(), 14, 72, {"first_seen": {"openssl": NOW.timestamp() - 20 * 86400}, "lists": {}},
+        packages=lambda: {"openssl": ("Ubuntu/noble-updates",)}, lists=lambda: NOW.timestamp() - 3600,
+        reboot=lambda: True, upgrades=lambda: {"openssl": ("Ubuntu/noble-updates",), "curl": ("Ubuntu/noble",)},
+        holds=lambda: {"curl"}, dates=dict,
+        writes=lambda: [(0, 0, "uid 0: refused"), (1000, 2, "uid 1000: Linux")])
+    failed = {**measured, "failed": ["package-lists"]}
+    for index, case in enumerate((measured, failed)):
+        document = json.loads(json.dumps(distro.document(DISTRO, case, NOW.timestamp() - 60)))
+        _, _, families = relay(tmp_path / str(index), document)
+        model = textfile.relayed(document)
+        assert {name: family["samples"] for name, family in families.items()} == {
+            name: family["samples"] for name, family in model.items()}

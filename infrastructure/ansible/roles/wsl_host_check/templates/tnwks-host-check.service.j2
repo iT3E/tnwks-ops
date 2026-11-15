@@ -11,7 +11,7 @@ StateDirectoryMode=0700
 # The answer of the write test as root, for the check of this run.
 RuntimeDirectory={{ wsl_host_check_name }}
 RuntimeDirectoryMode=0755
-# The check reads, and writes only its state and its .prom file. The write
+# The check reads, and writes only its state and its document in the inbox. The write
 # test makes a file in the textfile directory only if the try may, and then
 # removes it.
 NoNewPrivileges=yes
@@ -29,13 +29,12 @@ TimeoutStartSec=15min
 # stop the check, which reads the answer from the file.
 ExecStartPre=-+/usr/local/bin/{{ wsl_host_check_name }} \
   --system "{{ inventory_hostname }}" \
-  --textfile-dir "{{ wsl_host_check_textfile_dir }}" \
   --write-test-dir "{{ wsl_host_check_write_test_dir }}" \
   --write-test-only \
   --write-test-result "/run/{{ wsl_host_check_name }}/write-test.json"
 ExecStart=/usr/local/bin/{{ wsl_host_check_name }} \
   --system "{{ inventory_hostname }}" \
-  --textfile-dir "{{ wsl_host_check_textfile_dir }}" \
+  --inbox-dir "{{ wsl_host_check_inbox_dir }}" \
   --write-test-dir "{{ wsl_host_check_write_test_dir }}" \
   --write-test-result "/run/{{ wsl_host_check_name }}/write-test.json" \
   --file-name "{{ wsl_host_check_file }}" \

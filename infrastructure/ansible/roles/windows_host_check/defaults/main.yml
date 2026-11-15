@@ -7,16 +7,18 @@
 # windows_monitoring). homelab-wsl scrapes both hosts, and the peer-federate
 # job of homelab-wsl-02 brings the series to the rules of the registry.
 #
-# Each WSL distro writes its own check (role wsl_host_check) to a directory
-# of its own under the textfile directory. windows_exporter reads the
-# subdirectories too. This role makes that directory, and lets the account
-# that owns the distro write there and nowhere else.
+# Each WSL distro writes the document of its own check (role wsl_host_check)
+# into an inbox, host_check_inbox_dir, where only SYSTEM, the Administrators
+# and the account of the distro may change files. The relay, a second task of
+# this role, runs the script as SYSTEM each hour with -Relay: it checks the
+# document and writes the .prom file of the distro. The distro gets no right
+# on the textfile directory (Design Doc 0004, section 5.9).
 #
 # Both hosts get the same settings: nothing here is set in host_vars
 # (security/tests/test_host_check_windows.py fails if it is).
 
 # present, or absent: the way back (Design Doc 0004, section 4.3). absent
-# removes the task, the script and the files of the host and of its distro.
+# removes the tasks, the script and the files of the host and of its distro.
 # Run the role of the distro with absent first, so its timer stops writing.
 host_check_state: present
 
@@ -27,10 +29,25 @@ host_check_script: Invoke-TnwksHostCheck.ps1
 # directory under it.
 host_check_textfile_dir: 'C:\Program Files\windows_exporter\textfile_inputs'
 host_check_file: tnwks_security_host_check.prom
+# The directory where the distro wrote its .prom file before the relay. The
+# role removes it, and the right of the distro account that came with it.
 host_check_distro_dir: '{{ host_check_textfile_dir }}\wsl-distro'
 # The Windows account that owns the WSL distro, as which the distro writes to
-# drvfs (/mnt/c).
+# drvfs (/mnt/c): it may change files in the inbox only.
 host_check_distro_account: "{{ windows_desktop_user }}"
+
+# The relay of the distro (Design Doc 0004, section 5.9).
+host_check_inbox_dir: 'C:\ProgramData\tnwks-host-check-distro'
+host_check_inbox_file: tnwks_security_host_check_distro.json
+# A name that no file of the host has: the exporter refuses two files with
+# the same name.
+host_check_distro_file: tnwks_security_host_check_distro.prom
+host_check_relay_task: tnwks-host-check-relay
+# The name of the distro of this host in security/registry/systems.yaml: the
+# distro of the inventory whose wsl_distro_windows_host is this host.
+host_check_distro_system: >-
+  {{ groups['wsl_distros'] | map('extract', hostvars) | selectattr('wsl_distro_windows_host', 'defined')
+  | selectattr('wsl_distro_windows_host', 'equalto', inventory_hostname) | map(attribute='inventory_hostname') | first }}
 
 # The limits of the checks (Design Doc 0004, section 4.1.4). Defender counts
 # signatures as out of date after 7 days by default.

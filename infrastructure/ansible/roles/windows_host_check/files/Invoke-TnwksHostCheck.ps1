@@ -34,6 +34,20 @@ so the rules of the registry read the source as late for this host
 queries failed. The file goes to its place in one step, so windows_exporter
 never reads half a file.
 
+With -Relay, the script runs in its second mode, the relay of the WSL
+distro of the host (Design Doc 0004, section 5.9). The scheduled task
+tnwks-host-check-relay runs it as SYSTEM each hour. The check of the distro
+writes a JSON document into the inbox -InboxDir, which only SYSTEM, the
+Administrators and the account of the distro may change, and the distro may
+not write the textfile directory. The relay reads the document and writes
+the .prom file of the distro (-DistroFileName), with -System as the name of
+the distro and the time of the distro. It takes the document only when it
+fits: at most 64 KiB, not a link, the name -System, the checks
+updates-pending and updates-held only, each a whole number of 0 or more, a
+time at most 300 seconds ahead, and the detail series of a distro only. A
+document that does not fit, or no document, is the failed query relay: no
+result and no time, so the distro reads as late.
+
 Tests: security/tests/test_host_check_windows.py dot-sources this file with
 -Library and gives each query a fake answer.
 #>
@@ -45,6 +59,12 @@ param(
     [string]$FileName = 'tnwks_security_host_check.prom',
     [int]$SignatureMaxAgeDays = 7,
     [int]$UpdatesMaxAgeDays = 14,
+    # The relay of the document of the WSL distro; -System is then the name of
+    # the distro.
+    [switch]$Relay,
+    [string]$InboxDir = 'C:\ProgramData\tnwks-host-check-distro',
+    [string]$InboxFile = 'tnwks_security_host_check_distro.json',
+    [string]$DistroFileName = 'tnwks_security_host_check_distro.prom',
     # Define the functions only, for the tests.
     [switch]$Library
 )
@@ -52,9 +72,9 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
-# The text of each series. The check of each WSL distro (role wsl_host_check)
-# writes some of the same series to the same exporter, with the same text: a
-# series with two texts would stop the exporter from serving it.
+# The text of each series, also of the series that the relay writes for the
+# WSL distro: one text for each series, as the exporter serves no series with
+# two texts.
 $script:Help = [ordered]@{
     homelab_security_check_result                         = 'The number of items that fail one check of the security registry. 0 is a pass.'
     homelab_security_last_result_timestamp_seconds        = 'The Unix time of the newest result of a source of the security registry.'
@@ -67,6 +87,8 @@ $script:Help = [ordered]@{
     homelab_security_host_updates_held                    = 'The number of updates that the host holds back or hides, and has not installed.'
     homelab_security_host_updates_last_install_timestamp_seconds = 'The Unix time of the newest update that the host installed.'
     homelab_security_host_reboot_pending                  = 'Whether the host waits for a restart to finish an update: 1 yes, 0 no.'
+    homelab_security_host_package_lists_timestamp_seconds = 'The Unix time of the oldest package list of the updates and the security fixes of the host, from the Date of its Release file.'
+    homelab_security_host_write_test_result               = 'The write test of a WSL distro to the textfile directory of its host, by the uid that tried: 0 refused by Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not done.'
 }
 
 $script:Source = 'host-check'
@@ -84,6 +106,20 @@ $script:Severity = [ordered]@{
     'updates-held'        = 'high'
 }
 $script:Profiles = @('Domain', 'Private', 'Public')
+
+# What the relay takes from the document of a distro.
+$script:RelayMaxBytes = 65536
+# The allowance for a clock that runs ahead, as the generated rules use.
+$script:RelayMaxAheadSeconds = 300
+$script:RelayChecks = @('updates-pending', 'updates-held')
+# The detail series of a distro, each with the names of its labels.
+$script:RelayDetails = @{
+    homelab_security_host_package_lists_timestamp_seconds = @()
+    homelab_security_host_updates_pending                 = @()
+    homelab_security_host_updates_held                    = @()
+    homelab_security_host_reboot_pending                  = @()
+    homelab_security_host_write_test_result               = @('uid')
+}
 
 # --- The queries. Each one reads, and the tests replace it. -----------------
 
@@ -307,6 +343,129 @@ function Write-TnwksTextfile([string]$Directory, [string]$Name, [string]$Text) {
     }
 }
 
+# --- The relay of the WSL distro --------------------------------------------
+
+function Test-TnwksWhole($Value) {
+    ($Value -is [int]) -or ($Value -is [long])
+}
+
+function Test-TnwksNumber($Value) {
+    if ($Value -is [bool]) { return $false }
+    if (Test-TnwksWhole $Value) { return $true }
+    (($Value -is [double]) -or ($Value -is [decimal])) -and -not [double]::IsNaN([double]$Value) -and -not [double]::IsInfinity([double]$Value)
+}
+
+function Get-TnwksNames($Object) {
+    if ($Object -isnot [System.Management.Automation.PSCustomObject]) { throw 'not an object' }
+    @($Object.PSObject.Properties | ForEach-Object { $_.Name })
+}
+
+function Read-TnwksDistroDocument {
+    <#
+    .SYNOPSIS
+    Reads the document of the distro, and gives its measure and its time. A
+    document that does not fit throws, with the reason.
+    #>
+    param([string]$Path, [string]$System, [datetime]$Now)
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.PSIsContainer) { throw 'the document is a directory' }
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'the document is a link' }
+    # Read at most one byte past the limit, so a file that grows after the
+    # check of its length is still refused.
+    $buffer = New-Object byte[] ($script:RelayMaxBytes + 1)
+    $count = 0
+    $stream = [IO.File]::Open($item.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try {
+        while ($count -lt $buffer.Length) {
+            $read = $stream.Read($buffer, $count, $buffer.Length - $count)
+            if ($read -le 0) { break }
+            $count += $read
+        }
+    } finally {
+        $stream.Dispose()
+    }
+    if ($count -gt $script:RelayMaxBytes) { throw "the document is larger than $($script:RelayMaxBytes) bytes" }
+    # UTF-8 that is not valid throws.
+    $document = (New-Object Text.UTF8Encoding($false, $true)).GetString($buffer, 0, $count) | ConvertFrom-Json
+    $names = Get-TnwksNames $document
+    foreach ($name in $names) {
+        if (@('version', 'system', 'time', 'results', 'failed', 'details') -notcontains $name) { throw "the document has a field $name" }
+    }
+    if (-not (Test-TnwksWhole $document.version) -or $document.version -ne 1) { throw 'the document is not version 1' }
+    if ($document.system -isnot [string] -or $document.system -cne $System) { throw "the document names another system than $System" }
+    if (-not (Test-TnwksNumber $document.time) -or $document.time -le 0) { throw 'the document has no time' }
+    $limit = (ConvertTo-TnwksUnixTime $Now) + $script:RelayMaxAheadSeconds
+    if ([double]$document.time -gt $limit) { throw 'the time of the document is more than 300 seconds ahead' }
+
+    $failed = New-Object System.Collections.Generic.List[string]
+    $queries = @($document.failed)
+    if ($queries.Count -gt 10) { throw 'the document names more than 10 failed queries' }
+    foreach ($query in $queries) {
+        if ($query -isnot [string] -or $query -cnotmatch '^[a-z][a-z-]{0,39}$') { throw 'a failed query has no name' }
+        $failed.Add($query)
+    }
+
+    $results = [ordered]@{}
+    $checks = Get-TnwksNames $document.results
+    foreach ($check in $checks) {
+        if ($script:RelayChecks -cnotcontains $check) { throw "the document has a check $check that is not of a distro" }
+        $value = $document.results.$check
+        if (-not (Test-TnwksWhole $value) -or $value -lt 0) { throw "the result of $check is not a whole number of 0 or more" }
+        $results[$check] = [long]$value
+    }
+    if ($failed.Count -eq 0 -and $results.Count -ne $script:RelayChecks.Count) { throw 'the document has no failed query and not each result' }
+    if ($failed.Count -gt 0 -and $results.Count -gt 0) { throw 'the document has a failed query and a result' }
+
+    $details = New-Object System.Collections.Generic.List[object]
+    $rows = @($document.details)
+    if ($rows.Count -gt 20) { throw 'the document has more than 20 details' }
+    foreach ($row in $rows) {
+        $fields = Get-TnwksNames $row
+        if (($fields | Sort-Object) -join ',' -ne 'labels,name,value') { throw 'a detail is not a name, labels and a value' }
+        if ($row.name -isnot [string] -or -not $script:RelayDetails.ContainsKey($row.name)) { throw 'a detail is not a series of a distro' }
+        $want = @($script:RelayDetails[$row.name])
+        $have = @(Get-TnwksNames $row.labels)
+        if ((($have | Sort-Object) -join ',') -cne (($want | Sort-Object) -join ',')) { throw "a detail $($row.name) has other labels" }
+        $labels = [ordered]@{}
+        foreach ($label in $want) {
+            $text = $row.labels.$label
+            if ($text -isnot [string] -or $text -cnotmatch '^[0-9]{1,10}$') { throw "the label $label of $($row.name) is not a number" }
+            $labels[$label] = $text
+        }
+        if (-not (Test-TnwksNumber $row.value)) { throw "the value of $($row.name) is not a number" }
+        $details.Add(@($row.name, $labels, $row.value))
+    }
+    $time = [DateTimeOffset]::FromUnixTimeSeconds([long][math]::Floor([double]$document.time)).UtcDateTime
+    [pscustomobject]@{
+        Measure = [pscustomobject]@{ Results = $results; Details = $details; Failed = $failed }
+        Time    = $time
+    }
+}
+
+function Invoke-TnwksRelay {
+    param([string]$System, [string]$InboxDir, [string]$InboxFile, [string]$TextfileDir, [string]$FileName, [datetime]$Now)
+    if (-not $System) { throw 'no -System: the name of the distro in security/registry/systems.yaml' }
+    try {
+        $read = Read-TnwksDistroDocument -Path (Join-Path $InboxDir $InboxFile) -System $System -Now $Now
+        $measure = $read.Measure
+        $time = $read.Time
+    } catch {
+        # No result and no time: the distro reads as late. The reason names the
+        # rule that the document broke, and no value of the document.
+        Write-Output ('relay of {0}: the document does not fit: {1}' -f $System, $_.Exception.Message)
+        $failed = New-Object System.Collections.Generic.List[string]
+        $failed.Add('relay')
+        $measure = [pscustomobject]@{ Results = [ordered]@{}; Details = (New-Object System.Collections.Generic.List[object]); Failed = $failed }
+        $time = $Now
+    }
+    Write-TnwksTextfile $TextfileDir $FileName (Format-TnwksHostCheck -System $System -Measure $measure -Now $time)
+    if ($measure.Failed.Count -gt 0) {
+        Write-Output ('relay of {0}: no result, these queries failed: {1}' -f $System, ($measure.Failed -join ', '))
+        exit 1
+    }
+    Write-Output ('relay of {0}: {1} checks' -f $System, $measure.Results.Count)
+}
+
 function Invoke-TnwksHostCheck {
     param([string]$System, [string]$TextfileDir, [string]$FileName, [int]$SignatureMaxAgeDays, [int]$UpdatesMaxAgeDays)
     if (-not $System) { throw 'no -System: the name of this host in security/registry/systems.yaml' }
@@ -322,6 +481,11 @@ function Invoke-TnwksHostCheck {
 }
 
 if (-not $Library) {
-    Invoke-TnwksHostCheck -System $System -TextfileDir $TextfileDir -FileName $FileName `
-        -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays
+    if ($Relay) {
+        Invoke-TnwksRelay -System $System -InboxDir $InboxDir -InboxFile $InboxFile -TextfileDir $TextfileDir `
+            -FileName $DistroFileName -Now (Get-Date)
+    } else {
+        Invoke-TnwksHostCheck -System $System -TextfileDir $TextfileDir -FileName $FileName `
+            -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays
+    }
 }

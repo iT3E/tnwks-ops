@@ -30,6 +30,7 @@ SYSTEM = "WSL-02-ubuntu"
 RESULT = "homelab_security_check_result"
 LAST = "homelab_security_last_result_timestamp_seconds"
 FAILED = "homelab_security_host_check_failed_queries"
+INBOX_FILE = "tnwks_security_host_check_distro.json"
 
 
 def load():
@@ -110,7 +111,7 @@ def run(state=None, packages=(), lists=None, reboot=False, writes=None, upgrades
                              packages=fake_packages, lists=fake_lists, reboot=fake_reboot, writes=fake_writes,
                              upgrades=fake_upgrades, holds=fake_holds,
                              dates=lambda: dict(dates if dates is not None else {UPDATES: now - 3600}))
-    return measured, textfile.parse(check.render(SYSTEM, measured, now))
+    return measured, textfile.relayed(check.document(SYSTEM, measured, now))
 
 
 def result(families, name="updates-pending"):
@@ -274,7 +275,7 @@ def test_a_query_that_fails_gives_no_result_and_no_time(case):
     if unreadable:
         measured = check.measure(NOW, 14, 72, None, packages=dict, lists=lambda: NOW, reboot=lambda: False,
                                  upgrades=dict, holds=set)
-        families = textfile.parse(check.render(SYSTEM, measured, NOW))
+        families = textfile.relayed(check.document(SYSTEM, measured, NOW))
     else:
         measured, families = run(**arguments)
     assert RESULT not in families
@@ -490,7 +491,7 @@ def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW, writes=None, 
     lists.mkdir(exist_ok=True)
     release(lists, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", lists_date)
     release(lists, "archive_dists_noble-updates_InRelease", "Ubuntu", "noble-updates", lists_date)
-    out = tmp_path / "textfile"
+    out = tmp_path / "inbox"
     out.mkdir(exist_ok=True)
     tried = []
     if writes is None:
@@ -499,20 +500,27 @@ def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW, writes=None, 
     answer = tmp_path / "write-test.json"
     if root is not None:
         root_answer(answer, root, now)
-    rc = check.main(["--system", SYSTEM, "--textfile-dir", str(out), "--state-file", str(tmp_path / "state.json"),
+    rc = check.main(["--system", SYSTEM, "--inbox-dir", str(out), "--state-file", str(tmp_path / "state.json"),
                      "--write-test-dir", str(writes or tmp_path / "host"), "--write-test-result", str(answer),
                      "--lists-dir", str(lists), "--reboot-file", str(tmp_path / "reboot-required")])
     assert writes is not None or tried == [tmp_path / "host"]
     return rc, out
 
 
-def test_the_run_writes_the_whole_file_in_one_step_and_keeps_its_state(tmp_path, monkeypatch):
+def inbox(out):
+    """The families that the relay writes for the document in the inbox."""
+    return textfile.relayed(json.loads((out / INBOX_FILE).read_text()))
+
+
+def test_the_run_writes_the_whole_document_in_one_step_and_keeps_its_state(tmp_path, monkeypatch):
     rc, out = main(tmp_path, monkeypatch)
     assert rc == 0
-    assert sorted(p.name for p in out.iterdir()) == ["tnwks_security_host_check_distro.prom"]
-    raw = (out / "tnwks_security_host_check_distro.prom").read_bytes()
+    assert sorted(p.name for p in out.iterdir()) == [INBOX_FILE]
+    raw = (out / INBOX_FILE).read_bytes()
     assert not raw.startswith(b"\xef\xbb\xbf") and b"\r" not in raw
-    families = textfile.parse(raw.decode())
+    document = json.loads(raw)
+    assert (document["version"], document["system"], document["time"]) == (1, SYSTEM, int(NOW))
+    families = textfile.relayed(document)
     # No state file: the age of each upgrade is not known, so it counts as old.
     assert result(families) == 4
     state = json.loads((tmp_path / "state.json").read_text())
@@ -526,22 +534,22 @@ def test_the_run_writes_the_whole_file_in_one_step_and_keeps_its_state(tmp_path,
     rc, out = main(tmp_path, monkeypatch, now=NOW + 6 * 3600, lists_date="Sat, 14 Nov 2026 09:00:00 UTC",
                    simulation=later)
     assert rc == 0
-    assert result(textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())) == 0
+    assert result(inbox(out)) == 0
     assert json.loads((tmp_path / "state.json").read_text())["first_seen"] == {
         "libc6": NOW - 3 * 3600, "curl": NOW - 3 * 3600}
 
     rc, out = main(tmp_path, monkeypatch, now=NOW + 15 * DAY, lists_date="Sat, 28 Nov 2026 09:00:00 UTC",
                    simulation=later)
     assert rc == 0
-    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    families = inbox(out)
     assert result(families) == 2
-    assert sorted(p.name for p in out.iterdir()) == ["tnwks_security_host_check_distro.prom"]
+    assert sorted(p.name for p in out.iterdir()) == [INBOX_FILE]
 
 
 def test_a_run_with_a_failed_query_writes_no_result_and_exits_1(tmp_path, monkeypatch):
     rc, out = main(tmp_path, monkeypatch, code=100)
     assert rc == 1
-    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    families = inbox(out)
     assert RESULT not in families and LAST not in families
     assert textfile.value(families, FAILED, system=SYSTEM) == 1
 
@@ -551,7 +559,7 @@ def test_a_state_file_that_can_not_be_read_gives_no_result_and_stays_as_it_is(tm
     before = (tmp_path / "state.json").stat()
     rc, out = main(tmp_path, monkeypatch)
     assert rc == 1
-    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    families = inbox(out)
     assert RESULT not in families and LAST not in families
     assert (tmp_path / "state.json").read_text() == "{not json"
     after = (tmp_path / "state.json").stat()
@@ -743,7 +751,7 @@ def test_the_write_test_runs_first_and_each_try_is_a_series_with_its_uid():
                              upgrades=dict, holds=set)
     assert order == ["writes", "lists", "packages"]
     assert measured["failed"] == ["textfile-write"]
-    families = textfile.parse(check.render(SYSTEM, measured, NOW))
+    families = textfile.relayed(check.document(SYSTEM, measured, NOW))
     assert RESULT not in families and LAST not in families
     assert textfile.value(families, FAILED, system=SYSTEM) == 1
     assert textfile.series(families, "homelab_security_host_write_test_result") == {
@@ -800,7 +808,7 @@ def test_an_answer_that_root_writes_is_read_by_the_distro_user_and_not_one_of_it
     nobody = "setpriv --reuid=65534 --regid=65534 --clear-groups"
     script = f"""set -e
 mkdir -p /run/t /textfile && chown 65534:65534 /run/t && chmod 0755 /run/t
-python3 /check.py --system X --textfile-dir /out --write-test-dir /textfile --write-test-only \\
+python3 /check.py --system X --inbox-dir /out --write-test-dir /textfile --write-test-only \\
   --write-test-result /run/t/write-test.json || true
 stat -c '%a %u' /run/t/write-test.json
 {nobody} python3 -c "{READ_AS_NOBODY}"
@@ -859,7 +867,7 @@ def test_an_answer_of_root_of_this_run_is_read(tmp_path):
 def test_a_run_with_no_refusal_by_windows_for_root_writes_no_result(tmp_path, monkeypatch, root):
     rc, out = main(tmp_path, monkeypatch, root=root)
     assert rc == 1
-    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    families = inbox(out)
     assert RESULT not in families and LAST not in families
     assert textfile.value(families, FAILED, system=SYSTEM) == 1
 
@@ -869,7 +877,7 @@ def test_a_run_whose_own_write_succeeds_writes_no_result_and_leaves_no_file(tmp_
     host.mkdir()
     rc, out = main(tmp_path, monkeypatch, writes=host)
     assert rc == 1
-    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    families = inbox(out)
     assert RESULT not in families and LAST not in families
     assert list(host.iterdir()) == []
 
@@ -879,7 +887,7 @@ def test_one_try_alone_prints_its_uid_and_exits_with_its_answer(tmp_path, monkey
     host.mkdir()
     answer = tmp_path / "run/write-test.json"
     answer.parent.mkdir()
-    argv = ["--system", SYSTEM, "--textfile-dir", str(tmp_path / "out"), "--write-test-dir", str(host),
+    argv = ["--system", SYSTEM, "--inbox-dir", str(tmp_path / "out"), "--write-test-dir", str(host),
             "--write-test-only"]
     assert check.main([*argv, "--write-test-result", str(answer)]) == check.WRITTEN
     assert f"write test of {SYSTEM}: uid {os.geteuid()}: the write succeeded" in capsys.readouterr().out
@@ -906,53 +914,52 @@ def test_the_mount_of_a_path_is_its_type_and_options(tmp_path):
     assert check.mount_of(Path("/x"), tmp_path / "none") == "unknown"
 
 
-def test_a_label_value_is_escaped():
-    assert check.label_value('a\\b"c\nd') == 'a\\\\b\\"c\\nd'
-
-
-def windows_help() -> dict[str, str]:
+def relay_block(name: str) -> str:
     text = (WINDOWS / "files/Invoke-TnwksHostCheck.ps1").read_text()
-    block = text[text.index("$script:Help"):text.index("$script:Source")]
-    return dict(re.findall(r"^\s+(homelab_\w+)\s+=\s+'([^']*)'", block, re.MULTILINE))
+    start = text.index(f"$script:{name} =")
+    return text[start:text.index("\n}", start) if "@{" in text[start:start + 40] else text.index("\n", start)]
 
 
-def test_each_series_that_the_windows_host_also_writes_has_the_same_text():
-    """windows_exporter stops serving a series that two files give two texts."""
-    windows = windows_help()
-    shared = set(check.HELP) & set(windows)
-    assert shared >= {RESULT, LAST, FAILED, "homelab_security_host_updates_pending",
-                      "homelab_security_host_reboot_pending"}
-    for name in shared:
-        assert check.HELP[name] == windows[name], name
-
-
-def test_the_result_series_has_the_label_names_of_the_windows_host_check():
-    """windows_exporter needs the same label names for one family in two files."""
+def test_the_relay_takes_each_detail_and_each_check_of_a_distro_and_has_a_text_for_each():
+    """The relay of the Windows host refuses a document with a detail or a check that it
+    does not know, so each one that this script writes must be in its lists."""
+    script = SCRIPT.read_text()
+    written = set(re.findall(r'details\.append\(\("(homelab_\w+)"', script))
+    assert written == {"homelab_security_host_write_test_result", "homelab_security_host_package_lists_timestamp_seconds",
+                       "homelab_security_host_updates_pending", "homelab_security_host_updates_held",
+                       "homelab_security_host_reboot_pending"}
+    relay_details = set(re.findall(r"^\s+(homelab_\w+)\s+=", relay_block("RelayDetails"), re.MULTILINE))
+    assert written == relay_details
     text = (WINDOWS / "files/Invoke-TnwksHostCheck.ps1").read_text()
-    line = next(row for row in text.splitlines() if "Add-Line 'homelab_security_check_result'" in row)
-    windows = re.findall(r"(\w+) = \$", line.split("[ordered]@{", 1)[1])
-    measured = check.measure(NOW, 14, 72, state_of(), packages=dict, lists=lambda: NOW, reboot=lambda: False,
-                             upgrades=dict, holds=set)
-    families = textfile.parse(check.render(SYSTEM, measured, NOW))
-    labels, _ = textfile.series(families, RESULT)
-    assert sorted(windows) == sorted(name for name, _ in labels) == ["check", "severity", "source", "system"]
+    help_block = text[text.index("$script:Help"):text.index("$script:Source")]
+    assert written <= set(re.findall(r"^\s+(homelab_\w+)\s+=", help_block, re.MULTILINE))
+    assert re.findall(r"'([a-z-]+)'", relay_block("RelayChecks")) == list(check.CHECKS)
 
 
-def test_the_file_name_is_not_a_name_of_the_windows_host():
-    """windows_exporter refuses two files with the same name in its tree."""
+def test_the_document_has_the_results_only_when_no_query_failed():
+    measured = {"results": {"updates-pending": 1, "updates-held": 0}, "failed": [], "details": [
+        ("homelab_security_host_write_test_result", {"uid": "0"}, 0)], "state": {}}
+    document = check.document(SYSTEM, measured, NOW + 0.7)
+    assert document == {"version": 1, "system": SYSTEM, "time": int(NOW), "results": {"updates-pending": 1,
+                        "updates-held": 0}, "failed": [], "details": [
+                        {"name": "homelab_security_host_write_test_result", "labels": {"uid": "0"}, "value": 0}]}
+    failed = check.document(SYSTEM, {**measured, "failed": ["package-lists"]}, NOW)
+    assert failed["results"] == {} and failed["failed"] == ["package-lists"]
+    json.dumps(document)
+
+
+def test_the_distro_writes_to_the_inbox_of_the_windows_role_and_not_to_the_textfile_directory():
     windows = yaml.safe_load((WINDOWS / "defaults/main.yml").read_text())
     distro = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
-    assert distro["wsl_host_check_file"] != windows["host_check_file"]
-    assert distro["wsl_host_check_file"].endswith(".prom")
-
-
-def test_the_distro_writes_to_the_directory_that_the_windows_role_opens_to_it():
-    windows = yaml.safe_load((WINDOWS / "defaults/main.yml").read_text())
-    distro = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
-    windows_dir = windows["host_check_distro_dir"].replace("{{ host_check_textfile_dir }}",
-                                                           windows["host_check_textfile_dir"])
-    assert windows_dir.startswith("C:\\")
-    assert distro["wsl_host_check_textfile_dir"] == "/mnt/c/" + windows_dir[3:].replace("\\", "/")
+    inbox_dir = windows["host_check_inbox_dir"]
+    assert inbox_dir.startswith("C:\\")
+    assert distro["wsl_host_check_inbox_dir"] == "/mnt/c/" + inbox_dir[3:].replace("\\", "/")
+    assert distro["wsl_host_check_file"] == windows["host_check_inbox_file"]
+    assert not distro["wsl_host_check_file"].endswith(".prom")
+    assert "wsl_host_check_textfile_dir" not in distro
+    # The relay writes the .prom file of the distro with a name that no file of the host has.
+    assert windows["host_check_distro_file"] != windows["host_check_file"]
+    assert windows["host_check_distro_file"].endswith(".prom")
 
 
 def flat(tasks: list) -> list:
@@ -1015,13 +1022,11 @@ def test_the_service_tries_the_write_as_root_before_the_check_and_the_check_read
 
 
 def test_the_write_test_tries_the_textfile_directory_of_the_host():
-    """The directory above the one that the distro may change: the exporter reads each
-    .prom file under it."""
+    """The exporter reads each .prom file under it."""
     windows = yaml.safe_load((WINDOWS / "defaults/main.yml").read_text())
     distro = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
     textfile_dir = windows["host_check_textfile_dir"]
     assert distro["wsl_host_check_write_test_dir"] == "/mnt/c/" + textfile_dir[3:].replace("\\", "/")
-    assert distro["wsl_host_check_textfile_dir"].startswith(distro["wsl_host_check_write_test_dir"] + "/")
     unit = (ROLE / "templates/tnwks-host-check.service.j2").read_text()
     assert '--write-test-dir "{{ wsl_host_check_write_test_dir }}"' in unit
     assert distro["wsl_host_check_write_test_fails_play"] is False, "on with the start of each distro with no elevation"
@@ -1034,7 +1039,7 @@ def test_the_way_back_stops_the_timer_before_the_files_go():
     absent = blocks[1]["block"]
     assert absent[0]["ansible.builtin.systemd"]["state"] == "stopped"
     gone = absent[1]["loop"]
-    assert "{{ wsl_host_check_textfile_dir }}/{{ wsl_host_check_file }}" in gone
+    assert "{{ wsl_host_check_inbox_dir }}/{{ wsl_host_check_file }}" in gone
     assert yaml.safe_load((ROLE / "defaults/main.yml").read_text())["wsl_host_check_state"] == "present"
 
 
@@ -1080,4 +1085,4 @@ def test_each_distro_of_the_inventory_lists_the_host_check_in_the_registry():
     controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
     named = {item["check"] for line in controls for item in line["checks"].get("wsl-distro", [])
              if item["source"] == "host-check"}
-    assert named == set(check.SEVERITY) == {"updates-pending", "updates-held"}
+    assert named == set(check.CHECKS) == {"updates-pending", "updates-held"}
