@@ -28,7 +28,7 @@ HelmReleases of this repository do, so Renovate finds them.
 | --- | --- |
 | `ks.yaml` | The Flux Kustomization `security-trivy-operator`. It waits for `kube-prometheus-stack`, for the CRD of the ServiceMonitor |
 | `app/helmrelease.yaml` | The chart, from the HelmRepository `aquasecurity` (`kubernetes/flux/meta/helm/aquasecurity.yaml`) |
-| `app/pvc.yaml` | `trivy-cache`, 4 GiB: the vulnerability database for the scan jobs |
+| `app/pvc.yaml` | `trivy-cache`, 4 GiB: the vulnerability databases for the scan jobs. The scan cache is in the memory of each scan |
 | `app/networkpolicy.yaml` | What the operator and a scan job can reach |
 | `app/rbac.yaml` | The Role that lets the operator create and delete Jobs, and read pod logs, in `security` only ("Its roles") |
 
@@ -270,7 +270,7 @@ scan.
 | Part | Request | Limit | Source |
 | --- | --- | --- | --- |
 | The operator | 256 MiB | 512 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). `GOMEMLIMIT` is 460 MiB, 90% of the limit (go.dev/doc/gc-guide) |
-| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. On homelab-wsl-02, one scan container peaked at 25 MiB, and the containers of one job together at 97 MiB, in a full cycle (2026-11-15). One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`) |
+| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`). The full cycle on homelab-wsl-02 (one scan container at 25 MiB, one job at 97 MiB, 2026-11-15) ran while one container of a job scanned at a time; a job is not measured since the scan cache is in memory (below) |
 
 The operator counts its scan jobs from its cache before it starts one
 (`pkg/operator/jobs/limit_checker.go` of the release). A job that it has
@@ -289,7 +289,8 @@ of Trivy on that cluster, while such a pod has its scan:
 | By | The operator | The scan job | Sum |
 | --- | --- | --- | --- |
 | Limits | 512 MiB | 6 x 512 MiB | 3584 MiB |
-| Peak measured on homelab-wsl-02 | 316 MiB | 97 MiB | 413 MiB or less |
+| Estimate from a local test, scan cache in memory | 512 MiB (its limit) | 1032 to 1572 MiB, up to 2808 MiB with large old images | 1544 to 2084 MiB, up to 3320 MiB |
+| Measured on homelab-wsl-02, one container of a job that scans | 316 MiB | 97 MiB | 413 MiB or less |
 
 The measured line is the peak of a full cycle on homelab-wsl-02, in samples
 of one minute (step 9 of "Tests"): the operator at 316 MiB of its 512 MiB,
@@ -298,17 +299,48 @@ together at 97 MiB at most. No sample had more than one scan job. The two
 peaks need not be at the same time, so their sum is an upper bound.
 homelab-wsl runs more workloads, and the cache of the operator grows with
 them, so the operator can take more there; its limit leaves 196 MiB above
-the peak of homelab-wsl-02. The owner kept these limits with that measure,
-for homelab-wsl too (2026-11-15).
+the peak of homelab-wsl-02. The owner kept the limits with that measure,
+for homelab-wsl too (2026-11-15). That cycle ran with the scan cache in
+files on `trivy-cache`: one container of a job took the lock of the cache
+and scanned, and the others stopped within 5 seconds ("When a scan fails").
+So 97 MiB is the sum of the pod while one container scanned and the others
+had stopped, not the sum of a job whose containers all scan.
+
+The scan cache (what Trivy found in each layer of an image) is now in the
+memory of each scan. So all the containers of a job scan at the same time,
+and each reads each layer of its image again, each day: its peak is the one
+of a first scan, and it downloads the layers again. The estimate line comes
+from a local test in Docker, with the pinned Trivy and the settings of this
+app, which measured each container alone. In jobs of 6 containers, the
+largest container peaked at 172 MiB in one job, and at 262 MiB in another.
+That 262 MiB, the top of the range (6 x 262 = 1572 MiB), was measured with
+critical vulnerabilities only, while these values keep every severity. With
+every severity, one container of a large old image peaked at 468 MiB, and at
+512 MiB in a run with the file cache: at its limit. That case gives the top
+end (6 x 468 = 2808 MiB). The test did not sum a job, so the estimate of a
+job is 6 times its largest container, and the operator counts at its limit,
+as the budget counts it. It is an estimate, not a measure. The
+first full cycle after the change measures it on each cluster (step 10 of
+"Tests"), and the owner decides the line of `../README.md` with it.
 
 Each container of a scan job also has a CPU limit of 500m, so a job of 6
 containers can take 3 cores of `SECURITY_NODE` for the length of the scan.
-Its first container downloads the database (about 140 MB compressed) to
-`trivy-cache`, and a later job reads it from there. Without the cache, each
-job would download it again.
+With the file cache, the other containers stopped after 5 seconds; now all
+of them scan at once, so the 3 cores are real, next to the other pods of
+that node. The init container of a job downloads the database (about 140 MB
+compressed) to `trivy-cache`, and a later job reads it from there. Without
+the cache, each job would download it again.
 
-The signals of a limit that is too low: the pod status `OOMKilled`, and the
-alert `KubeJobFailed` for a scan job.
+**A container at its limit.** The kernel kills it (`OOMKilled`). The job
+fails, and the operator writes the reports of the other containers and
+deletes the job and its pod at once (`pkg/vulnerabilityreport/controller/scanjob.go`
+of the release, with no `scanJobTTL`). So the chart rule `KubeJobFailed`,
+which needs the failed Job for 15 minutes, is not expected to fire. The image of that
+container has no report. The next scan of the workload ("When a scan
+fails") runs the same image with the same limit and fails the same way,
+each time, until the limit or the image changes. The signals: the log of
+the operator has "Scan job container" with `status.reason` `OOMKilled`, and
+`SecurityImagesNotScanned` fires after 36 hours.
 
 ## When a scan fails
 
@@ -320,12 +352,54 @@ usual causes:
   not name fails. Add its hosts to `app/networkpolicy.yaml` and to the table
   above.
 - **A private image.** The operator reads no pull secret (above).
+- **Containers of one job at the same time.** A scan job has one container
+  for each container of the workload, and they run at the same time. With
+  the scan cache in files on `trivy-cache`, each container opens one file
+  with a lock that only one process holds (`pkg/cache/fs.go` of Trivy, a
+  timeout of 5 seconds), so the others stopped with "unable to initialize
+  fs cache: cache may be in use by another process: timeout", and their
+  images had no report. The values keep the scan cache in the memory of
+  each scan (`cache.backend: memory` in `trivy.configFile`); the databases
+  stay on `trivy-cache`, and a scan opens them read-only, which several
+  processes can do at once. The operator has the same issue in Standalone
+  mode upstream, with no fix in the pinned release.
+- **The Java database, two downloads at once.** A scan of an image with
+  Java files reads the Java database on `trivy-cache`. When the database is
+  past its next update and was downloaded more than a day ago, the scan
+  downloads it again, and the download removes the directory first
+  (`pkg/javadb/client.go` and `pkg/downloader/download.go` of Trivy). With
+  the file cache, one container of a job scanned, so one downloaded. With
+  the scan cache in memory, two containers of one job with Java files can
+  download it at the same time, and one of them can fail ("Unable to
+  initialize the Java DB"), with no report until the next scan of the
+  workload. This is a risk the values leave open, not tested. The init
+  container of a scan job downloads the vulnerability database only
+  (`--download-db-only`, `pkg/plugins/trivy/image.go` of the operator
+  release), the release has no setting that adds the Java database there,
+  and the settings file of Trivy reaches the scan containers too.
+  `trivy.skipJavaDBUpdate` alone stops each update, and a first scan on an
+  empty volume then fails. A job that updates the Java database on
+  `trivy-cache` once a day, with `trivy.skipJavaDBUpdate` on the scans,
+  would leave one download a day, at a time that it chooses.
+
+A container whose scan fails gets no second try of its own: the operator
+deletes the job, and writes the reports of the containers that ended well.
+It starts a new scan of the workload when it checks the workload again: at
+the resync of its cache (every 10 hours, with up to 10% jitter, the default
+of controller-runtime), at a restart, or when another report of the
+workload ends after 24 hours.
 
 ## What a change applies
 
 A merge that changes `app/` makes Flux upgrade the HelmRelease on each
-cluster that lists `ks.yaml`. The operator restarts. It then checks the
-workloads again, and a scan job starts for each image that has no report.
+cluster that lists `ks.yaml`. The operator restarts when its own settings
+change (the ConfigMap `trivy-operator-config`, whose checksum is on its
+pod). It then checks the workloads again, and a scan job starts for each
+image that has no report. A change of the settings of Trivy alone (the
+ConfigMap `trivy-operator-trivy-config`, such as `trivy.configFile`)
+restarts nothing: the next scan job reads it, and an
+image with no report gets its scan at the next check of its workload ("When
+a scan fails").
 
 **A chart release that moves a rule.** A `test` op of the post-render patch
 fails, and the upgrade stops before Helm applies a resource: the running
@@ -403,3 +477,9 @@ After a merge, on the cluster, with reads only:
    `max_over_time(sum by (pod) (container_memory_working_set_bytes{namespace="security",pod=~"scan-vulnerabilityreport-.+",container!=""})[1d:1m])`,
    with `kubectl -n security get jobs -l app.kubernetes.io/managed-by=trivy-operator`
    for the job of that pod. Write it in "Memory" in place of the estimate.
+10. After a change of the scan cache or of a limit, the first full cycle on
+    each cluster: step 9 on that cluster (the sum of the largest job), step
+    8 (the operator), step 7 (the CPU of `SECURITY_NODE`, and of the other
+    pods of that node), and no "Scan job container" error with
+    `status.reason` `OOMKilled` in the log of the operator. Write them in
+    "Memory" in place of the estimate.

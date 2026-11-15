@@ -134,10 +134,22 @@ spec:
         scan:
           skip-version-check: true
           disable-telemetry: true
-      # Each container of a scan job. On homelab-wsl-02 one scan container
-      # peaked at 25 MiB, and one job at 97 MiB, in a full cycle
-      # (../README.md, "Memory"). The CPU limit is the chart's
-      # default: a scan is slower, but it does not take a core from the node.
+        # The scan cache of each scan in its own memory. A scan job has one
+        # container for each container of the workload, and they run at the
+        # same time; the file cache in imageScanCacheDir takes a lock that only
+        # one process holds, so the others stopped after 5 seconds ("cache may
+        # be in use by another process: timeout") and their images had no
+        # report (README.md, "When a scan fails"). The databases stay on
+        # trivy-cache, read-only for a scan, but two containers can update the
+        # Java database at once (the same section).
+        cache:
+          backend: memory
+      # Each container of a scan job. The full cycle on homelab-wsl-02 (25 MiB
+      # for one container, 97 MiB for one job) ran while one container of a
+      # job scanned at a time; now all of them scan at once, and a job is an
+      # estimate until a cycle measures it (README.md, "Memory"). The CPU
+      # limit is the chart's default: one container takes half a core at
+      # most, a job of 6 containers 3 cores.
       resources:
         requests:
           cpu: 50m
