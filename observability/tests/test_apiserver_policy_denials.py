@@ -133,7 +133,11 @@ def test_prometheus_keeps_only_the_denials_of_the_policy():
         "--mount", f"type=bind,src={work},dst=/t,readonly",
         PROMETHEUS, "-c", SCRIPT,
     ])
-    result = json.loads(output.strip().splitlines()[-1])["data"]["result"]
+    # The output holds the pull lines of Docker too (stderr), so take the
+    # answer of the query by its start.
+    answer = [line for line in output.splitlines() if line.startswith('{"status"')]
+    assert answer, output[-4000:]
+    result = json.loads(answer[-1])["data"]["result"]
     kept = sorted(
         tuple(sorted((k, v) for k, v in series["metric"].items() if k not in {"instance", "job"}))
         for series in result
