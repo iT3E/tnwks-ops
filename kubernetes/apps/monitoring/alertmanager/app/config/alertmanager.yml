@@ -90,3 +90,21 @@ inhibit_rules:
     target_matchers:
       - severity = "warning"
     equal: ["alertname", "namespace"]
+  # Design Doc 0004, section 5.5: one alert for one outage. homelab-wsl-02
+  # can not scrape the Windows host of a site (SecurityHostUnreachable, the
+  # rules of the security registry): that site is away, the link between the
+  # sites is down, or the exporter stopped. The results of the systems behind
+  # that site are late for the same cause (the label behind_site, from
+  # security/registry/systems.yaml), and the Prometheus of that site answers
+  # through the same host, so its PeerSiteUnreachable has the same cause too.
+  # Both sites read this file; homelab-wsl has no SecurityHostUnreachable.
+  - source_matchers:
+      - alertname = "SecurityHostUnreachable"
+    target_matchers:
+      - alertname = "SecurityResultLate"
+    equal: ["behind_site"]
+  - source_matchers:
+      - alertname = "SecurityHostUnreachable"
+    target_matchers:
+      - alertname = "PeerSiteUnreachable"
+    equal: ["k8s_cluster"]

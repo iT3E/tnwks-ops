@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 from pathlib import Path
@@ -788,19 +789,50 @@ def test_the_answer_of_root_must_be_owned_by_root_and_not_be_a_link(tmp_path, mo
     assert check.read_root_result(link, NOW)[:2] == (0, check.NOT_DONE)
 
 
+def test_a_fifo_or_a_directory_in_the_place_of_the_answer_is_not_done_at_once(tmp_path):
+    """The distro user could put a FIFO in that place when the step of root writes no
+    answer. Without O_NONBLOCK the open would wait for a writer until the service times
+    out, and the run would write nothing. The alarm ends the test if the open waits."""
+    fifo = tmp_path / "write-test.json"
+    os.mkfifo(fifo)
+    directory = tmp_path / "dir.json"
+    directory.mkdir()
+
+    def waited(signum, frame):
+        raise TimeoutError("the open waited for a writer")
+
+    before = signal.signal(signal.SIGALRM, waited)
+    signal.alarm(5)
+    try:
+        for path in (fifo, directory):
+            uid, answer, message = check.read_root_result(path, NOW)
+            assert (uid, answer) == (0, check.NOT_DONE) and "not a regular file" in message, path
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, before)
+
+
 # The image of the jobs of the repository that run Python; Debian has setpriv.
 PYTHON_IMAGE = ("docker.io/library/python:3.15.2-slim-trixie"
                 "@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928")
-READ_AS_NOBODY = ("from pathlib import Path; import time; m = {}; "
+READ_AS_NOBODY = ("from pathlib import Path; import sys, time; m = {}; "
                   "exec(compile(open('/check.py').read(), 'check', 'exec'), m); "
+                  "m['ROOT_UID'] = int(sys.argv[1]) if len(sys.argv) > 1 else 0; "
                   "print(m['read_root_result'](Path('/run/t/write-test.json'), time.time())[1])")
+# A file in the form of an answer of root that refuses: version 1, uid 0, answer 0, now.
+FORGE_AS_NOBODY = ("import json, os, time; "
+                   "open('/run/t/own.json', 'w').write(json.dumps({'version': 1, 'uid': 0, 'answer': 0, "
+                   "'time': time.time(), 'message': 'uid 0: refused'})); "
+                   "os.replace('/run/t/own.json', '/run/t/write-test.json')")
 
 
 def test_an_answer_that_root_writes_is_read_by_the_distro_user_and_not_one_of_its_own():
     """The case of the service, across two users in a container with no network: root
     writes the answer (the step with the prefix +), and a user with no capability reads
     it. That user owns the runtime directory, as the distro user does, so it can put a
-    file of its own in that place: the check then reads no answer (3)."""
+    file of its own in that place, in the form of a refusal: the check then reads no
+    answer (3). Read as if root were uid 65534, the same file is a refusal (0), so only
+    the check of the owner tells them apart. A FIFO in that place is no answer at once."""
     if not shutil.which("docker"):
         if os.environ.get("CI"):
             pytest.fail("Docker is needed to test the answer of root across users")
@@ -812,16 +844,21 @@ python3 /check.py --system X --inbox-dir /out --write-test-dir /textfile --write
   --write-test-result /run/t/write-test.json || true
 stat -c '%a %u' /run/t/write-test.json
 {nobody} python3 -c "{READ_AS_NOBODY}"
-{nobody} sh -c 'echo {{}} > /run/t/own.json && mv -f /run/t/own.json /run/t/write-test.json'
+{nobody} python3 -c "{FORGE_AS_NOBODY}"
 {nobody} python3 -c "{READ_AS_NOBODY}"
+{nobody} python3 -c "{READ_AS_NOBODY}" 65534
+{nobody} sh -c 'rm -f /run/t/write-test.json && mkfifo /run/t/write-test.json'
+{nobody} timeout 20 python3 -c "{READ_AS_NOBODY}"
 """
     result = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{SCRIPT}:/check.py:ro",
                              PYTHON_IMAGE, "sh", "-c", script],
                             capture_output=True, text=True, timeout=600, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    mode, root_read, own_read = result.stdout.split("\n")[-4:-1]
+    mode, root_read, own_read, own_as_root, fifo_read = result.stdout.split("\n")[-6:-1]
     # Root may write in the plain directory of the container: answer 1, read as written.
-    assert (mode, root_read, own_read) == ("644 0", str(check.WRITTEN), str(check.NOT_DONE))
+    assert (mode, root_read) == ("644 0", str(check.WRITTEN))
+    assert (own_read, own_as_root) == (str(check.NOT_DONE), str(check.REFUSED))
+    assert fifo_read == str(check.NOT_DONE)
 
 
 def test_the_mode_of_a_file_lets_the_distro_user_read_the_answer_of_root(tmp_path):

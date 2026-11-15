@@ -54,6 +54,7 @@ One line for each system.
 | `site` | The cluster name of the site (`homelab-wsl`, `homelab-wsl-02`), or `none` for a system that is on no site |
 | `domain` | The domain of the system. It names no person and no age group |
 | `sources` | Optional. The sources that report on the system today. The rule for a late result watches each of them |
+| `behind_site` | Optional. The site whose Windows host or link the results of the system pass through on their way to homelab-wsl-02: the host of site 1, its distro and the router. Their late alerts carry it as a label, and Alertmanager holds them while `SecurityHostUnreachable` fires for that site |
 
 The types are fixed: `aws-account`, `cloudflare-account`,
 `github-organization`, `terraform-cloud-organization`, `cluster`,
@@ -226,8 +227,14 @@ does. Its value is the site whose Prometheus runs the rules. The label
 The source `host-check` runs on each host and each WSL distro of both
 sites, with the same settings. It writes a `.prom` file for the textfile collector of
 `windows_exporter` (`infrastructure/ansible/roles/windows_monitoring`).
-homelab-wsl scrapes the exporter of both Windows hosts, and `peer-federate`
-of homelab-wsl-02 brings the two series of the registry to its rules.
+homelab-wsl-02, where the rules run, scrapes the security series of the
+exporter of both Windows hosts itself (job `windows-exporter-security`), so
+a result of the site 1 host and its distro does not wait on the cluster of
+homelab-wsl (Design Doc 0004, section 5.5). homelab-wsl scrapes the same
+series in its job `windows-exporter` with the label `standby="true"`, as
+the standby: `SecurityFindingNew` fires there for a standby series only
+while homelab-wsl-02 does not scrape its host (the `up` of that host in
+`windows-exporter-security`, federated from homelab-wsl-02, is not 1).
 
 | Where | What runs | File |
 | --- | --- | --- |
@@ -347,8 +354,9 @@ by Windows is the pass.
   `/run/tnwks-host-check/write-test.json`, mode 0644, so that the check
   can read it. The check, as the distro user, reads that answer and tries
   once itself. The distro user owns that directory, so the check reads the
-  answer only from a file that root owns and that is not a link. Any other
-  file is answer 3.
+  answer only from a regular file that root owns and that is not a link.
+  Any other file is answer 3. The check opens it with `O_NONBLOCK`, so a FIFO
+  in that place is answer 3 at once, and does not hold the run.
 - **The answers.** Each try asks the kernel first (`access()` with the
   effective ids, the same check as `open()`), then makes the file with an
   exclusive create. It is a series
@@ -462,9 +470,18 @@ each source in `sources` of each system. For each pair it has two terms:
   `absent()` with a stated window, so a source that serves no time reads as
   late.
 
+A system with `behind_site` carries that label on its late alert.
+
 A second alert rule, `SecurityAcceptedFindingExpired`, fires for a system
 when the end date of one of its accepted findings has passed
 ([Accepted findings](#accepted-findings)).
+
+A third, `SecurityHostUnreachable`, fires when the scrape of a host target
+with `behind_site` in `windows-exporter-security` fails for 5 minutes. Two
+inhibit rules of Alertmanager (`alertmanager.yml`) hold, while it fires,
+each `SecurityResultLate` with the same `behind_site`, and
+`PeerSiteUnreachable` with the same `k8s_cluster`. So a loss of site 1 gives
+one alert, and a stop of the cluster of site 1 alone holds nothing.
 
 The query window of each rule is 10 minutes. A rule reads the newest sample
 in the window, so one missed scrape or a restart of a source is no gap. An
@@ -540,10 +557,11 @@ security stream `findings` in Loki has the text of each finding.
 | Alert | What it means | What to do |
 | --- | --- | --- |
 | `SecurityResultLate` | The newest result of a source for a system is older than `late_after` of the source, or the source serves no time. The safeguards that rest on it show "No evidence" | Open the tab Sources of the board. Then look at the last run of the source: its Job or its pod in the namespace `security`, or the agent on the host. The alert ends when the source reports again |
+| `SecurityHostUnreachable` | homelab-wsl-02 can not scrape `windows_exporter` on the host of the other site for 5 minutes: that site is away (its power or its link), the link between the sites is down, or the exporter on that host stopped. The late alerts of the systems behind that site, and `PeerSiteUnreachable` of that site, are held while it fires | Check the power and the link of that site. If the site is up, check the service `windows_exporter` on its host, and the firewall rule `windows_exporter (Prometheus)`, which admits the address of WSL-02 (`windows_monitoring_remote_extra`) |
 | `SecurityAcceptedFindingExpired` | An accepted finding of the system has passed its end date | The owner reads the line in the list. The owner sets a new end date with a reason, or removes the line and the cause of the finding |
 | `SecurityAcceptedListUnread` | The security converter gets no entry from the list of accepted findings, for 30 minutes. The board shows no accepted finding, and the rule of Trivy Operator mutes none | The log of the converter names the line and the kind of its form. Fix that line of the list (`converter/README.md`, "The form that the converter reads") |
 | `SecurityAcceptedEntriesSkipped` | Entries of the list do not fit, for one hour, so their findings show as fails | The log of the converter names each entry by its number, and why. Fix those entries (`converter/README.md`, "An entry that the converter skips") |
-| `SecurityFindingNew` | A check of high or critical severity on the system fails, and one of these is true: it has more failed resources than at each time of the day before; it had none one hour before; or it had no result in the day before (a new check, or one that comes back after more than a day). Only high and critical alert, as the design asks for "a new failed check of high severity"; the other severities are on the board. A check that fails again after less than one hour at 0 does not alert again. It compares one value for each check (the labels `k8s_cluster`, `source`, `check` and `system`, from the record `homelab:security_check_result_high:max`), so a new pod of a source, with new `pod` and `instance` labels, or a change of the severity of a check, is not a new result. It is in `observability/rules.py`, and each site fires it for its own results. It ends after one hour. On the first day of a source, and on the first day of the record, each system with a check of high or critical severity that fails alerts one time | Open the tab Systems of the board, then the reports of the source (for Trivy Operator, `kubectl get clustercompliancereport k8s-cis-1.23 -o yaml` and the vulnerability reports in the namespace of the workload). Fix the cause, or accept the finding in the encrypted list |
+| `SecurityFindingNew` | A check of high or critical severity on the system fails, and one of these is true: it has more failed resources than at each time of the day before; it had none one hour before; or it had no result in the day before (a new check, or one that comes back after more than a day). Only high and critical alert, as the design asks for "a new failed check of high severity"; the other severities are on the board. A check that fails again after less than one hour at 0 does not alert again. It compares one value for each check (the labels `k8s_cluster`, `source`, `check`, `system` and `standby`, from the record `homelab:security_check_result_high:max`), so a new pod of a source, with new `pod` and `instance` labels, or a change of the severity of a check, is not a new result. It is in `observability/rules.py`, and each site fires it for its own results. On homelab-wsl, a result of the host check has the label `standby`, and alerts only while homelab-wsl-02 does not scrape its host. It ends after one hour. On the first day of a source, and on the first day of the record, each system with a check of high or critical severity that fails alerts one time | Open the tab Systems of the board, then the reports of the source (for Trivy Operator, `kubectl get clustercompliancereport k8s-cis-1.23 -o yaml` and the vulnerability reports in the namespace of the workload). Fix the cause, or accept the finding in the encrypted list |
 | `SecurityImagesNotScanned` | Images that run on a cluster with Trivy Operator have had no vulnerability report for 36 hours (the `late_after` of `trivy`). A report counts for a running image when it has its digest, or the same namespace, container and image reference (`kubernetes/apps/security/trivy-operator/README.md`, "The digest of a report"). While one image has no report, the check `image-vulnerabilities` of the cluster keeps a fail, and shows "no evidence" in place of a pass. It is in `observability/rules.py`; each site fires it for its own cluster | List the scan jobs and the log of the operator (`kubernetes/apps/security/trivy-operator/README.md`, "When a scan fails"). Add the registry to the policy of the scan jobs, or move the image to a public registry. For an image that no scan can read, add an entry to the accepted list (`accepted.json`), an object in the form `{"source": "trivy", "check": "images-not-scanned", "system": "<the cluster>", "reason": "<why>", "until": "YYYY-MM-DD"}`. It mutes the alert of that cluster until its end, and `SecurityAcceptedFindingExpired` tells the owner at the end. The entry also mutes a new image with no report on the cluster, so keep the end near. Its 36 hours start again at the end, and each time the count of images with no report is 0 for one evaluation |
 | `SecurityImagesScannedByTag` | For 7 days, containers on a cluster with Trivy Operator have run an image that no report has, and the report of their reference counts for them (`homelab:security_trivy_containers_by_reference:count` above 0). The tag was pushed again after the node pulled it, so the report is of the image that the tag points to now, not of the image that runs (`kubernetes/apps/security/trivy-operator/README.md`, "The digest of a report"). It is in `observability/rules.py`; each site fires it for its own cluster, and a cluster with no Trivy Operator has no count | The board (Sources, "Images scanned by tag only") shows the count. Restart the workload, so that it pulls the image of the tag, or pin a digest in its pod spec. To keep a tag that moves, add an entry to the accepted list in the form `{"source": "trivy", "check": "images-scanned-by-tag", "system": "<the cluster>", "reason": "<why>", "until": "YYYY-MM-DD"}`. It mutes the alert of that cluster until its end |
 

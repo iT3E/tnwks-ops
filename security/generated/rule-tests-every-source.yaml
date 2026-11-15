@@ -4,46 +4,43 @@ rule_files:
 - rules-every-source-for-test.yaml
 evaluation_interval: 1m
 tests:
-- name: 'each source serves a fresh time: no alert'
+- name: the late alert of a system behind another site carries the site
   interval: 1m
   external_labels:
     cluster: site
   input_series:
-  - &id021
+  - &id001
     series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}
     values: 0+60x3000
-  - &id001
+  - &id002
     series: homelab_security_last_result_timestamp_seconds{source="stream",system="aws-management",check="cloudtrail"}
     values: 0+60x3000
-  - &id002
+  - &id003
     series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-prod"}
     values: 0+60x3000
-  - &id003
+  - &id004
     series: homelab_security_last_result_timestamp_seconds{source="stream",system="aws-prod",check="cloudtrail"}
     values: 0+60x3000
-  - &id004
+  - &id005
     series: homelab_security_last_result_timestamp_seconds{source="prowler",system="cloudflare"}
     values: 0+60x3000
-  - &id005
+  - &id006
     series: homelab_security_last_result_timestamp_seconds{source="prowler",system="iT3E"}
     values: 0+60x3000
-  - &id006
+  - &id007
     series: homelab_security_last_result_timestamp_seconds{source="api-check",system="tnwks-ops"}
     values: 0+60x3000
-  - &id007
+  - &id008
     series: homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl"}
     values: 0+60x3000
-  - &id008
+  - &id009
     series: homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl",check="k8s-audit"}
     values: 0+60x3000
-  - &id009
+  - &id010
     series: homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl-02"}
     values: 0+60x3000
-  - &id010
-    series: homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl-02",check="k8s-audit"}
-    values: 0+60x3000
   - &id011
-    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}
+    series: homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl-02",check="k8s-audit"}
     values: 0+60x3000
   - &id012
     series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="DESKTOP-HKE05KI"}
@@ -72,11 +69,26 @@ tests:
   - &id020
     series: homelab_security_last_result_timestamp_seconds{source="stream",system="sce-rtr01",check="routeros"}
     values: 0+60x3000
+  - series: homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}
+    values: 0+60x10
   alert_rule_test:
-  - eval_time: 1h
+  - eval_time: 5m
     alertname: SecurityResultLate
     exp_alerts: []
-- name: a source that serves no time reads as late
+  - eval_time: 45m
+    alertname: SecurityResultLate
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        source: host-check
+        system: DESKTOP-HKE05KI
+        behind_site: homelab-wsl
+      exp_annotations:
+        summary: A security source is late for DESKTOP-HKE05KI
+        description: The newest result of host-check for DESKTOP-HKE05KI is older than its limit, or the source
+          serves no time. The board shows no evidence for it.
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+- name: 'each source serves a fresh time: no alert'
   interval: 1m
   external_labels:
     cluster: site
@@ -92,6 +104,38 @@ tests:
   - *id009
   - *id010
   - *id011
+  - &id021
+    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}
+    values: 0+60x3000
+  - *id012
+  - *id013
+  - *id014
+  - *id015
+  - *id016
+  - *id017
+  - *id018
+  - *id019
+  - *id020
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: SecurityResultLate
+    exp_alerts: []
+- name: a source that serves no time reads as late
+  interval: 1m
+  external_labels:
+    cluster: site
+  input_series:
+  - *id002
+  - *id003
+  - *id004
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - *id009
+  - *id010
+  - *id011
+  - *id021
   - *id012
   - *id013
   - *id014
@@ -122,7 +166,6 @@ tests:
   external_labels:
     cluster: site
   input_series:
-  - *id002
   - *id003
   - *id004
   - *id005
@@ -132,6 +175,7 @@ tests:
   - *id009
   - *id010
   - *id011
+  - *id021
   - *id012
   - *id013
   - *id014
@@ -184,7 +228,6 @@ tests:
   external_labels:
     cluster: site
   input_series:
-  - *id021
   - *id001
   - *id002
   - *id003
@@ -194,7 +237,8 @@ tests:
   - *id007
   - *id008
   - *id009
-  - *id011
+  - *id010
+  - *id021
   - *id012
   - *id013
   - *id014

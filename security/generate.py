@@ -46,6 +46,13 @@ WINDOW = "10m"
 CLOCK_SKEW_SECONDS = 300
 LATE_FOR = "10m"
 BOARD = "tnwks-security"
+# The scrape of the security series of both Windows hosts on homelab-wsl-02
+# (kubernetes/clusters/wsl-02/apps/kustomization.yaml). The target of a host that
+# sits behind another site has the label BEHIND, and SecurityHostUnreachable fires
+# when its scrape fails for HOST_UNREACHABLE_FOR (Design Doc 0004, section 5.5).
+HOST_SCRAPE_JOB = "windows-exporter-security"
+BEHIND = "behind_site"
+HOST_UNREACHABLE_FOR = "5m"
 
 TYPES = ("aws-account", "cloudflare-account", "github-organization",
          "terraform-cloud-organization", "cluster", "windows-host", "wsl-distro", "laptop",
@@ -280,15 +287,26 @@ def expected(registry):
     return result
 
 
+def behind(registry):
+    """The site that each system sits behind, for the systems that have one."""
+    return {system["name"]: system[BEHIND] for system in registry["systems"] if BEHIND in system}
+
+
 def late_expr(registry):
+    """A system with behind_site carries it as a label, which the inhibit rule of
+    Alertmanager reads."""
+    sites = behind(registry)
     terms = []
     for source, system, check, limit in expected(registry):
         labels = f'source="{source}",system="{system}"' + (f',check="{check}"' if check else "")
         window = f"{LAST_RESULT}{{{labels}}}[{WINDOW}]"
         # absent_over_time is absent() with a stated window: it gives one series, with
         # the labels of the matchers, when the source served no time in the window.
-        terms.append(f"max by (source, system) (time() - last_over_time({window}) > {limit})"
-                     f" or max by (source, system) (absent_over_time({window}))")
+        term = (f"max by (source, system) (time() - last_over_time({window}) > {limit})"
+                f" or max by (source, system) (absent_over_time({window}))")
+        if system in sites:
+            term = f'label_replace({term}, "{BEHIND}", "{sites[system]}", "", "")'
+        terms.append(term)
     return " or ".join(terms)
 
 
@@ -331,9 +349,27 @@ def accepted_rule():
                 "dashboard_url": BOARD_LINK}}
 
 
+def host_unreachable_rule():
+    """The alert for a host that this site can not scrape, for a host target that sits
+    behind another site. It carries behind_site from its target. While it fires,
+    Alertmanager holds each SecurityResultLate with the same behind_site, and
+    PeerSiteUnreachable of the same k8s_cluster (alertmanager.yml)."""
+    return {"alert": "SecurityHostUnreachable",
+            "expr": f'up{{job="{HOST_SCRAPE_JOB}",{BEHIND}!=""}} == 0',
+            "for": HOST_UNREACHABLE_FOR, "labels": {"severity": "warning"},
+            "annotations": {
+                "summary": "This site can not scrape the exporter of {{ $labels.instance }}",
+                "description": ("The scrape of windows_exporter on {{ $labels.instance }} fails: {{ $labels.behind_site }} "
+                                "is away (its power or its link), the link between the sites is down, or windows_exporter "
+                                "on that host stopped. The results of the systems behind {{ $labels.behind_site }} wait, "
+                                "and their late alerts, and PeerSiteUnreachable of that site, are held while this fires."),
+                "dashboard_url": BOARD_LINK}}
+
+
 def alerts(registry):
     late = [late_rule(late_expr(registry))] if expected(registry) else []
-    return [*late, accepted_rule()]
+    host = [host_unreachable_rule()] if behind(registry) else []
+    return [*late, *host, accepted_rule()]
 
 
 def rule_resource(registry):
@@ -599,7 +635,36 @@ def fixtures(registry):
              {"eval_time": "45m", "alertname": "SecurityAcceptedFindingExpired",
               "exp_alerts": [alert_sample(accepted_rule(), system=system)]}]})
     tests += line_fixtures(registry)
+    tests += host_unreachable_fixtures(registry)
     return {"rule_files": ["rules-for-test.yaml"], "evaluation_interval": "1m", "tests": tests}
+
+
+def host_unreachable_fixtures(registry):
+    """SecurityHostUnreachable: the scrape of a host behind another site fails for 5
+    minutes. The scrape of a host with no behind_site does not raise it."""
+    sites = behind(registry)
+    if not sites:
+        return []
+    site = next(iter(sites.values()))
+    rule = host_unreachable_rule()
+
+    def up(values, instance="far-host", **labels):
+        return series("up", values, job=HOST_SCRAPE_JOB, instance=instance, k8s_cluster=site, **labels)
+
+    fires = [alert_sample(rule, job=HOST_SCRAPE_JOB, instance="far-host", k8s_cluster=site, **{BEHIND: site})]
+    near = {"instance": "near-host", "k8s_cluster": "site"}
+    return [
+        {"name": "a host behind another site that this site can not scrape for 5 minutes alerts", "interval": "1m",
+         "external_labels": {"cluster": "site"},
+         "input_series": [up("1+0x10 0+0x30", **{BEHIND: site})],
+         "alert_rule_test": [
+             {"eval_time": "14m", "alertname": rule["alert"], "exp_alerts": []},
+             {"eval_time": "16m", "alertname": rule["alert"], "exp_alerts": fires}]},
+        {"name": "a host behind another site that this site scrapes, or a host of this site, does not alert",
+         "interval": "1m", "external_labels": {"cluster": "site"},
+         "input_series": [up("1+0x40", **{BEHIND: site}), series("up", "0+0x40", job=HOST_SCRAPE_JOB, **near)],
+         "alert_rule_test": [{"eval_time": "30m", "alertname": rule["alert"], "exp_alerts": []}]},
+    ]
 
 
 def passing(registry, line, system):
@@ -686,14 +751,15 @@ def alert_sample(rule, **labels):
             "exp_annotations": {key: render(value) for key, value in rule["annotations"].items()}}
 
 
-def late_alert(source, system):
-    return alert_sample(late_rule(""), source=source, system=system)
+def late_alert(source, system, site=None):
+    return alert_sample(late_rule(""), source=source, system=system, **({BEHIND: site} if site else {}))
 
 
 def late_fixtures(registry):
     """Tests of the rule for a late result, on the registry with each source running."""
     full = every_source(registry)
     watched = expected(full)
+    sites = behind(full)
     source, system, _, limit = next(item for item in watched if item[2] is None)
     stream = next(item for item in watched if item[2] is not None)
     others = [series(LAST_RESULT, "0+60x3000", source=name, system=target, **({"check": check} if check else {}))
@@ -708,7 +774,20 @@ def late_fixtures(registry):
     silent = [item for item in watched if item[2] in by_system][1]
     one_only = [item for item in others
                 if f'source="{silent[0]}",system="{silent[1]}",check="{silent[2]}"' not in item["series"]]
+    # A system behind another site: its late alert carries behind_site.
+    behind_source, behind_system, behind_check, _ = next(item for item in watched if item[1] in sites)
+    behind_labels = {"check": behind_check} if behind_check else {}
+    behind_quiet = [item for item in others
+                    if f'source="{behind_source}",system="{behind_system}"' not in item["series"]]
     return {"rule_files": ["rules-every-source-for-test.yaml"], "evaluation_interval": "1m", "tests": [
+        {"name": "the late alert of a system behind another site carries the site", "interval": "1m",
+         "external_labels": {"cluster": "site"},
+         "input_series": [*behind_quiet,
+                          series(LAST_RESULT, "0+60x10", source=behind_source, system=behind_system, **behind_labels)],
+         "alert_rule_test": [
+             {"eval_time": "5m", "alertname": "SecurityResultLate", "exp_alerts": []},
+             {"eval_time": "45m", "alertname": "SecurityResultLate",
+              "exp_alerts": [late_alert(behind_source, behind_system, sites[behind_system])]}]},
         {"name": "each source serves a fresh time: no alert", "interval": "1m", "external_labels": {"cluster": "site"},
          "input_series": others,
          "alert_rule_test": [{"eval_time": "1h", "alertname": "SecurityResultLate", "exp_alerts": []}]},
@@ -717,7 +796,8 @@ def late_fixtures(registry):
          "input_series": quiet((source, system)),
          "alert_rule_test": [
              {"eval_time": "5m", "alertname": "SecurityResultLate", "exp_alerts": []},
-             {"eval_time": "30m", "alertname": "SecurityResultLate", "exp_alerts": [late_alert(source, system)]}]},
+             {"eval_time": "30m", "alertname": "SecurityResultLate",
+              "exp_alerts": [late_alert(source, system, sites.get(system))]}]},
         {"name": "a time that stops is late after the limit of its source, and a time that goes away is late too",
          "interval": "1m", "external_labels": {"cluster": "site"},
          "input_series": [*quiet((source, system), (stream[0], stream[1])),
@@ -725,16 +805,17 @@ def late_fixtures(registry):
                           series(LAST_RESULT, "0+60x30 _x3000", source=stream[0], system=stream[1], check=stream[2])],
          "alert_rule_test": [
              {"eval_time": f"{minutes - 5}m", "alertname": "SecurityResultLate",
-              "exp_alerts": [late_alert(stream[0], stream[1])] if minutes - 5 > 60 else []},
+              "exp_alerts": [late_alert(stream[0], stream[1], sites.get(stream[1]))] if minutes - 5 > 60 else []},
              {"eval_time": f"{minutes + 30}m", "alertname": "SecurityResultLate",
-              "exp_alerts": [late_alert(source, system), late_alert(stream[0], stream[1])]}]},
+              "exp_alerts": [late_alert(source, system, sites.get(system)),
+                             late_alert(stream[0], stream[1], sites.get(stream[1]))]}]},
         {"name": "a stream with a line for one system only reads as late for the other system",
          "interval": "1m", "external_labels": {"cluster": "site"},
          "input_series": one_only,
          "alert_rule_test": [
              {"eval_time": "5m", "alertname": "SecurityResultLate", "exp_alerts": []},
              {"eval_time": "30m", "alertname": "SecurityResultLate",
-              "exp_alerts": [late_alert(silent[0], silent[1])]}]},
+              "exp_alerts": [late_alert(silent[0], silent[1], sites.get(silent[1]))]}]},
     ]}
 
 
