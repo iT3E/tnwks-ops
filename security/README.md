@@ -276,7 +276,7 @@ fail alerts in one cycle, and not only on the board.
 | `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `high` (Design Doc 0004, section 5.8) |
 | `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off | `high` |
 | `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) | `high` |
-| `updates-held` | An online search of Windows Update for software updates that are hidden and not installed | Each such update released more than 14 days ago (Design Doc 0004, section 5.7). A hidden update never shows in `updates-pending` | `high` |
+| `updates-held` | An online search of Windows Update for software updates that are hidden, not installed and not optional: the search of `updates-pending` with `IsHidden=1` in place of `IsHidden=0` | Each such update released more than 14 days ago (Design Doc 0004, section 5.7). A hidden update never shows in `updates-pending`. An optional update (a preview, a feature update) counts in neither | `high` |
 | `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each upgrade that it offers, whose clock is older than 14 days (below) | `high` |
 | `updates-held` (distro) | A second simulation with `--ignore-hold` and each phased update, and `apt-mark showhold` | Each held package with a newer candidate, whose clock is older than 14 days (Design Doc 0004, section 5.7) | `high` |
 
@@ -291,13 +291,15 @@ keeps a clock for each package in `/var/lib/tnwks-host-check/state.json`.
   no time, and a phased update has the right age when the host gets it. A
   package loses its clock only when it leaves that list.
 - **The start of a clock.** The simulation names the lists of each upgrade
-  (the Label, or the Origin, and the Suite of its Release file). An upgrade
+  (the Label and the Suite of its Release file; apt prints an empty name for
+  a list with no Label, whatever its Origin). An upgrade
   that a run sees first came out after the Date of its list at the last run
   with a result, so its clock starts at that Date (the oldest one, for an
   upgrade of two lists). With no such Date, it starts at the time 0, and the
   upgrade counts as old: with no state file, with a state file of the old
   form (its clocks stay), and for a list that the last run with a result did
-  not have.
+  not have. The run reads the Dates before the simulations, so a refresh of
+  the lists during a run can start a clock early, never late.
 - **Only a run with a result writes the state.** A run in which a query
   failed leaves the state file as it was. A host that was off for a week
   fails its first run on old lists. The next run dates the upgrades of the
@@ -413,6 +415,13 @@ absent` and `host_check_state: absent` in the defaults of the two roles,
 which removes the timer, the tasks, the scripts, the inbox and the files on each host
 and distro, and remove `host-check` from `sources` of the hosts and distros
 in `systems.yaml`, in the same pull request.
+
+A revert of the clock of one package to the code before it is not a plain
+revert. That code reads only a state file of version 1, so it reads the
+version 2 file as a state that can not be read: each run of the distro gives
+no result until `/var/lib/tnwks-host-check/state.json` is deleted. With the
+file deleted, the next run counts each pending upgrade as old, so
+`updates-pending` can fail at once.
 
 ## The generator
 

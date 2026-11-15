@@ -161,8 +161,10 @@ function Get-TnwksPendingUpdates {
 
 function Get-TnwksHeldUpdates {
     # Software updates that are hidden and not installed: Windows does not
-    # install them, and the search of updates-pending does not list them.
-    Search-TnwksUpdates "IsInstalled=0 and IsHidden=1 and Type='Software'"
+    # install them, and the search of updates-pending does not list them. Not
+    # optional (BrowseOnly), as in that search: the two count the same kind of
+    # update, and differ only in IsHidden.
+    Search-TnwksUpdates "IsInstalled=0 and IsHidden=1 and BrowseOnly=0 and Type='Software'"
 }
 
 function Get-TnwksLastInstall {
