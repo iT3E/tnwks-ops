@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.161.2 - 2026-11-15
+
+### Fixed
+
+* security: a Trivy report of an image holds its critical vulnerabilities only, by an ignore policy in the scan containers, so the report of an image with many fixed vulnerabilities fits in one object of the API server ("etcdserver: request is too large"); trivy.severity keeps every severity, which the compliance report reads
+
 ## v2.161.1 - 2026-11-15
 
 ### Fixed

@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'security: a Trivy report of an image holds its critical vulnerabilities only, by an ignore policy in the scan containers, so the report of an image with many fixed vulnerabilities fits in one object of the API server ("etcdserver: request is too large"); trivy.severity keeps every severity, which the compliance report reads'
-time: 2026-11-15T21:30:00.000000000Z
