@@ -194,6 +194,49 @@ What the second join can miss, or hide:
 A report of the same reference in another namespace, or for another
 container, does not count.
 
+## Severities
+
+Trivy collects every severity: `trivy.severity` keeps the chart's default
+(`UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL`). The operator uses that key for more
+than the image scans. It drops each config audit, RBAC and infra result
+whose severity the key does not list (`filter()` in
+`pkg/configauditreport/controller/helper.go` of the release, with
+`GetDefaultSeverity()` of `pkg/policy/policy.go`), and the compliance report
+`k8s-cis-1.23` is built from those reports. Its controls have checks of each
+severity (19 critical, 50 high, 24 medium and 23 low in the spec of the
+release), and the rules read each one (the label `severity` above, and
+`SecurityFindingNew` for high and critical). So a narrower key turns a
+control that fails into a pass. `security/tests/test_trivy_operator_severity.py`
+fails when the key leaves out a severity that a rule reads.
+
+A report of an image holds its critical vulnerabilities only, through
+`trivy.ignorePolicy`: a policy in Rego that ignores each vulnerability that
+is not critical. The operator mounts it in each scan container and sets
+`TRIVY_IGNORE_POLICY` there (`pkg/plugins/trivy/image.go`); the config
+audit runs in the operator and does not read it. The reason is the size: a
+report is one object, and the API server stores an object of up to about
+1.5 MiB ("etcdserver: request is too large", or "Request entity too large"
+above 3 MiB). In a local test with the pinned Trivy, an old image gave a
+report of 5.4 MiB with every severity, 1.5 MiB with high and critical, and
+0.12 MiB with the policy.
+
+What the policy costs: the operator still exports `trivy_image_vulnerabilities`
+for each severity, but the counts of high, medium, low and unknown are 0 from
+the first scan after the change. No panel and no rule reads those counts.
+The check `image-vulnerabilities` sums `severity="Critical"`, and the other
+rules read the series of a report for its presence only: the coverage,
+`SecurityImagesNotScanned` and the containers matched by reference. The
+series from before the change keep their history. A rule that reads another
+severity of an image needs the policy changed first, and the test fails
+until then.
+
+The policy is in the ConfigMap `trivy-operator-trivy-config`, so the next
+scan job reads it, and a report from before keeps every severity until its
+new scan, within 24 hours. A policy that does not compile fails each scan
+(exit 1, "failed to apply the policy"): no image has a report, and
+`SecurityImagesNotScanned` fires after 36 hours. The test reads the text of
+the policy, not its syntax.
+
 ## Exceptions
 
 An exception names a check, never a result. A check that does not apply to
@@ -316,6 +359,11 @@ alert `KubeJobFailed` for a scan job.
 lists the scan jobs, and the log of the operator says why one failed. The
 usual causes:
 
+- **A report too large for the API server.** The log of the operator has
+  "etcdserver: request is too large". The policy keeps the critical
+  vulnerabilities only ("Severities"). If the report of an image is still
+  too large with them, the release has nothing more, and that image needs
+  an exception.
 - **A new registry.** The scan of an image from a host that the policy does
   not name fails. Add its hosts to `app/networkpolicy.yaml` and to the table
   above.
