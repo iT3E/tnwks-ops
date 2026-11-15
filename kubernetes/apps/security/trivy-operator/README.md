@@ -28,7 +28,7 @@ HelmReleases of this repository do, so Renovate finds them.
 | --- | --- |
 | `ks.yaml` | The Flux Kustomization `security-trivy-operator`. It waits for `kube-prometheus-stack`, for the CRD of the ServiceMonitor |
 | `app/helmrelease.yaml` | The chart, from the HelmRepository `aquasecurity` (`kubernetes/flux/meta/helm/aquasecurity.yaml`) |
-| `app/pvc.yaml` | `trivy-cache`, 4 GiB: the vulnerability database for the scan jobs |
+| `app/pvc.yaml` | `trivy-cache`, 4 GiB: the vulnerability databases for the scan jobs. The scan cache is in the memory of each scan |
 | `app/networkpolicy.yaml` | What the operator and a scan job can reach |
 | `app/rbac.yaml` | The Role that lets the operator create and delete Jobs, and read pod logs, in `security` only ("Its roles") |
 
@@ -307,6 +307,15 @@ Its first container downloads the database (about 140 MB compressed) to
 `trivy-cache`, and a later job reads it from there. Without the cache, each
 job would download it again.
 
+The scan cache (what Trivy found in each layer of an image) is in the memory
+of each scan, not on `trivy-cache` ("When a scan fails"). So each scan reads
+each layer of its image again, each day: its peak is the one of a first scan,
+as in the first cycle of a cluster, and it downloads the layers again. In a
+local test with the pinned Trivy, a first scan peaked at about the same
+memory with either cache (165 and 174 MiB for one mid-size image), and
+a job of 6 containers with critical vulnerabilities only peaked at 262 MiB
+for its largest container, under the limit of 512 MiB.
+
 The signals of a limit that is too low: the pod status `OOMKilled`, and the
 alert `KubeJobFailed` for a scan job.
 
@@ -320,12 +329,44 @@ usual causes:
   not name fails. Add its hosts to `app/networkpolicy.yaml` and to the table
   above.
 - **A private image.** The operator reads no pull secret (above).
+- **Containers of one job at the same time.** A scan job has one container
+  for each container of the workload, and they run at the same time. With
+  the scan cache in files on `trivy-cache`, each container opens one file
+  with a lock that only one process holds (`pkg/cache/fs.go` of Trivy, a
+  timeout of 5 seconds), so the others stopped with "unable to initialize
+  fs cache: cache may be in use by another process: timeout", and their
+  images had no report. The values keep the scan cache in the memory of
+  each scan (`cache.backend: memory` in `trivy.configFile`); the databases
+  stay on `trivy-cache`, and a scan opens them read-only, which several
+  processes can do at once. The operator has the same issue in Standalone
+  mode upstream, with no fix in the pinned release.
+- **A report too large for the API server.** A report is one object, and
+  the API server stores an object of up to about 1.5 MiB ("etcdserver:
+  request is too large", or "Request entity too large" above 3 MiB). With
+  every severity, the report of an image with many fixed vulnerabilities is
+  larger: in a local test, an old image gave 5.4 MiB with every severity,
+  1.5 MiB with high and critical, and 0.1 MiB with critical only. The values
+  keep critical vulnerabilities only (`trivy.severity`), the ones that the
+  check `image-vulnerabilities` counts.
+
+A container whose scan fails gets no second try of its own: the operator
+deletes the job, and writes the reports of the containers that ended well.
+It starts a new scan of the workload when it checks the workload again: at
+the resync of its cache (every 10 hours, with up to 10% jitter, the default
+of controller-runtime), at a restart, or when another report of the
+workload ends after 24 hours.
 
 ## What a change applies
 
 A merge that changes `app/` makes Flux upgrade the HelmRelease on each
-cluster that lists `ks.yaml`. The operator restarts. It then checks the
-workloads again, and a scan job starts for each image that has no report.
+cluster that lists `ks.yaml`. The operator restarts when its own settings
+change (the ConfigMap `trivy-operator-config`, whose checksum is on its
+pod). It then checks the workloads again, and a scan job starts for each
+image that has no report. A change of the settings of Trivy alone (the
+ConfigMap `trivy-operator-trivy-config`, such as `trivy.severity` or
+`trivy.configFile`) restarts nothing: the next scan job reads it, and an
+image with no report gets its scan at the next check of its workload ("When
+a scan fails").
 
 **A chart release that moves a rule.** A `test` op of the post-render patch
 fails, and the upgrade stops before Helm applies a resource: the running
