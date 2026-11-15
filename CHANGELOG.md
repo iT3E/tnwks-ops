@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.151.0 - 2026-11-15
+
+### Changed
+
+* github: the agent image repository is public
+
 ## v2.150.2 - 2026-11-15
 
 ### Fixed
