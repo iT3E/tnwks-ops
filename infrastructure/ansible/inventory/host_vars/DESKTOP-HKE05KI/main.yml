@@ -6,6 +6,13 @@
 # kubernetes/clusters/wsl/cluster-settings.yaml.
 ansible_host: 172.26.80.1
 
+# homelab-wsl-02's Prometheus scrapes the security series of this host's
+# windows_exporter over the LAN (from WSL-02's address, where its pods'
+# traffic leaves), so the host check of this host and its distro has a
+# result on site 2 while this cluster is down (Design Doc 0004, section 5.5).
+# WSL-02 admits this site's address in the same way.
+windows_monitoring_remote_extra: [10.10.91.112]
+
 # Prometheus sits on its own ext4 VHDX on C:, not the E: distro disk.
 observability_storage_enabled: true
 
