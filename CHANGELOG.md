@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.159.0 - 2026-11-15
+
+### Added
+
+* kopiur: the credentials of a Kopia repository for the agent trust domains (homelab-wsl): its own password, and a refresher that turns its own certificate into an S3 session for the role kept to kopiur-agents/
+
 ## v2.158.1 - 2026-11-15
 
 ### Fixed
