@@ -4,6 +4,7 @@ import copy
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -371,27 +372,65 @@ SOURCE_OF_APP = {
 # A source that needs hours for its first result joins `sources` in a pull request
 # after that result is there, so the late alert does not fire at the merge
 # (security/README.md, "A new check", step 4). Until then, its system and source
-# are here, and the test fails when the line lists it: take the pair out then.
-FIRST_RESULT_PENDING = {("homelab-wsl", "trivy")}
+# are here, with the last day of the wait: the test fails when the line lists the
+# source, when the day has passed, or when the system does not run the app.
+FIRST_RESULT_PENDING: dict[tuple[str, str], str] = {}
 
 
-def test_each_cluster_lists_the_sources_that_its_apps_give(registry):
+def apps_of_clusters(systems):
+    """{system name: the resources of its cluster's apps} for each cluster in the registry."""
     clusters = Path(__file__).resolve().parents[2] / "kubernetes" / "clusters"
-    systems = {system["name"]: system for system in registry["systems"]}
-    checked = 0
+    result = {}
     for settings in sorted(clusters.glob("*/cluster-settings.yaml")):
         name = yaml.safe_load(settings.read_text())["data"]["CLUSTER_NAME"]
         apps = settings.parent / "apps" / "kustomization.yaml"
-        if name not in systems or not apps.exists():
-            continue
-        resources = yaml.safe_load(apps.read_text()).get("resources", [])
+        if name in systems and apps.exists():
+            result[name] = yaml.safe_load(apps.read_text()).get("resources", [])
+    return result
+
+
+def source_errors(systems, apps, pending, today):
+    """What is wrong with the sources of the clusters: a source that an app gives and
+    the line does not list, and a pending pair that is listed, past its day, or that
+    no cluster reaches. The second number is how many (cluster, app) pairs it read."""
+    errors, checked, reached = [], 0, set()
+    for name, resources in apps.items():
+        listed = systems[name].get("sources", [])
         for app, source in SOURCE_OF_APP.items():
-            if app in resources:
-                checked += 1
-                if (name, source) in FIRST_RESULT_PENDING:
-                    assert source not in systems[name].get("sources", []), (
-                        f"{name} lists `{source}`: take ({name!r}, {source!r}) out of FIRST_RESULT_PENDING")
-                    continue
-                assert source in systems[name].get("sources", []), (
-                    f"{name} runs {app}, so systems.yaml must list `{source}` in its sources")
+            if app not in resources:
+                continue
+            checked += 1
+            if (name, source) in pending:
+                reached.add((name, source))
+                if source in listed:
+                    errors.append(f"{name} lists `{source}`: take ({name!r}, {source!r}) out of FIRST_RESULT_PENDING")
+                elif today > pending[(name, source)]:
+                    errors.append(f"({name!r}, {source!r}) waits past {pending[(name, source)]}: list the source, or set a new day")
+                continue
+            if source not in listed:
+                errors.append(f"{name} runs {app}, so systems.yaml must list `{source}` in its sources")
+    errors += [f"{pair} of FIRST_RESULT_PENDING is not a cluster that runs the app of its source"
+               for pair in sorted(set(pending) - reached)]
+    return errors, checked
+
+
+def test_each_cluster_lists_the_sources_that_its_apps_give(registry):
+    systems = {system["name"]: system for system in registry["systems"]}
+    errors, checked = source_errors(systems, apps_of_clusters(systems), FIRST_RESULT_PENDING,
+                                    date.today().isoformat())
+    assert not errors, errors
     assert checked, "no cluster runs an app of SOURCE_OF_APP: the paths are out of date"
+
+
+def test_a_pending_source_fails_when_listed_late_or_not_reached():
+    """The rules of FIRST_RESULT_PENDING, on a made-up registry."""
+    trivy = "../../../apps/security/trivy-operator/ks.yaml"
+    apps = {"one": [trivy], "two": []}
+    waiting = {"one": {"sources": []}, "two": {"sources": []}}
+    listed = {"one": {"sources": ["trivy"]}, "two": {"sources": []}}
+    pending = {("one", "trivy"): "2026-11-20"}
+    assert source_errors(waiting, apps, pending, "2026-11-20") == ([], 1)
+    assert "waits past 2026-11-20" in source_errors(waiting, apps, pending, "2026-11-21")[0][0]
+    assert "take ('one', 'trivy') out" in source_errors(listed, apps, pending, "2026-11-20")[0][0]
+    assert "is not a cluster" in source_errors(waiting, apps, {("two", "trivy"): "2026-11-20"}, "2026-11-20")[0][-1]
+    assert "must list `trivy`" in source_errors(waiting, apps, {}, "2026-11-20")[0][0]
