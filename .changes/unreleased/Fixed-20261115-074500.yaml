@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'security: a vulnerability report of Trivy Operator counts for a running image by its digest, or else by the same namespace, container and image reference, so an image whose pod and report show different digests of the same reference (a tag that moved, or an image index and a platform image) is not counted as not scanned, and its critical vulnerabilities count in image-vulnerabilities'
+time: 2026-11-15T07:45:00.000000000Z

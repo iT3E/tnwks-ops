@@ -1610,6 +1610,165 @@ tests:
           a pass. kubernetes/apps/security/trivy-operator/README.md (When a scan fails) has the steps. For an image
           that no scan can read, an entry of the accepted list with the check images-not-scanned mutes the alert
           of the cluster until its end.'
+- name: 'a pod with the digest of an image index and a report with the digest of the platform image: the report
+    counts'
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-1",container="postgres",image_spec="ghcr.io/example/postgres:16",image="ghcr.io/example/postgres:16",image_id="ghcr.io/example/postgres@sha256:index1"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="16",image_digest="sha256:platform1",severity="Critical"}
+    values: 2+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:2.0",image="ghcr.io/example/app:2.0",image_id="ghcr.io/example/app@sha256:platform2"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="2.0",image_digest="sha256:index2",severity="Critical"}
+    values: 1+0x90
+  promql_expr_test:
+  - expr: count by (k8s_cluster, digest) ((label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+      "digest", "$1", "image_id", ".*@(sha256:.+)"), "image_ref", "$1", "image_spec", "(.+)"), "image_ref", "$1$2:latest",
+      "image_ref", "([^@]*/)?([^/:@]+)"), "image_ref", "$1", "image_ref", "([^@]+:[^@/]+)@.+"), "image_ref", "",
+      "image_ref", "[^@]*@.*"), "image_ref", "index.docker.io/library/$1", "image_ref", "([^/]+)"), "image_ref",
+      "index.docker.io/$1", "image_ref", "([^/.:]+/.+)"), "image_ref", "$1", "image_ref", "index[.]docker[.]io/(localhost/.+)"),
+      "image_ref", "index.docker.io/$1", "image_ref", "docker[.]io/(.+)"), "image_ref", "index.docker.io/library/$1",
+      "image_ref", "index[.]docker[.]io/([^/]+)") or label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+      "digest", "$1", "image_id", ".*@(sha256:.+)"), "image_ref", "$1", "image_spec", "(.+)"), "image_ref", "$1$2:latest",
+      "image_ref", "([^@]*/)?([^/:@]+)"), "image_ref", "$1", "image_ref", "([^@]+:[^@/]+)@.+"), "image_ref", "",
+      "image_ref", "[^@]*@.*"), "image_ref", "index.docker.io/library/$1", "image_ref", "([^/]+)"), "image_ref",
+      "index.docker.io/$1", "image_ref", "([^/.:]+/.+)"), "image_ref", "$1", "image_ref", "index[.]docker[.]io/(localhost/.+)"),
+      "image_ref", "index.docker.io/$1", "image_ref", "docker[.]io/(.+)"), "image_ref", "index.docker.io/library/$1",
+      "image_ref", "index[.]docker[.]io/([^/]+)")) unless on (k8s_cluster, digest) (label_join(label_join(label_replace(label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+      "digest", "$1", "image_digest", "(.+)"), "container", "$1", "container_name", "(.+)"), "image_ref", "/", "image_registry",
+      "image_repository"), "image_ref", ":", "image_ref", "image_tag")) unless on (k8s_cluster, namespace, container,
+      image_ref) (label_join(label_join(label_replace(label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+      "digest", "$1", "image_digest", "(.+)"), "container", "$1", "container_name", "(.+)"), "image_ref", "/", "image_registry",
+      "image_repository"), "image_ref", ":", "image_ref", "image_tag")))
+    eval_time: 5m
+    exp_samples: []
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 3
+- name: the reference of a report matches the image of the pod spec as the operator parses it
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="db-1",container="db",image_spec="postgres:16-alpine",image="postgres:16-alpine",image_id="postgres@sha256:a1"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-db",resource_kind="ReplicaSet",resource_name="w",container_name="db",image_registry="index.docker.io",image_repository="library/postgres",image_tag="16-alpine",image_digest="sha256:b1",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="tool-1",container="tool",image_spec="docker.io/example/tool",image="docker.io/example/tool",image_id="docker.io/example/tool@sha256:a2"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-tool",resource_kind="ReplicaSet",resource_name="w",container_name="tool",image_registry="index.docker.io",image_repository="example/tool",image_tag="latest",image_digest="sha256:b2",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="proxy-1",container="proxy",image_spec="quay.io/example/proxy:1.2@sha256:a3",image="quay.io/example/proxy:1.2@sha256:a3",image_id="quay.io/example/proxy@sha256:a3"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-proxy",resource_kind="ReplicaSet",resource_name="w",container_name="proxy",image_registry="quay.io",image_repository="example/proxy",image_tag="1.2",image_digest="sha256:b3",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="cache-1",container="cache",image_spec="registry.example:5000/cache:7",image="registry.example:5000/cache:7",image_id="registry.example:5000/cache@sha256:a4"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-cache",resource_kind="ReplicaSet",resource_name="w",container_name="cache",image_registry="registry.example:5000",image_repository="cache",image_tag="7",image_digest="sha256:b4",severity="Critical"}
+    values: 0+0x90
+  promql_expr_test:
+  - expr: count by (k8s_cluster, digest) ((label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+      "digest", "$1", "image_id", ".*@(sha256:.+)"), "image_ref", "$1", "image_spec", "(.+)"), "image_ref", "$1$2:latest",
+      "image_ref", "([^@]*/)?([^/:@]+)"), "image_ref", "$1", "image_ref", "([^@]+:[^@/]+)@.+"), "image_ref", "",
+      "image_ref", "[^@]*@.*"), "image_ref", "index.docker.io/library/$1", "image_ref", "([^/]+)"), "image_ref",
+      "index.docker.io/$1", "image_ref", "([^/.:]+/.+)"), "image_ref", "$1", "image_ref", "index[.]docker[.]io/(localhost/.+)"),
+      "image_ref", "index.docker.io/$1", "image_ref", "docker[.]io/(.+)"), "image_ref", "index.docker.io/library/$1",
+      "image_ref", "index[.]docker[.]io/([^/]+)") or label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+      "digest", "$1", "image_id", ".*@(sha256:.+)"), "image_ref", "$1", "image_spec", "(.+)"), "image_ref", "$1$2:latest",
+      "image_ref", "([^@]*/)?([^/:@]+)"), "image_ref", "$1", "image_ref", "([^@]+:[^@/]+)@.+"), "image_ref", "",
+      "image_ref", "[^@]*@.*"), "image_ref", "index.docker.io/library/$1", "image_ref", "([^/]+)"), "image_ref",
+      "index.docker.io/$1", "image_ref", "([^/.:]+/.+)"), "image_ref", "$1", "image_ref", "index[.]docker[.]io/(localhost/.+)"),
+      "image_ref", "index.docker.io/$1", "image_ref", "docker[.]io/(.+)"), "image_ref", "index.docker.io/library/$1",
+      "image_ref", "index[.]docker[.]io/([^/]+)")) unless on (k8s_cluster, digest) (label_join(label_join(label_replace(label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+      "digest", "$1", "image_digest", "(.+)"), "container", "$1", "container_name", "(.+)"), "image_ref", "/", "image_registry",
+      "image_repository"), "image_ref", ":", "image_ref", "image_tag")) unless on (k8s_cluster, namespace, container,
+      image_ref) (label_join(label_join(label_replace(label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+      "digest", "$1", "image_digest", "(.+)"), "container", "$1", "container_name", "(.+)"), "image_ref", "/", "image_registry",
+      "image_repository"), "image_ref", ":", "image_ref", "image_tag")))
+    eval_time: 5m
+    exp_samples: []
+- name: a report of the same reference in another namespace, of another container or of another tag does not count
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-1",container="postgres",image_spec="ghcr.io/example/postgres:16",image="ghcr.io/example/postgres:16",image_id="ghcr.io/example/postgres@sha256:c1"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="other",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="16",image_digest="sha256:d1",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-2",container="postgres",image_spec="ghcr.io/example/postgres:17",image="ghcr.io/example/postgres:17",image_id="ghcr.io/example/postgres@sha256:c2"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-sidecar",resource_kind="ReplicaSet",resource_name="w",container_name="sidecar",image_registry="ghcr.io",image_repository="example/postgres",image_tag="17",image_digest="sha256:d2",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-3",container="postgres",image_spec="ghcr.io/example/postgres:18",image="ghcr.io/example/postgres:18",image_id="ghcr.io/example/postgres@sha256:c3"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="18.1",image_digest="sha256:d3",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-4",container="postgres",image_spec="ghcr.io/example/postgres@sha256:c4",image="ghcr.io/example/postgres@sha256:c4",image_id="ghcr.io/example/postgres@sha256:c4"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="latest",image_digest="sha256:d4",severity="Critical"}
+    values: 0+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-gone",resource_kind="ReplicaSet",resource_name="w",container_name="gone",image_registry="ghcr.io",image_repository="example/gone",image_tag="1",image_digest="sha256:d5",severity="Critical"}
+    values: 9+0x90
+  promql_expr_test:
+  - expr: count by (k8s_cluster, digest) ((label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+      "digest", "$1", "image_id", ".*@(sha256:.+)"), "image_ref", "$1", "image_spec", "(.+)"), "image_ref", "$1$2:latest",
+      "image_ref", "([^@]*/)?([^/:@]+)"), "image_ref", "$1", "image_ref", "([^@]+:[^@/]+)@.+"), "image_ref", "",
+      "image_ref", "[^@]*@.*"), "image_ref", "index.docker.io/library/$1", "image_ref", "([^/]+)"), "image_ref",
+      "index.docker.io/$1", "image_ref", "([^/.:]+/.+)"), "image_ref", "$1", "image_ref", "index[.]docker[.]io/(localhost/.+)"),
+      "image_ref", "index.docker.io/$1", "image_ref", "docker[.]io/(.+)"), "image_ref", "index.docker.io/library/$1",
+      "image_ref", "index[.]docker[.]io/([^/]+)") or label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+      "digest", "$1", "image_id", ".*@(sha256:.+)"), "image_ref", "$1", "image_spec", "(.+)"), "image_ref", "$1$2:latest",
+      "image_ref", "([^@]*/)?([^/:@]+)"), "image_ref", "$1", "image_ref", "([^@]+:[^@/]+)@.+"), "image_ref", "",
+      "image_ref", "[^@]*@.*"), "image_ref", "index.docker.io/library/$1", "image_ref", "([^/]+)"), "image_ref",
+      "index.docker.io/$1", "image_ref", "([^/.:]+/.+)"), "image_ref", "$1", "image_ref", "index[.]docker[.]io/(localhost/.+)"),
+      "image_ref", "index.docker.io/$1", "image_ref", "docker[.]io/(.+)"), "image_ref", "index.docker.io/library/$1",
+      "image_ref", "index[.]docker[.]io/([^/]+)")) unless on (k8s_cluster, digest) (label_join(label_join(label_replace(label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+      "digest", "$1", "image_digest", "(.+)"), "container", "$1", "container_name", "(.+)"), "image_ref", "/", "image_registry",
+      "image_repository"), "image_ref", ":", "image_ref", "image_tag")) unless on (k8s_cluster, namespace, container,
+      image_ref) (label_join(label_join(label_replace(label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+      "digest", "$1", "image_digest", "(.+)"), "container", "$1", "container_name", "(.+)"), "image_ref", "/", "image_registry",
+      "image_repository"), "image_ref", ":", "image_ref", "image_tag")))
+    eval_time: 5m
+    exp_samples:
+    - labels: '{k8s_cluster="homelab-wsl",digest="sha256:c1"}'
+      value: 1
+    - labels: '{k8s_cluster="homelab-wsl",digest="sha256:c2"}'
+      value: 1
+    - labels: '{k8s_cluster="homelab-wsl",digest="sha256:c3"}'
+      value: 1
+    - labels: '{k8s_cluster="homelab-wsl",digest="sha256:c4"}'
+      value: 1
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 5m
+    exp_samples: []
+- name: an image with a report under another digest does not alert; an image with no report still alerts after 36
+    hours
+  interval: 2m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-1",container="postgres",image_spec="ghcr.io/example/postgres:16",image="ghcr.io/example/postgres:16",image_id="ghcr.io/example/postgres@sha256:index1"}
+    values: 1+0x1200
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="16",image_digest="sha256:platform1",severity="Critical"}
+    values: 0+0x1200
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="db-1",container="db",image_spec="postgres:16-alpine",image="postgres:16-alpine",image_id="postgres@sha256:e1"}
+    values: 1+0x1200
+  - series: homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl",name="k8s-cis-1.23"}
+    values: 1700000000+0x1200
+  alert_rule_test:
+  - alertname: SecurityImagesNotScanned
+    eval_time: 37h
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+      exp_annotations:
+        summary: 1 running images on homelab-wsl have no scan report of Trivy Operator
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'Images that run on this cluster have had no vulnerability report for 36 hours: a private image,
+          a registry that the network policy of the scan jobs does not name, or a scan that fails. While one image
+          has no report, the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of
+          a pass. kubernetes/apps/security/trivy-operator/README.md (When a scan fails) has the steps. For an image
+          that no scan can read, an entry of the accepted list with the check images-not-scanned mutes the alert
+          of the cluster until its end.'
 - name: an accepted entry for the images with no report mutes the alert of its cluster until its end
   interval: 2m
   input_series:
