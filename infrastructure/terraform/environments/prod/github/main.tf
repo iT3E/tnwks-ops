@@ -174,14 +174,11 @@ locals {
       security_and_analysis = local.scanning_off
     }
 
-    # No security_and_analysis yet: the provider sends it in the update
-    # before the one that changes the visibility, while the repository is
-    # still private, and the API refuses it for private repositories.
-    # local.scanning_on follows in its own PR.
     tnwks-agent-image = {
-      visibility  = "public"
-      description = "The derived image of the personal agents on the tnwks agent platform"
-      has_wiki    = false
+      visibility            = "public"
+      description           = "The derived image of the personal agents on the tnwks agent platform"
+      has_wiki              = false
+      security_and_analysis = local.scanning_on
     }
 
     hass-config = {
