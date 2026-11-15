@@ -114,20 +114,58 @@ DNS goes through Cilium's DNS proxy, as in each app of the namespace.
 
 ## Memory
 
-The limit is 768 MiB for each run (`../README.md`, "Memory"), with a request
-of 512 MiB. A run of Prowler on one cluster measured 466 MiB at peak. A run on
-an AWS account is not measured, so the first run measures it:
+| Run | Request | Limit |
+| --- | --- | --- |
+| Each AWS run | 1024 MiB | 1536 MiB |
+| The Cloudflare run | 512 MiB | 768 MiB |
+
+The first two AWS runs ended with the status `OOMKilled` at the limit they
+had then, 768 MiB. The 466 MiB that set that limit came from a run of Prowler
+on one Kubernetes cluster, not on an AWS account. Measured without an
+account, with the image of the CronJob, its scan list and its settings:
+
+- **Before the scan:** Prowler takes about 345 MiB (its modules, the
+  metadata of its checks and its compliance frameworks).
+- **The AWS clients:** Prowler makes one boto3 client for each service and
+  each Region of the account. For the 62 services of the scan list in 17
+  Regions, that is about 1000 clients and about 380 MiB more. With one
+  Region, it is about 130 MiB.
+
+That is about 725 MiB before Prowler keeps any resource or finding, so 768 MiB
+was too low. 1536 MiB is twice the limit that the runs went over. It holds
+until a run measures the peak:
 
 1. The last line of the log of the run: `memory peak of the container: N MiB`
    (the `memory.peak` of its cgroup).
 2. The same in Prometheus:
    `max_over_time(container_memory_working_set_bytes{namespace="security",container="prowler"}[1d])`.
 3. A run over the limit ends with the status `OOMKilled`, and
-   `KubeJobFailed` fires.
+   `KubeJobFailed` fires. A run that fails is not tried again
+   (`backoffLimit: 0`): the next run is the next day. The peak of a run
+   comes from the resources of the account, so a second try at once would
+   end the same way and read each API again.
 
-When the peak is near the limit, raise the limit of both runs in one pull
-request, inside the 6 GiB of homelab-wsl-02, and change the line in
-`../README.md`.
+After the first run that ends well, set the limit of both AWS runs to the
+measured peak and a margin of 25 %, in one pull request, and change the
+lines in `../README.md`.
+
+Ways to bring the peak down, each with its cost. None of them is in use:
+
+- **Fewer Regions** (`--region` or `--excluded-region`): each Region costs
+  about 15 MiB of clients, but the checks would not see a resource in a
+  Region left out, and some checks of the registry ask for each Region. Not
+  equal coverage.
+- **The scan list in parts, one process after the other**, with the OCSF
+  files joined into one: each check still runs once, but each process takes
+  the 345 MiB again, so two parts save less than half. The run takes longer,
+  and the script joins the files.
+- **One Region for each process:** the checks of the global services (IAM,
+  S3, CloudFront) run in each process and give their findings more than
+  once.
+- **Prowler 5.49.0 has no setting** for its number of threads (10 for each
+  service, in the code) and no flag for its number of clients. The run
+  writes only `json-ocsf`, and a run with `--checks-file` writes no
+  compliance output, so there is nothing to turn off there.
 
 ## To start a provider
 

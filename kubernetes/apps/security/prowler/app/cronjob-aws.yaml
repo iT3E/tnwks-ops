@@ -57,15 +57,17 @@ spec:
               envFrom:
                 - secretRef:
                     name: aws-security-audit-sts
-              # The limit of ../../README.md, "Memory". A scan of one cluster
-              # measured 466 MiB at peak; the first run of an account measures
-              # it here: the script prints the peak of the container.
+              # The limit of ../../README.md, "Memory" (../README.md, "Memory").
+              # The first runs ended OOMKilled at 768 MiB. Prowler takes about
+              # 345 MiB before it scans and about 380 MiB more for its AWS
+              # clients in 17 Regions. 1536 MiB holds until a run measures the
+              # peak: the script prints it as its last line.
               resources:
                 requests:
                   cpu: 100m
-                  memory: 512Mi
+                  memory: 1024Mi
                 limits:
-                  memory: 768Mi
+                  memory: 1536Mi
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -166,12 +168,13 @@ spec:
               envFrom:
                 - secretRef:
                     name: aws-security-audit-sts
+              # The same as prowler-aws-prod.
               resources:
                 requests:
                   cpu: 100m
-                  memory: 512Mi
+                  memory: 1024Mi
                 limits:
-                  memory: 768Mi
+                  memory: 1536Mi
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

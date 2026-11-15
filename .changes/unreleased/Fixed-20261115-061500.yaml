@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'security: each Prowler run of an AWS account has a memory limit of 1536 MiB and a request of 1024 MiB (was 768 and 512): the first runs ended OOMKilled, as Prowler takes about 725 MiB before it keeps any resource; the README of prowler has the measure and the ways to bring the peak down, and the budget of homelab-wsl-02 counts the new limit'
+time: 2026-11-15T06:15:00.000000000Z
