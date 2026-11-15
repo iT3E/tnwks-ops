@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.161.1 - 2026-11-15
+
+### Fixed
+
+* security: Trivy Operator keeps the scan cache of each scan in memory, so the containers of one scan job no longer stop on the lock of the file cache ("cache may be in use by another process: timeout") and leave their images with no report; the vulnerability databases stay on the volume. The containers of a job now scan at the same time: the memory of a job is an estimate until the first cycle measures it
+
 ## v2.161.0 - 2026-11-15
 
 ### Changed

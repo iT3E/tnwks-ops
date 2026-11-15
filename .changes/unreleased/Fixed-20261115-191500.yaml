@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'security: Trivy Operator keeps the scan cache of each scan in memory, so the containers of one scan job no longer stop on the lock of the file cache ("cache may be in use by another process: timeout") and leave their images with no report; the vulnerability databases stay on the volume. The containers of a job now scan at the same time: the memory of a job is an estimate until the first cycle measures it'
-time: 2026-11-15T19:15:00.000000000Z
