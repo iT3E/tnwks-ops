@@ -6,7 +6,9 @@ metadata:
 automountServiceAccountToken: false
 ---
 # The probe reads the Sandbox record of its sandbox (for its id) and where
-# the sandbox's pods run. Nothing more.
+# the sandbox's pods run. It may delete its own Sandbox record and no other:
+# a record that the sandbox gateway left behind blocks each later create of
+# the same name (scripts/platform_checks.py, remove_leftover). Nothing more.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -18,6 +20,10 @@ rules:
   - apiGroups: ["agents.x-k8s.io"]
     resources: ["sandboxes"]
     verbs: ["get", "list"]
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    resourceNames: ["default--platform-probe"]
+    verbs: ["delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

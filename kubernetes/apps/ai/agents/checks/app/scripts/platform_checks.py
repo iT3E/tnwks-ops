@@ -7,7 +7,9 @@ A CronJob in each agents-<name> namespace runs one of:
   platform_checks.py probe
       A sandbox of this trust domain reaches nothing that no sandbox policy
       names, and holds no service account token. Its two pods (workload and
-      supervisor) run, and each is printed with its node.
+      supervisor) run, and each is printed with its node. The run removes a
+      sandbox of its own name that an earlier run left, and fails when its
+      own sandbox is still there at its end.
 
 Each probe prints one JSON line. The exit code is 1 when a probe fails, so
 the Job fails. Standard library only; the OpenShell CLI comes from the init
@@ -22,6 +24,7 @@ import ssl
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 OWN = os.environ["OWN_NAMESPACE"]
@@ -30,6 +33,10 @@ CLI = os.environ.get("OPENSHELL_CLI", "/tools/openshell")
 CLIENT_TLS = os.environ.get("CLIENT_TLS_DIR", "/client-tls")
 PROBE_IMAGE = os.environ.get("PROBE_IMAGE", "")
 SANDBOX = os.environ.get("PROBE_SANDBOX", "platform-probe")
+# OpenShell 0.1.8 names the Sandbox record <workspace>--<name>, and the CLI
+# creates in the workspace "default". rbac.yaml lets the probe delete this one
+# record and no other.
+RECORD = f"default--{SANDBOX}"
 PORT = 8080
 # The model gateway (docs/apps/litellm.md). No sandbox policy names it.
 MODEL_GATEWAY = os.environ.get("MODEL_GATEWAY", "litellm-app.ai.svc.cluster.local")
@@ -149,19 +156,86 @@ print("PROBE " + json.dumps(out))
 '''
 
 
-def kube_get(path: str) -> dict:
-    """GET from the API server with this pod's service account (rbac.yaml:
-    read Sandbox records and pods in this namespace only)."""
+def kube(method: str, path: str, body: dict | None = None) -> dict:
+    """A request to the API server with this pod's service account (rbac.yaml:
+    read Sandbox records and pods in this namespace, and delete the probe's
+    own Sandbox record)."""
     sa = "/var/run/secrets/kubernetes.io/serviceaccount"
     host = os.environ["KUBERNETES_SERVICE_HOST"]
     port = os.environ.get("KUBERNETES_SERVICE_PORT", "443")
     with open(f"{sa}/token") as f:
         token = f.read()
-    request = urllib.request.Request(f"https://{host}:{port}{path}",
-                                     headers={"Authorization": f"Bearer {token}"})
+    request = urllib.request.Request(
+        f"https://{host}:{port}{path}", method=method,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
     context = ssl.create_default_context(cafile=f"{sa}/ca.crt")
     with urllib.request.urlopen(request, timeout=15, context=context) as r:
         return json.load(r)
+
+
+def kube_get(path: str) -> dict:
+    return kube("GET", path)
+
+
+def record_path() -> str:
+    return f"/apis/agents.x-k8s.io/v1beta1/namespaces/{OWN}/sandboxes/{RECORD}"
+
+
+def record() -> dict | None:
+    """The probe's Sandbox record, or None when there is none."""
+    try:
+        return kube_get(record_path())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def wait_gone(seconds: float) -> bool:
+    deadline = time.monotonic() + seconds
+    while record() is not None:
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(3)
+    return True
+
+
+# The waits of the probe, in seconds. The Job's deadline (cronjobs.yaml) adds
+# them up.
+DELETE_TIMEOUT = 60
+REMOVE_WAIT = 60
+CLEANUP_WAIT = 45
+
+
+def remove_record(seconds: float = REMOVE_WAIT) -> str:
+    """Delete the probe's Sandbox record with the API, and wait until it is
+    gone. What the record owns goes with it (Foreground: the record stays
+    until they are deleted): its workspace volume claim, two Services and a
+    NetworkPolicy. A record of this name that OpenShell did not make for this
+    probe is left alone. A record that the gateway removes between the read
+    and the delete (404) counts as gone; one that was replaced by a new
+    record of the same name (409, the uid precondition) is left alone."""
+    found = record()
+    if found is None:
+        return "none"
+    meta = found["metadata"]
+    labels = meta.get("labels") or {}
+    if (labels.get("openshell.ai/managed-by") != "openshell"
+            or labels.get("openshell.ai/sandbox-name") != SANDBOX):
+        raise LookupError(f"{RECORD} is not the probe's sandbox (labels {labels})")
+    try:
+        kube("DELETE", record_path(), {
+            "apiVersion": "v1", "kind": "DeleteOptions", "propagationPolicy": "Foreground",
+            "preconditions": {"uid": meta["uid"]}})
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            raise LookupError(f"{RECORD} changed between its read and its delete (409)") from e
+        if e.code != 404:
+            raise
+    if not wait_gone(seconds):
+        raise TimeoutError(f"{RECORD} is still there {seconds:.0f} s after its delete")
+    return f"removed: {RECORD}, made {meta.get('creationTimestamp', 'at an unknown time')}"
 
 
 def sandbox_pods() -> list[dict]:
@@ -208,40 +282,99 @@ def report_pods() -> None:
                       "different_nodes": len(nodes) > 1}), flush=True)
 
 
-def probe() -> None:
-    setup_cli()
-    cli("sandbox", "delete", SANDBOX)  # a run that stopped can leave one
+def remove_leftover() -> bool:
+    """Remove a sandbox of the probe's name that an earlier run left. The
+    gateway delete removes a sandbox that the gateway knows. OpenShell 0.1.8
+    can answer a delete with success and leave the Sandbox record (its lookup
+    found no record, and it logs that at debug level only); the gateway then
+    forgets the sandbox, so its delete can't remove the record any more, and
+    each create of the same name fails with "sandbox already exists". So the
+    record goes with the API too. Prints one line; False stops the run."""
+    try:
+        cli("sandbox", "delete", SANDBOX, timeout=DELETE_TIMEOUT)
+    except subprocess.SubprocessError:
+        pass  # the record goes with the API below
+    try:
+        got = remove_record()
+    except (OSError, ValueError, LookupError, KeyError) as e:
+        report("probe", "leftover sandbox", "none or removed", f"failed: {type(e).__name__}: {e}")
+        return False
+    print(json.dumps({"check": "probe", "domain": OWN, "target": "leftover sandbox",
+                      "got": got, "ok": True}), flush=True)
+    return True
+
+
+def cleanup() -> None:
+    """Delete the probe's sandbox, then check that its Sandbox record is gone.
+    A record that the gateway delete left, or a gateway delete that failed,
+    goes with the API, so that the next run is not blocked. A record that the
+    gateway delete left fails the run."""
+    try:
+        failed = None
+        try:
+            cli("sandbox", "delete", SANDBOX, timeout=DELETE_TIMEOUT)
+        except (OSError, subprocess.SubprocessError) as e:
+            failed = type(e).__name__
+        if failed is None and wait_gone(CLEANUP_WAIT):
+            report("probe", "sandbox removed", "gone", "gone")
+            return
+        got = remove_record()
+        if failed is None:
+            report("probe", "sandbox removed", "gone",
+                   f"left after the gateway delete; {got} with the API")
+        elif got == "none":
+            report("probe", "sandbox removed", "gone", f"gone (the gateway delete: {failed})")
+        else:
+            report("probe", "sandbox removed", "gone",
+                   f"left after a failed gateway delete ({failed}); {got} with the API")
+    except (OSError, ValueError, LookupError, KeyError) as e:
+        report("probe", "sandbox removed", "gone", f"left: {type(e).__name__}: {e}")
+
+
+def run_probe() -> None:
+    """Create the sandbox, run the probe in it and check its pods."""
     created = cli("sandbox", "create", "--name", SANDBOX, "--from", PROBE_IMAGE,
                   "--detach", "--no-tty", "--", "sleep", "3600", timeout=300)
     if created.returncode != 0:
         report("probe", "sandbox create", "ok", f"failed: {tail(created)}")
         return
+    result = None
+    deadline = time.monotonic() + 300
+    # The direct probes use addresses: the sandbox resolves no names, so a
+    # name would test DNS only. The check pod resolves them.
+    code = (PROBE.replace("KUBE_DNS_IP", socket.gethostbyname(KUBE_DNS))
+            .replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
+            .replace("MODEL_GATEWAY", MODEL_GATEWAY)
+            .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN))))
+    while time.monotonic() < deadline:
+        result = cli("sandbox", "exec", "--name", SANDBOX, "--no-tty", "--",
+                     "python3", "-c", code, timeout=120)
+        if result.returncode == 0 and "PROBE " in result.stdout:
+            break
+        time.sleep(10)
+    line = next((l for l in (result.stdout if result else "").splitlines()
+                 if l.startswith("PROBE ")), None)
+    if line is None:
+        report("probe", "sandbox exec", "ok", f"failed: {tail(result)}")
+        return
+    for target, got in json.loads(line[len("PROBE "):]).items():
+        report("probe", target, "blocked", got)
+    # Before cleanup() deletes the sandbox.
+    report_pods()
+
+
+def probe() -> None:
+    setup_cli()
+    if not remove_leftover():
+        return
+    # From the create on, each way out goes through cleanup(): a create that
+    # timed out can still have made the sandbox.
     try:
-        result = None
-        deadline = time.monotonic() + 300
-        # The direct probes use addresses: the sandbox resolves no names, so a
-        # name would test DNS only. The check pod resolves them.
-        code = (PROBE.replace("KUBE_DNS_IP", socket.gethostbyname(KUBE_DNS))
-                .replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
-                .replace("MODEL_GATEWAY", MODEL_GATEWAY)
-                .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN))))
-        while time.monotonic() < deadline:
-            result = cli("sandbox", "exec", "--name", SANDBOX, "--no-tty", "--",
-                         "python3", "-c", code, timeout=120)
-            if result.returncode == 0 and "PROBE " in result.stdout:
-                break
-            time.sleep(10)
-        line = next((l for l in (result.stdout if result else "").splitlines()
-                     if l.startswith("PROBE ")), None)
-        if line is None:
-            report("probe", "sandbox exec", "ok", f"failed: {tail(result)}")
-            return
-        for target, got in json.loads(line[len("PROBE "):]).items():
-            report("probe", target, "blocked", got)
-        # Before the finally below deletes the sandbox.
-        report_pods()
+        run_probe()
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        report("probe", "probe run", "ok", f"failed: {type(e).__name__}: {e}")
     finally:
-        cli("sandbox", "delete", SANDBOX)
+        cleanup()
 
 
 if __name__ == "__main__":

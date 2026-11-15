@@ -737,7 +737,7 @@ pod's log goes to Loki. `AgentPlatformCronJobFailed` and
 | CronJob | Schedule | What must hold |
 | --- | --- | --- |
 | `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
-| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox |
+| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox. Before the create it removes a sandbox of its own name that an earlier run left (a `leftover sandbox` line), and at its end it fails when its Sandbox record is still there (a `sandbox removed` line), after it removes it |
 
 - The check pods may try every trust domain's gateway on port 8080, so the
   isolation check tests each gateway's own policy, not the check pod's.
@@ -749,7 +749,9 @@ pod's log goes to Loki. `AgentPlatformCronJobFailed` and
   (label `openshell.ai/sandbox-name`), whose `openshell.ai/sandbox-id` the
   two pods carry in lower case as `openshell.ai/boundary-pair`. A Role lets
   it get and list `Sandbox` records and pods in its own namespace, and
-  nothing more.
+  delete its own record `default--platform-probe` (the name that OpenShell
+  0.1.8 gives the sandbox `platform-probe`), and nothing more. It deletes
+  that record only when it has the labels of OpenShell for this probe.
 - Nothing places the two pods of a sandbox: the scheduler picks each node
   on its own, so they can share a node. The probe logs `nodes` and
   `different_nodes` and doesn't fail on one node.

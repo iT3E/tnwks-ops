@@ -117,6 +117,18 @@ that already fired, so nobody saw it. The fix (`0a3961f8`) removed the lint
 and logs the step of each failure. This alert came after it, and it resolves
 at the next good run, so a new failure shows.
 
+On 2026-11-15 at 04:48 UTC it fired for the first time live, for
+`agents-finance/platform-check-probe`: the probe's create failed with
+`sandbox already exists`. The sandbox gateway of `agents-finance` (OpenShell
+0.1.8) had answered the delete of the probe of 2026-11-14 with success and
+left its Sandbox record `default--platform-probe`: its log has `Deleting
+sandbox from Kubernetes` and no `Sandbox deleted from Kubernetes`. The
+gateway then forgot the sandbox, so the delete before the next create could
+not remove it. The record stayed `SandboxSuspended` with no pod after its
+`sleep 3600` ended. The probe of `agents-main` that minute deleted its record
+as usual. The fix (the change that adds this entry) removes such a record
+before the create, and fails a run that leaves its own record.
+
 **Fix.**
 
 - The step names the part: `gateway` (the sandbox gateway of
@@ -130,6 +142,25 @@ at the next good run, so a new failure shows.
   `kubectl -n agents-workflows create job --from=cronjob/workflow-providers providers-now`.
 - For the providers job, fix it within the hour: a run token lives one hour
   from the last good run.
+- **The probe, `sandbox already exists` or `sandbox removed` failed.** The
+  probe's lines in Loki
+  (`{namespace="<namespace>", app="platform-checks"}`) say what it did:
+  `leftover sandbox` is `none` or `removed: default--platform-probe, made
+  <time>` (it deletes only that record, with the labels of OpenShell for
+  this probe); `sandbox removed` is `gone`, or `left after the gateway
+  delete; removed: ...` when the gateway left the record again. That second
+  case fails the run, and the record is gone for the next run. The Sandbox
+  record owns its workspace volume claim (2Gi), two Services and a
+  NetworkPolicy, so its delete removes them too: the leftover of
+  2026-11-14 still holds them. Read only:
+  `kubectl -n <namespace> get sandboxes.agents.x-k8s.io` and the log of the
+  gateway (`kubectl -n <namespace> logs openshell-0`, the lines
+  `Deleting sandbox from Kubernetes` and `Sandbox deleted from Kubernetes`).
+  A run now (owner approval):
+  `kubectl -n <namespace> create job --from=cronjob/platform-check-probe probe-now`.
+  Follow-up: the gateway fault (a delete that answers success and removes
+  no record, logged at debug level only, OpenShell 0.1.8) has no upstream
+  report yet.
 
 ### WorkflowProvidersStale
 
