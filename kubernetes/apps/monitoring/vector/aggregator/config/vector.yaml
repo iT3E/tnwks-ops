@@ -101,6 +101,18 @@ transforms:
   # The time of an audit line is the time of its event (stageTimestamp), not
   # the time it got here: a line that waited on the node rests at its own
   # time. The line itself goes on as the API server wrote it.
+  # The router log for the security stream routeros, without the version line
+  # of the security platform (tnwks-routeros-version, the scheduler
+  # version_line of the router's Terraform). The router sends that line every
+  # hour to the host of homelab-wsl-02 too, and the API checks read it from
+  # the stream job="routeros" of that site's Loki. In the security stream it
+  # would make a router log that stops look alive once an hour.
+  routeros_security:
+    type: filter
+    inputs:
+      - routeros_syslog
+    condition: '!contains(string(.message) ?? "", "tnwks-routeros-version ")'
+
   audit_time:
     type: remap
     inputs:
@@ -177,7 +189,7 @@ sinks:
   loki_security_routeros:
     type: loki
     inputs:
-      - routeros_syslog
+      - routeros_security
     endpoint: "${SECURITY_LOKI_ENDPOINT:=http://loki-gateway.monitoring.svc.cluster.local}"
     tls: *security_loki_tls
     encoding:

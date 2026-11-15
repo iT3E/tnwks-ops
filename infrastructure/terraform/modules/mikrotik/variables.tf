@@ -503,6 +503,24 @@ variable "heartbeat" {
   default = null
 }
 
+variable "version_line" {
+  description = <<-EOT
+    The version line of the security platform (Design Doc 0004, section 5.5):
+    a scheduler logs the RouterOS version every interval, and a logging rule
+    sends only that line to a second remote syslog target, the host of the
+    other site, so the API checks there read the version while mktxp's site
+    is down. Null disables it. See heartbeat.tf and system.tf.
+  EOT
+  type = object({
+    remote          = string
+    remote_port     = optional(number, 6001)
+    remote_protocol = optional(string, "udp")
+    src_address     = optional(string)
+    interval        = optional(string, "1h")
+  })
+  default = null
+}
+
 variable "heartbeat_url" {
   description = <<-EOT
     The healthchecks.io ping URL, https://hc-ping.com/<ping key>/<slug>. The

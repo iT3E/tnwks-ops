@@ -12,17 +12,39 @@ the API checks"). On homelab-wsl-02 only.
 
 | Check | System | What it reads | What fails | Severity |
 | --- | --- | --- | --- | --- |
-| `routeros-firmware` (safeguard 12.1) | `sce-rtr01` | The version that the router runs: the label `version` of `mktxp_system_uptime` in the Prometheus of homelab-wsl, where mktxp reads the router with its read-only account. The newest stable release and its date: the release feed of the vendor, `https://cdn.mikrotik.com/routeros/latest-stable.rss` | The router runs an older version than a stable release that came out more than 14 days ago (Design Doc 0004, section 4.1.4), of each release that the job has seen | `high`, so a new fail alerts |
+| `routeros-firmware` (safeguard 12.1) | `sce-rtr01` | The version that the router runs: its version lines of the last 3 hours in the Loki of this site, and the label `version` of `mktxp_system_uptime` in the Prometheus of homelab-wsl, where mktxp reads the router with its read-only account (below). The newest stable release and its date: the release feed of the vendor, `https://cdn.mikrotik.com/routeros/latest-stable.rss` | The router runs an older version than a stable release that came out more than 14 days ago (Design Doc 0004, section 4.1.4), of each release that the job has seen | `high`, so a new fail alerts |
 | `tfc-mfa-required` (safeguards 6.3 and 6.5) | `tnwks-ops` | `collaborator-auth-policy` of `GET https://app.terraform.io/api/v2/organizations/tnwks-ops` ([the API of HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organizations#show-an-organization)) | The policy is not `two_factor_mandatory` | `medium` |
 
 Each test reads, and none changes a setting. The test of the router needs no
 credential of the router: mktxp already reads it, and the REST API of the
 router is open to the CI runners only.
 
+**The version of the router** (Design Doc 0004, section 5.5). mktxp runs on
+homelab-wsl only, so the router also logs one line each hour,
+`tnwks-routeros-version router=<identity> version=<version>` (the scheduler
+`version_line` of `infrastructure/terraform/modules/mikrotik`). A logging rule
+sends that line to the host of homelab-wsl-02, whose UDP relay admits the
+router only, and the aggregator there writes it to the stream
+`job="routeros"` of this site's Loki. The aggregators keep it out of the
+security stream `routeros`. The job reads the lines of the last 3 hours, and
+decides:
+
+| The lines | Prometheus of homelab-wsl | Result |
+| --- | --- | --- |
+| One version | No connection, or no HTTP answer | The version of the lines |
+| One version | One version, the same | That version |
+| One version | Another version, no series, two versions, or an HTTP error | None |
+| Two versions, or a line of the router with no version, or more than 30 lines | Any | None |
+| None (or no answer of Loki) | One version | The version of Prometheus |
+| None (or no answer of Loki) | No answer, no series, or two versions | None |
+
+So a forged line gives no result, not a pass, and a fault of mktxp alone
+shows as a late result while the lines still come. An upgrade of the router
+in the 3 hours before a run also gives no result that day.
+
 **A test that does not run has no entry**, never a 0. That is the case when
-Prometheus has no series of the router (mktxp did not read it in the last 5
-minutes) or two versions of it, when the feed has no stable release with a
-date, and when HCP Terraform does not answer 200. The run then fails, which
+the version of the router is not known (the table above), when the feed has
+no stable release with a date, and when HCP Terraform does not answer 200. The run then fails, which
 raises `KubeJobFailed`, and the system reads as late after 36 hours
 (`SecurityResultLate`). With no token, the test of Terraform Cloud does not
 run, and the run does not fail for it.
@@ -52,7 +74,7 @@ late result watches.
 | `ks.yaml` | The Flux Kustomization `security-api-checks`. It waits for `security-converter`, which has the claim of the volume |
 | `app/cronjob.yaml` | The run, each day at 06:47 UTC, between the runs of Prowler |
 | `app/scripts/api_checks.py` | The tests, the list of accepted findings, the list of releases, and the result file. The Python standard library only. Tests: `security/tests/test_api_checks.py` |
-| `app/networkpolicy.yaml` | DNS, the Prometheus of homelab-wsl on port 9090 of the address that `peer-federate` scrapes, and `cdn.mikrotik.com` and `app.terraform.io` on 443 |
+| `app/networkpolicy.yaml` | DNS, the Prometheus of homelab-wsl on port 9090 of the address that `peer-federate` scrapes, the Loki gateway of this cluster on 8080, and `cdn.mikrotik.com` and `app.terraform.io` on 443 |
 
 The claim `security-results` is in `../converter/app/pvc.yaml`. The job runs
 as user 65534 with a read-only root, and mounts the whole volume

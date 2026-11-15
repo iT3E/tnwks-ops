@@ -20,9 +20,12 @@ wsl_cluster_tools_enabled: true
 # Windows half forwards them, host_vars/WSL-02).
 # unifi-inform: the APs' inform (8080 on Windows -> 18080 here -> the VIP),
 # for when the UniFi controller runs here (docs/network/unifi.md).
-wsl_lan_bridge_instances: [http, https, prometheus, unifi-inform]
+# syslog: the router's version line (udp/6001 from the relay of WSL-02) ->
+# this site's vector-aggregator (VECTOR_LB_ADDR of homelab-wsl-02).
+wsl_lan_bridge_instances: [http, https, prometheus, unifi-inform, syslog]
 wsl_lan_bridge_targets:
   INTERNAL_INGRESS_IP: 10.6.0.200
+  VECTOR_IP: 10.6.0.205
   PROMETHEUS_IP: 10.6.0.209
   UNIFI_IP: 10.6.0.206
 wsl_usb_attach_devices: []

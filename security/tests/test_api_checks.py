@@ -1,8 +1,8 @@
 """The API checks (kubernetes/apps/security/api-checks) write a result file that the
 converter takes, and a test that does not run has no entry, never a pass.
 
-Each call gets a fake answer: no test reaches Prometheus, the feed of the vendor or
-HCP Terraform. The versions and the dates are invented.
+Each call gets a fake answer: no test reaches Prometheus, Loki, the feed of the vendor
+or HCP Terraform. The versions and the dates are invented.
 """
 
 import datetime
@@ -26,6 +26,7 @@ NOW = datetime.datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
 PROMETHEUS = "http://192.0.2.10:9090"
 FEED = "https://cdn.mikrotik.com/routeros/latest-stable.rss"
 ORG = "https://app.terraform.io/api/v2/organizations/tnwks-ops"
+LOKI = "http://loki-gateway.monitoring.svc.cluster.local"
 
 
 def load(name: str, path: Path):
@@ -42,6 +43,20 @@ prowler = load("prowler_run_for_api_checks", ROOT / "kubernetes/apps/security/pr
 def prometheus_answer(*versions: str) -> bytes:
     return json.dumps({"status": "success", "data": {"resultType": "vector", "result": [
         {"metric": {"version": version}, "value": [1794571200, "1"]} for version in versions]}}).encode()
+
+
+def line(version: str, router: str = "sce-rtr01") -> str:
+    """A line of the stream job="routeros" as the aggregator writes it: the syslog event
+    as JSON."""
+    return json.dumps({"message": f"tnwks-routeros-version router={router} version={version}",
+                       "hostname": router, "severity": "info", "appname": "script"})
+
+
+def loki_answer(*lines: str) -> bytes:
+    return json.dumps({"status": "success", "data": {"resultType": "streams", "result": [
+        {"stream": {"job": "routeros", "hostname": "sce-rtr01"},
+         "values": [[str(1794571200_000_000_000 - index), text] for index, text in enumerate(lines)]}
+    ] if lines else []}}).encode()
 
 
 def feed_answer(version: str, published: datetime.datetime) -> bytes:
@@ -73,8 +88,11 @@ class Fake:
         raise AssertionError(f"no fake for {url}")
 
 
-def fake(running="7.90.1 (stable)", newest="7.90.1", age_days=30, tfc=None):
+def fake(running="7.90.1 (stable)", newest="7.90.1", age_days=30, tfc=None, lines=()):
     answers = {
+        # A tuple of lines, or the answer itself: (status, body) or an exception.
+        LOKI: ((200, loki_answer(*lines)) if isinstance(lines, tuple) and all(isinstance(text, str) for text in lines)
+               else lines),
         PROMETHEUS: (200, prometheus_answer(running)) if isinstance(running, str) else running,
         FEED: (200, feed_answer(newest, NOW - datetime.timedelta(days=age_days))),
     }
@@ -139,7 +157,7 @@ BROKEN_ROUTER = {
     "Prometheus answers 503": (503, b""),
     "an answer that is not JSON": (200, b"<html>"),
     "a query error": (200, json.dumps({"status": "error", "error": "x"}).encode()),
-    "no answer": checks.QueryError("no answer from 192.0.2.10: URLError"),
+    "no answer": checks.NoAnswer("no answer from 192.0.2.10: URLError"),
 }
 
 
@@ -148,6 +166,99 @@ def test_a_router_query_that_fails_gives_no_entry_and_fails_the_run(tmp_path, mo
     code, document = run(tmp_path, monkeypatch, fake(running=BROKEN_ROUTER[case]))
     assert code == 1
     assert document["results"] == []
+
+
+# --- The version line of the router (Design Doc 0004, section 5.5) -----------------------
+
+NO_PROMETHEUS = checks.NoAnswer("no answer from 192.0.2.10: URLError")
+
+
+def firmware_entry(tmp_path, monkeypatch, get):
+    code, document = run(tmp_path, monkeypatch, get)
+    entries = by_check(document)
+    return code, entries.get("routeros-firmware")
+
+
+@pytest.mark.parametrize("lines", [(line("7.90.1 (stable)"),), (line("7.90.1"),) * 3])
+def test_lines_that_agree_give_a_result_with_no_answer_of_prometheus(tmp_path, monkeypatch, lines):
+    code, entry = firmware_entry(tmp_path, monkeypatch, fake(running=NO_PROMETHEUS, newest="7.90.2", lines=lines))
+    assert code == 0
+    assert entry["failed"] == 1, "7.90.1 runs, and 7.90.2 is out for 30 days"
+
+
+def test_lines_that_agree_with_prometheus_give_a_result(tmp_path, monkeypatch):
+    code, entry = firmware_entry(tmp_path, monkeypatch, fake(lines=(line("7.90.1"),) * 3))
+    assert (code, entry["failed"]) == (0, 0)
+
+
+def test_with_no_line_in_the_window_prometheus_decides(tmp_path, monkeypatch):
+    """Reviewer's note: zero lines and an answer of Prometheus give the result of today."""
+    code, entry = firmware_entry(tmp_path, monkeypatch, fake(newest="7.90.2", lines=()))
+    assert (code, entry["failed"]) == (0, 1)
+
+
+def test_with_no_answer_of_loki_prometheus_decides(tmp_path, monkeypatch):
+    for answer in (checks.NoAnswer("no answer from loki-gateway: URLError"), (502, b"")):
+        code, entry = firmware_entry(tmp_path, monkeypatch, fake(lines=answer))
+        assert (code, entry["failed"]) == (0, 0)
+
+
+BROKEN_LINES = {
+    "two lines that differ": {"lines": (line("7.90.1"), line("7.90.2")), "running": NO_PROMETHEUS},
+    "lines that differ from the answer of Prometheus": {"lines": (line("7.90.2"),) * 3},
+    "lines and an answer of Prometheus with no series": {
+        "lines": (line("7.90.1"),), "running": (200, prometheus_answer())},
+    "lines and an answer of Prometheus with two versions": {
+        "lines": (line("7.90.1"),), "running": (200, prometheus_answer("7.90.1", "7.90.2"))},
+    "lines and an HTTP error of Prometheus": {"lines": (line("7.90.1"),), "running": (503, b"")},
+    "a line of the router with no version": {
+        "lines": (line("7.90.1"), json.dumps({"message": "tnwks-routeros-version router=sce-rtr01 version=x"}))},
+    "no line and no answer of Prometheus": {"lines": (), "running": NO_PROMETHEUS},
+    "more lines than the limit": {"lines": (line("7.90.1"),) * 31, "running": NO_PROMETHEUS},
+    "an answer of Loki that does not fit": {"lines": (200, b"{}"), "running": NO_PROMETHEUS},
+}
+
+
+@pytest.mark.parametrize("case", BROKEN_LINES)
+def test_lines_that_do_not_agree_give_no_result_not_a_pass(tmp_path, monkeypatch, case):
+    code, entry = firmware_entry(tmp_path, monkeypatch, fake(**BROKEN_LINES[case]))
+    assert (code, entry) == (1, None)
+
+
+def test_a_line_of_another_router_does_not_count(tmp_path, monkeypatch):
+    lines = (line("7.90.1"), line("7.80.1", router="other-router"))
+    code, entry = firmware_entry(tmp_path, monkeypatch, fake(running=NO_PROMETHEUS, lines=lines))
+    assert (code, entry["failed"]) == (0, 0)
+
+
+def test_a_line_that_is_not_json_is_read_as_text():
+    raw = ("<14>1 2026-11-13T11:00:00Z sce-rtr01 script - - tnwks-routeros-version router=sce-rtr01"
+           " version=7.90.1 (stable)")
+    get = fake(lines=(raw,))
+    assert checks.line_versions(LOKI, "sce-rtr01", NOW, get) == {(7, 90, 1)}
+
+
+def test_the_job_reads_the_lines_of_the_last_3_hours_from_the_stream_of_the_router():
+    get = fake(lines=(line("7.90.1"),))
+    checks.line_versions(LOKI, "sce-rtr01", NOW, get)
+    url = get.calls[0][0]
+    assert url.startswith(f"{LOKI}/loki/api/v1/query_range?")
+    query = dict(item.split("=", 1) for item in url.split("?", 1)[1].split("&"))
+    end = int(NOW.timestamp()) * 10**9
+    assert (int(query["start"]), int(query["end"])) == (end - 3 * 3600 * 10**9, end)
+    assert checks.urllib.parse.unquote_plus(query["query"]) == '{job="routeros"} |= "tnwks-routeros-version "'
+    assert int(query["limit"]) == checks.LINE_LIMIT + 1
+
+
+def test_the_version_line_of_the_router_is_the_line_that_the_job_reads():
+    """The scheduler of the router's Terraform writes the prefix that the job and the
+    filter of the aggregator match."""
+    terraform = (ROOT / "infrastructure/terraform/modules/mikrotik/heartbeat.tf").read_text()
+    assert 'version_line_prefix = "tnwks-routeros-version"' in terraform
+    assert 'router=\\" . [/system identity get name] . \\" version=\\" . [/system resource get version]' in terraform
+    vector = (ROOT / "kubernetes/apps/monitoring/vector/aggregator/config/vector.yaml").read_text()
+    assert '"tnwks-routeros-version "' in vector
+    assert checks.VERSION_LINE.search("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)")[2] == "7.90.1"
 
 
 @pytest.mark.parametrize("answer", [
@@ -415,9 +526,17 @@ def test_the_policy_names_only_the_hosts_of_the_tests():
     assert names == {"cdn.mikrotik.com", "app.terraform.io"}
     cidrs = [cidr for rule in egress for cidr in rule.get("toCIDR", [])]
     assert cidrs == ["${PEER_WINDOWS_HOST_ADDR}/32"]
+    endpoints = [rule for rule in egress if "toEndpoints" in rule]
+    loki = [rule for rule in endpoints if rule["toEndpoints"][0]["matchLabels"].get("app.kubernetes.io/name") == "loki"]
+    assert len(loki) == 1
+    assert loki[0]["toEndpoints"] == [{"matchLabels": {
+        "io.kubernetes.pod.namespace": "monitoring", "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/component": "gateway", "io.cilium.k8s.policy.cluster": "${CLUSTER_NAME}"}}]
+    assert loki[0]["toPorts"] == [{"ports": [{"port": "8080", "protocol": "TCP"}]}]
     (job,) = manifests("cronjob.yaml")
     container = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
     assert "--prometheus=http://${PEER_WINDOWS_HOST_ADDR}:9090" in container["args"]
+    assert f"--loki={LOKI}" in container["args"]
 
 
 def test_no_secret_is_in_the_app_until_the_owner_adds_it():
