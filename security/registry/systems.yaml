@@ -9,7 +9,8 @@
 #
 # `sources` lists the sources that report on the system today. The rule for a
 # late result watches each of them. A source joins this list in the pull
-# request that starts it (security/README.md).
+# request that starts it, or, when it needs hours for its first result, in
+# the one after that result (security/README.md).
 #
 # The registry names controls, systems and checks. It holds no result.
 - name: aws-management
