@@ -43,7 +43,7 @@ resources:
   # Weekly restore of the other site's newest snapshots into this site's standby PVCs.
   - ../../../apps/kopiur-system/standby-restore/ks.yaml
   # The kopiur repository of the agent trust domains: its own prefix, password
-  # and role (docs/apps/agent-platform.md, "Backups of the agent trust domains").
+  # and role (docs/operations/backups.md, "Credentials").
   # This cluster only, like the agent platform.
   - ../../../apps/kopiur-system/agents-repository/ks.yaml
   # Fence a warm app's Postgres when its site lease names this site.

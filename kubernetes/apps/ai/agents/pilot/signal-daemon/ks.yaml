@@ -16,7 +16,7 @@ spec:
     name: flux-system
   dependsOn:
     # The SnapshotPolicy CRD and the repository it names.
-    - name: kopiur-agents-repository
+    - name: kopiur-repository
   wait: false
   interval: 30m
   retryInterval: 1m

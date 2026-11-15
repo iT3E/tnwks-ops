@@ -1,21 +1,15 @@
 ---
 # The state volume of the pilot agent, with its archives, to the Kopia
-# repository of the agent trust domains (ClusterRepository agents: its own
-# prefix, password and role; docs/operations/backups.md). The copy is encrypted
-# on the client. The archives hold credentials, so the snapshots do too.
-#
-# The name agent-state-v2 is a new policy, not an edit of agent-state: the
-# snapshots of agent-state stay in the shared repository (s3) as they are
-# (deletion.onPolicyDelete is Retain by default), and none of them count in the
-# retention of this policy.
+# repository in S3 (docs/operations/backups.md). The copy is encrypted on the
+# client. The archives hold credentials, so the snapshots do too.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
-  name: agent-state-v2
+  name: agent-state
 spec:
   repository:
     kind: ClusterRepository
-    name: agents
+    name: s3
   # local-path has no CSI snapshots: the mover reads the live PVC read-only,
   # on the node of the agent. The archives on the volume are the consistent
   # copy of the database.
@@ -54,10 +48,10 @@ spec:
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotSchedule
 metadata:
-  name: agent-state-v2
+  name: agent-state
 spec:
   policyRef:
-    name: agent-state-v2
+    name: agent-state
   schedule:
     # Nightly, spread across 02:00-03:00 (H), as the other volumes.
     cron: "H 2 * * *"

@@ -44,7 +44,7 @@ spec:
     # The client certificate, and the gateway of the sandboxes.
     - name: agents-pilot-sandbox-gateway
     # The SnapshotPolicy CRD and the repository it names.
-    - name: kopiur-agents-repository
+    - name: kopiur-repository
   wait: false
   interval: 30m
   retryInterval: 1m
