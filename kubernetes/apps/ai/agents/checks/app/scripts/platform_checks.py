@@ -201,11 +201,21 @@ def wait_gone(seconds: float) -> bool:
     return True
 
 
-def remove_record(seconds: float = 90) -> str:
+# The waits of the probe, in seconds. The Job's deadline (cronjobs.yaml) adds
+# them up.
+DELETE_TIMEOUT = 60
+REMOVE_WAIT = 60
+CLEANUP_WAIT = 45
+
+
+def remove_record(seconds: float = REMOVE_WAIT) -> str:
     """Delete the probe's Sandbox record with the API, and wait until it is
-    gone. Its workspace volume goes with it (Foreground: the record stays
-    until the volume, which it owns, is deleted). A record of this name that
-    OpenShell did not make for this probe is left alone."""
+    gone. What the record owns goes with it (Foreground: the record stays
+    until they are deleted): its workspace volume claim, two Services and a
+    NetworkPolicy. A record of this name that OpenShell did not make for this
+    probe is left alone. A record that the gateway removes between the read
+    and the delete (404) counts as gone; one that was replaced by a new
+    record of the same name (409, the uid precondition) is left alone."""
     found = record()
     if found is None:
         return "none"
@@ -214,9 +224,15 @@ def remove_record(seconds: float = 90) -> str:
     if (labels.get("openshell.ai/managed-by") != "openshell"
             or labels.get("openshell.ai/sandbox-name") != SANDBOX):
         raise LookupError(f"{RECORD} is not the probe's sandbox (labels {labels})")
-    kube("DELETE", record_path(), {
-        "apiVersion": "v1", "kind": "DeleteOptions", "propagationPolicy": "Foreground",
-        "preconditions": {"uid": meta["uid"]}})
+    try:
+        kube("DELETE", record_path(), {
+            "apiVersion": "v1", "kind": "DeleteOptions", "propagationPolicy": "Foreground",
+            "preconditions": {"uid": meta["uid"]}})
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            raise LookupError(f"{RECORD} changed between its read and its delete (409)") from e
+        if e.code != 404:
+            raise
     if not wait_gone(seconds):
         raise TimeoutError(f"{RECORD} is still there {seconds:.0f} s after its delete")
     return f"removed: {RECORD}, made {meta.get('creationTimestamp', 'at an unknown time')}"
@@ -275,9 +291,12 @@ def remove_leftover() -> bool:
     each create of the same name fails with "sandbox already exists". So the
     record goes with the API too. Prints one line; False stops the run."""
     try:
-        cli("sandbox", "delete", SANDBOX)
+        cli("sandbox", "delete", SANDBOX, timeout=DELETE_TIMEOUT)
+    except subprocess.SubprocessError:
+        pass  # the record goes with the API below
+    try:
         got = remove_record()
-    except (OSError, ValueError, LookupError, KeyError, subprocess.SubprocessError) as e:
+    except (OSError, ValueError, LookupError, KeyError) as e:
         report("probe", "leftover sandbox", "none or removed", f"failed: {type(e).__name__}: {e}")
         return False
     print(json.dumps({"check": "probe", "domain": OWN, "target": "leftover sandbox",
@@ -287,17 +306,28 @@ def remove_leftover() -> bool:
 
 def cleanup() -> None:
     """Delete the probe's sandbox, then check that its Sandbox record is gone.
-    A record that the gateway delete left fails the run, after the API
-    removes it, so that the next run is not blocked."""
+    A record that the gateway delete left, or a gateway delete that failed,
+    goes with the API, so that the next run is not blocked. A record that the
+    gateway delete left fails the run."""
     try:
-        cli("sandbox", "delete", SANDBOX)
-        if wait_gone(60):
+        failed = None
+        try:
+            cli("sandbox", "delete", SANDBOX, timeout=DELETE_TIMEOUT)
+        except (OSError, subprocess.SubprocessError) as e:
+            failed = type(e).__name__
+        if failed is None and wait_gone(CLEANUP_WAIT):
             report("probe", "sandbox removed", "gone", "gone")
             return
         got = remove_record()
-        report("probe", "sandbox removed", "gone",
-               f"left after the gateway delete; {got} with the API")
-    except (OSError, ValueError, LookupError, KeyError, subprocess.SubprocessError) as e:
+        if failed is None:
+            report("probe", "sandbox removed", "gone",
+                   f"left after the gateway delete; {got} with the API")
+        elif got == "none":
+            report("probe", "sandbox removed", "gone", f"gone (the gateway delete: {failed})")
+        else:
+            report("probe", "sandbox removed", "gone",
+                   f"left after a failed gateway delete ({failed}); {got} with the API")
+    except (OSError, ValueError, LookupError, KeyError) as e:
         report("probe", "sandbox removed", "gone", f"left: {type(e).__name__}: {e}")
 
 

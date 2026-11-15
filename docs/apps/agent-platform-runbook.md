@@ -149,12 +149,18 @@ before the create, and fails a run that leaves its own record.
   <time>` (it deletes only that record, with the labels of OpenShell for
   this probe); `sandbox removed` is `gone`, or `left after the gateway
   delete; removed: ...` when the gateway left the record again. That second
-  case fails the run, and the record is gone for the next run. Read only:
+  case fails the run, and the record is gone for the next run. The Sandbox
+  record owns its workspace volume claim (2Gi), two Services and a
+  NetworkPolicy, so its delete removes them too: the leftover of
+  2026-11-14 still holds them. Read only:
   `kubectl -n <namespace> get sandboxes.agents.x-k8s.io` and the log of the
   gateway (`kubectl -n <namespace> logs openshell-0`, the lines
   `Deleting sandbox from Kubernetes` and `Sandbox deleted from Kubernetes`).
   A run now (owner approval):
   `kubectl -n <namespace> create job --from=cronjob/platform-check-probe probe-now`.
+  Follow-up: the gateway fault (a delete that answers success and removes
+  no record, logged at debug level only, OpenShell 0.1.8) has no upstream
+  report yet.
 
 ### WorkflowProvidersStale
 
