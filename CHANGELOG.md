@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.153.0 - 2026-11-15
+
+### Added
+
+* agents: web search for the pilot agent through the Brave Search API, with its key for the agent container only
+
 ## v2.152.0 - 2026-11-15
 
 ### Changed
