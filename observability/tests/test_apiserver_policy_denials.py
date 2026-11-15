@@ -17,8 +17,8 @@ import re
 import subprocess
 
 import yaml
-
 from test_hand_written_rules import ROOT, docker, run, scratch
+
 from versions import PROMETHEUS
 
 HELMRELEASE = ROOT / "kubernetes/apps/monitoring/kube-prometheus-stack/app/helmrelease.yaml"
