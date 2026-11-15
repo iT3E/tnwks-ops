@@ -67,7 +67,9 @@ missing or old), or when a try succeeds, or when the directory is gone or can
 not be listed. A try removes the file that it made, and nothing else. Each
 try is a series homelab_security_host_write_test_result with the uid of its
 user: 0 refused by Windows, 1 the write succeeded, 2 refused by Linux before
-Windows, 3 not done. With --write-test-only, the script runs one try alone,
+Windows, 3 not done. The series homelab_security_host_write_test_errno gives
+the errno of each try, or 0 when the try had none, so a read of the metrics
+shows how drvfs maps a refusal. With --write-test-only, the script runs one try alone,
 prints its answer with its uid, and exits with that code.
 
 The relay gives each result the label severity: high (Design Doc 0004,
@@ -321,6 +323,16 @@ def read_root_result(path: Path, now: float) -> tuple[int, int, str]:
         return 0, NOT_DONE, f"uid 0: the try as root left no answer ({type(error).__name__}: {error})"
 
 
+ERRNO = re.compile(r"\(errno (\d+) ")
+
+
+def errno_of(message: str) -> int:
+    """The errno that the message of a try names, or 0. The message carries it, also
+    the message of root through its answer file."""
+    found = ERRNO.search(message)
+    return int(found[1]) if found else 0
+
+
 def write_failed(tries: list[tuple[int, int, str]]) -> bool:
     """The failed query textfile-write: root has no refusal by Windows, or a try wrote,
     or a try could not be done. A refusal by Linux for another user is no evidence, and
@@ -405,6 +417,7 @@ def measure(
     tries = writes()
     for uid, answer, message in tries:
         details.append(("homelab_security_host_write_test_result", {"uid": str(uid)}, answer))
+        details.append(("homelab_security_host_write_test_errno", {"uid": str(uid)}, errno_of(message)))
         print(f"textfile-write: {message}", file=sys.stderr)
     if write_failed(tries):
         failed.append("textfile-write")

@@ -89,6 +89,8 @@ $script:Help = [ordered]@{
     homelab_security_host_reboot_pending                  = 'Whether the host waits for a restart to finish an update: 1 yes, 0 no.'
     homelab_security_host_package_lists_timestamp_seconds = 'The Unix time of the oldest package list of the updates and the security fixes of the host, from the Date of its Release file.'
     homelab_security_host_write_test_result               = 'The write test of a WSL distro to the textfile directory of its host, by the uid that tried: 0 refused by Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not done.'
+    homelab_security_host_write_test_errno                = 'The errno of the write test of a WSL distro, by the uid that tried, or 0 when the try had none.'
+    homelab_security_host_write_test_files                = 'The number of files of the write test of a WSL distro in the textfile directory of the host. A try removes its own file, so this is 0.'
 }
 
 $script:Source = 'host-check'
@@ -119,6 +121,7 @@ $script:RelayDetails = @{
     homelab_security_host_updates_held                    = @()
     homelab_security_host_reboot_pending                  = @()
     homelab_security_host_write_test_result               = @('uid')
+    homelab_security_host_write_test_errno                = @('uid')
 }
 
 # --- The queries. Each one reads, and the tests replace it. -----------------
@@ -191,6 +194,12 @@ function ConvertTo-TnwksUnixTime([datetime]$Moment) {
     [DateTimeOffset]::new($Moment.ToUniversalTime()).ToUnixTimeSeconds()
 }
 
+function Get-TnwksWriteTestFiles([string]$Directory) {
+    # The files that the write test of a distro makes: role wsl_host_check,
+    # write_test. -Force also lists a hidden file.
+    @(Get-ChildItem -LiteralPath $Directory -Force -File -Filter '.tnwks-write-test-*.tmp' -ErrorAction Stop).Count
+}
+
 function Measure-TnwksHostCheck {
     <#
     .SYNOPSIS
@@ -200,7 +209,9 @@ function Measure-TnwksHostCheck {
     param(
         [datetime]$Now,
         [int]$SignatureMaxAgeDays,
-        [int]$UpdatesMaxAgeDays
+        [int]$UpdatesMaxAgeDays,
+        # The textfile directory, for the count of files of the write test.
+        [string]$TextfileDir
     )
     $results = [ordered]@{}
     $details = New-Object System.Collections.Generic.List[object]
@@ -275,6 +286,13 @@ function Measure-TnwksHostCheck {
         $details.Add(@('homelab_security_host_reboot_pending', [ordered]@{}, [int](Get-TnwksRebootPending)))
     } catch {
         Write-Verbose 'Windows Update does not say whether a restart is pending'
+    }
+    if ($TextfileDir) {
+        try {
+            $details.Add(@('homelab_security_host_write_test_files', [ordered]@{}, (Get-TnwksWriteTestFiles $TextfileDir)))
+        } catch {
+            Write-Verbose 'the textfile directory can not be listed'
+        }
     }
 
     [pscustomobject]@{ Results = $results; Details = $details; Failed = $failed }
@@ -469,7 +487,8 @@ function Invoke-TnwksRelay {
 function Invoke-TnwksHostCheck {
     param([string]$System, [string]$TextfileDir, [string]$FileName, [int]$SignatureMaxAgeDays, [int]$UpdatesMaxAgeDays)
     if (-not $System) { throw 'no -System: the name of this host in security/registry/systems.yaml' }
-    $measure = Measure-TnwksHostCheck -Now (Get-Date) -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays
+    $measure = Measure-TnwksHostCheck -Now (Get-Date) -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays `
+        -TextfileDir $TextfileDir
     $now = Get-Date
     Write-TnwksTextfile $TextfileDir $FileName (Format-TnwksHostCheck -System $System -Measure $measure -Now $now)
     # The names of the queries only: no value that the host gave.

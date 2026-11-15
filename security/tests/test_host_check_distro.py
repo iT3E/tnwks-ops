@@ -962,7 +962,8 @@ def test_the_relay_takes_each_detail_and_each_check_of_a_distro_and_has_a_text_f
     does not know, so each one that this script writes must be in its lists."""
     script = SCRIPT.read_text()
     written = set(re.findall(r'details\.append\(\("(homelab_\w+)"', script))
-    assert written == {"homelab_security_host_write_test_result", "homelab_security_host_package_lists_timestamp_seconds",
+    assert written == {"homelab_security_host_write_test_result", "homelab_security_host_write_test_errno",
+                       "homelab_security_host_package_lists_timestamp_seconds",
                        "homelab_security_host_updates_pending", "homelab_security_host_updates_held",
                        "homelab_security_host_reboot_pending"}
     relay_details = set(re.findall(r"^\s+(homelab_\w+)\s+=", relay_block("RelayDetails"), re.MULTILINE))
@@ -1123,3 +1124,18 @@ def test_each_distro_of_the_inventory_lists_the_host_check_in_the_registry():
     named = {item["check"] for line in controls for item in line["checks"].get("wsl-distro", [])
              if item["source"] == "host-check"}
     assert named == set(check.CHECKS) == {"updates-pending", "updates-held"}
+
+
+def test_each_try_gives_its_errno_as_a_series_also_the_try_of_root():
+    """The first read of the metrics after the start with no elevation shows how drvfs
+    maps a refusal by Windows, with no shell on the host."""
+    assert check.errno_of("uid 0: Windows refused the write (errno 13 EACCES; drwxr-xr-x 0:0, mount 9p rw)") == 13
+    assert check.errno_of("uid 1000: a write gave neither a file nor a refusal (errno 5 EIO: Input/output error)") == 5
+    assert check.errno_of("uid 1000: the write succeeded, and the file is removed") == 0
+    tries = [(0, check.REFUSED, "uid 0: Windows refused the write (errno 1 EPERM; x)"),
+             (1000, check.LINUX_REFUSED, "uid 1000: Linux refuses the write by the mode of the directory (x)")]
+    measured = check.measure(NOW, 14, 72, state_of(), packages=dict, lists=lambda: NOW, reboot=lambda: False,
+                             upgrades=dict, holds=set, writes=lambda: tries)
+    errnos = {labels["uid"]: value for name, labels, value in measured["details"]
+              if name == "homelab_security_host_write_test_errno"}
+    assert errnos == {"0": 1, "1000": 0}

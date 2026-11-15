@@ -367,7 +367,14 @@ by Windows is the pass.
   and the mount. A refusal is `EACCES` or `EPERM`. The message of a
   refusal, and of a try that fails in another way, names the errno by
   number and name. How drvfs maps a refusal of Windows to an errno is known
-  only on a host, so the first answers say it.
+  only on a host, so the first answers say it. The series
+  `homelab_security_host_write_test_errno{uid="<uid>"}` gives that errno,
+  or 0 when the try had none, so a read of the metrics shows it.
+- **The files of the test.** Each try removes the file that it made. The
+  host check of the Windows host, as SYSTEM, counts the files of the test
+  (`.tnwks-write-test-*.tmp`) in the textfile directory, as
+  `homelab_security_host_write_test_files`, which is 0. When it can not list
+  the directory, it leaves out the series, and no query fails.
 - **The failed query `textfile-write`.** Root has no answer 0 (or its answer
   is missing or older than 15 minutes), or a try has 1 or 3. Then the run
   gives no result. A try that wrote removes the file that it made, and

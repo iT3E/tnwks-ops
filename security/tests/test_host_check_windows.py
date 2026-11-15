@@ -652,3 +652,28 @@ def test_the_relay_writes_what_the_tests_of_the_distro_expect_of_it(tmp_path):
         model = textfile.relayed(document)
         assert {name: family["samples"] for name, family in families.items()} == {
             name: family["samples"] for name, family in model.items()}
+
+
+@needs_pwsh
+def test_the_host_check_counts_the_files_of_the_write_test_of_the_distro(tmp_path):
+    """A try of the distro removes its own file, so the count is 0. The host check, as
+    SYSTEM, lists the textfile directory, so a file that a try left shows in the metrics.
+    Other files do not count, and a directory that can not be listed leaves out the
+    series and fails no query."""
+    for name in (".tnwks-write-test-0123456789abcdef.tmp", ".tnwks-write-test-fedcba9876543210.tmp",
+                 "tnwks_security_host_check.prom", ".tnwks-write-test-x.prom", "other.tmp"):
+        (tmp_path / name).write_text("")
+    (tmp_path / ".tnwks-write-test-dir.tmp").mkdir()
+    body = FAKES + f"""
+$measure = Measure-TnwksHostCheck -Now $now -SignatureMaxAgeDays 7 -UpdatesMaxAgeDays 14 -TextfileDir '{tmp_path}'
+[Console]::Out.Write((Format-TnwksHostCheck -System 'HOST-A' -Measure $measure -Now $now))
+"""
+    families = textfile.parse(pwsh(body).stdout)
+    assert textfile.value(families, "homelab_security_host_write_test_files", system="HOST-A") == 2
+    gone = textfile.parse(pwsh(body.replace(str(tmp_path), str(tmp_path / "gone"))).stdout)
+    assert "homelab_security_host_write_test_files" not in gone
+    assert textfile.value(gone, FAILED, system="HOST-A") == 0
+    run = (ROLE / "files/Invoke-TnwksHostCheck.ps1").read_text()
+    assert "-TextfileDir $TextfileDir" in run[run.index("function Invoke-TnwksHostCheck"):]
+    distro = (ANSIBLE / "roles/wsl_host_check/files/tnwks-host-check.py").read_text()
+    assert 'f".tnwks-write-test-{secrets.token_hex(8)}.tmp"' in distro, "the name that the count reads"
