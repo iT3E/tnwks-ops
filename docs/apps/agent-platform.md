@@ -132,6 +132,13 @@ the shared repository that kopiur projects before each run
 (`docs/operations/backups.md`, "Credentials"). A repository of their own for
 the trust domains is a later step.
 
+A refusal fires `AgentBackupMoverConfigMapDenied` ([Alerts](#alerts)). The
+API server counts the refusals of a policy
+(`apiserver_validating_admission_policy_check_total`), and the scrape of the
+API server on homelab-wsl keeps the series of this policy with
+`enforcement_action="deny"` and no other
+(`kubernetes/clusters/wsl/apps/kustomization.yaml`).
+
 To check: `kubectl get validatingadmissionpolicy agents-backup-mover-configmaps`,
 and after the next snapshot of a trust domain,
 `kubectl -n agents-pilot get snapshots.kopiur.home-operations.com` shows the
@@ -344,7 +351,8 @@ the sandbox plugin copies the workspace only.
     or the limit fires), the pod still starts. The index stays as it was,
     so a stale index stays stale until the next start that ends with
     `memory-index result=ok`. To check:
-    `kubectl -n agents-pilot logs deploy/agent -c memory-index`.
+    `kubectl -n agents-pilot logs deploy/agent -c memory-index`. A
+    `result=failed` line fires `AgentMemoryIndexFailed` until that start.
   - To check a search with no chunk text, in the `agent` container (the
     gateway answers it): `openclaw memory search "<word>" --agent main
     --json`, keeping only `path`, `score` and `vectorScore` of each
@@ -716,12 +724,13 @@ The rules are in `monitoring/app/prometheusrule.yaml` and
 `agents-monitoring`, homelab-wsl only). Each alert goes to the
 War Room, the default Telegram route of Alertmanager, with severity
 `warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
-`AgentInstructionFileChanged`, `AgentInstructionCheckStale` and
-`ModelBridgeRateLimited` read lines of the logs, as gauges of Vector: the
-aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
-`AgentInstructionCheckStale`), the platform agent for the
-`instruction-check file=` lines and the bridge (`AgentInstructionFileChanged`,
-`ModelBridgeRateLimited`) ([Logs](#logs)).
+`AgentInstructionFileChanged`, `AgentInstructionCheckStale`,
+`AgentMemoryIndexFailed` and `ModelBridgeRateLimited` read lines of the logs,
+as gauges of Vector: the aggregator for the `<check> result=` lines
+(`WorkflowAppDrift`, `AgentInstructionCheckStale`, `AgentMemoryIndexFailed`),
+the platform agent for the `instruction-check file=` lines and the bridge
+(`AgentInstructionFileChanged`, `ModelBridgeRateLimited`) ([Logs](#logs)).
+`AgentBackupMoverConfigMapDenied` reads a counter of the API server.
 
 [`agent-platform-runbook.md`](agent-platform-runbook.md) has a section for
 each alert (what it means, the first checks, what was seen so far, the fix),
@@ -743,6 +752,8 @@ by hand, and the steps at a limit of the Claude plan.
 | `AgentDailyArchiveFailed` | The `backup` container of an agent pod started again in the last 2 hours after an exit with an error: the daily archive failed. A restart of the node (reason `Unknown`) does not count | none | `kubectl -n <namespace> logs <pod> -c backup --previous` |
 | `AgentInstructionFileChanged` | An `instruction-check file=<name> change=<change>` line in the last 20 minutes: an instruction file of the agent's workspace (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `skills/`) is new, changed or gone since the day before | none | The lines in Loki name each file. Compare it with the daily archive, and find what made the change before the agent runs on it |
 | `AgentInstructionCheckStale` | No `instruction-check result=` line of the pilot's agent pod in 26 hours, once its `backup` container has run for 26 hours | 15m | `kubectl -n agents-pilot logs deploy/agent -c backup`. A backup that waits on a gateway that is not ready logs nothing |
+| `AgentMemoryIndexFailed` | The newest `memory-index result=` line of the pilot's agent pod is `result=failed`, and it is not older than the start of the newest agent pod. It clears at a start that ends ok. A new pod that has not run the step yet, or no pod, does not fire | none | `kubectl -n agents-pilot logs deploy/agent -c memory-index`. When the model gateway and the model server of the host answer, start the pod again |
+| `AgentBackupMoverConfigMapDenied` | The admission rule `agents-backup-mover-configmaps` refused a ConfigMap write of a backup mover in a trust domain, in the last hour ([The backup mover and ConfigMaps](#the-backup-mover-and-configmaps)) | none | The audit lines of that hour in Loki name the namespace, the ConfigMap and the ServiceAccount. Suspend the snapshots of that namespace and keep the mover Job |
 | `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,

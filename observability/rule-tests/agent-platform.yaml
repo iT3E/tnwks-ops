@@ -290,3 +290,56 @@ tests:
     alert_rule_test:
       - {alertname: AgentPlatformCronJobFailed, eval_time: 15m, exp_alerts: [{exp_labels: {severity: warning, namespace: agents-main, cronjob: platform-check-probe}}]}
       - {alertname: AgentRunSandboxTooOld, eval_time: 91m, exp_alerts: [{exp_labels: {severity: warning, namespace: agents-workflows, sandbox: default--run-9999999-abc}}]}
+
+  - name: the first denial of the mover ConfigMap policy fires for an hour
+    interval: 1m
+    input_series:
+      # The API server counts a failed check only, so the series starts at
+      # its first denial (10m).
+      - series: apiserver_validating_admission_policy_check_total{instance="10.0.0.1:6443", job="apiserver", policy="agents-backup-mover-configmaps", policy_binding="agents-backup-mover-configmaps", enforcement_action="deny", error_type="invalid_error"}
+        values: _x10 1x200
+      # The denials of another policy never fire this alert.
+      - series: apiserver_validating_admission_policy_check_total{instance="10.0.0.1:6443", job="apiserver", policy="workflow-run-jobs", policy_binding="workflow-run-jobs", enforcement_action="deny", error_type="invalid_error"}
+        values: _x10 1x10 2x190
+    alert_rule_test:
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 1h5m
+        exp_alerts:
+          - exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 1h15m
+        exp_alerts: []
+
+  - name: a later denial of the mover ConfigMap policy fires again, also after a restart of the API server
+    interval: 1m
+    input_series:
+      # A denial before the test window, one more at 100m, then a restart of
+      # the API server at 130m clears the series, and a new denial at 230m
+      # starts it again at 1.
+      - series: apiserver_validating_admission_policy_check_total{instance="10.0.0.1:6443", job="apiserver", policy="agents-backup-mover-configmaps", policy_binding="agents-backup-mover-configmaps", enforcement_action="deny", error_type="invalid_error"}
+        values: 1x99 2x30 _x100 1x100
+    alert_rule_test:
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 90m
+        exp_alerts: []
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 101m
+        exp_alerts:
+          - exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 170m
+        exp_alerts: []
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 231m
+        exp_alerts:
+          - exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}
+      - alertname: AgentBackupMoverConfigMapDenied
+        eval_time: 300m
+        exp_alerts: []

@@ -1,11 +1,13 @@
 ---
 # The alerts of the agent platform (docs/apps/agent-platform.md, "Alerts").
 # Most read kube-state-metrics. WorkflowAppDrift, AgentInstructionFileChanged,
-# AgentInstructionCheckStale and ModelBridgeRateLimited read the time of the
-# newest line of a kind, a gauge that Vector serves: the aggregator for the
-# result lines (kubernetes/apps/monitoring/vector/aggregator), the platform
-# log agent for instruction-file and the model bridge
+# AgentInstructionCheckStale, AgentMemoryIndexFailed and ModelBridgeRateLimited
+# read the time of the newest line of a kind, a gauge that Vector serves: the
+# aggregator for the result lines (kubernetes/apps/monitoring/vector/aggregator),
+# the platform log agent for instruction-file and the model bridge
 # (kubernetes/apps/monitoring/vector/agent-platform).
+# AgentBackupMoverConfigMapDenied reads a counter of the API server that only
+# homelab-wsl keeps (kubernetes/clusters/wsl/apps/kustomization.yaml).
 # Already covered elsewhere, so not here: a failed or late snapshot of a
 # state volume (the kopiur chart's rules, KopiurLastBackupFailed and
 # KopiurBackupStale, match each SnapshotPolicy), and a crash loop (the
@@ -244,6 +246,72 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentinstructioncheckstale"
             summary: "The instruction check of the agent in {{ $labels.namespace }} has not run in 26 hours."
             description: "kubectl -n {{ $labels.namespace }} logs deploy/agent -c backup shows the last daily-backup and instruction-check lines; a backup that waits on a gateway that is not ready logs nothing."
+
+        - alert: AgentMemoryIndexFailed
+          # The newest `memory-index result=` line of the pilot's agent pod is
+          # result=failed: the init container memory-index
+          # (pilot/agent/config/scripts/memory-index.sh) could not bring the
+          # memory index up to date at the start of the pod. The pod still
+          # starts, and a stale index stays stale (each search returns no
+          # result) until a start that ends with result=ok. Only the pilot's
+          # agent pod ships its log. Two tests:
+          # - the failed line is newer than each ok line, so the ok line of a
+          #   later start clears it;
+          # - the line is not older than the start of the newest pod with a
+          #   memory-index init container. A new pod that has not run its
+          #   step yet does not fire on the line of the pod before, and with
+          #   no pod (replicas: 0) nothing fires.
+          # The aggregator serves each sample with the time of its line, so
+          # Prometheus holds a sample for 5 minutes only, and the gauge leaves
+          # the aggregator after an hour: max_over_time reads 15 days, the
+          # retention of Prometheus on homelab-wsl. The step runs once at each
+          # start, so a pod that runs more than 15 days after a failed start
+          # stops firing then.
+          expr: |
+            max by (namespace) (
+              label_replace(
+                max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", check="memory-index", result="failed"}[15d]))
+                >= max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", check="memory-index"}[15d])),
+                "namespace", "$1", "pod_namespace", "(.+)")
+            )
+            >= on (namespace)
+            max by (namespace) (
+              kube_pod_start_time{namespace="agents-pilot"}
+              and on (namespace, pod) kube_pod_init_container_info{namespace="agents-pilot", container="memory-index"}
+            )
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentmemoryindexfailed"
+            summary: "The memory index step of the agent pod in {{ $labels.namespace }} failed at its last start."
+            description: "kubectl -n {{ $labels.namespace }} logs deploy/agent -c memory-index shows memory-index result=failed; memory search stays as it was until a start that ends ok. Check the model gateway and the model server of the host, then start the pod again."
+
+        - alert: AgentBackupMoverConfigMapDenied
+          # The admission policy agents-backup-mover-configmaps
+          # (kubernetes/apps/ai/agents/admission) refused a create, change or
+          # delete of a ConfigMap by a backup mover ServiceAccount in a trust
+          # domain: a mover pod tried to change the config or the scripts of
+          # an agent, or a new release of the backup operator writes a
+          # ConfigMap there. The API server counts a check of a policy only
+          # when it fails, so the series starts at its first denial: the
+          # second part catches that one, the first each later one. It fires
+          # for an hour after a denial. A restart of the API server clears
+          # the counter; then the next denial starts a new series.
+          expr: |
+            sum by (policy) (increase(apiserver_validating_admission_policy_check_total{policy="agents-backup-mover-configmaps", enforcement_action="deny"}[1h])) > 0
+            or
+            sum by (policy) (
+              apiserver_validating_admission_policy_check_total{policy="agents-backup-mover-configmaps", enforcement_action="deny"}
+              unless apiserver_validating_admission_policy_check_total{policy="agents-backup-mover-configmaps", enforcement_action="deny"} offset 1h
+            )
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentbackupmoverconfigmapdenied"
+            summary: "The admission policy refused a ConfigMap write of a backup mover in a trust domain."
+            description: "The audit log (security stream k8s-audit) names the namespace, the ConfigMap and the mover ServiceAccount: an objectRef with resource configmaps, a user kopiur-*-mover and code 422. Treat it as an attack on the config of an agent until a release of the backup operator explains it."
 
         - alert: ModelBridgeRateLimited
           # The model bridge in `ai` logged an engine_error line with the kind

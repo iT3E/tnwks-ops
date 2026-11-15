@@ -38,8 +38,8 @@ section here (`runbook_url`).
 
 ## The alerts
 
-18 alerts cover the platform: the 13 rules of
-`kubernetes/apps/ai/agents/monitoring/app/` (11 in `prometheusrule.yaml`, 2
+20 alerts cover the platform: the 15 rules of
+`kubernetes/apps/ai/agents/monitoring/app/` (13 in `prometheusrule.yaml`, 2
 in `heartbeat-prometheusrule.yaml`), and the 5 rules of the backup operator
 (the kopiur chart) that match the snapshot policy, the snapshots and the
 restores of a state volume. The other rules of the backup operator are about
@@ -379,6 +379,106 @@ sink of the configs against a real source.
 **Fix.** A backup that waits for a gateway that is not ready logs nothing:
 see [AgentPlatformWorkloadNotReady](#agentplatformworkloadnotready). A log
 path fault: fix the config of the platform log agent in git.
+
+### AgentMemoryIndexFailed
+
+**What it means.** The newest `memory-index result=` line of the pilot's
+agent pod says `failed`: at the last start of the pod, the `memory-index`
+init container could not bring the memory index up to date. The pod runs,
+but an index that was stale stays stale: each memory search returns `stale`
+and no result, until a start that ends with `memory-index result=ok`
+([agent-platform.md](agent-platform.md), "The index at each start"). The
+alert clears at that start. A new pod that has not run the step yet does
+not fire on the line of the pod before, and with no pod (`replicas: 0`)
+nothing fires. The rule reads 15 days of samples (the retention of
+Prometheus on homelab-wsl), so a pod that runs more than 15 days after a
+failed start stops firing then.
+
+**First checks.**
+
+```sh
+kubectl -n agents-pilot logs deploy/agent -c memory-index
+kubectl -n agents-pilot get pods -l app.kubernetes.io/name=agent
+kubectl -n ai get deploy litellm
+kubectl -n ai logs deploy/litellm --since=1h
+```
+
+The step prints nothing of the output of the product's CLI, so the cause is
+on the path of the embeddings: the model gateway, or the model server of the
+host behind it, did not answer, or the step ran over its limit of 180
+seconds (a full rebuild of a large index).
+
+**Seen so far.** Not fired yet. The starts of the pod on 2026-11-15 logged
+`memory-index result=ok`.
+
+**Fix.** When the model gateway and the model server of the host answer
+again, start the pod again (owner approval):
+`kubectl -n agents-pilot delete pod -l app.kubernetes.io/name=agent`. The
+step runs at the start, and the alert clears with `memory-index result=ok`.
+If the step fails again while both answer, it ran over its limit: a pull
+request raises `LIMIT_SECONDS` in
+`kubernetes/apps/ai/agents/pilot/agent/config/scripts/memory-index.sh`, and
+the change of the script starts the pod again.
+
+### AgentBackupMoverConfigMapDenied
+
+**What it means.** The admission policy `agents-backup-mover-configmaps`
+(`kubernetes/apps/ai/agents/admission/`) refused a create, change or delete
+of a ConfigMap by a backup mover ServiceAccount (`kopiur-mover`,
+`kopiur-snapshot-replication-mover` or `kopiur-stream-mover`) in a namespace
+of a trust domain. The write did not happen. At kopiur 0.10.20 a mover
+writes no ConfigMap there ([agent-platform.md](agent-platform.md#the-backup-mover-and-configmaps)),
+so there are two causes: a mover pod tried to change the config or the
+scripts of an agent, which is the attack the policy is for, or a new release
+of the backup operator writes a ConfigMap there. It fires for an hour after
+each denial. The rule reads a counter of the API server that only
+homelab-wsl keeps (`kubernetes/clusters/wsl/apps/kustomization.yaml`); the
+other clusters run no agent.
+
+**First checks.** In Grafana, Loki of the security streams, the audit lines
+of the hour of the alert:
+
+```logql
+{security_stream="k8s-audit", k8s_cluster="homelab-wsl"} |= "configmaps" |= "kopiur" | json
+  | objectRef_resource="configmaps" | responseStatus_code="422"
+```
+
+Each line names the namespace, the ConfigMap, the verb and the
+ServiceAccount (`user_username`). Then, read only:
+
+```sh
+kubectl -n <namespace> get jobs,pods
+kubectl -n <namespace> get snapshotschedules.kopiur.home-operations.com
+kubectl -n kopiur-system get helmrelease kopiur
+```
+
+The mover Job of that time and its image, against the release of the backup
+operator in git (`kubernetes/apps/kopiur-system/kopiur/app/helmrelease.yaml`).
+Keep the Job and its pod: they are the evidence.
+
+**Seen so far.** Not fired yet. On 2026-11-15 the API server had counted no
+denial of this policy since it was added on 2026-11-14
+(`kubectl get --raw /metrics`). The other policy of the platform,
+`workflow-run-jobs`, had 22 denials then; no alert reads it.
+
+**Fix.**
+
+1. **Stop the movers in that namespace.** Owner approval: a pull request
+   sets `suspend: true` on its SnapshotSchedule (`backup.yaml` of the
+   agent), so no new mover runs there while you look.
+2. **A new release of the backup operator.** Its notes or its code name a
+   ConfigMap write in the namespace of a snapshot: pin the operator back, or
+   change the policy in
+   `kubernetes/apps/ai/agents/admission/app/mover-configmaps.yaml` with that
+   evidence, each by a pull request (owner approval).
+3. **No such release.** Treat it as an attack on the config of the agent:
+   the mover ran code that the operator does not run. Keep the snapshots
+   suspended and the Job kept, and give the audit lines to the owner, who
+   decides the next step. The refused write changed nothing, so the agent
+   keeps running on the config in git.
+4. Set `suspend: false` again by a pull request when the cause is clear.
+
+Not tested.
 
 ### ModelBridgeRateLimited
 
