@@ -1,3 +1,0 @@
-kind: Changed
-body: 'security: homelab-wsl lists `trivy` in its sources, after its first result, so SecurityResultLate watches Trivy Operator there. A pending source in the test of the sources of a cluster now has a last day and must be reached, and the federation test covers the series of `trivy` from homelab-wsl and the accepted findings of `trivy` on homelab-wsl'
-time: 2026-11-15T19:00:00.000000000Z

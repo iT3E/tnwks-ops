@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.161.0 - 2026-11-15
+
+### Changed
+
+* security: homelab-wsl lists `trivy` in its sources, after its first result, so SecurityResultLate watches Trivy Operator there. A pending source in the test of the sources of a cluster now has a last day and must be reached, and the federation test covers the series of `trivy` from homelab-wsl and the accepted findings of `trivy` on homelab-wsl
+
 ## v2.160.0 - 2026-11-15
 
 ### Added
