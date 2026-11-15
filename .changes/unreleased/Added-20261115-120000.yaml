@@ -1,3 +1,0 @@
-kind: Added
-body: 'security: the alert SecurityImagesScannedByTag (warning) fires when containers on a cluster with Trivy Operator have matched their vulnerability report by reference only, not by digest, for 7 days: the tag moved after the node pulled it, so the report is of another image; restart the workload or pin a digest. An entry of the accepted list with the check images-scanned-by-tag mutes it for the cluster'
-time: 2026-11-15T12:00:00.000000000Z

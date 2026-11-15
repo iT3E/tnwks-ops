@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.157.0 - 2026-11-15
+
+### Added
+
+* security: the alert SecurityImagesScannedByTag (warning) fires when containers on a cluster with Trivy Operator have matched their vulnerability report by reference only, not by digest, for 7 days: the tag moved after the node pulled it, so the report is of another image; restart the workload or pin a digest. An entry of the accepted list with the check images-scanned-by-tag mutes it for the cluster
+
+### Fixed
+
+* security: a vulnerability report of Trivy Operator counts for a running container by its digest, or, when no report has that digest, by the same namespace, container and image reference, so an image whose pod and report show different digests of the same reference (a tag that moved, or an image index and a platform image) is not counted as not scanned, and its critical vulnerabilities count once in image-vulnerabilities (when two reports have the reference and neither has the running digest, the one with the most critical vulnerabilities); the security board shows the number of containers matched by reference only
+
 ## v2.156.3 - 2026-11-15
 
 ### Fixed
