@@ -3,6 +3,18 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.165.0 - 2026-11-15
+
+### Added
+
+* Security: the host check of each WSL distro first tries to make a file in the textfile directory of its host, as root (a step of the service before the check) and as the distro user. Only a refusal by Windows for root is the pass; a write, a missing directory or no answer of root is the failed query textfile-write. The role runs the same tries and prints each answer with its uid.
+
+## v2.164.0 - 2026-11-15
+
+### Added
+
+* Security: homelab-wsl-02 scrapes the security series of both Windows hosts itself (job windows-exporter-security), in place of the federation of the host check through homelab-wsl. homelab-wsl keeps them with the label standby, and SecurityFindingNew fires there for them only while homelab-wsl-02 does not scrape their host. SecurityHostUnreachable fires when homelab-wsl-02 can not scrape the host of site 1 for 5 minutes, and two inhibit rules hold the late results behind that site (behind_site in systems.yaml) and PeerSiteUnreachable of that site while it fires.
+
 ## v2.163.0 - 2026-11-15
 
 ### Added

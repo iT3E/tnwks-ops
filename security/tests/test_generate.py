@@ -106,7 +106,8 @@ def test_the_registry_holds_no_result(registry):
         assert set(line) <= {"id", "title", "ig", "function", "nist_800_53", "attack", "checks"}
         for entries in line["checks"].values():
             assert all(set(entry) == {"source", "check"} for entry in entries)
-    assert all(set(system) <= {"name", "type", "site", "domain", "sources"} for system in registry["systems"])
+    assert all(set(system) <= {"name", "type", "site", "domain", "sources", "behind_site"}
+               for system in registry["systems"])
 
 
 def rules(registry):
@@ -317,7 +318,8 @@ def test_the_rule_tests_cover_no_evidence_and_the_late_rule(registry):
                for test in late)
 
 
-ALLOWED_LABELS = {"SecurityResultLate": {"source", "system"}, "SecurityAcceptedFindingExpired": {"system"}}
+ALLOWED_LABELS = {"SecurityResultLate": {"source", "system"}, "SecurityAcceptedFindingExpired": {"system"},
+                  "SecurityHostUnreachable": {"instance", "behind_site"}}
 
 
 def test_the_text_of_each_alert_is_a_system_a_severity_and_a_link_and_no_raw_event(registry):
@@ -335,6 +337,10 @@ def test_the_text_of_each_alert_is_a_system_a_severity_and_a_link_and_no_raw_eve
         used = set(re.findall(r"\{\{ *(\$[A-Za-z.]+) *\}\}", text))
         assert used <= {f"$labels.{label}" for label in allowed} | {"$externalLabels.cluster"}, used
         assert "$value" not in text and "{{ ." not in text, "no value and no raw field in the text"
+        if rule["alert"] == "SecurityHostUnreachable":
+            # The `up` of a scrape target: its target labels, and no result.
+            assert rule["expr"] == 'up{job="windows-exporter-security",behind_site!=""} == 0'
+            continue
         # Each term of the expression keeps only the labels of the text: a check, a pod
         # or a path of a result can not reach the alert.
         kept = set(re.findall(r"\bby \(([a-z_, ]+)\) \((?:time\(\) - last_over_time|absent_over_time|max by)", rule["expr"]))

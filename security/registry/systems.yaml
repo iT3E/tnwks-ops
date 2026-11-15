@@ -7,6 +7,12 @@
 # of the site, or `none` for a system that is on no site. A system of the type
 # `other` is a layer with no check.
 #
+# `behind_site` names the site whose Windows host or link the results of the
+# system pass through on their way to homelab-wsl-02: the host of site 1, its
+# distro, and the router, whose version mktxp of site 1 reads. Their late
+# alerts carry it, and Alertmanager holds them while homelab-wsl-02 can not
+# scrape the host of that site (SecurityHostUnreachable).
+#
 # `sources` lists the sources that report on the system today. The rule for a
 # late result watches each of them. A source joins this list in the pull
 # request that starts it, or, when it needs hours for its first result, in
@@ -49,6 +55,7 @@
   type: windows-host
   site: homelab-wsl
   domain: infrastructure
+  behind_site: homelab-wsl
   sources: [host-check]
 - name: WSL-02
   type: windows-host
@@ -59,6 +66,7 @@
   type: wsl-distro
   site: homelab-wsl
   domain: infrastructure
+  behind_site: homelab-wsl
   sources: [host-check]
 - name: WSL-02-ubuntu
   type: wsl-distro
@@ -69,6 +77,7 @@
   type: router
   site: none
   domain: infrastructure
+  behind_site: homelab-wsl
   sources: [stream, api-check]
 - name: sce-ep01
   type: other

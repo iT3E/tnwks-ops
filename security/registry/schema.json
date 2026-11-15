@@ -68,6 +68,10 @@
             "type": "array",
             "uniqueItems": true,
             "items": { "$ref": "#/$defs/sourceName" }
+          },
+          "behind_site": {
+            "description": "The site whose Windows host or link the results of the system pass through to homelab-wsl-02 (Design Doc 0004, section 5.5). The late alert of the system carries it as the label behind_site, and Alertmanager holds that alert while SecurityHostUnreachable fires for the same site.",
+            "enum": ["homelab-wsl", "homelab-wsl-02"]
           }
         }
       }
