@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.162.1 - 2026-11-15
+
+### Security
+
+* kopiur: the shared repository no longer allows agents-pilot, now that the old pilot policy agent-state is gone; its snapshots stay there under their kopia identity.
+
 ## v2.162.0 - 2026-11-15
 
 ### Changed
