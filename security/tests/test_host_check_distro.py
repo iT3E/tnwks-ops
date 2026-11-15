@@ -9,6 +9,8 @@ import importlib.util
 import json
 import os
 import re
+import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -38,6 +40,13 @@ def load():
 
 
 check = load()
+
+
+@pytest.fixture(autouse=True)
+def files_of_this_user_count_as_roots(monkeypatch):
+    """The tests run as one user, and the check reads only an answer that root owns. The
+    tests of that rule set ROOT_UID themselves."""
+    monkeypatch.setattr(check, "ROOT_UID", os.geteuid())
 
 
 # The tries of a host that refuses the write: root reaches Windows, which refuses; the
@@ -521,6 +530,91 @@ def test_an_answer_of_root_that_is_missing_old_or_odd_is_not_done(tmp_path, answ
     assert check.read_root_result(path, NOW)[:2] == (0, check.NOT_DONE)
 
 
+def test_the_answer_of_root_must_be_owned_by_root_and_not_be_a_link(tmp_path, monkeypatch):
+    """The distro user owns the runtime directory, so it could put a file of its own, or
+    a link, in the place of the answer of root."""
+    assert load().ROOT_UID == 0
+    path = tmp_path / "write-test.json"
+    root_answer(path, check.REFUSED, NOW - 60)
+    assert check.read_root_result(path, NOW)[:2] == (0, check.REFUSED)
+    monkeypatch.setattr(check, "ROOT_UID", os.geteuid() + 1)
+    uid, answer, message = check.read_root_result(path, NOW)
+    assert (uid, answer) == (0, check.NOT_DONE) and f"owned by uid {os.geteuid()}" in message
+    monkeypatch.setattr(check, "ROOT_UID", os.geteuid())
+    link = tmp_path / "link.json"
+    link.symlink_to(path)
+    assert check.read_root_result(link, NOW)[:2] == (0, check.NOT_DONE)
+
+
+# The image of the jobs of the repository that run Python; Debian has setpriv.
+PYTHON_IMAGE = ("docker.io/library/python:3.15.2-slim-trixie"
+                "@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928")
+READ_AS_NOBODY = ("from pathlib import Path; import time; m = {}; "
+                  "exec(compile(open('/check.py').read(), 'check', 'exec'), m); "
+                  "print(m['read_root_result'](Path('/run/t/write-test.json'), time.time())[1])")
+
+
+def test_an_answer_that_root_writes_is_read_by_the_distro_user_and_not_one_of_its_own():
+    """The case of the service, across two users in a container with no network: root
+    writes the answer (the step with the prefix +), and a user with no capability reads
+    it. That user owns the runtime directory, as the distro user does, so it can put a
+    file of its own in that place: the check then reads no answer (3)."""
+    if not shutil.which("docker"):
+        if os.environ.get("CI"):
+            pytest.fail("Docker is needed to test the answer of root across users")
+        pytest.skip("docker not installed")
+    nobody = "setpriv --reuid=65534 --regid=65534 --clear-groups"
+    script = f"""set -e
+mkdir -p /run/t /textfile && chown 65534:65534 /run/t && chmod 0755 /run/t
+python3 /check.py --system X --textfile-dir /out --write-test-dir /textfile --write-test-only \\
+  --write-test-result /run/t/write-test.json || true
+stat -c '%a %u' /run/t/write-test.json
+{nobody} python3 -c "{READ_AS_NOBODY}"
+{nobody} sh -c 'echo {{}} > /run/t/own.json && mv -f /run/t/own.json /run/t/write-test.json'
+{nobody} python3 -c "{READ_AS_NOBODY}"
+"""
+    result = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{SCRIPT}:/check.py:ro",
+                             PYTHON_IMAGE, "sh", "-c", script],
+                            capture_output=True, text=True, timeout=600, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    mode, root_read, own_read = result.stdout.split("\n")[-4:-1]
+    # Root may write in the plain directory of the container: answer 1, read as written.
+    assert (mode, root_read, own_read) == ("644 0", str(check.WRITTEN), str(check.NOT_DONE))
+
+
+def test_the_mode_of_a_file_lets_the_distro_user_read_the_answer_of_root(tmp_path):
+    """Without root: the bits that the reader needs. Owner root, reader neither root nor
+    of its group, so only the bits of "other" count."""
+    answer = tmp_path / "write-test.json"
+    check.write_atomic(answer, "{}\n", check.ROOT_RESULT_MODE)
+    assert stat.S_IMODE(answer.stat().st_mode) & stat.S_IROTH
+    check.write_atomic(tmp_path / "state.json", "{}\n")
+    assert not stat.S_IMODE((tmp_path / "state.json").stat().st_mode) & stat.S_IROTH, "a state stays private"
+
+
+def test_a_try_that_fails_in_another_way_names_its_errno(tmp_path, monkeypatch):
+    """Whether drvfs gives EACCES or EPERM for a refusal is known only on a host: the
+    message of the answer 3 names the errno, so the first live read says it."""
+    host = host_dir(tmp_path)
+    linux_allows(monkeypatch)
+    real = os.open
+
+    def create_fails_with(error):
+        def fake(path, flags, *args, **kwargs):
+            if flags & os.O_CREAT:
+                raise error
+            return real(path, flags, *args, **kwargs)
+        monkeypatch.setattr(check.os, "open", fake)
+
+    create_fails_with(OSError(5, "Input/output error"))
+    _, answer, message = check.write_test(host)
+    assert answer == check.NOT_DONE and "errno 5 EIO" in message
+    for code, name in ((13, "EACCES"), (1, "EPERM")):
+        create_fails_with(PermissionError(code, "denied"))
+        _, answer, message = check.write_test(host)
+        assert answer == check.REFUSED and f"errno {code} {name}" in message
+
+
 def test_an_answer_of_root_of_this_run_is_read(tmp_path):
     path = tmp_path / "write-test.json"
     root_answer(path, check.REFUSED, NOW - 60)
@@ -559,6 +653,9 @@ def test_one_try_alone_prints_its_uid_and_exits_with_its_answer(tmp_path, monkey
     assert not (tmp_path / "out").exists()
     written = json.loads(answer.read_text())
     assert (written["version"], written["uid"], written["answer"]) == (1, os.geteuid(), check.WRITTEN)
+    # The check reads this file as the distro user, with no capability: it needs the
+    # read bit of "other", as root owns the file.
+    assert stat.S_IMODE(answer.stat().st_mode) == 0o644
     linux_allows(monkeypatch)
     refuse(monkeypatch)
     assert check.main(argv) == check.REFUSED

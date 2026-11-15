@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import argparse
 import email.utils
+import errno
 import json
 import os
 import re
@@ -111,6 +112,11 @@ HELP = {
 REFUSED, WRITTEN, LINUX_REFUSED, NOT_DONE = 0, 1, 2, 3
 # The answer of the try as root counts when it is this new, in seconds.
 ROOT_RESULT_MAX_AGE = 900
+# The owner that the file of that answer must have: root wrote it. The distro user
+# owns the runtime directory, so it could put a file of its own in that place.
+ROOT_UID = 0
+# The mode of that file: the check reads it as the distro user, with no capability.
+ROOT_RESULT_MODE = 0o644
 
 # "Inst <package> [<installed version>] (<new version> ...)": an upgrade. A
 # line with no installed version is a new package that an upgrade pulls in.
@@ -205,10 +211,14 @@ def write_test(directory: Path) -> tuple[int, int, str]:
     path = directory / f".tnwks-write-test-{secrets.token_hex(8)}.tmp"
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except PermissionError:
-        return uid, REFUSED, f"{user}: Windows refused the write ({shown})"
+    except PermissionError as error:
+        # EACCES or EPERM: Python raises PermissionError for both.
+        return uid, REFUSED, (f"{user}: Windows refused the write"
+                              f" (errno {error.errno} {errno.errorcode.get(error.errno, '?')}; {shown})")
     except OSError as error:
-        return uid, NOT_DONE, f"{user}: a write gave neither a file nor a refusal ({error.strerror})"
+        # The errno, by number and name: the first live answer says how drvfs maps a refusal.
+        return uid, NOT_DONE, (f"{user}: a write gave neither a file nor a refusal"
+                               f" (errno {error.errno} {errno.errorcode.get(error.errno, '?')}: {error.strerror})")
     os.close(fd)
     try:
         path.unlink()
@@ -219,9 +229,14 @@ def write_test(directory: Path) -> tuple[int, int, str]:
 
 def read_root_result(path: Path, now: float) -> tuple[int, int, str]:
     """The answer of the try as root, from the step before the check. A missing, old or
-    odd answer is NOT_DONE."""
+    odd answer is NOT_DONE, and so is a file that root does not own, or a link."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, encoding="utf-8") as handle:
+            owner = os.fstat(handle.fileno()).st_uid
+            if owner != ROOT_UID:
+                raise ValueError(f"the file is owned by uid {owner}, not by root")
+            data = json.loads(handle.read(65536))
         uid, answer, moment, message = data["uid"], data["answer"], data["time"], data["message"]
         if data.get("version") != 1 or uid != 0 or answer not in (REFUSED, WRITTEN, LINUX_REFUSED, NOT_DONE):
             raise ValueError("not an answer of root")
@@ -255,10 +270,13 @@ def read_state(path: Path) -> dict[str, float]:
         raise QueryError(f"the state file {path} can not be read: {error}") from error
 
 
-def write_atomic(path: Path, text: str) -> None:
-    """Write next to the place, then put the file in place in one step."""
+def write_atomic(path: Path, text: str, mode: int | None = None) -> None:
+    """Write next to the place, then put the file in place in one step. mkstemp makes
+    the file 0600; mode, when given, is set before the file is in place."""
     fd, partial = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".partial")
     try:
+        if mode is not None:
+            os.fchmod(fd, mode)
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
         os.replace(partial, path)
@@ -374,8 +392,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.write_test_only:
         uid, answer, message = write_test(args.write_test_dir)
         if args.write_test_result:
+            # 0644: the check reads it as the distro user.
             write_atomic(args.write_test_result, json.dumps(
-                {"version": 1, "uid": uid, "answer": answer, "time": time.time(), "message": message}) + "\n")
+                {"version": 1, "uid": uid, "answer": answer, "time": time.time(), "message": message}) + "\n",
+                ROOT_RESULT_MODE)
         print(f"write test of {args.system}: {message}")
         return answer
     if args.state_file is None:
