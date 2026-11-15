@@ -388,13 +388,8 @@ the sandbox plugin copies the workspace only.
     product's own installer, with no network, before `doctor`. The install
     record in the state database makes it a verified official install, and
     its code is in `state/npm/`. The config enables it in
-    `plugins.entries` (the image README, "The official plugins").
-    `plugins.load.paths` still names the Brave path of the images before
-    0.4.0, so that the config and the image do not change in one merge
-    (one start of the pod, not two). The path is not in the image any
-    more: the gateway logs `Configured plugin load path is unavailable`
-    and goes on, and the code comes from `state/npm/`. A later change of
-    the config takes the path out.
+    `plugins.entries` (the image README, "The official plugins"), and
+    `plugins.load.paths` names no path for it.
   - **The code on the state volume is replaced at each start.** The
     gateway runs as the same user and can write the state volume, and the
     product checks no hash of installed code at a start: the trust comes

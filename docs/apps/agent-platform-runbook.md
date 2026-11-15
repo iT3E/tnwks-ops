@@ -763,9 +763,9 @@ sandbox filter is `src/plugins/web-provider-resolution-shared.ts:85-90`.)
    above it are the product's installer.
 3. **Read only, by the owner.** The start lines of the `agent` container
    (`kubectl -n agents-pilot logs deploy/agent -c agent | grep -E 'http server listening|plugins\]'`).
-   - `http server listening (18 plugins: ... brave ...)` means the plugin
+   - `http server listening (5 plugins: brave, ...)` means the plugin
      loaded. With no `brave` in that list, check the step above and the
-     entry `plugins.entries.brave` in `openclaw.json`.
+     entries `plugins.entries.brave` and `plugins.allow` in `openclaw.json`.
    - A line `OpenClaw can't verify where this plugin came from. Review it
      with 'openclaw plugins inspect brave'` means the plugin loaded from a
      path, not as a verified official install: a sandboxed session refuses
@@ -812,9 +812,7 @@ sandbox filter is `src/plugins/web-provider-resolution-shared.ts:85-90`.)
      "Web search".
    - **Not a verified official install:** the image at 0.4.0 or later, the
      `official-plugins` init container before `doctor`, and no Brave path
-     that a plugin can load from in `plugins.load.paths`. (A path that is
-     not there gives only the warning `Configured plugin load path is
-     unavailable`.)
+     in `plugins.load.paths`.
 7. **Turn search off,** through a merge: set `tools.web.search.enabled` to
    `false` in `openclaw.json` and take `web_search` out of
    `tools.sandbox.tools.alsoAllow`. The change of the config starts the pod
