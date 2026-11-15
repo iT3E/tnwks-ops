@@ -251,11 +251,40 @@ for the alert are `high`, and old signatures, which it does not name, are
 | `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `medium` |
 | `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off | `high` |
 | `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) | `high` |
-| `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each package whose upgrade this check first saw more than 14 days ago. A package list does not say when an upgrade came out, so the check keeps the first time it saw each upgrade in `/var/lib/tnwks-host-check/state.json`, and the clock of a package starts at the first run that sees it | `high` |
+| `updates-held` | An online search of Windows Update for software updates that are hidden and not installed | Each such update released more than 14 days ago (Design Doc 0004, section 5.7). A hidden update never shows in `updates-pending` | `high` |
+| `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each upgrade that it offers, whose clock is older than 14 days (below) | `high` |
+| `updates-held` (distro) | A second simulation with `--ignore-hold` and each phased update, and `apt-mark showhold` | Each held package with a newer candidate, whose clock is older than 14 days (Design Doc 0004, section 5.7) | `high` |
+
+**The clock of an upgrade in a distro** (Design Doc 0004, sections 5.6 and
+5.7). A package list does not say when an upgrade came out, so the check
+keeps a clock for each package in `/var/lib/tnwks-host-check/state.json`.
+
+- **One clock for each package.** The second simulation lists each upgrade
+  that the sources offer, also a held package and a phased update that the
+  host is not yet eligible for. Each package of that list has one clock. It
+  keeps its clock when it moves from waiting to held or back, so a hold buys
+  no time, and a phased update has the right age when the host gets it. A
+  package loses its clock only when it leaves that list.
+- **The start of a clock.** The simulation names the lists of each upgrade
+  (the Label, or the Origin, and the Suite of its Release file). An upgrade
+  that a run sees first came out after the Date of its list at the last run
+  with a result, so its clock starts at that Date (the oldest one, for an
+  upgrade of two lists). With no such Date, it starts at the time 0, and the
+  upgrade counts as old: with no state file, with a state file of the old
+  form (its clocks stay), and for a list that the last run with a result did
+  not have.
+- **Only a run with a result writes the state.** A run in which a query
+  failed leaves the state file as it was. A host that was off for a week
+  fails its first run on old lists. The next run dates the upgrades of the
+  week by the Dates of the last run with a result, not by the day it sees
+  them.
+- **What it can not see.** A pin in the APT preferences changes the
+  candidate itself, so no simulation sees it. A phase that the vendor halts
+  keeps an update out with no fail.
 
 The file also has series of the host check itself, which no rule of the
 registry reads: each protection and profile, the time of the signatures and
-of the newest scan, the count of pending updates, the time of the newest
+of the newest scan, the counts of pending and of held updates, the time of the newest
 install, a restart that an update waits for, and
 `homelab_security_host_check_failed_queries`.
 

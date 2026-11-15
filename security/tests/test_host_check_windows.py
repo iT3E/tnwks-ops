@@ -26,11 +26,11 @@ SCRIPT = ROLE / "files/Invoke-TnwksHostCheck.ps1"
 REGISTRY = ROOT / "security/registry"
 PWSH = shutil.which("pwsh")
 NOW = datetime.datetime(2026, 11, 13, 12, 0, tzinfo=datetime.UTC)
-CHECKS = ("defender-enabled", "defender-signatures", "firewall-enabled", "updates-pending")
+CHECKS = ("defender-enabled", "defender-signatures", "firewall-enabled", "updates-pending", "updates-held")
 # Design Doc 0004, section 4.1.4: the alert covers Defender off, the firewall off and
 # updates pending past 14 days. Old signatures show on the board and do not alert.
 SEVERITY = {"defender-enabled": "high", "defender-signatures": "medium",
-            "firewall-enabled": "high", "updates-pending": "high"}
+            "firewall-enabled": "high", "updates-pending": "high", "updates-held": "high"}
 RESULT = "homelab_security_check_result"
 LAST = "homelab_security_last_result_timestamp_seconds"
 FAILED = "homelab_security_host_check_failed_queries"
@@ -52,6 +52,7 @@ function Get-TnwksFirewallProfiles {
     foreach ($name in 'Domain', 'Private', 'Public') { [pscustomobject]@{ Name = $name; Enabled = 'True' } }
 }
 function Get-TnwksPendingUpdates { }
+function Get-TnwksHeldUpdates { }
 function Get-TnwksLastInstall { $now.AddDays(-3) }
 function Get-TnwksRebootPending { $false }
 """
@@ -80,7 +81,7 @@ def host_check(fakes: str = "") -> dict:
 
 
 @needs_pwsh
-def test_a_host_where_each_check_passes_gives_four_results_of_0_and_the_time():
+def test_a_host_where_each_check_passes_gives_five_results_of_0_and_the_time():
     families = host_check()
     assert textfile.series(families, RESULT) == {
         (("check", check), ("severity", SEVERITY[check]), ("source", "host-check"), ("system", "HOST-A")): 0
@@ -93,6 +94,7 @@ def test_a_host_where_each_check_passes_gives_four_results_of_0_and_the_time():
     assert textfile.value(families, "homelab_security_host_defender_last_scan_timestamp_seconds",
                           system="HOST-A") == (NOW - datetime.timedelta(days=2)).timestamp()
     assert textfile.value(families, "homelab_security_host_updates_pending", system="HOST-A") == 0
+    assert textfile.value(families, "homelab_security_host_updates_held", system="HOST-A") == 0
     assert textfile.value(families, "homelab_security_host_reboot_pending", system="HOST-A") == 0
     for profile in ("domain", "private", "public"):
         assert textfile.value(families, "homelab_security_host_firewall_enabled",
@@ -116,11 +118,14 @@ function Get-TnwksFirewallProfiles {
 }
 # Released 30, 15 and 2 days ago: two are past 14 days.
 function Get-TnwksPendingUpdates { $now.AddDays(-30); $now.AddDays(-15); $now.AddDays(-2) }
+# Hidden: released 20 and 3 days ago, one past 14 days.
+function Get-TnwksHeldUpdates { $now.AddDays(-20); $now.AddDays(-3) }
 function Get-TnwksRebootPending { $true }
 """)
     results = {dict(key)["check"]: value for key, value in textfile.series(families, RESULT).items()}
     assert results == {"defender-enabled": 2, "defender-signatures": 1,
-                       "firewall-enabled": 2, "updates-pending": 2}
+                       "firewall-enabled": 2, "updates-pending": 2, "updates-held": 1}
+    assert textfile.value(families, "homelab_security_host_updates_held", system="HOST-A") == 2
     assert textfile.value(families, LAST, source="host-check", system="HOST-A") == NOW.timestamp()
     assert textfile.value(families, "homelab_security_host_updates_pending", system="HOST-A") == 3
     assert textfile.value(families, "homelab_security_host_reboot_pending", system="HOST-A") == 1
@@ -165,6 +170,7 @@ function Get-TnwksFirewallProfiles {
 }""",
     "the firewall gives no profile": "function Get-TnwksFirewallProfiles { }",
     "the search of Windows Update fails": "function Get-TnwksPendingUpdates { throw 'search failed' }",
+    "the search of hidden updates fails": "function Get-TnwksHeldUpdates { throw 'search failed' }",
 }
 
 
@@ -198,10 +204,36 @@ function Get-TnwksUpdateSession {
 def test_a_search_that_windows_update_does_not_finish_is_a_failed_query():
     """The query itself, with a fake session: a result code other than 2 (succeeded)
     throws, as a search that did not finish can not say that nothing is pending."""
-    fakes = FAKES.replace("function Get-TnwksPendingUpdates { }\n", "")
-    assert "Get-TnwksPendingUpdates" not in fakes
-    families = textfile.parse(pwsh(fakes + FAKE_SESSION + "$script:code = 4\n" + MEASURE).stdout)
-    assert RESULT not in families and LAST not in families
+    for query in ("Get-TnwksPendingUpdates", "Get-TnwksHeldUpdates"):
+        fakes = FAKES.replace(f"function {query} {{ }}\n", "")
+        assert query not in fakes
+        families = textfile.parse(pwsh(fakes + FAKE_SESSION + "$script:code = 4\n" + MEASURE).stdout)
+        assert RESULT not in families and LAST not in families
+
+
+@needs_pwsh
+def test_a_hidden_update_fails_after_14_days():
+    """Design Doc 0004, section 5.7: a hidden update is dated by its release, so it
+    needs no clock."""
+    at_limit = host_check("function Get-TnwksHeldUpdates { $now.AddDays(-14) }")
+    past = host_check("function Get-TnwksHeldUpdates { $now.AddDays(-14).AddHours(-1) }")
+    for families, expected in ((at_limit, 0), (past, 1)):
+        assert textfile.value(families, RESULT, source="host-check", check="updates-held", system="HOST-A",
+                              severity="high") == expected
+        assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system="HOST-A",
+                              severity="high") == 0
+
+
+@needs_pwsh
+def test_the_search_of_held_updates_asks_windows_update_online_for_hidden_updates():
+    output = pwsh(FAKE_SESSION + r"""
+$script:code = 2
+$released = @(Get-TnwksHeldUpdates)
+[Console]::Out.Write(('{0}|{1}|{2}' -f $released.Count, $script:seen.online, $script:seen.criteria))
+""").stdout
+    count, online, criteria = output.split("|")
+    assert count == "1" and online == "True"
+    assert criteria == "IsInstalled=0 and IsHidden=1 and Type='Software'"
 
 
 @needs_pwsh
@@ -222,7 +254,7 @@ def test_a_fact_that_no_check_reads_costs_no_result():
 function Get-TnwksLastInstall { throw 'no history' }
 function Get-TnwksRebootPending { throw 'no answer' }
 """)
-    assert len(textfile.series(families, RESULT)) == 4
+    assert len(textfile.series(families, RESULT)) == 5
     assert textfile.value(families, LAST, source="host-check", system="HOST-A") == NOW.timestamp()
     assert "homelab_security_host_updates_last_install_timestamp_seconds" not in families
     assert "homelab_security_host_reboot_pending" not in families
@@ -235,11 +267,11 @@ def test_the_run_writes_the_whole_file_in_one_step_and_fails_when_a_query_fails(
 Invoke-TnwksHostCheck -System 'HOST-A' -TextfileDir '{tmp_path}' -FileName 'tnwks_security_host_check.prom' `
     -SignatureMaxAgeDays 7 -UpdatesMaxAgeDays 14
 """)
-    assert run.stdout.strip() == "host check of HOST-A: 4 checks"
+    assert run.stdout.strip() == "host check of HOST-A: 5 checks"
     written = (tmp_path / "tnwks_security_host_check.prom").read_bytes()
     assert not written.startswith(b"\xef\xbb\xbf") and b"\r" not in written
     families = textfile.parse(written.decode())
-    assert len(textfile.series(families, RESULT)) == 4
+    assert len(textfile.series(families, RESULT)) == 5
     assert sorted(path.name for path in tmp_path.iterdir()) == ["tnwks_security_host_check.prom"]
 
     failed = pwsh(FAKES + rf"""
