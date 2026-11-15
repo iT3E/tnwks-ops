@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.165.0 - 2026-11-15
+
+### Added
+
+* Security: the host check of each WSL distro first tries to make a file in the textfile directory of its host, as root (a step of the service before the check) and as the distro user. Only a refusal by Windows for root is the pass; a write, a missing directory or no answer of root is the failed query textfile-write. The role runs the same tries and prints each answer with its uid.
+
 ## v2.164.0 - 2026-11-15
 
 ### Added
