@@ -191,21 +191,22 @@ spec:
     # works at about 168 MiB at rest, and the limit of 256 MiB killed it 3
     # times in the first burst of scans (236 MiB in the last sample before a
     # kill). A burst comes again each day, when the reports end after 24 hours,
-    # and with each rollout. 512 MiB is twice the old limit and 3 times the
-    # rest.
+    # and with each rollout. On homelab-wsl the first cycle peaked at 473 MiB
+    # of the next limit, 512 MiB (about 260 MiB at rest, no kill): under 8%
+    # above the peak. The owner raised it to 640 MiB on 2026-11-15.
     resources:
       requests:
         cpu: 25m
         memory: 256Mi
       limits:
-        memory: 512Mi
+        memory: 640Mi
     # The Go runtime collects its garbage harder near this value, so a burst
     # of short-lived objects stays under the limit: 90% of it, the margin
     # that "A Guide to the Go Garbage Collector" (go.dev/doc/gc-guide) gives
     # for memory outside the heap.
     extraEnv:
       - name: GOMEMLIMIT
-        value: 460MiB
+        value: 576MiB
 
   # The chart's ClusterRole gives create and delete on Jobs and a read of pod
   # logs in every namespace, and has no value to narrow it. With
