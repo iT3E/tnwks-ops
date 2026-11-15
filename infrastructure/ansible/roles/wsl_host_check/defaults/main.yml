@@ -17,13 +17,13 @@ wsl_host_check_name: tnwks-host-check
 wsl_host_check_textfile_dir: /mnt/c/Program Files/windows_exporter/textfile_inputs/wsl-distro
 # The write test (Design Doc 0004, section 5.9): the distro's path of the
 # textfile directory of the host, host_check_textfile_dir of role
-# windows_host_check. The distro has no right to change it, so each run of
-# the check and the last task of this role must get a refusal. A write that
-# succeeds is the failed query textfile-write, and the run gives no result.
+# windows_host_check. Each run of the check and the last task of this role try
+# to make a file there. Only a refusal by Windows is the pass; any other
+# answer is the failed query textfile-write, and the run gives no result.
 wsl_host_check_write_test_dir: /mnt/c/Program Files/windows_exporter/textfile_inputs
-# Whether a write that succeeds in the last task of the role fails the play.
-# Off until each distro starts with no elevation (section 5.9): until then the
-# task reports the result of each try, and the check of each run counts it.
+# Whether the answer of the last task of the role can fail the play. Off until
+# the owner turns it on (section 5.9 of the design). The change that starts
+# each distro with no elevation turns it on, and a test holds it on there.
 wsl_host_check_write_test_fails_play: false
 # A name that no file of the Windows host has: the exporter refuses two
 # files with the same name.

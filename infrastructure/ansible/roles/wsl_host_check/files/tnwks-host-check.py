@@ -32,17 +32,23 @@ leaves it as it is, so it does not start the clock of each upgrade again.
 The file goes to its place in one step, so windows_exporter never reads
 half a file.
 
-The write test comes first in each run (Design Doc 0004, section 5.9). The
-check tries to make a file in the textfile directory of the host, above the
-directory of the distro, with a name that does not end in .prom, so the
-exporter never reads it. The account of the distro has no right to change
-that directory, so a refusal is the pass. A write that succeeds shows that
-the processes of the distro carry the admin rights of the host: the run
-removes the file that it made, and nothing else, and counts the failed
-query textfile-write. A refusal counts only when the directory is there and
-can be listed, so a directory that is gone or moved is a failed query too,
-not a pass. With --write-test-only, the script runs this test alone, for the
-last task of the role.
+The write test comes first in each run (Design Doc 0004, section 5.9). A try
+makes a file in the textfile directory of the host, above the directory of
+the distro, with a name that does not end in .prom, so the exporter never
+reads it. Only a refusal by Windows is the pass. Linux checks the mode of the
+directory first, as /mnt/c shows it, and a refusal there never reaches
+Windows: a try asks the kernel first (access() with the effective ids), and
+such a try is no evidence. Root passes that check, so the try as root is the
+one that reaches Windows: the service runs it before the check, with full
+privileges, and writes its answer to --write-test-result. The check reads
+that answer, and also tries as its own user. The run counts the failed query
+textfile-write when the answer of root is not a refusal by Windows (or is
+missing or old), or when a try succeeds, or when the directory is gone or can
+not be listed. A try removes the file that it made, and nothing else. Each
+try is a series homelab_security_host_write_test_result with the uid of its
+user: 0 refused by Windows, 1 the write succeeded, 2 refused by Linux before
+Windows, 3 not done. With --write-test-only, the script runs one try alone,
+prints its answer with its uid, and exits with that code.
 
 The result carries the label severity: high, as Design Doc 0004, section
 4.1.4, alerts for updates pending for more than 14 days.
@@ -61,6 +67,7 @@ import json
 import os
 import re
 import secrets
+import stat
 import subprocess
 import sys
 import tempfile
@@ -94,7 +101,16 @@ HELP = {
     "homelab_security_host_reboot_pending": (
         "Whether the host waits for a restart to finish an update: 1 yes, 0 no."
     ),
+    "homelab_security_host_write_test_result": (
+        "The write test of a WSL distro to the textfile directory of its host, by the uid that tried:"
+        " 0 refused by Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not done."
+    ),
 }
+
+# The answers of a try of the write test.
+REFUSED, WRITTEN, LINUX_REFUSED, NOT_DONE = 0, 1, 2, 3
+# The answer of the try as root counts when it is this new, in seconds.
+ROOT_RESULT_MAX_AGE = 900
 
 # "Inst <package> [<installed version>] (<new version> ...)": an upgrade. A
 # line with no installed version is a new package that an upgrade pulls in.
@@ -150,28 +166,79 @@ def lists_time(lists_dir: Path) -> float:
     return oldest
 
 
-def write_test(directory: Path) -> None:
-    """Try to make a file in the textfile directory of the host. A refusal is the pass,
-    and it counts only when the directory is there and can be listed. A file that the
-    test made goes again, and the test touches no other file."""
+def mount_of(path: Path, mountinfo: Path = Path("/proc/self/mountinfo")) -> str:
+    """The type and the options of the mount that holds path, for the message."""
+    best, found = "", "unknown"
+    try:
+        lines = mountinfo.read_text().splitlines()
+    except OSError:
+        return found
+    text = str(path)
+    for line in lines:
+        fields = line.split()
+        if " - " not in line or len(fields) < 6:
+            continue
+        point = fields[4].replace("\\040", " ")
+        if (text == point or text.startswith(point.rstrip("/") + "/")) and len(point) >= len(best):
+            after = line.split(" - ", 1)[1].split()
+            best, found = point, f"{after[0]} {fields[5]},{after[2] if len(after) > 2 else ''}".rstrip(",")
+    return found
+
+
+def write_test(directory: Path) -> tuple[int, int, str]:
+    """One try to make a file in the textfile directory of the host, as this process:
+    (uid, answer, message). Only a refusal by Windows is REFUSED. The kernel answers
+    first by the mode that /mnt/c shows (access() with the effective ids asks the same
+    check as open()), and a try that Linux refuses never reaches Windows. A try that
+    made a file removes it, and touches no other file."""
+    uid = os.geteuid()
+    user = f"uid {uid}"
     try:
         os.listdir(directory)
+        mode = os.stat(directory)
     except OSError as error:
-        raise QueryError(f"the textfile directory {directory} can not be listed: {error}") from error
+        return uid, NOT_DONE, f"{user}: the textfile directory {directory} can not be listed ({error.strerror})"
+    shown = f"{stat.filemode(mode.st_mode)} {mode.st_uid}:{mode.st_gid}, mount {mount_of(directory)}"
+    if not os.access(directory, os.W_OK | os.X_OK, effective_ids=True):
+        return uid, LINUX_REFUSED, f"{user}: Linux refuses the write by the mode of the directory ({shown}), so the try does not reach Windows"
     # Not .prom: windows_exporter reads .prom files only, so it never reads this one.
     path = directory / f".tnwks-write-test-{secrets.token_hex(8)}.tmp"
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except PermissionError:
-        return
+        return uid, REFUSED, f"{user}: Windows refused the write ({shown})"
     except OSError as error:
-        raise QueryError(f"a write to {directory} gave neither a file nor a refusal: {error}") from error
+        return uid, NOT_DONE, f"{user}: a write gave neither a file nor a refusal ({error.strerror})"
     os.close(fd)
     try:
         path.unlink()
     except OSError as error:
-        raise QueryError(f"a write to {directory} succeeded, and {path.name} could not go: {error}") from error
-    raise QueryError(f"a write to {directory} succeeded: the distro can change the textfile directory")
+        return uid, WRITTEN, f"{user}: the write succeeded, and {path.name} could not be removed ({error.strerror})"
+    return uid, WRITTEN, f"{user}: the write succeeded, and the file is removed"
+
+
+def read_root_result(path: Path, now: float) -> tuple[int, int, str]:
+    """The answer of the try as root, from the step before the check. A missing, old or
+    odd answer is NOT_DONE."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        uid, answer, moment, message = data["uid"], data["answer"], data["time"], data["message"]
+        if data.get("version") != 1 or uid != 0 or answer not in (REFUSED, WRITTEN, LINUX_REFUSED, NOT_DONE):
+            raise ValueError("not an answer of root")
+        if not isinstance(moment, (int, float)) or not now - ROOT_RESULT_MAX_AGE <= moment <= now + 60:
+            raise ValueError("not an answer of this run")
+        return 0, answer, str(message)[:300]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return 0, NOT_DONE, f"uid 0: the try as root left no answer ({type(error).__name__}: {error})"
+
+
+def write_failed(tries: list[tuple[int, int, str]]) -> bool:
+    """The failed query textfile-write: root has no refusal by Windows, or a try wrote,
+    or a try could not be done. A refusal by Linux for another user is no evidence, and
+    not a fail."""
+    if REFUSED not in [answer for uid, answer, _ in tries if uid == 0]:
+        return True
+    return any(answer in (WRITTEN, NOT_DONE) for _, answer, _ in tries)
 
 
 def read_state(path: Path) -> dict[str, float]:
@@ -208,7 +275,7 @@ def measure(
     packages=pending_packages,
     lists=lists_time,
     reboot=lambda: False,
-    writes=lambda: None,
+    writes=lambda: [(0, REFUSED, "uid 0: not tried")],
 ) -> dict:
     """Run each query. state is None when the state file could not be read. writes is the
     write test, and it runs first."""
@@ -217,11 +284,12 @@ def measure(
     failed: list[str] = []
     new_state = dict(state or {})
 
-    try:
-        writes()
-    except QueryError as error:
+    tries = writes()
+    for uid, answer, message in tries:
+        details.append(("homelab_security_host_write_test_result", {"uid": str(uid)}, answer))
+        print(f"textfile-write: {message}", file=sys.stderr)
+    if write_failed(tries):
         failed.append("textfile-write")
-        print(f"textfile-write: {error}", file=sys.stderr)
 
     if state is None:
         failed.append("state")
@@ -292,7 +360,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--write-test-dir", type=Path, required=True,
                         help="the textfile directory of the host, which the distro must not be able to change")
     parser.add_argument("--write-test-only", action="store_true",
-                        help="run the write test alone: exit 0 on a refusal, 1 otherwise")
+                        help="run one try of the write test alone, and exit with its answer (0 refused by Windows)")
+    parser.add_argument("--write-test-result", type=Path,
+                        help="with --write-test-only: write the answer there; else: read the answer of root there")
     parser.add_argument("--file-name", default="tnwks_security_host_check_distro.prom")
     parser.add_argument("--state-file", type=Path)
     parser.add_argument("--updates-max-age-days", type=int, default=14)
@@ -302,13 +372,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.write_test_only:
-        try:
-            write_test(args.write_test_dir)
-        except QueryError as error:
-            print(f"write test of {args.system}: {error}")
-            return 1
-        print(f"write test of {args.system}: {args.write_test_dir} refused the write")
-        return 0
+        uid, answer, message = write_test(args.write_test_dir)
+        if args.write_test_result:
+            write_atomic(args.write_test_result, json.dumps(
+                {"version": 1, "uid": uid, "answer": answer, "time": time.time(), "message": message}) + "\n")
+        print(f"write test of {args.system}: {message}")
+        return answer
     if args.state_file is None:
         parser.error("--state-file is required")
 
@@ -324,7 +393,9 @@ def main(argv: list[str] | None = None) -> int:
         state,
         lists=lambda: lists_time(args.lists_dir),
         reboot=args.reboot_file.exists,
-        writes=lambda: write_test(args.write_test_dir),
+        writes=lambda: [read_root_result(args.write_test_result, now) if args.write_test_result
+                        else (0, NOT_DONE, "uid 0: no answer of root to read"),
+                        write_test(args.write_test_dir)],
     )
     write_atomic(args.textfile_dir / args.file_name, render(args.system, measured, now))
     # A state file that is there and can not be read stays as it is: a new one would

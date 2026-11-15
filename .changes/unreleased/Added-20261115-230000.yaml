@@ -1,3 +1,3 @@
 kind: Added
-body: 'Security: the host check of each WSL distro first tries to make a file in the textfile directory of its host, and a write that succeeds is the failed query textfile-write; the role runs the same try as root and as the distro user.'
+body: 'Security: the host check of each WSL distro first tries to make a file in the textfile directory of its host, as root (a step of the service before the check) and as the distro user. Only a refusal by Windows for root is the pass; a write, a missing directory or no answer of root is the failed query textfile-write. The role runs the same tries and prints each answer with its uid.'
 time: 2026-11-15T23:00:00.000000000Z

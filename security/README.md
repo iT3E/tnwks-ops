@@ -287,15 +287,46 @@ write only its own directory of the textfile collector.
 **The write test of a distro.** The distro must not be able to change the
 textfile directory of its host, because the exporter reads each `.prom` file
 under it and can not tell who wrote it (Design Doc 0004, section 5.9). So
-each run of the distro check starts with a try to make a file there, above
-its own directory, with a name that does not end in `.prom`. A refusal is the
-pass, and it counts only when the directory is there and can be listed. A
-write that succeeds, or a directory that is gone, is the failed query
-`textfile-write`: the run removes the file that it made, and nothing else,
-and gives no result. The last task of role `wsl_host_check` runs the same try
-as root and as the distro user, and prints each answer. A check run skips
-it. It fails the play only with `wsl_host_check_write_test_fails_play`,
-which stays off until each distro starts with no elevation.
+each run of the distro check starts with tries to make a file there, above
+its own directory, with a name that does not end in `.prom`. Only a refusal
+by Windows is the pass.
+
+- **Root tries first.** Linux checks the mode that `/mnt/c` shows before a
+  write reaches Windows, and a refusal there is no evidence. Root passes that
+  check, so the service runs a try as root before the check (`ExecStartPre`
+  with the prefix `+`), and writes its answer to
+  `/run/tnwks-host-check/write-test.json`. The check, as the distro user,
+  reads that answer and tries once itself.
+- **The answers.** Each try asks the kernel first (`access()` with the
+  effective ids, the same check as `open()`), then makes the file with an
+  exclusive create. It is a series
+  `homelab_security_host_write_test_result{uid="<uid>"}`: 0 refused by
+  Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not
+  done (the directory is gone or can not be listed, or another error). The
+  message of each try names its uid, the mode and owner of the directory,
+  and the mount.
+- **The failed query `textfile-write`.** Root has no answer 0 (or its answer
+  is missing or older than 15 minutes), or a try has 1 or 3. Then the run
+  gives no result. A try that wrote removes the file that it made, and
+  nothing else.
+- **What it can not see.** The check of the kernel covers the mode, the
+  groups and an ACL of the mount, but not what the Windows side of `/mnt/c`
+  decides by itself. A refusal by Windows for root is the evidence.
+
+The last task of role `wsl_host_check` runs the same try as root and as the
+distro user, and prints each answer with its uid. A check run skips it. The
+play fails only with `wsl_host_check_write_test_fails_play`, when root has no
+refusal by Windows or a try has 1 or 3. The switch is off until the owner
+turns it on (section 5.9 of the design). The pull request that starts each
+distro with no elevation turns it on, and a test there fails while that
+change is present and the switch is off.
+
+The design also names a try from an SSH session. The role connects to a
+distro over SSH, but `ansible_connection` is `local` when the hostname of
+the controller is the Windows host of that distro, as in that distro itself,
+which takes the Windows computer name (`group_vars/wsl_distros.yml`). On that
+site the tries of the role come from the processes of the controller, not
+from an SSH session.
 
 **The first result, then the source.** A host or a distro lists `host-check` in
 `sources` of `systems.yaml` only after its first result is on the board of
