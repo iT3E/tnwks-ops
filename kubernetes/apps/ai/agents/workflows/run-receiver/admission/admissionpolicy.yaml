@@ -13,7 +13,9 @@
 #     other ones;
 #   - one container, run-job, from the image of the workflow agents, pinned
 #     by digest, and a sandbox of that same image;
-#   - the service account workflow-run, with no token;
+#   - the service account workflow-run (its Role lists Sandbox records only;
+#     the Job turns its token on, for the check of the record after the
+#     delete);
 #   - no secret but the client certificate of the sandbox gateway, and no
 #     variable from a secret;
 #   - one try, and a time limit of one hour at most (the sweep deletes a run
@@ -86,10 +88,8 @@ spec:
         pinned by digest.
     - expression: >-
         has(variables.pod.serviceAccountName) &&
-        variables.pod.serviceAccountName == 'workflow-run' &&
-        has(variables.pod.automountServiceAccountToken) &&
-        variables.pod.automountServiceAccountToken == false
-      message: A run job runs as workflow-run, with no token.
+        variables.pod.serviceAccountName == 'workflow-run'
+      message: A run job runs as workflow-run.
     - expression: >-
         variables.env.filter(e, e.name == 'AGENT_NAME').size() == 1 &&
         variables.env.exists(e, e.name == 'AGENT_NAME' && has(e.value) &&
@@ -121,6 +121,54 @@ metadata:
   name: workflow-run-jobs
 spec:
   policyName: workflow-run-jobs
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: agents-workflows
+---
+# The second control on the sweep (../app/sweep.yaml). Its Role can delete any
+# Sandbox record of the namespace, because RBAC can't limit a delete by label
+# and the names of run records are not known ahead. This policy refuses a
+# delete by the service account of the sweep unless the record is one that
+# OpenShell made for a run sandbox: the label openshell.ai/managed-by is
+# openshell, and openshell.ai/sandbox-name has the name of a run
+# (run-<7 hex>-<base 36>, iT3E/tnwks-workflow-agents, src/run_job/names.py).
+# The record of the platform probe, and any other record, stays. The age of a
+# record is the code's check: the policy has no clock.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: workflow-sweep-deletes
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["agents.x-k8s.io"]
+        apiVersions: ["*"]
+        operations: ["DELETE"]
+        resources: ["sandboxes"]
+  matchConditions:
+    - name: sent-by-the-sweep
+      expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:agents-workflows:workflow-sweep'
+  validations:
+    - expression: >-
+        oldObject != null &&
+        has(oldObject.metadata.labels) &&
+        'openshell.ai/managed-by' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['openshell.ai/managed-by'] == 'openshell' &&
+        'openshell.ai/sandbox-name' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['openshell.ai/sandbox-name'].matches('^run-[0-9a-f]{7}-[0-9a-z]{1,7}$')
+      message: The sweep deletes the Sandbox record of a run sandbox only.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: workflow-sweep-deletes
+spec:
+  policyName: workflow-sweep-deletes
   validationActions: ["Deny"]
   matchResources:
     namespaceSelector:

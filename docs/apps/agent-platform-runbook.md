@@ -259,6 +259,14 @@ The log of the sweep is in Loki,
 
 **Seen so far.** Never. The stopped-run drill below is the test of this path.
 
+**A record with no pod.** This alert reads pods, so it does not see a
+Sandbox record that the gateway left with no pod (OpenShell 0.1.8 can answer
+a delete with success and forget the sandbox). The run job and the sweep
+check the record through the API: a run that left one fails with
+`sandbox_error` in its result (AgentWorkflowRunFailed), and the sweep removes
+it after one hour and fails once (AgentPlatformCronJobFailed), with an
+`ERROR sweep:` line that names the sandbox.
+
 **Fix.** The route that deletes a sandbox through the sandbox gateway is the
 sweep: it deletes each run sandbox older than one hour, by its name and
 label, so the gateway's record goes too. The gateway takes calls only from
@@ -285,7 +293,10 @@ The run log is in Loki, `{namespace="agents-workflows", app="workflow-run"}`.
 The exit code of the run job says where it stopped: 1 the agent answered
 with an error, 2 the environment is not complete, 3 the sandbox did not
 start or answer, 4 no answer in time, 5 the pod was stopped, 6 the sandbox
-was not deleted (the README of iT3E/tnwks-workflow-agents).
+was not deleted (the README of iT3E/tnwks-workflow-agents). With exit 6,
+`sandbox_error` in the result says why: the gateway did not delete it, or its
+Sandbox record was still there 60 s after the delete, or could not be read.
+The sweep removes a record that stays, after one hour.
 
 **Seen so far.**
 

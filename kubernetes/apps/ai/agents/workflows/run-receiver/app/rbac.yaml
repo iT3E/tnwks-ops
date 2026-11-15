@@ -47,8 +47,15 @@ subjects:
   - kind: ServiceAccount
     name: run-receiver
 ---
-# The run jobs and the sweep: no role and no token. They call the sandbox
-# gateway with its client certificate, and no Kubernetes API.
+# The run jobs. They call the sandbox gateway with its client certificate.
+# After the delete of its sandbox, a run job lists the Sandbox record of that
+# sandbox until it is gone (the gateway can answer a delete with success and
+# leave the record): `list` on Sandbox records in this namespace, and nothing
+# more. The token is off here; the Job template of each agent turns it on.
+# RBAC can't limit a list to the labels of one sandbox, so the run job can
+# read each Sandbox record of this namespace (the probe's too). A record
+# holds the image, the command and the AGENT_ENV_ variables of a sandbox,
+# never a credential (the providers add those outside the sandbox).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -56,3 +63,71 @@ metadata:
   labels:
     app.kubernetes.io/name: workflow-run
 automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workflow-run
+  labels:
+    app.kubernetes.io/name: workflow-run
+rules:
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workflow-run
+  labels:
+    app.kubernetes.io/name: workflow-run
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workflow-run
+subjects:
+  - kind: ServiceAccount
+    name: workflow-run
+---
+# The sweep (sweep.yaml). Through the gateway it deletes each old run
+# sandbox; through the API it lists the run records and removes each old one
+# that the gateway left or does not list: `list` and `delete` on Sandbox
+# records in this namespace. RBAC can't limit a delete by label, and the
+# names of run records are not known ahead (no resourceNames), so this Role
+# alone could delete any Sandbox record here, the probe's too. Two more
+# controls hold it to the run records: the code deletes only a record that
+# OpenShell made for a run name and that is older than the limit, and the
+# admission policy workflow-sweep-deletes (../admission/) refuses a delete of
+# any other record by this service account.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workflow-sweep
+  labels:
+    app.kubernetes.io/name: workflow-sweep
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workflow-sweep
+  labels:
+    app.kubernetes.io/name: workflow-sweep
+rules:
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    verbs: ["list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workflow-sweep
+  labels:
+    app.kubernetes.io/name: workflow-sweep
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workflow-sweep
+subjects:
+  - kind: ServiceAccount
+    name: workflow-sweep
