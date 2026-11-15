@@ -514,7 +514,10 @@ def security_selector(metric, **labels):
 TRIVY_IMAGE_REF_STEPS = (
     # No tag and no digest: the tag latest.
     ("([^@]*/)?([^/:@]+)", "$1$2:latest"),
-    # A tag and a digest: the tag only.
+    # A tag and a digest: the tag only. The operator writes the tag of such a
+    # reference as the rest of the pod-spec string (postgres:16@sha256:... gives
+    # the tag "postgres:16"), so this reference never matches its report: these
+    # images join by their digest, which the report takes from the reference.
     ("([^@]+:[^@/]+)@.+", "$1"),
     # A digest only: no reference.
     ("[^@]*@.*", ""),
@@ -571,15 +574,28 @@ def trivy_report_digests(expr):
 # scanned it. They differ when a tag moved after the node pulled it, or when
 # one is the digest of an image index and the other of the image of a platform.
 TRIVY_CONTAINER_MATCH = "k8s_cluster, namespace, container, image_ref"
+# The running containers whose report matches by reference only: the report is
+# of the image that the tag points to now, not of the image that runs.
+TRIVY_BY_REFERENCE_RECORD = "homelab:security_trivy_containers_by_reference:count"
+
+
+def trivy_reports_window():
+    """The reports of the last TRIVY_REPORT_GAP, a report gone for its new scan included."""
+    return trivy_report_digests(
+        f'max_over_time({security_selector("trivy_image_vulnerabilities")}[{TRIVY_REPORT_GAP}])')
 
 
 def trivy_reports_of_running(expr):
     """The series of the reports (trivy_report_digests()) of the images that run
-    on this site now: by digest, or else by namespace, container and reference."""
+    on this site now: by digest, or, for a namespace, container and reference with
+    no report of a running digest, by that reference. So one container counts
+    one image: the one that runs when a report has its digest, and else the one
+    that its tag points to now."""
     reports = trivy_report_digests(expr)
     containers = f"group by ({TRIVY_CONTAINER_MATCH}) ({trivy_running_containers()})"
-    return (f"({reports} and on (k8s_cluster, digest) {trivy_running_digests()})"
-            f" or ({reports} and on ({TRIVY_CONTAINER_MATCH}) {containers})")
+    by_digest = f"({reports} and on (k8s_cluster, digest) {trivy_running_digests()})"
+    by_reference = f"({reports} and on ({TRIVY_CONTAINER_MATCH}) {containers})"
+    return f"{by_digest} or ({by_reference} unless on ({TRIVY_CONTAINER_MATCH}) {by_digest})"
 
 
 def trivy_accepted(check=None):
@@ -596,11 +612,23 @@ def trivy_unscanned_images():
     have no report of Trivy Operator in the last TRIVY_REPORT_GAP: no report with
     their digest, and none for the same namespace, container and reference
     (TRIVY_CONTAINER_MATCH)."""
-    reported = trivy_report_digests(
-        f'max_over_time({security_selector("trivy_image_vulnerabilities")}[{TRIVY_REPORT_GAP}])')
+    reported = trivy_reports_window()
     return (f"count by (k8s_cluster, digest) (({trivy_running_containers()})"
             f" unless on (k8s_cluster, digest) ({reported})"
             f" unless on ({TRIVY_CONTAINER_MATCH}) ({reported}))")
+
+
+def trivy_by_reference_containers():
+    """The number of running containers of each cluster with Trivy Operator whose
+    report matches by reference only (no report has their digest), and 0 when none."""
+    reported = trivy_reports_window()
+    running = trivy_running_containers()
+    matched = (f"(({running}) unless on (k8s_cluster, digest) ({reported}))"
+               f" and on ({TRIVY_CONTAINER_MATCH}) ({reported})")
+    operator = ("group by (k8s_cluster) ("
+                + security_selector("homelab_trivy_compliance_report_update_timestamp_seconds") + ")")
+    return (f"(count by (k8s_cluster) ({matched}) or on (k8s_cluster) 0 * count by (k8s_cluster) ({running}))"
+            f" and on (k8s_cluster) {operator}")
 
 
 def security_records():
@@ -672,6 +700,8 @@ def security_records():
          "labels": {"source": "trivy"}},
         {"record": "homelab_security_last_result_timestamp_seconds",
          "expr": f"max by (k8s_cluster, system) ({as_system(report)})", "labels": {"source": "trivy"}},
+        # Shown on the security board, next to the images with no report: no alert.
+        {"record": TRIVY_BY_REFERENCE_RECORD, "expr": trivy_by_reference_containers()},
     ]
 
 
@@ -1532,6 +1562,43 @@ def trivy_fixtures():
              # A pass with images that have no report is no evidence.
              {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": []},
          ]},
+        {"name": "a tag moves between two scans while the pod runs the old image: the report of the running digest counts, alone",
+         "interval": "1m",
+         "input_series": [
+             pod("web", "app-1", "app", "ghcr.io/example/app:1", "sha256:d1", values="1+0x120"),
+             # The report of the old image until minute 30, then the one of the new image.
+             report("web", "app", "ghcr.io/example/app:1", "sha256:d1", 2, values="2+0x30"),
+             report("web", "app", "ghcr.io/example/app:1", "sha256:d2", 3, values="_x31 3+0x89"),
+             {"series": (f'homelab_trivy_compliance_report_update_timestamp_seconds{{k8s_cluster="{site}",'
+                         'name="k8s-cis-1.23"}'), "values": "1700000000+0x120"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "45m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 2)]},
+             {"expr": TRIVY_BY_REFERENCE_RECORD, "eval_time": "45m", "exp_samples": [
+                 {"labels": f'{TRIVY_BY_REFERENCE_RECORD}{{k8s_cluster="{site}"}}', "value": 0}]},
+             # The report of the old image is gone for more than an hour: the new one counts, by reference.
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "100m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 3)]},
+             {"expr": TRIVY_BY_REFERENCE_RECORD, "eval_time": "100m", "exp_samples": [
+                 {"labels": f'{TRIVY_BY_REFERENCE_RECORD}{{k8s_cluster="{site}"}}', "value": 1}]},
+         ]},
+        {"name": "after a restart on a moved tag, the report of the old ReplicaSet does not count next to the new one",
+         "interval": "1m",
+         "input_series": [
+             pod("web", "app-2", "app", "ghcr.io/example/app:1", "sha256:d2"),
+             {"series": ('trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-old-app",'
+                         'resource_kind="ReplicaSet",resource_name="old",container_name="app",image_registry="ghcr.io",'
+                         'image_repository="example/app",image_tag="1",image_digest="sha256:d1",severity="Critical"}'),
+              "values": "4+0x90"},
+             report("web", "app", "ghcr.io/example/app:1", "sha256:d2", 0),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "45m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 0)]},
+         ]},
+        {"name": "a cluster with no Trivy Operator has no count of containers matched by reference",
+         "interval": "1m",
+         "input_series": [pod("web", "app-1", "app", "ghcr.io/example/app:1", "sha256:d1")],
+         "promql_expr_test": [{"expr": TRIVY_BY_REFERENCE_RECORD, "eval_time": "5m", "exp_samples": []}]},
         {"name": "an image with a report under another digest does not alert; an image with no report still alerts after 36 hours",
          "interval": "2m",
          "input_series": [

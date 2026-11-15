@@ -80,6 +80,11 @@ def board() -> Board:
                 p("Failing checks",
                   f'count by (source, system) ({selector(series["result"])} > 0)', "short",
                   "The number of checks of each source that fail on each system.", "table", empty=NO_ALERTS),
+                p("Images scanned by tag only",
+                  f'sum({selector("homelab:security_trivy_containers_by_reference:count")})', "short",
+                  "Running containers whose Trivy report has the image that their tag points to now, not the "
+                  "image that runs: the tag moved after the node pulled it. Restart the workload, or pin a digest, "
+                  "to make the report exact (kubernetes/apps/security/trivy-operator/README.md).", "stat"),
             ],
             "Accepted findings": [
                 p("Accepted findings", f"count({accepted})", "short",

@@ -1741,6 +1741,63 @@ tests:
   - expr: homelab_security_check_result{source="trivy"}
     eval_time: 5m
     exp_samples: []
+- name: 'a tag moves between two scans while the pod runs the old image: the report of the running digest counts,
+    alone'
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d1"}
+    values: 1+0x120
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d1",severity="Critical"}
+    values: 2+0x30
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d2",severity="Critical"}
+    values: _x31 3+0x89
+  - series: homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl",name="k8s-cis-1.23"}
+    values: 1700000000+0x120
+  promql_expr_test:
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 45m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 2
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 45m
+    exp_samples:
+    - labels: homelab:security_trivy_containers_by_reference:count{k8s_cluster="homelab-wsl"}
+      value: 0
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 100m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 3
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 100m
+    exp_samples:
+    - labels: homelab:security_trivy_containers_by_reference:count{k8s_cluster="homelab-wsl"}
+      value: 1
+- name: after a restart on a moved tag, the report of the old ReplicaSet does not count next to the new one
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-2",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d2"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-old-app",resource_kind="ReplicaSet",resource_name="old",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d1",severity="Critical"}
+    values: 4+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d2",severity="Critical"}
+    values: 0+0x90
+  promql_expr_test:
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 45m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 0
+- name: a cluster with no Trivy Operator has no count of containers matched by reference
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d1"}
+    values: 1+0x90
+  promql_expr_test:
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 5m
+    exp_samples: []
 - name: an image with a report under another digest does not alert; an image with no report still alerts after 36
     hours
   interval: 2m
