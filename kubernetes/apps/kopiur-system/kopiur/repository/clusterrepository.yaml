@@ -39,8 +39,17 @@ spec:
       - media
       - production
       - selfhosted
-      # The pilot of the agent platform (docs/apps/agent-platform.md): the
-      # volumes of the agent and the Signal daemon. Only homelab-wsl runs it.
+      # Not the agent trust domains (agents-*): they back up to the agents
+      # repository of their own (kopiur-system/agents-repository). Their
+      # snapshots from before the move stay here; a restore of one adds the
+      # namespace back for that restore (docs/apps/agent-platform-runbook.md).
+      # agents-pilot, for now only: the old policy agent-state can finish its
+      # delete only while its namespace is allowed here, since the admission
+      # webhook checks this list on every update of a SnapshotPolicy, the
+      # removal of its finalizer too. The next change removes it again, once
+      # `kubectl -n agents-pilot get snapshotpolicies` no longer shows
+      # agent-state (docs/apps/agent-platform.md, "Move a trust domain to
+      # another repository").
       - agents-pilot
   credentialProjection:
     allowed: true

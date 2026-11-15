@@ -1,6 +1,7 @@
 ---
 # The volume of the Signal daemon, with its archives, to the Kopia
-# repository in S3 (docs/operations/backups.md). It holds the keys of the
+# repository of the agent trust domains (ClusterRepository agents;
+# docs/operations/backups.md). It holds the keys of the
 # test account; the copy is encrypted on the client.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
@@ -9,7 +10,7 @@ metadata:
 spec:
   repository:
     kind: ClusterRepository
-    name: s3
+    name: agents
   # local-path has no CSI snapshots: the mover reads the live PVC read-only,
   # on the node of the daemon. The archive of each start is the copy taken
   # with no writer.

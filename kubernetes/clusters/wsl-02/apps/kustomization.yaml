@@ -255,6 +255,10 @@ patches:
                         # copy of this site's.
                         - 'homelab_security_check_result{source="host-check",source_site=""}'
                         - 'homelab_security_last_result_timestamp_seconds{source="host-check",source_site=""}'
+                        # The same two series from Trivy Operator of
+                        # homelab-wsl (kubernetes/apps/security/trivy-operator/README.md).
+                        - 'homelab_security_check_result{source="trivy",source_site=""}'
+                        - 'homelab_security_last_result_timestamp_seconds{source="trivy",source_site=""}'
                     static_configs:
                       - targets:
                           - ${PEER_WINDOWS_HOST_ADDR}:9090

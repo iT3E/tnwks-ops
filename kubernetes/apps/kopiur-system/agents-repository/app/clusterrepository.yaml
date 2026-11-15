@@ -1,0 +1,58 @@
+---
+# The repository of the agent trust domains, in the backup bucket under
+# kopiur-agents/. Kopia encrypts on the client with its own KOPIA_PASSWORD
+# (kopiur-repository-agents, SOPS; a copy belongs on the off-site key media,
+# docs/operations/backups.md). The S3 session is aws-backup-sts-agents, from
+# the certificate CN homelab-wsl-agent-backups and a role that lists, reads,
+# writes and deletes under kopiur-agents/ only
+# (infrastructure/terraform/modules/aws/rolesanywhere.tf,
+# rolesanywhere_backups_prefixed). The repository is created at its first
+# bootstrap (create absent = enabled).
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: ClusterRepository
+metadata:
+  name: agents
+spec:
+  backend:
+    s3:
+      bucket: "${BACKUP_S3_BUCKET}"
+      prefix: kopiur-agents/
+      endpoint: s3.us-west-2.amazonaws.com
+      region: us-west-2
+      auth:
+        secretRef:
+          name: aws-backup-sts-agents
+          namespace: kopiur-system
+  encryption:
+    passwordSecretRef:
+      name: kopiur-repository-agents
+      namespace: kopiur-system
+      key: KOPIA_PASSWORD
+  allowedNamespaces:
+    list:
+      # kopiur-system: the repository's own Maintenance runs here.
+      - kopiur-system
+      # One line for each agent trust domain with a backup policy. Today the
+      # pilot only (its agent volume, and the Signal daemon when it is on).
+      - agents-pilot
+  credentialProjection:
+    allowed: true
+  identityDefaults:
+    hostnameExpr: "namespace"
+    usernameExpr: "namespace + '-' + policyName"
+  maintenance:
+    namespace: kopiur-system
+    schedule:
+      # Off the times of the shared repository (0 */6, 04:30).
+      quick:
+        cron: "15 */6 * * *"
+        jitter: 10m
+      full:
+        cron: "45 5 * * *"
+        jitter: 30m
+  moverDefaults:
+    cache:
+      contentCacheSizeMb: 256
+      metadataCacheSizeMb: 256
+  scheduleDefaults:
+    timezone: "${TIMEZONE}"

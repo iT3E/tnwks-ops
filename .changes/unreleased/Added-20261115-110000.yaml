@@ -1,3 +1,0 @@
-kind: Added
-body: 'terraform: a Roles Anywhere backup role and profile kept to one prefix of the backup bucket (list, read, write and delete under it, nothing else), with its own certificate CN, for the Kopia repository of the agent trust domains'
-time: 2026-11-15T11:00:00.000000000-08:00

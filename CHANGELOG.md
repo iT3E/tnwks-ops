@@ -3,6 +3,66 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.161.3 - 2026-11-15
+
+### Fixed
+
+* kopiur: the shared repository allows agents-pilot again until the old pilot policy agent-state finishes its delete, which the admission webhook refuses without the grant. The docs give the two-step order for moving a trust domain to another repository.
+
+## v2.161.2 - 2026-11-15
+
+### Fixed
+
+* security: a Trivy report of an image holds its critical vulnerabilities only, by an ignore policy in the scan containers, so the report of an image with many fixed vulnerabilities fits in one object of the API server ("etcdserver: request is too large"); trivy.severity keeps every severity, which the compliance report reads
+
+## v2.161.1 - 2026-11-15
+
+### Fixed
+
+* security: Trivy Operator keeps the scan cache of each scan in memory, so the containers of one scan job no longer stop on the lock of the file cache ("cache may be in use by another process: timeout") and leave their images with no report; the vulnerability databases stay on the volume. The containers of a job now scan at the same time: the memory of a job is an estimate until the first cycle measures it
+
+## v2.161.0 - 2026-11-15
+
+### Changed
+
+* security: homelab-wsl lists `trivy` in its sources, after its first result, so SecurityResultLate watches Trivy Operator there. A pending source in the test of the sources of a cluster now has a last day and must be reached, and the federation test covers the series of `trivy` from homelab-wsl and the accepted findings of `trivy` on homelab-wsl
+
+## v2.160.0 - 2026-11-15
+
+### Added
+
+* security: Trivy Operator on homelab-wsl, with the values of homelab-wsl-02. `peer-federate` of homelab-wsl-02 brings the two series of the registry of `trivy` from homelab-wsl, and `peer-federate` of homelab-wsl brings the accepted findings of `trivy` from homelab-wsl-02. The limits are those of homelab-wsl-02, where a full cycle peaked at 316 MiB of 512 MiB for the operator and 97 MiB for the containers of one scan job. homelab-wsl lists `trivy` in its sources in a later pull request, after its first result, so the late alert does not fire before the first scans; a test names the pending pair until then
+
+## v2.159.2 - 2026-11-15
+
+### Fixed
+
+* agents-workflows: a Sandbox record that the sandbox gateway left after a delete is now seen and removed. The run receiver can list Sandbox records, to check the record of each run after its end; the sweep runs as its own service account workflow-sweep with list and delete on Sandbox records, an admission policy (workflow-sweep-deletes) holds its deletes to run records, and its own network policy adds the API server. The run jobs keep no token and the gateway as their only egress.
+
+## v2.159.1 - 2026-11-15
+
+### Security
+
+* kopiur: the agent trust domains back up to a Kopia repository of their own (ClusterRepository agents, prefix kopiur-agents/, its own password and role). The pilot agent policy is now agent-state-v2; the snapshots of agent-state stay in the shared repository, which no longer allows agents-pilot. New alert AgentBackupRepositoryNotReady for a repository of the trust domains that never gets Ready.
+
+## v2.159.0 - 2026-11-15
+
+### Added
+
+* kopiur: the credentials of a Kopia repository for the agent trust domains (homelab-wsl): its own password, and a refresher that turns its own certificate into an S3 session for the role kept to kopiur-agents/
+
+## v2.158.1 - 2026-11-15
+
+### Fixed
+
+* ci: the observability contracts job has 25 minutes instead of 15, since its rule tests alone take 6 to 9 minutes on a hosted runner and the job reached 11.5 minutes on main
+
+## v2.158.0 - 2026-11-15
+
+### Added
+
+* terraform: a Roles Anywhere backup role and profile kept to one prefix of the backup bucket (list, read, write and delete under it, nothing else), with its own certificate CN, for the Kopia repository of the agent trust domains
+
 ## v2.157.0 - 2026-11-15
 
 ### Added
