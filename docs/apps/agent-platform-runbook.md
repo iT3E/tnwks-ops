@@ -846,11 +846,15 @@ reasons:
    - `id=brave ... result=failed`: the install itself failed. The lines
      above it are the product's installer. An image of a bad build fails
      the same step in CI, so look at the release first.
-2. **Fix, through a merge.** Revert the image pin to the last release that
-   started. For a state that holds a foreign plugin, restore the state
-   from a backup taken before the write
-   ([Restore the state of an agent](#restore-the-state-of-an-agent)).
-   Turning web search off does not skip the step.
+2. **Fix.**
+   - **A failed install:** revert the image pin to the last release that
+     started, through a merge.
+   - **A plugin that the image did not put there:** do not revert the
+     image; an image before 0.4.0 has no step and would start with that
+     plugin. Restore the state from a backup taken before the write
+     ([Restore the state of an agent](#restore-the-state-of-an-agent)),
+     with owner approval.
+   - Turning web search off does not skip the step.
 
 ## Memory search finds nothing
 
