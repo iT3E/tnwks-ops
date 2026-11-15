@@ -362,6 +362,32 @@ the sandbox plugin copies the workspace only.
   Brave Search API (the plugin `@openclaw/brave-plugin` of the agent image,
   `tools.web.search` in the config). The gateway process of the agent pod
   makes the call, not a sandbox.
+  - **A verified official install.** A sandboxed session uses a search
+    provider only when it is bundled with the product or is a verified
+    official install, and each session of the pilot is sandboxed. A plugin
+    from `plugins.load.paths` is neither, and the Brave plugin is not
+    bundled. So the image holds the plugin in an npm cache, and the
+    `official-plugins` init container installs it from there with the
+    product's own installer, with no network, before `doctor`. The install
+    record in the state database makes it a verified official install, and
+    its code is in `state/npm/`. The config enables it in
+    `plugins.entries` (the image README, "The official plugins").
+    `plugins.load.paths` still names the Brave path of the images before
+    0.4.0, so that the config and the image do not change in one merge
+    (one start of the pod, not two). The path is not in the image any
+    more: the gateway logs `Configured plugin load path is unavailable`
+    and goes on, and the code comes from `state/npm/`. A later change of
+    the config takes the path out.
+  - **The code on the state volume is replaced at each start.** The
+    gateway runs as the same user and can write the state volume, and the
+    product checks no hash of installed code at a start: the trust comes
+    from the install record alone, which the gateway can write too. So the
+    step removes `state/npm/` and installs the plugin again from the image
+    at each start (some 8 seconds), and the record with it. A restored
+    archive does not bring back old code either. The step also stops the
+    start when the state holds an install record of another plugin or a
+    file in `state/extensions` (the runbook, "The official plugins step
+    fails").
   - What goes to the vendor: the query that the model writes for the tool,
     and its filters (count, country, language, dates), with the key. The
     conversation does not go. The answer is a list of titles, URLs and
@@ -392,7 +418,7 @@ the sandbox plugin copies the workspace only.
     changes. Then revoke the old key.
   - **Turn off:** set `tools.web.search.enabled` to `false` in
     `openclaw.json` and take `web_search` out of `alsoAllow`. To remove it,
-    also take out the plugin path, the plugin entry, the network rule and
+    also take out the plugin entry, the network rule and
     the Secret. With a wrong key, the gateway starts and each search fails
     with an error from the vendor (401).
 - **Secret** `agent-secret` (env vars of the pod):
@@ -433,7 +459,7 @@ the sandbox plugin copies the workspace only.
 
 | When | What | Kept |
 | --- | --- | --- |
-| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `doctor` migrates the state, on a copy of the config, and `memory-index` brings the memory index up to date (see "The index at each start" above) | 14 days |
+| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `official-plugins` installs the Brave plugin again from the image (it stops the start on a plugin in the state that the image did not put there), `doctor` migrates the state, on a copy of the config, and `memory-index` brings the memory index up to date (see "The index at each start" above) | 14 days |
 | Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): once the gateway is ready, `openclaw backup create --verify` to `archives/daily/`. The command checks that the gateway owns the state, and it can only see the gateway process in the same PID namespace, so the pod shares one (`shareProcessNamespace: true`) | The last 7 |
 | Each day, after that backup | The same container: the SHA-256 of `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md` and each file under `skills/`, compared with the list of the day before (`archives/instruction-files/`). One log line for each file that is new, changed or gone, then `instruction-check result=...` | 30 days of lists |
 | Each start of the Signal daemon | `archive` init container: a `tar.gz` of `data` in `archives/start/`, with the signal-cli release | 14 days |
@@ -710,7 +736,7 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 | The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
 | The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
 | A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
-| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
+| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory) and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
 | The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
 
 Not in Loki, on purpose:
@@ -780,7 +806,7 @@ by hand, and the steps at a limit of the Claude plan.
 
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |
-| `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive` or `doctor` init container, or a lock on the state volume. Revert the last image if it came with an update |
+| `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive`, `official-plugins` or `doctor` init container, or a lock on the state volume. Revert the last image if it came with an update |
 | `AgentPlatformCronJobFailed` | The last run of a CronJob of a trust domain failed, and no run passed since: the providers job, the sweep, a daily check. It resolves at the next good run | none | Its log in Loki (below). A `result=failed` line of the providers job names the step |
 | `WorkflowProvidersStale` | No good run of `workflow-providers` in 35 minutes, or the CronJob is gone. A token of the reviewer lives one hour, so about 25 minutes are left | 5m | `kubectl -n agents-workflows get cronjob,jobs`, then the log of the last run |
 | `WorkflowAppDrift` | An `app-drift result=drift` line in the last 20 minutes: the App or its installation has more permissions than the list in git | none | The `detail=` of the line names each one. Set the App back, or change the list by a pull request |
