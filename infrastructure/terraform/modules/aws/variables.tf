@@ -58,6 +58,23 @@ variable "rolesanywhere_backups_sites" {
   default = {}
 }
 
+variable "rolesanywhere_backups_prefixed" {
+  description = <<-EOT
+    Backup roles kept to one prefix of the bucket (rolesanywhere.tf), keyed by name (agents): the certificate CNs
+    allowed a session, and the prefix (ending in /) that the role may list, read, write and delete. It reaches
+    nothing else in the bucket.
+  EOT
+  type = map(object({
+    common_names = list(string)
+    prefix       = string
+  }))
+  default = {}
+  validation {
+    condition     = alltrue([for v in values(var.rolesanywhere_backups_prefixed) : endswith(v.prefix, "/") && length(v.prefix) > 1])
+    error_message = "Each prefix must end in / and not be the bucket root."
+  }
+}
+
 variable "rolesanywhere_backups_common_names" {
   description = "Certificate CNs allowed a Roles Anywhere session as the homelab backup role (S3 read/write on the backup bucket)."
   type        = list(string)
