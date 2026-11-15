@@ -303,7 +303,7 @@ def tests(args: argparse.Namespace, now: datetime.datetime, get=http_get) -> tup
             policy = tfc_policy(token, args.tfc_organization, get)
             failed = int(policy != "two_factor_mandatory")
             entry = {"check": "tfc-mfa-required", "system": args.tfc_organization, "failed": failed,
-                     "severity": "medium"}
+                     "severity": "high"}
             if failed:
                 entry["findings"] = [{
                     "resource": args.tfc_organization,
