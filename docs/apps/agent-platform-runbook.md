@@ -430,8 +430,10 @@ of a trust domain. The write did not happen. At kopiur 0.10.20 a mover
 writes no ConfigMap there ([agent-platform.md](agent-platform.md#the-backup-mover-and-configmaps)),
 so there are two causes: a mover pod tried to change the config or the
 scripts of an agent, which is the attack the policy is for, or a new release
-of the backup operator writes a ConfigMap there. It fires for an hour after
-each denial. The rule reads a counter of the API server that only
+of the backup operator writes a ConfigMap there. It fires for one to two
+hours after each denial (`keep_firing_for: 1h`). A gap of more than an hour
+in the scrape of the API server makes the series look new, and fires it once
+with no denial: then the audit lines show none. The rule reads a counter of the API server that only
 homelab-wsl keeps (`kubernetes/clusters/wsl/apps/kustomization.yaml`); the
 other clusters run no agent.
 
@@ -447,14 +449,20 @@ Each line names the namespace, the ConfigMap, the verb and the
 ServiceAccount (`user_username`). Then, read only:
 
 ```sh
-kubectl -n <namespace> get jobs,pods
+kubectl -n <namespace> get events --sort-by=.lastTimestamp
+kubectl -n <namespace> get jobs
 kubectl -n <namespace> get snapshotschedules.kopiur.home-operations.com
 kubectl -n kopiur-system get helmrelease kopiur
 ```
 
-The mover Job of that time and its image, against the release of the backup
-operator in git (`kubernetes/apps/kopiur-system/kopiur/app/helmrelease.yaml`).
-Keep the Job and its pod: they are the evidence.
+The pod of a mover is gone seconds after it ends (the pod garbage
+collection of this cluster, `terminated-pod-gc-threshold: 1` in
+`talos/wsl/cluster-config.yaml`), so the audit lines and the events of the
+namespace are the evidence: the events name the mover Job and its pod of
+that time, and the audit lines name what it tried to write. Compare the
+release of the backup operator that runs with the one in git
+(`kubernetes/apps/kopiur-system/kopiur/app/helmrelease.yaml`). Events stay
+about an hour on the cluster, so read them first.
 
 **Seen so far.** Not fired yet. On 2026-11-15 the API server had counted no
 denial of this policy since it was added on 2026-11-14
@@ -473,7 +481,7 @@ denial of this policy since it was added on 2026-11-14
    evidence, each by a pull request (owner approval).
 3. **No such release.** Treat it as an attack on the config of the agent:
    the mover ran code that the operator does not run. Keep the snapshots
-   suspended and the Job kept, and give the audit lines to the owner, who
+   suspended, and give the audit lines and the events to the owner, who
    decides the next step. The refused write changed nothing, so the agent
    keeps running on the config in git.
 4. Set `suspend: false` again by a pull request when the cause is clear.

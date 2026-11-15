@@ -294,52 +294,63 @@ tests:
   - name: the first denial of the mover ConfigMap policy fires for an hour
     interval: 1m
     input_series:
-      # The API server counts a failed check only, so the series starts at
-      # its first denial (10m).
+      # The API server started long before the test. It counts a failed
+      # check only, so the series starts at its first denial (10m).
+      - series: process_start_time_seconds{instance="10.0.0.1:6443", job="apiserver"}
+        values: -100000x200
       - series: apiserver_validating_admission_policy_check_total{instance="10.0.0.1:6443", job="apiserver", policy="agents-backup-mover-configmaps", policy_binding="agents-backup-mover-configmaps", enforcement_action="deny", error_type="invalid_error"}
-        values: _x10 1x200
+        values: _x10 1x190
       # The denials of another policy never fire this alert.
       - series: apiserver_validating_admission_policy_check_total{instance="10.0.0.1:6443", job="apiserver", policy="workflow-run-jobs", policy_binding="workflow-run-jobs", enforcement_action="deny", error_type="invalid_error"}
-        values: _x10 1x10 2x190
+        values: _x10 1x10 2x180
     alert_rule_test:
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 9m
-        exp_alerts: []
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 11m
-        exp_alerts:
-          - exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 1h5m
-        exp_alerts:
-          - exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 1h15m
-        exp_alerts: []
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 9m, exp_alerts: []}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 11m, exp_alerts: [{exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}}]}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 1h5m, exp_alerts: [{exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}}]}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 1h15m, exp_alerts: []}
 
-  - name: a later denial of the mover ConfigMap policy fires again, also after a restart of the API server
+  - name: a later denial, a restart of the API server, and a first denial 100 minutes after it
     interval: 1m
     input_series:
-      # A denial before the test window, one more at 100m, then a restart of
-      # the API server at 130m clears the series, and a new denial at 230m
-      # starts it again at 1.
+      # Denials before the test, one more at 100m. The API server starts
+      # again at 130m: its scrape no longer has the series, so Prometheus
+      # marks it stale. A new denial at 230m starts it again at 1.
+      - series: process_start_time_seconds{instance="10.0.0.1:6443", job="apiserver"}
+        values: -100000x129 7800x200
       - series: apiserver_validating_admission_policy_check_total{instance="10.0.0.1:6443", job="apiserver", policy="agents-backup-mover-configmaps", policy_binding="agents-backup-mover-configmaps", enforcement_action="deny", error_type="invalid_error"}
-        values: 1x99 2x30 _x100 1x100
+        values: 1x99 2x29 stale _x100 1x100
     alert_rule_test:
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 90m
-        exp_alerts: []
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 101m
-        exp_alerts:
-          - exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 170m
-        exp_alerts: []
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 231m
-        exp_alerts:
-          - exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}
-      - alertname: AgentBackupMoverConfigMapDenied
-        eval_time: 300m
-        exp_alerts: []
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 90m, exp_alerts: []}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 101m, exp_alerts: [{exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}}]}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 225m, exp_alerts: []}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 231m, exp_alerts: [{exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}}]}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 330m, exp_alerts: []}
+
+  - name: a first denial 20 minutes after a restart of the API server fires
+    interval: 1m
+    input_series:
+      # The series of before the restart (130m) is still in the hour that
+      # the second part reads, so the third part fires.
+      - series: process_start_time_seconds{instance="10.0.0.1:6443", job="apiserver"}
+        values: -100000x129 7800x200
+      - series: apiserver_validating_admission_policy_check_total{instance="10.0.0.1:6443", job="apiserver", policy="agents-backup-mover-configmaps", policy_binding="agents-backup-mover-configmaps", enforcement_action="deny", error_type="invalid_error"}
+        values: 1x128 stale _x20 1x180
+    alert_rule_test:
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 149m, exp_alerts: []}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 151m, exp_alerts: [{exp_labels: {severity: warning, policy: agents-backup-mover-configmaps}}]}
+
+  - name: a gap of the scrape of 20 minutes does not fire again
+    interval: 1m
+    input_series:
+      # A denial at 0m, then no scrape from 300m to 320m (a restart of
+      # Prometheus or of the host). The review found that the form
+      # `unless ... offset 1h` fired at 6h15m here.
+      - series: process_start_time_seconds{instance="10.0.0.1:6443", job="apiserver"}
+        values: -100000x299 _x20 -100000x200
+      - series: apiserver_validating_admission_policy_check_total{instance="10.0.0.1:6443", job="apiserver", policy="agents-backup-mover-configmaps", policy_binding="agents-backup-mover-configmaps", enforcement_action="deny", error_type="invalid_error"}
+        values: 1x299 _x20 1x200
+    alert_rule_test:
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 2h, exp_alerts: []}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 321m, exp_alerts: []}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 6h15m, exp_alerts: []}
+      - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 7h, exp_alerts: []}

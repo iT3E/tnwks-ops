@@ -294,24 +294,41 @@ spec:
           # domain: a mover pod tried to change the config or the scripts of
           # an agent, or a new release of the backup operator writes a
           # ConfigMap there. The API server counts a check of a policy only
-          # when it fails, so the series starts at its first denial: the
-          # second part catches that one, the first each later one. It fires
-          # for an hour after a denial. A restart of the API server clears
-          # the counter; then the next denial starts a new series.
+          # when it fails, so the series starts at the first denial after a
+          # start of the API server. Three parts:
+          # - a later denial raises the counter (increase);
+          # - the series is there now and was not there at any scrape of the
+          #   hour before (the last 2 minutes left out, so that a new series
+          #   shows for 2 minutes): the first denial. A gap of the scrape of
+          #   less than an hour (a restart of Prometheus or of the host) does
+          #   not make the series look new; a gap of more than an hour does,
+          #   and fires once;
+          # - the series is there now, and the API server started less than 2
+          #   hours ago: a denial since that start. This covers the first
+          #   denial in the hour after a restart of the API server, when the
+          #   series of before the restart is still in the window above.
+          # keep_firing_for holds the alert for an hour after the last of
+          # these, so each denial fires for one to two hours.
           expr: |
             sum by (policy) (increase(apiserver_validating_admission_policy_check_total{policy="agents-backup-mover-configmaps", enforcement_action="deny"}[1h])) > 0
             or
             sum by (policy) (
               apiserver_validating_admission_policy_check_total{policy="agents-backup-mover-configmaps", enforcement_action="deny"}
-              unless apiserver_validating_admission_policy_check_total{policy="agents-backup-mover-configmaps", enforcement_action="deny"} offset 1h
+              unless max_over_time(apiserver_validating_admission_policy_check_total{policy="agents-backup-mover-configmaps", enforcement_action="deny"}[1h] offset 2m)
             )
+            or
+            sum by (policy) (
+              apiserver_validating_admission_policy_check_total{policy="agents-backup-mover-configmaps", enforcement_action="deny"}
+              and on (instance) ((time() - process_start_time_seconds{job="apiserver"}) < 2 * 3600)
+            )
+          keep_firing_for: 1h
           labels:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentbackupmoverconfigmapdenied"
             summary: "The admission policy refused a ConfigMap write of a backup mover in a trust domain."
-            description: "The audit log (security stream k8s-audit) names the namespace, the ConfigMap and the mover ServiceAccount: an objectRef with resource configmaps, a user kopiur-*-mover and code 422. Treat it as an attack on the config of an agent until a release of the backup operator explains it."
+            description: "The audit log (security stream k8s-audit) names the namespace, the ConfigMap and the ServiceAccount: an objectRef with resource configmaps, code 422, and the user kopiur-mover, kopiur-snapshot-replication-mover or kopiur-stream-mover of that namespace. Treat it as an attack on the config of an agent until a release of the backup operator explains it."
 
         - alert: ModelBridgeRateLimited
           # The model bridge in `ai` logged an engine_error line with the kind
