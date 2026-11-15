@@ -746,15 +746,16 @@ sandbox filter is `src/plugins/web-provider-resolution-shared.ts:85-90`.)
    kubectl -n agents-pilot get pods -l app.kubernetes.io/name=agent
    kubectl -n agents-pilot get deploy agent -o jsonpath='{.spec.template.spec.containers[0].image}'
    ```
-   The image must be 1.0.0 or later: earlier images load the Brave plugin
+   The image must be 0.4.0 or later: earlier images load the Brave plugin
    from a path, and a sandboxed session refuses it.
 2. **Read only.** The official plugins step of this start:
    ```sh
    kubectl -n agents-pilot logs deploy/agent -c official-plugins | grep '^official-plugins'
    ```
-   `official-plugins id=brave version=<release> result=installed` (the
-   first start of a release) or `result=current` is good. `result=failed`
-   stops the start, and the lines above it are the product's installer.
+   `official-plugins id=brave version=<release> result=installed` is good:
+   the step installs the plugin again from the image at each start.
+   `result=failed` stops the start of the whole pod (below), and the lines
+   above it are the product's installer.
 3. **Read only, by the owner.** The start lines of the `agent` container
    (`kubectl -n agents-pilot logs deploy/agent -c agent | grep -E 'http server listening|plugins\]'`).
    - `http server listening (18 plugins: ... brave ...)` means the plugin
@@ -804,14 +805,52 @@ sandbox filter is `src/plugins/web-provider-resolution-shared.ts:85-90`.)
    - **The allow list, the plugin or the network rule:** a pull request
      that puts back the lines of [agent-platform.md](agent-platform.md),
      "Web search".
-   - **Not a verified official install:** the image at 1.0.0 or later, the
+   - **Not a verified official install:** the image at 0.4.0 or later, the
      `official-plugins` init container before `doctor`, and no Brave path
-     in `plugins.load.paths`.
+     that a plugin can load from in `plugins.load.paths`. (A path that is
+     not there gives only the warning `Configured plugin load path is
+     unavailable`.)
 7. **Turn search off,** through a merge: set `tools.web.search.enabled` to
    `false` in `openclaw.json` and take `web_search` out of
    `tools.sandbox.tools.alsoAllow`. The change of the config starts the pod
    again. Then the agent has no search tool, and nothing goes to the
    vendor.
+
+## The official plugins step fails
+
+The pod of the pilot does not start: its `official-plugins` init container
+failed, and `AgentPlatformWorkloadNotReady` fires after 10 minutes. The
+step installs the Brave plugin from the image at each start
+([agent-platform.md](agent-platform.md), "Web search"). It stops the whole
+pod on purpose, and does not let the gateway start without it, for two
+reasons:
+
+- The step also checks the state volume for plugins that the image did not
+  put there: an install record of another plugin, or any file in
+  `state/extensions`. Such a plugin would run in `doctor` and in the
+  gateway, with the secrets of the agent. A start that goes on would run
+  it.
+- With no plugin, `doctor` tries to install it from the npm registry. The
+  pod has no route there, so `doctor` waits for its timeouts and records an
+  unfinished upgrade of the plugin.
+
+1. **Read only.** The line of the step:
+   ```sh
+   kubectl -n agents-pilot logs deploy/agent -c official-plugins | grep '^official-plugins'
+   ```
+   - `result=failed reason=an install record of another plugin: <id>` or
+     `reason=files in .../extensions`: something wrote a plugin to the
+     state volume. Treat it as a security event: keep the pod down, take a
+     copy of the volume for the review, and find the writer before a
+     restore.
+   - `id=brave ... result=failed`: the install itself failed. The lines
+     above it are the product's installer. An image of a bad build fails
+     the same step in CI, so look at the release first.
+2. **Fix, through a merge.** Revert the image pin to the last release that
+   started. For a state that holds a foreign plugin, restore the state
+   from a backup taken before the write
+   ([Restore the state of an agent](#restore-the-state-of-an-agent)).
+   Turning web search off does not skip the step.
 
 ## Memory search finds nothing
 
