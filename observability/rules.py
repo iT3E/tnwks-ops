@@ -551,10 +551,28 @@ def trivy_running_containers():
     return " or ".join(parts)
 
 
+# The parts of the Trivy rules that more than one rule reads are recording rules
+# of their own, evaluated first in the group: each rule reads the recorded series
+# in place of the whole expression again, so an evaluation computes each part once.
+# The running containers (trivy_running_containers()).
+TRIVY_RUNNING_RECORD = "homelab:security_trivy_running_containers:info"
+# The reports of the last TRIVY_REPORT_GAP (trivy_reports_window()).
+TRIVY_REPORTS_RECORD = "homelab:security_trivy_reports:max"
+# The reports of the images that run now (trivy_reports_of_running()).
+TRIVY_REPORTS_OF_RUNNING_RECORD = "homelab:security_trivy_reports_of_running:max"
+# The digests of the running images with no report (trivy_unscanned_images()).
+TRIVY_UNSCANNED_RECORD = "homelab:security_trivy_unscanned_digests:count"
+
+
+def trivy_running():
+    """The recorded running containers (TRIVY_RUNNING_RECORD)."""
+    return security_selector(TRIVY_RUNNING_RECORD)
+
+
 def trivy_running_digests():
     """The digests of the images that run on this site now, one series for each
     (k8s_cluster, digest)."""
-    return f"count by (k8s_cluster, digest) ({trivy_running_containers()})"
+    return f"count by (k8s_cluster, digest) ({trivy_running()})"
 
 
 def trivy_report_digests(expr):
@@ -595,7 +613,7 @@ def trivy_reports_window():
         f'max_over_time({security_selector("trivy_image_vulnerabilities")}[{TRIVY_REPORT_GAP}])')
 
 
-def trivy_reports_of_running(expr):
+def trivy_reports_of_running():
     """The series of the reports (trivy_report_digests()) of the images that run
     on this site now: by digest, or, for a namespace, container and reference with
     no report of a running digest, by that reference. So one container counts
@@ -606,8 +624,8 @@ def trivy_reports_of_running(expr):
     sum reads one severity (critical), so it is the value of one report: the
     worst, which never hides a fail. The metric has no time of the scan, so the
     newest report can not be chosen."""
-    reports = trivy_report_digests(expr)
-    containers = f"group by ({TRIVY_CONTAINER_MATCH}) ({trivy_running_containers()})"
+    reports = security_selector(TRIVY_REPORTS_RECORD)
+    containers = f"group by ({TRIVY_CONTAINER_MATCH}) ({trivy_running()})"
     by_digest = f"({reports} and on (k8s_cluster, digest) {trivy_running_digests()})"
     by_reference = (f"topk by ({TRIVY_CONTAINER_MATCH}, severity) (1,"
                     f" ({reports} and on ({TRIVY_CONTAINER_MATCH}) {containers}))")
@@ -628,8 +646,8 @@ def trivy_unscanned_images():
     have no report of Trivy Operator in the last TRIVY_REPORT_GAP: no report with
     their digest, and none for the same namespace, container and reference
     (TRIVY_CONTAINER_MATCH)."""
-    reported = trivy_reports_window()
-    return (f"count by (k8s_cluster, digest) (({trivy_running_containers()})"
+    reported = security_selector(TRIVY_REPORTS_RECORD)
+    return (f"count by (k8s_cluster, digest) (({trivy_running()})"
             f" unless on (k8s_cluster, digest) ({reported})"
             f" unless on ({TRIVY_CONTAINER_MATCH}) ({reported}))")
 
@@ -637,8 +655,8 @@ def trivy_unscanned_images():
 def trivy_by_reference_containers():
     """The number of running containers of each cluster with Trivy Operator whose
     report matches by reference only (no report has their digest), and 0 when none."""
-    reported = trivy_reports_window()
-    running = trivy_running_containers()
+    reported = security_selector(TRIVY_REPORTS_RECORD)
+    running = trivy_running()
     matched = (f"(({running}) unless on (k8s_cluster, digest) ({reported}))"
                f" and on ({TRIVY_CONTAINER_MATCH}) ({reported})")
     operator = ("group by (k8s_cluster) ("
@@ -695,23 +713,27 @@ def security_records():
                 + ")")
     # Over the same window as the coverage: a report that is gone during its new
     # scan still counts, so the sum does not fall for those minutes.
-    critical_only = '="Critical"'
-    critical = f'max_over_time({selector("trivy_image_vulnerabilities", severity=critical_only)}[{TRIVY_REPORT_GAP}])'
-    any_report = f'max_over_time({selector("trivy_image_vulnerabilities")}[{TRIVY_REPORT_GAP}])'
+    critical = selector(TRIVY_REPORTS_OF_RUNNING_RECORD, severity='="Critical"')
+    any_report = selector(TRIVY_REPORTS_RECORD)
     # Only the reports of the images that run now: after a rollout to another
     # image, the report of the old image (it can stay for a day) leaves the sum
     # when its pods stop.
     running = trivy_running_digests()
-    images = (f"sum by (k8s_cluster) (max by (k8s_cluster, digest) ({trivy_reports_of_running(critical)}))"
+    images = (f"sum by (k8s_cluster) (max by (k8s_cluster, digest) ({critical}))"
               f" or on (k8s_cluster) 0 * count by (k8s_cluster) ({any_report})"
               f" and on (k8s_cluster) count by (k8s_cluster) ({running})")
     # A fail stays a fail with an image that has no report. A pass with such an
     # image is no evidence: no result. SecurityImagesNotScanned tells the owner.
-    images = f"({images}) > 0 or (({images}) unless on (k8s_cluster) ({trivy_unscanned_images()}))"
+    images = f"({images}) > 0 or (({images}) unless on (k8s_cluster) ({selector(TRIVY_UNSCANNED_RECORD)}))"
     images = as_system(
         f'label_replace(label_replace({images}, "check", "image-vulnerabilities", "", ""), "severity", "critical", "", "")')
     report = selector("homelab_trivy_compliance_report_update_timestamp_seconds", name=f'="{TRIVY_COMPLIANCE_SPEC}"')
     return [
+        # First: the rules below read them in the same evaluation.
+        {"record": TRIVY_RUNNING_RECORD, "expr": trivy_running_containers()},
+        {"record": TRIVY_REPORTS_RECORD, "expr": trivy_reports_window()},
+        {"record": TRIVY_REPORTS_OF_RUNNING_RECORD, "expr": trivy_reports_of_running()},
+        {"record": TRIVY_UNSCANNED_RECORD, "expr": trivy_unscanned_images()},
         {"record": "homelab_security_check_result", "expr": except_accepted(f"({controls} or {images})"),
          "labels": {"source": "trivy"}},
         {"record": "homelab_security_last_result_timestamp_seconds",
@@ -765,7 +787,7 @@ def security_alerts():
                                          f" (security/README.md, Accepted findings). The alert ends after {SECURITY_FINDING_HOLD[:-1]} hour.")}},
         {"alert": "SecurityImagesNotScanned",
          # Only where Trivy Operator runs: its compliance report exists there.
-         "expr": (f"count by (k8s_cluster) ({trivy_unscanned_images()}) > 0 and on (k8s_cluster)"
+         "expr": (f"count by (k8s_cluster) ({security_selector(TRIVY_UNSCANNED_RECORD)}) > 0 and on (k8s_cluster)"
                   " group by (k8s_cluster) ("
                   + security_selector("homelab_trivy_compliance_report_update_timestamp_seconds") + ")"
                   # An entry of the accepted list for the cluster mutes it until its end.
