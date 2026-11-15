@@ -31,11 +31,13 @@ simulation, and updates-held the held packages of the second one.
 
 The clock of an upgrade that a run sees first starts at the Date of its
 package list at the last run with a result: the upgrade came out after that
-Date. The simulation names the list of each upgrade (its Label, or Origin,
-and its Suite). With no Date of its list in the state (no state file, a
-state file of the old form, or a list that the last run did not have), the
-clock starts at the time 0, so the age that is not known counts as old. Only
-a run with a result, one in which no query failed, writes the state file.
+Date. The simulation names the list of each upgrade (its Label and its
+Suite; a list with no Label has an empty name). With no Date of its list in
+the state (no state file, a state file of the old form, or a list that the
+last run did not have), the clock starts at the time 0, so the age that is
+not known counts as old. Only a run with a result, one in which no query
+failed, writes the state file, with the Dates that it read before the
+simulations.
 A run that fails leaves it as it was, so a stop never moves a clock late.
 
 When one query fails, the document has no result, only the names of the
@@ -113,8 +115,8 @@ ROOT_RESULT_MODE = 0o644
 # "Inst <package> [<installed version>] (<new version> <lists> [<arch>])": an
 # upgrade. A line with no installed version is a new package that an upgrade
 # pulls in. <lists> is "<Label>:<Version>/<Suite>" for each list of the new
-# version, joined by ", " (apt names a list by its Label, or by its Origin when
-# it has no Label).
+# version, joined by ", ". apt names a list by its Label; a list with no Label
+# has an empty name there ("2.0 stable [all]"), whatever its Origin.
 UPGRADE = re.compile(r"^Inst \S+ \[")
 INST = re.compile(r"^Inst (\S+) \[[^\]]*\] \((\S+)(?: ([^()]*?))?(?: \[[^\[\]]*\])?\)")
 FIELD = re.compile(r"^(Origin|Label|Suite|Date): (.+)$", re.MULTILINE)
@@ -234,7 +236,9 @@ def list_dates(lists_dir: Path) -> dict[str, float]:
             moment = date_of(fields)
         except (TypeError, ValueError):
             continue
-        key = list_key(fields.get("Label") or fields.get("Origin", ""), fields.get("Suite", ""))
+        # The Label only, as the simulation names the list: apt 2.8 prints no Origin
+        # for a list with no Label.
+        key = list_key(fields.get("Label", ""), fields.get("Suite", ""))
         dates[key] = min(moment, dates.get(key, moment))
     return dates
 
@@ -435,6 +439,10 @@ def measure(
         failed.append("package-lists")
 
     try:
+        # The Dates first: the lists that the simulations read below are these or newer,
+        # so a stored Date is never newer than the lists of this run. A refresh of the
+        # lists during the run can then start a clock early, never late.
+        listed = dict(dates())
         pending = packages()
         offered = {**upgrades(), **pending}
         held = holds()
@@ -449,7 +457,7 @@ def measure(
         results["updates-held"] = sum(1 for name in held_now if late(name))
         details.append(("homelab_security_host_updates_pending", {}, len(pending)))
         details.append(("homelab_security_host_updates_held", {}, len(held_now)))
-        new_state = {"first_seen": first, "lists": dict(dates())}
+        new_state = {"first_seen": first, "lists": listed}
     except QueryError:
         failed.append("updates")
 

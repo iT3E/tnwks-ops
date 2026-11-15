@@ -236,7 +236,9 @@ $released = @(Get-TnwksHeldUpdates)
 """).stdout
     count, online, criteria = output.split("|")
     assert count == "1" and online == "True"
-    assert criteria == "IsInstalled=0 and IsHidden=1 and Type='Software'"
+    assert criteria == "IsInstalled=0 and IsHidden=1 and BrowseOnly=0 and Type='Software'"
+    pending = "IsInstalled=0 and IsHidden=0 and BrowseOnly=0 and Type='Software'"
+    assert criteria.replace("IsHidden=1", "IsHidden=0") == pending, "the same kind of update, hidden"
 
 
 @needs_pwsh

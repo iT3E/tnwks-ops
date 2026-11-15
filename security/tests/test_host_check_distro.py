@@ -353,16 +353,21 @@ def test_an_upgrade_line_that_can_not_be_read_is_a_failed_query():
 
 
 def test_the_lists_of_the_simulation_have_the_names_of_the_release_files(tmp_path):
-    """apt names a list by its Label (or Origin), and its Suite: so do the Dates."""
+    """apt names a list by its Label and its Suite, so do the Dates. A list with no Label
+    has an empty name in the simulation, whatever its Origin (apt 2.8 prints
+    "(2.0 stable [all])"), so its Date has that name too."""
     release(tmp_path, "archive_dists_noble-updates_InRelease", "Ubuntu", "noble-updates", FRESH)
     release(tmp_path, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", STALE)
     (tmp_path / "ppa_dists_noble_InRelease").write_text(
         "Origin: LP-PPA-ubuntugis-ubuntugis-unstable\nLabel: ubuntugis-unstable\nSuite: noble\nDate: " + STALE + "\n")
     (tmp_path / "odd_dists_x_InRelease").write_text("Origin: Odd\nSuite: x\nDate: not a date\n")
+    (tmp_path / "vendor_dists_stable_InRelease").write_text("Origin: Vendor\nSuite: stable\nDate: " + STALE + "\n")
     assert check.list_dates(tmp_path) == {UPDATES: NOW - 3 * 3600, SECURITY: NOW - 5 * DAY,
-                                          "ubuntugis-unstable/noble": NOW - 5 * DAY}
+                                          "ubuntugis-unstable/noble": NOW - 5 * DAY, "/stable": NOW - 5 * DAY}
     simulated = check.pending_packages(run=lambda argv, **kwargs: Proc(0, SIMULATION))
     assert set(simulated["gdal-data"]) <= set(check.list_dates(tmp_path))
+    no_label = check.pending_packages(run=lambda argv, **kwargs: Proc(0, "Inst tool [1.0] (2.0 stable [all])\n"))
+    assert no_label == {"tool": ("/stable",)} and set(no_label["tool"]) <= set(check.list_dates(tmp_path))
 
 
 @pytest.mark.parametrize("query", ["pending_packages", "every_upgrade", "held_packages"])
@@ -1140,3 +1145,34 @@ def test_each_try_gives_its_errno_as_a_series_also_the_try_of_root():
     errnos = {labels["uid"]: value for name, labels, value in measured["details"]
               if name == "homelab_security_host_write_test_errno"}
     assert errnos == {"0": 1, "1000": 0}
+
+
+def test_a_refresh_of_the_lists_during_a_run_starts_no_clock_late():
+    """The simulation of run k sees lists dated 60 hours before the run. An upgrade comes
+    out 50 hours before the run, and a refresh during run k, after the simulations, brings
+    it in. The run stores the Dates that it read before the simulations, so the next run
+    starts the clock of that upgrade at the old Date: early, not 50 hours late."""
+    lists_now = {UPDATES: NOW - 60 * 3600}
+
+    def simulation():
+        # apt-daily refreshes the lists while the simulations run.
+        lists_now[UPDATES] = NOW - 60
+        return {}
+
+    run_k = check.measure(NOW, 14, 72, state_of({}, {UPDATES: NOW - 70 * 3600}), packages=simulation,
+                          lists=lambda: NOW - 3600, upgrades=dict, holds=set, writes=lambda: PASSING_TRIES,
+                          dates=lambda: dict(lists_now))
+    assert run_k["failed"] == [] and run_k["state"]["lists"] == {UPDATES: NOW - 60 * 3600}
+    after, _ = run(state=run_k["state"], packages=["openssl"], now=NOW + 6 * 3600)
+    assert after["state"]["first_seen"] == {"openssl": NOW - 60 * 3600}
+    _, families = run(state=after["state"], packages=["openssl"], now=NOW - 60 * 3600 + 14 * DAY + 60)
+    assert result(families) == 1, "the clock of the old order started at the refresh, 60 hours late"
+
+
+def test_an_upgrade_of_the_plain_simulation_counts_also_when_the_second_one_does_not_offer_it():
+    """Each run joins the packages of the plain simulation to the second list, so an
+    upgrade that only the plain one offers gets a clock and fails pending."""
+    state = state_of({"openssl": NOW - 20 * DAY}, {UPDATES: NOW - 3600})
+    measured, families = run(state=state, packages=["openssl"], upgrades=["curl"])
+    assert result(families) == 1
+    assert measured["state"]["first_seen"] == {"openssl": NOW - 20 * DAY, "curl": NOW - 3600}
