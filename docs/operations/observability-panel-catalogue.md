@@ -241,6 +241,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-security / Sources / Age of the last result | `homelab_security_last_result_timestamp_seconds` | 180s | Unknown: no source reports | [Runbook](../../security/README.md) |
 | tnwks-security / Sources / Late sources | `ALERTS` | 180s | None | [Runbook](../../security/README.md) |
 | tnwks-security / Sources / Failing checks | `homelab_security_check_result` | 180s | None | [Runbook](../../security/README.md) |
+| tnwks-security / Sources / Images scanned by tag only | `homelab:security_trivy_containers_by_reference:count` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
 | tnwks-security / Accepted findings / Accepted findings | `homelab_security_accepted_until_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
 | tnwks-security / Accepted findings / Past their end date | `homelab_security_accepted_until_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
 | tnwks-security / Accepted findings / Accepted findings by system | `homelab_security_accepted_until_timestamp_seconds` | 180s | None | [Runbook](../../security/README.md) |

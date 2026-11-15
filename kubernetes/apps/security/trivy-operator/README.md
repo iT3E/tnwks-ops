@@ -101,7 +101,7 @@ contract of the registry (`security/README.md`, "The series"), with
 | Series | From | Value |
 | --- | --- | --- |
 | `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
-| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images that run on the cluster now (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`). The report of an image that no longer runs (an old ReplicaSet, whose report can stay for a day) does not count. 0 when the scan reports have none. No series when no running image is known (kube-state-metrics down). A report counts for an hour after its last sample, so a report that is gone during its new scan changes nothing. No series when there is no scan report. While an image that runs on the cluster has had no report for an hour, a fail stays and a pass is "no evidence": a failed scan never reads as a pass, and never hides a known fail. The pods of the scan jobs, a container that has not started (no `image_id` yet) and an image with no registry digest are not counted |
+| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images that run on the cluster now (`kube_pod_container_info` and `kube_pod_init_container_info`). Each running container counts one report: the one with the digest of `image_id`, or, when no report has that digest, the one with the same namespace, container and reference ("The digest of a report", below). The report of an image that no longer runs (an old ReplicaSet, whose report can stay for a day) counts only for a container of the same namespace, container and reference that has no report of its own digest. 0 when the scan reports have none. No series when no running image is known (kube-state-metrics down). A report counts for an hour after its last sample, so a report that is gone during its new scan changes nothing. No series when there is no scan report. While an image that runs on the cluster has had no report for an hour, a fail stays and a pass is "no evidence": a failed scan never reads as a pass, and never hides a known fail. The pods of the scan jobs, a container that has not started (no `image_id` yet) and an image with no registry digest are not counted |
 | `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
 
 A result also has the label `severity`, in lower case. Trivy counts a control
@@ -136,6 +136,53 @@ Known limits of the alert `SecurityFindingNew`:
 - During a rolling update, the old and the new image both run, and both
   count. An update that takes longer than the 10 minutes of the alert, with
   both images reported, alerts once.
+
+### The digest of a report
+
+The operator scans the image of the pod spec, by its reference, and the
+report has the digest that the registry gave for that reference at the scan.
+`image_id` has the digest that the node pulled. For most images they are the
+same digest, but not always:
+
+- **The tag moved.** The node pulled the tag before it was pushed again, and
+  the scan reads the new image. The pod keeps the old digest until it starts
+  again, and the operator scans the reference, so no report can have it.
+- **An index and a platform image.** One side has the digest of the image
+  index of a multi-platform image, and the other the digest of the image of
+  one platform.
+
+So the rules join a report to a running container by its digest first, and
+else by the namespace, the container name and the reference
+(`<registry>/<repository>:<tag>`). The second join is used only when no
+report has the digest of the container, so a container counts one report.
+When two reports have the reference and neither has the running digest (the
+tag moved twice, and the report of an old ReplicaSet is still there), the
+second join keeps the report with the most critical vulnerabilities. The
+metric has no time of the scan, so the rules can not pick the newest report,
+and the worst one never hides a fail.
+The reference of the pod spec is read as the operator reads it: Docker Hub is
+`index.docker.io`, a single name is in `library/`, and no tag is `latest`. A
+pod spec with a digest joins by its digest only: the operator writes the tag
+of such a reference in another form.
+
+What the second join can miss, or hide:
+
+- **A tag that moved.** The report of the new image counts for a pod that
+  still runs the old one, until the pod starts again. The board shows the
+  number of such containers ("Images scanned by tag only", from
+  `homelab:security_trivy_containers_by_reference:count`). The report is of
+  the image that the tag points to now: restart the workload, or pin a
+  digest, to make it exact. When the count of a cluster stays above 0 for 7
+  days, `SecurityImagesScannedByTag` tells the owner (`security/README.md`).
+- **Two workloads in one namespace** with the same container name and the
+  same reference cover for each other: the report of one counts for the
+  other.
+- **A leftover report** (an old ReplicaSet, up to its lifetime of 24 hours)
+  counts for a container of the same reference, so it can hold back
+  `SecurityImagesNotScanned` for up to that time.
+
+A report of the same reference in another namespace, or for another
+container, does not count.
 
 ## Exceptions
 

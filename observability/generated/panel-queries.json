@@ -1881,6 +1881,14 @@
   },
   {
     "dashboard": "tnwks-security",
+    "tab": "Sources",
+    "title": "Images scanned by tag only",
+    "expr": "sum(homelab:security_trivy_containers_by_reference:count{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
     "tab": "Accepted findings",
     "title": "Accepted findings",
     "expr": "count(max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}))",

@@ -9,7 +9,7 @@ import yaml
 from contracts import generated_contracts
 from dashboards import generated
 from inventory import inventory
-from rules import fixtures, rule_resource
+from rules import fixtures, rule_resource, week_fixtures
 from thanos_manifests import generated_platform
 from vendor import generated_upstream
 
@@ -31,6 +31,7 @@ def artifacts():
         ROOT / "kubernetes/apps/monitoring/observability-evidence/rules/rules.yaml": resource,
         ROOT / "observability/generated/rules-for-test.yaml": {"groups": resource["spec"]["groups"]},
         ROOT / "observability/generated/rule-tests.yaml": fixtures(),
+        ROOT / "observability/generated/rule-tests-week.yaml": week_fixtures(),
     }
     for path, data in rules.items():
         files[path] = "---\n" + yaml.safe_dump(data, sort_keys=False, width=110)
