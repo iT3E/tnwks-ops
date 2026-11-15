@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.159.1 - 2026-11-15
+
+### Security
+
+* kopiur: the agent trust domains back up to a Kopia repository of their own (ClusterRepository agents, prefix kopiur-agents/, its own password and role). The pilot agent policy is now agent-state-v2; the snapshots of agent-state stay in the shared repository, which no longer allows agents-pilot. New alert AgentBackupRepositoryNotReady for a repository of the trust domains that never gets Ready.
+
 ## v2.159.0 - 2026-11-15
 
 ### Added
