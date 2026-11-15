@@ -21,4 +21,4 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: iT3E/github-workflows/.github/workflows/sync-labels.yaml@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
+    uses: iT3E/github-workflows/.github/workflows/sync-labels.yaml@1060ac8fcc8d8d2462ca5096698304e64b904663 # v1.9.5
