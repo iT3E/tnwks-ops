@@ -100,9 +100,10 @@ of homelab-wsl (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`).
 homelab-wsl lists `trivy` in its `sources` (`security/registry/systems.yaml`)
 from the pull request after its first result, so the late alert does not
 fire before the first scans. From then, when homelab-wsl or that scrape is
-down, its series go stale after 5 minutes, and `SecurityResultLate` fires
-for `trivy` on homelab-wsl 10 minutes later, next to the alert of the lost
-site. That is the federation, not a fault of the operator. The rules give
+down, its last sample leaves the 10-minute window of the rule, and
+`SecurityResultLate` fires for `trivy` on homelab-wsl 10 minutes after that
+(`for: 10m`), about 20 minutes after the last sample, next to the alert of
+the lost site. That is the federation, not a fault of the operator. The rules give
 the two series of the
 contract of the registry (`security/README.md`, "The series"), with
 `source="trivy"` and the cluster as `system`:
@@ -111,7 +112,7 @@ contract of the registry (`security/README.md`, "The series"), with
 | --- | --- | --- |
 | `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
 | `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images that run on the cluster now (`kube_pod_container_info` and `kube_pod_init_container_info`). Each running container counts one report: the one with the digest of `image_id`, or, when no report has that digest, the one with the same namespace, container and reference ("The digest of a report", below). The report of an image that no longer runs (an old ReplicaSet, whose report can stay for a day) counts only for a container of the same namespace, container and reference that has no report of its own digest. 0 when the scan reports have none. No series when no running image is known (kube-state-metrics down). A report counts for an hour after its last sample, so a report that is gone during its new scan changes nothing. No series when there is no scan report. While an image that runs on the cluster has had no report for an hour, a fail stays and a pass is "no evidence": a failed scan never reads as a pass, and never hides a known fail. The pods of the scan jobs, a container that has not started (no `image_id` yet) and an image with no registry digest are not counted |
-| `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
+| `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at the first tick of its cron (`0 */6 * * *`, the chart's default) after the report object is made, so up to 6 hours after the first start of the operator, then at each tick (`pkg/compliance/clustercompliancereport.go` of the release) |
 
 A result also has the label `severity`, in lower case. Trivy counts a control
 with no input as a pass, so the rule leaves out the controls that have no
@@ -269,7 +270,7 @@ scan.
 | Part | Request | Limit | Source |
 | --- | --- | --- | --- |
 | The operator | 256 MiB | 512 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). `GOMEMLIMIT` is 460 MiB, 90% of the limit (go.dev/doc/gc-guide) |
-| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One scan container measured 56 MiB at peak. One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`) |
+| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. On homelab-wsl-02, one scan container peaked at 25 MiB, and the containers of one job together at 97 MiB, in a full cycle (2026-11-15). One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`) |
 
 The operator counts its scan jobs from its cache before it starts one
 (`pkg/operator/jobs/limit_checker.go` of the release). A job that it has
