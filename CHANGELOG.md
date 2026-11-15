@@ -3,6 +3,30 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.163.0 - 2026-11-15
+
+### Added
+
+* DESKTOP-HKE05KI's windows_exporter and smartctl_exporter also admit WSL-02's address, so homelab-wsl-02's Prometheus can scrape the security series of the site 1 host over the LAN (`windows_monitoring_remote_extra`, as WSL-02 has for the other way).
+
+## v2.162.1 - 2026-11-15
+
+### Security
+
+* kopiur: the shared repository no longer allows agents-pilot, now that the old pilot policy agent-state is gone; its snapshots stay there under their kopia identity.
+
+## v2.162.0 - 2026-11-15
+
+### Changed
+
+* security: the memory limit of the Trivy Operator raises from 512 to 640 MiB on both sites, with GOMEMLIMIT at 576 MiB (90%): on homelab-wsl the first cycle peaked at 473 MiB, under 8% below the old limit
+
+## v2.161.3 - 2026-11-15
+
+### Fixed
+
+* kopiur: the shared repository allows agents-pilot again until the old pilot policy agent-state finishes its delete, which the admission webhook refuses without the grant. The docs give the two-step order for moving a trust domain to another repository.
+
 ## v2.161.2 - 2026-11-15
 
 ### Fixed

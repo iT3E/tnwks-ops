@@ -315,7 +315,7 @@ scan.
 
 | Part | Request | Limit | Source |
 | --- | --- | --- | --- |
-| The operator | 256 MiB | 512 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). `GOMEMLIMIT` is 460 MiB, 90% of the limit (go.dev/doc/gc-guide) |
+| The operator | 256 MiB | 640 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). On homelab-wsl the first cycle peaked at 473 MiB of the next limit, 512 MiB (about 260 MiB at rest, no kill), and the owner raised it to 640 MiB on 2026-11-15. `GOMEMLIMIT` is 576 MiB, 90% of the limit (go.dev/doc/gc-guide) |
 | Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`). The full cycle on homelab-wsl-02 (one scan container at 25 MiB, one job at 97 MiB, 2026-11-15) ran while one container of a job scanned at a time; a job is not measured since the scan cache is in memory (below) |
 
 The operator counts its scan jobs from its cache before it starts one
@@ -334,18 +334,19 @@ of Trivy on that cluster, while such a pod has its scan:
 
 | By | The operator | The scan job | Sum |
 | --- | --- | --- | --- |
-| Limits | 512 MiB | 6 x 512 MiB | 3584 MiB |
-| Estimate from a local test, scan cache in memory | 512 MiB (its limit) | 1032 to 1572 MiB, up to 2808 MiB with large old images | 1544 to 2084 MiB, up to 3320 MiB |
+| Limits | 640 MiB | 6 x 512 MiB | 3712 MiB |
+| Estimate from a local test, scan cache in memory | 640 MiB (its limit) | 1032 to 1572 MiB, up to 2808 MiB with large old images | 1672 to 2212 MiB, up to 3448 MiB |
 | Measured on homelab-wsl-02, one container of a job that scans | 316 MiB | 97 MiB | 413 MiB or less |
 
 The measured line is the peak of a full cycle on homelab-wsl-02, in samples
-of one minute (step 9 of "Tests"): the operator at 316 MiB of its 512 MiB,
+of one minute (step 9 of "Tests"): the operator at 316 MiB of its 512 MiB
+then,
 one scan container at 25 MiB at most, and the containers of one scan job
 together at 97 MiB at most. No sample had more than one scan job. The two
 peaks need not be at the same time, so their sum is an upper bound.
 homelab-wsl runs more workloads, and the cache of the operator grows with
-them, so the operator can take more there; its limit leaves 196 MiB above
-the peak of homelab-wsl-02. The owner kept the limits with that measure,
+them, so the operator can take more there; its limit of 640 MiB leaves
+324 MiB above the peak of homelab-wsl-02. The owner kept the limits with that measure,
 for homelab-wsl too (2026-11-15). That cycle ran with the scan cache in
 files on `trivy-cache`: one container of a job took the lock of the cache
 and scanned, and the others stopped within 5 seconds ("When a scan fails").
