@@ -13,9 +13,7 @@
 #     other ones;
 #   - one container, run-job, from the image of the workflow agents, pinned
 #     by digest, and a sandbox of that same image;
-#   - the service account workflow-run (its Role lists Sandbox records only;
-#     the Job turns its token on, for the check of the record after the
-#     delete);
+#   - the service account workflow-run, with no token;
 #   - no secret but the client certificate of the sandbox gateway, and no
 #     variable from a secret;
 #   - one try, and a time limit of one hour at most (the sweep deletes a run
@@ -88,8 +86,10 @@ spec:
         pinned by digest.
     - expression: >-
         has(variables.pod.serviceAccountName) &&
-        variables.pod.serviceAccountName == 'workflow-run'
-      message: A run job runs as workflow-run.
+        variables.pod.serviceAccountName == 'workflow-run' &&
+        has(variables.pod.automountServiceAccountToken) &&
+        variables.pod.automountServiceAccountToken == false
+      message: A run job runs as workflow-run, with no token.
     - expression: >-
         variables.env.filter(e, e.name == 'AGENT_NAME').size() == 1 &&
         variables.env.exists(e, e.name == 'AGENT_NAME' && has(e.value) &&

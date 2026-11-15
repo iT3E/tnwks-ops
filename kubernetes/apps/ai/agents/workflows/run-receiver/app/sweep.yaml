@@ -8,7 +8,7 @@
 # answer a delete with success, leave the record and forget the sandbox). It
 # deletes only sandboxes and records with the name of a run, so it never
 # deletes the sandbox of a check. A run job has a time limit of 40 minutes
-# at most (agents.yaml), with 150 s of grace, and the admission policy admits
+# at most (agents.yaml), with 90 s of grace, and the admission policy admits
 # one hour at most, so a record older than one hour belongs to no live run.
 # A record that the gateway left or forgot fails the Job after its removal
 # (AgentPlatformCronJobFailed).
