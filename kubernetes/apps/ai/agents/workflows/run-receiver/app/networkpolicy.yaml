@@ -50,7 +50,8 @@ spec:
 ---
 # The run jobs and the sweep. Nothing comes in. Out: the sandbox gateway of
 # this trust domain only, which also relays the SSH path to a sandbox (and
-# DNS, through allow-dns). The agent itself runs in the sandbox, whose egress
+# DNS, through allow-dns). The sweep also gets the Kubernetes API, in its own
+# policy below. The agent itself runs in the sandbox, whose egress
 # is the sandbox policy and the providers of the agent.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -74,6 +75,22 @@ spec:
         - ports:
             - port: "8080"
               protocol: TCP
+---
+# The sweep only: the Kubernetes API too, to list and remove the Sandbox
+# records that the gateway left (rbac.yaml). Cilium adds the rules of each
+# policy that selects a pod, so the sweep gets this and the gateway above,
+# and a run job keeps the gateway only.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: workflow-sweep
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: workflow-sweep
+  egress:
+    - toEntities:
+        - kube-apiserver
 ---
 # The providers job (providers.yaml). Nothing comes in. Out: the sandbox
 # gateway of this trust domain, and the GitHub API for the installation token
