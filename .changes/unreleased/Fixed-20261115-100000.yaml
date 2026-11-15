@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'agents: the pilot config names no Brave plugin path any more (the plugin is a verified official install from the agent image since 0.4.0), so the gateway logs no load path warning at each start'
+time: 2026-11-15T10:00:00.000000000-08:00

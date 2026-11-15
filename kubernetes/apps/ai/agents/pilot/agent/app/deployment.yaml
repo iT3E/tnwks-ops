@@ -158,8 +158,11 @@ spec:
         # only when it is bundled or a verified official install, and each
         # session of the pilot is sandboxed. It runs before doctor, which
         # would try to install a missing configured plugin from the npm
-        # registry. It prints `official-plugins id=brave version=...
-        # result=current|installed|failed`, and a failure stops the start.
+        # registry. It installs the plugin again at each start, and stops
+        # the start on a plugin in the state that the image did not put
+        # there. It prints `official-plugins id=brave version=...
+        # result=installed|failed` or `official-plugins result=failed
+        # reason=...`, and a failure stops the start.
         # It needs no secret.
         - name: official-plugins
           image: *image
