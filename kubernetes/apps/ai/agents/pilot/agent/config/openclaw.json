@@ -82,8 +82,7 @@
   "plugins": {
     "load": {
       "paths": [
-        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox",
-        "/opt/openclaw/plugins/node_modules/@openclaw/brave-plugin"
+        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox"
       ]
     },
     "entries": {

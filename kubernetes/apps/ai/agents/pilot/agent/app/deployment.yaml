@@ -151,6 +151,39 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
+        # The official plugins step of the image (the image README, "The
+        # official plugins"): it installs the Brave plugin from the npm cache
+        # of the image, with no network, as a verified official install, in
+        # the state directory. A sandboxed session uses a search provider
+        # only when it is bundled or a verified official install, and each
+        # session of the pilot is sandboxed. It runs before doctor, which
+        # would try to install a missing configured plugin from the npm
+        # registry. It prints `official-plugins id=brave version=...
+        # result=current|installed|failed`, and a failure stops the start.
+        # It needs no secret.
+        - name: official-plugins
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["install-official-plugins"]
+          env: *env
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
         # Doctor of the product, on a copy of the config (the image README):
         # it migrates the state for a new release.
         - name: doctor

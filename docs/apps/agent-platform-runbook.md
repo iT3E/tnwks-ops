@@ -734,36 +734,55 @@ result.
 | `provider_error: Search failed (HTTP 429)`, "Check this search provider's quota or try again later" | The vendor's rate limit or the plan's quota. The key is shared with another deployment of the owner, and the vendor counts both |
 | `provider_error: Search failed (HTTP 5xx)`, "Check this search provider's configuration and connection" | The vendor is down |
 | `Search timed out after 30s` | No answer in 30 seconds: the vendor is slow, or the network policy drops the flow (below) |
+| `web_search is unavailable. Enable or select a bundled or verified official search provider for sandboxed agents.` In the `agent` container's log: `[tools] dispatch_action failed: ... web_search is unavailable ...`. The tool span ends with an error in a few milliseconds, and no flow goes to the vendor | The Brave plugin loaded, but not as a verified official install. A sandboxed session (each session of the pilot) uses a search provider only when it is bundled or a verified official install, and a plugin from `plugins.load.paths` is neither. The `official-plugins` init container makes it one (below) |
 | No `web_search` tool at all | The tool is not in the allow list of a sandboxed session, or the plugin did not load (below) |
 
-(The messages come from `src/web-search/runtime-error.ts:36-70` of the
-product at 2026.11.3.)
+(The messages come from `src/web-search/runtime-error.ts:36-70` and
+`src/web-search/runtime.ts:568-573` of the product at 2026.11.3; the
+sandbox filter is `src/plugins/web-provider-resolution-shared.ts:85-90`.)
 
 1. **Read only.** The pod and its start:
    ```sh
    kubectl -n agents-pilot get pods -l app.kubernetes.io/name=agent
    kubectl -n agents-pilot get deploy agent -o jsonpath='{.spec.template.spec.containers[0].image}'
    ```
-   The image must be 0.3.0 or later: earlier images have no Brave plugin.
-2. **Read only, by the owner.** The start lines of the `agent` container
+   The image must be 1.0.0 or later: earlier images load the Brave plugin
+   from a path, and a sandboxed session refuses it.
+2. **Read only.** The official plugins step of this start:
+   ```sh
+   kubectl -n agents-pilot logs deploy/agent -c official-plugins | grep '^official-plugins'
+   ```
+   `official-plugins id=brave version=<release> result=installed` (the
+   first start of a release) or `result=current` is good. `result=failed`
+   stops the start, and the lines above it are the product's installer.
+3. **Read only, by the owner.** The start lines of the `agent` container
    (`kubectl -n agents-pilot logs deploy/agent -c agent | grep -E 'http server listening|plugins\]'`).
    - `http server listening (18 plugins: ... brave ...)` means the plugin
-     loaded. With no `brave` in that list, check the plugin path and the
+     loaded. With no `brave` in that list, check the step above and the
      entry `plugins.entries.brave` in `openclaw.json`.
    - A line `OpenClaw can't verify where this plugin came from. Review it
-     with 'openclaw plugins inspect brave'` is expected. The product says it
-     for each plugin that loads from a path, and the config names that path
-     in `plugins.load.paths`. The same line comes for `openshell`.
+     with 'openclaw plugins inspect brave'` means the plugin loaded from a
+     path, not as a verified official install: a sandboxed session refuses
+     it. Take its path out of `plugins.load.paths`. The same line for
+     `openshell` is expected: the sandbox backend loads from a path, and
+     needs no trust.
    - `WEB_SEARCH_PROVIDER_INVALID_AUTODETECT` means the provider `brave`
      is set but no plugin gives it: the plugin did not load.
-3. **Read only.** The allow list of a sandboxed session: each session of
+   - The check of trust, in the `agent` container:
+     `openclaw plugins inspect brave --json` must show `"origin": "global"`,
+     `"trustedOfficialInstall": true` and `"reason": "trusted-official"`.
+     `openclaw sandbox explain` is not this check: it shows the tool policy
+     (the names a sandbox allows, with `web_search` in it), not whether the
+     provider behind the tool is trusted. So it shows `web_search` as
+     allowed while each call fails.
+4. **Read only.** The allow list of a sandboxed session: each session of
    the pilot is sandboxed, and the product leaves `web_search` out of one
    by default. It must be in `tools.sandbox.tools.alsoAllow`, and
    `tools.web.search.enabled` must be `true`:
    ```sh
    kubectl -n agents-pilot get configmap agent-config -o jsonpath='{.data.openclaw\.json}' | jq '.tools'
    ```
-4. **Read only.** The network path: a dropped flow to the vendor shows in
+5. **Read only.** The network path: a dropped flow to the vendor shows in
    Hubble, through a read-only port-forward to `hubble-relay` in
    `kube-system`:
    ```sh
@@ -774,7 +793,7 @@ product at 2026.11.3.)
    `FORWARDED`. A `DROPPED` flow means that the rule of
    `pilot/agent/app/networkpolicy.yaml` does not match. A flow from any
    other pod of the namespace must stay `DROPPED`.
-5. **Fix, through a merge.**
+6. **Fix, through a merge.**
    - **A wrong or revoked key:** the owner makes a new key at the vendor,
      puts it in `kubernetes/apps/ai/agents/pilot/agent/app/secret-search.sops.yaml`
      (`sops <file>`) in a pull request, and changes the other deployment
@@ -785,7 +804,10 @@ product at 2026.11.3.)
    - **The allow list, the plugin or the network rule:** a pull request
      that puts back the lines of [agent-platform.md](agent-platform.md),
      "Web search".
-6. **Turn search off,** through a merge: set `tools.web.search.enabled` to
+   - **Not a verified official install:** the image at 1.0.0 or later, the
+     `official-plugins` init container before `doctor`, and no Brave path
+     in `plugins.load.paths`.
+7. **Turn search off,** through a merge: set `tools.web.search.enabled` to
    `false` in `openclaw.json` and take `web_search` out of
    `tools.sandbox.tools.alsoAllow`. The change of the config starts the pod
    again. Then the agent has no search tool, and nothing goes to the
