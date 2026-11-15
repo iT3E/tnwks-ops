@@ -14,8 +14,8 @@ metadata:
   labels:
     app.kubernetes.io/name: agent
   annotations:
-    # Start the pod again when agent-config, agent-scripts or agent-secret
-    # changes.
+    # Start the pod again when agent-config, agent-scripts, agent-secret or
+    # agent-search-secret changes.
     reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
@@ -71,7 +71,7 @@ spec:
         # on this cluster the kubelet can't reach the local-path directory,
         # so it would make a subPath directory as root (talos/wsl/README.md).
         - name: prepare
-          image: &image ghcr.io/it3e/tnwks-agent-image:0.2.0@sha256:d0fef0cc4ab0270f74e9cc8a19ab27bc569d359949b24ce6d7ade50cf0428a40
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.3.0@sha256:ca3a1c7b8778380970098fdb68ed1f21dfeb75757428b675725e093d43bd11d1
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -261,7 +261,14 @@ spec:
           image: *image
           imagePullPolicy: IfNotPresent
           env: *env
-          envFrom: *secrets
+          envFrom:
+            - secretRef:
+                name: agent-secret
+            # BRAVE_API_KEY, for the web search of the gateway. This
+            # container only: not the init containers, not the backup
+            # container, and no sandbox (autoProviders is off).
+            - secretRef:
+                name: agent-search-secret
           ports:
             - name: gateway
               containerPort: 18789

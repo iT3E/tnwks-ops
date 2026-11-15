@@ -17,7 +17,8 @@
   "tools": {
     "elevated": {"enabled": false},
     "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
-    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get"]}}
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search"]}},
+    "web": {"search": {"enabled": true, "provider": "brave"}}
   },
   "memory": {
     "search": {
@@ -81,7 +82,8 @@
   "plugins": {
     "load": {
       "paths": [
-        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox"
+        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox",
+        "/opt/openclaw/plugins/node_modules/@openclaw/brave-plugin"
       ]
     },
     "entries": {
@@ -95,6 +97,7 @@
           "timeoutSeconds": 300
         }
       },
+      "brave": {"enabled": true},
       "diagnostics-otel": {"enabled": true}
     }
   },

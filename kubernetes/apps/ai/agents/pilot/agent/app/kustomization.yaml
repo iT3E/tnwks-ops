@@ -9,3 +9,6 @@ resources:
   # Secret agent-secret: the gateway token, the key of the model gateway and
   # the four values of the test chat accounts (docs/apps/agent-platform.md).
   - ./secret.sops.yaml
+  # Secret agent-search-secret: BRAVE_API_KEY, the key of the search API, for
+  # the agent container only (docs/apps/agent-platform.md, "Web search").
+  - ./secret-search.sops.yaml
