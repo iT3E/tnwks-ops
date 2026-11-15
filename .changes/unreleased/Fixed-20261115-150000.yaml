@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'kopiur: the shared repository allows agents-pilot again until the old pilot policy agent-state finishes its delete, which the admission webhook refuses without the grant. The docs give the two-step order for moving a trust domain to another repository.'
+time: 2026-11-15T15:00:00.000000000-08:00
