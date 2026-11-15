@@ -115,6 +115,8 @@ def by_check(document):
 ])
 def test_the_router_fails_when_a_release_it_does_not_run_is_out_past_the_grace(
         tmp_path, monkeypatch, running, newest, age_days, failed):
+    # The list already holds an older release, so the router is not behind each one.
+    seed(tmp_path, {"7.90.0": (NOW - datetime.timedelta(days=500)).timestamp()})
     code, document = run(tmp_path, monkeypatch, fake(running, newest, age_days))
     assert code == 0
     entry = by_check(document)["routeros-firmware"]
@@ -181,10 +183,14 @@ def releases_file(tmp_path):
     return tmp_path / "results/api-check/routeros-releases.json"
 
 
-def seed(tmp_path, first_seen):
+def seed(tmp_path, first_seen, last_read=None):
+    """A list of the old form, or of the new form with the time of the last read."""
     path = releases_file(tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"version": 1, "first_seen": first_seen}))
+    document = {"version": 1, "first_seen": first_seen}
+    if last_read is not None:
+        document = {"version": 2, "first_seen": first_seen, "last_read": last_read}
+    path.write_text(json.dumps(document))
     return path
 
 
@@ -200,13 +206,77 @@ def test_a_router_two_releases_behind_fails_while_the_newest_is_still_new(tmp_pa
     assert set(seen) == {"7.90.2", "7.90.3"}
 
 
-def test_the_first_run_keeps_the_newest_release_with_its_date(tmp_path, monkeypatch):
+def test_the_first_run_keeps_the_newest_release_with_its_date_and_the_time_of_the_read(tmp_path, monkeypatch):
     assert not releases_file(tmp_path).exists()
-    code, document = run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.2", age_days=3))
+    code, document = run(tmp_path, monkeypatch, fake("7.90.2 (stable)", "7.90.2", age_days=3))
     assert code == 0
     assert by_check(document)["routeros-firmware"]["failed"] == 0
     assert json.loads(releases_file(tmp_path).read_text()) == {
-        "version": 1, "first_seen": {"7.90.2": (NOW - datetime.timedelta(days=3)).timestamp()}}
+        "version": 2, "first_seen": {"7.90.2": (NOW - datetime.timedelta(days=3)).timestamp()},
+        "last_read": NOW.timestamp()}
+
+
+# Design Doc 0004, section 5.6: an age that the check does not know counts as old.
+
+def test_a_router_two_releases_behind_a_list_of_one_release_fails_at_once(tmp_path, monkeypatch):
+    """The feed holds one release: the ones between the router and it are not known."""
+    code, document = run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.3", age_days=1))
+    assert code == 0
+    entry = by_check(document)["routeros-firmware"]
+    assert entry["failed"] == 1
+    message = entry["findings"][0]["message"]
+    assert "7.90.3" in message and "not known" in message
+
+
+def test_a_router_on_the_oldest_release_of_the_list_keeps_its_grace(tmp_path, monkeypatch):
+    seed(tmp_path, {"7.90.2": (NOW - datetime.timedelta(days=60)).timestamp()}, NOW.timestamp() - 86400)
+    _, document = run(tmp_path, monkeypatch, fake("7.90.2 (stable)", "7.90.3", age_days=1))
+    assert by_check(document)["routeros-firmware"]["failed"] == 0
+
+
+def run_at(tmp_path, monkeypatch, day, newest, published_day, running="7.90.1 (stable)"):
+    """One run of the job on a day after day 0 (NOW)."""
+    at = NOW + datetime.timedelta(days=day)
+    get = Fake({PROMETHEUS: (200, prometheus_answer(running)),
+                FEED: (200, feed_answer(newest, NOW + datetime.timedelta(days=published_day)))})
+    monkeypatch.delenv("TFE_TOKEN", raising=False)
+    (tmp_path / "results").mkdir(exist_ok=True)
+    assert checks.run(args(tmp_path), now=lambda: at, get=get) == 0
+    document = json.loads((tmp_path / "results/api-check/results.json").read_text())
+    return by_check(document)["routeros-firmware"]["failed"]
+
+
+@pytest.mark.parametrize(("back", "fails_at_once"), [(10, False), (20, True)])
+def test_a_stop_of_the_job_never_moves_the_fail_late(tmp_path, monkeypatch, back, fails_at_once):
+    """The job reads A on day 0. B comes out on day 2 and C on day 8, and the job is back
+    on day 10. C gets the time of the read of day 0, so a router on A fails on day 14,
+    before the grace of B would end on day 16. Back on day 20, it fails at once."""
+    assert run_at(tmp_path, monkeypatch, 0, "7.90.1", -30) == 0  # A, which the router runs
+    assert run_at(tmp_path, monkeypatch, back, "7.90.3", 8) == int(fails_at_once)  # C; B never seen
+    seen = json.loads(releases_file(tmp_path).read_text())
+    assert seen["first_seen"]["7.90.3"] == NOW.timestamp()
+    assert seen["last_read"] == (NOW + datetime.timedelta(days=back)).timestamp()
+    if not fails_at_once:
+        assert run_at(tmp_path, monkeypatch, 13.9, "7.90.3", 8) == 0
+        assert run_at(tmp_path, monkeypatch, 14.01, "7.90.3", 8) == 1
+
+
+def test_in_daily_runs_a_new_release_is_dated_no_more_than_a_day_early(tmp_path, monkeypatch):
+    assert run_at(tmp_path, monkeypatch, 0, "7.90.1", -30) == 0
+    assert run_at(tmp_path, monkeypatch, 1, "7.90.1", -30) == 0
+    # Out at day 1.5, read at day 2: dated by the read of day 1.
+    assert run_at(tmp_path, monkeypatch, 2, "7.90.2", 1.5) == 0
+    assert json.loads(releases_file(tmp_path).read_text())["first_seen"]["7.90.2"] == (
+        NOW + datetime.timedelta(days=1)).timestamp()
+    assert run_at(tmp_path, monkeypatch, 15.01, "7.90.2", 1.5) == 1
+
+
+def test_a_list_of_the_old_form_dates_a_new_release_as_before(tmp_path, monkeypatch):
+    seed(tmp_path, {"7.90.1": (NOW - datetime.timedelta(days=60)).timestamp()})
+    run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.2", age_days=3))
+    seen = json.loads(releases_file(tmp_path).read_text())
+    assert seen["first_seen"]["7.90.2"] == (NOW - datetime.timedelta(days=3)).timestamp()
+    assert seen["version"] == 2 and seen["last_read"] == NOW.timestamp()
 
 
 def test_a_date_in_the_future_counts_from_now(tmp_path, monkeypatch):
@@ -223,6 +293,8 @@ def test_a_release_seen_before_keeps_its_first_time(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("text", ["{not json", '{"version": 2, "first_seen": {}}', '{"version": 1}',
+                                  '{"version": 3, "first_seen": {}, "last_read": 1}',
+                                  '{"version": 2, "first_seen": {}, "last_read": "x"}',
                                   '{"version": 1, "first_seen": {"7.90.2": "x"}}',
                                   '{"version": 1, "first_seen": {"stable": 1}}'])
 def test_a_list_of_releases_that_can_not_be_read_gives_no_result_and_stays_as_it_is(tmp_path, monkeypatch, text):
