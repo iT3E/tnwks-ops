@@ -30,8 +30,9 @@ PWSH = shutil.which("pwsh")
 NOW = datetime.datetime(2026, 11, 13, 12, 0, tzinfo=datetime.UTC)
 CHECKS = ("defender-enabled", "defender-signatures", "firewall-enabled", "updates-pending", "updates-held")
 # Design Doc 0004, section 4.1.4: the alert covers Defender off, the firewall off and
-# updates pending past 14 days. Old signatures show on the board and do not alert.
-SEVERITY = {"defender-enabled": "high", "defender-signatures": "medium",
+# updates pending past 14 days. Section 5.8 adds old signatures, and section 5.7 gives
+# a held update the severity of a pending one, so each check is high.
+SEVERITY = {"defender-enabled": "high", "defender-signatures": "high",
             "firewall-enabled": "high", "updates-pending": "high", "updates-held": "high"}
 RESULT = "homelab_security_check_result"
 LAST = "homelab_security_last_result_timestamp_seconds"
@@ -143,14 +144,14 @@ function Get-TnwksDefenderStatus {
         AntivirusSignatureLastUpdated = $now.AddDays(-7); QuickScanEndTime = $null; FullScanEndTime = $null }
 }""")
     assert textfile.value(at_limit, RESULT, source="host-check", check="defender-signatures", system="HOST-A",
-                         severity="medium") == 0
+                         severity="high") == 0
     past = host_check(r"""
 function Get-TnwksDefenderStatus {
     [pscustomobject]@{ AMServiceEnabled = $true; AntivirusEnabled = $true; RealTimeProtectionEnabled = $true
         AntivirusSignatureLastUpdated = $now.AddDays(-7).AddMinutes(-1); QuickScanEndTime = $null; FullScanEndTime = $null }
 }""")
     assert textfile.value(past, RESULT, source="host-check", check="defender-signatures", system="HOST-A",
-                         severity="medium") == 1
+                         severity="high") == 1
 
 
 BROKEN = {

@@ -98,11 +98,11 @@ $script:Source = 'host-check'
 # The severity of each check, in the label severity of its result. The
 # alert for a new finding (SecurityFindingNew) reads high and critical only.
 # Design Doc 0004, section 4.1.4, alerts for Defender off, the firewall off
-# and updates pending for more than 14 days, so those are high. Old
-# signatures are not in that list: they show on the board and do not alert.
+# and updates pending for more than 14 days, so those are high. Section 5.8
+# makes old signatures high too, so a fail reaches the owner in one cycle.
 $script:Severity = [ordered]@{
     'defender-enabled'    = 'high'
-    'defender-signatures' = 'medium'
+    'defender-signatures' = 'high'
     'firewall-enabled'    = 'high'
     'updates-pending'     = 'high'
     'updates-held'        = 'high'
