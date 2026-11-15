@@ -8,10 +8,12 @@
     that:
       - not (wsl_start_unelevated | bool) or (usb_attach_bound_devices | default([]) | length == 0)
       - not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool)
+      - not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)
     fail_msg: >-
-      wsl_start_unelevated is on for {{ inventory_hostname }}, which runs the USB attach or the
-      monitoring volume. Their tasks need admin rights and start a process in the distro, so
-      they need a part with no elevation first (Design Doc 0004, section 5.9).
+      On {{ inventory_hostname }}: wsl_start_unelevated_done needs wsl_start_unelevated. And
+      wsl_start_unelevated needs no USB attach and no monitoring volume: their tasks need
+      admin rights and start a process in the distro, so they need a part with no elevation
+      first (Design Doc 0004, section 5.9).
     quiet: true
 
 - name: Directories

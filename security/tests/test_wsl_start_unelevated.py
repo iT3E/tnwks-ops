@@ -168,6 +168,7 @@ def windows_hosts() -> dict[str, dict]:
 def test_the_switch_is_off_by_default_and_on_for_site_2_first():
     group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
     assert group["wsl_start_unelevated"] is False
+    assert group["wsl_start_unelevated_done"] is False
     switched = {name for name, data in windows_hosts().items() if data["wsl_start_unelevated"]}
     assert switched == {"WSL-02"}
 
@@ -183,26 +184,49 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
         usb = data.get("usb_attach_bound_devices", usb_default)
         return all([not on or len(usb) == 0, not on or not data.get("observability_storage_enabled", False)])
 
-    assert [condition.split(" or ")[0] for condition in guard["that"]] == ["not (wsl_start_unelevated | bool)"] * 2
+    assert [condition.split(" or ")[0] for condition in guard["that"][:2]] == ["not (wsl_start_unelevated | bool)"] * 2
+    assert guard["that"][2] == "not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)"
     for name, data in windows_hosts().items():
         assert passes(data), name
+        assert not data["wsl_start_unelevated_done"] or data["wsl_start_unelevated"], name
     site1 = windows_hosts()["DESKTOP-HKE05KI"]
     assert not passes({**site1, "wsl_start_unelevated": True}), "site 1 needs the split of its two roles first"
 
 
-def test_the_write_test_fails_the_play_exactly_where_the_switch_is_on():
-    """The holding test: the write test may fail the play of a distro whose Windows host
-    starts WSL with no elevation, and its switch follows that switch."""
+HOST_SWITCH = re.compile(r"\(hostvars\[wsl_distro_windows_host\]\.(\w+) \| default\(false\) \| bool\)")
+
+
+def fails_play(expression: str, host: dict) -> bool:
+    """Reads the default of wsl_host_check_write_test_fails_play for the given Windows
+    host: switches of that host, each with default(false) and bool, joined by "and".
+    Any other form stops the test, so a change of the form needs a change here."""
+    body = re.fullmatch(r"\{\{ (.*) \}\}", expression.strip())
+    assert body, expression
+    terms = body.group(1).split(" and ")
+    names = [HOST_SWITCH.fullmatch(term) for term in terms]
+    assert all(names), expression
+    return all(bool(host.get(name.group(1), False)) for name in names)
+
+
+def test_the_write_test_fails_the_play_only_where_the_start_step_is_done():
+    """The holding test: the write test fails the play of a distro whose Windows host
+    starts WSL with no elevation and has done the start step, and only there. A merge
+    of the switch alone leaves the plays green; a host with both on gets a play that
+    can fail."""
     defaults = yaml.safe_load((ROLES / "wsl_host_check/defaults/main.yml").read_text())
-    assert defaults["wsl_host_check_write_test_fails_play"] == (
-        "{{ hostvars[wsl_distro_windows_host].wsl_start_unelevated | default(false) | bool }}")
+    expression = defaults["wsl_host_check_write_test_fails_play"]
+    for switch in (False, True):
+        for done in (False, True):
+            host = {"wsl_start_unelevated": switch, "wsl_start_unelevated_done": done}
+            assert fails_play(expression, host) == (switch and done), host
+    assert fails_play(expression, {}) is False
     hosts = windows_hosts()
     distros = yaml.safe_load((INVENTORY / "hosts.yml").read_text())["all"]["children"]["wsl_distros"]["hosts"]
     for distro in distros:
         own = yaml.safe_load((INVENTORY / f"host_vars/{distro}/main.yml").read_text())
         assert "wsl_host_check_write_test_fails_play" not in own, distro
-        fails = bool(hosts[own["wsl_distro_windows_host"]]["wsl_start_unelevated"])
-        assert fails == (distro == "WSL-02-ubuntu"), distro
+        host = hosts[own["wsl_distro_windows_host"]]
+        assert fails_play(expression, host) == bool(host["wsl_start_unelevated"] and host["wsl_start_unelevated_done"])
 
 
 # --- The scripts, in PowerShell ------------------------------------------------------------

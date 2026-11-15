@@ -23,6 +23,10 @@ windows_desktop_user: "{{ ansible_user }}"
 # (docs/wsl/windows-ansible.md, "Start WSL with no elevation"). Per host, site
 # 2 first; off until then.
 wsl_start_unelevated: false
+# On, per host, only after the start step of that doc and its read (step 6),
+# in a pull request of its own. With it on, the write test of the distro can
+# fail the distro play (role wsl_host_check). It needs wsl_start_unelevated.
+wsl_start_unelevated_done: false
 
 # The keys sshd accepts (role windows_sshd): one per controller, so each can
 # be revoked on its own.
