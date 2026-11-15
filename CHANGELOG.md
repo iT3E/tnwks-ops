@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.150.2 - 2026-11-15
+
+### Fixed
+
+* agents: the pilot pod rebuilds a stale memory index at each start (an init container after doctor), so a new embedding model needs no step by hand
+
 ## v2.150.1 - 2026-11-14
 
 ### Security
