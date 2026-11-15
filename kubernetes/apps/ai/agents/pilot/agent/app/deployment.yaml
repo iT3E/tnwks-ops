@@ -202,6 +202,58 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
+        # The memory index step (scripts/memory-index.sh in ../config): a
+        # stale index (a new embedding provider or model) gets a full rebuild,
+        # a valid one an incremental pass, before the gateway owns the state.
+        # It prints one line, memory-index result=ok|failed, and never stops
+        # the start: a failure or the time limit leaves search as it was.
+        # Its one secret is the key of the model gateway, for the
+        # embeddings.
+        - name: memory-index
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/memory-index.sh"]
+          env:
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: LITELLM_API_KEY
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
       containers:
         # The gateway of the product, on loopback only: no pod comes in. It
         # reaches the channels, the model gateway and the sandbox gateway.
