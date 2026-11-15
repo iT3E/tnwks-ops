@@ -228,6 +228,13 @@ def cronjobs():
     return documents
 
 
+# An AWS run ended OOMKilled at 768 MiB: Prowler takes about 345 MiB before it
+# scans and about 380 MiB more for its clients in 17 Regions. A Cloudflare run
+# has a few clients in one place.
+MEMORY_LIMITS = {"aws": "1536Mi", "cloudflare": "768Mi"}
+MEMORY_REQUESTS = {"aws": "1024Mi", "cloudflare": "512Mi"}
+
+
 def test_each_cronjob_runs_one_system_of_the_registry_with_its_scan_list():
     systems = {item["name"]: item["type"] for item in yaml.safe_load((ROOT / "security/registry/systems.yaml").read_text())}
     providers = {"aws-account": "aws", "cloudflare-account": "cloudflare", "github-organization": "github"}
@@ -246,7 +253,9 @@ def test_each_cronjob_runs_one_system_of_the_registry_with_its_scan_list():
         assert f"./config/checks-{provider}.json" in config["files"]
         assert pod["metadata"]["labels"]["security.tnwks.us/prowler-provider"] == provider
         assert "@sha256:" in container["image"]
-        assert container["resources"]["limits"]["memory"] == "768Mi"
+        # The limit of each provider (kubernetes/apps/security/README.md, "Memory").
+        assert container["resources"]["limits"]["memory"] == MEMORY_LIMITS[provider], job["metadata"]["name"]
+        assert container["resources"]["requests"]["memory"] == MEMORY_REQUESTS[provider], job["metadata"]["name"]
         assert pod["spec"]["nodeSelector"] == {"kubernetes.io/hostname": "${SECURITY_NODE}"}
         volumes = {volume["name"]: volume for volume in pod["spec"]["volumes"]}
         assert volumes["results"]["persistentVolumeClaim"]["claimName"] == "security-results"
