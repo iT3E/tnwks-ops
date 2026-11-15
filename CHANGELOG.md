@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.159.2 - 2026-11-15
+
+### Fixed
+
+* agents-workflows: a Sandbox record that the sandbox gateway left after a delete is now seen and removed. The run receiver can list Sandbox records, to check the record of each run after its end; the sweep runs as its own service account workflow-sweep with list and delete on Sandbox records, an admission policy (workflow-sweep-deletes) holds its deletes to run records, and its own network policy adds the API server. The run jobs keep no token and the gateway as their only egress.
+
 ## v2.159.1 - 2026-11-15
 
 ### Security

@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'agents-workflows: a Sandbox record that the sandbox gateway left after a delete is now seen and removed. The run receiver can list Sandbox records, to check the record of each run after its end; the sweep runs as its own service account workflow-sweep with list and delete on Sandbox records, an admission policy (workflow-sweep-deletes) holds its deletes to run records, and its own network policy adds the API server. The run jobs keep no token and the gateway as their only egress.'
-time: 2026-11-15T12:00:00.000000+00:00
