@@ -291,6 +291,56 @@ Users may read. A file below it with a rule of its own, or another owner,
 gets the rules of the directory again. The account of the WSL distro may
 write only its own directory of the textfile collector.
 
+**The write test of a distro.** The distro must not be able to change the
+textfile directory of its host, because the exporter reads each `.prom` file
+under it and can not tell who wrote it (Design Doc 0004, section 5.9). So
+each run of the distro check starts with tries to make a file there, above
+its own directory, with a name that does not end in `.prom`. Only a refusal
+by Windows is the pass.
+
+- **Root tries first.** Linux checks the mode that `/mnt/c` shows before a
+  write reaches Windows, and a refusal there is no evidence. Root passes that
+  check, so the service runs a try as root before the check (`ExecStartPre`
+  with the prefix `+`), and writes its answer to
+  `/run/tnwks-host-check/write-test.json`, mode 0644, so that the check
+  can read it. The check, as the distro user, reads that answer and tries
+  once itself. The distro user owns that directory, so the check reads the
+  answer only from a file that root owns and that is not a link. Any other
+  file is answer 3.
+- **The answers.** Each try asks the kernel first (`access()` with the
+  effective ids, the same check as `open()`), then makes the file with an
+  exclusive create. It is a series
+  `homelab_security_host_write_test_result{uid="<uid>"}`: 0 refused by
+  Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not
+  done (the directory is gone or can not be listed, or another error). The
+  message of each try names its uid, the mode and owner of the directory,
+  and the mount. A refusal is `EACCES` or `EPERM`. The message of a
+  refusal, and of a try that fails in another way, names the errno by
+  number and name. How drvfs maps a refusal of Windows to an errno is known
+  only on a host, so the first answers say it.
+- **The failed query `textfile-write`.** Root has no answer 0 (or its answer
+  is missing or older than 15 minutes), or a try has 1 or 3. Then the run
+  gives no result. A try that wrote removes the file that it made, and
+  nothing else.
+- **What it can not see.** The check of the kernel covers the mode, the
+  groups and an ACL of the mount, but not what the Windows side of `/mnt/c`
+  decides by itself. A refusal by Windows for root is the evidence.
+
+The last task of role `wsl_host_check` runs the same try as root and as the
+distro user, and prints each answer with its uid. A check run skips it. The
+play fails only with `wsl_host_check_write_test_fails_play`, when root has no
+refusal by Windows or a try has 1 or 3. The switch is off until the owner
+turns it on (section 5.9 of the design). The pull request that starts each
+distro with no elevation turns it on, and a test there fails while that
+change is present and the switch is off.
+
+The design also names a try from an SSH session. The role connects to a
+distro over SSH, but `ansible_connection` is `local` when the hostname of
+the controller is the Windows host of that distro, as in that distro itself,
+which takes the Windows computer name (`group_vars/wsl_distros.yml`). On that
+site the tries of the role come from the processes of the controller, not
+from an SSH session.
+
 **The first result, then the source.** A host or a distro lists `host-check` in
 `sources` of `systems.yaml` only after its first result is on the board of
 homelab-wsl-02, in a pull request of its own. Before that, the rule for a

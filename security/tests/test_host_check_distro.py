@@ -7,7 +7,10 @@ The script is loaded as a module, and each query gets a fake answer.
 
 import importlib.util
 import json
+import os
 import re
+import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -39,7 +42,19 @@ def load():
 check = load()
 
 
-def run(state=None, packages=(), lists=NOW - 3600, reboot=False, **limits):
+@pytest.fixture(autouse=True)
+def files_of_this_user_count_as_roots(monkeypatch):
+    """The tests run as one user, and the check reads only an answer that root owns. The
+    tests of that rule set ROOT_UID themselves."""
+    monkeypatch.setattr(check, "ROOT_UID", os.geteuid())
+
+
+# The tries of a host that refuses the write: root reaches Windows, which refuses; the
+# distro user stops at the mode of /mnt/c.
+PASSING_TRIES = [(0, 0, "uid 0: Windows refused the write"), (1000, 2, "uid 1000: Linux refuses the write")]
+
+
+def run(state=None, packages=(), lists=NOW - 3600, reboot=False, writes=None, **limits):
     def fake_packages():
         if isinstance(packages, Exception):
             raise packages
@@ -55,9 +70,12 @@ def run(state=None, packages=(), lists=NOW - 3600, reboot=False, **limits):
             raise reboot
         return reboot
 
+    def fake_writes():
+        return writes if writes is not None else PASSING_TRIES
+
     measured = check.measure(NOW, limits.get("days", 14), limits.get("hours", 72),
                              {} if state is None else state,
-                             packages=fake_packages, lists=fake_lists, reboot=fake_reboot)
+                             packages=fake_packages, lists=fake_lists, reboot=fake_reboot, writes=fake_writes)
     return measured, textfile.parse(check.render(SYSTEM, measured, NOW))
 
 
@@ -91,6 +109,7 @@ BROKEN = {
     "no package lists": {"lists": check.QueryError("no Release file")},
     "old package lists": {"lists": NOW - 73 * 3600},
     "an unreadable state file": {"state": "unreadable"},
+    "a write as root that succeeds": {"writes": [(0, 1, "uid 0: the write succeeded")]},
 }
 
 
@@ -250,7 +269,12 @@ def fake_apt(tmp_path, stdout, code=0):
     return bin_dir
 
 
-def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW):
+def root_answer(path, answer=0, moment=NOW, uid=0):
+    path.write_text(json.dumps({"version": 1, "uid": uid, "answer": answer, "time": moment,
+                                "message": f"uid {uid}: an answer"}))
+
+
+def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW, writes=None, root=0):
     monkeypatch.setenv("PATH", f"{fake_apt(tmp_path, SIMULATION, code)}:/usr/bin:/bin")
     monkeypatch.setattr(check.time, "time", lambda: now)
     lists = tmp_path / "lists"
@@ -258,8 +282,17 @@ def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW):
     release(lists, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", lists_date)
     out = tmp_path / "textfile"
     out.mkdir(exist_ok=True)
+    tried = []
+    if writes is None:
+        # The distro user stops at the mode of /mnt/c: no evidence, and no fail.
+        monkeypatch.setattr(check, "write_test", lambda path: tried.append(path) or (1000, 2, "uid 1000: Linux"))
+    answer = tmp_path / "write-test.json"
+    if root is not None:
+        root_answer(answer, root, now)
     rc = check.main(["--system", SYSTEM, "--textfile-dir", str(out), "--state-file", str(tmp_path / "state.json"),
+                     "--write-test-dir", str(writes or tmp_path / "host"), "--write-test-result", str(answer),
                      "--lists-dir", str(lists), "--reboot-file", str(tmp_path / "reboot-required")])
+    assert writes is not None or tried == [tmp_path / "host"]
     return rc, out
 
 
@@ -306,6 +339,337 @@ def test_the_first_run_writes_the_state(tmp_path, monkeypatch):
     rc, _ = main(tmp_path, monkeypatch)
     assert rc == 0
     assert json.loads((tmp_path / "state.json").read_text())["version"] == 1
+
+
+def refuse(monkeypatch):
+    """Windows refuses each new file, as it does for an account with no right."""
+    real = os.open
+
+    def fake(path, flags, *args, **kwargs):
+        if flags & os.O_CREAT:
+            raise PermissionError(13, "Permission denied", str(path))
+        return real(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(check.os, "open", fake)
+
+
+def linux_allows(monkeypatch, allows=True):
+    """What access() with the effective ids answers: the check of the mode by Linux."""
+    asked = []
+
+    def fake(path, mode, *, effective_ids=False):
+        asked.append((path, mode, effective_ids))
+        return allows
+
+    monkeypatch.setattr(check.os, "access", fake)
+    return asked
+
+
+def host_dir(tmp_path):
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    (host / "tnwks_security_host_check.prom").write_text("x 1\n")
+    return host
+
+
+def test_a_refusal_by_windows_is_the_pass_and_names_the_user(tmp_path, monkeypatch):
+    host = host_dir(tmp_path)
+    asked = linux_allows(monkeypatch)
+    refuse(monkeypatch)
+    uid, answer, message = check.write_test(host)
+    assert (uid, answer) == (os.geteuid(), check.REFUSED)
+    assert message.startswith(f"uid {os.geteuid()}: Windows refused the write")
+    assert asked == [(host, os.W_OK | os.X_OK, True)], "the kernel's check, with the effective ids"
+    assert sorted(p.name for p in host.iterdir()) == ["tnwks_security_host_check.prom"]
+
+
+def test_a_refusal_by_the_mode_of_the_directory_never_reaches_windows_and_is_no_pass(tmp_path, monkeypatch):
+    """Reviewer's note: the refusal must come from Windows, not from Linux."""
+    host = host_dir(tmp_path)
+    linux_allows(monkeypatch, allows=False)
+    opened = []
+    monkeypatch.setattr(check.os, "open", lambda *a, **k: opened.append(a) or 1 / 0)
+    uid, answer, message = check.write_test(host)
+    assert (uid, answer) == (os.geteuid(), check.LINUX_REFUSED)
+    assert "Linux refuses the write by the mode of the directory" in message
+    assert "does not reach Windows" in message
+    assert opened == []
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root passes the check of the mode")
+def test_a_directory_whose_mode_refuses_the_user_is_a_refusal_by_linux(tmp_path):
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    host.chmod(0o555)
+    try:
+        _, answer, message = check.write_test(host)
+    finally:
+        host.chmod(0o755)
+    assert answer == check.LINUX_REFUSED
+    assert "dr-xr-xr-x" in message
+    assert list(host.iterdir()) == []
+
+
+def test_a_write_that_succeeds_removes_only_its_own_file(tmp_path):
+    host = tmp_path / "textfile_inputs"
+    (host / "wsl-distro").mkdir(parents=True)
+    kept = {"tnwks_security_host_check.prom": "a 1\n", ".tnwks-write-test-0000000000000000.tmp": "b\n",
+            "wsl-distro/tnwks_security_host_check_distro.prom": "c 1\n"}
+    for name, text in kept.items():
+        (host / name).write_text(text)
+    uid, answer, message = check.write_test(host)
+    assert (uid, answer) == (os.geteuid(), check.WRITTEN)
+    assert message == f"uid {os.geteuid()}: the write succeeded, and the file is removed"
+    assert {str(p.relative_to(host)): p.read_text() for p in host.rglob("*") if p.is_file()} == kept
+
+
+def test_a_file_with_the_name_of_the_try_stays_as_it_is_and_the_try_is_not_done(tmp_path, monkeypatch):
+    """The try never opens a file that is there: an exclusive create."""
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    there = host / ".tnwks-write-test-00112233aabbccdd.tmp"
+    there.write_text("not the test's\n")
+    monkeypatch.setattr(check.secrets, "token_hex", lambda size: "00112233aabbccdd")
+    uid, answer, message = check.write_test(host)
+    assert answer == check.NOT_DONE
+    assert there.read_text() == "not the test's\n"
+    assert sorted(p.name for p in host.iterdir()) == [there.name]
+    assert check.write_failed([(0, check.REFUSED, ""), (uid, answer, message)])
+
+
+def test_the_file_of_the_try_is_not_a_file_that_the_exporter_reads(tmp_path, monkeypatch):
+    made = []
+    real = os.open
+
+    def spy(path, flags, *args, **kwargs):
+        made.append(Path(path))
+        return real(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(check.os, "open", spy)
+    check.write_test(tmp_path)
+    (path,) = made
+    assert path.parent == tmp_path
+    assert not path.name.endswith(".prom")
+
+
+@pytest.mark.parametrize("case", ["gone", "a file", "not listed"])
+def test_a_directory_that_is_gone_or_can_not_be_listed_is_no_pass(tmp_path, monkeypatch, case):
+    """Reviewer's note: a directory that is gone or moved is not a pass."""
+    host = tmp_path / "textfile_inputs"
+    if case == "a file":
+        host.write_text("")
+    elif case == "not listed":
+        host.mkdir()
+
+        def no_list(path):
+            raise PermissionError(13, "Permission denied", str(path))
+
+        monkeypatch.setattr(check.os, "listdir", no_list)
+    refuse(monkeypatch)
+    uid, answer, message = check.write_test(host)
+    assert answer == check.NOT_DONE
+    assert message.startswith(f"uid {uid}: the textfile directory")
+
+
+def test_a_write_that_fails_in_another_way_is_no_pass(tmp_path, monkeypatch):
+    def full(path, flags, *args, **kwargs):
+        raise OSError(28, "No space left on device", str(path))
+
+    monkeypatch.setattr(check.os, "open", full)
+    _, answer, message = check.write_test(tmp_path)
+    assert answer == check.NOT_DONE and "neither" in message
+
+
+VERDICTS = {
+    "root refused by Windows, the user stops at Linux": ([(0, 0, ""), (1000, 2, "")], False),
+    "root and the user refused by Windows": ([(0, 0, ""), (1000, 0, "")], False),
+    "root wrote": ([(0, 1, ""), (1000, 2, "")], True),
+    "the user wrote": ([(0, 0, ""), (1000, 1, "")], True),
+    "root stops at Linux (a read-only mount)": ([(0, 2, ""), (1000, 2, "")], True),
+    "no answer of root": ([(0, 3, ""), (1000, 0, "")], True),
+    "no try of root at all": ([(1000, 0, "")], True),
+    "the directory is gone for the user": ([(0, 0, ""), (1000, 3, "")], True),
+}
+
+
+@pytest.mark.parametrize("case", VERDICTS)
+def test_only_a_refusal_by_windows_for_root_and_no_write_is_the_pass(case):
+    tries, failed = VERDICTS[case]
+    assert check.write_failed(tries) is failed
+
+
+def test_the_write_test_runs_first_and_each_try_is_a_series_with_its_uid():
+    order = []
+
+    def writes():
+        order.append("writes")
+        return [(0, check.WRITTEN, "uid 0: the write succeeded"), (1000, check.LINUX_REFUSED, "uid 1000: Linux")]
+
+    measured = check.measure(NOW, 14, 72, {}, packages=lambda: order.append("packages") or [],
+                             lists=lambda: order.append("lists") or NOW, reboot=lambda: False, writes=writes)
+    assert order == ["writes", "lists", "packages"]
+    assert measured["failed"] == ["textfile-write"]
+    families = textfile.parse(check.render(SYSTEM, measured, NOW))
+    assert RESULT not in families and LAST not in families
+    assert textfile.value(families, FAILED, system=SYSTEM) == 1
+    assert textfile.series(families, "homelab_security_host_write_test_result") == {
+        (("system", SYSTEM), ("uid", "0")): 1.0, (("system", SYSTEM), ("uid", "1000")): 2.0}
+
+
+@pytest.mark.parametrize(("answer", "moment", "uid"), [
+    (None, NOW, 0),             # no file: the step as root did not run
+    (0, NOW - 901, 0),          # an answer of an earlier run
+    (0, NOW + 120, 0),          # a time in the future
+    (0, NOW, 1000),             # not an answer of root
+    (7, NOW, 0),                # not an answer
+])
+def test_an_answer_of_root_that_is_missing_old_or_odd_is_not_done(tmp_path, answer, moment, uid):
+    path = tmp_path / "write-test.json"
+    if answer is not None:
+        root_answer(path, answer, moment, uid)
+    assert check.read_root_result(path, NOW)[:2] == (0, check.NOT_DONE)
+
+
+def test_the_answer_of_root_must_be_owned_by_root_and_not_be_a_link(tmp_path, monkeypatch):
+    """The distro user owns the runtime directory, so it could put a file of its own, or
+    a link, in the place of the answer of root."""
+    assert load().ROOT_UID == 0
+    path = tmp_path / "write-test.json"
+    root_answer(path, check.REFUSED, NOW - 60)
+    assert check.read_root_result(path, NOW)[:2] == (0, check.REFUSED)
+    monkeypatch.setattr(check, "ROOT_UID", os.geteuid() + 1)
+    uid, answer, message = check.read_root_result(path, NOW)
+    assert (uid, answer) == (0, check.NOT_DONE) and f"owned by uid {os.geteuid()}" in message
+    monkeypatch.setattr(check, "ROOT_UID", os.geteuid())
+    link = tmp_path / "link.json"
+    link.symlink_to(path)
+    assert check.read_root_result(link, NOW)[:2] == (0, check.NOT_DONE)
+
+
+# The image of the jobs of the repository that run Python; Debian has setpriv.
+PYTHON_IMAGE = ("docker.io/library/python:3.15.2-slim-trixie"
+                "@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928")
+READ_AS_NOBODY = ("from pathlib import Path; import time; m = {}; "
+                  "exec(compile(open('/check.py').read(), 'check', 'exec'), m); "
+                  "print(m['read_root_result'](Path('/run/t/write-test.json'), time.time())[1])")
+
+
+def test_an_answer_that_root_writes_is_read_by_the_distro_user_and_not_one_of_its_own():
+    """The case of the service, across two users in a container with no network: root
+    writes the answer (the step with the prefix +), and a user with no capability reads
+    it. That user owns the runtime directory, as the distro user does, so it can put a
+    file of its own in that place: the check then reads no answer (3)."""
+    if not shutil.which("docker"):
+        if os.environ.get("CI"):
+            pytest.fail("Docker is needed to test the answer of root across users")
+        pytest.skip("docker not installed")
+    nobody = "setpriv --reuid=65534 --regid=65534 --clear-groups"
+    script = f"""set -e
+mkdir -p /run/t /textfile && chown 65534:65534 /run/t && chmod 0755 /run/t
+python3 /check.py --system X --textfile-dir /out --write-test-dir /textfile --write-test-only \\
+  --write-test-result /run/t/write-test.json || true
+stat -c '%a %u' /run/t/write-test.json
+{nobody} python3 -c "{READ_AS_NOBODY}"
+{nobody} sh -c 'echo {{}} > /run/t/own.json && mv -f /run/t/own.json /run/t/write-test.json'
+{nobody} python3 -c "{READ_AS_NOBODY}"
+"""
+    result = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{SCRIPT}:/check.py:ro",
+                             PYTHON_IMAGE, "sh", "-c", script],
+                            capture_output=True, text=True, timeout=600, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    mode, root_read, own_read = result.stdout.split("\n")[-4:-1]
+    # Root may write in the plain directory of the container: answer 1, read as written.
+    assert (mode, root_read, own_read) == ("644 0", str(check.WRITTEN), str(check.NOT_DONE))
+
+
+def test_the_mode_of_a_file_lets_the_distro_user_read_the_answer_of_root(tmp_path):
+    """Without root: the bits that the reader needs. Owner root, reader neither root nor
+    of its group, so only the bits of "other" count."""
+    answer = tmp_path / "write-test.json"
+    check.write_atomic(answer, "{}\n", check.ROOT_RESULT_MODE)
+    assert stat.S_IMODE(answer.stat().st_mode) & stat.S_IROTH
+    check.write_atomic(tmp_path / "state.json", "{}\n")
+    assert not stat.S_IMODE((tmp_path / "state.json").stat().st_mode) & stat.S_IROTH, "a state stays private"
+
+
+def test_a_try_that_fails_in_another_way_names_its_errno(tmp_path, monkeypatch):
+    """Whether drvfs gives EACCES or EPERM for a refusal is known only on a host: the
+    message of the answer 3 names the errno, so the first live read says it."""
+    host = host_dir(tmp_path)
+    linux_allows(monkeypatch)
+    real = os.open
+
+    def create_fails_with(error):
+        def fake(path, flags, *args, **kwargs):
+            if flags & os.O_CREAT:
+                raise error
+            return real(path, flags, *args, **kwargs)
+        monkeypatch.setattr(check.os, "open", fake)
+
+    create_fails_with(OSError(5, "Input/output error"))
+    _, answer, message = check.write_test(host)
+    assert answer == check.NOT_DONE and "errno 5 EIO" in message
+    for code, name in ((13, "EACCES"), (1, "EPERM")):
+        create_fails_with(PermissionError(code, "denied"))
+        _, answer, message = check.write_test(host)
+        assert answer == check.REFUSED and f"errno {code} {name}" in message
+
+
+def test_an_answer_of_root_of_this_run_is_read(tmp_path):
+    path = tmp_path / "write-test.json"
+    root_answer(path, check.REFUSED, NOW - 60)
+    assert check.read_root_result(path, NOW) == (0, check.REFUSED, "uid 0: an answer")
+
+
+@pytest.mark.parametrize("root", [check.WRITTEN, check.LINUX_REFUSED, check.NOT_DONE, None])
+def test_a_run_with_no_refusal_by_windows_for_root_writes_no_result(tmp_path, monkeypatch, root):
+    rc, out = main(tmp_path, monkeypatch, root=root)
+    assert rc == 1
+    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    assert RESULT not in families and LAST not in families
+    assert textfile.value(families, FAILED, system=SYSTEM) == 1
+
+
+def test_a_run_whose_own_write_succeeds_writes_no_result_and_leaves_no_file(tmp_path, monkeypatch):
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    rc, out = main(tmp_path, monkeypatch, writes=host)
+    assert rc == 1
+    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    assert RESULT not in families and LAST not in families
+    assert list(host.iterdir()) == []
+
+
+def test_one_try_alone_prints_its_uid_and_exits_with_its_answer(tmp_path, monkeypatch, capsys):
+    host = tmp_path / "textfile_inputs"
+    host.mkdir()
+    answer = tmp_path / "run/write-test.json"
+    answer.parent.mkdir()
+    argv = ["--system", SYSTEM, "--textfile-dir", str(tmp_path / "out"), "--write-test-dir", str(host),
+            "--write-test-only"]
+    assert check.main([*argv, "--write-test-result", str(answer)]) == check.WRITTEN
+    assert f"write test of {SYSTEM}: uid {os.geteuid()}: the write succeeded" in capsys.readouterr().out
+    assert list(host.iterdir()) == []
+    assert not (tmp_path / "out").exists()
+    written = json.loads(answer.read_text())
+    assert (written["version"], written["uid"], written["answer"]) == (1, os.geteuid(), check.WRITTEN)
+    # The check reads this file as the distro user, with no capability: it needs the
+    # read bit of "other", as root owns the file.
+    assert stat.S_IMODE(answer.stat().st_mode) == 0o644
+    linux_allows(monkeypatch)
+    refuse(monkeypatch)
+    assert check.main(argv) == check.REFUSED
+    assert f"uid {os.geteuid()}: Windows refused the write" in capsys.readouterr().out
+    assert check.main([*argv[:-2], str(tmp_path / "gone"), "--write-test-only"]) == check.NOT_DONE
+
+
+def test_the_mount_of_a_path_is_its_type_and_options(tmp_path):
+    info = tmp_path / "mountinfo"
+    info.write_text("22 1 0:20 / / rw,relatime - ext4 /dev/sdc rw\n"
+                    "80 22 0:51 / /mnt/c rw,noatime - 9p drvfs rw,aname=drvfs;path=C:\\;uid=1000;gid=1000\n")
+    assert check.mount_of(Path("/mnt/c/Program Files/x"), info).startswith("9p rw,noatime,rw,aname=drvfs")
+    assert check.mount_of(Path("/var/lib"), info) == "ext4 rw,relatime,rw"
+    assert check.mount_of(Path("/x"), tmp_path / "none") == "unknown"
 
 
 def test_a_label_value_is_escaped():
@@ -367,18 +731,65 @@ def test_the_role_changes_nothing_in_a_check_run():
     """The pull request runs the role with --check on each distro
     (.github/workflows/ansible-hosts.yaml). No task may run in a check run, the handler
     starts a run only in an apply, and a check run does not start a timer whose unit it
-    did not write."""
+    did not write. The one command is the write test, which a check run skips."""
     tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
     handlers = yaml.safe_load((ROLE / "handlers/main.yml").read_text())
     for task in tasks + handlers:
         assert task.get("check_mode") is not False, task["name"]
-        for key in ("ansible.builtin.command", "ansible.builtin.shell"):
-            assert key not in task, task["name"]
+        assert "ansible.builtin.shell" not in task, task["name"]
+        if "ansible.builtin.command" in task:
+            assert task["name"] == "Write test of the textfile directory"
+            assert not {"creates", "removes"} & set(task["ansible.builtin.command"]), "a check run would run it"
     run_now = next(task for task in handlers if task["name"] == "Run the host check")
     assert run_now["when"] == "not ansible_check_mode"
     assert run_now["ansible.builtin.systemd"]["no_block"] is True
     timer = next(task for task in tasks if task["name"] == "Host check timer is enabled and running")
     assert "ansible_check_mode" in timer["when"]
+
+
+def test_the_last_task_of_the_role_tries_the_write_as_root_and_as_the_distro_user():
+    """Design Doc 0004, section 5.9: the effective right, not the entry."""
+    present = yaml.safe_load((ROLE / "tasks/main.yml").read_text())[0]["block"]
+    write, verdict = present[-2:]
+    assert write["name"] == "Write test of the textfile directory"
+    argv = write["ansible.builtin.command"]["argv"]
+    assert argv[0] == "/usr/local/bin/{{ wsl_host_check_name }}"
+    assert argv[argv.index("--write-test-dir") + 1] == "{{ wsl_host_check_write_test_dir }}"
+    assert argv[-1] == "--write-test-only"
+    assert write["become_user"] == "{{ item }}"
+    assert write["loop"] == ["root", "{{ wsl_distro_user }}"]
+    assert write["changed_when"] is False
+    assert "wsl_host_check_write_test_fails_play" in verdict["failed_when"]
+    assert "selectattr('item', 'equalto', 'root')" in verdict["failed_when"], "root must get a refusal by Windows"
+    assert "select('in', [1, 3])" in verdict["failed_when"], "no try may write, or fail to be done"
+    assert verdict["when"] == "not ansible_check_mode"
+
+
+def test_the_service_tries_the_write_as_root_before_the_check_and_the_check_reads_it():
+    """The service runs as the distro user, whose try can stop at the mode of /mnt/c.
+    The step before the check runs as root (the prefix +), and its exit code does not
+    stop the check (the prefix -)."""
+    unit = (ROLE / "templates/tnwks-host-check.service.j2").read_text()
+    pre = unit.split("ExecStartPre=", 1)[1].split("\nExecStart=", 1)[0]
+    assert pre.startswith("-+/usr/local/bin/{{ wsl_host_check_name }}")
+    assert "--write-test-only" in pre
+    result = '--write-test-result "/run/{{ wsl_host_check_name }}/write-test.json"'
+    assert result in pre
+    assert result in unit.split("\nExecStart=", 1)[1]
+    assert "RuntimeDirectory={{ wsl_host_check_name }}" in unit
+
+
+def test_the_write_test_tries_the_textfile_directory_of_the_host():
+    """The directory above the one that the distro may change: the exporter reads each
+    .prom file under it."""
+    windows = yaml.safe_load((WINDOWS / "defaults/main.yml").read_text())
+    distro = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
+    textfile_dir = windows["host_check_textfile_dir"]
+    assert distro["wsl_host_check_write_test_dir"] == "/mnt/c/" + textfile_dir[3:].replace("\\", "/")
+    assert distro["wsl_host_check_textfile_dir"].startswith(distro["wsl_host_check_write_test_dir"] + "/")
+    unit = (ROLE / "templates/tnwks-host-check.service.j2").read_text()
+    assert '--write-test-dir "{{ wsl_host_check_write_test_dir }}"' in unit
+    assert distro["wsl_host_check_write_test_fails_play"] is False, "on with the start of each distro with no elevation"
 
 
 def test_the_way_back_stops_the_timer_before_the_files_go():

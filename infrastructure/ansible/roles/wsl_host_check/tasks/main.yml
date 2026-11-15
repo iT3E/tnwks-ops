@@ -41,6 +41,42 @@
       # A check run doesn't write a new timer's unit, so systemd can't find it yet.
       when: not (ansible_check_mode and wsl_host_check_timer_file is changed)
 
+    # The write test, last (Design Doc 0004, section 5.9): the effective right,
+    # not the entry. One try as root and one as the distro user to make a file
+    # in the textfile directory of the host; each prints its uid and its
+    # answer, and its exit code is the answer: 0 refused by Windows, 1 the
+    # write succeeded, 2 refused by Linux before Windows (no evidence), 3 not
+    # done. The script removes a file that it made. A check run skips it,
+    # because it would write to the host.
+    - name: Write test of the textfile directory
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/{{ wsl_host_check_name }}
+          - --system
+          - "{{ inventory_hostname }}"
+          - --textfile-dir
+          - "{{ wsl_host_check_textfile_dir }}"
+          - --write-test-dir
+          - "{{ wsl_host_check_write_test_dir }}"
+          - --write-test-only
+      become: true
+      become_user: "{{ item }}"
+      loop: [root, "{{ wsl_distro_user }}"]
+      register: wsl_host_check_write_test
+      changed_when: false
+      failed_when: false
+
+    # A fail: root got no refusal by Windows, or a try wrote, or a try could
+    # not be done. Only with the switch on (defaults).
+    - name: The write test gets a refusal as root and as the distro user
+      ansible.builtin.debug:
+        msg: "{{ wsl_host_check_write_test.results | map(attribute='stdout') | list }}"
+      failed_when: >-
+        wsl_host_check_write_test_fails_play | bool
+        and ((wsl_host_check_write_test.results | selectattr('item', 'equalto', 'root') | map(attribute='rc') | first) != 0
+             or (wsl_host_check_write_test.results | map(attribute='rc') | select('in', [1, 3]) | list | length > 0))
+      when: not ansible_check_mode
+
 # The way back: the timer stops first, so no run starts while the files go.
 - name: The host check is gone
   when: wsl_host_check_state == 'absent'
