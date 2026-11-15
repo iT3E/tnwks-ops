@@ -96,11 +96,14 @@ match of a secret in the namespace of the workload.
 The rules are in `observability/rules.py` (group `homelab.security`), and
 each site runs them for its own series. The rules of the registry run on
 homelab-wsl-02 only, so the job `peer-federate` there brings the two series
-of homelab-wsl (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`). When
-homelab-wsl or that scrape is down, its series go stale after 5 minutes, and
-`SecurityResultLate` fires for `trivy` on homelab-wsl 10 minutes later, next
-to the alert of the lost site. That is the federation, not a fault of the
-operator. The rules give the two series of the
+of homelab-wsl (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`).
+homelab-wsl lists `trivy` in its `sources` (`security/registry/systems.yaml`)
+from the pull request after its first result, so the late alert does not
+fire before the first scans. From then, when homelab-wsl or that scrape is
+down, its series go stale after 5 minutes, and `SecurityResultLate` fires
+for `trivy` on homelab-wsl 10 minutes later, next to the alert of the lost
+site. That is the federation, not a fault of the operator. The rules give
+the two series of the
 contract of the registry (`security/README.md`, "The series"), with
 `source="trivy"` and the cluster as `system`:
 
@@ -285,19 +288,23 @@ of Trivy on that cluster, while such a pod has its scan:
 | By | The operator | The scan job | Sum |
 | --- | --- | --- | --- |
 | Limits | 512 MiB | 6 x 512 MiB | 3584 MiB |
-| Estimate | 236 MiB or more | 6 x 56 MiB | 572 MiB or more |
+| Peak measured on homelab-wsl-02 | 316 MiB | 97 MiB | 413 MiB or less |
 
-The estimate is not a measure of a job of 6 containers. The operator line
-is the last sample before a kill on homelab-wsl-02, in a burst of scans;
+The measured line is the peak of a full cycle on homelab-wsl-02, in samples
+of one minute (step 9 of "Tests"): the operator at 316 MiB of its 512 MiB,
+one scan container at 25 MiB at most, and the containers of one scan job
+together at 97 MiB at most. No sample had more than one scan job. The two
+peaks need not be at the same time, so their sum is an upper bound.
 homelab-wsl runs more workloads, and the cache of the operator grows with
-them. The scan line takes one measured scan container of 56 MiB 6 times. A
-scan of a pod of 6 containers on homelab-wsl-02 (the Cilium agent pods have
-6 there too) measures it before homelab-wsl lists the app (step 8 of
-"Tests"). The owner decides the limit with that number. Each container of a
-scan job also has a CPU limit of 500m, so such a job can take 3 cores of
-`SECURITY_NODE` for the length of the scan. Its first container downloads the database (about 140 MB
-compressed) to `trivy-cache`, and a later job reads it from there. Without
-the cache, each job would download it again.
+them, so the operator can take more there; its limit leaves 196 MiB above
+the peak of homelab-wsl-02. The owner kept these limits with that measure,
+for homelab-wsl too (2026-11-15).
+
+Each container of a scan job also has a CPU limit of 500m, so a job of 6
+containers can take 3 cores of `SECURITY_NODE` for the length of the scan.
+Its first container downloads the database (about 140 MB compressed) to
+`trivy-cache`, and a later job reads it from there. Without the cache, each
+job would download it again.
 
 The signals of a limit that is too low: the pod status `OOMKilled`, and the
 alert `KubeJobFailed` for a scan job.
@@ -389,7 +396,7 @@ After a merge, on the cluster, with reads only:
    `sum(rate(container_cpu_usage_seconds_total{namespace="security",pod=~"scan-vulnerabilityreport-.+"}[5m]))`.
 8. The memory of the operator stays under its limit for a full cycle:
    `max_over_time(container_memory_working_set_bytes{namespace="security",container="trivy-operator"}[1d])`.
-8. On homelab-wsl-02, before homelab-wsl lists the app: the peak memory of
+9. On homelab-wsl-02, before homelab-wsl lists the app: the peak memory of
    the scan job of the pod with the most containers (a Cilium agent pod has
    6), summed over its containers:
    `max_over_time(sum by (pod) (container_memory_working_set_bytes{namespace="security",pod=~"scan-vulnerabilityreport-.+",container!=""})[1d:1m])`,

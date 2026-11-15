@@ -368,6 +368,11 @@ SOURCE_OF_APP = {
     "../../../apps/monitoring/vector/ks-audit-reader.yaml": "stream",
     "../../../apps/security/trivy-operator/ks.yaml": "trivy",
 }
+# A source that needs hours for its first result joins `sources` in a pull request
+# after that result is there, so the late alert does not fire at the merge
+# (security/README.md, "A new check", step 4). Until then, its system and source
+# are here, and the test fails when the line lists it: take the pair out then.
+FIRST_RESULT_PENDING = {("homelab-wsl", "trivy")}
 
 
 def test_each_cluster_lists_the_sources_that_its_apps_give(registry):
@@ -383,6 +388,10 @@ def test_each_cluster_lists_the_sources_that_its_apps_give(registry):
         for app, source in SOURCE_OF_APP.items():
             if app in resources:
                 checked += 1
+                if (name, source) in FIRST_RESULT_PENDING:
+                    assert source not in systems[name].get("sources", []), (
+                        f"{name} lists `{source}`: take ({name!r}, {source!r}) out of FIRST_RESULT_PENDING")
+                    continue
                 assert source in systems[name].get("sources", []), (
                     f"{name} runs {app}, so systems.yaml must list `{source}` in its sources")
     assert checked, "no cluster runs an app of SOURCE_OF_APP: the paths are out of date"

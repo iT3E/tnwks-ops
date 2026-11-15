@@ -551,7 +551,11 @@ the type, so nothing else changes.
 3. Make the source serve the two series of the contract.
 4. In the pull request that starts the source on a system, add the source
    to `sources` of that system in `systems.yaml`. From that merge, the rule
-   for a late result watches it.
+   for a late result watches it. A source that needs hours for its first
+   result (Trivy Operator: its first scans and compliance report) joins in
+   a pull request after that result is on the board, or the late alert
+   fires at the merge. Until then, `FIRST_RESULT_PENDING` of
+   `security/tests/test_generate.py` names the system and the source.
 5. Run the generator, and commit its outputs.
 
 A text in this repository says what a part does. It never names a finding
