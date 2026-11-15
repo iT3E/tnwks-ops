@@ -15,13 +15,29 @@
 #
 # Run elevated. Idempotent: an entry that already points at the right address
 # is left alone, so a run doesn't drop open connections.
+#
+# With wsl_start_unelevated (Design Doc 0004, section 5.9), no elevated task
+# starts a process in the distro, so the script runs in two parts:
+#   -WriteIpFile <path>  the task tnwks-lan-bridge-ip, with no elevation: asks
+#                        the distro for the VM address and writes it to the
+#                        file. It needs no admin right and changes no rule.
+#   -IpFile <path>       the task tnwks-lan-bridge-sync, as SYSTEM: reads the
+#                        address from the file and runs no wsl.exe. It takes
+#                        only an address in the subnet of the vEthernet (WSL)
+#                        adapter, so the file can point a rule at the WSL VM
+#                        only, and it writes to its log only when it changes a
+#                        rule.
 
 [CmdletBinding()]
 param(
     [string]$WslDistro = 'Ubuntu',
     # No $PSScriptRoot default: it is empty during param binding under
     # `powershell.exe -File`, so the path is resolved below instead.
-    [string]$ConfigPath
+    [string]$ConfigPath,
+    [string]$WriteIpFile,
+    [string]$IpFile,
+    # Define the functions only, for the tests.
+    [switch]$Library
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,6 +68,49 @@ function Get-WslIpv4 {
     $ip = ($raw.Trim() -split '\s+')[0]
     if ($ip -notmatch '^\d+\.\d+\.\d+\.\d+$') {
         throw "Got non-IPv4 from WSL hostname -I: '$ip'"
+    }
+    return $ip
+}
+
+function Write-WslIpFile {
+    param([string]$Path, [string]$Ip)
+    # A new file next to the old one, then one rename: the reader never sees
+    # half a file.
+    $text = (@{ address = $Ip; time = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() } | ConvertTo-Json -Compress)
+    $temp = "$Path.new"
+    [IO.File]::WriteAllText($temp, $text, (New-Object Text.UTF8Encoding $false))
+    Move-Item -LiteralPath $temp -Destination $Path -Force
+}
+
+function ConvertTo-UInt32Address([string]$Address) {
+    $bytes = ([Net.IPAddress]::Parse($Address)).GetAddressBytes()
+    [Array]::Reverse($bytes)
+    [BitConverter]::ToUInt32($bytes, 0)
+}
+
+function Get-WslSubnet {
+    # The address and prefix of the host on the vEthernet (WSL) adapter, as
+    # playbooks/windows-host.yml reads them.
+    $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.InterfaceAlias -like 'vEthernet (WSL*' } | Select-Object -First 1
+    if (-not $ip) { throw 'No vEthernet (WSL) adapter.' }
+    [pscustomobject]@{ Address = [string]$ip.IPAddress; PrefixLength = [int]$ip.PrefixLength }
+}
+
+function Read-WslIpFile {
+    param([string]$Path, $Subnet)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "$Path is not a plain file." }
+    if ($item.Length -gt 1024) { throw "$Path is larger than 1 KiB." }
+    $ip = [string](Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json).address
+    if ($ip -notmatch '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') { throw "$Path has no IPv4 address." }
+    $parsed = $null
+    if (-not [Net.IPAddress]::TryParse($ip, [ref]$parsed)) { throw "$Path has no IPv4 address." }
+    $mask = [uint32]([math]::Pow(2, 32) - [math]::Pow(2, 32 - $Subnet.PrefixLength))
+    $hostAddress = ConvertTo-UInt32Address $Subnet.Address
+    $address = ConvertTo-UInt32Address $ip
+    if ((($address -band $mask) -ne ($hostAddress -band $mask)) -or $address -eq $hostAddress) {
+        throw "$ip is not an address of the WSL VM in the subnet of the vEthernet (WSL) adapter."
     }
     return $ip
 }
@@ -100,14 +159,37 @@ function Remove-RetiredPort {
     }
 }
 
-Write-Host "=== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Sync-TnwksLanBridge"
-Require-Admin
+if ($Library) { return }
 
-if (-not (Test-Path $ConfigPath)) { throw "No port list at $ConfigPath (written by Ansible, role windows_lan_bridge)." }
-$config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
-$listen = $config.ListenAddress
+if ($WriteIpFile) {
+    # No admin right and no rule: the address only.
+    $wslIp = Get-WslIpv4 -Distro $WslDistro
+    Write-WslIpFile -Path $WriteIpFile -Ip $wslIp
+    exit 0
+}
 
-$wslIp = Get-WslIpv4 -Distro $WslDistro
+if ($IpFile) {
+    Require-Admin
+    if (-not (Test-Path $ConfigPath)) { throw "No port list at $ConfigPath (written by Ansible, role windows_lan_bridge)." }
+    $config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
+    $listen = $config.ListenAddress
+    $wslIp = Read-WslIpFile -Path $IpFile -Subnet (Get-WslSubnet)
+    $current = Get-PortProxy
+    $same = @($config.TcpPorts | Where-Object { $current["${listen}:$($_.Port)"] -ne "${wslIp}:$($_.WslPort)" }).Count -eq 0 -and
+        @($config.RetiredTcpPorts | Where-Object { $current.ContainsKey("${listen}:$_") }).Count -eq 0
+    # Each 5 minutes: quiet when each rule is right.
+    if ($same) { exit 0 }
+    Write-Host "=== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Sync-TnwksLanBridge (address from $IpFile)"
+} else {
+    Write-Host "=== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Sync-TnwksLanBridge"
+    Require-Admin
+
+    if (-not (Test-Path $ConfigPath)) { throw "No port list at $ConfigPath (written by Ansible, role windows_lan_bridge)." }
+    $config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
+    $listen = $config.ListenAddress
+
+    $wslIp = Get-WslIpv4 -Distro $WslDistro
+}
 Write-Host "WSL ($WslDistro) IPv4: $wslIp"
 
 $current = Get-PortProxy

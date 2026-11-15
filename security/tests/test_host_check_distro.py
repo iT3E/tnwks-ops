@@ -1067,7 +1067,8 @@ def test_the_write_test_tries_the_textfile_directory_of_the_host():
     assert distro["wsl_host_check_write_test_dir"] == "/mnt/c/" + textfile_dir[3:].replace("\\", "/")
     unit = (ROLE / "templates/tnwks-host-check.service.j2").read_text()
     assert '--write-test-dir "{{ wsl_host_check_write_test_dir }}"' in unit
-    assert distro["wsl_host_check_write_test_fails_play"] is False, "on with the start of each distro with no elevation"
+    # On where the Windows host starts WSL with no elevation: test_wsl_start_unelevated.py.
+    assert "wsl_start_unelevated" in distro["wsl_host_check_write_test_fails_play"]
 
 
 def test_the_way_back_stops_the_timer_before_the_files_go():

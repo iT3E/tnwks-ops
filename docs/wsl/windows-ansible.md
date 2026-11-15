@@ -147,6 +147,59 @@ by hand or from a draft template, copy `Export-ScheduledTask -TaskName <name>`
 into the template, and check that `--check` reports no change. S4U tasks
 (desktop user, no stored password) register fine over the SSH session.
 
+## Start WSL with no elevation
+
+Per host, `wsl_start_unelevated` (`group_vars/windows_hosts.yml`, on in
+`host_vars/WSL-02` first) makes each task that starts a process in the
+distro run with no elevation (Design Doc 0004, section 5.9). WSL gives each
+process in a distro the access to the Windows drives of the `wsl.exe` that
+started it, and gives the services of the distro (systemd, Docker, the
+Talos nodes) the access of the `wsl.exe` that created the distro instance
+(the WSL technical documentation, "Elevated vs non-elevated mountpoints",
+`doc/docs/technical-documentation/drvfs.md` in microsoft/WSL).
+
+| Task | With the switch on |
+| --- | --- |
+| `tnwks-wsl-keepalive`, `tnwks-wsl-watchdog`, the UDP relays | The desktop user, no elevation. They log to a `log` directory that the account may change, apart from the scripts |
+| `tnwks-wsl-service` (new) | SYSTEM, each 5 minutes and at boot: the part of the watchdog that needs admin rights (the WSL service, the keepalive task). It runs no `wsl.exe` |
+| `tnwks-lan-bridge-ip` (new) | The desktop user, no elevation: writes the address of the WSL VM to `C:\ProgramData\tnwks-lan-bridge\wsl-ip\address.json` |
+| `tnwks-lan-bridge-sync` | SYSTEM, with that file and no `wsl.exe`. It takes only an address in the subnet of the vEthernet (WSL) adapter |
+| `tnwks-vhdx-compact` | Still elevated for diskpart, with `-NoDistroStart`: the keepalive and the watchdog start the distro after it |
+
+SYSTEM's `wsl.exe` can not see the distro of the user, so a SYSTEM task can
+not start a process in it. The USB attach and the monitoring volume have no
+part with no elevation yet, and the play refuses the switch on a host that
+runs them.
+
+**The change takes effect for the services only at the next start of the
+distro.** Until then they keep the access of the elevated start, and the
+last task of `wsl_host_check` fails the distro play (its write test). The
+start is a step of its own, at a time the owner chooses, site 2 first:
+
+1. Pause each task that runs `wsl.exe`: `Stop-ScheduledTask` and
+   `Disable-ScheduledTask` for `tnwks-wsl-watchdog`, `tnwks-wsl-keepalive`,
+   `tnwks-lan-bridge-ip`, the UDP relays, and on `DESKTOP-HKE05KI`
+   `tnwks-usb-attach` and `tnwks-observability-mount`. A paused task that
+   runs again picks up its new principal.
+2. Stop the cluster cleanly as in
+   [windows-patching.md](../operations/windows-patching.md), phase 3: the
+   Talos nodes shut down, and the router moves the shared VIPs.
+3. `wsl --terminate <distro>`, and check that `wsl --list --running` does
+   not list it. A `wsl --shutdown` is not needed: the next `wsl.exe` that
+   starts the distro sets the access of its services, and the VM, its
+   attached disks and USB devices stay.
+4. Close each elevated terminal that runs `wsl`: an elevated `wsl.exe`
+   that starts the distro first gives it the elevated access again.
+5. `Enable-ScheduledTask` and `Start-ScheduledTask` for the keepalive (or
+   the watchdog on a host with no keepalive) first, then the others.
+6. Read: in the distro, `sudo systemctl start tnwks-host-check.service`;
+   then `homelab_security_host_write_test_result{uid="0"}` is 0, and
+   `homelab_security_host_write_test_errno{uid="0"}` names the refusal.
+   The next play of the distro passes.
+
+The way back: set the switch off, run the plays (the tasks are elevated
+again, and the new tasks go), and start the distro again in the same steps.
+
 ## Check-only settings
 
 The role `windows_host_settings` (last in the play) only reads. Its single

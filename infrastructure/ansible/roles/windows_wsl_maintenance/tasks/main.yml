@@ -1,4 +1,19 @@
 ---
+# Two roles start a process in the distro from a task that needs admin
+# rights, and they have no part with no elevation yet: the USB attach (usbipd
+# bind) and the monitoring volume (wsl --mount). A host with either one can
+# not start WSL with no elevation until they do.
+- name: The start with no elevation has each role it needs
+  ansible.builtin.assert:
+    that:
+      - not (wsl_start_unelevated | bool) or (usb_attach_bound_devices | default([]) | length == 0)
+      - not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool)
+    fail_msg: >-
+      wsl_start_unelevated is on for {{ inventory_hostname }}, which runs the USB attach or the
+      monitoring volume. Their tasks need admin rights and start a process in the distro, so
+      they need a part with no elevation first (Design Doc 0004, section 5.9).
+    quiet: true
+
 - name: Directories
   ansible.windows.win_file:
     path: "{{ item }}"
@@ -16,10 +31,47 @@
   loop_control:
     label: "{{ item.src }}"
 
+# With no elevation, the watchdog can not change a log that an elevated run
+# made, so it logs to a directory of its own. The account may change only
+# that directory, not the scripts that SYSTEM runs.
+- name: Log directory of the watchdog
+  ansible.windows.win_file:
+    path: "{{ wsl_watchdog_log_dir }}"
+    state: directory
+  register: wsl_watchdog_log_dir_result
+  when: wsl_start_unelevated | bool
+
+- name: The account may change the log directory of the watchdog
+  ansible.windows.win_acl:
+    path: "{{ wsl_watchdog_log_dir }}"
+    user: "{{ wsl_maintenance_user }}"
+    rights: Modify
+    type: allow
+    state: present
+    inherit: ContainerInherit, ObjectInherit
+    propagation: None
+  # A check run does not make the directory, so it has no ACL to read yet.
+  when: wsl_start_unelevated | bool and not (ansible_check_mode and wsl_watchdog_log_dir_result is changed)
+
 - name: Watchdog task (every 5 min and at boot)
   tnwks_win_scheduled_task:
     name: "{{ wsl_watchdog_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'wsl-watchdog.xml.j2') }}"
+
+# The part of the watchdog that needs admin rights, as SYSTEM. SYSTEM's
+# wsl.exe can not see the distro of the user, and the script runs no wsl.exe
+# with -ServiceOnly, so this task starts no process in the distro.
+- name: WSL service task (SYSTEM, every 5 min and at boot)
+  tnwks_win_scheduled_task:
+    name: "{{ wsl_service_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'wsl-service.xml.j2') }}"
+  when: wsl_start_unelevated | bool
+
+- name: No WSL service task while the watchdog is elevated
+  tnwks_win_scheduled_task:
+    name: "{{ wsl_service_task }}"
+    state: absent
+  when: not (wsl_start_unelevated | bool)
 
 # WSL stops a distro soon after its last wsl.exe client exits, Docker and the
 # Talos nodes inside or not. DESKTOP-HKE05KI always has one (the UDP relays,

@@ -11,8 +11,18 @@ ansible_ssh_private_key_file: "{{ lookup('ansible.builtin.env', 'TNWKS_ANSIBLE_S
 # The SSH session already has the admin's full token.
 ansible_become: false
 # The account that owns the WSL distro. Tasks that call wsl.exe run as it
-# (S4U, elevated): SYSTEM's wsl.exe can't see the per-user Ubuntu.
+# (S4U): SYSTEM's wsl.exe can't see the per-user Ubuntu.
 windows_desktop_user: "{{ ansible_user }}"
+# Start each WSL distro with no elevation (Design Doc 0004, section 5.9). A
+# distro instance takes the drive access of the wsl.exe that creates it, and
+# each process that an elevated wsl.exe starts in it has the admin access to
+# the Windows drives. With this on, each task that starts a process in the
+# distro runs with no elevation, and each step that needs admin rights runs
+# in a task that starts no process in the distro. It takes effect for the
+# services of the distro only when the distro is started again
+# (docs/wsl/windows-ansible.md, "Start WSL with no elevation"). Per host, site
+# 2 first; off until then.
+wsl_start_unelevated: false
 
 # The keys sshd accepts (role windows_sshd): one per controller, so each can
 # be revoked on its own.
