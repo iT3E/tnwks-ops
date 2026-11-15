@@ -179,6 +179,13 @@ locals {
       description           = "The derived image of the personal agents on the tnwks agent platform"
       has_wiki              = false
       security_and_analysis = local.scanning_on
+
+      variables = {
+        # The client ID of the release GitHub App, the same App as tnwks-ops
+        # (public by design). release.yaml passes it as app-client-id, so
+        # the App pushes the release commit and tag.
+        RELEASE_APP_CLIENT_ID = "Iv23li4tvKlTdMwPMmJR"
+      }
     }
 
     hass-config = {

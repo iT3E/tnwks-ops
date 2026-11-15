@@ -19,7 +19,7 @@ PR at a time, each with its own plan.
 | `github_repository_ruleset` | `tnwks-ops`: `main` | Deletion and force-push blocked, PRs with squash merges only and no approvals, the required checks `Build Success`, `betterleaks / betterleaks`, `privacy / privacy` and `Owner label` from GitHub Actions. Admins and one GitHub App bypass it |
 | `github_repository_environment` | `tnwks-ops`: `external-contributions`, `openclaw-hooks`, `prod` | The owner as required reviewer of `external-contributions`; `openclaw-hooks` deploys from `main` only; `prod` from protected branches only |
 | `github_repository_environment_deployment_policy` | `tnwks-ops`: `openclaw-hooks` | The `main` branch pattern |
-| `github_actions_variable` | `tnwks-ops`: `RELEASE_APP_CLIENT_ID`, `UNIFI_TERRAFORM_ENABLED` | Values are public. `TERRAFORM_GITHUB_ENABLED` stays by hand (below) |
+| `github_actions_variable` | `tnwks-ops`: `RELEASE_APP_CLIENT_ID`, `UNIFI_TERRAFORM_ENABLED`; `tnwks-agent-image`: `RELEASE_APP_CLIENT_ID` | Values are public. `TERRAFORM_GITHUB_ENABLED` stays by hand (below) |
 | `github_actions_environment_variable` | `tnwks-ops`, `openclaw-hooks`: `OPENCLAW_NOTIFY_ACCOUNT`, `OPENCLAW_NOTIFY_CHANNEL`, `OPENCLAW_NOTIFY_TO` | Values from `tnwks-ops.sops.yaml` (below) |
 | `github_repository_webhook` | `tnwks-ops`: `flux` | Flux's receiver: `push` events, form content type, URL from `tnwks-ops.sops.yaml`. Its secret isn't managed, and Terraform never updates the webhook (below) |
 | `github_actions_repository_permissions` | `tnwks-ops` | Actions on, all actions allowed |
