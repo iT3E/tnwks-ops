@@ -71,7 +71,7 @@ spec:
         # on this cluster the kubelet can't reach the local-path directory,
         # so it would make a subPath directory as root (talos/wsl/README.md).
         - name: prepare
-          image: &image ghcr.io/it3e/tnwks-agent-image:0.3.0@sha256:ca3a1c7b8778380970098fdb68ed1f21dfeb75757428b675725e093d43bd11d1
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.0@sha256:43ee2f3a1a11dff2294795250091c685ac8b7b8b988a9eeb93c1adffef6f971d
           imagePullPolicy: IfNotPresent
           command:
             - sh
