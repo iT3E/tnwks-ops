@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.156.0 - 2026-11-15
+
+### Added
+
+* security: the router lists `api-check` in its sources, now that the API checks have its first result on homelab-wsl-02, so `SecurityResultLate` watches it
+
 ## v2.155.0 - 2026-11-15
 
 ### Added
