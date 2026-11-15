@@ -48,7 +48,7 @@ spec:
           containers:
             - name: providers
               # The image of the workflow agents holds the OpenShell CLI.
-              image: ghcr.io/it3e/tnwks-workflow-agents:0.1.4@sha256:5483f12a8f59c8747c31aaa8d395ec83c4479132c705810160d471c41b2eb98a
+              image: ghcr.io/it3e/tnwks-workflow-agents:0.1.5@sha256:66f2a946099c6d38d3f8c590d8eea959be2680656eb452028f31fc045441bd75
               imagePullPolicy: IfNotPresent
               command: ["sh", "/scripts/providers.sh"]
               env:
