@@ -133,12 +133,30 @@ cert CN homelab-wsl-backups  (Secret kopiur-system/aws-backup-certificate, SOPS)
        the app namespace before every mover run
 ```
 
+The repository of the agent trust domains has a chain of its own, beside
+this one (`kubernetes/apps/kopiur-system/agents-repository/`):
+
+```
+cert CN homelab-wsl-agent-backups  (Secret kopiur-system/aws-backup-certificate-agents, SOPS)
+  -> CronJob kopiur-system/aws-backup-credentials-agents, every 30 min (:15, :45)
+  -> role tnwks-rolesanywhere-backups-agents: list, read and write kopiur-agents/ only
+  -> 4-hour STS session -> Secret aws-backup-sts-agents in kopiur-system/
+       the repository of the agent trust domains; kopiur projects a fresh copy
+       into the namespace of the trust domain before every mover run
+```
+
 - Same trust anchor and CA as the SOPS workstation certificates
   (`environments/prod/aws/rolesanywhere/`), separate role and profile
   (`modules/aws/rolesanywhere.tf`). The role trusts only CN
   `homelab-wsl-backups`; removing it from
   `rolesanywhere_backups_common_names` and applying revokes the cluster
-  immediately.
+  immediately. The role of the agents repository trusts only CN
+  `homelab-wsl-agent-backups` and is an entry of
+  `rolesanywhere_backups_prefixed` (`environments/prod/aws/main.tf`); its
+  profile and role ARNs reach the CronJob as `RA_AGENT_BACKUPS_PROFILE_ARN`
+  and `RA_AGENT_BACKUPS_ROLE_ARN` in `kubernetes/clusters/wsl/cluster-settings.yaml`.
+  Without those two keys the refresher stops at its start (`missing env`) and
+  `KubeJobFailed` fires.
 - A refresher outage leaves the last session valid for up to 4 hours. A
   failed run raises `KubeJobFailed`.
 - In the namespaces of the agent platform (label
@@ -156,14 +174,42 @@ cert CN homelab-wsl-backups  (Secret kopiur-system/aws-backup-certificate, SOPS)
   rm -rf "$T"
   ```
 
+  The certificate of the agents repository goes in with no value on the
+  screen (`sops --set` takes each file as a JSON string), one year after it
+  was issued:
+
+  ```bash
+  T=$(mktemp -d)
+  F=kubernetes/apps/kopiur-system/agents-repository/app/secret-certificate.sops.yaml
+  infrastructure/terraform/environments/prod/aws/rolesanywhere/issue-cert.sh homelab-wsl-agent-backups "$T" 365
+  bin/sops --set "[\"stringData\"][\"tls.crt\"] $(jq -Rs . < "$T/homelab-wsl-agent-backups.pem")" "$F"
+  bin/sops --set "[\"stringData\"][\"tls.key\"] $(jq -Rs . < "$T/homelab-wsl-agent-backups.key")" "$F"
+  rm -rf "$T"
+  ```
+
 - **`KOPIA_PASSWORD`** (`kopiur-system/kopiur-repository`, SOPS) encrypts every
   kopiur snapshot. Without it the `kopiur/` data is unreadable, so it belongs on
   the off-site key media with the age key ([BCP](disaster-recovery.md#off-site-keys)).
+  The agents repository has its own `KOPIA_PASSWORD`
+  (`kopiur-system/kopiur-repository-agents`, SOPS): without it the
+  `kopiur-agents/` data is unreadable. It is made once, straight into the
+  encrypted file, and never shown:
+
+  ```bash
+  bin/sops --set "[\"stringData\"][\"KOPIA_PASSWORD\"] \"$(openssl rand -hex 32)\"" \
+    kubernetes/apps/kopiur-system/agents-repository/app/secret-password.sops.yaml
+  ```
+
+  Its off-site copy is that encrypted file, copied as it is to the kit next to
+  the age key that opens it. Set the value only before the repository is
+  created: Kopia creates the repository with it.
 - After a fresh install the STS Secrets hold placeholders until the first
   refresh. Run one now instead of waiting:
 
   ```bash
   kubectl -n kopiur-system create job --from=cronjob/aws-backup-credentials sts-now
+  # the agents repository
+  kubectl -n kopiur-system create job --from=cronjob/aws-backup-credentials-agents sts-agents-now
   ```
 
   If kopiur already tried with the placeholders, the ClusterRepository sits in
@@ -182,6 +228,7 @@ kubectl cnpg status postgres -n databases     # "Continuous Backup status"
 kubectl get snapshotpolicies,snapshots -A
 # STS session expiry
 kubectl -n databases get secret aws-backup-sts -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
+kubectl -n kopiur-system get secret aws-backup-sts-agents -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
 # Desktop timers (Drive copy of the gdrive-sync export, switch config)
 systemctl list-timers 'tnwks-*.timer'
 journalctl -u tnwks-gdrive-sync -u tnwks-aruba-backup -n 20
@@ -193,7 +240,8 @@ Alerts: `PostgresBackupStale` (no base backup in 30 h, per CNPG cluster), `Postg
 `LastFailedArchiveTime` (cnpg rules); kopiur's own PrometheusRule (failed or
 stale snapshots; `KopiurBackupStale` is patched in the HelmRelease to skip a
 policy whose schedule is suspended on a standby site, from the collector's
-`homelab_app_backup_scheduled`); `KubeJobFailed` for the credentials CronJob. The desktop
+`homelab_app_backup_scheduled`); `KubeJobFailed` for the credentials CronJobs
+(both refreshers). The desktop
 timers have no alert yet: check the journal.
 
 ## Restoring
