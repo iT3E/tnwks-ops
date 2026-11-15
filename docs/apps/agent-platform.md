@@ -723,9 +723,15 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   resolves to the current value, which is newer. A new run gets the newest
   token.
 - **Roles.** The service account `run-receiver` can create and get Jobs,
-  list pods and read pod logs in this namespace, and nothing more. The run
-  jobs and the sweep run as `workflow-run`, with no role and no token: they
-  call the sandbox gateway with its client certificate.
+  list pods and read pod logs in this namespace, and list Sandbox records
+  (`agents.x-k8s.io`), and nothing more. The run jobs run as `workflow-run`,
+  with no role and no token: they call the sandbox gateway with its client
+  certificate. The sweep runs as `workflow-sweep`, which can list and delete
+  Sandbox records. RBAC can't limit a list or a delete by label, so each of
+  the two Roles covers every Sandbox record of the namespace; the code
+  touches only run records, and the admission policy
+  `workflow-sweep-deletes` refuses a delete by the sweep of any record that
+  OpenShell did not make for a run name. A record holds no credential.
 - **The admission policy** (`run-receiver/admission/`, the
   ValidatingAdmissionPolicy `workflow-run-jobs` and its binding to this
   namespace). A right to make a Job is a right to read each secret of the
@@ -741,15 +747,30 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   pull request as its entry in `agents.yaml`.
 - **The sweep** (CronJob `workflow-sweep`, every 15 minutes) deletes each
   run sandbox that is older than one hour, by its name and label, through
-  the sandbox gateway. A run job deletes its own sandbox; the sweep is for
-  a run job that stopped before it could.
+  the sandbox gateway, and then checks that its Sandbox record went. It also
+  removes, through the API, each run record older than one hour that the
+  gateway does not list. A run job deletes its own sandbox; the sweep is for
+  a run job that stopped before it could, and for a record that the gateway
+  left.
+- **A record that the gateway leaves.** OpenShell 0.1.8 can answer a delete
+  with success, keep the Sandbox record and forget the sandbox (seen on
+  2026-11-14 on the probe of a trust domain). The run job can't see that:
+  it has no token, and its result says `sandbox_deleted: true`. So the run
+  receiver checks the record of each run 60 s after its end, and writes
+  `gone` or `left: <sandbox>` in the Job annotation
+  `workflow-agents/sandbox-record`. A record that stays is one ERROR line
+  in its log; the answer of the run does not change. No alert reads that
+  line: the sweep removes the record after one hour and
+  fails once (AgentPlatformCronJobFailed), with an `ERROR sweep:` line that
+  names the sandbox.
 - **Network policy.** In: the runner pods of the `openclaw-hooks` scale set
   in `tools`, a pod `app.kubernetes.io/name: workflow-schedule` of this
   namespace (a schedule, later), and the kubelet's probes. Out: the API
   server only. The run jobs and the sweep reach the sandbox gateway of this
-  namespace only (the providers job also reaches `api.github.com`, for the
-  token of the App), which also relays the SSH path to a sandbox. The agent
-  runs in the sandbox, whose egress is its sandbox policy and its providers.
+  namespace only, which also relays the SSH path to a sandbox; the sweep
+  also reaches the API server, for the Sandbox records (and the providers
+  job `api.github.com`, for the token of the App). The agent runs in the
+  sandbox, whose egress is its sandbox policy and its providers.
 - **A test call by hand** needs no rule: a `kubectl port-forward` reaches
   the pod through the kubelet, not from another pod, and the receiver
   listens on each address of the pod.

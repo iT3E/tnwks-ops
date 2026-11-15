@@ -134,8 +134,9 @@ spec:
         scan:
           skip-version-check: true
           disable-telemetry: true
-      # Each container of a scan job. One scan job measured 56 MiB at peak
-      # (../../README.md, "Memory"). The CPU limit is the chart's
+      # Each container of a scan job. On homelab-wsl-02 one scan container
+      # peaked at 25 MiB, and one job at 97 MiB, in a full cycle
+      # (../README.md, "Memory"). The CPU limit is the chart's
       # default: a scan is slower, but it does not take a core from the node.
       resources:
         requests:

@@ -1,11 +1,17 @@
 ---
 # The sweep: it deletes each run sandbox that is older than one hour, through
-# the sandbox gateway. A run job deletes its own sandbox at its end; the
-# sweep deletes the sandbox of a run job that was stopped before that (a node
-# that went away, for example). It deletes only sandboxes with the name and
-# the label of a run, so it never deletes the sandbox of a check. A run job
-# has a time limit of 40 minutes at most (agents.yaml), and the admission
-# policy admits one hour at most.
+# the sandbox gateway, and then checks that its Sandbox record went. A run job
+# deletes its own sandbox at its end; the sweep deletes the sandbox of a run
+# job that was stopped before that (a node that went away, for example). It
+# also lists the run records through the Kubernetes API, and removes each one
+# older than one hour that the gateway left or does not list (the gateway can
+# answer a delete with success, leave the record and forget the sandbox). It
+# deletes only sandboxes and records with the name of a run, so it never
+# deletes the sandbox of a check. A run job has a time limit of 40 minutes
+# at most (agents.yaml), with 90 s of grace, and the admission policy admits
+# one hour at most, so a record older than one hour belongs to no live run.
+# A record that the gateway left or forgot fails the Job after its removal
+# (AgentPlatformCronJobFailed).
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -26,8 +32,10 @@ spec:
           labels: *labels
         spec:
           restartPolicy: Never
-          serviceAccountName: workflow-run
-          automountServiceAccountToken: false
+          # list and delete on Sandbox records (rbac.yaml), and the admission
+          # policy workflow-sweep-deletes.
+          serviceAccountName: workflow-sweep
+          automountServiceAccountToken: true
           enableServiceLinks: false
           securityContext:
             runAsNonRoot: true
@@ -39,7 +47,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: sweep
-              image: ghcr.io/it3e/tnwks-workflow-agents:0.1.5@sha256:66f2a946099c6d38d3f8c590d8eea959be2680656eb452028f31fc045441bd75
+              image: ghcr.io/it3e/tnwks-workflow-agents:0.2.0@sha256:afa99d46ca1a2a160a381ec5211d7395a419da198dcfbe73237ea7e046546378
               imagePullPolicy: IfNotPresent
               args: ["sweep"]
               env:
@@ -49,6 +57,11 @@ spec:
                   value: /etc/openshell/mtls
                 - name: SWEEP_MAX_AGE_SECONDS
                   value: "3600"
+                # Under the activeDeadlineSeconds above (600), with room for
+                # the start of the pod: the sweep starts no removal it has no
+                # time to end.
+                - name: SWEEP_DEADLINE_SECONDS
+                  value: "420"
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

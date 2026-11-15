@@ -94,7 +94,17 @@ match of a secret in the namespace of the workload.
 ## The result series
 
 The rules are in `observability/rules.py` (group `homelab.security`), and
-each site runs them for its own series. They give the two series of the
+each site runs them for its own series. The rules of the registry run on
+homelab-wsl-02 only, so the job `peer-federate` there brings the two series
+of homelab-wsl (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`).
+homelab-wsl lists `trivy` in its `sources` (`security/registry/systems.yaml`)
+since the pull request after its first result (the compliance report of
+2026-11-15, 18:00 UTC), so the late alert did not fire before the first
+scans. When homelab-wsl or that scrape is down, its last sample leaves the 10-minute window of the rule, and
+`SecurityResultLate` fires for `trivy` on homelab-wsl 10 minutes after that
+(`for: 10m`), about 20 minutes after the last sample, next to the alert of
+the lost site. That is the federation, not a fault of the operator. The rules give
+the two series of the
 contract of the registry (`security/README.md`, "The series"), with
 `source="trivy"` and the cluster as `system`:
 
@@ -102,7 +112,7 @@ contract of the registry (`security/README.md`, "The series"), with
 | --- | --- | --- |
 | `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
 | `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images that run on the cluster now (`kube_pod_container_info` and `kube_pod_init_container_info`). Each running container counts one report: the one with the digest of `image_id`, or, when no report has that digest, the one with the same namespace, container and reference ("The digest of a report", below). The report of an image that no longer runs (an old ReplicaSet, whose report can stay for a day) counts only for a container of the same namespace, container and reference that has no report of its own digest. 0 when the scan reports have none. No series when no running image is known (kube-state-metrics down). A report counts for an hour after its last sample, so a report that is gone during its new scan changes nothing. No series when there is no scan report. While an image that runs on the cluster has had no report for an hour, a fail stays and a pass is "no evidence": a failed scan never reads as a pass, and never hides a known fail. The pods of the scan jobs, a container that has not started (no `image_id` yet) and an image with no registry digest are not counted |
-| `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
+| `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at the first tick of its cron (`0 */6 * * *`, the chart's default) after the report object is made, so up to 6 hours after the first start of the operator, then at each tick (`pkg/compliance/clustercompliancereport.go` of the release) |
 
 A result also has the label `severity`, in lower case. Trivy counts a control
 with no input as a pass, so the rule leaves out the controls that have no
@@ -196,8 +206,21 @@ date. There is no second list here. The `ignoreFile` of the chart applies
 only to the image scans, and not to the compliance report, so it is not the
 place for an exception.
 
-The reader runs on homelab-wsl-02, where the Secret of the list is. Until
-the reader runs, no check is accepted, and an exception shows as a fail.
+The reader runs on homelab-wsl-02, where the Secret of the list is. The
+job `peer-federate` of homelab-wsl brings its series of `trivy` there
+(`kubernetes/apps/monitoring/kube-prometheus-stack/app/helmrelease.yaml`).
+The rule of the result series reads the accepted findings with no
+`source_site` matcher, so on homelab-wsl the federated copy mutes them: the
+fixture "an accepted check gives 0 until its end" of `observability/rules.py`
+has the copy from homelab-wsl-02 and the result of homelab-wsl. The rule
+keeps the last value of the list for a day, so when homelab-wsl-02 or the
+federation is down, an accepted finding stays muted for up to a day and
+does not alert as new (the fixture "an accepted check of homelab-wsl stays
+muted while the federated list is gone for hours"). After a day with no
+copy of the list, the mute stops. For the same reason, an entry that the
+owner takes out of the list before its end stays muted for up to a day.
+Until the reader runs, no check is accepted, and an exception shows as a
+fail.
 
 ## What it can reach
 
@@ -247,7 +270,7 @@ scan.
 | Part | Request | Limit | Source |
 | --- | --- | --- | --- |
 | The operator | 256 MiB | 512 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). `GOMEMLIMIT` is 460 MiB, 90% of the limit (go.dev/doc/gc-guide) |
-| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One scan container measured 56 MiB at peak. One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`) |
+| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. On homelab-wsl-02, one scan container peaked at 25 MiB, and the containers of one job together at 97 MiB, in a full cycle (2026-11-15). One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`) |
 
 The operator counts its scan jobs from its cache before it starts one
 (`pkg/operator/jobs/limit_checker.go` of the release). A job that it has
@@ -266,19 +289,23 @@ of Trivy on that cluster, while such a pod has its scan:
 | By | The operator | The scan job | Sum |
 | --- | --- | --- | --- |
 | Limits | 512 MiB | 6 x 512 MiB | 3584 MiB |
-| Estimate | 236 MiB or more | 6 x 56 MiB | 572 MiB or more |
+| Peak measured on homelab-wsl-02 | 316 MiB | 97 MiB | 413 MiB or less |
 
-The estimate is not a measure of a job of 6 containers. The operator line
-is the last sample before a kill on homelab-wsl-02, in a burst of scans;
+The measured line is the peak of a full cycle on homelab-wsl-02, in samples
+of one minute (step 9 of "Tests"): the operator at 316 MiB of its 512 MiB,
+one scan container at 25 MiB at most, and the containers of one scan job
+together at 97 MiB at most. No sample had more than one scan job. The two
+peaks need not be at the same time, so their sum is an upper bound.
 homelab-wsl runs more workloads, and the cache of the operator grows with
-them. The scan line takes one measured scan container of 56 MiB 6 times. A
-scan of a pod of 6 containers on homelab-wsl-02 (the Cilium agent pods have
-6 there too) measures it before homelab-wsl lists the app (step 8 of
-"Tests"). The owner decides the limit with that number. Each container of a
-scan job also has a CPU limit of 500m, so such a job can take 3 cores of
-`SECURITY_NODE` for the length of the scan. Its first container downloads the database (about 140 MB
-compressed) to `trivy-cache`, and a later job reads it from there. Without
-the cache, each job would download it again.
+them, so the operator can take more there; its limit leaves 196 MiB above
+the peak of homelab-wsl-02. The owner kept these limits with that measure,
+for homelab-wsl too (2026-11-15).
+
+Each container of a scan job also has a CPU limit of 500m, so a job of 6
+containers can take 3 cores of `SECURITY_NODE` for the length of the scan.
+Its first container downloads the database (about 140 MB compressed) to
+`trivy-cache`, and a later job reads it from there. Without the cache, each
+job would download it again.
 
 The signals of a limit that is too low: the pod status `OOMKilled`, and the
 alert `KubeJobFailed` for a scan job.
@@ -365,9 +392,12 @@ After a merge, on the cluster, with reads only:
    for this cluster, and `homelab_security_check_result{source="trivy"}` and
    `homelab_security_last_result_timestamp_seconds{source="trivy"}` for its
    system.
-7. The memory of the operator stays under its limit for a full cycle:
+7. The CPU of `SECURITY_NODE` while the largest scan job runs (6 containers
+   with a limit of 500m each):
+   `sum(rate(container_cpu_usage_seconds_total{namespace="security",pod=~"scan-vulnerabilityreport-.+"}[5m]))`.
+8. The memory of the operator stays under its limit for a full cycle:
    `max_over_time(container_memory_working_set_bytes{namespace="security",container="trivy-operator"}[1d])`.
-8. On homelab-wsl-02, before homelab-wsl lists the app: the peak memory of
+9. On homelab-wsl-02, before homelab-wsl lists the app: the peak memory of
    the scan job of the pod with the most containers (a Cilium agent pod has
    6), summed over its containers:
    `max_over_time(sum by (pod) (container_memory_working_set_bytes{namespace="security",pod=~"scan-vulnerabilityreport-.+",container!=""})[1d:1m])`,
