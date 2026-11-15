@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.154.1 - 2026-11-15
+
+### Fixed
+
+* agents: the sandbox probe removes a Sandbox record of its own name that an earlier run left before it creates its sandbox, and fails a run whose own record is still there at its end, so a delete that the sandbox gateway answered and did not do no longer blocks the next runs
+
 ## v2.154.0 - 2026-11-15
 
 ### Added
