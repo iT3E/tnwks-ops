@@ -1,3 +1,0 @@
-kind: Added
-body: 'agents: alerts when the memory index step of the pilot fails at a start, and when the admission rule refuses a ConfigMap write of a backup mover in a trust domain (homelab-wsl keeps that one API server counter)'
-time: 2026-11-15T03:00:00.000000000Z

@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.154.0 - 2026-11-15
+
+### Added
+
+* agents: alerts when the memory index step of the pilot fails at a start, and when the admission rule refuses a ConfigMap write of a backup mover in a trust domain (homelab-wsl keeps that one API server counter)
+
 ## v2.153.0 - 2026-11-15
 
 ### Added
