@@ -1,9 +1,15 @@
 """The severities that Trivy Operator collects, and the ones that the rules read
 (kubernetes/apps/security/trivy-operator/README.md, "Severities")."""
 
+import json
+import os
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,3 +66,59 @@ def test_the_ignore_policy_keeps_each_severity_that_a_rule_reads_of_an_image():
         for selectors in re.findall(IMAGE_SERIES + r"\{([^}]*)\}", expr):
             read |= matched(selectors)
     assert read == {"CRITICAL"}, read
+
+
+def docker():
+    """Docker, or a skip with its reason. CI has Docker, so there the test runs."""
+    if shutil.which("docker"):
+        return "docker"
+    if os.environ.get("CI"):
+        pytest.fail("Docker is needed to compile the ignore policy of Trivy Operator")
+    pytest.skip("docker not installed: the ignore policy of Trivy Operator is not compiled")
+
+
+def trivy_image():
+    image = VALUES["trivy"]["image"]
+    return f'{image["registry"]}/{image["repository"]}:{image["tag"]}'
+
+
+def scan_with_policy(policy):
+    """Trivy of the pinned image, with no network, scans a file with one fake
+    secret and the policy. A policy is compiled only for a result to filter,
+    so the scan needs a finding. The secret is built here, not written in the
+    repository."""
+    binary = docker()
+    work = Path(tempfile.mkdtemp(prefix="trivy-policy-"))
+    try:
+        (work / "policy.rego").write_text(policy)
+        (work / "data").mkdir()
+        # The form of a GitHub personal token: its prefix and 36 letters and digits.
+        (work / "data/found.txt").write_text("gh" + "p_" + "Ab1" * 12 + "\n")
+        subprocess.run(["chmod", "-R", "a+rX", str(work)], check=True)
+        return subprocess.run([
+            binary, "run", "--rm", "--network", "none",
+            "--mount", f"type=bind,src={work},dst=/t,readonly",
+            trivy_image(), "fs", "/t/data", "--scanners", "secret", "--cache-backend", "memory",
+            "--cache-dir", "/tmp/trivy", "--skip-version-check", "--disable-telemetry",
+            "--format", "json", "--quiet", "--ignore-policy", "/t/policy.rego",
+        ], capture_output=True, text=True, timeout=600, check=False)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def test_the_ignore_policy_compiles_and_keeps_a_finding_that_is_not_a_vulnerability():
+    """A policy that does not compile fails each scan that has a result to
+    filter, on both clusters (exit 1, "failed to apply the policy")."""
+    result = scan_with_policy(VALUES["trivy"]["ignorePolicy"])
+    assert result.returncode == 0, result.stderr[-4000:]
+    report = json.loads(result.stdout)
+    secrets = [secret for found in report.get("Results", []) for secret in found.get("Secrets", [])]
+    assert len(secrets) == 1, result.stdout[-4000:]
+
+
+def test_a_policy_that_does_not_compile_fails_the_scan():
+    """The test above would see a broken policy."""
+    broken = VALUES["trivy"]["ignorePolicy"].rstrip().removesuffix("}")
+    result = scan_with_policy(broken)
+    assert result.returncode == 1, result.stdout[-2000:] + result.stderr[-2000:]
+    assert "failed to apply the policy" in result.stderr, result.stderr[-4000:]

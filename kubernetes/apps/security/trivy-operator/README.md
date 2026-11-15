@@ -233,9 +233,12 @@ until then.
 The policy is in the ConfigMap `trivy-operator-trivy-config`, so the next
 scan job reads it, and a report from before keeps every severity until its
 new scan, within 24 hours. A policy that does not compile fails each scan
-(exit 1, "failed to apply the policy"): no image has a report, and
-`SecurityImagesNotScanned` fires after 36 hours. The test reads the text of
-the policy, not its syntax.
+that has a result to filter, on both clusters (exit 1, "failed to apply the
+policy"): those images have no report, and `SecurityImagesNotScanned` fires
+after 36 hours. The test compiles the policy with the pinned Trivy in Docker
+(a scan with no network of a file with one fake secret, built by the test),
+and checks that a policy with a syntax error fails that scan. Without Docker
+it skips, and in CI it fails.
 
 ## Exceptions
 
