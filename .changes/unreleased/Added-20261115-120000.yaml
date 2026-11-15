@@ -1,3 +1,0 @@
-kind: Added
-body: 'kopiur: the credentials of a Kopia repository for the agent trust domains (homelab-wsl): its own password, and a refresher that turns its own certificate into an S3 session for the role kept to kopiur-agents/'
-time: 2026-11-15T12:00:00.000000000-08:00

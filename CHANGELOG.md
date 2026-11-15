@@ -3,6 +3,24 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.159.0 - 2026-11-15
+
+### Added
+
+* kopiur: the credentials of a Kopia repository for the agent trust domains (homelab-wsl): its own password, and a refresher that turns its own certificate into an S3 session for the role kept to kopiur-agents/
+
+## v2.158.1 - 2026-11-15
+
+### Fixed
+
+* ci: the observability contracts job has 25 minutes instead of 15, since its rule tests alone take 6 to 9 minutes on a hosted runner and the job reached 11.5 minutes on main
+
+## v2.158.0 - 2026-11-15
+
+### Added
+
+* terraform: a Roles Anywhere backup role and profile kept to one prefix of the backup bucket (list, read, write and delete under it, nothing else), with its own certificate CN, for the Kopia repository of the agent trust domains
+
 ## v2.157.0 - 2026-11-15
 
 ### Added

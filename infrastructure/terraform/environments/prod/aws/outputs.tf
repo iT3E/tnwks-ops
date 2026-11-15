@@ -147,6 +147,16 @@ output "rolesanywhere_backups_site_role_arns" {
   value       = module.aws.rolesanywhere_backups_site_role_arns
 }
 
+output "rolesanywhere_backups_prefixed_profile_arns" {
+  description = "Roles Anywhere profile per prefixed backup role (agents)."
+  value       = module.aws.rolesanywhere_backups_prefixed_profile_arns
+}
+
+output "rolesanywhere_backups_prefixed_role_arns" {
+  description = "Prefixed backup role per name, assumed through Roles Anywhere."
+  value       = module.aws.rolesanywhere_backups_prefixed_role_arns
+}
+
 output "security_trail_bucket" {
   description = "S3 bucket of the organization trail."
   value       = module.security.trail_bucket

@@ -152,3 +152,13 @@ output "rolesanywhere_backups_site_role_arns" {
   description = "Role per backup site, assumed through Roles Anywhere."
   value       = { for k, r in aws_iam_role.rolesanywhere_backups_site : k => r.arn }
 }
+
+output "rolesanywhere_backups_prefixed_profile_arns" {
+  description = "Roles Anywhere profile per prefixed backup role (rolesanywhere_backups_prefixed)."
+  value       = { for k, p in aws_rolesanywhere_profile.backups_prefixed : k => p.arn }
+}
+
+output "rolesanywhere_backups_prefixed_role_arns" {
+  description = "Prefixed backup role per name, assumed through Roles Anywhere."
+  value       = { for k, r in aws_iam_role.rolesanywhere_backups_prefixed : k => r.arn }
+}
