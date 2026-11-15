@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 from pathlib import Path
@@ -54,16 +55,45 @@ def files_of_this_user_count_as_roots(monkeypatch):
 PASSING_TRIES = [(0, 0, "uid 0: Windows refused the write"), (1000, 2, "uid 1000: Linux refuses the write")]
 
 
-def run(state=None, packages=(), lists=NOW - 3600, reboot=False, writes=None, **limits):
+UPDATES = "Ubuntu/noble-updates"
+SECURITY = "Ubuntu/noble-security"
+
+
+def offered(names, keys=(UPDATES,)) -> dict:
+    """Upgrades from the given lists, in the form of the simulation."""
+    if isinstance(names, dict):
+        return names
+    return {name: tuple(keys) for name in names}
+
+
+def state_of(first=None, lists=None) -> dict:
+    return {"first_seen": dict(first or {}), "lists": dict(lists or {})}
+
+
+def run(state=None, packages=(), lists=None, reboot=False, writes=None, upgrades=None, holds=(),
+        dates=None, now=NOW, **limits):
+    """A run of the check with fakes. state is a map of clocks, or a state from state_of.
+    upgrades is the second simulation (by default the same as packages); dates the Dates
+    of the lists now."""
     def fake_packages():
         if isinstance(packages, Exception):
             raise packages
-        return list(packages)
+        return offered(packages)
+
+    def fake_upgrades():
+        if isinstance(upgrades, Exception):
+            raise upgrades
+        return offered(packages if upgrades is None else upgrades)
+
+    def fake_holds():
+        if isinstance(holds, Exception):
+            raise holds
+        return set(holds)
 
     def fake_lists():
         if isinstance(lists, Exception):
             raise lists
-        return lists
+        return now - 3600 if lists is None else lists
 
     def fake_reboot():
         if isinstance(reboot, Exception):
@@ -73,39 +103,164 @@ def run(state=None, packages=(), lists=NOW - 3600, reboot=False, writes=None, **
     def fake_writes():
         return writes if writes is not None else PASSING_TRIES
 
-    measured = check.measure(NOW, limits.get("days", 14), limits.get("hours", 72),
-                             {} if state is None else state,
-                             packages=fake_packages, lists=fake_lists, reboot=fake_reboot, writes=fake_writes)
-    return measured, textfile.parse(check.render(SYSTEM, measured, NOW))
+    if state is None:
+        state = state_of()
+    elif "first_seen" not in state:
+        state = state_of(state)
+    measured = check.measure(now, limits.get("days", 14), limits.get("hours", 72), state,
+                             packages=fake_packages, lists=fake_lists, reboot=fake_reboot, writes=fake_writes,
+                             upgrades=fake_upgrades, holds=fake_holds,
+                             dates=lambda: dict(dates if dates is not None else {UPDATES: now - 3600}))
+    return measured, textfile.parse(check.render(SYSTEM, measured, now))
+
+
+def result(families, name="updates-pending"):
+    return textfile.value(families, RESULT, source="host-check", check=name, system=SYSTEM, severity="high")
 
 
 def test_a_distro_with_no_pending_upgrade_gives_a_result_of_0_and_the_time():
     measured, families = run()
     assert textfile.series(families, RESULT) == {
-        (("check", "updates-pending"), ("severity", "high"), ("source", "host-check"), ("system", SYSTEM)): 0.0}
+        (("check", name), ("severity", "high"), ("source", "host-check"), ("system", SYSTEM)): 0.0
+        for name in ("updates-pending", "updates-held")}
     assert textfile.value(families, LAST, source="host-check", system=SYSTEM) == NOW
     assert textfile.value(families, FAILED, system=SYSTEM) == 0
     assert textfile.value(families, "homelab_security_host_updates_pending", system=SYSTEM) == 0
+    assert textfile.value(families, "homelab_security_host_updates_held", system=SYSTEM) == 0
     assert textfile.value(families, "homelab_security_host_reboot_pending", system=SYSTEM) == 0
-    assert measured["state"] == {}
+    assert measured["state"] == state_of(lists={UPDATES: NOW - 3600})
 
 
 def test_an_upgrade_fails_the_check_only_after_it_waited_past_the_limit():
-    state = {"old": NOW - 15 * DAY, "edge": NOW - 14 * DAY, "fresh": NOW - DAY}
+    state = state_of({"old": NOW - 15 * DAY, "edge": NOW - 14 * DAY, "fresh": NOW - DAY}, {UPDATES: NOW - 7 * 3600})
     measured, families = run(state=state, packages=["old", "edge", "fresh", "new"], reboot=True)
-    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM, severity="high") == 1
+    assert result(families) == 1
     assert textfile.value(families, "homelab_security_host_updates_pending", system=SYSTEM) == 4
     assert textfile.value(families, "homelab_security_host_reboot_pending", system=SYSTEM) == 1
-    assert measured["state"] == {"old": NOW - 15 * DAY, "edge": NOW - 14 * DAY, "fresh": NOW - DAY, "new": NOW}
+    # The new upgrade came out after the Date of its list at the last run with a result.
+    assert measured["state"]["first_seen"] == {"old": NOW - 15 * DAY, "edge": NOW - 14 * DAY, "fresh": NOW - DAY,
+                                               "new": NOW - 7 * 3600}
 
 
 def test_an_upgrade_that_was_installed_leaves_the_state():
     measured, _ = run(state={"gone": NOW - 30 * DAY, "kept": NOW - DAY}, packages=["kept"])
-    assert measured["state"] == {"kept": NOW - DAY}
+    assert measured["state"]["first_seen"] == {"kept": NOW - DAY}
+
+
+# Design Doc 0004, section 5.6: an age that the check does not know counts as old,
+# with a bound from the Dates of the lists.
+
+
+def test_with_no_state_file_each_upgrade_counts_as_old():
+    measured, families = run(state=None, packages=["openssl"], dates={UPDATES: NOW - 3600})
+    assert result(families) == 1
+    assert measured["state"] == state_of({"openssl": 0.0}, {UPDATES: NOW - 3600})
+
+
+def test_a_state_file_of_the_old_form_keeps_its_clocks_and_a_new_upgrade_counts_as_old():
+    measured, families = run(state=state_of({"openssl": NOW - DAY}), packages=["openssl", "curl"])
+    assert result(families) == 1
+    assert measured["state"]["first_seen"] == {"openssl": NOW - DAY, "curl": 0.0}
+
+
+def test_an_upgrade_seen_6_hours_after_a_run_with_a_result_from_a_list_1_day_old_passes():
+    state = state_of({}, {UPDATES: NOW - 6 * 3600 - DAY})
+    measured, families = run(state=state, packages=["openssl"])
+    assert result(families) == 0
+    assert measured["state"]["first_seen"] == {"openssl": NOW - 6 * 3600 - DAY}
+    # Its clock runs from the Date of the list: it fails 14 days after that Date.
+    _, families = run(state=measured["state"], packages=["openssl"], now=NOW + 12 * DAY + 18 * 3600)
+    assert result(families) == 0
+    _, families = run(state=measured["state"], packages=["openssl"], now=NOW + 13 * DAY)
+    assert result(families) == 1
+
+
+def test_an_upgrade_from_a_list_with_no_date_in_the_state_counts_as_old():
+    measured, families = run(state=state_of({}, {UPDATES: NOW - DAY}), packages=offered(["x"], ["Vendor/stable"]))
+    assert result(families) == 1
+    assert measured["state"]["first_seen"] == {"x": 0.0}
+
+
+def test_an_upgrade_of_two_lists_takes_the_oldest_date():
+    state = state_of({}, {UPDATES: NOW - DAY, SECURITY: NOW - 2 * DAY})
+    measured, _ = run(state=state, packages=offered(["openssl"], [UPDATES, SECURITY, "Vendor/stable"]))
+    assert measured["state"]["first_seen"] == {"openssl": NOW - 2 * DAY}
+
+
+def test_a_host_off_for_a_week_fails_by_the_dates_of_its_last_run_with_a_result():
+    """Day 0: a run with a result, lists dated 6 hours before. The host is off until day
+    7. Its run at boot fails on old lists, and keeps the state. The next run sees the
+    upgrades of the week first: their clocks start at the Date of day 0, not at day 7."""
+    day0 = state_of({}, {UPDATES: NOW - 6 * 3600})
+    boot, families = run(state=day0, packages=["openssl"], lists=NOW - 8 * DAY, now=NOW + 7 * DAY)
+    assert RESULT not in families and boot["failed"] == ["package-lists"]
+    after, families = run(state=day0, packages=["openssl"], lists=NOW + 7 * DAY, now=NOW + 7 * DAY + 3600,
+                          dates={UPDATES: NOW + 7 * DAY})
+    assert result(families) == 0
+    assert after["state"]["first_seen"] == {"openssl": NOW - 6 * 3600}
+    _, families = run(state=after["state"], packages=["openssl"], now=NOW + 14 * DAY)
+    assert result(families) == 1, "the old rule started the clock at day 7 and failed at day 21"
+
+
+# Design Doc 0004, section 5.7: an update that the host holds back.
+
+
+def test_a_held_package_at_the_first_run_of_updates_held_fails_at_once():
+    """A state of the old form never saw the hold: the plain simulation hides it."""
+    measured, families = run(state=state_of({"curl": NOW - DAY}), packages=["curl"], upgrades=["curl", "openssl"],
+                             holds=["openssl"])
+    assert result(families, "updates-held") == 1
+    assert result(families, "updates-pending") == 0
+    assert textfile.value(families, "homelab_security_host_updates_held", system=SYSTEM) == 1
+    assert measured["state"]["first_seen"] == {"curl": NOW - DAY, "openssl": 0.0}
+
+
+def test_a_held_package_fails_after_14_days():
+    state = state_of({}, {UPDATES: NOW - 3600})
+    first, families = run(state=state, packages=[], upgrades=["openssl"], holds=["openssl"])
+    assert result(families, "updates-held") == 0
+    _, families = run(state=first["state"], packages=[], upgrades=["openssl"], holds=["openssl"],
+                      now=NOW + 14 * DAY - 2 * 3600)
+    assert result(families, "updates-held") == 0
+    _, families = run(state=first["state"], packages=[], upgrades=["openssl"], holds=["openssl"], now=NOW + 14 * DAY)
+    assert result(families, "updates-held") == 1
+    assert result(families, "updates-pending") == 0
+
+
+def test_a_package_that_waits_10_days_and_is_then_held_fails_4_days_later():
+    """One clock: a hold buys no time."""
+    state = state_of({"openssl": NOW - 10 * DAY}, {UPDATES: NOW - 3600})
+    held, families = run(state=state, packages=[], upgrades=["openssl"], holds=["openssl"])
+    assert result(families, "updates-held") == 0
+    assert held["state"]["first_seen"] == {"openssl": NOW - 10 * DAY}
+    _, families = run(state=held["state"], packages=[], upgrades=["openssl"], holds=["openssl"],
+                      now=NOW + 4 * DAY + 3600)
+    assert result(families, "updates-held") == 1
+
+
+def test_a_phased_update_that_the_host_gets_after_10_days_fails_4_days_later():
+    """The second simulation sees the phased update from its first day; the plain one
+    offers it on day 10, with the clock of day 0."""
+    state = state_of({}, {UPDATES: NOW - 3600})
+    phased, families = run(state=state, packages=[], upgrades=["openssl"])
+    assert result(families, "updates-pending") == 0 and result(families, "updates-held") == 0
+    got, families = run(state=phased["state"], packages=["openssl"], now=NOW + 10 * DAY)
+    assert result(families, "updates-pending") == 0
+    _, families = run(state=got["state"], packages=["openssl"], now=NOW + 14 * DAY)
+    assert result(families, "updates-pending") == 1
+
+
+def test_a_package_that_leaves_the_list_loses_its_clock():
+    state = state_of({"openssl": NOW - 20 * DAY}, {UPDATES: NOW - 3600})
+    measured, families = run(state=state, packages=[], upgrades=[], holds=["openssl"])
+    assert result(families, "updates-held") == 0
+    assert measured["state"]["first_seen"] == {}
 
 
 BROKEN = {
     "apt-get fails": {"packages": check.QueryError("apt-get exited 100")},
+    "the second simulation fails": {"upgrades": check.QueryError("apt-get exited 100")},
+    "apt-mark fails": {"holds": check.QueryError("apt-mark exited 1")},
     "no package lists": {"lists": check.QueryError("no Release file")},
     "old package lists": {"lists": NOW - 73 * 3600},
     "an unreadable state file": {"state": "unreadable"},
@@ -118,7 +273,8 @@ def test_a_query_that_fails_gives_no_result_and_no_time(case):
     arguments = dict(BROKEN[case])
     unreadable = arguments.pop("state", None) == "unreadable"
     if unreadable:
-        measured = check.measure(NOW, 14, 72, None, packages=list, lists=lambda: NOW, reboot=lambda: False)
+        measured = check.measure(NOW, 14, 72, None, packages=dict, lists=lambda: NOW, reboot=lambda: False,
+                                 upgrades=dict, holds=set)
         families = textfile.parse(check.render(SYSTEM, measured, NOW))
     else:
         measured, families = run(**arguments)
@@ -134,7 +290,7 @@ def test_package_lists_at_the_limit_still_give_a_result():
 
 def test_a_failed_package_query_keeps_the_state():
     measured, _ = run(state={"old": NOW - 30 * DAY}, packages=check.QueryError("apt-get exited 100"))
-    assert measured["state"] == {"old": NOW - 30 * DAY}
+    assert measured["state"] == state_of({"old": NOW - 30 * DAY})
 
 
 def test_a_fact_that_no_check_reads_costs_no_result():
@@ -150,36 +306,79 @@ class Proc:
 
 SIMULATION = """NOTE: This is only a simulation!
 Reading package lists...
-Inst libssl3t64 [3.0.13-0ubuntu3.4] (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates [amd64])
+Inst libssl3t64 [3.0.13-0ubuntu3.4] (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64])
 Inst openssl [3.0.13-0ubuntu3.4] (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates [amd64])
 Inst linux-tools-6.8.0-90 (6.8.0-90.91 Ubuntu:24.04/noble-updates [amd64])
+Inst gdal-data [3.9.3+dfsg-1~noble0] (3.11.4+dfsg-1~noble0 ubuntugis-unstable:24.04/noble [all])
+Inst docker-ce [5:28.5.1-1~ubuntu.24.04~noble] (5:29.0.0-1~ubuntu.24.04~noble Docker CE:noble [amd64])
 Conf libssl3t64 (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates [amd64])
 """
 
 
-def test_the_query_simulates_and_counts_only_upgrades():
+def test_the_query_simulates_and_names_the_lists_of_each_upgrade():
     calls = []
 
     def fake_run(argv, **kwargs):
         calls.append((argv, kwargs))
         return Proc(0, SIMULATION)
 
-    assert check.pending_packages(run=fake_run) == ["libssl3t64", "openssl"]
+    assert check.pending_packages(run=fake_run) == {
+        "libssl3t64": (SECURITY, UPDATES), "openssl": (UPDATES,),
+        "gdal-data": ("ubuntugis-unstable/noble",), "docker-ce": ("Docker CE/noble",)}
     argv, kwargs = calls[0]
     assert argv[:2] == ["apt-get", "-s"], "a simulation installs nothing"
-    assert "Debug::NoLocking=1" in argv
+    assert "Debug::NoLocking=1" in argv and "--ignore-hold" not in argv
     assert kwargs["env"]["LC_ALL"] == "C", "the lines are parsed in English"
 
 
+def test_the_second_simulation_lists_held_and_phased_upgrades_and_installs_nothing():
+    calls = []
+    check.every_upgrade(run=lambda argv, **kwargs: calls.append(argv) or Proc(0, SIMULATION))
+    assert calls[0][:2] == ["apt-get", "-s"] and calls[0][-1] == "dist-upgrade"
+    assert "--ignore-hold" in calls[0]
+    assert "APT::Get::Always-Include-Phased-Updates=true" in calls[0]
+
+
+def test_the_holds_come_from_apt_mark_which_only_reads():
+    calls = []
+    assert check.held_packages(run=lambda argv, **kwargs: calls.append(argv) or Proc(0, "openssl\nlibc6\n\n")) == {
+        "openssl", "libc6"}
+    assert calls == [["apt-mark", "showhold"]]
+
+
+def test_an_upgrade_line_that_can_not_be_read_is_a_failed_query():
+    with pytest.raises(check.QueryError):
+        check.pending_packages(run=lambda argv, **kwargs: Proc(0, "Inst odd [1.0] no lists\n"))
+
+
+def test_the_lists_of_the_simulation_have_the_names_of_the_release_files(tmp_path):
+    """apt names a list by its Label and its Suite, so do the Dates. A list with no Label
+    has an empty name in the simulation, whatever its Origin (apt 2.8 prints
+    "(2.0 stable [all])"), so its Date has that name too."""
+    release(tmp_path, "archive_dists_noble-updates_InRelease", "Ubuntu", "noble-updates", FRESH)
+    release(tmp_path, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", STALE)
+    (tmp_path / "ppa_dists_noble_InRelease").write_text(
+        "Origin: LP-PPA-ubuntugis-ubuntugis-unstable\nLabel: ubuntugis-unstable\nSuite: noble\nDate: " + STALE + "\n")
+    (tmp_path / "odd_dists_x_InRelease").write_text("Origin: Odd\nSuite: x\nDate: not a date\n")
+    (tmp_path / "vendor_dists_stable_InRelease").write_text("Origin: Vendor\nSuite: stable\nDate: " + STALE + "\n")
+    assert check.list_dates(tmp_path) == {UPDATES: NOW - 3 * 3600, SECURITY: NOW - 5 * DAY,
+                                          "ubuntugis-unstable/noble": NOW - 5 * DAY, "/stable": NOW - 5 * DAY}
+    simulated = check.pending_packages(run=lambda argv, **kwargs: Proc(0, SIMULATION))
+    assert set(simulated["gdal-data"]) <= set(check.list_dates(tmp_path))
+    no_label = check.pending_packages(run=lambda argv, **kwargs: Proc(0, "Inst tool [1.0] (2.0 stable [all])\n"))
+    assert no_label == {"tool": ("/stable",)} and set(no_label["tool"]) <= set(check.list_dates(tmp_path))
+
+
+@pytest.mark.parametrize("query", ["pending_packages", "every_upgrade", "held_packages"])
 @pytest.mark.parametrize("answer", [Proc(100, ""), OSError("no apt-get"), subprocess.TimeoutExpired("apt-get", 600)])
-def test_an_apt_get_that_fails_is_a_failed_query(answer):
+def test_an_apt_get_or_apt_mark_that_fails_is_a_failed_query(answer, query):
     def fake_run(argv, **kwargs):
         if isinstance(answer, Exception):
             raise answer
         return answer
 
     with pytest.raises(check.QueryError):
-        check.pending_packages(run=fake_run)
+        getattr(check, query)(run=fake_run)
 
 
 def release(directory, name, origin, suite, date):
@@ -246,8 +445,9 @@ def test_no_release_file_is_a_failed_query(tmp_path):
         check.lists_time(tmp_path)
 
 
-@pytest.mark.parametrize("text", ["not json", '{"version": 2, "first_pending": {}}', '{"version": 1}',
-                                  '{"version": 1, "first_pending": {"a": "x"}}'])
+@pytest.mark.parametrize("text", ["not json", '{"version": 3, "first_seen": {}, "lists": {}}', '{"version": 1}',
+                                  '{"version": 1, "first_pending": {"a": "x"}}', '{"version": 2, "first_seen": {}}',
+                                  '{"version": 2, "first_seen": {}, "lists": {"a": "x"}}'])
 def test_a_state_file_that_can_not_be_read_is_a_failed_query(tmp_path, text):
     (tmp_path / "state.json").write_text(text)
     with pytest.raises(check.QueryError):
@@ -255,17 +455,32 @@ def test_a_state_file_that_can_not_be_read_is_a_failed_query(tmp_path, text):
 
 
 def test_no_state_file_starts_with_no_upgrade_seen(tmp_path):
-    assert check.read_state(tmp_path / "state.json") == {}
+    assert check.read_state(tmp_path / "state.json") == state_of()
 
 
-def fake_apt(tmp_path, stdout, code=0):
-    """A directory with an apt-get that prints stdout, first on PATH."""
+def test_a_state_file_of_the_old_form_keeps_its_clocks_and_has_no_dates(tmp_path):
+    (tmp_path / "state.json").write_text('{"version": 1, "first_pending": {"openssl": 1794000000}}')
+    assert check.read_state(tmp_path / "state.json") == state_of({"openssl": 1_794_000_000.0})
+
+
+def test_a_state_file_of_the_new_form_is_read_as_it_was_written(tmp_path):
+    state = state_of({"openssl": NOW - DAY}, {UPDATES: NOW - 2 * DAY})
+    (tmp_path / "state.json").write_text(check.state_text(state))
+    assert check.read_state(tmp_path / "state.json") == state
+    assert json.loads((tmp_path / "state.json").read_text())["version"] == 2
+
+
+def fake_apt(tmp_path, stdout, code=0, holds=""):
+    """A directory with an apt-get that prints stdout, and an apt-mark that prints
+    holds, first on PATH."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     (bin_dir / "out").write_text(stdout)
-    apt = bin_dir / "apt-get"
-    apt.write_text(f"#!/bin/sh\ncat '{bin_dir / 'out'}'\nexit {code}\n")
-    apt.chmod(0o755)
+    (bin_dir / "holds").write_text(holds)
+    for name, out in (("apt-get", "out"), ("apt-mark", "holds")):
+        tool = bin_dir / name
+        tool.write_text(f"#!/bin/sh\ncat '{bin_dir / out}'\nexit {code}\n")
+        tool.chmod(0o755)
     return bin_dir
 
 
@@ -274,12 +489,13 @@ def root_answer(path, answer=0, moment=NOW, uid=0):
                                 "message": f"uid {uid}: an answer"}))
 
 
-def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW, writes=None, root=0):
-    monkeypatch.setenv("PATH", f"{fake_apt(tmp_path, SIMULATION, code)}:/usr/bin:/bin")
+def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW, writes=None, root=0, simulation=SIMULATION):
+    monkeypatch.setenv("PATH", f"{fake_apt(tmp_path, simulation, code)}:/usr/bin:/bin")
     monkeypatch.setattr(check.time, "time", lambda: now)
     lists = tmp_path / "lists"
     lists.mkdir(exist_ok=True)
     release(lists, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", lists_date)
+    release(lists, "archive_dists_noble-updates_InRelease", "Ubuntu", "noble-updates", lists_date)
     out = tmp_path / "textfile"
     out.mkdir(exist_ok=True)
     tried = []
@@ -303,14 +519,28 @@ def test_the_run_writes_the_whole_file_in_one_step_and_keeps_its_state(tmp_path,
     raw = (out / "tnwks_security_host_check_distro.prom").read_bytes()
     assert not raw.startswith(b"\xef\xbb\xbf") and b"\r" not in raw
     families = textfile.parse(raw.decode())
-    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM, severity="high") == 0
+    # No state file: the age of each upgrade is not known, so it counts as old.
+    assert result(families) == 4
     state = json.loads((tmp_path / "state.json").read_text())
-    assert state == {"version": 1, "first_pending": {"libssl3t64": NOW, "openssl": NOW}}
+    assert state == {"version": 2, "first_seen": {"libssl3t64": 0.0, "openssl": 0.0, "gdal-data": 0.0, "docker-ce": 0.0},
+                     "lists": {UPDATES: NOW - 3 * 3600, SECURITY: NOW - 3 * 3600}}
 
-    rc, out = main(tmp_path, monkeypatch, now=NOW + 15 * DAY, lists_date="Sat, 28 Nov 2026 09:00:00 UTC")
+    # The upgrades are installed; two new ones come out. The next run dates them by
+    # the Dates that the state keeps.
+    later = "\n".join(line for line in SIMULATION.replace("libssl3t64", "libc6").replace("openssl", "curl").splitlines()
+                      if "gdal" not in line and "docker" not in line) + "\n"
+    rc, out = main(tmp_path, monkeypatch, now=NOW + 6 * 3600, lists_date="Sat, 14 Nov 2026 09:00:00 UTC",
+                   simulation=later)
+    assert rc == 0
+    assert result(textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())) == 0
+    assert json.loads((tmp_path / "state.json").read_text())["first_seen"] == {
+        "libc6": NOW - 3 * 3600, "curl": NOW - 3 * 3600}
+
+    rc, out = main(tmp_path, monkeypatch, now=NOW + 15 * DAY, lists_date="Sat, 28 Nov 2026 09:00:00 UTC",
+                   simulation=later)
     assert rc == 0
     families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
-    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM, severity="high") == 2
+    assert result(families) == 2
     assert sorted(p.name for p in out.iterdir()) == ["tnwks_security_host_check_distro.prom"]
 
 
@@ -338,7 +568,16 @@ def test_the_first_run_writes_the_state(tmp_path, monkeypatch):
     assert not (tmp_path / "state.json").exists()
     rc, _ = main(tmp_path, monkeypatch)
     assert rc == 0
-    assert json.loads((tmp_path / "state.json").read_text())["version"] == 1
+    assert json.loads((tmp_path / "state.json").read_text())["version"] == 2
+
+
+def test_a_run_with_a_failed_query_leaves_the_state_as_it_was(tmp_path, monkeypatch):
+    """Design Doc 0004, section 5.6: only a run with a result writes the state."""
+    state = state_of({"openssl": NOW - DAY}, {UPDATES: NOW - 2 * DAY})
+    (tmp_path / "state.json").write_text(check.state_text(state))
+    rc, _ = main(tmp_path, monkeypatch, lists_date=STALE)
+    assert rc == 1
+    assert check.read_state(tmp_path / "state.json") == state
 
 
 def refuse(monkeypatch):
@@ -505,8 +744,9 @@ def test_the_write_test_runs_first_and_each_try_is_a_series_with_its_uid():
         order.append("writes")
         return [(0, check.WRITTEN, "uid 0: the write succeeded"), (1000, check.LINUX_REFUSED, "uid 1000: Linux")]
 
-    measured = check.measure(NOW, 14, 72, {}, packages=lambda: order.append("packages") or [],
-                             lists=lambda: order.append("lists") or NOW, reboot=lambda: False, writes=writes)
+    measured = check.measure(NOW, 14, 72, state_of(), packages=lambda: order.append("packages") or {},
+                             lists=lambda: order.append("lists") or NOW, reboot=lambda: False, writes=writes,
+                             upgrades=dict, holds=set)
     assert order == ["writes", "lists", "packages"]
     assert measured["failed"] == ["textfile-write"]
     families = textfile.parse(check.render(SYSTEM, measured, NOW))
@@ -546,19 +786,50 @@ def test_the_answer_of_root_must_be_owned_by_root_and_not_be_a_link(tmp_path, mo
     assert check.read_root_result(link, NOW)[:2] == (0, check.NOT_DONE)
 
 
+def test_a_fifo_or_a_directory_in_the_place_of_the_answer_is_not_done_at_once(tmp_path):
+    """The distro user could put a FIFO in that place when the step of root writes no
+    answer. Without O_NONBLOCK the open would wait for a writer until the service times
+    out, and the run would write nothing. The alarm ends the test if the open waits."""
+    fifo = tmp_path / "write-test.json"
+    os.mkfifo(fifo)
+    directory = tmp_path / "dir.json"
+    directory.mkdir()
+
+    def waited(signum, frame):
+        raise TimeoutError("the open waited for a writer")
+
+    before = signal.signal(signal.SIGALRM, waited)
+    signal.alarm(5)
+    try:
+        for path in (fifo, directory):
+            uid, answer, message = check.read_root_result(path, NOW)
+            assert (uid, answer) == (0, check.NOT_DONE) and "not a regular file" in message, path
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, before)
+
+
 # The image of the jobs of the repository that run Python; Debian has setpriv.
 PYTHON_IMAGE = ("docker.io/library/python:3.15.2-slim-trixie"
                 "@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928")
-READ_AS_NOBODY = ("from pathlib import Path; import time; m = {}; "
+READ_AS_NOBODY = ("from pathlib import Path; import sys, time; m = {}; "
                   "exec(compile(open('/check.py').read(), 'check', 'exec'), m); "
+                  "m['ROOT_UID'] = int(sys.argv[1]) if len(sys.argv) > 1 else 0; "
                   "print(m['read_root_result'](Path('/run/t/write-test.json'), time.time())[1])")
+# A file in the form of an answer of root that refuses: version 1, uid 0, answer 0, now.
+FORGE_AS_NOBODY = ("import json, os, time; "
+                   "open('/run/t/own.json', 'w').write(json.dumps({'version': 1, 'uid': 0, 'answer': 0, "
+                   "'time': time.time(), 'message': 'uid 0: refused'})); "
+                   "os.replace('/run/t/own.json', '/run/t/write-test.json')")
 
 
 def test_an_answer_that_root_writes_is_read_by_the_distro_user_and_not_one_of_its_own():
     """The case of the service, across two users in a container with no network: root
     writes the answer (the step with the prefix +), and a user with no capability reads
     it. That user owns the runtime directory, as the distro user does, so it can put a
-    file of its own in that place: the check then reads no answer (3)."""
+    file of its own in that place, in the form of a refusal: the check then reads no
+    answer (3). Read as if root were uid 65534, the same file is a refusal (0), so only
+    the check of the owner tells them apart. A FIFO in that place is no answer at once."""
     if not shutil.which("docker"):
         if os.environ.get("CI"):
             pytest.fail("Docker is needed to test the answer of root across users")
@@ -570,16 +841,21 @@ python3 /check.py --system X --textfile-dir /out --write-test-dir /textfile --wr
   --write-test-result /run/t/write-test.json || true
 stat -c '%a %u' /run/t/write-test.json
 {nobody} python3 -c "{READ_AS_NOBODY}"
-{nobody} sh -c 'echo {{}} > /run/t/own.json && mv -f /run/t/own.json /run/t/write-test.json'
+{nobody} python3 -c "{FORGE_AS_NOBODY}"
 {nobody} python3 -c "{READ_AS_NOBODY}"
+{nobody} python3 -c "{READ_AS_NOBODY}" 65534
+{nobody} sh -c 'rm -f /run/t/write-test.json && mkfifo /run/t/write-test.json'
+{nobody} timeout 20 python3 -c "{READ_AS_NOBODY}"
 """
     result = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{SCRIPT}:/check.py:ro",
                              PYTHON_IMAGE, "sh", "-c", script],
                             capture_output=True, text=True, timeout=600, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    mode, root_read, own_read = result.stdout.split("\n")[-4:-1]
+    mode, root_read, own_read, own_as_root, fifo_read = result.stdout.split("\n")[-6:-1]
     # Root may write in the plain directory of the container: answer 1, read as written.
-    assert (mode, root_read, own_read) == ("644 0", str(check.WRITTEN), str(check.NOT_DONE))
+    assert (mode, root_read) == ("644 0", str(check.WRITTEN))
+    assert (own_read, own_as_root) == (str(check.NOT_DONE), str(check.REFUSED))
+    assert fifo_read == str(check.NOT_DONE)
 
 
 def test_the_mode_of_a_file_lets_the_distro_user_read_the_answer_of_root(tmp_path):
@@ -697,9 +973,10 @@ def test_the_result_series_has_the_label_names_of_the_windows_host_check():
     text = (WINDOWS / "files/Invoke-TnwksHostCheck.ps1").read_text()
     line = next(row for row in text.splitlines() if "Add-Line 'homelab_security_check_result'" in row)
     windows = re.findall(r"(\w+) = \$", line.split("[ordered]@{", 1)[1])
-    measured = check.measure(NOW, 14, 72, {}, packages=list, lists=lambda: NOW, reboot=lambda: False)
+    measured = check.measure(NOW, 14, 72, state_of(), packages=dict, lists=lambda: NOW, reboot=lambda: False,
+                             upgrades=dict, holds=set)
     families = textfile.parse(check.render(SYSTEM, measured, NOW))
-    (labels,) = textfile.series(families, RESULT)
+    labels, _ = textfile.series(families, RESULT)
     assert sorted(windows) == sorted(name for name, _ in labels) == ["check", "severity", "source", "system"]
 
 
@@ -845,4 +1122,35 @@ def test_each_distro_of_the_inventory_lists_the_host_check_in_the_registry():
     controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
     named = {item["check"] for line in controls for item in line["checks"].get("wsl-distro", [])
              if item["source"] == "host-check"}
-    assert named == set(check.SEVERITY) == {"updates-pending"}
+    assert named == set(check.SEVERITY) == {"updates-pending", "updates-held"}
+
+
+def test_a_refresh_of_the_lists_during_a_run_starts_no_clock_late():
+    """The simulation of run k sees lists dated 60 hours before the run. An upgrade comes
+    out 50 hours before the run, and a refresh during run k, after the simulations, brings
+    it in. The run stores the Dates that it read before the simulations, so the next run
+    starts the clock of that upgrade at the old Date: early, not 50 hours late."""
+    lists_now = {UPDATES: NOW - 60 * 3600}
+
+    def simulation():
+        # apt-daily refreshes the lists while the simulations run.
+        lists_now[UPDATES] = NOW - 60
+        return {}
+
+    run_k = check.measure(NOW, 14, 72, state_of({}, {UPDATES: NOW - 70 * 3600}), packages=simulation,
+                          lists=lambda: NOW - 3600, upgrades=dict, holds=set, writes=lambda: PASSING_TRIES,
+                          dates=lambda: dict(lists_now))
+    assert run_k["failed"] == [] and run_k["state"]["lists"] == {UPDATES: NOW - 60 * 3600}
+    after, _ = run(state=run_k["state"], packages=["openssl"], now=NOW + 6 * 3600)
+    assert after["state"]["first_seen"] == {"openssl": NOW - 60 * 3600}
+    _, families = run(state=after["state"], packages=["openssl"], now=NOW - 60 * 3600 + 14 * DAY + 60)
+    assert result(families) == 1, "the clock of the old order started at the refresh, 60 hours late"
+
+
+def test_an_upgrade_of_the_plain_simulation_counts_also_when_the_second_one_does_not_offer_it():
+    """Each run joins the packages of the plain simulation to the second list, so an
+    upgrade that only the plain one offers gets a clock and fails pending."""
+    state = state_of({"openssl": NOW - 20 * DAY}, {UPDATES: NOW - 3600})
+    measured, families = run(state=state, packages=["openssl"], upgrades=["curl"])
+    assert result(families) == 1
+    assert measured["state"]["first_seen"] == {"openssl": NOW - 20 * DAY, "curl": NOW - 3600}

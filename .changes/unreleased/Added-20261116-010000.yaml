@@ -1,0 +1,3 @@
+kind: Added
+body: 'Security: the host checks of each Windows host and each WSL distro add the check updates-held, for a held package or a hidden update that is not optional, older than 14 days (severity high). In a distro, each package has one clock whether it waits, is held or is phased; an upgrade that a run sees first is dated by the Date of its package list (by its Label), read before the simulations of the last run with a result, or counts as old with no such Date; and only a run with a result writes the state file.'
+time: 2026-11-16T01:00:00.000000000Z

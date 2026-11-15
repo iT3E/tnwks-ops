@@ -23,6 +23,10 @@ pass:
   updates-pending      each software update that Windows Update offers and
                        that is not installed, released more than
                        -UpdatesMaxAgeDays ago
+  updates-held         each hidden software update that is not installed,
+                       released more than -UpdatesMaxAgeDays ago (Design Doc
+                       0004, section 5.7): a hidden update never shows in
+                       updates-pending
 
 When one query fails, the file has no result and no time of the last result,
 so the rules of the registry read the source as late for this host
@@ -60,6 +64,7 @@ $script:Help = [ordered]@{
     homelab_security_host_defender_last_scan_timestamp_seconds = 'The Unix time at which the newest quick or full scan of Defender ended.'
     homelab_security_host_firewall_enabled                = 'Whether one profile of the firewall is on in the active store: 1 on, 0 off.'
     homelab_security_host_updates_pending                 = 'The number of updates that the host can install and has not installed.'
+    homelab_security_host_updates_held                    = 'The number of updates that the host holds back or hides, and has not installed.'
     homelab_security_host_updates_last_install_timestamp_seconds = 'The Unix time of the newest update that the host installed.'
     homelab_security_host_reboot_pending                  = 'Whether the host waits for a restart to finish an update: 1 yes, 0 no.'
 }
@@ -76,6 +81,7 @@ $script:Severity = [ordered]@{
     'defender-signatures' = 'high'
     'firewall-enabled'    = 'high'
     'updates-pending'     = 'high'
+    'updates-held'        = 'high'
 }
 $script:Profiles = @('Domain', 'Private', 'Public')
 
@@ -95,18 +101,31 @@ function Get-TnwksUpdateSession {
     New-Object -ComObject Microsoft.Update.Session
 }
 
-function Get-TnwksPendingUpdates {
-    # Software updates that Windows Update offers and that are not installed.
-    # Not hidden, and not optional (BrowseOnly), as Windows would install
-    # them. The search asks Windows Update itself, so a stale local cache
-    # can not give an empty list.
+function Search-TnwksUpdates([string]$Criteria) {
+    # The search asks Windows Update itself, so a stale local cache can not
+    # give an empty list.
     $searcher = (Get-TnwksUpdateSession).CreateUpdateSearcher()
     $searcher.Online = $true
-    $found = $searcher.Search("IsInstalled=0 and IsHidden=0 and BrowseOnly=0 and Type='Software'")
+    $found = $searcher.Search($Criteria)
     # 2 is orcSucceeded. Any other code is a search that did not finish.
     if ($found.ResultCode -ne 2) { throw "the search of Windows Update ended with code $($found.ResultCode)" }
     # One release time for each update, on the output.
     foreach ($update in $found.Updates) { [datetime]$update.LastDeploymentChangeTime }
+}
+
+function Get-TnwksPendingUpdates {
+    # Software updates that Windows Update offers and that are not installed.
+    # Not hidden, and not optional (BrowseOnly), as Windows would install
+    # them.
+    Search-TnwksUpdates "IsInstalled=0 and IsHidden=0 and BrowseOnly=0 and Type='Software'"
+}
+
+function Get-TnwksHeldUpdates {
+    # Software updates that are hidden and not installed: Windows does not
+    # install them, and the search of updates-pending does not list them. Not
+    # optional (BrowseOnly), as in that search: the two count the same kind of
+    # update, and differ only in IsHidden.
+    Search-TnwksUpdates "IsInstalled=0 and IsHidden=1 and BrowseOnly=0 and Type='Software'"
 }
 
 function Get-TnwksLastInstall {
@@ -198,6 +217,14 @@ function Measure-TnwksHostCheck {
         $details.Add(@('homelab_security_host_updates_pending', [ordered]@{}, $released.Count))
     } catch {
         $failed.Add('updates')
+    }
+
+    try {
+        $hidden = @(Get-TnwksHeldUpdates)
+        $results['updates-held'] = @($hidden | Where-Object { ($Now - $_).TotalDays -gt $UpdatesMaxAgeDays }).Count
+        $details.Add(@('homelab_security_host_updates_held', [ordered]@{}, $hidden.Count))
+    } catch {
+        $failed.Add('updates-held')
     }
 
     # Facts of the updates that no check reads: a fault here leaves out the
