@@ -249,13 +249,13 @@ the collector refuses a series with two texts.
 Each check gives the number of items that fail it, and 0 is a pass. Each
 result carries the label `severity`. `SecurityFindingNew` reads `high` and
 `critical` only, so the checks that section 4.1.4 of Design Doc 0004 names
-for the alert are `high`, and old signatures, which it does not name, are
-`medium`: they show on the board and do not alert.
+for the alert are `high`. Old signatures are `high` too (section 5.8): a
+fail alerts in one cycle, and not only on the board.
 
 | Check | What it reads | What fails | Severity |
 | --- | --- | --- | --- |
 | `defender-enabled` | `Get-MpComputerStatus` | Each of the Defender service, the antivirus and real-time protection that is off | `high` |
-| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `medium` |
+| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `high` (Design Doc 0004, section 5.8) |
 | `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off | `high` |
 | `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) | `high` |
 | `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each package whose upgrade this check first saw more than 14 days ago. A package list does not say when an upgrade came out, so the check keeps the first time it saw each upgrade in `/var/lib/tnwks-host-check/state.json`, and the clock of a package starts at the first run that sees it | `high` |
