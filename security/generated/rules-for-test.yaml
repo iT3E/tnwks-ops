@@ -3742,18 +3742,19 @@ groups:
       > 900) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl-02",check="k8s-audit"}[10m]))
       or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl-02"}[10m])
       > 129600) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl-02"}[10m]))
-      or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}[10m])
-      > 43200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}[10m]))
-      or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02"}[10m])
+      or label_replace(max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}[10m])
+      > 43200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}[10m])),
+      "behind_site", "homelab-wsl", "", "") or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02"}[10m])
       > 43200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02"}[10m]))
-      or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI-ubuntu"}[10m])
-      > 43200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI-ubuntu"}[10m]))
-      or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02-ubuntu"}[10m])
+      or label_replace(max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI-ubuntu"}[10m])
+      > 43200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI-ubuntu"}[10m])),
+      "behind_site", "homelab-wsl", "", "") or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02-ubuntu"}[10m])
       > 43200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02-ubuntu"}[10m]))
-      or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="sce-rtr01",check="routeros"}[10m])
-      > 900) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="sce-rtr01",check="routeros"}[10m]))
-      or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="api-check",system="sce-rtr01"}[10m])
-      > 129600) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="api-check",system="sce-rtr01"}[10m]))
+      or label_replace(max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="sce-rtr01",check="routeros"}[10m])
+      > 900) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="sce-rtr01",check="routeros"}[10m])),
+      "behind_site", "homelab-wsl", "", "") or label_replace(max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="api-check",system="sce-rtr01"}[10m])
+      > 129600) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="api-check",system="sce-rtr01"}[10m])),
+      "behind_site", "homelab-wsl", "", "")
     for: 10m
     labels:
       severity: warning
@@ -3761,6 +3762,19 @@ groups:
       summary: A security source is late for {{ $labels.system }}
       description: The newest result of {{ $labels.source }} for {{ $labels.system }} is older than its limit, or
         the source serves no time. The board shows no evidence for it.
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster
+        }}
+  - alert: SecurityHostUnreachable
+    expr: up{job="windows-exporter-security",behind_site!=""} == 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: This site can not scrape the exporter of {{ $labels.instance }}
+      description: 'The scrape of windows_exporter on {{ $labels.instance }} fails: {{ $labels.behind_site }} is
+        away (its power or its link), the link between the sites is down, or windows_exporter on that host stopped.
+        The results of the systems behind {{ $labels.behind_site }} wait, and their late alerts, and PeerSiteUnreachable
+        of that site, are held while this fires.'
       dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster
         }}
   - alert: SecurityAcceptedFindingExpired

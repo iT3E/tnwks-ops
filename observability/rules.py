@@ -489,8 +489,15 @@ SECURITY_FINDING_SEVERITY = "high|critical"
 SECURITY_FINDING_HOLD = "1h"
 # One value for each check: no pod, instance, container or endpoint (they change
 # when the pod that serves a result starts again), and no severity (a check
-# whose severity changes is not a new finding).
-SECURITY_FINDING_LABELS = "k8s_cluster, source, check, system"
+# whose severity changes is not a new finding). standby: a series that the other
+# site scrapes for itself (SECURITY_STANDBY_JOB), kept so the alert can tell it.
+SECURITY_FINDING_LABELS = "k8s_cluster, source, check, system, standby"
+# The host check of both Windows hosts (Design Doc 0004, section 5.5). homelab-wsl-02
+# scrapes their security series in this job, and homelab-wsl scrapes them in the
+# job windows-exporter with the label standby="true". homelab-wsl federates the
+# `up` of this job from homelab-wsl-02: while that `up` is 1 for a host, site 2 has
+# the results of that host, and the standby series of the host do not alert here.
+SECURITY_STANDBY_JOB = "windows-exporter-security"
 SECURITY_FINDING_RECORD = "homelab:security_check_result_high:max"
 
 
@@ -768,15 +775,24 @@ def security_alerts():
     result = SECURITY_FINDING_RECORD
     day_before = f"max_over_time({result}[1d] offset {SECURITY_FINDING_HOLD})"
     hold_before = f"{result} offset {SECURITY_FINDING_HOLD}"
+    # A standby series (SECURITY_STANDBY_JOB) is held while homelab-wsl-02 scrapes
+    # its host: the federated `up` of that host is 1. The key is k8s_cluster, which
+    # both sites give each host target. A loss of homelab-wsl-02 makes the federated
+    # `up` stale, and a failed scrape there makes it 0: the standby then alerts.
+    # The record keeps each value while it is held, so a finding that failed
+    # before is not new when the hold ends.
+    held = (f'label_replace(up{{job="{SECURITY_STANDBY_JOB}",source_site!=""}} == 1,'
+            ' "standby", "true", "", "")')
     # A result above 0 that is above each value of the day before, or was 0 one
     # hold before, or has no value in the day before (a new check, or one back
     # after more than a day). Each term holds until the hold has passed.
     return [
         {"alert": "SecurityFindingNew",
-         "expr": (f"max by (k8s_cluster, source, system) ({result} > 0 and ("
+         "expr": (f"max by (k8s_cluster, source, system) (({result} > 0 and ("
                   f"{result} > {day_before}"
                   f" or {hold_before} == 0"
-                  f" or {result} unless {day_before}))"),
+                  f" or {result} unless {day_before}))"
+                  f" unless on (k8s_cluster, standby) {held})"),
          "for": "10m", "labels": {"severity": "warning"},
          "annotations": {"summary": "A new finding of high severity on {{ $labels.system }}, from {{ $labels.source }}",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
@@ -1890,6 +1906,68 @@ def trivy_fixtures():
         {"name": "a result that comes back after a gap of less than a day does not alert", "interval": "1m",
          "input_series": [control("5.1.2", "Fail", f"2+0x600 _x600 2+0x{after}")],
          "alert_rule_test": [at(1215, []), at(1260, [])]},
+        *standby_fixtures(),
+    ]
+
+
+def standby_fixtures():
+    """Design Doc 0004, section 5.5: homelab-wsl holds the series of the host check
+    (label standby) as the standby of homelab-wsl-02. A new finding of a standby
+    series alerts only while homelab-wsl-02 does not scrape its host: no federated
+    `up` of that host (site 2 is away), or an `up` of 0 (site 2 can not reach it)."""
+    rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityFindingNew")
+    host, other = "homelab-wsl", "homelab-wsl-02"
+
+    def result(values, system="DESKTOP-HKE05KI", cluster=host, standby=True):
+        mark = ',standby="true"' if standby else ""
+        return {"series": (f'homelab_security_check_result{{k8s_cluster="{cluster}",job="windows-exporter",'
+                           f'instance="{system}",source="host-check",system="{system}",check="defender-enabled",'
+                           f'severity="high"{mark}}}'),
+                "values": values}
+
+    def up(values, cluster=host, instance="DESKTOP-HKE05KI"):
+        return {"series": (f'up{{job="{SECURITY_STANDBY_JOB}",instance="{instance}",k8s_cluster="{cluster}",'
+                           f'source_site="{other}"}}'),
+                "values": values}
+
+    def fires(system="DESKTOP-HKE05KI", cluster=host):
+        labels = {"k8s_cluster": cluster, "source": "host-check", "system": system}
+        annotations = {}
+        for key, text in rule["annotations"].items():
+            for label, value in labels.items():
+                text = text.replace("{{ $labels." + label + " }}", value)
+            annotations[key] = text
+        return [{"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}]
+
+    def at(minute, exp_alerts):
+        return {"alertname": rule["alert"], "eval_time": f"{minute}m", "exp_alerts": exp_alerts}
+
+    # A day and an hour of a pass, then a fail at minute 1500.
+    before, after = 1500, 120
+    new_fail = f"0+0x{before} 1+0x{after}"
+    return [
+        {"name": "a new finding of a standby series is held while site 2 scrapes its host", "interval": "1m",
+         "input_series": [result(new_fail), up(f"1+0x{before + after}")],
+         "alert_rule_test": [at(before + 15, []), at(before + 60, [])]},
+        {"name": "a new finding of a standby series alerts while site 2 is away", "interval": "1m",
+         "input_series": [result(new_fail), up(f"1+0x{before - 100}")],
+         "alert_rule_test": [at(before - 10, []), at(before + 15, fires())]},
+        # Reviewer's note: the hold is the scrape of that host on site 2, not
+        # the answer of the Prometheus of site 2.
+        {"name": "a new finding of a standby series alerts while site 2 answers but can not scrape its host",
+         "interval": "1m",
+         "input_series": [result(new_fail), up(f"1+0x{before} 0+0x{after}"),
+                          up(f"1+0x{before + after}", cluster=other, instance="WSL-02")],
+         "alert_rule_test": [at(before + 15, fires())]},
+        {"name": "the hold of one host does not hold the standby series of the other host", "interval": "1m",
+         "input_series": [result(new_fail, system="WSL-02", cluster=other), up(f"1+0x{before + after}")],
+         "alert_rule_test": [at(before + 15, fires(system="WSL-02", cluster=other))]},
+        {"name": "a finding that failed while held is not new when the hold ends", "interval": "1m",
+         "input_series": [result(f"0+0x60 1+0x{before + after - 60}"), up(f"1+0x{before}")],
+         "alert_rule_test": [at(before + 15, []), at(before + 60, [])]},
+        {"name": "a series with no standby label is not held by the scrape of site 2", "interval": "1m",
+         "input_series": [result(new_fail, standby=False), up(f"1+0x{before + after}")],
+         "alert_rule_test": [at(before + 15, fires())]},
     ]
 
 
