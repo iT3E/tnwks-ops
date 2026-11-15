@@ -1,0 +1,3 @@
+kind: Security
+body: 'kopiur: the agent trust domains back up to a Kopia repository of their own (ClusterRepository agents, prefix kopiur-agents/), with its own password and an S3 session from its own certificate and a role kept to that prefix. The pilot agent policy is now agent-state-v2; the snapshots of agent-state stay in the shared repository, which no longer allows agents-pilot.'
+time: 2026-11-15T12:00:00.000000000-08:00

@@ -1,0 +1,29 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The Kopia repository of the agent trust domains (docs/apps/agent-platform.md,
+# "Backups of the agent trust domains"): its own prefix of the backup bucket,
+# its own password, and an S3 session from its own certificate and role, which
+# reach that prefix only. The backup operator copies that session and that
+# password into the namespace of a trust domain before each mover run, so a
+# mover there reaches no other snapshot. homelab-wsl only, like the agents.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kopiur-agents-repository
+  namespace: flux-system
+spec:
+  dependsOn:
+    # The CRDs and the operator.
+    - name: kopiur
+    # The ConfigMap aws-backup-credentials-scripts (refresh.py) of the shared
+    # refresher, which the refresher of this repository runs too.
+    - name: aws-backup-credentials
+  path: ./kubernetes/apps/kopiur-system/agents-repository/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m
