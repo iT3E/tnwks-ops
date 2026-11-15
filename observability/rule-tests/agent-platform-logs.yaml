@@ -126,3 +126,121 @@ tests:
         eval_time: 52h
         exp_alerts:
           - exp_labels: {severity: warning, namespace: agents-pilot}
+
+  - name: a failed memory index fires until the next start, and an ok start keeps it clear
+    interval: 1m
+    input_series:
+      # Pod agent-1 started at 1m and logged result=failed at 3m. It ran
+      # until 10h; pod agent-2 started at 10h and logged result=ok at 10h3m.
+      - series: kube_pod_start_time{namespace="agents-pilot", pod="agent-1"}
+        values: 60x599 _x200
+      - series: kube_pod_init_container_info{namespace="agents-pilot", pod="agent-1", container="memory-index"}
+        values: 1x599 _x200
+      - series: kube_pod_start_time{namespace="agents-pilot", pod="agent-2"}
+        values: _x600 36000x200
+      - series: kube_pod_init_container_info{namespace="agents-pilot", pod="agent-2", container="memory-index"}
+        values: _x600 1x200
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="memory-index", result="failed"}
+        values: _x3 180 _x797
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="memory-index", result="ok"}
+        values: _x603 36180 _x197
+    alert_rule_test:
+      # The pod runs, and its step has not logged yet.
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 4m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+      # Long after the sample left the 5-minute lookback.
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 9h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+      # The new pod started and has not logged yet: the old line is older
+      # than its start.
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 601m
+        exp_alerts: []
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 605m
+        exp_alerts: []
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 13h
+        exp_alerts: []
+
+  - name: a new start that fails again fires again
+    interval: 1m
+    input_series:
+      - series: kube_pod_start_time{namespace="agents-pilot", pod="agent-1"}
+        values: 60x59 _x100
+      - series: kube_pod_init_container_info{namespace="agents-pilot", pod="agent-1", container="memory-index"}
+        values: 1x59 _x100
+      - series: kube_pod_start_time{namespace="agents-pilot", pod="agent-2"}
+        values: _x60 3600x100
+      - series: kube_pod_init_container_info{namespace="agents-pilot", pod="agent-2", container="memory-index"}
+        values: _x60 1x100
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="memory-index", result="failed"}
+        values: _x3 180 _x59 3780 _x97
+    alert_rule_test:
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 61m
+        exp_alerts: []
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 64m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+
+  - name: a failed memory index does not fire with no agent pod, nor when an old line comes back
+    interval: 1m
+    input_series:
+      # A failed start at 3m, then replicas 0 from 30m.
+      - series: kube_pod_start_time{namespace="agents-pilot", pod="agent-1"}
+        values: 60x29 _x100
+      - series: kube_pod_init_container_info{namespace="agents-pilot", pod="agent-1", container="memory-index"}
+        values: 1x29 _x100
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="memory-index", result="failed"}
+        values: _x3 180 _x126
+      # Another trust domain's line never counts: only the pilot ships.
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-main", app="agent", check="memory-index", result="failed"}
+        values: _x3 180 _x126
+      - series: kube_pod_start_time{namespace="agents-main", pod="agent-9"}
+        values: 60x129
+      - series: kube_pod_init_container_info{namespace="agents-main", pod="agent-9", container="memory-index"}
+        values: 1x129
+    alert_rule_test:
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 20m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 40m
+        exp_alerts: []
+
+  - name: an old failed line read again after an ok start does not fire
+    interval: 1m
+    input_series:
+      # Pod agent-1 failed at 3m; pod agent-2 started at 20m and logged ok
+      # at 22m. At 60m a restart of the log agent sends the old failed line
+      # again, with its old time.
+      - series: kube_pod_start_time{namespace="agents-pilot", pod="agent-1"}
+        values: 60x19 _x100
+      - series: kube_pod_start_time{namespace="agents-pilot", pod="agent-2"}
+        values: _x20 1200x100
+      - series: kube_pod_init_container_info{namespace="agents-pilot", pod="agent-1", container="memory-index"}
+        values: 1x19 _x100
+      - series: kube_pod_init_container_info{namespace="agents-pilot", pod="agent-2", container="memory-index"}
+        values: _x20 1x100
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="memory-index", result="failed"}
+        values: _x3 180 _x56 180 _x60
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="memory-index", result="ok"}
+        values: _x22 1320 _x98
+    alert_rule_test:
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 10m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 61m
+        exp_alerts: []
