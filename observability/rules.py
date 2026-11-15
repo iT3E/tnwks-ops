@@ -582,6 +582,11 @@ TRIVY_BY_REFERENCE_RECORD = "homelab:security_trivy_containers_by_reference:coun
 TRIVY_BY_REFERENCE_HOLD = "7d"
 # The check of the accepted list that mutes SecurityImagesScannedByTag of a cluster.
 TRIVY_BY_REFERENCE_CHECK = "images-scanned-by-tag"
+# A test that spans a week runs in its own file (week_fixtures()), with one evaluation
+# each 30 minutes: at one each minute it would take minutes of the CI job.
+WEEK_EVALUATION = "30m"
+TRIVY_BY_REFERENCE_WEEK_TEST = ("containers matched by reference for 7 days alert; an accepted entry mutes the alert"
+                                " of its cluster, and a cluster with no Trivy Operator does not alert")
 
 
 def trivy_reports_window():
@@ -1238,8 +1243,15 @@ def fixtures():
         *security_fixtures(),
         *audit_sink_fixtures(),
         *accepted_list_fixtures(),
-        *trivy_fixtures(),
+        *(test for test in trivy_fixtures() if test["name"] != TRIVY_BY_REFERENCE_WEEK_TEST),
     ]}
+
+
+def week_fixtures():
+    """The tests that span a week, with one evaluation each WEEK_EVALUATION
+    (observability/tests/test_week_rule_tests.py runs them)."""
+    return {"rule_files": ["rules-for-test.yaml"], "evaluation_interval": WEEK_EVALUATION,
+            "tests": [test for test in trivy_fixtures() if test["name"] == TRIVY_BY_REFERENCE_WEEK_TEST]}
 
 
 def security_fixtures():
@@ -1643,9 +1655,9 @@ def trivy_fixtures():
              {"expr": TRIVY_BY_REFERENCE_RECORD, "eval_time": "10m", "exp_samples": [
                  {"labels": f'{TRIVY_BY_REFERENCE_RECORD}{{k8s_cluster="{site}"}}', "value": 1}]},
          ]},
-        {"name": ("containers matched by reference for 7 days alert; an accepted entry mutes the alert of its cluster,"
-                  " and a cluster with no Trivy Operator does not alert"),
-         "interval": "4m",
+        {"name": TRIVY_BY_REFERENCE_WEEK_TEST,
+         # One sample at each evaluation (week_fixtures()).
+         "interval": WEEK_EVALUATION,
          "input_series": [
              series
              # The same container and report on the cluster of the site and on a second cluster with
@@ -1654,19 +1666,19 @@ def trivy_fixtures():
              for series in (
                  {key: value.replace(f'k8s_cluster="{site}"', f'k8s_cluster="{cluster}"') for key, value in item.items()}
                  for item in (
-                     pod("web", "app-1", "app", "ghcr.io/example/app:1", "sha256:d0", values="1+0x2600"),
-                     report("web", "app", "ghcr.io/example/app:1", "sha256:d2", 0, values="0+0x2600"),
+                     pod("web", "app-1", "app", "ghcr.io/example/app:1", "sha256:d0", values="1+0x400"),
+                     report("web", "app", "ghcr.io/example/app:1", "sha256:d2", 0, values="0+0x400"),
                      {"series": (f'homelab_trivy_compliance_report_update_timestamp_seconds{{k8s_cluster="{site}",'
-                                 'name="k8s-cis-1.23"}'), "values": "1700000000+0x2600"}))
+                                 'name="k8s-cis-1.23"}'), "values": "1700000000+0x400"}))
          ] + [
              # Until a time after the end of the test.
              {"series": ('homelab_security_accepted_until_timestamp_seconds{k8s_cluster="homelab-wsl-02",'
                          f'source_site="homelab-wsl-02",source="trivy",check="{TRIVY_BY_REFERENCE_CHECK}",'
-                         'system="homelab-wsl-03"}'), "values": "4102444800+0x2600"},
+                         'system="homelab-wsl-03"}'), "values": "4102444800+0x400"},
              # A cluster with no Trivy Operator: no record, no alert.
              {"series": ('kube_pod_container_info{k8s_cluster="homelab-wsl-02",namespace="web",pod="app-1",container="app",'
                          'image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d0"}'),
-              "values": "1+0x2600"},
+              "values": "1+0x400"},
          ], "alert_rule_test": [
              {"alertname": "SecurityImagesScannedByTag", "eval_time": "6d", "exp_alerts": []},
              {"alertname": "SecurityImagesScannedByTag", "eval_time": "7d2h", "exp_alerts": [
@@ -2245,6 +2257,7 @@ def generate():
         ROOT / "kubernetes/apps/monitoring/observability-evidence/rules/rules.yaml": resource,
         ROOT / "observability/generated/rules-for-test.yaml": {"groups": resource["spec"]["groups"]},
         ROOT / "observability/generated/rule-tests.yaml": fixtures(),
+        ROOT / "observability/generated/rule-tests-week.yaml": week_fixtures(),
     }
     for path, data in result.items():
         path.parent.mkdir(parents=True, exist_ok=True)
