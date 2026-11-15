@@ -10,6 +10,7 @@ it back. The scenario playbooks that use these backups are in
 | --- | --- | --- | --- | --- | --- |
 | Postgres (every app database) | CloudNativePG barman-cloud plugin | WAL continuously, base backup 01:00 | S3 `cnpg/<cluster>/` | 30 days, point-in-time | minutes |
 | App config PVCs (list below) | kopiur (Kopia) | nightly 02:00-03:00 | S3 `kopiur/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
+| Agent platform PVCs (list below) | kopiur (Kopia), repository `agents` | daily, by each policy | S3 `kopiur-agents/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
 | UniFi controller | controller auto-backup (`.unf`), `unifi-gdrive-copy` → nfs-server `/gdrive-sync` → `tnwks-gdrive-sync` | 02:00, 02:15, copied 02:30 | controller PVC + Google Drive `Backup/nfs-gdrive-sync/unifi` | 14 on the controller, 30 on the export, 30 in Drive | 24 h |
 | Aruba SW03 config | `tnwks-aruba-backup` | 02:45, saved when changed | Google Drive `Backup/aruba` | 60 versions | 24 h |
 | Everything declarative | git | every merge | GitHub | full history | 0 |
@@ -91,12 +92,21 @@ new, and list the file in `policies/kustomization.yaml`.
 
 The agent platform keeps its policies with each app instead, in its own trust
 domain's directory, since only homelab-wsl runs it
-(`docs/apps/agent-platform.md`, "The pilot agent"):
+(`docs/apps/agent-platform.md`, "The pilot agent"). They write to the
+repository of the agent trust domains (ClusterRepository `agents`, prefix
+`kopiur-agents/`), which has its own password and its own role, not to the
+shared one (`docs/apps/agent-platform.md`, "Backups of the agent trust
+domains"):
 
-| App | PVC | Why |
-| --- | --- | --- |
-| Pilot agent | `agents-pilot/agent-state` | The state of the product (sessions, workspace) and its archives. Mover user 1000 |
-| Pilot Signal daemon | `agents-pilot/signal-state` | The keys of the test Signal account and the archive of each start. Mover user 65532 |
+| App | PVC | Policy | Why |
+| --- | --- | --- | --- |
+| Pilot agent | `agents-pilot/agent-state` | `agent-state-v2` | The state of the product (sessions, workspace) and its archives. Mover user 1000 |
+| Pilot Signal daemon | `agents-pilot/signal-state` | `signal-state` | The keys of the test Signal account and the archive of each start. Mover user 65532 |
+
+The snapshots of the pilot agent from before the move (policy `agent-state`)
+stay in the shared repository until they are deleted; the runbook restores
+one of them (`docs/apps/agent-platform-runbook.md`, "A snapshot from before
+the move").
 
 Those namespaces are `restricted` and deny by default, so the policy sets the
 mover's `podSecurityContext` too, and the namespace has a `backup-mover`
@@ -229,6 +239,7 @@ kubectl get snapshotpolicies,snapshots -A
 # STS session expiry
 kubectl -n databases get secret aws-backup-sts -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
 kubectl -n kopiur-system get secret aws-backup-sts-agents -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
+kubectl get clusterrepositories
 # Desktop timers (Drive copy of the gdrive-sync export, switch config)
 systemctl list-timers 'tnwks-*.timer'
 journalctl -u tnwks-gdrive-sync -u tnwks-aruba-backup -n 20
@@ -322,6 +333,10 @@ picks a specific one. Scale the app back up when the Restore's phase is
 `Completed` (`Ready=True`, reason `RestoreSucceeded`).
 On a rebuilt cluster, the PVCs are new and empty: do the same once the app has
 created its PVC.
+
+The volumes of the agent platform restore from the repository `agents`, by
+the steps in `docs/apps/agent-platform-runbook.md` ("Restore the state of an
+agent"), which also restore a snapshot taken before the move.
 
 ### UniFi
 
