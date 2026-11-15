@@ -1789,6 +1789,75 @@ tests:
     exp_samples:
     - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
       value: 0
+- name: 'a tag moved twice and the pod runs an older image: one report of the reference counts, the worst'
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d0"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-old-app",resource_kind="ReplicaSet",resource_name="old",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d1",severity="Critical"}
+    values: 4+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d2",severity="Critical"}
+    values: 3+0x90
+  - series: homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl",name="k8s-cis-1.23"}
+    values: 1700000000+0x90
+  promql_expr_test:
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 4
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab:security_trivy_containers_by_reference:count{k8s_cluster="homelab-wsl"}
+      value: 1
+- name: containers matched by reference for 7 days alert; an accepted entry mutes the alert of its cluster, and
+    a cluster with no Trivy Operator does not alert
+  interval: 4m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d0"}
+    values: 1+0x2600
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d2",severity="Critical"}
+    values: 0+0x2600
+  - series: homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl",name="k8s-cis-1.23"}
+    values: 1700000000+0x2600
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl-03",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d0"}
+    values: 1+0x2600
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl-03",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d2",severity="Critical"}
+    values: 0+0x2600
+  - series: homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl-03",name="k8s-cis-1.23"}
+    values: 1700000000+0x2600
+  - series: homelab_security_accepted_until_timestamp_seconds{k8s_cluster="homelab-wsl-02",source_site="homelab-wsl-02",source="trivy",check="images-scanned-by-tag",system="homelab-wsl-03"}
+    values: 4102444800+0x2600
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl-02",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d0"}
+    values: 1+0x2600
+  alert_rule_test:
+  - alertname: SecurityImagesScannedByTag
+    eval_time: 6d
+    exp_alerts: []
+  - alertname: SecurityImagesScannedByTag
+    eval_time: 7d2h
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+      exp_annotations:
+        summary: 1 running containers on homelab-wsl have a Trivy report of their tag, not of the image that runs
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'For a week, containers on this cluster have run an image that no report has: the tag was pushed
+          again after the node pulled it, and the report is of the image that the tag points to now. The check image-vulnerabilities
+          counts that report. Restart the workload, so that it pulls the image of the tag, or pin a digest in its
+          pod spec. The board (Sources, Images scanned by tag only) has the count, and kubernetes/apps/security/trivy-operator/README.md
+          (The digest of a report) the detail. An entry of the accepted list with the check images-scanned-by-tag
+          mutes the alert of the cluster until its end.'
+  promql_expr_test:
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 7d2h
+    exp_samples:
+    - labels: homelab:security_trivy_containers_by_reference:count{k8s_cluster="homelab-wsl"}
+      value: 1
+    - labels: homelab:security_trivy_containers_by_reference:count{k8s_cluster="homelab-wsl-03"}
+      value: 1
 - name: a cluster with no Trivy Operator has no count of containers matched by reference
   interval: 1m
   input_series:

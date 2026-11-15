@@ -155,6 +155,11 @@ So the rules join a report to a running container by its digest first, and
 else by the namespace, the container name and the reference
 (`<registry>/<repository>:<tag>`). The second join is used only when no
 report has the digest of the container, so a container counts one report.
+When two reports have the reference and neither has the running digest (the
+tag moved twice, and the report of an old ReplicaSet is still there), the
+second join keeps the report with the most critical vulnerabilities. The
+metric has no time of the scan, so the rules can not pick the newest report,
+and the worst one never hides a fail.
 The reference of the pod spec is read as the operator reads it: Docker Hub is
 `index.docker.io`, a single name is in `library/`, and no tag is `latest`. A
 pod spec with a digest joins by its digest only: the operator writes the tag
@@ -167,7 +172,8 @@ What the second join can miss, or hide:
   number of such containers ("Images scanned by tag only", from
   `homelab:security_trivy_containers_by_reference:count`). The report is of
   the image that the tag points to now: restart the workload, or pin a
-  digest, to make it exact.
+  digest, to make it exact. When the count of a cluster stays above 0 for 7
+  days, `SecurityImagesScannedByTag` tells the owner (`security/README.md`).
 - **Two workloads in one namespace** with the same container name and the
   same reference cover for each other: the report of one counts for the
   other.
