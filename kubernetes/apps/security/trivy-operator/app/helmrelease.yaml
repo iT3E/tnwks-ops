@@ -124,13 +124,6 @@ spec:
       # Only the vulnerabilities that have a fixed version: the check
       # image-vulnerabilities is safeguard 7.4, the patching of applications.
       ignoreUnfixed: true
-      # Only the critical ones: the check image-vulnerabilities counts those
-      # (observability/rules.py), and nothing else reads a report. With every
-      # severity, the report of an image with many fixed vulnerabilities is
-      # larger than the API server stores in one object ("etcdserver: request
-      # is too large"), and that image has no report (README.md, "When a scan
-      # fails").
-      severity: CRITICAL
       # No call to a package index (such as the one of Maven) for a file that
       # the database does not know. The scan reads the registries and the
       # database, and the network policy names only those hosts.
@@ -147,13 +140,16 @@ spec:
         # one process holds, so the others stopped after 5 seconds ("cache may
         # be in use by another process: timeout") and their images had no
         # report (README.md, "When a scan fails"). The databases stay on
-        # trivy-cache, read-only for a scan.
+        # trivy-cache, read-only for a scan, but two containers can update the
+        # Java database at once (the same section).
         cache:
           backend: memory
-      # Each container of a scan job. On homelab-wsl-02 one scan container
-      # peaked at 25 MiB, and one job at 97 MiB, in a full cycle
-      # (../README.md, "Memory"). The CPU limit is the chart's
-      # default: a scan is slower, but it does not take a core from the node.
+      # Each container of a scan job. The full cycle on homelab-wsl-02 (25 MiB
+      # for one container, 97 MiB for one job) ran while one container of a
+      # job scanned at a time; now all of them scan at once, and a job is an
+      # estimate until a cycle measures it (README.md, "Memory"). The CPU
+      # limit is the chart's default: one container takes half a core at
+      # most, a job of 6 containers 3 cores.
       resources:
         requests:
           cpu: 50m
