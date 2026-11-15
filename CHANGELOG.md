@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.156.3 - 2026-11-15
+
+### Fixed
+
+* agents: the pilot config names no Brave plugin path any more (the plugin is a verified official install from the agent image since 0.4.0), so the gateway logs no load path warning at each start
+
 ## v2.156.2 - 2026-11-15
 
 ### Security
