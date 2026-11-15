@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.160.0 - 2026-11-15
+
+### Added
+
+* security: Trivy Operator on homelab-wsl, with the values of homelab-wsl-02. `peer-federate` of homelab-wsl-02 brings the two series of the registry of `trivy` from homelab-wsl, and `peer-federate` of homelab-wsl brings the accepted findings of `trivy` from homelab-wsl-02. The limits are those of homelab-wsl-02, where a full cycle peaked at 316 MiB of 512 MiB for the operator and 97 MiB for the containers of one scan job. homelab-wsl lists `trivy` in its sources in a later pull request, after its first result, so the late alert does not fire before the first scans; a test names the pending pair until then
+
 ## v2.159.2 - 2026-11-15
 
 ### Fixed
