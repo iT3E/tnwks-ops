@@ -20,6 +20,15 @@ def test_the_scan_cache_is_in_memory_and_the_databases_on_the_volume():
 
 
 
+def test_a_scan_reads_one_layer_at_a_time_under_its_limit():
+    """Five layers at a time took a scan container to its limit of 512 MiB on
+    large images, and it was killed with no report (README.md, "Memory").
+    --slow (trivy.slow) no longer sets it in Trivy 0.76."""
+    trivy = VALUES["trivy"]
+    assert trivy["configFile"]["scan"]["parallel"] == 1
+    assert mebibytes(trivy["resources"]["limits"]["memory"]) == 512
+
+
 def mebibytes(quantity):
     """A memory quantity of Kubernetes or of GOMEMLIMIT, in MiB."""
     number, unit = re.fullmatch(r"(\d+)(Mi|MiB|Gi|GiB)", quantity).groups()

@@ -3,6 +3,22 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.167.0 - 2026-11-15
+
+### Added
+
+* Security: the host checks of each Windows host and each WSL distro add the check updates-held, for a held package or a hidden update that is not optional, older than 14 days (severity high). In a distro, each package has one clock whether it waits, is held or is phased; an upgrade that a run sees first is dated by the Date of its package list (by its Label), read before the simulations of the last run with a result, or counts as old with no such Date; and only a run with a result writes the state file.
+
+### Fixed
+
+* Security: the host check of each WSL distro reads the answer of the write test of root only from a regular file, and opens it without waiting, so a FIFO in its place is "not done" at once and does not hold the run.
+
+## v2.166.1 - 2026-11-15
+
+### Fixed
+
+* security: a Trivy scan reads the layers of an image one at a time (scan.parallel 1), not 5, so a scan container of a large image no longer reaches its limit of 512 MiB and is killed with no report; the limit stays
+
 ## v2.166.0 - 2026-11-15
 
 ### Changed
