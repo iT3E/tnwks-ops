@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.156.1 - 2026-11-15
+
+### Fixed
+
+* agents: web search works in the sandboxed sessions of the pilot agent: the Brave plugin is a verified official install from the agent image 0.4.0 (the official-plugins init container, which installs it again at each start and stops the start on a plugin in the state that the image did not put there), not a plugin from plugins.load.paths, which a sandboxed session refuses
+
 ## v2.156.0 - 2026-11-15
 
 ### Added
