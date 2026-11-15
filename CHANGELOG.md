@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.166.0 - 2026-11-15
+
+### Changed
+
+* Security: the check of the Defender signatures of each Windows host and the MFA check of Terraform Cloud have the severity high, so a new fail of either starts SecurityFindingNew, as Design Doc 0004, section 5.8, selects.
+
 ## v2.165.0 - 2026-11-15
 
 ### Added

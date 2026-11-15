@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Security: the check of the Defender signatures of each Windows host and the MFA check of Terraform Cloud have the severity high, so a new fail of either starts SecurityFindingNew, as Design Doc 0004, section 5.8, selects.'
-time: 2026-11-16T03:00:00.000000000Z
