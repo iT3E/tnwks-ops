@@ -243,7 +243,8 @@ README has the contract of the pod.
 daemon stays in the repository but out of `pilot/kustomization.yaml`, and
 the config of the agent has no Signal channel. When the test Signal number
 exists, one change turns it on: the daemon in the kustomization, the
-`dependsOn` of the agent, the channel and its plugin in `openclaw.json`,
+`dependsOn` of the agent, the channel, its plugin and its id in
+`plugins.allow` in `openclaw.json`,
 the rule to the daemon in the agent's network policy, and the two Signal
 keys in the secret. Then link the number (below).
 
@@ -286,6 +287,22 @@ the sandbox plugin copies the workspace only.
   design change: the exec approvals of the product cover host commands
   only, so a hold of an outward message needs a plugin hook
   (`before_tool_call` with `requireApproval`).
+  **Plugins.** `plugins.allow` names the plugins that the agent loads:
+  `brave` (web search), `diagnostics-otel` (the traces), `memory-core`
+  (memory search), `openshell` (the sandbox backend) and `telegram` (the
+  channel). Without the list, the product enables each plugin that it finds
+  by default: the bundled ones, and any plugin in the state directory
+  (`state/extensions`, or an install record in the state database)
+  (`src/plugins/config-activation-shared.ts:138` and `:170` at 2026.11.3). With it, a plugin that is not in the list does not
+  load, in `doctor` or in the gateway. The list leaves out 13 bundled
+  plugins that loaded before it: the model providers `anthropic`, `openai`,
+  `xai` and `ollama` (the model and the embeddings go through the model
+  gateway, with the product's own clients), and `browser`, `canvas`,
+  `cua-computer`, `device-pair`, `file-transfer`, `geolocation`, `github`,
+  `linux-node` and `talk-voice`, which give no tool to a sandboxed session
+  or are denied (`file-transfer`). A sandboxed session offers and finds the
+  same tools with and without the list. A new plugin needs its id in the
+  list, in the same change.
   `autoProviders` of the sandbox plugin is off, so no credential of the pod
   goes to a sandbox as a provider. Each channel takes messages from its one
   allowed sender, and no group. The config can't be changed from a chat

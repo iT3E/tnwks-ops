@@ -679,6 +679,11 @@ morning when the scheduled turn did not complete.
    In Loki, the `call` and `engine_error` lines of the bridge
    (`{namespace="ai", app="model-bridge"}`) for the minutes of the message.
    A plan limit is [its own case](#at-a-limit-of-the-claude-plan).
+   The start line of the gateway lists the plugins that loaded
+   (`kubectl -n agents-pilot logs deploy/agent -c agent | grep 'http server listening'`):
+   `brave, diagnostics-otel, memory-core, openshell, telegram`. A plugin
+   that is missing there is missing from `plugins.allow` or its entry in
+   `openclaw.json` ([agent-platform.md](agent-platform.md), "Plugins").
 2. **Read only, by the owner.** The log of the `agent` container
    (`kubectl -n agents-pilot logs deploy/agent -c agent --since=30m`). It
    can hold chat content, so it never ships to Loki; the owner reads it, and

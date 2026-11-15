@@ -80,6 +80,13 @@
     }
   },
   "plugins": {
+    "allow": [
+      "brave",
+      "diagnostics-otel",
+      "memory-core",
+      "openshell",
+      "telegram"
+    ],
     "load": {
       "paths": [
         "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox",
