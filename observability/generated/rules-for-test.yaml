@@ -454,12 +454,13 @@ groups:
       (homelab:security_trivy_reports:max{source_site=""})) or on (k8s_cluster) 0 * count by (k8s_cluster) (homelab:security_trivy_running_containers:info{source_site=""}))
       and on (k8s_cluster) group by (k8s_cluster) (homelab_trivy_compliance_report_update_timestamp_seconds{source_site=""})
   - record: homelab:security_check_result_high:max
-    expr: max by (k8s_cluster, source, check, system) (homelab_security_check_result{source_site="",severity=~"high|critical"})
+    expr: max by (k8s_cluster, source, check, system, standby) (homelab_security_check_result{source_site="",severity=~"high|critical"})
   - alert: SecurityFindingNew
-    expr: max by (k8s_cluster, source, system) (homelab:security_check_result_high:max > 0 and (homelab:security_check_result_high:max
+    expr: max by (k8s_cluster, source, system) ((homelab:security_check_result_high:max > 0 and (homelab:security_check_result_high:max
       > max_over_time(homelab:security_check_result_high:max[1d] offset 1h) or homelab:security_check_result_high:max
       offset 1h == 0 or homelab:security_check_result_high:max unless max_over_time(homelab:security_check_result_high:max[1d]
-      offset 1h)))
+      offset 1h))) unless on (k8s_cluster, standby) label_replace(up{job="windows-exporter-security",source_site!=""}
+      == 1, "standby", "true", "", ""))
     for: 10m
     labels:
       severity: warning
