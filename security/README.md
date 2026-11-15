@@ -334,8 +334,9 @@ by Windows is the pass.
   `/run/tnwks-host-check/write-test.json`, mode 0644, so that the check
   can read it. The check, as the distro user, reads that answer and tries
   once itself. The distro user owns that directory, so the check reads the
-  answer only from a file that root owns and that is not a link. Any other
-  file is answer 3.
+  answer only from a regular file that root owns and that is not a link.
+  Any other file is answer 3. The check opens it with `O_NONBLOCK`, so a FIFO
+  in that place is answer 3 at once, and does not hold the run.
 - **The answers.** Each try asks the kernel first (`access()` with the
   effective ids, the same check as `open()`), then makes the file with an
   exclusive create. It is a series

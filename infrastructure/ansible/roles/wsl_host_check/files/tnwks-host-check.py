@@ -323,13 +323,22 @@ def write_test(directory: Path) -> tuple[int, int, str]:
 
 def read_root_result(path: Path, now: float) -> tuple[int, int, str]:
     """The answer of the try as root, from the step before the check. A missing, old or
-    odd answer is NOT_DONE, and so is a file that root does not own, or a link."""
+    odd answer is NOT_DONE, and so is a file that root does not own, a link, or a file
+    that is not a regular file. O_NONBLOCK: a FIFO in that place opens at once, and does
+    not hold the run until the service times out."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(fd, encoding="utf-8") as handle:
-            owner = os.fstat(handle.fileno()).st_uid
-            if owner != ROOT_UID:
-                raise ValueError(f"the file is owned by uid {owner}, not by root")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError("not a regular file")
+            if info.st_uid != ROOT_UID:
+                raise ValueError(f"the file is owned by uid {info.st_uid}, not by root")
+            handle = os.fdopen(fd, encoding="utf-8")
+        except BaseException:
+            os.close(fd)
+            raise
+        with handle:
             data = json.loads(handle.read(65536))
         uid, answer, moment, message = data["uid"], data["answer"], data["time"], data["message"]
         if data.get("version") != 1 or uid != 0 or answer not in (REFUSED, WRITTEN, LINUX_REFUSED, NOT_DONE):
