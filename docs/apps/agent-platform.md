@@ -161,8 +161,9 @@ kopiur copies this session and this password into the namespace of the trust
 domain before each mover run. So a mover there, and anything that reads the
 Secrets of that namespace, reaches the snapshots of the trust domains and no
 other snapshot: not those of the household apps in `kopiur/`, and not the
-password that decrypts them. The shared repository no longer allows
-`agents-pilot`.
+password that decrypts them. The shared repository does not allow
+`agents-pilot` once the move ends ([Move a trust domain to another
+repository](#move-a-trust-domain-to-another-repository)).
 
 One repository holds every trust domain for now. A mover of one trust domain
 can still reach the snapshots of the other trust domains in it. One repository
@@ -175,6 +176,36 @@ stay in the shared repository. The policy was replaced, not edited: kopiur
 deleted its Snapshot objects with it and kept the snapshots
 (`deletion.onPolicyDelete: Retain`, the default). The runbook restores one by
 its kopia identity ("A snapshot from before the move").
+
+### Move a trust domain to another repository
+
+Two pull requests, in this order:
+
+1. Replace each SnapshotPolicy of the namespace with one of a new name on the
+   new repository, and keep the namespace in the `allowedNamespaces` of the
+   old repository. Flux deletes the old policy; kopiur keeps its snapshots.
+2. When `kubectl -n <namespace> get snapshotpolicies` no longer shows the old
+   policy, remove the namespace from the `allowedNamespaces` of the old
+   repository.
+
+Not both in one pull request. A policy that names a ClusterRepository can
+finish its delete only while its namespace is allowed there: the admission
+webhook of kopiur (0.10.20) checks that list on every update of a
+SnapshotPolicy, and the removal of the `policy-cleanup` finalizer is an
+update. Without the grant the old policy stays `Terminating`, the controller
+retries about once a minute, and the namespace gets `BlockedOnGrant` and
+`KubeApiError` events. No alert fires and the new backups are not hit. The
+pilot moved in one pull request on 2026-11-15, and its old policy stayed
+`Terminating` until the grant came back.
+
+Between the two pull requests, the change of the old repository makes it list
+its snapshots again, and kopiur makes a `Discovered` Snapshot object in the
+namespace for each snapshot of the old policy (forced `Retain`, owned by the
+old repository). Step 2 does not remove them: kopiur expires a discovered
+object by its age, its count or a snapshot that is gone, not by a lost grant.
+They do no work and hold no data; they list the snapshots from before the
+move. Deleting one never deletes its snapshot. They go when the old snapshots
+are deleted.
 
 The alerts of these backups: a failed run of the refresher is
 `KubeJobFailed`; a repository in `Failed` or `Degraded` is

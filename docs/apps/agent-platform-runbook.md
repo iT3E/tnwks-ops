@@ -1206,7 +1206,13 @@ of a day holds the daily archive of that day when the pod ran.
 
    #### A snapshot from before the move
 
-   The shared repository `s3` no longer allows `agents-pilot`, so the
+   `kubectl -n agents-pilot get snapshots.kopiur.home-operations.com` can show
+   the snapshots from before the move as `Discovered` objects (they came while
+   `s3` allowed `agents-pilot` again for the delete of the old policy,
+   [`agent-platform.md`](agent-platform.md#move-a-trust-domain-to-another-repository)).
+   Their `status.snapshot` holds the identity and the snapshot ID to use below.
+
+   The shared repository `s3` does not allow `agents-pilot` after the move, so the
    pull request of this step also adds `agents-pilot` back to
    `allowedNamespaces` in
    `kubernetes/apps/kopiur-system/kopiur/repository/clusterrepository.yaml`,
