@@ -1,6 +1,7 @@
 """The values of Trivy Operator that keep each running image with a report
 (kubernetes/apps/security/trivy-operator/README.md, "When a scan fails")."""
 
+import re
 from pathlib import Path
 
 import yaml
@@ -17,3 +18,18 @@ def test_the_scan_cache_is_in_memory_and_the_databases_on_the_volume():
     mount = VALUES["trivyOperator"]["scanJobCustomVolumesMount"]
     assert trivy["imageScanCacheDir"] in [entry["mountPath"] for entry in mount]
 
+
+
+def mebibytes(quantity):
+    """A memory quantity of Kubernetes or of GOMEMLIMIT, in MiB."""
+    number, unit = re.fullmatch(r"(\d+)(Mi|MiB|Gi|GiB)", quantity).groups()
+    return int(number) * (1024 if unit.startswith("G") else 1)
+
+
+def test_the_operator_has_its_limit_and_gomemlimit_is_90_percent_of_it():
+    """The limit of ../README.md, "Memory" (640 MiB since 2026-11-15), and the
+    soft limit of the Go runtime at 90% of it (go.dev/doc/gc-guide)."""
+    limit = mebibytes(VALUES["resources"]["limits"]["memory"])
+    assert limit == 640
+    env = {entry["name"]: entry["value"] for entry in VALUES["extraEnv"]}
+    assert mebibytes(env["GOMEMLIMIT"]) == limit * 90 // 100

@@ -324,8 +324,11 @@ by Windows is the pass.
   write reaches Windows, and a refusal there is no evidence. Root passes that
   check, so the service runs a try as root before the check (`ExecStartPre`
   with the prefix `+`), and writes its answer to
-  `/run/tnwks-host-check/write-test.json`. The check, as the distro user,
-  reads that answer and tries once itself.
+  `/run/tnwks-host-check/write-test.json`, mode 0644, so that the check
+  can read it. The check, as the distro user, reads that answer and tries
+  once itself. The distro user owns that directory, so the check reads the
+  answer only from a file that root owns and that is not a link. Any other
+  file is answer 3.
 - **The answers.** Each try asks the kernel first (`access()` with the
   effective ids, the same check as `open()`), then makes the file with an
   exclusive create. It is a series
@@ -333,7 +336,10 @@ by Windows is the pass.
   Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not
   done (the directory is gone or can not be listed, or another error). The
   message of each try names its uid, the mode and owner of the directory,
-  and the mount.
+  and the mount. A refusal is `EACCES` or `EPERM`. The message of a
+  refusal, and of a try that fails in another way, names the errno by
+  number and name. How drvfs maps a refusal of Windows to an errno is known
+  only on a host, so the first answers say it.
 - **The failed query `textfile-write`.** Root has no answer 0 (or its answer
   is missing or older than 15 minutes), or a try has 1 or 3. Then the run
   gives no result. A try that wrote removes the file that it made, and
