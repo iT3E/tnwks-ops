@@ -1263,6 +1263,7 @@ def fixtures():
         *host_fixtures(),
         *capacity_fixtures(),
         *security_fixtures(),
+        *high_check_fixtures(),
         *audit_sink_fixtures(),
         *accepted_list_fixtures(),
         *(test for test in trivy_fixtures() if test["name"] != TRIVY_BY_REFERENCE_WEEK_TEST),
@@ -1324,6 +1325,42 @@ def security_fixtures():
              {"alertname": "SecurityCertificateExpiring", "eval_time": "26h", "exp_alerts": [
                  expected("aws-security-trail-certificate")]},
          ]},
+    ]
+
+
+def high_check_fixtures():
+    """Design Doc 0004, section 5.8: the check of the Defender signatures and the MFA
+    check of Terraform Cloud are high, so a fail of each starts SecurityFindingNew. The
+    same fail at medium, as before, does not."""
+    rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityFindingNew")
+    site = "homelab-wsl"
+    checks = (("host-check", "defender-signatures", "DESKTOP-HKE05KI"),
+              ("api-check", "tfc-mfa-required", "tnwks-ops"))
+
+    def result(source, check, system, severity):
+        return {"series": (f'homelab_security_check_result{{k8s_cluster="{site}",source="{source}",'
+                           f'check="{check}",system="{system}",severity="{severity}"}}'),
+                "values": "1+0x30"}
+
+    def fires(source, system):
+        labels = {"k8s_cluster": site, "source": source, "system": system}
+        annotations = {}
+        for key, text in rule["annotations"].items():
+            for label, value in labels.items():
+                text = text.replace("{{ $labels." + label + " }}", value)
+            annotations[key] = text
+        return {"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}
+
+    return [
+        {"name": f"a fail of {check} at high starts SecurityFindingNew, and at medium it does not",
+         "interval": "1m",
+         "input_series": [result(source, check, system, "high"),
+                          result(source, check, f"{system}-medium", "medium")],
+         "alert_rule_test": [
+             {"alertname": rule["alert"], "eval_time": "5m", "exp_alerts": []},
+             {"alertname": rule["alert"], "eval_time": "15m", "exp_alerts": [fires(source, system)]},
+         ]}
+        for source, check, system in checks
     ]
 
 
