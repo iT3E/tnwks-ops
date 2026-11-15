@@ -17,7 +17,7 @@ import re
 import subprocess
 
 import yaml
-from test_hand_written_rules import ROOT, docker, run, scratch
+from test_hand_written_rules import ROOT, docker, scratch
 
 from versions import PROMETHEUS
 
@@ -104,6 +104,7 @@ for i in $(seq 1 60); do
 done
 sleep 3
 wget -qO- 'http://127.0.0.1:9090/api/v1/query?query=%7Bjob%3D%22apiserver%22%7D'
+echo
 """
 
 
@@ -128,16 +129,18 @@ def test_prometheus_keeps_only_the_denials_of_the_policy():
     }
     (work / "prometheus.yml").write_text(yaml.safe_dump(config, sort_keys=False))
     subprocess.run(["chmod", "-R", "a+rX", str(work)], check=True)
-    output = run([
-        binary, "run", "--rm", "--network", "none", "--entrypoint", "/bin/sh",
-        "--mount", f"type=bind,src={work},dst=/t,readonly",
-        PROMETHEUS, "-c", SCRIPT,
-    ])
-    # The output holds the pull lines of Docker too (stderr), so take the
-    # answer of the query by its start.
-    answer = [line for line in output.splitlines() if line.startswith('{"status"')]
-    assert answer, output[-4000:]
-    result = json.loads(answer[-1])["data"]["result"]
+    # Only stdout holds the answer of the query: Docker writes its pull lines
+    # to stderr, and they can end up on the same line in a merged output.
+    container = subprocess.run(
+        [
+            binary, "run", "--rm", "--network", "none", "--entrypoint", "/bin/sh",
+            "--mount", f"type=bind,src={work},dst=/t,readonly",
+            PROMETHEUS, "-c", SCRIPT,
+        ],
+        capture_output=True, text=True, timeout=600, check=False,
+    )
+    assert container.returncode == 0, (container.stdout + container.stderr)[-8000:]
+    result = json.loads(container.stdout.strip().splitlines()[-1])["data"]["result"]
     kept = sorted(
         tuple(sorted((k, v) for k, v in series["metric"].items() if k not in {"instance", "job"}))
         for series in result
