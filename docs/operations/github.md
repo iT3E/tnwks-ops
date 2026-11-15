@@ -16,7 +16,7 @@ PR at a time, each with its own plan.
 | Resource | Where | Notes |
 | --- | --- | --- |
 | `github_repository` | every repository of the account: public ones and private ones named in `main.tf`, and private ones held in SOPS (below) | Description, homepage, visibility, topics, features (issues, wiki, projects, discussions), merge methods and commit messages, auto-merge, branch deletion and update, sign-off, template, archived. Secret scanning and push protection on public repositories only |
-| `github_repository_ruleset` | `tnwks-ops`: `main` | Deletion and force-push blocked, PRs with squash merges only and no approvals, the required checks `Build Success`, `betterleaks / betterleaks`, `privacy / privacy` and `Owner label` from GitHub Actions. Admins and one GitHub App bypass it |
+| `github_repository_ruleset` | `tnwks-ops`: `main`; `tnwks-agent-image`: `main` (the same rules, with its checks `betterleaks / betterleaks`, `privacy / privacy`, `python / check` and `image / image`, and no `Owner label`) | Deletion and force-push blocked, PRs with squash merges only and no approvals, the required checks `Build Success`, `betterleaks / betterleaks`, `privacy / privacy` and `Owner label` from GitHub Actions. Admins and one GitHub App bypass it |
 | `github_repository_environment` | `tnwks-ops`: `external-contributions`, `openclaw-hooks`, `prod` | The owner as required reviewer of `external-contributions`; `openclaw-hooks` deploys from `main` only; `prod` from protected branches only |
 | `github_repository_environment_deployment_policy` | `tnwks-ops`: `openclaw-hooks` | The `main` branch pattern |
 | `github_actions_variable` | `tnwks-ops`: `RELEASE_APP_CLIENT_ID`, `UNIFI_TERRAFORM_ENABLED`; `tnwks-agent-image`: `RELEASE_APP_CLIENT_ID` | Values are public. `TERRAFORM_GITHUB_ENABLED` stays by hand (below) |
@@ -238,6 +238,7 @@ Left alone on purpose:
   can't be managed by the root it switches.
 - **Secrets whose values only the owner holds**: `TF_API_TOKEN` (on the
   repository and on `external-contributions`), `RELEASE_APP_PRIVATE_KEY`
+  (on `tnwks-ops` and `tnwks-agent-image`)
   and `OPENCLAW_HOOK_TOKEN`. Not even their existence is managed: a secret
   resource that is later removed from the code deletes the secret, and CI
   depends on each of them. Managing their values would mean copying them
