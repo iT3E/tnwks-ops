@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.163.0 - 2026-11-15
+
+### Added
+
+* DESKTOP-HKE05KI's windows_exporter and smartctl_exporter also admit WSL-02's address, so homelab-wsl-02's Prometheus can scrape the security series of the site 1 host over the LAN (`windows_monitoring_remote_extra`, as WSL-02 has for the other way).
+
 ## v2.162.1 - 2026-11-15
 
 ### Security
