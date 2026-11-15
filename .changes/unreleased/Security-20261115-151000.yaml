@@ -1,0 +1,3 @@
+kind: Security
+body: 'kopiur: the shared repository no longer allows agents-pilot, now that the old pilot policy agent-state is gone; its snapshots stay there under their kopia identity.'
+time: 2026-11-15T15:10:00.000000000-08:00
