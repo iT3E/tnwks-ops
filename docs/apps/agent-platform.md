@@ -320,8 +320,36 @@ the sandbox plugin copies the workspace only.
     `diagnostics.otel.captureContent`.
   - If the model gateway is down, a search finds nothing and the chat goes
     on. The start of the pod doesn't need the model gateway.
-  - To check: `openclaw memory status` in the `agent` container shows the
-    provider, the model and the count of indexed files.
+  - **The index at each start.** At this release the product does not
+    rebuild the index by itself when the embedding provider or model
+    changes. It records the provider and model in the index, and a
+    mismatch with the config only marks the index stale: each search
+    returns `stale` and no result ("index was built for model ...,
+    expected ..."). It does this by design, so that no change of config
+    starts a cost that nobody asked for. Its rebuild command
+    (`openclaw memory index`) refuses to run while the gateway owns the
+    state, so it can't run in the `agent` container.
+  - So the `memory-index` init container
+    (`agent/config/scripts/memory-index.sh`) runs `memory index --agent
+    main` at each start of the pod, after `doctor` and before the gateway.
+    A stale index gets a full rebuild. A valid one gets an incremental
+    pass, which embeds only the changed files. The product keeps a cache
+    of embeddings, so a rebuild embeds only text that it has not seen.
+    The step has a limit of 180 seconds. Its only secret is
+    `LITELLM_API_KEY`. It prints one line, `memory-index result=ok` or
+    `memory-index result=failed`, and nothing of the CLI's own output.
+  - A later change of the embedding model needs no step by hand: the
+    config change restarts the pod (Reloader), and the step rebuilds.
+  - When the step fails (the model gateway or the host's Ollama is down,
+    or the limit fires), the pod still starts. The index stays as it was,
+    so a stale index stays stale until the next start that ends with
+    `memory-index result=ok`. To check:
+    `kubectl -n agents-pilot logs deploy/agent -c memory-index`.
+  - To check a search with no chunk text, in the `agent` container (the
+    gateway answers it): `openclaw memory search "<word>" --agent main
+    --json`, keeping only `path`, `score` and `vectorScore` of each
+    result. A ready index gives results with a `vectorScore`; a stale one
+    gives `stale: true` and a warning.
 - **Web search.** The agent searches the web with `web_search`, through the
   Brave Search API (the plugin `@openclaw/brave-plugin` of the agent image,
   `tools.web.search` in the config). The gateway process of the agent pod
@@ -336,7 +364,9 @@ the sandbox plugin copies the workspace only.
     minutes. The query and the result are also in the session store
     (`state/agents/main/agent/openclaw-agent.sqlite`), like each tool call,
     so the archives, the daily backup and the nightly copy hold them
-    ([State, archives and backups](#state-archives-and-backups)).
+    ([State, archives and backups](#state-archives-and-backups)). The
+    owner accepted this for the pilot, which runs on test accounts. A
+    trust domain with real accounts needs that decision again.
   - The traces hold no query: the config doesn't set
     `diagnostics.otel.captureContent`.
   - The product leaves `web_search` out of a sandboxed session by default,
@@ -344,9 +374,10 @@ the sandbox plugin copies the workspace only.
   - **The key** is `BRAVE_API_KEY` in the Secret `agent-search-secret`
     (`kubernetes/apps/ai/agents/pilot/agent/app/secret-search.sops.yaml`).
     Only the `agent` container gets it, as an env var: not the init
-    containers, not the backup container, and no sandbox. It is one key, shared with an OpenClaw
-    deployment outside the cluster. So a leak or a rotation touches both,
-    and the usage counts of the vendor are for both.
+    containers (`memory-index` included), not the backup container, and no
+    sandbox. It is one key, shared with an OpenClaw deployment outside the
+    cluster. So a leak or a rotation touches both, and the usage counts of
+    the vendor are for both.
   - **Rotate:** make a new key at the vendor, put it in the file with
     `sops <file>` (the file above) in a PR, merge, and change the other
     deployment too. Reloader starts the pod again when the Secret
@@ -394,7 +425,7 @@ the sandbox plugin copies the workspace only.
 
 | When | What | Kept |
 | --- | --- | --- |
-| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `doctor` migrates the state, on a copy of the config | 14 days |
+| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `doctor` migrates the state, on a copy of the config, and `memory-index` brings the memory index up to date (see "The index at each start" above) | 14 days |
 | Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): once the gateway is ready, `openclaw backup create --verify` to `archives/daily/`. The command checks that the gateway owns the state, and it can only see the gateway process in the same PID namespace, so the pod shares one (`shareProcessNamespace: true`) | The last 7 |
 | Each day, after that backup | The same container: the SHA-256 of `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md` and each file under `skills/`, compared with the list of the day before (`archives/instruction-files/`). One log line for each file that is new, changed or gone, then `instruction-check result=...` | 30 days of lists |
 | Each start of the Signal daemon | `archive` init container: a `tar.gz` of `data` in `archives/start/`, with the signal-cli release | 14 days |
@@ -671,7 +702,7 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 | The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
 | The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
 | A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
-| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
+| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
 | The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
 
 Not in Loki, on purpose:

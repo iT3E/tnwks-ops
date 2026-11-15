@@ -355,7 +355,9 @@ comments, reviews and review comments.
   `.github/privacy-terms.sops.yaml`. Edit it with `task privacy:edit`: when
   the list changed, it copies it to the `PRIVACY_TERMS` secret of every
   repository that has one (CI checks against those). If that copy fails,
-  `task privacy:sync` retries it.
+  `task privacy:sync` retries it. A repository gets the list as one opaque
+  line once its check and its comment check are ready for it, and the plain
+  list until then (`bin/privacy-terms` says which).
   - Commits: `task precommit:init` installs a pre-commit hook (staged files
     and git identity) and a commit-msg hook (the message).
   - PRs: `.github/workflows/privacy.yaml` (required) checks the tree, the

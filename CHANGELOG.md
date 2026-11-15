@@ -3,6 +3,36 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.152.0 - 2026-11-15
+
+### Changed
+
+* github: secret scanning and push protection on the agent image repository
+
+## v2.151.0 - 2026-11-15
+
+### Changed
+
+* github: the agent image repository is public
+
+## v2.150.2 - 2026-11-15
+
+### Fixed
+
+* agents: the pilot pod rebuilds a stale memory index at each start (an init container after doctor), so a new embedding model needs no step by hand
+
+## v2.150.1 - 2026-11-14
+
+### Security
+
+* privacy: bin/privacy-check reads the denylist in two forms, the plain list and one opaque line that `bin/privacy-check --encode` makes from it; a value that reads as neither stops the check. Hits print as "hit: <where>" with every term in it replaced by "[term]", case is ignored outside ASCII too whatever the locale, paths print as they are rather than as escapes, and a failed search stops the check. task privacy:sync gives a repository the opaque line once its bin/privacy-check reads it and its comment check pins the fixed shared workflow, and the plain list until then, and says which. Tests in .github/scripts/test_privacy_terms.py.
+
+## v2.150.0 - 2026-11-14
+
+### Removed
+
+* tools: the runner scale set of the agent image repo, which goes public; its jobs run on GitHub-hosted runners
+
 ## v2.149.0 - 2026-11-14
 
 ### Added

@@ -174,6 +174,13 @@ locals {
       security_and_analysis = local.scanning_off
     }
 
+    tnwks-agent-image = {
+      visibility            = "public"
+      description           = "The derived image of the personal agents on the tnwks agent platform"
+      has_wiki              = false
+      security_and_analysis = local.scanning_on
+    }
+
     hass-config = {
       visibility            = "public"
       security_and_analysis = local.scanning_off
@@ -225,12 +232,6 @@ locals {
     #####################################
     # Those already named elsewhere in this repo, outside the paths
     # .github/privacy-allow exempts. The rest are sops_repositories below.
-
-    tnwks-agent-image = {
-      visibility  = "private"
-      description = "The derived image of the personal agents on the tnwks agent platform"
-      has_wiki    = false
-    }
 
     tnwks-coe = {
       visibility = "private"

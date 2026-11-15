@@ -8,13 +8,23 @@
 #   bin/privacy-check --commits A..B  # also those commits' messages and identities
 #   bin/privacy-check --message FILE  # a commit message only (commit-msg hook)
 #   bin/privacy-check --text          # stdin only (a PR body or comment you're about to post)
+#   bin/privacy-check --encode        # stdin: the list; stdout: its opaque one-line form
 #
 # Terms come from $PRIVACY_TERMS (CI: the PRIVACY_TERMS Actions secret) or
 # else from .github/privacy-terms.sops.yaml (`terms`, one per line). Edit the
 # list with `task privacy:edit`, which copies a changed list to every
 # PRIVACY_TERMS secret (bin/privacy-terms; `task privacy:sync` retries).
 #
-# Matching is case-insensitive. A term with "@" or "." matches anywhere. Any
+# The value is either the list itself (one term per line, `#` comments) or
+# one opaque line that `--encode` makes from it ("#privacy-terms:v1:" and
+# base64). A value that is neither, or one that doesn't decode, stops the
+# check with exit 2: it never runs on a list it couldn't read.
+#
+# Matching is case-insensitive, outside ASCII too: every search and the
+# mask run under a UTF-8 locale that the script sets itself, and git prints
+# paths unescaped (core.quotePath=false). A letter written as a base letter
+# plus a combining mark doesn't match the same letter written as one
+# character, or the other way round. A term with "@" or "." matches anywhere. Any
 # other term matches as a word: no letter directly before it, and no letter
 # after it except a plural/possessive "s" (so "driver" passes, "chore_x_1"
 # and "xs-api" are hits). Text in $PRIVACY_EXTRA_TEXT (CI: the PR title and
@@ -29,24 +39,114 @@
 # and GitHub text (not files): the repo is public and nothing may tie it to
 # a tool or its account (AGENTS.md). Fixed patterns, no denylist needed.
 #
-# Hits print as "term #N: <where>". The matched text is never printed, since
-# CI logs on a public repo are public.
+# Hits print as "hit: <where>", with every occurrence of a term in <where>
+# replaced by "[term]". The matched text, the term and its place in the list
+# are never printed, since CI logs on a public repo are public. Exit 0
+# clean, 1 a hit, 2 nothing checked (bad usage, no list, a list that
+# doesn't read, a search that failed).
 set -euo pipefail
+
+opaque_prefix='#privacy-terms:v1:'
+
+broken() {
+  echo "privacy-check: $1; nothing was checked" >&2
+  exit 2
+}
+
+# One matching rule whatever the caller's locale: grep -P and git grep -P
+# fold case outside ASCII only under a UTF-8 locale.
+for loc in C.UTF-8 en_US.UTF-8 ""; do
+  [[ -n "${loc}" ]] || broken "no UTF-8 locale"
+  if LC_ALL="${loc}" grep -qiP 'é' <<<'É' 2>/dev/null; then break; fi
+done
+export LC_ALL="${loc}"
+# Every grep reads its input as text (-a): under this locale, grep turns a
+# line with a byte that isn't UTF-8 into "binary file matches" otherwise.
+# Paths print as they are, not as octal escapes, in every git call.
+git() { command git -c core.quotePath=false "$@"; }
+
+# The terms of a list in either form, one per line, on stdout. Returns 1 if
+# the value is neither form, or doesn't decode. A value that mentions the
+# opaque form anywhere must be exactly one opaque line (trailing newlines
+# aside), or it doesn't read.
+read_terms() {
+  local raw lines body payload line
+  raw="$(tr -d '\r' <<<"$1")"
+  if [[ "${raw}" == *privacy-terms:* ]]; then
+    [[ "${raw}" != *$'\n'* && "${raw}" == "${opaque_prefix}"* ]] || return 1
+    body="${raw#"${opaque_prefix}"}"
+    [[ "${body}" =~ ^[A-Za-z0-9+/]+={0,2}$ ]] || return 1
+    payload="$(base64 -d <<<"${body}" 2>/dev/null | gzip -dc 2>/dev/null)" || return 1
+    [[ -n "${payload}" ]] || return 1
+    while IFS= read -r line; do
+      [[ "${line}" =~ ^[0-9a-f]{16}\ (.+)$ ]] || return 1
+      printf '%s\n' "${BASH_REMATCH[1]}"
+    done <<<"${payload}"
+    return 0
+  fi
+  lines="$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<<"${raw}" | grep -a -v -e '^$' || true)"
+  while IFS= read -r line; do
+    # A long run of base64 with no space is an encoded list that lost its
+    # prefix, not a term.
+    [[ "${line}" =~ ^[A-Za-z0-9+/=]{40,}$ ]] && return 1
+    [[ -z "${line}" || "${line}" == \#* ]] && continue
+    printf '%s\n' "${line}"
+  done <<<"${lines}"
+  return 0
+}
+
+# One opaque line from a list: each term behind its own random 16 hex
+# digits, gzip, base64. Retried until no term shows
+# up in the result (case-insensitive), so the encoded value never contains a
+# term; it fails rather than write one that does.
+encode() {
+  local -a list=("$@")
+  local t salt value ok
+  for _ in $(seq 1 50); do
+    value="${opaque_prefix}$(
+      for t in "${list[@]}"; do
+        salt="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+        printf '%s %s\n' "${salt}" "${t}"
+      done | gzip -9nc | base64 | tr -d '\n'
+    )"
+    ok=1
+    for t in "${list[@]}"; do
+      if grep -a -q -i -F -e "${t}" <<<"${value}"; then ok=""; break; fi
+    done
+    [[ -n "${ok}" ]] || continue
+    # It must read back as the same list.
+    [[ "$(read_terms "${value}")" == "$(printf '%s\n' "${list[@]}")" ]] || broken "the encoded list doesn't read back"
+    printf '%s\n' "${value}"
+    return 0
+  done
+  broken "no encoding without a term in it after 50 tries"
+}
 
 cached=""
 range=""
 message=""
 text_mode=""
+encode_mode=""
 while (($#)); do
   case "$1" in
     --cached) cached="--cached" ;;
     --commits) range="${2:?--commits needs a range}"; shift ;;
     --message) message="${2:?--message needs a file}"; shift ;;
     --text) text_mode=1 ;;
-    *) echo "usage: privacy-check [--cached] [--commits A..B] [--message FILE] [--text]" >&2; exit 2 ;;
+    --encode) encode_mode=1 ;;
+    *) echo "usage: privacy-check [--cached] [--commits A..B] [--message FILE] [--text] [--encode]" >&2; exit 2 ;;
   esac
   shift
 done
+
+# --encode: the list on stdin (either form), its opaque line on stdout.
+if [[ -n "${encode_mode}" ]]; then
+  terms_in="$(read_terms "$(cat)")" || broken "the list on stdin doesn't read"
+  mapfile -t terms <<<"${terms_in}"
+  [[ -n "${terms_in}" ]] || broken "no terms on stdin"
+  encode "${terms[@]}"
+  exit 0
+fi
 
 # Read the text inputs before changing directory (relative paths, stdin).
 input=""
@@ -73,8 +173,9 @@ if [[ -n "${PRIVACY_TERMS:-}" ]]; then
 else
   raw="$(sops -d --extract '["terms"]' "${terms_file}")"
 fi
-mapfile -t terms < <(tr -d '\r' <<<"${raw}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v -e '^$' -e '^#' || true)
-((${#terms[@]})) || { echo "privacy-check: no terms loaded" >&2; exit 2; }
+terms_in="$(read_terms "${raw}")" || broken "the term list doesn't read (neither a list nor an encoded list)"
+[[ -n "${terms_in}" ]] || broken "no terms loaded"
+mapfile -t terms <<<"${terms_in}"
 
 pattern() {
   local t q
@@ -87,71 +188,113 @@ pattern() {
   fi
 }
 
+patterns=()
+for t in "${terms[@]}"; do patterns+=("$(pattern "${t}")"); done
+
+# A location is printed with every occurrence of every term replaced by
+# "[term]" (case-insensitive, also inside a longer word), so a hit in a path
+# or a name never prints a term.
+masked() {
+  perl -MEncode -e 'binmode STDOUT, ":encoding(UTF-8)"; my ($s, @t) = map { decode("UTF-8", $_) } @ARGV;
+    for my $t (@t) { $s =~ s/\Q$t\E/[term]/gi } print $s' -- "$1" "${terms[@]}" 2>/dev/null
+}
 hits=0
-report() { echo "term #$1: $2"; hits=$((hits + 1)); }
-has() { grep -q -P -e "$1" <<<"$2"; }
+report() {
+  local where
+  where="$(masked "$1")" || broken "a search failed"
+  echo "hit: ${where}"
+  hits=1
+}
+# grep: 0 a match, 1 none, 2 an error. An error stops the check; its message
+# isn't printed, since it can quote the pattern.
+has() {
+  local st=0
+  grep -a -q -P -e "$1" <<<"$2" 2>/dev/null || st=$?
+  ((st <= 1)) || broken "a search failed"
+  return "${st}"
+}
+matches() {
+  local st=0
+  grep -a -P -e "$1" <<<"$2" 2>/dev/null || st=$?
+  ((st <= 1)) || broken "a search failed"
+}
 
 # AI attribution, wherever there's message or GitHub text.
 attribution='(?im)(generated (with|by) \[?claude|claude\.(com|ai)/claude-code|^\s*co-authored-by:.*(claude|anthropic)|noreply@anthropic\.com)'
-attr_report() { echo "AI attribution: $1"; hits=$((hits + 1)); }
+attr_report() {
+  local where
+  where="$(masked "$1")" || broken "a search failed"
+  echo "AI attribution: ${where}"
+  hits=1
+}
 if [[ -n "${message}" ]] && has "${attribution}" "${input}"; then attr_report "commit message"; fi
 if [[ -n "${text_mode}" ]] && has "${attribution}" "${input}"; then attr_report "text"; fi
 if [[ -n "${PRIVACY_EXTRA_TEXT:-}" ]] && has "${attribution}" "${PRIVACY_EXTRA_TEXT}"; then
   attr_report "PR title or body"
 fi
 if [[ -n "${range}" ]]; then
+  shas="$(git log --format='%H%x09%B%x00' "${range}" 2>/dev/null |
+    perl -MEncode -0 -ne 'BEGIN { $re = decode("UTF-8", shift @ARGV) }
+        print substr($_, 0, 40), "\n" if decode("UTF-8", $_) =~ /$re/' "${attribution}" 2>/dev/null)" ||
+    broken "git log or a search failed"
   while IFS= read -r sha; do
-    attr_report "commit ${sha:0:12} (message)"
-  done < <(git log --format='%H%x09%B%x00' "${range}" |
-    perl -0 -ne 'BEGIN { $re = shift @ARGV } print substr($_, 0, 40), "\n" if /$re/' "${attribution}" || true)
+    [[ -n "${sha}" ]] && attr_report "commit ${sha:0:12} (message)"
+  done <<<"${shas}"
 fi
 
-for i in "${!terms[@]}"; do
-  n=$((i + 1))
-  p="$(pattern "${terms[$i]}")"
+files="$(git ls-files -- "${pathspec[@]}")" || broken "git ls-files failed"
+
+for p in "${patterns[@]}"; do
 
   if [[ -n "${message}" ]]; then
-    if has "${p}" "${input}"; then report "${n}" "commit message"; fi
+    if has "${p}" "${input}"; then report "commit message"; fi
     continue
   fi
   if [[ -n "${text_mode}" ]]; then
-    if has "${p}" "${input}"; then report "${n}" "text"; fi
+    if has "${p}" "${input}"; then report "text"; fi
     continue
   fi
 
   # File contents, as path:line.
+  st=0
+  found="$(git grep ${cached} -I -n -P -e "${p}" -- "${pathspec[@]}" 2>/dev/null)" || st=$?
+  ((st <= 1)) || broken "git grep failed"
   while IFS= read -r loc; do
-    report "${n}" "${loc}"
-  done < <(git grep ${cached} -I -n -P -e "${p}" -- "${pathspec[@]}" | grep -v -F 'privacy:allow' | cut -d: -f1,2 || true)
+    [[ -n "${loc}" ]] && report "${loc}"
+  done < <(grep -a -v -F 'privacy:allow' <<<"${found}" | cut -d: -f1,2 || true)
 
   # File and directory names.
+  names="$(matches "${p}" "${files}")" || exit 2
   while IFS= read -r f; do
-    report "${n}" "path ${f}"
-  done < <(git ls-files -- "${pathspec[@]}" | grep -P -e "${p}" || true)
+    [[ -n "${f}" ]] && report "path ${f}"
+  done <<<"${names}"
 
   # The identity the next commit gets.
   if [[ -n "${cached}" ]]; then
     for v in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
       if has "${p}" "$(git var "${v}" 2>/dev/null || true)"; then
-        report "${n}" "${v} (git config user.name/user.email)"
+        report "${v} (git config user.name/user.email)"
       fi
     done
   fi
 
   if [[ -n "${range}" ]]; then
+    shas="$(git log --format='%H%x09%an <%ae>%x09%cn <%ce>%x09%B%x00' "${range}" 2>/dev/null |
+      perl -MEncode -0 -ne 'BEGIN { $re = decode("UTF-8", shift @ARGV) }
+        print substr($_, 0, 40), "\n" if decode("UTF-8", $_) =~ /$re/' "${p}" 2>/dev/null)" ||
+      broken "git log or a search failed"
     while IFS= read -r sha; do
-      report "${n}" "commit ${sha:0:12} (message or author/committer)"
-    done < <(git log --format='%H%x09%an <%ae>%x09%cn <%ce>%x09%B%x00' "${range}" |
-      perl -0 -ne 'BEGIN { $re = shift @ARGV } print substr($_, 0, 40), "\n" if /$re/' "${p}" || true)
+      [[ -n "${sha}" ]] && report "commit ${sha:0:12} (message or author/committer)"
+    done <<<"${shas}"
   fi
 
   if [[ -n "${PRIVACY_EXTRA_TEXT:-}" ]] && has "${p}" "${PRIVACY_EXTRA_TEXT}"; then
-    report "${n}" "PR title or body"
+    report "PR title or body"
   fi
 done
 
 if ((hits)); then
-  echo "privacy-check: ${hits} hit(s). Remove the term (or attribution line), or move a term to a SOPS secret." >&2
+  echo "privacy-check: found a hit. Remove the term (or attribution line), or move a term to a SOPS secret." >&2
   exit 1
 fi
-echo "privacy-check: clean (${#terms[@]} terms)"
+echo "privacy-check: clean"
