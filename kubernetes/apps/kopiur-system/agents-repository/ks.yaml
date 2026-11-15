@@ -1,6 +1,7 @@
 ---
 # yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/kustomize.toolkit.fluxcd.io/kustomization_v1.json
-# The Kopia repository of the agent trust domains (docs/operations/backups.md,
+# The Kopia repository of the agent trust domains (docs/apps/agent-platform.md,
+# "Backups of the agent trust domains"; docs/operations/backups.md,
 # "Credentials"): its own password, and an S3 session from its own certificate
 # and role, which reach the prefix kopiur-agents/ of the backup bucket only.
 # The backup operator copies that session and that password into the

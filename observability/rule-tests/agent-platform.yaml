@@ -354,3 +354,26 @@ tests:
       - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 321m, exp_alerts: []}
       - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 6h15m, exp_alerts: []}
       - {alertname: AgentBackupMoverConfigMapDenied, eval_time: 7h, exp_alerts: []}
+
+  - name: the agents repository stays Initializing; Ready, Failed and another repository do not fire
+    interval: 1m
+    input_series:
+      # Initializing from 0 to 90m, then Ready.
+      - series: kopiur_resource_phase{kind="ClusterRepository", name="agents", phase="Initializing"}
+        values: 1x90
+      - series: kopiur_resource_phase{kind="ClusterRepository", name="agents", phase="Ready"}
+        values: _x90 1x30
+      # A repository of one trust domain, Pending for 30 minutes only.
+      - series: kopiur_resource_phase{kind="ClusterRepository", name="agents-finance", phase="Pending"}
+        values: 1x30
+      - series: kopiur_resource_phase{kind="ClusterRepository", name="agents-finance", phase="Ready"}
+        values: _x30 1x90
+      # Failed is the chart rule's, and s3 is not a repository of the agents.
+      - series: kopiur_resource_phase{kind="ClusterRepository", name="agents-main", phase="Failed"}
+        values: 1x120
+      - series: kopiur_resource_phase{kind="ClusterRepository", name="s3", phase="Initializing"}
+        values: 1x120
+    alert_rule_test:
+      - {alertname: AgentBackupRepositoryNotReady, eval_time: 59m, exp_alerts: []}
+      - {alertname: AgentBackupRepositoryNotReady, eval_time: 61m, exp_alerts: [{exp_labels: {severity: warning, name: agents, phase: Initializing}}]}
+      - {alertname: AgentBackupRepositoryNotReady, eval_time: 100m, exp_alerts: []}

@@ -7,6 +7,7 @@ resources:
   - ./secret-password.sops.yaml
   - ./rbac.yaml
   - ./cronjob.yaml
+  - ./clusterrepository.yaml
 labels:
   - pairs:
       app.kubernetes.io/name: kopiur-agents-repository
