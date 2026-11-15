@@ -70,7 +70,10 @@ LOKI = "http://loki-gateway.monitoring.svc.cluster.local"
 # The version line of the router (the scheduler version_line of its Terraform):
 # "tnwks-routeros-version router=<identity> version=<version>". The router
 # sends one each hour, so the window holds about three.
-VERSION_LINE = re.compile(r"tnwks-routeros-version router=(\S+) version=([0-9][0-9.]*)")
+# The whole line, with or without the topics of the router in front (script,info),
+# as the filter of the aggregator matches it.
+VERSION_LINE = re.compile(r"(?:[a-z]+(?:,[a-z]+)* )?tnwks-routeros-version router=(\S+) version=([0-9][0-9.]*)"
+                          r"(?: \([a-z]+\))?")
 LINE_QUERY = '{job="routeros"} |= "tnwks-routeros-version "'
 LINE_WINDOW_HOURS = 3
 # More lines than this in the window is not the hourly line: no result.
@@ -232,13 +235,14 @@ def line_versions(loki: str, router: str, now: datetime.datetime, get=http_get) 
         raise QueryError(f"Loki has more than {LINE_LIMIT} version lines in {LINE_WINDOW_HOURS} hours")
     versions = set()
     for line in lines:
-        # The aggregator writes the syslog event as JSON, with the text in `message`.
+        # The aggregator writes the syslog event as JSON, with the text in `message`. A
+        # line in another form is not the whole version line: no result.
         try:
             event = json.loads(line)
             text = event.get("message") if isinstance(event, dict) else None
         except ValueError:
             text = None
-        match = VERSION_LINE.search(text if isinstance(text, str) else str(line))
+        match = VERSION_LINE.fullmatch((text if isinstance(text, str) else str(line)).strip())
         if not match:
             raise QueryError("a version line gives no version")
         if match[1] == router:

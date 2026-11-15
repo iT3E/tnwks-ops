@@ -231,11 +231,13 @@ def test_a_line_of_another_router_does_not_count(tmp_path, monkeypatch):
     assert (code, entry["failed"]) == (0, 0)
 
 
-def test_a_line_that_is_not_json_is_read_as_text():
+def test_a_line_that_is_not_the_json_of_the_aggregator_gives_no_result():
+    """The aggregator writes each event as JSON. A raw syslog line is not the whole
+    version line, so it is read as a line with no version."""
     raw = ("<14>1 2026-11-13T11:00:00Z sce-rtr01 script - - tnwks-routeros-version router=sce-rtr01"
            " version=7.90.1 (stable)")
-    get = fake(lines=(raw,))
-    assert checks.line_versions(LOKI, "sce-rtr01", NOW, get) == {(7, 90, 1)}
+    with pytest.raises(checks.QueryError):
+        checks.line_versions(LOKI, "sce-rtr01", NOW, fake(lines=(raw,)))
 
 
 def test_the_job_reads_the_lines_of_the_last_3_hours_from_the_stream_of_the_router():
@@ -257,8 +259,42 @@ def test_the_version_line_of_the_router_is_the_line_that_the_job_reads():
     assert 'version_line_prefix = "tnwks-routeros-version"' in terraform
     assert 'router=\\" . [/system identity get name] . \\" version=\\" . [/system resource get version]' in terraform
     vector = (ROOT / "kubernetes/apps/monitoring/vector/aggregator/config/vector.yaml").read_text()
-    assert '"tnwks-routeros-version "' in vector
-    assert checks.VERSION_LINE.search("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)")[2] == "7.90.1"
+    assert "tnwks-routeros-version router=" in vector
+    assert checks.VERSION_LINE.fullmatch("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)")[2] == "7.90.1"
+
+
+@pytest.mark.parametrize(("message", "versions"), [
+    ("script,info tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)", {(7, 90, 1)}),
+    ("tnwks-routeros-version router=sce-rtr01 version=7.90.1", {(7, 90, 1)}),
+    ("system,info user admin ran tnwks-routeros-version router=sce-rtr01 version=7.90.1", None),
+    ("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable) and more", None),
+])
+def test_the_job_reads_only_the_whole_version_line_as_the_filter_does(message, versions):
+    """The same form as the filter of the aggregator: the topics in front, or none. A line
+    that holds the prefix elsewhere gives no result."""
+    answer = json.dumps({"status": "success", "data": {"resultType": "streams", "result": [
+        {"stream": {"job": "routeros"}, "values": [["1794571200000000000", json.dumps({"message": message})]]}]}})
+    get = Fake({LOKI: (200, answer.encode())})
+    if versions is None:
+        with pytest.raises(checks.QueryError):
+            checks.line_versions(LOKI, "sce-rtr01", NOW, get)
+    else:
+        assert checks.line_versions(LOKI, "sce-rtr01", NOW, get) == versions
+
+
+def test_the_security_stream_of_the_router_reads_the_filtered_log_and_the_job_stream_the_whole_log():
+    """The Vector tests prove the filter; this proves that the sinks read the right step:
+    the security stream the log without the version line, and job="routeros", which the
+    job reads, the whole log."""
+    config = yaml.safe_load((ROOT / "kubernetes/apps/monitoring/vector/aggregator/config/vector.yaml").read_text())
+    assert config["transforms"]["routeros_security"]["inputs"] == ["routeros_syslog"]
+    assert config["sinks"]["loki_security_routeros"]["inputs"] == ["routeros_security"]
+    assert config["sinks"]["loki_security_routeros"]["labels"]["security_stream"] == "routeros"
+    assert config["sinks"]["loki_routeros"]["inputs"] == ["routeros_syslog"]
+    assert config["sinks"]["loki_routeros"]["labels"]["job"] == "routeros"
+    readers = [name for kind in ("transforms", "sinks") for name, item in config[kind].items()
+               if "routeros_syslog" in item.get("inputs", [])]
+    assert sorted(readers) == ["loki_routeros", "routeros_security"]
 
 
 @pytest.mark.parametrize("answer", [

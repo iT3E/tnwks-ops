@@ -26,7 +26,9 @@ homelab-wsl only, so the router also logs one line each hour,
 sends that line to the host of homelab-wsl-02, whose UDP relay admits the
 router only, and the aggregator there writes it to the stream
 `job="routeros"` of this site's Loki. The aggregators keep it out of the
-security stream `routeros`. The job reads the lines of the last 3 hours, and
+security stream `routeros`. The job and the filter of the aggregator read
+the same form: the whole line, with or without the topics of the router in
+front (`script,info`). The job reads the lines of the last 3 hours, and
 decides:
 
 | The lines | Prometheus of homelab-wsl | Result |
@@ -34,19 +36,34 @@ decides:
 | One version | No connection, or no HTTP answer | The version of the lines |
 | One version | One version, the same | That version |
 | One version | Another version, no series, two versions, or an HTTP error | None |
-| Two versions, or a line of the router with no version, or more than 30 lines | Any | None |
+| Two versions, or a line with the prefix that is not the whole version line, or more than 30 lines | Any | None |
 | None (or no answer of Loki) | One version | The version of Prometheus |
 | None (or no answer of Loki) | No answer, no series, or two versions | None |
 
-So a forged line gives no result, not a pass, and a fault of mktxp alone
-shows as a late result while the lines still come. An upgrade of the router
-in the 3 hours before a run also gives no result that day.
+A line that disagrees with another line, or with an answering Prometheus,
+gives no result. A fault of mktxp alone shows as a late result while the
+lines still come. An upgrade of the router in the 3 hours before a run also
+gives no result that day.
+
+**The way back** of the version line is a revert of its merge, and three
+steps that a revert does not do. The apply of Terraform removes the
+scheduler, the logging rule and the logging action from the router. The role
+of the UDP relay does not run with an empty list, and the role of the LAN
+bridge does not stop an instance that is no longer listed. So, after the
+revert and the plays:
+
+1. On WSL-02, in an elevated PowerShell:
+   `Unregister-ScheduledTask -TaskName tnwks-udp-relay-syslog -Confirm:$false`.
+2. On WSL-02: `Get-NetFirewallRule -DisplayName tnwks-udp-relay-6001 | Remove-NetFirewallRule`.
+3. In WSL-02-ubuntu: `sudo systemctl disable --now tnwks-lan-bridge@syslog.service`.
 
 **A test that does not run has no entry**, never a 0. That is the case when
 the version of the router is not known (the table above), when the feed has
-no stable release with a date, and when HCP Terraform does not answer 200. The run then fails, which
-raises `KubeJobFailed`, and the system reads as late after 36 hours
-(`SecurityResultLate`). With no token, the test of Terraform Cloud does not
+no stable release with a date, and when HCP Terraform does not answer 200. The run still
+writes `api-check/results.json`, with no entry for that test, and fails,
+which raises `KubeJobFailed`. The converter then serves no time of the last
+result for that system, and `SecurityResultLate` fires about 20 minutes
+after the converter reads the file. With no token, the test of Terraform Cloud does not
 run, and the run does not fail for it.
 
 The feed holds the newest release only. So the job keeps each newest
