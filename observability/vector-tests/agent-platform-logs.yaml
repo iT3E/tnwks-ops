@@ -699,6 +699,21 @@ tests:
       source: 'assert_eq!(.message, "instruction-check file=skills/a/SKILL.md change=changed")
 
         '
+- name: 'pilot: a memory-index line passes unchanged'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: memory-index result=failed
+      kubernetes.container_name: memory-index
+      kubernetes.pod_namespace: agents-pilot
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "memory-index result=failed")
+
+        '
 - name: 'supervisor: a known line type passes (1)'
   inputs:
   - insert_at: supervisor_filter
