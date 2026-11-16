@@ -88,10 +88,18 @@ spec:
           - path: /etc/vector/vector.yaml
             subPath: vector.yaml
             readOnly: true
-      # The positions in the log files. An emptyDir: a new pod reads the
-      # files of the pods it selects from their start again.
+      # The positions in the log files. On the node, as the audit reader
+      # keeps its own (../audit-reader), so a new pod goes on where the last
+      # one stopped. With an emptyDir a new pod read each file of the pods it
+      # selects from its start again, and the aggregator's Loki sink gave each
+      # old line the time of the newest line of its stream
+      # (out_of_order_action: rewrite_timestamp): a copy at the wrong time.
+      # The pod runs as root, so it can write here with no init container.
+      # It is read again only at the first start on a node, or after the
+      # directory is gone.
       data:
-        type: emptyDir
+        type: hostPath
+        hostPath: /var/lib/vector-agent-platform
         globalMounts:
           - path: /vector-data-dir
       # Only the pod logs, read-only. kubernetes_logs reads the files the

@@ -221,8 +221,13 @@ sinks:
   # specified, https is used"). The audit reader writes it the same way.
   # Small batches, one request at a time and a small buffer, as on the audit
   # reader, keep the memory flat: when the aggregator can't take lines, the
-  # buffer holds 200 events and then blocks, so the sources stop reading,
-  # and the read positions keep what is not sent yet.
+  # buffer holds 200 events and then blocks. A read position moves when a
+  # line is read, not when the aggregator took it: kubernetes_logs has no
+  # acknowledgements (src/sources/kubernetes_logs/mod.rs, can_acknowledge,
+  # false at v0.61.0; with them on, Vector warns of silent data loss). So a
+  # pod that is killed while the aggregator is away loses the lines it read
+  # and did not send. Acknowledgements are a later step, when the source
+  # has them.
   aggregator:
     type: vector
     compression: gzip
