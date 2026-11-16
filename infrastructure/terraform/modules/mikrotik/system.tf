@@ -44,6 +44,35 @@ resource "routeros_system_logging" "remote" {
   action = routeros_system_logging_action.remote[0].name
 }
 
+# --- Version line to site 2 ------------------------------------------------------
+# The line of the scheduler version_line (heartbeat.tf) also goes to the host
+# of homelab-wsl-02, whose UDP relay admits this router only, and from there to
+# the vector-aggregator of that site. The regex keeps every other line of the
+# topic off this target. The line also reaches the first target through its
+# topic info; the aggregator keeps it out of the security stream routeros.
+
+resource "routeros_system_logging_action" "version_line" {
+  count = var.version_line == null ? 0 : 1
+
+  name            = "remoteversion"
+  target          = "remote"
+  remote          = var.version_line.remote
+  remote_port     = var.version_line.remote_port
+  remote_protocol = var.version_line.remote_protocol
+  src_address     = var.version_line.src_address
+
+  remote_log_format  = "syslog"
+  syslog_time_format = "iso8601"
+}
+
+resource "routeros_system_logging" "version_line" {
+  count = var.version_line == null ? 0 : 1
+
+  topics = ["script"]
+  regex  = "^${local.version_line_prefix} "
+  action = routeros_system_logging_action.version_line[0].name
+}
+
 # --- Services ----------------------------------------------------------------
 # VyOS exposed SSH only. Everything RouterOS enables by default is disabled.
 # The provider requires `port` on every ip_service entry, even to disable it, so

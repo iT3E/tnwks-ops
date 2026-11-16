@@ -2360,7 +2360,7 @@ spec:
         system_type: cluster
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
-      expr: max by (system) (((max by (system) (label_replace((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="host-check",check="updates-pending"}[10m]))
+      expr: max by (system) (((max by (system) (label_replace((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="host-check",check=~"updates-pending|updates-held"}[10m]))
         > bool 0)) and on (system) (((time() - max by (system) (last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check"}[10m])))
         <= 43200) >= -300), "evidence", "1", "", "") or label_replace((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="wazuh",check=~"26368|26441|26473|26474|26475|26477|26479|26480|26481"}[10m]))
         > bool 0)) and on (system) (((time() - max by (system) (last_over_time(homelab_security_last_result_timestamp_seconds{source="wazuh"}[10m])))
@@ -2371,7 +2371,7 @@ spec:
         system_type: windows-host
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
-      expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="host-check",check="updates-pending"}[10m]))
+      expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="host-check",check=~"updates-pending|updates-held"}[10m]))
         > bool 0)) and on (system) (((time() - max by (system) (last_over_time(homelab_security_last_result_timestamp_seconds{source="host-check"}[10m])))
         <= 43200) >= -300)) and on (system) homelab:security_system_info{system_type="wsl-distro"}) or on (system)
         (0 * homelab:security_system_info{system_type="wsl-distro"}))
@@ -3741,8 +3741,12 @@ spec:
     - alert: SecurityResultLate
       expr: max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="aws-management",check="cloudtrail"}[10m])
         > 7200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="aws-management",check="cloudtrail"}[10m]))
+        or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}[10m])
+        > 129600) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}[10m]))
         or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="aws-prod",check="cloudtrail"}[10m])
         > 7200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="aws-prod",check="cloudtrail"}[10m]))
+        or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-prod"}[10m])
+        > 129600) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-prod"}[10m]))
         or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl",check="k8s-audit"}[10m])
         > 900) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl",check="k8s-audit"}[10m]))
         or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl"}[10m])

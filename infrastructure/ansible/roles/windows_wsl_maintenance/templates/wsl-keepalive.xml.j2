@@ -8,7 +8,7 @@
     <Principal id="Author">
       <UserId>{{ wsl_maintenance_user | e }}</UserId>
       <LogonType>S4U</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
+      <RunLevel>{{ 'LeastPrivilege' if wsl_start_unelevated | bool else 'HighestAvailable' }}</RunLevel>
     </Principal>
   </Principals>
   <Settings>

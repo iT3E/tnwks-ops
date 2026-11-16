@@ -7,6 +7,10 @@
 
 udp_relay_dir: 'C:\ProgramData\tnwks-udp-relay'
 udp_relay_src: Start-TnwksUdpRelay.ps1
+# With wsl_start_unelevated (group_vars/windows_hosts.yml), the relays run
+# with no elevation: they need no admin right. They log to a directory that
+# the account may change, apart from the script.
+udp_relay_log_dir: '{{ udp_relay_dir }}\log'
 # The account that owns the WSL distro.
 udp_relay_user: "{{ windows_desktop_user }}"
 

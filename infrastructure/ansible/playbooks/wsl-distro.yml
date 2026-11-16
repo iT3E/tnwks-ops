@@ -59,8 +59,9 @@
     - role: wsl_drift_check
       tags: [drift-check]
     # The host check of the security platform: the distro's pending upgrades,
-    # as a .prom file for the Windows host's windows_exporter
-    # (security/README.md, "The host check"). windows-host.yml makes the
-    # directory first (role windows_host_check).
+    # as a JSON document in the inbox of its Windows host, whose relay writes
+    # the .prom file for windows_exporter (security/README.md, "The host
+    # check"). windows-host.yml makes the inbox first (role
+    # windows_host_check).
     - role: wsl_host_check
       tags: [host-check]

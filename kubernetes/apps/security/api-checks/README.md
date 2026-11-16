@@ -12,21 +12,61 @@ the API checks"). On homelab-wsl-02 only.
 
 | Check | System | What it reads | What fails | Severity |
 | --- | --- | --- | --- | --- |
-| `routeros-firmware` (safeguard 12.1) | `sce-rtr01` | The version that the router runs: the label `version` of `mktxp_system_uptime` in the Prometheus of homelab-wsl, where mktxp reads the router with its read-only account. The newest stable release and its date: the release feed of the vendor, `https://cdn.mikrotik.com/routeros/latest-stable.rss` | The router runs an older version than a stable release that came out more than 14 days ago (Design Doc 0004, section 4.1.4), of each release that the job has seen. Or, at once, a version older than each release that the job has seen, as the age of the releases between is not known (section 5.6) | `high`, so a new fail alerts |
-| `tfc-mfa-required` (safeguards 6.3 and 6.5) | `tnwks-ops` | `collaborator-auth-policy` of `GET https://app.terraform.io/api/v2/organizations/tnwks-ops` ([the API of HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organizations#show-an-organization)) | The policy is not `two_factor_mandatory` | `medium` |
+| `routeros-firmware` (safeguard 12.1) | `sce-rtr01` | The version that the router runs: its version lines of the last 3 hours in the Loki of this site, and the label `version` of `mktxp_system_uptime` in the Prometheus of homelab-wsl, where mktxp reads the router with its read-only account (below). The newest stable release and its date: the release feed of the vendor, `https://cdn.mikrotik.com/routeros/latest-stable.rss` | The router runs an older version than a stable release that came out more than 14 days ago (Design Doc 0004, section 4.1.4), of each release that the job has seen. Or, at once, a version older than each release that the job has seen, as the age of the releases between is not known (section 5.6) | `high`, so a new fail alerts |
+| `tfc-mfa-required` (safeguards 6.3 and 6.5) | `tnwks-ops` | `collaborator-auth-policy` of `GET https://app.terraform.io/api/v2/organizations/tnwks-ops` ([the API of HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organizations#show-an-organization)) | The policy is not `two_factor_mandatory` | `high` (Design Doc 0004, section 5.8), so a new fail alerts |
 
 Each test reads, and none changes a setting. The test of the router needs no
 credential of the router: mktxp already reads it, and the REST API of the
 router is open to the CI runners only.
 
+**The version of the router** (Design Doc 0004, section 5.5). mktxp runs on
+homelab-wsl only, so the router also logs one line each hour,
+`tnwks-routeros-version router=<identity> version=<version>` (the scheduler
+`version_line` of `infrastructure/terraform/modules/mikrotik`). A logging rule
+sends that line to the host of homelab-wsl-02, whose UDP relay admits the
+router only, and the aggregator there writes it to the stream
+`job="routeros"` of this site's Loki. The aggregators keep it out of the
+security stream `routeros`. The syslog source of the aggregator takes the
+prefix as the tag of the line: Loki keeps the event as JSON with `appname`
+`tnwks-routeros-version` and `message` `router=<identity> version=<version>`.
+The job and the filter of the aggregator read the same forms: that one, and
+the whole line in `message`, with or without the topics of the router in
+front (`script,info`). The job reads the lines of the last 3 hours, and
+decides:
+
+| The lines | Prometheus of homelab-wsl | Result |
+| --- | --- | --- |
+| One version | No connection, or no HTTP answer | The version of the lines |
+| One version | One version, the same | That version |
+| One version | Another version, no series, two versions, or an HTTP error | None |
+| Two versions, or a line with the prefix that is not the whole version line, or more than 30 lines | Any | None |
+| None (or no answer of Loki) | One version | The version of Prometheus |
+| None (or no answer of Loki) | No answer, no series, or two versions | None |
+
+A line that disagrees with another line, or with an answering Prometheus,
+gives no result. A fault of mktxp alone shows as a late result while the
+lines still come. An upgrade of the router in the 3 hours before a run also
+gives no result that day.
+
+**The way back** of the version line is a revert of its merge, and three
+steps that a revert does not do. The apply of Terraform removes the
+scheduler, the logging rule and the logging action from the router. The role
+of the UDP relay does not run with an empty list, and the role of the LAN
+bridge does not stop an instance that is no longer listed. So, after the
+revert and the plays:
+
+1. On WSL-02, in an elevated PowerShell:
+   `Unregister-ScheduledTask -TaskName tnwks-udp-relay-syslog -Confirm:$false`.
+2. On WSL-02: `Get-NetFirewallRule -DisplayName tnwks-udp-relay-6001 | Remove-NetFirewallRule`.
+3. In WSL-02-ubuntu: `sudo systemctl disable --now tnwks-lan-bridge@syslog.service`.
+
 **A test that does not run has no entry**, never a 0. That is the case when
-Prometheus has no series of the router (mktxp did not read it in the last 5
-minutes) or two versions of it, when the feed has no stable release with a
-date, and when HCP Terraform does not answer 200. The run still writes
-`api-check/results.json`, with no entry for that test, and fails, which
-raises `KubeJobFailed`. The converter then serves no time of the last result
-for that system, and `SecurityResultLate` fires about 20 minutes after the
-converter reads the file. With no token, the test of Terraform Cloud does not
+the version of the router is not known (the table above), when the feed has
+no stable release with a date, and when HCP Terraform does not answer 200. The run still
+writes `api-check/results.json`, with no entry for that test, and fails,
+which raises `KubeJobFailed`. The converter then serves no time of the last
+result for that system, and `SecurityResultLate` fires about 20 minutes
+after the converter reads the file. With no token, the test of Terraform Cloud does not
 run, and the run does not fail for it.
 
 The feed holds the newest release only. So the job keeps each newest
@@ -78,7 +118,7 @@ late result watches.
 | `ks.yaml` | The Flux Kustomization `security-api-checks`. It waits for `security-converter`, which has the claim of the volume |
 | `app/cronjob.yaml` | The run, each day at 06:47 UTC, between the runs of Prowler |
 | `app/scripts/api_checks.py` | The tests, the list of accepted findings, the list of releases, and the result file. The Python standard library only. Tests: `security/tests/test_api_checks.py` |
-| `app/networkpolicy.yaml` | DNS, the Prometheus of homelab-wsl on port 9090 of the address that `peer-federate` scrapes, and `cdn.mikrotik.com` and `app.terraform.io` on 443 |
+| `app/networkpolicy.yaml` | DNS, the Prometheus of homelab-wsl on port 9090 of the address that `peer-federate` scrapes, the Loki gateway of this cluster on 8080, and `cdn.mikrotik.com` and `app.terraform.io` on 443 |
 
 The claim `security-results` is in `../converter/app/pvc.yaml`. The job runs
 as user 65534 with a read-only root, and mounts the whole volume

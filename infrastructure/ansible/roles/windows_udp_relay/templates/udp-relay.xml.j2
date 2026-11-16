@@ -5,7 +5,7 @@
     <Principal id="Author">
       <UserId>{{ udp_relay_user | e }}</UserId>
       <LogonType>S4U</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
+      <RunLevel>{{ 'LeastPrivilege' if wsl_start_unelevated | bool else 'HighestAvailable' }}</RunLevel>
     </Principal>
   </Principals>
   <Settings>
@@ -33,7 +33,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>powershell.exe</Command>
-      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ udp_relay_dir | e }}\Start-TnwksUdpRelay.ps1" -Port {{ item.port }}</Arguments>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ udp_relay_dir | e }}\Start-TnwksUdpRelay.ps1" -Port {{ item.port }}{% if wsl_start_unelevated | bool %} -LogPath "{{ udp_relay_log_dir | e }}\udp-relay-{{ item.port }}.log"{% endif %}</Arguments>
     </Exec>
   </Actions>
 </Task>

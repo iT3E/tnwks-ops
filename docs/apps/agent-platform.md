@@ -645,7 +645,9 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   the provider `github-reviewer`.
 - **The providers** are in the store of the sandbox gateway. The CronJob
   `workflow-providers` (`app/providers.yaml`, every 15 minutes at :07, :22,
-  :37 and :52) runs `app/scripts/providers.sh`. Each run:
+  :37 and :52) runs the `providers` command of the image of the workflow
+  agents (`src/providers/` in iT3E/tnwks-workflow-agents, tested in its CI
+  with a fake CLI and on its kind cluster). Each run:
   1. checks that the gateway answers;
   2. imports each provider profile of `app/providers/` that is not in the
      store, and updates each one whose file changed in git. The profile keeps
@@ -655,20 +657,20 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
      `openshell profile export`), as the gateway requires;
   3. updates `model-gateway` with `MODEL_GATEWAY_KEY`;
   4. gets a new installation token of the GitHub App of the reviewer
-     (`app/scripts/github_app_token.py`);
+     (`src/providers/github_app.py` of the image);
   5. updates `github-reviewer` with that token. (A provider that is not
      there yet is created.)
 
-  The script runs no `openshell profile lint`. Import and update check the
+  The command runs no `openshell profile lint`. Import and update check the
   profile themselves, and lint refuses a profile that is already in the
-  store, so the first version of the script failed on each run after its
-  first. A failure that a new token can't fix (the gateway, a profile, the
-  model provider) stops the run before the token call. Each failure logs one
-  line for an alert,
-  `workflow-providers result=failed step=<step> name=<name>`, with step
-  `gateway`, `profile-export`, `profile-import`, `profile-update`,
-  `provider-create`, `provider-update` or `github-token`; a good run logs
-  `workflow-providers result=ok`. To run it now,
+  store, so the first version (a script in this repo) failed on each run
+  after its first. A failure that a new token can't fix (the gateway, a
+  profile, the model provider) stops the run before the token call. Each
+  failure logs one line for an alert, `workflow-providers result=failed
+  step=<step> name=<name>`, with step `gateway`, `profile-export`,
+  `profile-import`, `profile-update`, `provider-create`, `provider-update`
+  or `github-token`, and exits 1 (`step=config` and exit 2 when the gateway
+  URL is not set); a good run logs `workflow-providers result=ok`. To run it now,
   `kubectl -n agents-workflows create job --from=cronjob/workflow-providers providers-now`.
 
   | Provider (profile) | Credential | What the proxy of a sandbox allows with it |
@@ -738,12 +740,19 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   namespace, because the Job sets its pod. So each Job that the receiver
   sends must match the rules of a template: an agent of the list with its
   own providers, one container from the image of the workflow agents pinned
-  by digest (and a sandbox of the same image), the service account
+  by digest (and a sandbox of the same image), run with the one argument
+  `run-job` and no command, lifecycle hook or probe, the service account
   `workflow-run` with no token, no secret but the client certificate, one
-  try, and a time limit of one hour at most. The two objects are
-  cluster-scoped, so they have a Flux Kustomization of their own with no
-  `targetNamespace` (`agents-workflows-run-admission`), and the receiver
-  depends on it. A new agent adds its providers to the policy in the same
+  try, and a time limit of one hour at most. A second policy,
+  `workflow-run-job-updates`, lets an update of a Job by the receiver change
+  only its two annotations `workflow-agents/result` and
+  `workflow-agents/sandbox-record`: nothing in the spec, the labels, the
+  owner references, the finalizers or the other annotations. Both bind the
+  account of the receiver only, so the Job, TTL and garbage collector
+  controllers are not bound. `admission/tests/run.sh` tests them on a
+  throwaway API server in containers. The objects are cluster-scoped, so
+  they have a Flux Kustomization of their own with no `targetNamespace`
+  (`agents-workflows-run-admission`), and the receiver depends on it. A new agent adds its providers to the policy in the same
   pull request as its entry in `agents.yaml`.
 - **The sweep** (CronJob `workflow-sweep`, every 15 minutes) deletes each
   run sandbox that is older than one hour, by its name and label, through
@@ -937,8 +946,15 @@ by hand, and the steps at a limit of the Claude plan.
   ([Logs](#logs)).
 - **A failed Job.** The chart rule `KubeJobFailed` also fires for each
   failed Job, and keeps firing while the Job is kept: a run job for 7 days,
-  a failed CronJob run until three newer runs fail. Read
-  `AgentPlatformCronJobFailed` for the state of now.
+  a failed CronJob run until three newer runs fail. Alertmanager drops it
+  for the run jobs and the Jobs of the CronJobs `platform-check-isolation`,
+  `platform-check-probe`, `workflow-providers` and `workflow-sweep`, which
+  the alerts above cover (the route in
+  `kubernetes/apps/monitoring/alertmanager/app/config/alertmanager.yml`, and
+  its cases in `observability/tests/test_alertmanager_routes.py`). It still
+  reaches the channel for any other Job of a trust domain: a backup mover, a
+  Job made by hand, or a new CronJob. It stays in Prometheus and in the
+  Alertmanager UI for all of them.
 - **The drift line.** The Vector aggregator turns each line of a pod in a
   namespace `agents-*` that starts with `<check> result=<result>` into the
   gauge `homelab_agent_platform_result_timestamp_seconds{pod_namespace, app,

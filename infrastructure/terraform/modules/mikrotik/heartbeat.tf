@@ -37,3 +37,36 @@ resource "routeros_system_scheduler" "heartbeat" {
     }
   }
 }
+
+## ---------------------------------------------------------------------------------------------------------------------
+## VERSION LINE
+##
+## The API checks of the security platform on homelab-wsl-02 compare the
+## RouterOS version with the vendor's newest release (routeros-firmware). mktxp
+## reads the version on homelab-wsl only, so this line gives site 2 the version
+## while that cluster is down (Design Doc 0004, section 5.5). Once an interval
+## the scheduler logs one line with the identity and the version; the logging
+## rule in system.tf sends that line, and only that line, to the host of
+## site 2. It carries no credential and no setting.
+##
+## policy: read, for /system identity and /system resource. Nothing else.
+## ---------------------------------------------------------------------------------------------------------------------
+
+locals {
+  # The prefix that the API checks and the logging rule match. The job
+  # (kubernetes/apps/security/api-checks) reads "router=<identity>
+  # version=<version>" after it.
+  version_line_prefix = "tnwks-routeros-version"
+}
+
+resource "routeros_system_scheduler" "version_line" {
+  count = var.version_line != null ? 1 : 0
+
+  name     = "version-line"
+  interval = var.version_line.interval
+  on_event = ":log info (\"${local.version_line_prefix} router=\" . [/system identity get name] . \" version=\" . [/system resource get version])"
+
+  policy = ["read"]
+
+  comment = "security version line every ${var.version_line.interval} (terraform)"
+}

@@ -186,6 +186,33 @@ locals {
         # the App pushes the release commit and tag.
         RELEASE_APP_CLIENT_ID = "Iv23li4tvKlTdMwPMmJR"
       }
+
+      rulesets = {
+        # The main ruleset of tnwks-ops, with this repository's checks: the
+        # two scans and the two jobs of Build, which run on every pull
+        # request. Admins (repository role 5) and the release GitHub App
+        # bypass it; GITHUB_TOKEN can't, so releases need the App.
+        main = {
+          include = ["~DEFAULT_BRANCH"]
+          bypass_actors = [
+            { actor_type = "RepositoryRole", actor_id = 5 },
+            { actor_type = "Integration", actor_id = local.bypass_app_id },
+          ]
+          deletion         = true
+          non_fast_forward = true
+          pull_request = {
+            allowed_merge_methods = ["squash"]
+          }
+          required_status_checks = {
+            checks = {
+              "betterleaks / betterleaks" = local.github_actions_app_id
+              "privacy / privacy"         = local.github_actions_app_id
+              "python / check"            = local.github_actions_app_id
+              "image / image"             = local.github_actions_app_id
+            }
+          }
+        }
+      }
     }
 
     hass-config = {

@@ -1,8 +1,14 @@
 ---
+# Only SYSTEM and the Administrators may make or change files here, and
+# Users may read (tnwks_win_dir_acl, no writer). The folder inherits no rule.
+# Each item in it takes the owner Administrators and the rules of the folder,
+# at each run.
 - name: LAN bridge directory
-  ansible.windows.win_file:
+  tnwks_win_dir_acl:
     path: "{{ lan_bridge_dir }}"
-    state: directory
+    items: reset
+    # Its own rules: the address task writes there (below).
+    keep: ["{{ lan_bridge_ip_dir }}"]
 
 - name: Sync script
   ansible.windows.win_copy:
@@ -52,7 +58,29 @@
     state: absent
   loop: "{{ lan_bridge_retired_tcp_ports }}"
 
-- name: Sync task (desktop user, at logon and after a WSL vNIC reset)
+# The account may make and change files here, but not change the directory
+# itself, the script or the port list (tnwks_win_dir_acl). The sync task
+# takes from the file only an address of the WSL VM.
+- name: Directory of the address file
+  tnwks_win_dir_acl:
+    path: "{{ lan_bridge_ip_dir }}"
+    writer: "{{ lan_bridge_user }}"
+  when: wsl_start_unelevated | bool
+
+- name: Address task (desktop user, no elevation)
+  tnwks_win_scheduled_task:
+    name: "{{ lan_bridge_ip_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'lan-bridge-ip.xml.j2') }}"
+  when: wsl_start_unelevated | bool
+  notify: Run the LAN bridge sync
+
+- name: No address task while the sync task is elevated
+  tnwks_win_scheduled_task:
+    name: "{{ lan_bridge_ip_task }}"
+    state: absent
+  when: not (wsl_start_unelevated | bool)
+
+- name: Sync task (desktop user elevated, or SYSTEM with no wsl.exe)
   tnwks_win_scheduled_task:
     name: "{{ lan_bridge_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'lan-bridge-sync.xml.j2') }}"

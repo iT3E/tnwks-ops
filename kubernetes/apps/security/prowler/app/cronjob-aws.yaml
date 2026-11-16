@@ -1,8 +1,9 @@
 ---
 # Prowler for the AWS prod account, each day (../README.md). The session comes
 # from aws-security-audit-sts, which the refresher of ../../aws-credentials
-# writes. A run that fails moves no file and raises KubeJobFailed; the next
-# run is the next day.
+# writes. The run is one process of Prowler for each service of the scan list,
+# one after the other (../README.md, "Memory"). A run in which a part fails
+# moves no file and raises KubeJobFailed; the next run is the next day.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -57,17 +58,17 @@ spec:
               envFrom:
                 - secretRef:
                     name: aws-security-audit-sts
-              # The limit of ../../README.md, "Memory" (../README.md, "Memory").
-              # The first runs ended OOMKilled at 768 MiB. Prowler takes about
-              # 345 MiB before it scans and about 380 MiB more for its AWS
-              # clients in 17 Regions. 1536 MiB holds until a run measures the
-              # peak: the script prints it as its last line.
+              # The limit of ../../README.md, "Memory" (../README.md, "Memory"):
+              # the highest peak of the container in the first runs in parts,
+              # 682 MiB, and 25 %, rounded up to a multiple of 64 MiB. The
+              # request is the highest working set, 646 MiB, rounded up the
+              # same way, so a run stays within its request.
               resources:
                 requests:
                   cpu: 100m
-                  memory: 1024Mi
+                  memory: 704Mi
                 limits:
-                  memory: 1536Mi
+                  memory: 896Mi
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -104,8 +105,9 @@ spec:
             - name: results
               persistentVolumeClaim:
                 claimName: security-results
-            # Prowler's own output (the OCSF file and the compliance tables)
-            # before the script copies the OCSF file to the volume.
+            # Prowler's own output for one part (the OCSF file and the
+            # compliance tables) before the script copies its records to the
+            # volume. One part at a time.
             - name: tmp
               emptyDir:
                 sizeLimit: 1Gi
@@ -172,9 +174,9 @@ spec:
               resources:
                 requests:
                   cpu: 100m
-                  memory: 1024Mi
+                  memory: 704Mi
                 limits:
-                  memory: 1536Mi
+                  memory: 896Mi
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

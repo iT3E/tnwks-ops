@@ -7,7 +7,7 @@ listens and what it reports about itself.
 | --- | --- | --- | --- |
 | The aggregator | `aggregator/` (`ks.yaml`) | Each cluster, one pod | Takes in pod logs and the router's syslog, and writes them to the Loki of its cluster. Takes in the audit log of the API server, and writes the security streams |
 | The agent | `agent/` (`ks-agent.yaml`) | Each cluster that lists it, one pod on each node | Reads pod logs on its node and sends them to the aggregator. On the WSL clusters, Job pods only (`VECTOR_AGENT_POD_SELECTOR`) |
-| The platform agent | `agent-platform/` (`ks-agent-platform.yaml`) | homelab-wsl, one pod on each node | Reads the logs of the long-running pods of the agent platform on an allowlist (pod label `logs.home.arpa/ship=true`) and of the sandbox supervisors of a namespace labeled `logs.home.arpa/ship-supervisors=true`. Drops what can hold content from the gateway's and the supervisors' lines on the node, and sends the rest to the aggregator. Serves two gauges for the alerts of the platform on its port 9598 (`docs/apps/agent-platform.md`, "Logs") |
+| The platform agent | `agent-platform/` (`ks-agent-platform.yaml`) | homelab-wsl, one pod on each node | Reads the logs of the long-running pods of the agent platform on an allowlist (pod label `logs.home.arpa/ship=true`) and of the sandbox supervisors of a namespace labeled `logs.home.arpa/ship-supervisors=true`. Drops what can hold content from the gateway's and the supervisors' lines on the node, and sends the rest to the aggregator. Serves two gauges for the alerts of the platform on its port 9598 (`docs/apps/agent-platform.md`, "Logs"). Keeps its read positions in the host path `/var/lib/vector-agent-platform`, so a new pod goes on where the last one stopped |
 | The audit reader | `audit-reader/` (`ks-audit-reader.yaml`) | Each cluster that lists it, one pod on the control plane node | Reads the audit log of the API server on its node and sends it to the audit source of the aggregator |
 
 The config of the aggregator is one file, `aggregator/config/vector.yaml`,
@@ -67,7 +67,7 @@ each way is on purpose:
 | Stream | Path in `vector.yaml` | When Loki is away |
 | --- | --- | --- |
 | The audit log | `audit_source`, `audit_time`, `loki_security_audit` | The sink waits and tries again, and each part before it waits too. No line is lost while the audit files on the node last. An acknowledgement goes back to the sender only when Loki took the line |
-| The router log | `routeros_syslog`, `loki_security_routeros` | The sink holds 500 events and then drops the newest (`vector_buffer_discarded_events_total`). The sink `loki_routeros` to the Loki of the own cluster does not wait |
+| The router log | `routeros_syslog`, `routeros_security` (leaves out the hourly version line of the API checks), `loki_security_routeros` | The sink holds 500 events and then drops the newest (`vector_buffer_discarded_events_total`). The sink `loki_routeros` to the Loki of the own cluster does not wait |
 
 Three rules keep the other logs safe:
 

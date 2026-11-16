@@ -3,6 +3,158 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.176.0 - 2026-11-16
+
+### Changed
+
+* Windows hosts: each folder of a role under C:\ProgramData lets only SYSTEM and the Administrators make or change files, and Users read (tnwks_win_dir_acl). At each run, each item below takes the owner Administrators and the rules of the folder; the log and address folders keep their own rules. A folder that no role owns, listed in windows_locked_dirs, is for SYSTEM and the Administrators only (readers: none).
+
+## v2.175.1 - 2026-11-16
+
+### Fixed
+
+* Security: the filter of the aggregators and the reader of the API checks now read the router's version line in the form that the syslog source gives (the prefix as the tag, appname, and the identity and version in message). The filter keeps that line out of the security stream routeros, and the job finds it in the Loki of homelab-wsl-02 (its line filter has no space after the prefix). With no line in 3 hours, the job says so in its log.
+
+## v2.175.0 - 2026-11-16
+
+### Changed
+
+* The AWS runs of Prowler have the memory limit of their measured peak and 25 %, and a request of 704 MiB, the highest working set rounded up. The two AWS systems list prowler as a source, so SecurityResultLate fires when a run has no result for 36 hours.
+
+## v2.174.0 - 2026-11-16
+
+### Changed
+
+* The two AWS runs of Prowler run at 03:17 and 05:17 UTC again, after their run of one day.
+
+## v2.173.0 - 2026-11-16
+
+### Added
+
+* github: a main ruleset on the agent image repository
+
+## v2.172.0 - 2026-11-16
+
+### Added
+
+* Security: the router logs its RouterOS version each hour to the host of homelab-wsl-02 too (a scheduler and a logging rule in Terraform, the syslog relay on WSL-02 and its distro), and the API checks read the version lines of the last 3 hours from that site's Loki. The lines must agree, and agree with the Prometheus of homelab-wsl when it answers; with no line, that Prometheus decides as before. The aggregators keep the line out of the security stream routeros.
+
+## v2.171.3 - 2026-11-16
+
+### Fixed
+
+* logs: the platform log agent keeps its read positions on the node (/var/lib/vector-agent-platform), as the audit reader does, so a restart no longer sends each line of the pods it selects to Loki again with a new time
+
+## v2.171.2 - 2026-11-16
+
+### Fixed
+
+* alerts: Alertmanager drops KubeJobFailed for the run jobs and the four CronJobs of the agent platform, which have alerts of their own that resolve with their cause, so an old failed Job no longer keeps a group open in the alert channel; any other failed Job still reaches it, and a test checks each route
+
+## v2.171.1 - 2026-11-16
+
+### Fixed
+
+* Windows hosts: the scheduled task module reads a task with the run level LeastPrivilege as unchanged. Export-ScheduledTask leaves out the RunLevel element for that default, so each check and the nightly drift run reported such a task as changed, and each apply registered it again.
+
+## v2.171.0 - 2026-11-16
+
+### Changed
+
+* The two AWS runs of Prowler run once today at 08:47 and 09:47 UTC, ahead of the night. A second change sets them back to 03:17 and 05:17 UTC.
+
+## v2.170.1 - 2026-11-16
+
+### Fixed
+
+* ci: a manifest change no longer waits 10 minutes for the observability checks. promtool on the generated rule tests and the PowerShell tests are their own jobs, which run only when observability/, security/ or the host check roles changed, and the rule tests run in shards, one promtool per core
+
+## v2.170.0 - 2026-11-16
+
+### Changed
+
+* agents-workflows: the CronJob workflow-providers runs the providers command of the image of the workflow agents, which its CI tests, in place of the providers script and the GitHub App token script of this repo. The steps, the log lines and the exit codes stay the same.
+
+## v2.169.4 - 2026-11-16
+
+### Fixed
+
+* Alerting: Telegram answered ENTITIES_TOO_LONG for the messages of SecurityResultLate, two alerts each with a graph link of about 5100 characters (its whole expression). The Telegram message now has one graph link, on the first alert, up to 1500 characters in a message of one alert and 1000 in a message of more; the text and the other links of the first three alerts of a group only, and the labels of the next five; at most 1700 characters of link text. The bounds are chosen from a measured delivered message (a graph link of 1444 characters, 1643 of link text) and the measured refused one (10460), not from a documented limit. A test renders each alert of the repository through the template with amtool and checks the tags, the number of entities, the text length, the size and the links.
+
+## v2.169.3 - 2026-11-16
+
+### Fixed
+
+* Each Prowler run of AWS runs one process of Prowler for each service of the scan list, and joins their records into one OCSF file. A process holds one service at a time, and a run in which a part fails leaves no file.
+
+## v2.169.2 - 2026-11-16
+
+### Security
+
+* agents-workflows: the admission policy of the run jobs pins the run job container to the entrypoint of the image with the one argument run-job (no command, lifecycle hook or probe), and a new policy, workflow-run-job-updates, lets an update of a run Job by the run receiver change only its two annotations (the kept answer and the check of the Sandbox record). Both bind the account of the receiver only. A test harness (admission/tests/run.sh) runs them on a throwaway API server in containers.
+
+## v2.169.1 - 2026-11-16
+
+### Fixed
+
+* terraform: the bucket policy of an exclusive backup prefix did not apply, because S3 refuses the s3:prefix condition on s3:ListBucketMultipartUploads. The list deny now names ListBucket and ListBucketVersions only.
+
+## v2.169.0 - 2026-11-16
+
+### Changed
+
+* Windows hosts: a per-host switch, wsl_start_unelevated (on for WSL-02 first), runs each task that starts a process in the WSL distro with no elevation, and moves the steps that need admin rights to tasks that start none: tnwks-wsl-service (SYSTEM) for the WSL service, and tnwks-lan-bridge-sync as SYSTEM with the VM address from the new task tnwks-lan-bridge-ip. The compaction no longer starts the distro itself under the switch. No elevated client creates the WSL VM or starts a process in a distro, and each directory that a task with no elevation writes is made by a new module, tnwks_win_dir_acl, which lets the account make and change files there but not change the directory itself. The services of a distro take the change at its next start, a step by hand with a runbook that stops WSL with wsl --shutdown (docs/wsl/windows-ansible.md). A second switch, wsl_start_unelevated_done, goes on after that step and its read, and only then can the write test of the distro fail its play.
+
+## v2.168.2 - 2026-11-16
+
+### Security
+
+* terraform: a backup prefix of rolesanywhere_backups_prefixed can be exclusive: a bucket policy denies its objects, and a list under it, to every principal but its own role and the break-glass roles. kopiur-agents/ is exclusive, with the AdministratorAccess role of IAM Identity Center as break-glass.
+
+## v2.168.1 - 2026-11-16
+
+### Fixed
+
+* Security: the relay of the WSL distro host check also refuses a document that has more than one name (a hard link). The task that resets the files of C:\ProgramData\tnwks-host-check accepts SYSTEM as their owner, so the relay log that SYSTEM makes there is no change for a check run. The security README describes the inbox rules, the relay log and the checks of the relay as they are.
+
+## v2.168.0 - 2026-11-16
+
+### Added
+
+* Security: the host check of each WSL distro gives the errno of each try of the write test as a series, and the host check of each Windows host counts the files of the write test in its textfile directory.
+
+### Changed
+
+* Security: the host check of each WSL distro writes a JSON document into an inbox, C:\ProgramData\tnwks-host-check-distro, where the account of the distro may make and change files but not change the folder itself. A relay on its Windows host, a SYSTEM task each hour, checks the document and writes the .prom file of the distro; a document that does not fit, a repeated series, or a link on the way gives no result. The relay logs each run to C:\ProgramData\tnwks-host-check\relay.log. The distro account loses its right on the textfile directory, and its directory wsl-distro goes.
+
+## v2.167.0 - 2026-11-15
+
+### Added
+
+* Security: the host checks of each Windows host and each WSL distro add the check updates-held, for a held package or a hidden update that is not optional, older than 14 days (severity high). In a distro, each package has one clock whether it waits, is held or is phased; an upgrade that a run sees first is dated by the Date of its package list (by its Label), read before the simulations of the last run with a result, or counts as old with no such Date; and only a run with a result writes the state file.
+
+### Fixed
+
+* Security: the host check of each WSL distro reads the answer of the write test of root only from a regular file, and opens it without waiting, so a FIFO in its place is "not done" at once and does not hold the run.
+
+## v2.166.1 - 2026-11-15
+
+### Fixed
+
+* security: a Trivy scan reads the layers of an image one at a time (scan.parallel 1), not 5, so a scan container of a large image no longer reaches its limit of 512 MiB and is killed with no report; the limit stays
+
+## v2.166.0 - 2026-11-15
+
+### Changed
+
+* Security: the check of the Defender signatures of each Windows host and the MFA check of Terraform Cloud have the severity high, so a new fail of either starts SecurityFindingNew, as Design Doc 0004, section 5.8, selects.
+
+## v2.165.0 - 2026-11-15
+
+### Added
+
+* Security: the host check of each WSL distro first tries to make a file in the textfile directory of its host, as root (a step of the service before the check) and as the distro user. Only a refusal by Windows for root is the pass; a write, a missing directory or no answer of root is the failed query textfile-write. The role runs the same tries and prints each answer with its uid.
+
 ## v2.164.0 - 2026-11-15
 
 ### Added

@@ -153,6 +153,12 @@ spec:
         scan:
           skip-version-check: true
           disable-telemetry: true
+          # One layer of an image at a time, not 5 (the default of Trivy
+          # 0.76). Trivy holds each file under 100 MB of the layers it reads
+          # in memory, so 5 layers at once took a scan container to its limit
+          # of 512 MiB on large images (README.md, "Memory"). The chart's
+          # trivy.slow gives --slow, which Trivy 0.76 no longer reads.
+          parallel: 1
         # The scan cache of each scan in its own memory. A scan job has one
         # container for each container of the workload, and they run at the
         # same time; the file cache in imageScanCacheDir takes a lock that only
@@ -193,7 +199,7 @@ spec:
     # kill). A burst comes again each day, when the reports end after 24 hours,
     # and with each rollout. On homelab-wsl the first cycle peaked at 473 MiB
     # of the next limit, 512 MiB (about 260 MiB at rest, no kill): under 8%
-    # above the peak. The owner raised it to 640 MiB on 2026-11-15.
+    # below the limit. The owner raised it to 640 MiB on 2026-11-15.
     resources:
       requests:
         cpu: 25m

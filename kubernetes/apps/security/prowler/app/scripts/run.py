@@ -9,14 +9,20 @@ provider and one system. The script:
    run, so the default mutelist of Prowler is off too. An entry that does not
    fit is skipped and counted; a list that can not be read stops the run.
 2. Runs Prowler with the checks of the registry for the provider, the output
-   format json-ocsf and no report to the vendor.
-3. Moves the finished file to `prowler/<provider>/<system>.<time>.ocsf.json` on
-   the volume of results, through `prowler/<provider>/tmp/`, so the converter
-   never reads half a file (security/converter/README.md, "The files of
-   results"). A run that fails, or leaves no file or an empty one, moves no
-   file.
+   format json-ocsf and no report to the vendor, in parts: one process of
+   Prowler for each service of the scan list, one after the other. Prowler
+   keeps each service it has read, and each finding, until its process ends,
+   so a process for the whole list holds them all at once (../README.md,
+   "Memory").
+3. Joins the records of the parts into one JSON array in
+   `prowler/<provider>/tmp/` on the volume of results, and moves it to
+   `prowler/<provider>/<system>.<time>.ocsf.json`, so the converter never
+   reads half a file (security/converter/README.md, "The files of results").
+   A run in which a part fails, or a part leaves an empty file or a file that
+   is not one array, or no part leaves a record, moves no file.
 4. Deletes the files of the system that are older than 14 days.
-5. Prints the peak of memory of the container, the measure of the run.
+5. Prints a line when each part starts and one when it ends, with the peak of
+   its process, and the peak of memory of the container at the end.
 
 It prints no finding and no credential. Tests: security/tests/test_prowler.py.
 """
@@ -179,15 +185,116 @@ def make_dir(path: Path) -> None:
     path.chmod(0o755)
 
 
-def publish(produced: Path, results: Path, provider: str, system: str, now: datetime.datetime) -> Path:
-    """Copy the OCSF file into tmp/ of the volume, then move it to its name in one step."""
+def service(check: str) -> str:
+    """The service of a check: the first word of its ID, as Prowler 5.49.0 reads it
+    (prowler/lib/check/check.py, execute_checks)."""
+    return check.split("_", 1)[0]
+
+
+def parts(checks_file: Path, provider: str) -> list[tuple[str, list[str]]]:
+    """The scan list of the provider in parts: one part for each service, in the order
+    of their names, each with its checks in the order of the list.
+
+    Prowler makes the client of a service the first time a check imports it, and the
+    client keeps what it read until the process ends. A check of one service stays
+    with the other checks of that service, so no part reads a service that another
+    part read already (a check can still read the client of another service)."""
+    checks = json.loads(checks_file.read_text())[provider]
+    grouped: dict[str, list[str]] = {}
+    for check in checks:
+        grouped.setdefault(service(check), []).append(check)
+    return sorted(grouped.items())
+
+
+def child(command: list[str]) -> tuple[int, int | None]:
+    """Run one process of Prowler: its exit code (minus the signal when a signal
+    ended it) and the peak of its resident memory, in bytes."""
+    process = subprocess.Popen(command)
+    _, status, usage = os.wait4(process.pid, 0)
+    process.returncode = os.waitstatus_to_exitcode(status)
+    # ru_maxrss is in KiB on Linux.
+    return process.returncode, usage.ru_maxrss * 1024
+
+
+class BadPart(Exception):
+    """The OCSF file of a part is not one JSON array."""
+
+
+CHUNK = 1024 * 1024
+SPACE = b" \t\r\n"
+
+
+def read_at(file, offset: int, length: int) -> bytes:
+    file.seek(offset)
+    chunk = file.read(length)
+    if len(chunk) != length:
+        raise BadPart("its file changed while it was read")
+    return chunk
+
+
+def first_byte(file, start: int, stop: int) -> int | None:
+    """The offset of the first byte in [start, stop) that is not JSON space, or None."""
+    while start < stop:
+        chunk = read_at(file, start, min(CHUNK, stop - start))
+        kept = chunk.lstrip(SPACE)
+        if kept:
+            return start + len(chunk) - len(kept)
+        start += len(chunk)
+    return None
+
+
+def last_byte(file, start: int, stop: int) -> int | None:
+    """The offset of the last byte in [start, stop) that is not JSON space, or None."""
+    while start < stop:
+        length = min(CHUNK, stop - start)
+        kept = read_at(file, stop - length, length).rstrip(SPACE)
+        if kept:
+            return stop - length + len(kept) - 1
+        stop -= length
+    return None
+
+
+def append_records(produced: Path, joined, records: bool) -> bool:
+    """Copy the records of the JSON array of one part into the array that `joined` holds
+    open, with a comma before them when the array has records already, and return
+    whether the array has records now. In chunks: the run never holds a file in
+    memory.
+
+    Prowler 5.49.0 writes the array as `[`, the records with a comma between them,
+    and `]` (prowler/lib/outputs/ocsf/ocsf.py, batch_write_data_to_file). The script
+    checks the brackets at the two ends only; the converter reads each record."""
+    size = produced.stat().st_size
+    with produced.open("rb") as file:
+        first, last = first_byte(file, 0, size), last_byte(file, 0, size)
+        if first is None or first == last or read_at(file, first, 1) != b"[" or read_at(file, last, 1) != b"]":
+            raise BadPart("its file is not one JSON array")
+        start, stop = first_byte(file, first + 1, last), last_byte(file, first + 1, last)
+        if start is None:
+            return records
+        if records:
+            joined.write(b",")
+        file.seek(start)
+        left = stop + 1 - start
+        while left:
+            chunk = file.read(min(CHUNK, left))
+            if not chunk:
+                raise BadPart("its file changed while it was read")
+            joined.write(chunk)
+            left -= len(chunk)
+    return True
+
+
+def staging(results: Path, provider: str) -> Path:
+    """`prowler/<provider>/tmp/` on the volume, with directories the converter can read."""
     directory = results / "prowler" / provider
-    staging = directory / "tmp"
     make_dir(directory)
-    make_dir(staging)
-    final = directory / f"{system}.{now.strftime(STAMP)}.ocsf.json"
-    partial = staging / f"{final.name}.partial"
-    shutil.copyfile(produced, partial)
+    make_dir(directory / "tmp")
+    return directory / "tmp"
+
+
+def publish(partial: Path, results: Path, provider: str, system: str, now: datetime.datetime) -> Path:
+    """Move the whole file from tmp/ to its name, in one step."""
+    final = results / "prowler" / provider / f"{system}.{now.strftime(STAMP)}.ocsf.json"
     partial.chmod(0o644)
     os.replace(partial, final)
     return final
@@ -213,6 +320,10 @@ def prune(results: Path, provider: str, system: str, now: datetime.datetime) -> 
     return removed
 
 
+def mib(value: int | None) -> str:
+    return "unknown" if value is None else f"{value / 2**20:.0f} MiB"
+
+
 def memory_peak() -> str:
     try:
         return f"{int(MEMORY_PEAK.read_text()) / 2**20:.0f} MiB"
@@ -220,38 +331,78 @@ def memory_peak() -> str:
         return "unknown"
 
 
-def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), call=subprocess.call) -> int:
+def run_part(args: argparse.Namespace, work: Path, mutelist_file: Path, index: int,
+             piece: tuple[str, list[str]], joined, records: bool, call) -> tuple[str | None, bool, int | None]:
+    """Run one part and copy its records into `joined`: why it failed, or None, whether
+    the array has records now, and the peak of memory of the process of the part."""
+    name, checks = piece
+    checks_file = work / f"checks-{name}.json"
+    checks_file.write_text(json.dumps({args.provider: checks}))
+    output = work / f"output-{index}"
+    prefix = f"{args.system}.{name}"
+    code, peak = call(prowler_command(args.provider, checks_file, mutelist_file, output, prefix, args.extra))
+    produced = output / f"{prefix}.ocsf.json"
+    why = None
+    if code != 0:
+        why = f"prowler ended with code {code}"
+    elif produced.is_file() and produced.stat().st_size == 0:
+        # The converter reads an empty file as a bad file: a part that leaves
+        # one fails, as a run of the whole list did.
+        why = "prowler wrote an empty OCSF file"
+    elif produced.is_file():
+        try:
+            records = append_records(produced, joined, records)
+        except BadPart as error:
+            why = str(error)
+    # No file: Prowler made no finding for the checks of this part. Other parts can.
+    shutil.rmtree(output, ignore_errors=True)
+    checks_file.unlink()
+    return why, records, peak
+
+
+def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), call=child) -> int:
     started = now()
     try:
         checks, skipped = accepted_checks(args.accepted, args.system, started.date())
     except UnreadableList as error:
         print(f"the list of accepted findings can not be read ({error}): no run", flush=True)
         return 2
+    pieces = parts(args.checks, args.provider)
     with tempfile.TemporaryDirectory(dir=args.work) as work:
         work = Path(work)
         mutelist_file = work / "mutelist.yaml"
         # JSON is YAML, and Prowler reads the file with yaml.safe_load.
         mutelist_file.write_text(json.dumps(mutelist(checks)))
-        output = work / "output"
-        name = f"{args.system}.run"
-        command = prowler_command(args.provider, args.checks, mutelist_file, output, name, args.extra)
         print(f"prowler {args.provider} for {args.system}: {len(checks)} accepted checks muted,"
-              f" {skipped} entries of the list skipped", flush=True)
-        code = call(command)
-        produced = output / f"{name}.ocsf.json"
-        if code != 0:
-            print(f"prowler ended with code {code}: no file for the converter", flush=True)
-        elif not produced.is_file():
-            print("prowler wrote no OCSF file: no file for the converter", flush=True)
+              f" {skipped} entries of the list skipped, {len(pieces)} parts", flush=True)
+        partial = staging(args.results, args.provider) / f"{args.system}.{started.strftime(STAMP)}.ocsf.json.partial"
+        failed, records = [], False
+        with partial.open("wb") as joined:
+            joined.write(b"[")
+            for index, piece in enumerate(pieces, 1):
+                part = f"part {index} of {len(pieces)}: {piece[0]}, {len(piece[1])} checks"
+                print(f"{part}: starts", flush=True)
+                why, records, peak = run_part(args, work, mutelist_file, index, piece, joined, records, call)
+                print(f"{part}: {'ends' if why is None else f'fails ({why})'},"
+                      f" memory peak of the part: {mib(peak)}", flush=True)
+                if why is not None:
+                    failed.append(piece[0])
+            joined.write(b"]")
+        if failed:
+            # A night with a part missing is no result: the converter keeps the file
+            # of the last whole run, and its time ages until the rule for a late
+            # result fires. Partial results would drop the checks of the part.
+            print(f"{len(failed)} of {len(pieces)} parts failed ({', '.join(failed)}):"
+                  " no file for the converter", flush=True)
             code = 1
-        elif produced.stat().st_size == 0:
-            # The converter reads an empty file as a bad file and serves no
-            # result: the same as no file, so the run fails and moves nothing.
-            print("prowler wrote an empty OCSF file: no file for the converter", flush=True)
+        elif not records:
+            print("prowler wrote no record in any part: no file for the converter", flush=True)
             code = 1
         else:
-            final = publish(produced, args.results, args.provider, args.system, now())
+            final = publish(partial, args.results, args.provider, args.system, now())
             print(f"wrote {final.relative_to(args.results)}", flush=True)
+            code = 0
+    # A file of a run that failed is a leftover in tmp/: prune deletes it.
     for path in prune(args.results, args.provider, args.system, now()):
         print(f"deleted {path.relative_to(args.results)}", flush=True)
     print(f"memory peak of the container: {memory_peak()}", flush=True)

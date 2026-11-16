@@ -80,6 +80,14 @@ module "mikrotik" {
   ntp         = local.ntp
   syslog      = local.syslog
 
+  # The version line of the security platform to WSL-02 (homelab-wsl-02's
+  # Windows host), which relays udp/6001 into its WSL distro and on to that
+  # site's vector-aggregator (Design Doc 0004, section 5.5).
+  version_line = {
+    remote      = "10.10.91.112"
+    src_address = "10.10.91.1"
+  }
+
   # WireGuard private keys are injected from SOPS, never committed. The rest of
   # each listener (address, port, peers) is generated from the VyOS config, or
   # for the WSL site tunnels written in site-tunnels.tf.
