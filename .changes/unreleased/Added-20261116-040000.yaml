@@ -1,3 +1,0 @@
-kind: Added
-body: 'Security: the host check of each WSL distro gives the errno of each try of the write test as a series, and the host check of each Windows host counts the files of the write test in its textfile directory.'
-time: 2026-11-16T04:00:00.000000000Z
