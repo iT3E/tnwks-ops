@@ -72,9 +72,13 @@ LOKI = "http://loki-gateway.monitoring.svc.cluster.local"
 # sends one each hour, so the window holds about three.
 # The whole line, with or without the topics of the router in front (script,info),
 # as the filter of the aggregator matches it.
+VERSION_PREFIX = "tnwks-routeros-version"
 VERSION_LINE = re.compile(r"(?:[a-z]+(?:,[a-z]+)* )?tnwks-routeros-version router=(\S+) version=([0-9][0-9.]*)"
                           r"(?: \([a-z]+\))?")
-LINE_QUERY = '{job="routeros"} |= "tnwks-routeros-version "'
+# Loki keeps the syslog event as JSON. The syslog source of the aggregator takes the
+# prefix as the tag (appname) and keeps the rest in message, so the line filter has
+# no space after the prefix.
+LINE_QUERY = '{job="routeros"} |= "tnwks-routeros-version"'
 LINE_WINDOW_HOURS = 3
 # More lines than this in the window is not the hourly line: no result.
 LINE_LIMIT = 30
@@ -212,6 +216,23 @@ def running_version(prometheus: str, router: str, get=http_get) -> tuple[int, ..
     return version_key(versions.pop())
 
 
+def version_text(line: str) -> str:
+    """The text of the router in a line of the stream job="routeros". The aggregator
+    writes the syslog event as JSON: with the appname VERSION_PREFIX, the text is the
+    prefix and the message (the form that the syslog source gives); else the message
+    alone. A line that is not that JSON is read as it is, and gives no version."""
+    try:
+        event = json.loads(line)
+    except ValueError:
+        return str(line).strip()
+    if not isinstance(event, dict) or not isinstance(event.get("message"), str):
+        return str(line).strip()
+    text = event["message"].strip()
+    if event.get("appname") == VERSION_PREFIX:
+        return f"{VERSION_PREFIX} {text}"
+    return text
+
+
 def line_versions(loki: str, router: str, now: datetime.datetime, get=http_get) -> set[tuple[int, ...]]:
     """The versions in the version lines of the router of the last LINE_WINDOW_HOURS, from
     the stream job="routeros" of Loki. An empty set: no line. Loki that does not answer
@@ -235,14 +256,7 @@ def line_versions(loki: str, router: str, now: datetime.datetime, get=http_get) 
         raise QueryError(f"Loki has more than {LINE_LIMIT} version lines in {LINE_WINDOW_HOURS} hours")
     versions = set()
     for line in lines:
-        # The aggregator writes the syslog event as JSON, with the text in `message`. A
-        # line in another form is not the whole version line: no result.
-        try:
-            event = json.loads(line)
-            text = event.get("message") if isinstance(event, dict) else None
-        except ValueError:
-            text = None
-        match = VERSION_LINE.fullmatch((text if isinstance(text, str) else str(line)).strip())
+        match = VERSION_LINE.fullmatch(version_text(line))
         if not match:
             raise QueryError("a version line gives no version")
         if match[1] == router:
@@ -272,6 +286,7 @@ def router_version(args: argparse.Namespace, now: datetime.datetime, get=http_ge
         if answer is not None and answer != line:
             raise QueryError("the version lines and Prometheus give two versions")
         return line
+    print(f"routeros-firmware for {args.router}: no version line in {LINE_WINDOW_HOURS} hours", flush=True)
     if answer is None:
         raise QueryError(f"no version line in {LINE_WINDOW_HOURS} hours, and no answer of Prometheus")
     return answer
