@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.175.1 - 2026-11-16
+
+### Fixed
+
+* Security: the filter of the aggregators and the reader of the API checks now read the router's version line in the form that the syslog source gives (the prefix as the tag, appname, and the identity and version in message). The filter keeps that line out of the security stream routeros, and the job finds it in the Loki of homelab-wsl-02 (its line filter has no space after the prefix). With no line in 3 hours, the job says so in its log.
+
 ## v2.175.0 - 2026-11-16
 
 ### Changed
