@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.175.0 - 2026-11-16
+
+### Changed
+
+* The AWS runs of Prowler have the memory limit of their measured peak and 25 %, and a request of 704 MiB, the highest working set rounded up. The two AWS systems list prowler as a source, so SecurityResultLate fires when a run has no result for 36 hours.
+
 ## v2.174.0 - 2026-11-16
 
 ### Changed
