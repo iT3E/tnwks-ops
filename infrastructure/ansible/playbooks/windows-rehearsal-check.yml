@@ -15,11 +15,12 @@
 #   import   the import exited 0, and a later task of the account (the probe)
 #            finds the distro registered
 #   start    the start task runs, with nobody signed in
-#   tokens   each WSL process of the account (wsl, wslhost, wslrelay, and a
-#            VM process whose token is the account's): medium integrity, and the
-#            Administrators group absent or deny-only, with at least one wsl.exe
-#            client. A WSL process that this read can not open fails the check.
-#            The VM processes of other accounts are listed with no user
+#   tokens   each WSL process whose token is the account's (wsl, wslhost,
+#            wslrelay): medium integrity, and the Administrators group absent
+#            or deny-only, with at least one wsl.exe client. A WSL process that
+#            this read can not open fails the check. A VM process (vmmem) whose
+#            token is another user's, such as the account of a VM, is listed
+#            with its values and no user
 #   write    as root in the distro: refused, with EACCES or EPERM. Another
 #            answer, such as ENOENT or EIO, fails
 #   mount    wsl --mount --vhd <file> --bare, then wsl --unmount: both exit 0
@@ -96,7 +97,8 @@
           public static class TnwksRehearsalToken {
               [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
               [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
-              [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int cls, IntPtr buffer, int length, out int needed);
+              [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(
+                  IntPtr token, int cls, IntPtr buffer, int length, out int needed);
               [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
               static IntPtr Info(IntPtr token, int cls) {
                   int needed;
@@ -137,9 +139,8 @@
               }
           }
           '@
-          # Each process of the account, by the user of its token. The VM
-          # processes of the other accounts are listed apart, with no user, so
-          # the reader sees which VM process belongs to whom.
+          # Each process of the account, by the user of its token. A VM process
+          # of another user is listed apart, with no user.
           $read = @()
           $vms = @()
           $failed = @()
@@ -148,7 +149,7 @@
               if ($token -like 'error*') { $failed += "$($p.Name) $($p.Id): $token"; continue }
               $mine = $token -like "user=$sid *"
               $value = "$($p.Name) $($p.Id): $($token -replace '^user=\S+ ', '')"
-              if ($mine) { $read += $value } elseif ($p.Name -like 'vmmem*') { $vms += "other account, $value" }
+              if ($mine) { $read += $value } elseif ($p.Name -like 'vmmem*') { $vms += "not the account, $value" }
           }
           $bad = @($read | Where-Object { $_ -notmatch 'integrity=0x2000 ' -or $_ -match 'admins=enabled' })
           $clients = @($read | Where-Object { $_ -like 'wsl *' })

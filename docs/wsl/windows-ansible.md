@@ -18,6 +18,7 @@ run that shows drift.
 | `windows_usb_attach` (`usb-attach`)         | usbipd-win (pinned MSI), the forced bind of the Z-Stick, `Sync-TnwksUsbAttach.ps1` and the task `tnwks-usb-attach` (Z-Stick attach plus worker-2 restart, [usb-passthrough.md](usb-passthrough.md)) |
 | `windows_wsl_maintenance` (`wsl-maintenance`) | `Watch-TnwksWsl.ps1` and the task `tnwks-wsl-watchdog` (every 5 min), `Compact-WslVhdx.ps1` and the on-demand task `tnwks-vhdx-compact` |
 | `windows_observability_storage` (`observability-storage`) | The 20Gi Prometheus disk `C:\WSL\observability.vhdx` and the task `tnwks-observability-mount` (site 1, [observability-implementation.md](../operations/observability-implementation.md#site-1-prometheus-volume)) |
+| `windows_wsl_rehearsal` (`wsl-rehearsal`) | hosts with `wsl_rehearsal` (WSL-02): a temporary standard account `tnwks-rehearsal` with a distro of its own and five tasks, for the rehearsal of the account change ([below](#the-rehearsal-of-the-account-change)) |
 | `windows_power` (`power`)                   | hosts with `power_no_sleep` (WSL-02): standby (S1-S3) not allowed on the active scheme, plugged in or on battery, and hibernation off, so neither a program nor the Start menu can sleep the host. Skipped elsewhere; how to undo it is in the role's defaults |
 | `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
 | `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
@@ -494,6 +495,27 @@ from before the start step. Then turn the switch off as below.
 switch on with the start switch off). Its apply makes the tasks elevated
 again and removes the new tasks. Then do steps 1 to 5 again; with the
 switch off, the keepalive and the watchdog start WSL elevated, as before.
+
+## The rehearsal of the account change
+
+Per host, `wsl_rehearsal` (`group_vars/windows_hosts.yml`, on in
+`host_vars/WSL-02` only) adds the role `windows_wsl_rehearsal`: step 0 of
+the account change (Design Doc 0004, section 9). It does not touch the
+distro, the tasks or the account of today.
+
+| Part | What it is, and who gets what |
+| --- | --- |
+| The account `tnwks-rehearsal` | A local account, a member of Users only. Its password is random, made on the host, and kept nowhere. The play stops if the account is a member of Administrators |
+| The right to log on as a batch job | For `tnwks-rehearsal` only (an S4U task needs it) |
+| `C:\ProgramData\tnwks-rehearsal` | The scripts and the pinned Alpine root file system. Only SYSTEM and the Administrators may change them |
+| `...\log`, `...\disk` | `tnwks-rehearsal` may make and change files: the results of its tasks, and the empty test disk file `mount-test.vhdx` |
+| Five tasks `tnwks-rehearsal-<step>` | As `tnwks-rehearsal`, S4U, no elevation, no trigger: `probe`, `import`, `start` (holds the distro with nobody signed in), `write`, `mount` |
+| The profile of `tnwks-rehearsal` | Its `.wslconfig` (a memory limit, one processor, no swap, no networking key) and its distro `tnwks-rehearsal` |
+
+Run the checks after the apply, as the comment of
+`playbooks/windows-rehearsal-check.yml` says. The play reads, and changes
+no setting. A second change sets `wsl_rehearsal_state` to `absent` and
+removes each part.
 
 ## Check-only settings
 

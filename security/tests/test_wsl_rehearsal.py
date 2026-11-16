@@ -284,3 +284,12 @@ def test_the_mount_step_mounts_bare_and_unmounts(tmp_path):
     out = run_step(tmp_path, "mount", wsl=f'echo "$@" >> {calls}; exit 0', extra="-Disk 'C:\\x\\mount-test.vhdx'")
     assert calls.read_text().splitlines() == ["--mount --vhd C:\\x\\mount-test.vhdx --bare", "--unmount C:\\x\\mount-test.vhdx"]
     assert out["mount_exit"] == 0 and out["unmount_exit"] == 0
+
+
+def test_the_import_waits_for_the_hive_and_the_profile_of_the_account():
+    names = [task["name"] for task in present()]
+    guard = names.index("The task of the account ran in its own profile")
+    assert names.index("The probe makes the profile of the account") < guard < names.index(".wslconfig of the account")
+    assert guard < names.index("The import of the distro")
+    script = task_named("The task of the account ran in its own profile")["ansible.windows.win_powershell"]["script"]
+    assert "$probe.hive" in script and "Users" in script

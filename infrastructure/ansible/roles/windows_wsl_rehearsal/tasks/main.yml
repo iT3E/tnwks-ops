@@ -146,6 +146,24 @@
               (Get-CimInstance Win32_UserProfile -Filter "SID = '$sid'").LocalPath
           register: wsl_rehearsal_profile
 
+        # WSL keeps the distros of an account in its registry hive, which is
+        # loaded while a task of the account runs. No import without it, and
+        # no .wslconfig outside a profile under C:\Users.
+        - name: The task of the account ran in its own profile
+          ansible.windows.win_powershell:
+            parameters:
+              Path: '{{ wsl_rehearsal_log_dir }}\probe.json'
+              Profile: "{{ wsl_rehearsal_profile.output | last | default('') }}"
+            script: |
+              param([string]$Path, [string]$Profile)
+              $ErrorActionPreference = 'Stop'
+              $Ansible.Changed = $false
+              $probe = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+              if (-not $probe.hive) { throw 'The registry hive of the account was not loaded in its task. No import.' }
+              if ($Profile -notmatch '^[A-Za-z]:\\Users\\[^\\]+$' -or $probe.profile -ne $Profile) {
+                  throw "The profile of the account is not one folder under Users ($Profile, $($probe.profile)). No import."
+              }
+
         - name: .wslconfig of the account
           ansible.windows.win_copy:
             dest: '{{ wsl_rehearsal_profile.output | last }}\.wslconfig'
