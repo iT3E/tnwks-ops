@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.172.0 - 2026-11-16
+
+### Added
+
+* Security: the router logs its RouterOS version each hour to the host of homelab-wsl-02 too (a scheduler and a logging rule in Terraform, the syslog relay on WSL-02 and its distro), and the API checks read the version lines of the last 3 hours from that site's Loki. The lines must agree, and agree with the Prometheus of homelab-wsl when it answers; with no line, that Prometheus decides as before. The aggregators keep the line out of the security stream routeros.
+
 ## v2.171.3 - 2026-11-16
 
 ### Fixed
