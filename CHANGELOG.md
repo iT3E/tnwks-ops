@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.181.0 - 2026-11-16
+
+### Changed
+
+* Agent platform alerts: `AgentInstructionCheckStale` and `AgentMemoryIndexFailed` count each trust domain with an agent pod, not the pilot only. A trust domain with no agent pod, or one at zero replicas, never fires them.
+
 ## v2.180.1 - 2026-11-16
 
 ### Fixed
