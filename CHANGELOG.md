@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.170.0 - 2026-11-16
+
+### Changed
+
+* agents-workflows: the CronJob workflow-providers runs the providers command of the image of the workflow agents, which its CI tests, in place of the providers script and the GitHub App token script of this repo. The steps, the log lines and the exit codes stay the same.
+
 ## v2.169.4 - 2026-11-16
 
 ### Fixed
