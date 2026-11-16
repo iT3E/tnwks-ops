@@ -1,21 +1,4 @@
 ---
-# Two roles start a process in the distro from a task that needs admin
-# rights, and they have no part with no elevation yet: the USB attach (usbipd
-# bind) and the monitoring volume (wsl --mount). A host with either one can
-# not start WSL with no elevation until they do.
-- name: The start with no elevation has each role it needs
-  ansible.builtin.assert:
-    that:
-      - not (wsl_start_unelevated | bool) or (usb_attach_bound_devices | default([]) | length == 0)
-      - not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool)
-      - not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)
-    fail_msg: >-
-      On {{ inventory_hostname }}: wsl_start_unelevated_done needs wsl_start_unelevated. And
-      wsl_start_unelevated needs no USB attach and no monitoring volume: their tasks need
-      admin rights and start a process in the distro, so they need a part with no elevation
-      first (Design Doc 0004, section 5.9).
-    quiet: true
-
 - name: Directories
   ansible.windows.win_file:
     path: "{{ item }}"
@@ -34,26 +17,20 @@
     label: "{{ item.src }}"
 
 # With no elevation, the watchdog can not change a log that an elevated run
-# made, so it logs to a directory of its own. The account may change only
-# that directory, not the scripts that SYSTEM runs.
-- name: Log directory of the watchdog
-  ansible.windows.win_file:
-    path: "{{ wsl_watchdog_log_dir }}"
-    state: directory
-  register: wsl_watchdog_log_dir_result
+# made, so it logs to a directory of its own, where the account may make and
+# change files but not change the directory itself (tnwks_win_dir_acl). The
+# SYSTEM task logs to a directory that only SYSTEM and the Administrators may
+# change.
+- name: Log directories of the watchdog and the WSL service task
+  tnwks_win_dir_acl:
+    path: "{{ item.path }}"
+    writer: "{{ item.writer }}"
+  loop:
+    - { path: "{{ wsl_watchdog_log_dir }}", writer: "{{ wsl_maintenance_user }}" }
+    - { path: "{{ wsl_service_log_dir }}", writer: "" }
+  loop_control:
+    label: "{{ item.path }}"
   when: wsl_start_unelevated | bool
-
-- name: The account may change the log directory of the watchdog
-  ansible.windows.win_acl:
-    path: "{{ wsl_watchdog_log_dir }}"
-    user: "{{ wsl_maintenance_user }}"
-    rights: Modify
-    type: allow
-    state: present
-    inherit: ContainerInherit, ObjectInherit
-    propagation: None
-  # A check run does not make the directory, so it has no ACL to read yet.
-  when: wsl_start_unelevated | bool and not (ansible_check_mode and wsl_watchdog_log_dir_result is changed)
 
 - name: Watchdog task (every 5 min and at boot)
   tnwks_win_scheduled_task:
@@ -78,10 +55,15 @@
 # WSL stops a distro soon after its last wsl.exe client exits, Docker and the
 # Talos nodes inside or not. DESKTOP-HKE05KI always has one (the UDP relays,
 # the OpenClaw gateway, interactive use); a host without them needs this.
+# running: an apply starts it when it is not running, also after a register
+# of a changed task. A task that a run of the compaction or the start step
+# paused (disabled) is registered again, so enabled, and then started: do
+# not apply during either (docs/wsl/windows-ansible.md).
 - name: Keepalive task (one wsl.exe client from boot)
   tnwks_win_scheduled_task:
     name: "{{ wsl_keepalive_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'wsl-keepalive.xml.j2') }}"
+    running: true
   when: wsl_keepalive_enabled | bool
 
 - name: vhdx compaction task (on demand)

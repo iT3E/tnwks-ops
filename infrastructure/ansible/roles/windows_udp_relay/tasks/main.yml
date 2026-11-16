@@ -4,24 +4,13 @@
     path: "{{ udp_relay_dir }}"
     state: directory
 
+# The account may make and change files here, but not change the directory
+# itself (tnwks_win_dir_acl).
 - name: Log directory of the relays
-  ansible.windows.win_file:
+  tnwks_win_dir_acl:
     path: "{{ udp_relay_log_dir }}"
-    state: directory
-  register: udp_relay_log_dir_result
+    writer: "{{ udp_relay_user }}"
   when: wsl_start_unelevated | bool
-
-- name: The account may change the log directory of the relays
-  ansible.windows.win_acl:
-    path: "{{ udp_relay_log_dir }}"
-    user: "{{ udp_relay_user }}"
-    rights: Modify
-    type: allow
-    state: present
-    inherit: ContainerInherit, ObjectInherit
-    propagation: None
-  # A check run does not make the directory, so it has no ACL to read yet.
-  when: wsl_start_unelevated | bool and not (ansible_check_mode and udp_relay_log_dir_result is changed)
 
 - name: Relay script
   ansible.windows.win_copy:

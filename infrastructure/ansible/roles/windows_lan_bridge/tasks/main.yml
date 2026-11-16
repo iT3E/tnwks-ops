@@ -52,26 +52,14 @@
     state: absent
   loop: "{{ lan_bridge_retired_tcp_ports }}"
 
+# The account may make and change files here, but not change the directory
+# itself, the script or the port list (tnwks_win_dir_acl). The sync task
+# takes from the file only an address of the WSL VM.
 - name: Directory of the address file
-  ansible.windows.win_file:
+  tnwks_win_dir_acl:
     path: "{{ lan_bridge_ip_dir }}"
-    state: directory
-  register: lan_bridge_ip_dir_result
+    writer: "{{ lan_bridge_user }}"
   when: wsl_start_unelevated | bool
-
-# The account may change this directory only, not the script or the port
-# list. The sync task takes from the file only an address of the WSL VM.
-- name: The account may change the directory of the address file
-  ansible.windows.win_acl:
-    path: "{{ lan_bridge_ip_dir }}"
-    user: "{{ lan_bridge_user }}"
-    rights: Modify
-    type: allow
-    state: present
-    inherit: ContainerInherit, ObjectInherit
-    propagation: None
-  # A check run does not make the directory, so it has no ACL to read yet.
-  when: wsl_start_unelevated | bool and not (ansible_check_mode and lan_bridge_ip_dir_result is changed)
 
 - name: Address task (desktop user, no elevation)
   tnwks_win_scheduled_task:

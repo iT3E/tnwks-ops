@@ -151,54 +151,90 @@ into the template, and check that `--check` reports no change. S4U tasks
 
 Per host, `wsl_start_unelevated` (`group_vars/windows_hosts.yml`, on in
 `host_vars/WSL-02` first) makes each task that starts a process in the
-distro run with no elevation (Design Doc 0004, section 5.9). WSL gives each
-process in a distro the access to the Windows drives of the `wsl.exe` that
-started it, and gives the services of the distro (systemd, Docker, the
-Talos nodes) the access of the `wsl.exe` that created the distro instance
-(the WSL technical documentation, "Elevated vs non-elevated mountpoints",
-`doc/docs/technical-documentation/drvfs.md` in microsoft/WSL).
+distro run with no elevation, and moves each step that needs admin rights to
+a task that runs no `wsl.exe` (Design Doc 0004, section 5.9).
+
+**The rule: no elevated client ever creates the WSL VM or starts a process
+in a distro.** The `wsl.exe` commands that do neither are `--shutdown`,
+`--terminate`, `--list`, `--status` and `--version`. A start of a distro,
+`--mount`, and `--manage` (resize, compact, set-version) create the VM when
+none runs (the callers of `_CreateVm` in
+`src/windows/service/exe/LxssUserSession.cpp`, microsoft/WSL). A test
+(`security/tests/test_wsl_start_unelevated.py`) checks each elevated task of
+the user, and the scripts that it runs, against that list.
 
 | Task | With the switch on |
 | --- | --- |
-| `tnwks-wsl-keepalive`, `tnwks-wsl-watchdog`, the UDP relays | The desktop user, no elevation. They log to a `log` directory that the account may change, apart from the scripts |
-| `tnwks-wsl-service` (new) | SYSTEM, each 5 minutes and at boot: the part of the watchdog that needs admin rights (the WSL service, the keepalive task). It runs no `wsl.exe` |
+| `tnwks-wsl-keepalive`, `tnwks-wsl-watchdog`, the UDP relays | The desktop user, no elevation. They log to a `log` directory where the account may make and change files, apart from the scripts |
+| `tnwks-wsl-service` (new) | SYSTEM, each 5 minutes and at boot: the part of the watchdog that needs admin rights (the WSL service, the keepalive task). It runs no `wsl.exe`, and logs to `service-log`, which only SYSTEM and the Administrators may change |
 | `tnwks-lan-bridge-ip` (new) | The desktop user, no elevation: writes the address of the WSL VM to `C:\ProgramData\tnwks-lan-bridge\wsl-ip\address.json` |
-| `tnwks-lan-bridge-sync` | SYSTEM, with that file and no `wsl.exe`. It takes only an address in the subnet of the vEthernet (WSL) adapter |
-| `tnwks-vhdx-compact` | Still elevated for diskpart, with `-NoDistroStart`: the keepalive and the watchdog start the distro after it |
+| `tnwks-lan-bridge-sync` | SYSTEM, with that file and no `wsl.exe`. It opens the file once, refuses a link on the way, and takes only an address in the subnet of the vEthernet (WSL) adapter |
+| `tnwks-vhdx-compact` | Still elevated for diskpart, with `-NoDistroStart`: it runs only `wsl --shutdown` and `wsl --list`, and the keepalive starts WSL first after it |
 
-SYSTEM's `wsl.exe` can not see the distro of the user, so a SYSTEM task can
-not start a process in it. The USB attach and the monitoring volume have no
-part with no elevation yet, and the play refuses the switch on a host that
-runs them.
+Each directory where an account with no elevation writes is made by the
+module `tnwks_win_dir_acl` (`playbooks/library`): no inherited rule, the
+Administrators own it, and the account may make and change files but not
+delete the directory or make one in it. The module stops when the path is a
+link or a junction. SYSTEM's `wsl.exe` can not see the distro of the user,
+so a SYSTEM task can not start a process in it. The USB attach and the
+monitoring volume have no part with no elevation yet, and the play refuses
+the switch on a host that runs them (the first task of the play, with each
+tag).
 
-**The change takes effect for the services only at the next start of the
-distro.** Until then they keep the access of the elevated start. The merge
-and the apply of the switch leave the plays green: the last task of
-`wsl_host_check` (the write test) can fail the distro play only when
+**The services take the change at the next start of WSL**, the start step
+below. The merge and the apply of the switch leave the plays green: the last
+task of `wsl_host_check` (the write test) can fail the distro play only when
 `wsl_start_unelevated_done` is on too. The security result of the check
 shows the write test from the first run, with or without it.
+
+### Before the merge of the switch for a host
+
+Read these on the host, as the desktop user. Each is a condition of the
+change; if one is not met, stop and say which.
+
+- User Account Control is on: `(Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System).EnableLUA` is `1`.
+- The account is not the built-in Administrator: `[Security.Principal.WindowsIdentity]::GetCurrent().User.Value` does not end in `-500`.
+- A PowerShell window with no elevation runs at medium integrity: `whoami /groups | Select-String 'Mandatory Label'` shows `Medium Mandatory Level`.
+- One distro only, and no Docker Desktop: `wsl --list --verbose` lists only `Ubuntu`, and `Get-Process 'Docker Desktop' -ErrorAction SilentlyContinue` gives nothing. Another distro or Docker Desktop could start WSL first.
+- Developer mode is off: `(Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock -ErrorAction SilentlyContinue).AllowDevelopmentWithoutDevLicense` is `0` or empty. With it on, an account may make a symbolic link with no privilege.
+- The inherited rules of the three directories of the tasks: `(Get-Acl C:\ProgramData\tnwks-watchdog).Access`, the same for `C:\ProgramData\tnwks-lan-bridge` and `C:\ProgramData\tnwks-udp-relay`. Note who may make files there.
+- The `wsl.exe` processes and their start times, to compare after the apply: `Get-Process wsl -ErrorAction SilentlyContinue | Format-Table Id, StartTime`.
 
 ### The start step (site 2 first)
 
 **Who runs it:** the owner, at the console of the host or over remote
 desktop, as the desktop user. No play can do it: Ansible reaches `WSL-02`
 only through its distro (the jump in `host_vars/WSL-02`), so a play loses
-its way to the host when the distro stops. The dispatch of `ansible-hosts`
-takes only a mode (check, drift or apply), with no tag, and no workflow or
-play is added for this step.
+its way to the host when WSL stops. The dispatch of `ansible-hosts` takes
+only a mode (check, drift or apply), with no tag, and no workflow or play is
+added for this step.
 
 **When:** at a time when the apps of the cluster on the host may be down.
 This step moves no app. The cluster is down from step 1 to the end of
 step 5: about 10 minutes, at most about 25 (an estimate from the parts
 below, not a measured time). The whole runbook takes about 30 minutes with
-its checks.
+its checks. Merge nothing under `infrastructure/ansible` during the window:
+an apply registers the paused tasks again, so enables them, and starts the
+keepalive.
+
+**Never leave the host in the state after step 2 across a restart of
+Windows**: with the tasks disabled, nothing starts WSL at boot. To stop
+there, enable the tasks and start the keepalive (step 5).
+
+**Alerts during the window**, on site 1: `PeerSiteUnreachable` after 10
+minutes, `SecurityHostUnreachable` after 5, maybe `WindowsHostDown` (if
+site 1 reaches the host of site 2 through the tunnel in its distro), and
+`SecurityResultLate` later if the window runs long. Before step 1, add a
+silence of one hour in the Alertmanager of site 1 with
+`alertname=~"PeerSiteUnreachable|SecurityHostUnreachable|WindowsHostDown"`,
+and expire it after step 6.
 
 Open two windows on the host, and keep to them:
 
-- **Window A**, PowerShell with "Run as administrator": only the
-  `ScheduledTask` and `Get-Process` commands below. **Never `wsl` in it.**
-  An elevated `wsl.exe` that starts the distro gives its services the
-  elevated access again.
+- **Window A**, PowerShell with "Run as administrator": the
+  `ScheduledTask` and `Get-Process` commands below. It runs no `wsl`
+  command that creates the VM or starts a process (only `--shutdown` and
+  `--list`, as a fallback).
 - **Window B**, PowerShell with no elevation: each `wsl` command. Check it
   first; this must print `False`:
 
@@ -215,11 +251,26 @@ host, use the name from its host_vars.
    ```powershell
    Get-ScheduledTask -TaskName tnwks-wsl-keepalive, tnwks-wsl-watchdog, tnwks-wsl-service, tnwks-lan-bridge-ip |
      Format-Table TaskName, State, @{ n = 'RunLevel'; e = { $_.Principal.RunLevel } }, @{ n = 'User'; e = { $_.Principal.UserId } }
+   Get-Process wsl -ErrorAction SilentlyContinue | Format-Table Id, StartTime
    ```
 
    Check: the keepalive, the watchdog and `tnwks-lan-bridge-ip` show
-   `Limited`, and `tnwks-wsl-service` shows `SYSTEM`. If not, stop here:
-   the apply did not reach the host. Nothing is changed yet.
+   `Limited`, and `tnwks-wsl-service` shows `SYSTEM`. Compare the `wsl`
+   processes with the list from before the merge. If the tasks are not as
+   above, stop here: the apply did not reach the host. Nothing is changed
+   yet.
+
+   Then, in window B, the reads as root of what the distro uses under
+   `/mnt` (open files, Docker mounts, units, fstab and cron):
+
+   ```powershell
+   wsl -d Ubuntu -u root -e sh -c "find /proc/[0-9]*/fd -lname '/mnt/*' -printf '%l\n' 2>/dev/null | sort -u"
+   wsl -d Ubuntu -u root -e sh -c 'docker ps -q | xargs -r docker inspect -f "{{.Name}} {{range .Mounts}}{{.Source}} {{end}}" | grep /mnt/'
+   wsl -d Ubuntu -u root -e sh -c 'grep -rls /mnt/ /etc/systemd/system /etc/fstab /etc/cron* /var/spool/cron 2>/dev/null'
+   ```
+
+   Check: each path under `/mnt` is one that the desktop user may use with
+   no elevation. If one is not, stop here and say which.
 
 1. **Stop the cluster cleanly** (window B, about 2 minutes). The
    keepalive still holds the distro, so WSL does not stop it under the
@@ -250,41 +301,40 @@ host, use the name from its host_vars.
    ```
 
    Check: each task shows `Disabled`. Keep window A open: step 5 uses
-   `$tasks`. When the keepalive stops, WSL may
-   stop the distro on its own a few seconds later; that is expected. A
-   paused task takes its new principal when it runs again. The way back:
-   step 5.
+   `$tasks`. When the keepalive stops, WSL may stop the distro on its own a
+   few seconds later; that is expected. A paused task takes its new
+   principal when it runs again. The way back: step 5.
 
-3. **Stop the distro** (window B, 1 minute):
+3. **Stop WSL** (window B, about 1 minute). `wsl --shutdown` stops the VM,
+   so the next start of a distro creates it again:
 
    ```powershell
-   wsl --terminate Ubuntu
+   wsl --shutdown
    wsl --list --running
+   Get-Process vmmemWSL, vmmem -ErrorAction SilentlyContinue
    ```
 
-   Check: the list does not name `Ubuntu`. If the distro had already
-   stopped in step 2, the terminate says so; that is a pass. If window B
-   gets "access denied", run the same two commands in window A: they start
-   no process in the distro. A `wsl --shutdown` is not needed: the next
-   `wsl.exe` that starts the distro sets the access of its services, and
-   the VM, its attached disks and its USB devices stay. The way back:
-   step 5.
+   Check: the list says that no distro runs, and `Get-Process` gives no
+   output. A `wsl --terminate` is not enough: it stops the distro and
+   leaves the VM. If window B is refused, run the same three commands in
+   window A: `--shutdown` and `--list` create no VM and start no process.
+   The way back: step 5.
 
 4. **No `wsl.exe` is left** (window A, 1 minute). Close each terminal on
    the host other than windows A and B, elevated or not, and each `wsl`
    session. Then:
 
    ```powershell
-   Get-Process -Name wsl, wslhost -ErrorAction SilentlyContinue
+   Get-Process -Name wsl, wslhost, vmmemWSL, vmmem -ErrorAction SilentlyContinue
    ```
 
-   Check: no output. A `wsl.exe` that is left can start the distro with its
-   own access. Find the window that holds it and close it, or end it with
+   Check: no output. A `wsl.exe` that is left can start WSL with its own
+   elevation. Find the window that holds it and close it, or end it with
    `Stop-Process -Id <id>`, and run the check again. The way back: step 5.
 
-5. **Start the distro with no elevation, then the nodes** (windows A and
-   B, about 5 minutes). The keepalive starts the distro first, as the
-   desktop user with no elevation:
+5. **Start WSL with no elevation, then the nodes** (windows A and B, about
+   5 minutes). The keepalive starts WSL first, as the desktop user with no
+   elevation:
 
    ```powershell
    # Window A
@@ -295,11 +345,13 @@ host, use the name from its host_vars.
    ```powershell
    # Window B, about 30 s later
    wsl --list --running
+   wsl -d Ubuntu -u root -e readlink /proc/1/ns/mnt /proc/self/ns/mnt
    wsl -d Ubuntu -u root -e systemctl is-system-running
    wsl -d Ubuntu -u root -e sh -c 'docker start $(docker ps -aq --filter label=talos.owned=true --filter name=controlplane)'
    wsl -d Ubuntu -u root -e sh -c 'docker start $(docker ps -aq --filter label=talos.owned=true --filter name=worker)'
    wsl -d Ubuntu -u root -e docker ps --filter label=talos.owned=true --format '{{.Names}} {{.Status}}'
    wsl -d Ubuntu -u root -e systemctl is-active docker tnwks-frr tnwks-site-routing
+   wsl -d Ubuntu -u root -e docker exec tnwks-frr vtysh -c 'show bgp summary'
    ```
 
    ```powershell
@@ -314,17 +366,28 @@ host, use the name from its host_vars.
    netsh interface portproxy show v4tov4
    ```
 
-   Check: the list names `Ubuntu`; systemd says `running` (or `degraded`:
-   then `systemctl --failed` names the unit to read); each node is `Up`;
-   docker and the units of the site routing are `active`; the address in
-   the file is the one in each portproxy entry. From the workstation, the
-   nodes of the cluster are `Ready` (`kubectl get nodes` with the
-   kubeconfig of that cluster), and its Flux Kustomizations are ready. If a
-   node does not come back, `docker logs <name>` in the distro. The way
-   back from here is the way back below.
+   Check:
+   - the list names `Ubuntu`, and `readlink` prints two equal lines;
+   - systemd says `running` (or `degraded`: then `systemctl --failed`
+     names the unit to read);
+   - each node is `Up`, and docker and the units of the site routing are
+     `active`;
+   - each BGP session in `show bgp summary` is established (a number of
+     prefixes, not `Active` or `Connect`);
+   - the address in the file is the one in each portproxy entry;
+   - from the workstation, the nodes of the cluster are `Ready`
+     (`kubectl get nodes` with the kubeconfig of that cluster), and its
+     Flux Kustomizations are ready;
+   - from a LAN machine, the ingress VIP of the cluster answers:
+     `curl -sk -o /dev/null -w '%{http_code}\n' https://10.6.0.200/`
+     prints an HTTP code, not a time-out.
+
+   If `readlink` prints two lines that differ, the services did not start
+   with the keepalive: do steps 2 to 5 again, and look harder at step 4.
+   If a node does not come back, `docker logs <name>` in the distro.
 
 6. **Read** (window B, then A, 2 minutes). The service of the check runs
-   its write test as root in the namespace of the services:
+   its write test as root:
 
    ```powershell
    # Window B
@@ -342,12 +405,12 @@ host, use the name from its host_vars.
    Check: the journal says `uid 0: Windows refused the write (errno ...)`;
    `homelab_security_host_write_test_result` is 0 for `uid="0"` and for the
    distro user; `homelab_security_host_write_test_errno` names the
-   refusal; `homelab_security_host_write_test_files` is 0. Only then open
-   the pull request of one line that sets `wsl_start_unelevated_done:
-   true` in the host's host_vars. From its apply on, the distro play fails
-   when the write test is not refused. If the read does not pass, do not
-   open that pull request: do steps 1 to 5 again, and look harder at
-   step 4.
+   refusal; `homelab_security_host_write_test_files` is 0. Then expire the
+   silence. Only then open the pull request of one line that sets
+   `wsl_start_unelevated_done: true` in the host's host_vars. From its
+   apply on, the distro play fails when the write test is not refused. If
+   the read does not pass, do not open that pull request: do steps 1 to 5
+   again, and look harder at step 4.
 
 What the done switch does not catch: between step 6 and the merge of its
 pull request, the play does not fail on the write test (the security
@@ -355,12 +418,16 @@ result still shows it). And the play trusts the switch: a switch set to
 on with no start step makes the play fail at the next apply, which is the
 signal to do the step.
 
+**The fastest way back at the console**, if WSL misbehaves after step 5:
+in window A, `wsl --shutdown`, then `wsl -d Ubuntu -e true`, then
+`docker start` the nodes as in step 5 (from window A). That is the state
+from before the start step. Then turn the switch off as below.
+
 **The way back.** One pull request sets `wsl_start_unelevated` and
 `wsl_start_unelevated_done` off for the host (the play refuses the done
 switch on with the start switch off). Its apply makes the tasks elevated
-again and removes the new tasks. Then do steps 1 to 5 again, so that the
-distro starts as before; with the switch off, the keepalive and the
-watchdog start it elevated.
+again and removes the new tasks. Then do steps 1 to 5 again; with the
+switch off, the keepalive and the watchdog start WSL elevated, as before.
 
 ## Check-only settings
 

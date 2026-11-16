@@ -29,11 +29,11 @@
 # which outlive wsl --shutdown. WSL starts new watchers itself when it boots.
 
 #
-# With -NoDistroStart (wsl_start_unelevated), the script does not start the
-# distro itself: this task is elevated, and a distro that an elevated wsl.exe
-# starts has the admin access to the Windows drives. The tasks that it starts
-# at the end (the keepalive and the watchdog, with no elevation) start the
-# distro instead.
+# With -NoDistroStart (wsl_start_unelevated), the script runs only
+# `wsl --shutdown` and `wsl --list`: this task is elevated, and no elevated
+# client may create the WSL VM or start a process in a distro
+# (docs/wsl/windows-ansible.md, "Start WSL with no elevation"). At the end it
+# starts the keepalive first, with no elevation, which starts WSL.
 [CmdletBinding()]
 param(
     [string]$Distro,

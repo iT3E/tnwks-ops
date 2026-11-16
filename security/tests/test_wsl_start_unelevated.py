@@ -1,9 +1,8 @@
 """The start of WSL with no elevation (Design Doc 0004, section 5.9).
 
-WSL gives the services of a distro the access to the Windows drives of the wsl.exe
-that created the distro instance, and each other process the access of the wsl.exe
-that started it. With wsl_start_unelevated on for a Windows host, no task that runs
-elevated as the desktop user may start a process in the distro. These tests render the
+With wsl_start_unelevated on for a Windows host, no elevated client may create the WSL
+VM or start a process in a distro, and a directory that a task with no elevation writes
+is one that SYSTEM and the elevated tasks read with care. These tests render the
 task templates of the Windows roles with the switch on and off, and run the scripts in
 PowerShell with fakes for wsl.exe and the Windows commands.
 """
@@ -20,6 +19,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from winacl import ACL_FAKES
 
 ROOT = Path(__file__).resolve().parents[2]
 ANSIBLE = ROOT / "infrastructure/ansible"
@@ -74,22 +74,69 @@ def templates() -> list[Path]:
 
 
 # The elevated tasks of the desktop user that may still run wsl.exe with the switch on:
-# the compaction does not start the distro with -NoDistroStart, and the play refuses the
-# switch on a host with the USB attach or the monitoring volume.
-STILL_ELEVATED = {"vhdx-compact.xml.j2", "usb-attach.xml.j2", "monitoring-mount.xml.j2"}
+# the play refuses the switch on a host with the USB attach or the monitoring volume.
+STILL_ELEVATED = {"usb-attach.xml.j2", "monitoring-mount.xml.j2"}
+# The wsl.exe commands that an elevated client may run: none of them creates the WSL VM
+# or starts a process in a distro (LxssUserSession.cpp, the callers of _CreateVm: a
+# distro start, --mount, and --manage resize, compact or set-version create the VM).
+NEITHER_VM_NOR_PROCESS = ("--shutdown", "--terminate", "--list", "--status", "--version")
+# A call that a switch of the task turns off, and the switch: the compaction starts the
+# distro itself only without -NoDistroStart (its run in PowerShell shows it below).
+SWITCHED_OFF = {("Compact-WslVhdx.ps1", "-d $Distro -e true"): "-NoDistroStart"}
+WSL_CALL = re.compile(r"&\s*wsl(?:\.exe)?\b(?P<amp>[^\n]*)|-FilePath\s+'wsl(?:\.exe)?'\s+-Arguments\s+@\((?P<native>[^\n]*)\)"
+                      r"|Start-Process\b[^\n]*\bwsl(?:\.exe)?\b(?P<start>[^\n]*)", re.IGNORECASE)
 
 
-def test_with_the_switch_on_no_elevated_task_of_the_user_starts_a_process_in_the_distro():
-    checked = []
-    for path in templates():
-        text = render(path, on=True)
-        user, level = principal(text)
-        if user == SYSTEM or level != "HighestAvailable":
-            continue
-        if starts_distro_process(text, path.parents[1]):
-            checked.append(path.name)
-            assert path.name in STILL_ELEVATED, f"{path.name} starts a process in the distro, elevated"
-    assert set(checked) == STILL_ELEVATED
+def wsl_calls(text: str) -> list[str]:
+    """The arguments of each call of wsl.exe in a PowerShell script, without comments."""
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    code = re.sub(r"<#.*?#>", "", code, flags=re.DOTALL)
+    return [next(group for group in match.groups() if group is not None).strip() for match in WSL_CALL.finditer(code)]
+
+
+def elevated_wsl_calls(path: Path) -> list[str]:
+    """Each wsl.exe call of a task of the desktop user that runs elevated with the switch
+    on, in its action or in a script that it runs, that may create the VM or start a
+    process in a distro."""
+    text = render(path, on=True)
+    user, level = principal(text)
+    if user == SYSTEM or level != "HighestAvailable":
+        return []
+    calls = []
+    if re.search(r"wsl(\.exe)?</Command>", text, re.IGNORECASE):
+        calls.append(re.search(r"<Arguments>(.*?)</Arguments>", text)[1] if "<Arguments>" in text else "")
+    for script in scripts_of(text, path.parents[1]):
+        for call in wsl_calls(script.read_text()):
+            switch = SWITCHED_OFF.get((script.name, call.split(" 2>")[0].strip()))
+            if switch and switch in action(text):
+                continue
+            calls.append(call)
+    return [call for call in calls if not call.startswith(NEITHER_VM_NOR_PROCESS)]
+
+
+def test_with_the_switch_on_no_elevated_task_of_the_user_creates_the_vm_or_starts_a_process():
+    """No elevated client ever creates the VM or starts a process in a distro: each call
+    of wsl.exe by an elevated task of the user is one that does neither."""
+    found = {path.name: calls for path in templates() if (calls := elevated_wsl_calls(path))}
+    assert set(found) == STILL_ELEVATED, found
+
+
+def test_the_scan_of_wsl_calls_finds_each_form():
+    """The mutations that the scan must catch: a start of the default distro (no -d), a
+    --mount, a --manage, a call through Invoke-Native, and a call of wsl with no .exe."""
+    script = """
+& wsl.exe --shutdown
+& wsl.exe --list --running --quiet
+# & wsl.exe -d Ubuntu in a comment
+& wsl.exe -e true
+& wsl.exe --mount --vhd $Vhdx --bare
+& wsl.exe --manage Ubuntu --resize 300GB
+$r = Invoke-Native -FilePath 'wsl.exe' -Arguments @('-d', $Distro, '--exec', 'true')
+& wsl hostname -I
+"""
+    calls = [call for call in wsl_calls(script) if not call.startswith(NEITHER_VM_NOR_PROCESS)]
+    assert calls == ["-e true", "--mount --vhd $Vhdx --bare", "--manage Ubuntu --resize 300GB",
+                     "'-d', $Distro, '--exec', 'true'", "hostname -I"]
 
 
 def test_with_the_switch_on_each_task_that_starts_the_distro_runs_with_no_elevation():
@@ -143,16 +190,96 @@ def test_each_new_task_exists_only_with_the_switch_and_the_compaction_pauses_it(
 
 
 def test_the_logs_of_the_tasks_with_no_elevation_are_apart_from_their_scripts():
-    """The account may change the log directory only: a script that SYSTEM or an
-    elevated task runs stays where the account may not change it."""
-    for role, directory in (("windows_wsl_maintenance", "wsl_watchdog_log_dir"), ("windows_udp_relay", "udp_relay_log_dir"),
-                            ("windows_lan_bridge", "lan_bridge_ip_dir")):
+    """The account may write files in its log or address directory only, through
+    tnwks_win_dir_acl: a script that SYSTEM or an elevated task runs stays where the
+    account may not change it. The SYSTEM part of the watchdog logs where only SYSTEM
+    and the Administrators may change files."""
+    found = {}
+    for role in ("windows_wsl_maintenance", "windows_udp_relay", "windows_lan_bridge"):
         tasks = yaml.safe_load((ROLES / role / "tasks/main.yml").read_text())
-        acls = [task["ansible.windows.win_acl"] for task in tasks if "ansible.windows.win_acl" in task]
-        assert [acl["path"] for acl in acls] == [f"{{{{ {directory} }}}}"], role
-        assert acls[0]["rights"] == "Modify"
-        defaults = yaml.safe_load((ROLES / role / "defaults/main.yml").read_text())
-        assert defaults[directory].endswith(("\\log", "\\wsl-ip")), role
+        assert not any("ansible.windows.win_acl" in task for task in tasks), role
+        for task in tasks:
+            if "tnwks_win_dir_acl" in task:
+                assert task["when"] == "wsl_start_unelevated | bool", role
+                for item in task.get("loop", [task["tnwks_win_dir_acl"]]):
+                    found[item["path"]] = item["writer"]
+    assert found == {
+        "{{ wsl_watchdog_log_dir }}": "{{ wsl_maintenance_user }}", "{{ wsl_service_log_dir }}": "",
+        "{{ udp_relay_log_dir }}": "{{ udp_relay_user }}", "{{ lan_bridge_ip_dir }}": "{{ lan_bridge_user }}"}
+    defaults = yaml.safe_load((ROLES / "windows_wsl_maintenance/defaults/main.yml").read_text())
+    assert defaults["wsl_service_log_dir"] != defaults["wsl_watchdog_log_dir"]
+    service = (ROLES / "windows_wsl_maintenance/templates/wsl-service.xml.j2").read_text()
+    assert '-LogDir "{{ wsl_service_log_dir | e }}"' in service and "wsl_watchdog_log_dir" not in service
+
+
+MODULE = ANSIBLE / "playbooks/library/tnwks_win_dir_acl.ps1"
+WRITER = "S-1-5-21-7-7-7-1001"
+DIR_RULES = sorted([
+    "S-1-5-18|FullControl|ContainerInherit, ObjectInherit|None",
+    "S-1-5-32-544|FullControl|ContainerInherit, ObjectInherit|None",
+    "S-1-5-32-545|ReadAndExecute, Synchronize|ContainerInherit, ObjectInherit|None",
+])
+WRITER_RULES = sorted(DIR_RULES + [
+    # CreateFiles is WriteData on a directory: the same bit, and .NET names it WriteData.
+    f"{WRITER}|WriteData, ReadAndExecute, Synchronize|None|None",
+    f"{WRITER}|Modify, Synchronize|ObjectInherit|InheritOnly",
+])
+
+
+def run_dir_acl(have: str, writer: str = "adult1", check: bool = False, exists: bool = True, link: bool = False) -> dict:
+    """Run the logic of the module tnwks_win_dir_acl with the fakes of winacl.py."""
+    text = MODULE.read_text()
+    logic = text[text.index("# --- BEGIN logic"):text.index("# --- END logic")]
+    encoded = base64.b64encode(logic.encode()).decode()
+    body = ACL_FAKES + f"""
+. ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))))
+$script:Have = {have}
+$script:Exists = ${str(exists).lower()}
+$script:IsLink = ${str(link).lower()}
+$thrown = $null; $changed = $null
+try {{ $changed = Invoke-TnwksDirAcl -Path 'C:\\ProgramData\\x\\log' -Writer '{writer}' -Check ${str(check).lower()} }}
+catch {{ $thrown = $_.Exception.Message }}
+$sets = @($script:Calls | Where-Object {{ $_ -is [hashtable] }} | ForEach-Object {{
+    @{{ owner = $_.Acl.Owner; protected = $_.Acl.Protected; rules = @(Get-TestKeys $_.Acl.Rules) }} }})
+[Console]::Out.Write((ConvertTo-Json -Depth 5 -Compress @{{
+    changed = $changed; thrown = $thrown; sets = $sets; calls = @($script:Calls | Where-Object {{ $_ -is [string] }}) }}))
+"""
+    return json.loads(pwsh(body).stdout.splitlines()[-1])
+
+
+def an_acl(rules: list[str]) -> str:
+    parts = []
+    for rule in rules:
+        sid, rights, inheritance, propagation = rule.split("|")
+        parts.append(f"(New-TestRule '{sid}' '{rights}' '{inheritance}' '{propagation}')")
+    return f"New-TestAcl $true 'S-1-5-32-544' @({','.join(parts)})"
+
+
+@needs_pwsh
+def test_the_directory_module_sets_the_split_rule_and_changes_nothing_in_place():
+    in_place = run_dir_acl(an_acl(WRITER_RULES))
+    assert in_place["changed"] is False and in_place["sets"] == [] and in_place["thrown"] is None
+    reader = run_dir_acl(an_acl(DIR_RULES), writer="")
+    assert reader["changed"] is False and reader["sets"] == []
+    old = [rule for rule in WRITER_RULES if not rule.startswith(WRITER)] + [f"{WRITER}|Modify|ContainerInherit, ObjectInherit|None"]
+    for have in (an_acl(old), an_acl(WRITER_RULES).replace("New-TestAcl $true", "New-TestAcl $false"),
+                 an_acl(DIR_RULES)):
+        out = run_dir_acl(have)
+        assert out["changed"] is True and out["sets"] == [{"owner": "S-1-5-32-544", "protected": True, "rules": WRITER_RULES}]
+        checked = run_dir_acl(have, check=True)
+        assert checked["changed"] is True and checked["sets"] == [], "a check run changes nothing"
+    assert run_dir_acl(an_acl(WRITER_RULES), writer="")["sets"][0]["rules"] == DIR_RULES
+
+
+@needs_pwsh
+def test_the_directory_module_makes_a_missing_directory_and_stops_at_a_link():
+    missing = run_dir_acl(an_acl([]), exists=False)
+    assert missing["calls"][:2] == ["Get-Item", "New-Item"] and missing["sets"][0]["rules"] == WRITER_RULES
+    checked = run_dir_acl(an_acl([]), exists=False, check=True)
+    assert checked["changed"] is True and checked["calls"] == ["Get-Item"]
+    link = run_dir_acl(an_acl(WRITER_RULES), link=True)
+    assert link["thrown"] and "not a plain directory" in link["thrown"]
+    assert link["calls"] == ["Get-Item"] and link["sets"] == []
 
 
 def windows_hosts() -> dict[str, dict]:
@@ -174,9 +301,15 @@ def test_the_switch_is_off_by_default_and_on_for_site_2_first():
 
 
 def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet():
-    tasks = yaml.safe_load((ROLES / "windows_wsl_maintenance/tasks/main.yml").read_text())
-    guard = tasks[0]["ansible.builtin.assert"]
-    assert tasks[0]["name"] == "The start with no elevation has each role it needs"
+    """The guard is the first task of the play, before any role, with each tag."""
+    play = next(play for play in yaml.safe_load((ANSIBLE / "playbooks/windows-host.yml").read_text())
+                if play["hosts"] == "windows_hosts")
+    first = play["pre_tasks"][0]
+    assert first["name"] == "The start with no elevation has each role it needs"
+    assert first["tags"] == ["always"]
+    guard = first["ansible.builtin.assert"]
+    for role in ROLES.glob("windows_*/tasks/*.yml"):
+        assert "wsl_start_unelevated_done" not in role.read_text(), role
     usb_default = yaml.safe_load((ROLES / "windows_usb_attach/defaults/main.yml").read_text())["usb_attach_bound_devices"]
 
     def passes(data: dict) -> bool:
@@ -307,7 +440,7 @@ function Get-PSDrive { [pscustomobject]@{ Free = 1GB } }
 def test_the_sync_takes_only_an_address_of_the_wsl_vm(tmp_path):
     script = ROLES / "windows_lan_bridge/files/Sync-TnwksLanBridge.ps1"
     cases = {"172.25.20.7": "ok", "172.25.16.1": "host", "10.10.91.112": "outside", "not-an-address": "none",
-             "999.1.1.1": "none"}
+             "999.1.1.1": "none", "172.25.020.7": "a leading zero", "172.25.20.07": "a leading zero"}
     lines = []
     for address in cases:
         lines.append(f"""
@@ -322,6 +455,48 @@ try {{ Read-WslIpFile -Path '{tmp_path}/big.json' -Subnet $subnet | Out-Null; 'b
 """)
     out = result.stdout.splitlines()
     assert out[:-1] == ["172.25.20.7 172.25.20.7", "172.25.16.1 refused", "10.10.91.112 refused",
-                        "not-an-address refused", "999.1.1.1 refused"], result.stdout + result.stderr
+                        "not-an-address refused", "999.1.1.1 refused", "172.25.020.7 refused",
+                        "172.25.20.07 refused"], result.stdout + result.stderr
     assert out[-1] == "big refused"
-    assert json.loads((tmp_path / "a.json").read_text())["address"] == "999.1.1.1"
+    assert json.loads((tmp_path / "a.json").read_text())["address"] == "172.25.20.07"
+
+
+@needs_pwsh
+def test_the_sync_reads_the_address_file_once_and_refuses_a_link_on_the_way(tmp_path):
+    """The account may write the directory of the file. A link at the file or at a
+    directory above it is refused, by the path of the open file, and an error quotes no
+    text of the file."""
+    script = ROLES / "windows_lan_bridge/files/Sync-TnwksLanBridge.ps1"
+    real = tmp_path / "real"
+    (real / "wsl-ip").mkdir(parents=True)
+    (real / "wsl-ip" / "address.json").write_text('{"address": "172.25.20.7"}')
+    (real / "wsl-ip" / "other.json").write_text('{"address": "172.25.20.9"}')
+    (real / "wsl-ip" / "link.json").symlink_to(real / "wsl-ip" / "other.json")
+    (real / "wsl-ip" / "secret.json").write_text("SECRETTOKEN and more")
+    (tmp_path / "above").symlink_to(real, target_is_directory=True)
+    paths = {"plain": real / "wsl-ip/address.json", "link": real / "wsl-ip/link.json",
+             "above": tmp_path / "above/wsl-ip/address.json", "not JSON": real / "wsl-ip/secret.json"}
+    body = f". '{script}' -Library\n$subnet = [pscustomobject]@{{ Address = '172.25.16.1'; PrefixLength = 20 }}\n"
+    for name, path in paths.items():
+        body += (f"try {{ [Console]::Out.WriteLine('{name}: ' + (Read-WslIpFile -Path '{path}' -Subnet $subnet)) }}"
+                 f" catch {{ [Console]::Out.WriteLine('{name}: ' + $_.Exception.Message) }}\n")
+    out = dict(line.split(": ", 1) for line in pwsh(body).stdout.splitlines())
+    assert out["plain"] == "172.25.20.7"
+    assert "not a plain file" in out["link"] and "not a plain file" in out["above"], out
+    assert "not a JSON object" in out["not JSON"] and "SECRET" not in out["not JSON"], out
+
+
+@needs_pwsh
+def test_the_sync_is_quiet_when_each_rule_is_in_place():
+    script = ROLES / "windows_lan_bridge/files/Sync-TnwksLanBridge.ps1"
+    body = f""". '{script}' -Library
+function netsh {{ 'Address         Port        Address         Port'; '0.0.0.0         80          172.25.20.7     80'
+    '0.0.0.0         2222        172.25.20.7     22' }}
+$config = '{{"ListenAddress":"0.0.0.0","TcpPorts":[{{"Port":80,"WslPort":80}},{{"Port":2222,"WslPort":22}}],"RetiredTcpPorts":[6001]}}' | ConvertFrom-Json
+$current = Get-PortProxy
+[Console]::Out.WriteLine((Test-PortProxyInPlace -Config $config -Current $current -WslIp '172.25.20.7'))
+[Console]::Out.WriteLine((Test-PortProxyInPlace -Config $config -Current $current -WslIp '172.25.20.8'))
+$config.RetiredTcpPorts = @(2222)
+[Console]::Out.WriteLine((Test-PortProxyInPlace -Config $config -Current $current -WslIp '172.25.20.7'))
+"""
+    assert pwsh(body).stdout.split() == ["True", "False", "False"]

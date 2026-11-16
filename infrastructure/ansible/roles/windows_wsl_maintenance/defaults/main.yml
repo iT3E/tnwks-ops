@@ -22,6 +22,8 @@ wsl_watchdog_task: tnwks-wsl-watchdog
 # the part of the watchdog that needs admin rights, with no wsl.exe.
 wsl_watchdog_log_dir: '{{ wsl_watchdog_dir }}\log'
 wsl_service_task: tnwks-wsl-service
+# The log of that SYSTEM task: only SYSTEM and the Administrators may change it.
+wsl_service_log_dir: '{{ wsl_watchdog_dir }}\service-log'
 # Extra arguments for Watch-TnwksWsl.ps1: `-SkipGateway -SkipUsb` on a host
 # without the OpenClaw gateway or the Z-Stick.
 wsl_watchdog_args: ""
