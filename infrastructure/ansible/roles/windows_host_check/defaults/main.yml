@@ -43,6 +43,9 @@ host_check_inbox_file: tnwks_security_host_check_distro.json
 # the same name.
 host_check_distro_file: tnwks_security_host_check_distro.prom
 host_check_relay_task: tnwks-host-check-relay
+# The log of the relay, in the directory of the script, which only SYSTEM and
+# the Administrators may change. It rolls over at 1 MiB to relay.log.1.
+host_check_relay_log: '{{ host_check_dir }}\relay.log'
 # The name of the distro of this host in security/registry/systems.yaml: the
 # distro of the inventory whose wsl_distro_windows_host is this host.
 host_check_distro_system: >-

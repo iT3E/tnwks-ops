@@ -397,26 +397,157 @@ def test_the_distro_gets_no_right_on_the_textfile_directory_and_its_old_director
     assert defaults["host_check_inbox_dir"].startswith("C:\\ProgramData\\")
 
 
-def test_the_inbox_has_no_inherited_rule_and_three_rules():
+def inbox_lock() -> dict:
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    return next(task for task in tasks if task["name"].startswith("Only SYSTEM, the Administrators and the account"))
+
+
+def test_the_inbox_has_no_inherited_rule_and_a_split_rule_for_the_distro():
     """Only SYSTEM, the Administrators and the account of the distro may change the
     inbox. It does not inherit the rights of C:\\ProgramData, where each user may make
-    files."""
+    files and folders. On the folder itself the account may only list it and make files,
+    so it can not remove the folder or put a junction in its place."""
     tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
     names = [task["name"] for task in tasks]
-    lock = next(task for task in tasks if task["name"].startswith("Only SYSTEM, the Administrators and the account"))
+    lock = inbox_lock()
     assert names.index("Inbox of the distro") < names.index(lock["name"])
     task = lock["ansible.windows.win_powershell"]
     assert task["parameters"] == {"Path": "{{ host_check_inbox_dir }}", "Account": "{{ host_check_distro_account }}"}
     script = task["script"]
     assert "SetAccessRuleProtection($true, $false)" in script, "no inherited rule"
-    assert "$acl.SetOwner($admins)" in script and "'S-1-5-32-544'" in script
-    want = script[script.index("$want = @("):script.index("\n)", script.index("$want = @("))]
-    assert re.findall(r"@\((.+), '([^']+)'\)", want) == [
-        ("(New-Object $sid 'S-1-5-18')", "FullControl"), ("$admins", "FullControl"), ("$distro", "Modify, Synchronize")]
-    assert "NTAccount $Account).Translate($sid)" in script
     assert "GetAccessRules($true, $true, $sid)" in script, "an inherited rule is a change"
     assert "$Ansible.Changed" in script and "ShouldProcess(" in script
     assert "ansible_check_mode" in lock["when"]
+
+
+ACL_FAKES = r"""
+$script:Calls = New-Object System.Collections.Generic.List[object]
+$Ansible = [pscustomobject]@{ Changed = $null }
+$script:IsLink = $false
+function Get-Item {
+    param([string]$LiteralPath, [switch]$Force)
+    $script:Calls.Add('Get-Item')
+    $attributes = [IO.FileAttributes]::Directory
+    if ($script:IsLink) { $attributes = $attributes -bor [IO.FileAttributes]::ReparsePoint }
+    [pscustomobject]@{ PSIsContainer = $true; Attributes = $attributes }
+}
+function New-TestRule($Sid, $Rights, $Inheritance, $Propagation, $Inherited = $false) {
+    [pscustomobject]@{
+        IdentityReference = [pscustomobject]@{ Value = [string]$Sid }
+        FileSystemRights  = [System.Security.AccessControl.FileSystemRights]$Rights
+        InheritanceFlags  = [System.Security.AccessControl.InheritanceFlags]$Inheritance
+        PropagationFlags  = [System.Security.AccessControl.PropagationFlags]$Propagation
+        AccessControlType = 'Allow'
+        IsInherited       = $Inherited
+    }
+}
+function New-Object {
+    param([Parameter(Position = 0)]$TypeName, [Parameter(Position = 1)]$ArgumentList)
+    switch -Wildcard ("$TypeName") {
+        '*.NTAccount' {
+            $account = [pscustomobject]@{ Name = $ArgumentList }
+            $account | Add-Member ScriptMethod Translate { param($Type) [pscustomobject]@{ Value = 'S-1-5-21-7-7-7-1001' } }
+            return $account
+        }
+        '*.SecurityIdentifier' { return [pscustomobject]@{ Value = [string]$ArgumentList } }
+        '*.FileSystemAccessRule' {
+            $a = @($ArgumentList)
+            return New-TestRule $a[0].Value $a[1] $a[2] $a[3]
+        }
+        '*.DirectorySecurity' {
+            $acl = [pscustomobject]@{ Owner = $null; Protected = $null; Rules = [System.Collections.Generic.List[object]]::new() }
+            $acl | Add-Member ScriptMethod SetOwner { param($Sid) $this.Owner = $Sid.Value }
+            $acl | Add-Member ScriptMethod SetAccessRuleProtection { param($On, $Keep) $this.Protected = $On }
+            $acl | Add-Member ScriptMethod AddAccessRule { param($Rule) $this.Rules.Add($Rule) }
+            return $acl
+        }
+        default { throw "no fake for $TypeName" }
+    }
+}
+function New-TestAcl([bool]$Protected, [string]$Owner, $Rules) {
+    $acl = [pscustomobject]@{ AreAccessRulesProtected = $Protected; Owner = $Owner; Rules = @($Rules) }
+    $acl | Add-Member ScriptMethod GetOwner { param($Type) [pscustomobject]@{ Value = $this.Owner } }
+    $acl | Add-Member ScriptMethod GetAccessRules {
+        param($Explicit, $Inherited, $Type)
+        @($this.Rules | Where-Object { ($Explicit -and -not $_.IsInherited) -or ($Inherited -and $_.IsInherited) })
+    }
+    $acl
+}
+function Get-Acl { param([string]$LiteralPath) $script:Calls.Add('Get-Acl'); $script:Have }
+function Set-Acl { param([string]$LiteralPath, $AclObject) $script:Calls.Add(@{ Path = $LiteralPath; Acl = $AclObject }) }
+function Get-TestKeys($Rules) {
+    @($Rules | ForEach-Object { '{0}|{1}|{2}|{3}' -f $_.IdentityReference.Value, $_.FileSystemRights, $_.InheritanceFlags, $_.PropagationFlags } | Sort-Object)
+}
+"""
+
+# The rules of the inbox as the role wants them, in the form of Get-TestKeys.
+DISTRO_SID = "S-1-5-21-7-7-7-1001"
+INBOX_RULES = sorted([
+    "S-1-5-18|FullControl|ContainerInherit, ObjectInherit|None",
+    "S-1-5-32-544|FullControl|ContainerInherit, ObjectInherit|None",
+    # CreateFiles is WriteData on a directory: the same bit, and .NET names it WriteData.
+    f"{DISTRO_SID}|WriteData, ReadAndExecute, Synchronize|None|None",
+    f"{DISTRO_SID}|Modify, Synchronize|ObjectInherit|InheritOnly",
+])
+WANT_ACL = ("New-TestAcl $true 'S-1-5-32-544' @("
+            "(New-TestRule 'S-1-5-18' 'FullControl' 'ContainerInherit, ObjectInherit' 'None'),"
+            "(New-TestRule 'S-1-5-32-544' 'FullControl' 'ContainerInherit, ObjectInherit' 'None'),"
+            f"(New-TestRule '{DISTRO_SID}' 'ReadAndExecute, CreateFiles, Synchronize' 'None' 'None'),"
+            f"(New-TestRule '{DISTRO_SID}' 'Modify, Synchronize' 'ObjectInherit' 'InheritOnly'))")
+
+
+def run_inbox_lock(have: str, what_if: bool = False, link: bool = False) -> dict:
+    """Run the script of the ACL task of the inbox with fakes for the commands and the
+    types that only Windows has; give what it changed."""
+    script = inbox_lock()["ansible.windows.win_powershell"]["script"]
+    encoded = base64.b64encode(script.encode()).decode()
+    body = ACL_FAKES + f"""
+$script:Have = {have}
+$script:IsLink = ${str(link).lower()}
+$text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))
+$thrown = $null
+try {{
+    & ([scriptblock]::Create($text)) -Path 'C:\\ProgramData\\inbox' -Account 'adult1' -WhatIf:${str(what_if).lower()} 6>$null | Out-Null
+}} catch {{ $thrown = $_.Exception.Message }}
+$sets = @($script:Calls | Where-Object {{ $_ -is [hashtable] }} | ForEach-Object {{
+    @{{ owner = $_.Acl.Owner; protected = $_.Acl.Protected; rules = @(Get-TestKeys $_.Acl.Rules) }} }})
+[Console]::Out.Write((ConvertTo-Json -Depth 5 -Compress @{{
+    changed = $Ansible.Changed; thrown = $thrown; sets = $sets
+    calls = @($script:Calls | Where-Object {{ $_ -is [string] }}) }}))
+"""
+    # A check run prints its "What if" lines to the host first.
+    return json.loads(pwsh(body).stdout.splitlines()[-1])
+
+
+@needs_pwsh
+def test_the_rules_of_the_inbox_that_are_in_place_are_no_change():
+    out = run_inbox_lock(WANT_ACL)
+    assert out["changed"] is False and out["sets"] == [] and out["thrown"] is None
+
+
+@needs_pwsh
+@pytest.mark.parametrize("have", [
+    # The rule before the split: Modify on the folder too.
+    ("New-TestAcl $true 'S-1-5-32-544' @((New-TestRule 'S-1-5-18' 'FullControl' 'ContainerInherit, ObjectInherit' 'None'),"
+     "(New-TestRule 'S-1-5-32-544' 'FullControl' 'ContainerInherit, ObjectInherit' 'None'),"
+     f"(New-TestRule '{DISTRO_SID}' 'Modify, Synchronize' 'ContainerInherit, ObjectInherit' 'None'))"),
+    WANT_ACL.replace("New-TestAcl $true", "New-TestAcl $false"),
+    WANT_ACL.replace("New-TestAcl $true 'S-1-5-32-544'", f"New-TestAcl $true '{DISTRO_SID}'"),
+    WANT_ACL[:-1] + ",(New-TestRule 'S-1-5-32-545' 'ReadAndExecute' 'ContainerInherit, ObjectInherit' 'None' $true))",
+], ids=["the rule before the split", "inherited rules on", "another owner", "an inherited rule"])
+def test_other_rules_of_the_inbox_are_set_to_the_split_rules(have):
+    out = run_inbox_lock(have)
+    assert out["changed"] is True and out["thrown"] is None
+    assert out["sets"] == [{"owner": "S-1-5-32-544", "protected": True, "rules": INBOX_RULES}]
+    checked = run_inbox_lock(have, what_if=True)
+    assert checked["changed"] is True and checked["sets"] == [], "a check run changes nothing"
+
+
+@needs_pwsh
+def test_a_link_or_junction_in_the_place_of_the_inbox_stops_the_task_before_any_rule():
+    out = run_inbox_lock(WANT_ACL, link=True)
+    assert out["thrown"] and "not a plain directory" in out["thrown"]
+    assert out["calls"] == ["Get-Item"] and out["sets"] == []
 
 
 def test_the_relay_task_runs_the_relay_as_system_each_hour_for_the_distro_of_the_host():
@@ -425,6 +556,9 @@ def test_the_relay_task_runs_the_relay_as_system_each_hour_for_the_distro_of_the
     assert "-Relay" in arguments
     assert '-System "{{ host_check_distro_system | e }}"' in arguments
     assert '-TextfileDir "{{ host_check_textfile_dir | e }}"' in arguments
+    assert '-LogPath "{{ host_check_relay_log | e }}"' in arguments
+    log = yaml.safe_load((ROLE / "defaults/main.yml").read_text())["host_check_relay_log"]
+    assert log.startswith("{{ host_check_dir }}\\"), "a directory that only SYSTEM and the Administrators may change"
     for name in re.findall(r"\{\{ (\w+)", arguments):
         assert name.startswith("host_check_"), name
     assert "<UserId>S-1-5-18</UserId>" in template
@@ -535,10 +669,10 @@ def good_document(**changes) -> dict:
     return document
 
 
-def relay(tmp_path, document=None, raw=None, system=DISTRO):
+def relay(tmp_path, document=None, raw=None, system=DISTRO, inbox=None, log=""):
     """Run the relay of the script on one document; give its exit code, its output and
     the families of the .prom file of the distro."""
-    inbox, out = tmp_path / "inbox", tmp_path / "textfile"
+    inbox, out = inbox or tmp_path / "inbox", tmp_path / "textfile"
     inbox.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
     out.chmod(0o777)
@@ -548,7 +682,7 @@ def relay(tmp_path, document=None, raw=None, system=DISTRO):
         (inbox / INBOX_FILE).write_text(json.dumps(document))
     result = pwsh(f"""$now = [datetime]::SpecifyKind([datetime]'2026-11-13T12:00:00', 'Utc')
 Invoke-TnwksRelay -System '{system}' -InboxDir '{inbox}' -InboxFile '{INBOX_FILE}' -TextfileDir '{out}' `
-    -FileName '{DISTRO_FILE}' -Now $now
+    -FileName '{DISTRO_FILE}' -Now $now -LogPath '{log}'
 """, check=False)
     return result.returncode, result.stdout, textfile.parse((out / DISTRO_FILE).read_text())
 
@@ -581,38 +715,167 @@ def test_a_failed_run_of_the_distro_gives_the_count_of_failed_queries_and_no_res
     assert textfile.value(families, FAILED, system=DISTRO) == 2
 
 
+def without(field: str) -> dict:
+    document = good_document()
+    del document[field]
+    return document
+
+
+def renamed(old: str, new: str) -> dict:
+    document = good_document()
+    document[new] = document.pop(old)
+    return document
+
+
+UID0 = {"name": "homelab_security_host_write_test_result", "labels": {"uid": "0"}, "value": 0}
+# Each document that does not fit, and the rule that the relay names for it.
 BAD_DOCUMENTS = {
-    "no document": None,
-    "it names the host": good_document(system="WSL-02"),
-    "it has a check of the host": good_document(results={"updates-pending": 0, "updates-held": 0,
-                                                         "defender-enabled": 0}),
-    "a time 10 minutes ahead": good_document(time=int(NOW.timestamp()) + 600),
-    "a result that is not a whole number of 0 or more": good_document(results={"updates-pending": -1,
-                                                                               "updates-held": 0}),
-    "a result that is true": good_document(results={"updates-pending": True, "updates-held": 0}),
-    "a result missing with no failed query": good_document(results={"updates-pending": 0}),
-    "a failed query and a result": good_document(failed=["state"]),
-    "a series of the host": good_document(details=[{"name": "homelab_security_host_defender_enabled",
-                                                    "labels": {"protection": "service"}, "value": 1}]),
-    "a label that is not a uid": good_document(details=[{"name": "homelab_security_host_write_test_result",
-                                                         "labels": {"uid": "0\"} 1\nx{a=\""}, "value": 0}]),
-    "another field": good_document(source="host-check"),
-    "another version": good_document(version=2),
-    "not JSON": "not json",
+    "no document": (None, "no document"),
+    "it names the host": (good_document(system="WSL-02"), "names another system"),
+    "it has a check of the host": (good_document(results={"updates-pending": 0, "updates-held": 0,
+                                                          "defender-enabled": 0}), "a check that is not of a distro"),
+    "it has a check of the host in place of one of its own": (
+        good_document(results={"updates-pending": 0, "defender-enabled": 0}), "a check that is not of a distro"),
+    "a time 10 minutes ahead": (good_document(time=int(NOW.timestamp()) + 600), "more than 300 seconds ahead"),
+    "a result that is not a whole number of 0 or more": (
+        good_document(results={"updates-pending": -1, "updates-held": 0}), "not a whole number"),
+    "a result that is true": (good_document(results={"updates-pending": True, "updates-held": 0}), "not a whole number"),
+    "a result missing with no failed query": (good_document(results={"updates-pending": 0}), "not each result"),
+    "a failed query and a result": (good_document(failed=["state"]), "a failed query and a result"),
+    "a failed query with a line end": (good_document(results={}, failed=["state\n"]), "a failed query has no name"),
+    "a series of the host": (good_document(details=[{"name": "homelab_security_host_defender_enabled",
+                                                     "labels": {"protection": "service"}, "value": 1}]),
+                             "not a series of a distro"),
+    "a series of a distro in other letters": (good_document(details=[{"name": "homelab_security_host_Updates_pending",
+                                                                      "labels": {}, "value": 1}]),
+                                              "not a series of a distro"),
+    "a series with a system label": (good_document(details=[{"name": "homelab_security_host_updates_pending",
+                                                             "labels": {"system": "WSL-02"}, "value": 1}]),
+                                     "other labels than its series"),
+    "a label that is not a uid": (good_document(details=[{"name": "homelab_security_host_write_test_result",
+                                                          "labels": {"uid": "0\"} 1\nx{a=\""}, "value": 0}]),
+                                  "not a number"),
+    "a uid with a line end": (good_document(details=[{**UID0, "labels": {"uid": "0\n"}}]), "not a number"),
+    "a repeated series": (good_document(details=[UID0, UID0]), "repeats a series"),
+    "a repeated series with another between": (
+        good_document(details=[UID0, {**UID0, "labels": {"uid": "1000"}}, {**UID0, "value": 1}]), "repeats a series"),
+    "another field": (good_document(source="host-check"), "a field that is not of a document"),
+    "a field in other letters": (renamed("system", "System"), "a field that is not of a document"),
+    "a field missing": (without("details"), "misses a field"),
+    "another version": (good_document(version=2), "not version 1"),
+    "not JSON": ("not json", "not JSON"),
+    "not UTF-8": (b'{"version": 1, "system": "\xff"}', "not UTF-8"),
 }
 
 
 @needs_pwsh
 @pytest.mark.parametrize("case", BAD_DOCUMENTS)
-def test_a_document_that_does_not_fit_gives_no_result(tmp_path, case):
-    document = BAD_DOCUMENTS[case]
-    if isinstance(document, str):
-        code, output, families = relay(tmp_path, raw=document.encode())
+def test_a_document_that_does_not_fit_gives_no_result_and_names_the_rule(tmp_path, case):
+    document, reason = BAD_DOCUMENTS[case]
+    if isinstance(document, (str, bytes)):
+        code, output, families = relay(tmp_path, raw=document if isinstance(document, bytes) else document.encode())
     else:
         code, output, families = relay(tmp_path, document)
     assert code == 1
-    assert "relay" in output
+    assert "the document does not fit: " in output and reason in output, output
     assert_no_result(families)
+
+
+@needs_pwsh
+def test_the_reason_quotes_no_value_of_the_document(tmp_path):
+    for index, (document, raw) in enumerate(((good_document(**{"SECRET-FIELD-NAME": 1}), None),
+                                             (None, b'{"version": SECRETTOKEN}'),
+                                             (good_document(system="SECRET-SYSTEM"), None))):
+        code, output, _ = relay(tmp_path / str(index), document, raw=raw)
+        assert code == 1 and "does not fit" in output
+        assert "SECRET" not in output, output
+
+
+@needs_pwsh
+def test_each_series_of_the_relay_names_the_distro_and_no_detail_can_name_a_system(tmp_path):
+    """The host's own file has the same families with system set to the host. A series
+    of the relay always has system set to the distro, so no series of the two files can
+    be the same: windows_exporter would serve no textfile series at all."""
+    _, _, families = relay(tmp_path, good_document())
+    for family in families.values():
+        for labels in family["samples"]:
+            assert dict(labels)["system"] == DISTRO, labels
+    labels = pwsh("[Console]::Out.Write((@($script:RelayDetails.Values | ForEach-Object { $_ }) -join ','))").stdout
+    assert "system" not in labels.split(","), labels
+
+
+def test_the_distro_of_each_host_has_another_name_than_any_host():
+    hosts = yaml.safe_load((ANSIBLE / "inventory/hosts.yml").read_text())["all"]["children"]
+    windows = set(hosts["windows_hosts"]["hosts"])
+    distros = {}
+    for distro in hosts["wsl_distros"]["hosts"]:
+        own = yaml.safe_load((ANSIBLE / f"inventory/host_vars/{distro}/main.yml").read_text())
+        distros.setdefault(own["wsl_distro_windows_host"], []).append(distro)
+    for host in windows:
+        assert len(distros.get(host, [])) <= 1, host
+    assert not windows & {name for names in distros.values() for name in names}
+
+
+@needs_pwsh
+def test_the_relay_takes_the_types_that_windows_powershell_gives():
+    """Windows PowerShell 5.1 gives a whole number as Int32 and a fraction as Decimal.
+    The checks take both, and a date in place of the name is refused."""
+    body = f"""$now = [datetime]::SpecifyKind([datetime]'2026-11-13T12:00:00', 'Utc')
+function New-TestDocument($System) {{
+    [pscustomobject]@{{ version = [int]1; system = $System; time = [decimal]1763030400.5
+        results = [pscustomobject]@{{ 'updates-pending' = [int]2; 'updates-held' = [int]0 }}; failed = @()
+        details = @([pscustomobject]@{{ name = 'homelab_security_host_write_test_result'
+            labels = [pscustomobject]@{{ uid = '0' }}; value = [decimal]0 }}) }}
+}}
+$read = Test-TnwksDistroDocument -Document (New-TestDocument '{DISTRO}') -System '{DISTRO}' -Now $now
+[Console]::Out.WriteLine($read.Measure.Results['updates-pending'])
+try {{ Test-TnwksDistroDocument -Document (New-TestDocument ([datetime]'2026-11-13')) -System '{DISTRO}' -Now $now }}
+catch {{ [Console]::Out.WriteLine($_.Exception.Message) }}
+"""
+    assert pwsh(body).stdout.splitlines() == ["2", "the document names another system"]
+
+
+@needs_pwsh
+def test_an_inbox_that_is_a_link_gives_no_result(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / INBOX_FILE).write_text(json.dumps(good_document()))
+    (tmp_path / "inbox").symlink_to(real, target_is_directory=True)
+    code, output, families = relay(tmp_path, inbox=tmp_path / "inbox")
+    assert code == 1 and "the inbox is not a plain directory" in output, output
+    assert_no_result(families)
+
+
+@needs_pwsh
+def test_a_link_above_the_inbox_gives_no_result(tmp_path):
+    """The relay opens the document once and compares the path of the open file with
+    its own: a link or a junction anywhere on the way is refused."""
+    real = tmp_path / "real"
+    (real / "inbox").mkdir(parents=True)
+    (real / "inbox" / INBOX_FILE).write_text(json.dumps(good_document()))
+    (tmp_path / "above").symlink_to(real, target_is_directory=True)
+    code, output, families = relay(tmp_path, inbox=tmp_path / "above" / "inbox")
+    assert code == 1 and "the document or its directory is a link" in output, output
+    assert_no_result(families)
+    code, _, families = relay(tmp_path, inbox=real / "inbox")
+    assert code == 0 and RESULT in families
+
+
+@needs_pwsh
+def test_the_relay_logs_each_run_and_rolls_the_log_over(tmp_path):
+    log = tmp_path / "log" / "relay.log"
+    log.parent.mkdir()
+    log.parent.chmod(0o777)
+    relay(tmp_path / "a", good_document(), log=str(log))
+    relay(tmp_path / "b", good_document(system="WSL-02"), log=str(log))
+    lines = log.read_text().splitlines()
+    assert len(lines) == 3
+    assert lines[0].endswith(f"relay of {DISTRO}: 2 checks")
+    assert lines[1].endswith("the document does not fit: the document names another system")
+    log.write_text("x" * 1048577)
+    relay(tmp_path / "c", good_document(), log=str(log))
+    assert (tmp_path / "log" / "relay.log.1").stat().st_size == 1048577
+    assert log.read_text().endswith(f"relay of {DISTRO}: 2 checks\n")
 
 
 @needs_pwsh
@@ -632,7 +895,7 @@ def test_a_document_that_is_a_link_gives_no_result(tmp_path):
     (tmp_path / "inbox").mkdir()
     (tmp_path / "inbox" / INBOX_FILE).symlink_to(target)
     code, output, families = relay(tmp_path)
-    assert code == 1 and "link" in output
+    assert code == 1 and "the document is a link" in output
     assert_no_result(families)
 
 

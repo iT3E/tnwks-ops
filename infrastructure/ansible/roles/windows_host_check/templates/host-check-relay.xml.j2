@@ -34,7 +34,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
-      <Arguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{{ host_check_dir | e }}\{{ host_check_script | e }}" -Relay -System "{{ host_check_distro_system | e }}" -InboxDir "{{ host_check_inbox_dir | e }}" -InboxFile "{{ host_check_inbox_file | e }}" -TextfileDir "{{ host_check_textfile_dir | e }}" -DistroFileName "{{ host_check_distro_file | e }}"</Arguments>
+      <Arguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{{ host_check_dir | e }}\{{ host_check_script | e }}" -Relay -System "{{ host_check_distro_system | e }}" -InboxDir "{{ host_check_inbox_dir | e }}" -InboxFile "{{ host_check_inbox_file | e }}" -TextfileDir "{{ host_check_textfile_dir | e }}" -DistroFileName "{{ host_check_distro_file | e }}" -LogPath "{{ host_check_relay_log | e }}"</Arguments>
     </Exec>
   </Actions>
 </Task>
