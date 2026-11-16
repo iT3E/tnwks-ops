@@ -541,10 +541,13 @@ no setting.
 **The removal.** `wsl_rehearsal_state: absent` (the default of the role
 now) removes each part, in this order:
 
-1. The play stops the start task. A task of the account then runs
-   `wsl --terminate`, `wsl --unregister` and `wsl --shutdown`. The shutdown
-   stops the VM of that account only: WSL keeps one session for each
-   account. No task of the play runs `wsl.exe`.
+1. When the account has a profile, the play stops the start task. A task
+   of the account then runs `wsl --terminate`, `wsl --unregister` and
+   `wsl --shutdown`. The shutdown stops the VM of that account only: WSL
+   keeps one session for each account. No task of the play runs `wsl.exe`.
+   With no profile, no task of the account ever ran (the first one makes
+   the profile), so it has no hive, no distro and no VM, and the play skips
+   this step and the next.
 2. The play ends any process of the account that is left.
 3. It removes the tasks, the batch right and the three deny rights (before
    the account, so no SID with no account stays in the policy), the value
@@ -553,11 +556,13 @@ now) removes each part, in this order:
    system, the test disk file and the results), and the file of the write
    test.
 
-The same check play then reads the exit check: no account; no holder of
-the batch right or of a deny right that is the account or a SID with no
-account; no value for the tile; no task, no profile and no folder. It shows
-the local accounts, the members of Administrators and the holders of the
-rights.
+The same check play then reads the exit check, with the SID of the
+account read before the removal (`-e wsl_rehearsal_removed_sid=<SID>`): no
+account; no holder of the batch right or of a deny right that is the
+account or its SID; no value for the tile; no task, no profile and no
+folder. It shows the local accounts, the members of Administrators and the
+holders of the rights, and a SID of another origin that names no account
+as a note.
 
 ## Check-only settings
 

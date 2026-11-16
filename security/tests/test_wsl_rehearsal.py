@@ -463,6 +463,55 @@ def test_the_removal_stops_the_vm_as_the_account_before_the_profile_goes():
     assert "Start-ScheduledTask -TaskName $Task" in run["script"] and "shutdown_exit" in run["script"]
 
 
+LAST_OUTPUT = re.compile(r"\{\{ (\w+)\.output \| default\(\[\]\) \| last \| default\(''\) \}\}")
+LENGTH = re.compile(r"(\w+) \| length > 0")
+
+
+def stop_block_runs(user_output: list, profile_output: list, check_mode: bool = False) -> bool:
+    """Whether "The distro and the VM stop, as the account" runs, by its `when` and the
+    vars of the absent block, from what the two reads gave. The test knows the two
+    forms that the block uses, as Jinja reads them, and fails on any other."""
+    block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'absent'")
+    outputs = {"wsl_rehearsal_user": user_output, "wsl_rehearsal_profile_read": profile_output}
+    values = {}
+    for name, expression in block["vars"].items():
+        m = LAST_OUTPUT.fullmatch(expression)
+        assert m, expression
+        # `last` of an empty list is undefined, and `default('')` makes it ''.
+        values[name] = outputs[m[1]][-1] if outputs[m[1]] else ""
+    stop = next(task for task in block["block"] if task["name"] == "The distro and the VM stop, as the account")
+    results = []
+    for condition in stop["when"]:
+        if condition == "not ansible_check_mode":
+            results.append(not check_mode)
+        else:
+            m = LENGTH.fullmatch(condition)
+            assert m, condition
+            results.append(len(values[m[1]]) > 0)
+    return all(results)
+
+
+def test_with_no_profile_the_task_of_the_removal_is_neither_registered_nor_run():
+    """No profile: no task of the account ever ran, so it has no hive, no distro and no
+    VM. The removal then goes on with the tasks, rights, tile, account and folder,
+    and registers no task of the account."""
+    sid = "S-1-5-21-7-7-7-1002"
+    assert stop_block_runs([sid], ["C:\\Users\\tnwks-rehearsal"]) is True
+    assert stop_block_runs([sid], [""]) is False
+    assert stop_block_runs([sid], []) is False
+    assert stop_block_runs([""], [""]) is False, "no account"
+    assert stop_block_runs([sid], ["C:\\Users\\tnwks-rehearsal"], check_mode=True) is False
+    block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'absent'")
+    stop = next(task for task in block["block"] if task["name"] == "The distro and the VM stop, as the account")
+    assert {"The task of the removal", "The removal runs as the account"} <= {task["name"] for task in stop["block"]}
+    read = next(task for task in absent() if task["name"] == "Read the profile of the account")
+    assert read["check_mode"] is False and read["register"] == "wsl_rehearsal_profile_read"
+    assert "Win32_UserProfile -Filter \"SID = '$Sid'\"" in read["ansible.windows.win_powershell"]["script"]
+    names = [task["name"] for task in absent()]
+    assert names.index("Read the temporary account") < names.index("Read the profile of the account") < names.index(
+        "The start task stops")
+
+
 def test_no_task_of_the_play_runs_wsl_exe():
     """The administrator session never starts or stops WSL: each wsl.exe is in a task of
     the account (Invoke-TnwksRehearsal.ps1, or the start task)."""
@@ -534,7 +583,7 @@ function secedit.exe {
 """
 
 
-def run_exit_check(tmp_path: Path, policy: str, code: int = 0) -> str:
+def run_exit_check(tmp_path: Path, policy: str, code: int = 0, removed: str = "S-1-5-21-7-7-7-1002") -> str:
     play = yaml.safe_load((ANSIBLE / "playbooks/windows-rehearsal-check.yml").read_text())
     task = next(t for t in play[0]["tasks"] if t["name"] == "The exit check of the removal")
     body = EXIT_FAKES + f"""
@@ -546,7 +595,7 @@ $env:FAKE_EXIT = '{code}'
 $f = {{
 {task["ansible.windows.win_powershell"]["script"]}
 }}
-try {{ $r = & $f -Account tnwks-rehearsal -Prefix tnwks-rehearsal -Dir '{tmp_path / "gone"}' -Rights @('SeBatchLogonRight', 'SeDenyNetworkLogonRight') -UserList 'x'
+try {{ $r = & $f -Account tnwks-rehearsal -RemovedSid '{removed}' -Prefix tnwks-rehearsal -Dir '{tmp_path / "gone"}' -Rights @('SeBatchLogonRight', 'SeDenyNetworkLogonRight') -UserList 'x'
   'rights {{0}} {{1}}' -f $r.rights.pass, $r.rights.value }}
 catch {{ 'failed ' + $_.Exception.Message }}
 """
@@ -566,6 +615,31 @@ def test_the_exit_check_reads_the_rights_from_secedit_and_stops_when_it_fails(tm
     assert run_exit_check(tmp_path, left).startswith("rights False ")
     assert run_exit_check(tmp_path, clean, code=1).startswith("failed secedit did not export the rights (1)")
     assert run_exit_check(tmp_path, "", code=0).startswith("failed secedit did not export the rights (0)")
+
+
+@needs_pwsh
+def test_the_rights_check_fails_only_on_the_sid_of_the_account_and_notes_another(tmp_path):
+    """The SID of the removed account fails the check, also when it names no account.
+    A SID of another origin that names no account is shown as a note and passes."""
+    clean = "[Privilege Rights]\nSeBatchLogonRight = Administrators\nSeDenyNetworkLogonRight = Guest"
+    ours = clean.replace("= Guest", "= Guest,*S-1-5-21-7-7-7-1002")
+    out = run_exit_check(tmp_path, ours)
+    assert out.startswith("rights False ") and "S-1-5-21-7-7-7-1002 (the account of the rehearsal)" in out
+    stale = clean.replace("= Guest", "= Guest,*S-1-5-21-9-9-9-1500")
+    out = run_exit_check(tmp_path, stale)
+    assert out.startswith("rights True ") and "S-1-5-21-9-9-9-1500 (note: names no account, not the SID of the rehearsal)" in out
+
+
+def test_the_exit_check_needs_the_sid_of_the_removed_account():
+    play = yaml.safe_load((ANSIBLE / "playbooks/windows-rehearsal-check.yml").read_text())
+    tasks = play[0]["tasks"]
+    names = [t["name"] for t in tasks]
+    assert names.index("The SID of the removed account is given") < names.index("The exit check of the removal")
+    given = tasks[names.index("The SID of the removed account is given")]
+    assert given["when"] == "wsl_rehearsal_state == 'absent'"
+    assert "wsl_rehearsal_removed_sid" in given["ansible.builtin.assert"]["that"]
+    exit_check = tasks[names.index("The exit check of the removal")]["ansible.windows.win_powershell"]
+    assert exit_check["parameters"]["RemovedSid"] == "{{ wsl_rehearsal_removed_sid }}"
 
 
 @needs_pwsh

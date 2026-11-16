@@ -273,6 +273,8 @@
   vars:
     # The SID of the account, or empty when it is gone.
     wsl_rehearsal_sid: "{{ wsl_rehearsal_user.output | default([]) | last | default('') }}"
+    # The folder of its profile, or empty when it has none.
+    wsl_rehearsal_profile_path: "{{ wsl_rehearsal_profile_read.output | default([]) | last | default('') }}"
   block:
     - name: Read the temporary account
       ansible.windows.win_powershell:
@@ -286,13 +288,30 @@
       check_mode: false
       register: wsl_rehearsal_user
 
+    # A read, also in a check run. The first task of the account makes its
+    # profile, so with no profile no task of the account ever ran.
+    - name: Read the profile of the account
+      ansible.windows.win_powershell:
+        parameters:
+          Sid: "{{ wsl_rehearsal_sid }}"
+        script: |
+          param([string]$Sid)
+          $Ansible.Changed = $false
+          if (-not $Sid) { return '' }
+          $found = Get-CimInstance Win32_UserProfile -Filter "SID = '$Sid'"
+          if ($found) { "$($found.LocalPath)" } else { '' }
+      check_mode: false
+      register: wsl_rehearsal_profile_read
+
     # As the account: its own task ends the distro, unregisters it (with its
     # disk in the profile), and shuts down the VM of its own session. The
     # play first stops the start task, which ends the wsl.exe client that
-    # held the distro.
+    # held the distro. With no profile, no task of the account ever ran: it
+    # has no hive, so no distro and no VM, and this part has nothing to do.
     - name: The distro and the VM stop, as the account
       when:
         - wsl_rehearsal_sid | length > 0
+        - wsl_rehearsal_profile_path | length > 0
         - not ansible_check_mode
       block:
         - name: The start task stops

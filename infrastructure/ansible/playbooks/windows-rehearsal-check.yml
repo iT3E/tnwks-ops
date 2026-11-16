@@ -25,12 +25,17 @@
 #   mount    wsl --mount --vhd <file> --bare, then wsl --unmount: both exit 0
 #
 # With wsl_rehearsal_state absent (the removal), it reads the exit check
-# instead, and starts no task:
+# instead, and starts no task. It needs the SID of the account, read before
+# the removal (Get-LocalUser tnwks-rehearsal):
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-rehearsal-check.yml --limit WSL-02 \
+#     -e wsl_rehearsal_removed_sid=<SID>
 #
 #   account   no local account of the rehearsal; the local accounts and the
 #             members of Administrators are shown
 #   rights    no holder of the batch right or of the three deny rights is the
-#             account or a SID that names no account; the holders are shown
+#             account or its SID; the holders are shown, and a SID of another
+#             origin that names no account is shown as a note
 #   tile      no value for the account under Winlogon\SpecialAccounts\UserList
 #   tasks     no task of the rehearsal
 #   profile   no profile of the account
@@ -198,17 +203,27 @@
           $results
       register: wsl_rehearsal_checks
 
+    - name: The SID of the removed account is given
+      when: wsl_rehearsal_state == 'absent'
+      ansible.builtin.assert:
+        that: (wsl_rehearsal_removed_sid | default('')) is match('^S-1-5-21-[0-9]+-[0-9]+-[0-9]+-[0-9]+$')
+        fail_msg: >-
+          The exit check needs the SID of {{ wsl_rehearsal_account }}, read before the removal:
+          -e wsl_rehearsal_removed_sid=<SID>.
+        quiet: true
+
     - name: The exit check of the removal
       when: wsl_rehearsal_state == 'absent'
       ansible.windows.win_powershell:
         parameters:
           Account: "{{ wsl_rehearsal_account }}"
+          RemovedSid: "{{ wsl_rehearsal_removed_sid }}"
           Prefix: "{{ wsl_rehearsal_task_prefix }}"
           Dir: "{{ wsl_rehearsal_dir }}"
           Rights: "{{ ['SeBatchLogonRight'] + wsl_rehearsal_deny_rights }}"
           UserList: "{{ wsl_rehearsal_userlist_key }}"
         script: |
-          param([string]$Account, [string]$Prefix, [string]$Dir, [string[]]$Rights, [string]$UserList)
+          param([string]$Account, [string]$RemovedSid, [string]$Prefix, [string]$Dir, [string[]]$Rights, [string]$UserList)
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
           $results = [ordered]@{}
@@ -237,12 +252,15 @@
               if ($line) { $holders = @(($line[0] -split '=', 2)[1].Split(',') | ForEach-Object { $_.Trim().TrimStart('*') } | Where-Object { $_ }) }
               $named = @()
               foreach ($h in $holders) {
+                  # The SID of the account fails the check, also when it names
+                  # no account. Another SID that names no account is a note.
+                  if ($h -eq $RemovedSid) { $pass = $false; $named += "$h (the account of the rehearsal)"; continue }
                   try {
                       $name = $h
                       if ($h -like 'S-1-*') { $name = (New-Object Security.Principal.SecurityIdentifier $h).Translate([Security.Principal.NTAccount]).Value }
                       if ($name -like "*\$Account" -or $name -eq $Account) { $pass = $false }
                       $named += $name
-                  } catch { $pass = $false; $named += "$h (no account)" }
+                  } catch { $named += "$h (note: names no account, not the SID of the rehearsal)" }
               }
               $shown += "{0}: {1}" -f $right, $(if ($named) { $named -join ', ' } else { 'none' })
           }
