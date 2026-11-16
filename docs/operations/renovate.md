@@ -180,8 +180,8 @@ A review goes one of two ways, and the repository variable
 
 | Value | Job of `renovate-review.yaml` | What it calls | What the answer is |
 | --- | --- | --- | --- |
-| `host`, or any value but `platform` | `Review #<n>` | The hook of the gateway on the host (above) | The run of the host: it can migrate, label and merge |
-| `platform` | `Review #<n> (platform)` | `POST /runs` of the run receiver of the workflow agents (`docs/apps/agent-platform.md`, "Run receiver") | One comment on the pull request, with a verdict. It never merges, approves, pushes or labels |
+| `host`, or any value but `platform` | `Review #<n>` | The hook of the gateway on the host (above) | The run of the host: it can migrate, label and merge, and it sends the owner a chat summary of each review |
+| `platform` | `Review #<n> (platform)` | `POST /runs` of the run receiver of the workflow agents (`docs/apps/agent-platform.md`, "Run receiver") | One comment on the pull request, with a verdict. It never merges, approves, pushes or labels, and it sends no chat message |
 
 Both jobs run on the `openclaw-hooks` runner, after the same Select job and
 the same "Still eligible" step, so the gates of a review do not change.
@@ -194,7 +194,9 @@ the same "Still eligible" step, so the gates of a review do not change.
   only.
 - Its token is the secret `RUN_RECEIVER_TOKEN` of the environment
   `run-receiver` (deployments from `main` only). Only this job names that
-  environment, and only its call step has the token in its env.
+  environment, and only its call step has the token in its env. The step
+  writes it to a header file (mode 0600) for curl, so it is in no argument
+  list and no log, and removes the file at its end.
 - The key of an attempt is `renovate-review-<pr>-<sha7>-<n>`, with `n` from
   1. Before it calls, the job reads `GET /runs/<key>` for each `n` up to 3:
   a key that succeeded ends the job with no new run, a running one is
@@ -203,7 +205,10 @@ the same "Still eligible" step, so the gates of a review do not change.
   workflow, for as long as the receiver keeps their Jobs (7 days).
 - It tries again only after a `failed` (`502`) or `timed_out` (`504`)
   answer, with `n + 1`. A call with no answer, or `503`, goes again with
-  the same key. Any other answer fails the job with no new attempt.
+  the same key, a read or a run alike, 3 calls at the most; then the job
+  fails. Any other answer fails the job with no new attempt.
+- `.github/scripts/test_renovate_review_call.py` runs the script of the
+  call step against a fake receiver (in `actionlint.yaml`).
 - The log shows the status, the Job name, the verdict and the address of
   the comment. It does not show the error text of a failed run: that is
   in the annotation `workflow-agents/result` of the Job, and in Loki.
@@ -222,6 +227,15 @@ the same "Still eligible" step, so the gates of a review do not change.
    merge (or revert); the next review goes to the host again. The host
    reviewer keeps no state, so nothing else moves back.
 
+What stops at step 4, on the platform route: the migration commit on the
+branch, the `ori/blocked` and `ori/awaiting-approval` labels, the merge, and
+the chat summary to the owner. The comment on the pull request is the one
+notice of a review, and the owner merges by hand.
+
+A head that the host reviewer reviewed before step 4 has no key at the
+receiver, so a re-send of it after step 4 gets a second review, as a
+comment.
+
 The hook of the host stays as it is until the gateway on the host goes; a
 review on the host route still works after the move.
 
@@ -236,8 +250,8 @@ review on the host route still works after the move.
 | Variable `RENOVATE_REVIEW_ROUTE` | Terraform (`github` root) | `host` or `platform` (The route of a review, above) |
 | Label `owner/review` | `.github/labels.yaml` | Only the owner sets it. Required for any review. Cleared by a Renovate push |
 | Check `Owner label` | `.github/workflows/owner-label.yaml`, `.github/scripts/owner-label-check.py` | Fails an `impact/high` PR without the owner's `owner/review`, and an `impact/critical` PR without the owner's `owner/approved`, added after the head's push. Passes every other PR (above) |
-| Label `ori/blocked` | `.github/labels.yaml` | Set by the agent, cleared by a new push or by hand |
-| Labels `impact/critical`, `ori/awaiting-approval`, `owner/approved` | `.github/labels.yaml` | Critical tier: Renovate or the agent sets the first, the agent sets the second, only the owner sets the third. A new push clears the last two |
+| Label `ori/blocked` | `.github/labels.yaml` | Set by the host reviewer (route `host`), cleared by a new push or by hand. The platform reviewer sets no label |
+| Labels `impact/critical`, `ori/awaiting-approval`, `owner/approved` | `.github/labels.yaml` | Critical tier: Renovate or the host reviewer sets the first, the host reviewer (route `host`) sets the second, only the owner sets the third. A new push clears the last two. The platform reviewer sets none of them |
 | OpenClaw hook | `~/.openclaw/openclaw.json` on the WSL host, `hooks.*` | `allowedAgentIds: ["renovate"]`, no caller session keys. Token copy in `~/.openclaw/credentials/openclaw-hooks.env` |
 | OpenClaw agent `renovate` | `agents.entries.renovate`, workspace `~/.openclaw/workspace-renovate` | Tools: `exec`, `process`, `read` only. Its `AGENTS.md` is the review contract |
 | Rendered diff comment | `.github/workflows/kubernetes.yaml` (`Rendered diff`), `.github/scripts/flate-diff-comment.py` (the body; github-workflows' `sticky-comment` posts it) | One sticky comment per PR (`<!-- flate-diff -->`, from `github-actions[bot]`) with `flate diff` against the base branch for `wsl` and `wsl-02`. Secrets aren't rendered. The review starts from it: what a chart bump actually changes in the manifests |
