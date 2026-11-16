@@ -165,16 +165,20 @@
               if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Path)) { throw "diskpart did not make $Path ($LASTEXITCODE): $out" }
           }
 
-    # The principal is not the account of this session: the module registers
-    # each task for it by S4U, with no password. The Task Scheduler refuses
-    # that to the network logon of this session, so each task that registers,
-    # starts or stops a task of the account runs as SYSTEM (runas, with the
-    # debug privilege of the session and no password).
+    # The principal is not the account of this session. An administrator,
+    # SYSTEM included, registers an S4U task for a different account only with
+    # its password (Microsoft's rule, docs/wsl/windows-ansible.md), and the
+    # account has none that anything keeps. So for each task the module sets
+    # a new random password on the account and registers with it (s4u_user);
+    # nothing keeps that one either. Each task that registers, starts or stops
+    # a task of the account runs as SYSTEM (runas, with the debug privilege of
+    # the session and no password).
     - name: Tasks of the temporary account
       tnwks_win_scheduled_task:
         name: "{{ wsl_rehearsal_task_prefix }}-{{ item }}"
         xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
         s4u_user: "{{ wsl_rehearsal_account }}"
+        s4u_description: "{{ wsl_rehearsal_account_description }}"
       vars:
         ansible_become: true
         ansible_become_method: ansible.builtin.runas
@@ -204,7 +208,15 @@
                   Start-Sleep -Seconds 3
                   $info = Get-ScheduledTaskInfo -TaskName $Task
               } while (((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -or $info.LastRunTime -eq $before) -and (Get-Date) -lt $deadline)
-              if ($info.LastTaskResult -ne 0) { throw "$Task ended with $($info.LastTaskResult)" }
+              $code = '0x{0:X8}' -f $info.LastTaskResult
+              # An S4U task stores no password. If the service kept the one of
+              # its registration, the next registration (a new password) would
+              # break the tasks before it, and their start fails to log on.
+              if ($code -eq '0x8007052E') {
+                  throw ("$Task could not log on as $Account ($code): a task registered with an earlier password " +
+                      'of the account does not start. The tasks of the account need registering again, all in one run.')
+              }
+              if ($info.LastTaskResult -ne 0) { throw "$Task ended with $($info.LastTaskResult) ($code)" }
               $sid = (Get-LocalUser -Name $Account).SID.Value
               (Get-CimInstance Win32_UserProfile -Filter "SID = '$sid'").LocalPath
           vars:
@@ -279,6 +291,7 @@
             name: "{{ wsl_rehearsal_task_prefix }}-start"
             xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
             s4u_user: "{{ wsl_rehearsal_account }}"
+            s4u_description: "{{ wsl_rehearsal_account_description }}"
             running: true
           vars:
             item: start
