@@ -38,7 +38,7 @@
 #             origin that names no account is shown as a note
 #   tile      no value for the account under Winlogon\SpecialAccounts\UserList
 #   tasks     no task of the rehearsal
-#   profile   no profile of the account
+#   profile   no profile of the account, and no folder <users folder>\<account>*
 #   folder    no folder of the rehearsal
 
 - name: The checks of the rehearsal
@@ -271,7 +271,13 @@
           $tasks = @(Get-ScheduledTask -TaskName "$Prefix-*" -ErrorAction SilentlyContinue | ForEach-Object { $_.TaskName })
           Add-Check 'tasks' ($tasks.Count -eq 0) $(if ($tasks) { $tasks -join ', ' } else { 'none' })
           $profiles = @(Get-CimInstance Win32_UserProfile | Where-Object { $_.LocalPath -like "*\$Account*" } | ForEach-Object { $_.LocalPath })
-          Add-Check 'profile' ($profiles.Count -eq 0) $(if ($profiles) { $profiles -join ', ' } else { 'none' })
+          # A folder of the account in the users folder with no profile entry
+          # could still hold the disk of a distro.
+          $list = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -Name ProfilesDirectory
+          $usersDir = [Environment]::ExpandEnvironmentVariables($list.ProfilesDirectory)
+          $folders = @(Get-ChildItem -LiteralPath $usersDir -Directory -Force -Filter "$Account*" | ForEach-Object { $_.FullName })
+          $left = @($profiles) + @($folders | Where-Object { $_ -notin $profiles })
+          Add-Check 'profile' ($left.Count -eq 0) $(if ($left) { $left -join ', ' } else { "none (no profile, no folder $usersDir\$Account*)" })
           Add-Check 'folder' (-not (Test-Path -LiteralPath $Dir)) "$Dir exists: $(Test-Path -LiteralPath $Dir)"
           $results
       register: wsl_rehearsal_exit

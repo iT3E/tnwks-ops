@@ -433,11 +433,14 @@ def test_the_import_waits_for_the_hive_and_the_profile_of_the_account():
 
 
 def absent() -> list[dict]:
+    """The tasks of the state absent, with the tasks of each inner block, at any depth."""
+    def flat(tasks: list[dict]) -> list[dict]:
+        out = []
+        for task in tasks:
+            out.extend(flat(task["block"]) if "block" in task else [task])
+        return out
     block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'absent'")
-    out = []
-    for task in block["block"]:
-        out.extend(task.get("block", [task]))
-    return out
+    return flat(block["block"])
 
 
 def test_the_state_is_absent_and_the_controller_downloads_nothing():
@@ -570,7 +573,10 @@ EXIT_FAKES = r"""
 $Ansible = [pscustomobject]@{ Changed = $null }
 function Get-LocalUser { @([pscustomobject]@{ Name = 'admin1'; Enabled = $true }) }
 function Get-LocalGroupMember { param($SID) @([pscustomobject]@{ Name = 'host\admin1'; SID = [pscustomobject]@{ Value = 'S-1-5-21-7-7-7-1001' } }) }
-function Get-ItemProperty { param($LiteralPath, $Name, $ErrorAction) $null }
+function Get-ItemProperty {
+    param($LiteralPath, $Name, $ErrorAction)
+    if ($LiteralPath -like '*\ProfileList') { [pscustomobject]@{ ProfilesDirectory = $env:FAKE_USERS } }
+}
 function Get-ScheduledTask { param($TaskName, $ErrorAction) @() }
 function Get-CimInstance { param([Parameter(Position = 0)]$ClassName) @() }
 # secedit.exe: writes the policy that $env:FAKE_POLICY holds, and exits with $env:FAKE_EXIT.
@@ -583,7 +589,10 @@ function secedit.exe {
 """
 
 
-def run_exit_check(tmp_path: Path, policy: str, code: int = 0, removed: str = "S-1-5-21-7-7-7-1002") -> str:
+def run_exit_check(tmp_path: Path, policy: str, code: int = 0, removed: str = "S-1-5-21-7-7-7-1002",
+                   check: str = "rights") -> str:
+    users = tmp_path / "Users"
+    users.mkdir(exist_ok=True)
     play = yaml.safe_load((ANSIBLE / "playbooks/windows-rehearsal-check.yml").read_text())
     task = next(t for t in play[0]["tasks"] if t["name"] == "The exit check of the removal")
     body = EXIT_FAKES + f"""
@@ -592,11 +601,12 @@ $env:FAKE_POLICY = @'
 {policy}
 '@
 $env:FAKE_EXIT = '{code}'
+$env:FAKE_USERS = '{users}'
 $f = {{
 {task["ansible.windows.win_powershell"]["script"]}
 }}
 try {{ $r = & $f -Account tnwks-rehearsal -RemovedSid '{removed}' -Prefix tnwks-rehearsal -Dir '{tmp_path / "gone"}' -Rights @('SeBatchLogonRight', 'SeDenyNetworkLogonRight') -UserList 'x'
-  'rights {{0}} {{1}}' -f $r.rights.pass, $r.rights.value }}
+  '{check} {{0}} {{1}}' -f $r.{check}.pass, $r.{check}.value }}
 catch {{ 'failed ' + $_.Exception.Message }}
 """
     run = pwsh(body)
@@ -628,6 +638,32 @@ def test_the_rights_check_fails_only_on_the_sid_of_the_account_and_notes_another
     stale = clean.replace("= Guest", "= Guest,*S-1-5-21-9-9-9-1500")
     out = run_exit_check(tmp_path, stale)
     assert out.startswith("rights True ") and "S-1-5-21-9-9-9-1500 (note: names no account, not the SID of the rehearsal)" in out
+
+
+@needs_pwsh
+def test_the_profile_check_finds_a_folder_of_the_account_with_no_profile_entry(tmp_path):
+    """A profile folder without its registry entry would hold the disk of a distro."""
+    clean = "[Privilege Rights]\nSeBatchLogonRight = Administrators"
+    out = run_exit_check(tmp_path, clean, check="profile")
+    assert out.startswith("profile True none (no profile, no folder ")
+    (tmp_path / "Users" / "someone").mkdir()
+    assert run_exit_check(tmp_path, clean, check="profile").startswith("profile True ")
+    (tmp_path / "Users" / "tnwks-rehearsal.HOST").mkdir()
+    out = run_exit_check(tmp_path, clean, check="profile")
+    assert out.startswith("profile False ") and out.endswith("tnwks-rehearsal.HOST")
+
+
+def test_a_remove_task_that_does_not_register_stops_the_removal_and_says_what_is_left():
+    block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'absent'")
+    stop = next(task for task in block["block"] if task["name"] == "The distro and the VM stop, as the account")
+    guarded = next(task for task in stop["block"] if task["name"] == "The task of the removal")
+    assert [task["name"] for task in guarded["block"]] == ["The task of the removal"]
+    message = guarded["rescue"][0]["ansible.builtin.fail"]["msg"]
+    for part in ("ansible_failed_result.msg", "The removal stops here", "the account", "its profile", "its tasks",
+                 "the three deny rights", "tile", "wsl_rehearsal_dir", "waits for a run where the task registers"):
+        assert part in message, part
+    read = next(task for task in absent() if task["name"] == "Read the profile of the account")
+    assert "$ErrorActionPreference = 'Stop'" in read["ansible.windows.win_powershell"]["script"]
 
 
 def test_the_exit_check_needs_the_sid_of_the_removed_account():

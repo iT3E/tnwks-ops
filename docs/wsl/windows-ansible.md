@@ -548,6 +548,9 @@ now) removes each part, in this order:
    With no profile, no task of the account ever ran (the first one makes
    the profile), so it has no hive, no distro and no VM, and the play skips
    this step and the next.
+   When the task of the removal does not register, the removal stops
+   there: the account and each part of the rehearsal stay, and the message
+   says so.
 2. The play ends any process of the account that is left.
 3. It removes the tasks, the batch right and the three deny rights (before
    the account, so no SID with no account stays in the policy), the value
@@ -559,8 +562,8 @@ now) removes each part, in this order:
 The same check play then reads the exit check, with the SID of the
 account read before the removal (`-e wsl_rehearsal_removed_sid=<SID>`): no
 account; no holder of the batch right or of a deny right that is the
-account or its SID; no value for the tile; no task, no profile and no
-folder. It shows the local accounts, the members of Administrators and the
+account or its SID; no value for the tile; no task; no profile, and no
+folder of the account in the users folder; and no folder of the rehearsal. It shows the local accounts, the members of Administrators and the
 holders of the rights, and a SID of another origin that names no account
 as a note.
 
