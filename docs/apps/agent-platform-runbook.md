@@ -1457,42 +1457,87 @@ multiplying.
 ## Drill: a run job stopped in the middle
 
 A proposal for the readiness of the workflow agents: a run job that stops
-in the middle leaves no run sandbox behind. It is not run yet. Each step
-that changes the cluster needs the owner's yes at that time, and the drill
-runs only when the owner has approved it.
+in the middle leaves no run sandbox behind, and a Sandbox record that stays
+is seen and removed. It is not run yet. Each step that changes the cluster
+needs the owner's yes at that time, and the drill runs only when the owner
+has approved it. These steps are for run receiver 0.2.0 and later.
 
 **Why.** The run job deletes its sandbox at its end and on SIGTERM; the sweep
-deletes a run sandbox older than one hour. Neither path has run on the
-cluster for a stopped job.
+deletes a run sandbox older than one hour; the receiver checks the Sandbox
+record of each run 60 s after its end. None of these has run on the cluster
+for a stopped job.
 
-**When.** Not near a run of the providers job (:07, :22, :37, :52) or of the
-sweep (:00, :15, :30, :45), so each step is one cause. A real review needs a
-Renovate pull request at a new head, and one model call; at a limit of the
-plan, wait.
+**When.** Not near a run of the providers job (:07, :22, :37, :52), of the
+sweep (:00, :15, :30, :45) or of the daily checks (04:17, 04:47), so each
+step is one cause. A start at :09 to :12, :24 to :27, :39 to :42 or :54 to
+:57 leaves the run and its record check clear of them. A real review needs
+a Renovate pull request at a head with no review yet, and one model call;
+at a limit of the plan, wait.
 
 **Steps.**
 
 1. Read only: `kubectl -n agents-workflows get sandboxes.agents.x-k8s.io`
-   shows no run sandbox, and no alert of the platform fires.
-2. Owner approval: start one run through the caller (a real review, or the
-   call script of the receiver with the token, never on the screen).
-3. Read only: wait until `get sandboxes.agents.x-k8s.io` shows the run
-   sandbox `default--run-*` ready, and the run pod running.
+   shows no run sandbox, and no alert of the platform fires. Start a watch
+   that prints the run pod, the Sandbox records and the pods of each
+   sandbox as they change, and follows the log of the run pod (`get` and
+   `logs -f` only).
+2. Owner approval: start one run with one call to the receiver, with no
+   retry (a real review, with the token in the shell of the owner and never
+   on the screen).
+3. Read only: wait for the line `INFO run_job: sandbox <name> is ready after
+   N s` in the log of the run pod. The input goes to the agent right after
+   it, and a review takes 15 to 50 s, so the stop comes 2 to 5 s after that
+   line.
 4. **Case A, a stop with SIGTERM.** Owner approval:
-   `kubectl -n agents-workflows delete pod <run pod>`. Pass: the run job logs
-   exit 5, its sandbox is gone within 90 seconds, and the receiver keeps
-   the result `failed` on the Job.
+   `kubectl -n agents-workflows delete pod <run pod> --wait=false`. Pass:
+   - the run job logs exit 5 and `sandbox <name> deleted`, and its result
+     line says `failed`, `"error": "the run job was stopped"` and
+     `"sandbox_deleted": true`;
+   - the call gets `502` with that result, and the Job keeps it in the
+     annotation `workflow-agents/result`;
+   - within 90 s, `get sandboxes.agents.x-k8s.io` shows no run sandbox and
+     no sandbox pod is left;
+   - about 60 to 70 s after the end of the Job, the annotation
+     `workflow-agents/sandbox-record` of the Job says `gone`, and the
+     receiver logs no `Sandbox record` line.
+   A value `left: <sandbox>` with one `ERROR run_receiver: run <job>: the
+   Sandbox record of <sandbox> is still there` line is the fault of the
+   gateway that answers a delete with success and keeps the record: case B
+   then applies to it.
 5. **Case B, a stop with no time to clean.** Owner approval, on a second
    run: `kubectl -n agents-workflows delete pod <run pod> --grace-period=0 --force`.
-   The kubelet ends the container at once, as when a node goes away. Pass:
-   the sandbox stays at first, the sweep deletes it once it is one hour old
-   (within 75 minutes of its start), and `AgentRunSandboxTooOld` does not
-   fire.
+   The pod object goes at once. The kubelet still sends SIGTERM and gives
+   the container about 2 s before it kills it, which is too short for the
+   delete of the sandbox in most cases; if the run job logs `sandbox <name>
+   deleted`, the case did not leave a sandbox, and its pass is that of case
+   A. Pass:
+   - the Job fails with no result line; the receiver keeps `failed` with
+     `"output_kept": false`;
+   - about 60 to 70 s after the end of the Job, the annotation
+     `workflow-agents/sandbox-record` says `left: <sandbox>`, found by the
+     prefix of the run key, and the receiver logs one ERROR line for it;
+   - the sandbox and its pods stay at first (the agent can still post its
+     comment);
+   - the first sweep after the record is one hour old (within 75 minutes of
+     its start) deletes it: the sweep log says `<sandbox> deleted: its
+     Sandbox record is gone`, or, if the gateway kept the record, `the
+     gateway answered the delete and left the Sandbox record; removed
+     through the API` (a delete under the admission policy
+     `workflow-sweep-deletes`, and one failed sweep);
+   - `AgentRunSandboxTooOld` does not fire.
 6. Read only, after each case: no run sandbox in
-   `get sandboxes.agents.x-k8s.io`, no sandbox pod, and the sweep's log line
-   for case B.
+   `get sandboxes.agents.x-k8s.io`, no sandbox pod, and the lines above in
+   Loki: `{namespace="agents-workflows", app="workflow-run"}`,
+   `{namespace="agents-workflows", app="run-receiver"} |= "Sandbox record"`
+   and `{namespace="agents-workflows", app="workflow-sweep"}`.
 7. Record the times, the commands and each pass or fail in the readiness
    checklist of the platform.
+
+**Alerts during the drill.** `AgentWorkflowRunFailed` fires for each
+stopped run and clears 2 hours after the start of its Job. The chart rule
+`KubeJobFailed` fires for each failed run Job for as long as the Job stays
+(7 days). In case B, `AgentPlatformCronJobFailed` fires only if the sweep
+removed the record through the API, and clears at the next good sweep.
 
 **Rollback.** Nothing to roll back: the drill makes runs and deletes them.
 If a sandbox stays past 80 minutes, the alert fires and its section above
