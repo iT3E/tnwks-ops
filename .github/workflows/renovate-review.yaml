@@ -311,19 +311,37 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ matrix.pr }}
           SHA: ${{ matrix.sha }}
+        # .github/scripts/test_renovate_review_call.py runs this script against
+        # a fake receiver.
         run: |
           set -euo pipefail
           # The retry rule of a caller (docs/apps/agent-platform.md, "Run
           # receiver"): the key of attempt n is renovate-review-<pr>-<sha7>-<n>,
           # a new attempt only after a failed (502) or timed out (504) answer,
-          # and 3 attempts at the most for one head.
+          # and 3 attempts at the most for one head. A call with no answer, or
+          # 503, goes again with the same key: it gets the same run.
           sha7="${SHA:0:7}"
           answer="${RUNNER_TEMP}/answer.json"
-          auth="Authorization: Bearer ${RUN_RECEIVER_TOKEN}"
-          get() {
-            curl -sS -o "$answer" -w '%{http_code}' --max-time 30 -H "$auth" \
-              "${RUN_RECEIVER_URL}/runs/$1"
+          # The token goes to curl in a header file (mode 0600, from mktemp),
+          # never in an argument list or the log. printf is a builtin, so no
+          # process gets the token as an argument. The file goes at the end.
+          auth="$(mktemp "${RUNNER_TEMP}/receiver-auth.XXXXXX")"
+          trap 'rm -f "$auth"' EXIT
+          printf 'Authorization: Bearer %s\n' "$RUN_RECEIVER_TOKEN" >"$auth"
+          unset RUN_RECEIVER_TOKEN
+          # One call; its HTTP code, or 000 when there is no answer. A call
+          # with no answer, or 503, goes again, 3 calls at the most.
+          call() {
+            local c try
+            for try in 1 2 3; do
+              c="$(curl -sS -o "$answer" -w '%{http_code}' -H "@${auth}" "$@")" || c=000
+              [[ "$c" == 000 || "$c" == 503 ]] || break
+              echo "#${PR}: no answer (${c}), call ${try} of 3" >&2
+              if (( try < 3 )); then sleep 30; fi
+            done
+            echo "$c"
           }
+          get() { call --max-time 30 "${RUN_RECEIVER_URL}/runs/$1"; }
           # One line for the log. The error text of a failed run stays out of
           # it: it is in the annotation workflow-agents/result of the Job.
           show() {
@@ -339,7 +357,7 @@ jobs:
           n=1
           while (( n <= 3 )); do
             key="renovate-review-${PR}-${sha7}-${n}"
-            code="$(get "$key")" || code=000
+            code="$(get "$key")"
             case "$code" in
               404) break ;;
               202) break ;; # running: the call below joins it with the same key
@@ -353,20 +371,14 @@ jobs:
             key="renovate-review-${PR}-${sha7}-${n}"
             body="$(jq -nc --arg repo "$REPO" --argjson pr "$PR" --arg sha "$SHA" --arg key "$key" \
               '{agent: "renovate-reviewer", input: {repo: $repo, pr: $pr, head_sha: $sha}, key: $key, wait: true}')"
-            # A call with no answer, or 503, goes again with the same key: it
-            # gets the same run, not a second one.
-            for call in 1 2 3; do
-              code="$(curl -sS -o "$answer" -w '%{http_code}' --max-time 2520 -H "$auth" \
-                -H "Content-Type: application/json" --data "$body" "${RUN_RECEIVER_URL}/runs")" || code=000
-              [[ "$code" == 000 || "$code" == 503 ]] || break
-              echo "#${PR}: ${key}: no answer (${code}), call ${call} of 3"
-              sleep 30
-            done
-            # 202: the run has not ended. Read its state until it does.
+            code="$(call --max-time 2520 -H "Content-Type: application/json" --data "$body" "${RUN_RECEIVER_URL}/runs")"
+            # 202: the run has not ended. Read its state until it does, for 10
+            # minutes at the most.
             for read in $(seq 1 20); do
               [[ "$code" == 202 ]] || break
               sleep 30
-              if ! code="$(get "$key")" || [[ "$code" == 000 || "$code" == 503 ]]; then
+              code="$(get "$key")"
+              if [[ "$code" == 000 || "$code" == 503 ]]; then
                 echo "#${PR}: ${key}: no answer to read ${read} of 20"
                 code=202
               fi
