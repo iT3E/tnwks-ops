@@ -29,8 +29,9 @@
 #
 #   account   no local account of the rehearsal; the local accounts and the
 #             members of Administrators are shown
-#   batch     no holder of the right to log on as a batch job is the account or
-#             a SID that names no account; the holders are shown
+#   rights    no holder of the batch right or of the three deny rights is the
+#             account or a SID that names no account; the holders are shown
+#   tile      no value for the account under Winlogon\SpecialAccounts\UserList
 #   tasks     no task of the rehearsal
 #   profile   no profile of the account
 #   folder    no folder of the rehearsal
@@ -204,8 +205,10 @@
           Account: "{{ wsl_rehearsal_account }}"
           Prefix: "{{ wsl_rehearsal_task_prefix }}"
           Dir: "{{ wsl_rehearsal_dir }}"
+          Rights: "{{ ['SeBatchLogonRight'] + wsl_rehearsal_deny_rights }}"
+          UserList: "{{ wsl_rehearsal_userlist_key }}"
         script: |
-          param([string]$Account, [string]$Prefix, [string]$Dir)
+          param([string]$Account, [string]$Prefix, [string]$Dir, [string[]]$Rights, [string]$UserList)
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
           $results = [ordered]@{}
@@ -217,24 +220,31 @@
           $list = ($users | ForEach-Object { "$($_.Name) enabled=$($_.Enabled)" }) -join ', '
           Add-Check 'account' (-not ($users.Name -contains $Account)) ("local accounts: {0}; Administrators: {1}" -f $list, ($admins -join ', '))
 
-          # The holders of the right, from the local policy (secedit gives SIDs as *S-1-...).
+          # The holders of each right, from the local policy (secedit gives SIDs as *S-1-...).
           $file = Join-Path $env:TEMP 'tnwks-rehearsal-rights.inf'
           & secedit.exe /export /areas USER_RIGHTS /cfg $file /quiet | Out-Null
-          $line = @(Get-Content -LiteralPath $file | Where-Object { $_ -like 'SeBatchLogonRight*' })
+          $policy = @(Get-Content -LiteralPath $file)
           Remove-Item -LiteralPath $file -Force
-          $holders = @()
-          if ($line) { $holders = @(($line[0] -split '=', 2)[1].Split(',') | ForEach-Object { $_.Trim().TrimStart('*') } | Where-Object { $_ }) }
-          $named = @()
-          $orphans = @()
-          foreach ($h in $holders) {
-              try {
-                  $name = $h
-                  if ($h -like 'S-1-*') { $name = (New-Object Security.Principal.SecurityIdentifier $h).Translate([Security.Principal.NTAccount]).Value }
-                  $named += "$name ($h)"
-              } catch { $orphans += $h }
+          $pass = $true
+          $shown = @()
+          foreach ($right in $Rights) {
+              $line = @($policy | Where-Object { $_ -match "^$right\s*=" })
+              $holders = @()
+              if ($line) { $holders = @(($line[0] -split '=', 2)[1].Split(',') | ForEach-Object { $_.Trim().TrimStart('*') } | Where-Object { $_ }) }
+              $named = @()
+              foreach ($h in $holders) {
+                  try {
+                      $name = $h
+                      if ($h -like 'S-1-*') { $name = (New-Object Security.Principal.SecurityIdentifier $h).Translate([Security.Principal.NTAccount]).Value }
+                      if ($name -like "*\$Account" -or $name -eq $Account) { $pass = $false }
+                      $named += $name
+                  } catch { $pass = $false; $named += "$h (no account)" }
+              }
+              $shown += "{0}: {1}" -f $right, $(if ($named) { $named -join ', ' } else { 'none' })
           }
-          Add-Check 'batch' (($named | Where-Object { $_ -like "*\$Account *" -or $_ -like "$Account *" }).Count -eq 0 -and $orphans.Count -eq 0) `
-              ("holders: {0}{1}" -f ($named -join ', '), $(if ($orphans) { "; no account: $($orphans -join ', ')" } else { '' }))
+          Add-Check 'rights' $pass ($shown -join '; ')
+          $tile = Get-ItemProperty -LiteralPath $UserList -Name $Account -ErrorAction SilentlyContinue
+          Add-Check 'tile' (-not $tile) $(if ($tile) { "the value $Account is there" } else { 'no value' })
 
           $tasks = @(Get-ScheduledTask -TaskName "$Prefix-*" -ErrorAction SilentlyContinue | ForEach-Object { $_.TaskName })
           Add-Check 'tasks' ($tasks.Count -eq 0) $(if ($tasks) { $tasks -join ', ' } else { 'none' })

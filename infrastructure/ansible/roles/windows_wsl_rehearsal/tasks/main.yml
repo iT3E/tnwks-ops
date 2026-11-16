@@ -265,6 +265,9 @@
 # play runs wsl.exe: the administrator session never stops WSL.
 - name: The rehearsal is absent
   when: wsl_rehearsal_state == 'absent'
+  vars:
+    # The SID of the account, or empty when it is gone.
+    wsl_rehearsal_sid: "{{ wsl_rehearsal_user.output | default([]) | last | default('') }}"
   block:
     - name: Read the temporary account
       ansible.windows.win_powershell:
@@ -275,7 +278,8 @@
           $Ansible.Changed = $false
           $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
           if ($user) { $user.SID.Value } else { '' }
-      register: wsl_rehearsal_sid
+      check_mode: false
+      register: wsl_rehearsal_user
 
     # As the account: its own task ends the distro, unregisters it (with its
     # disk in the profile), and shuts down the VM of its own session. The
@@ -283,7 +287,7 @@
     # held the distro.
     - name: The distro and the VM stop, as the account
       when:
-        - (wsl_rehearsal_sid.output | last | default('')) | length > 0
+        - wsl_rehearsal_sid | length > 0
         - not ansible_check_mode
       block:
         - name: The start task stops
@@ -318,7 +322,7 @@
               Task: "{{ wsl_rehearsal_task_prefix }}-remove"
               Result: '{{ wsl_rehearsal_log_dir }}\remove.json'
               Distro: "{{ wsl_rehearsal_distro }}"
-              Sid: "{{ wsl_rehearsal_sid.output | last }}"
+              Sid: "{{ wsl_rehearsal_sid }}"
             script: |
               param([string]$Task, [string]$Result, [string]$Distro, [string]$Sid)
               $ErrorActionPreference = 'Stop'
@@ -354,18 +358,34 @@
         state: absent
       loop: "{{ wsl_rehearsal_tasks }}"
 
+    # Each right goes before the account, so no SID with no account stays
+    # in the local policy.
     - name: The account may no longer log on as a batch job
       ansible.windows.win_user_right:
         name: SeBatchLogonRight
-        users: ["{{ wsl_rehearsal_sid.output | last }}"]
+        users: ["{{ wsl_rehearsal_sid }}"]
         action: remove
-      when: (wsl_rehearsal_sid.output | last | default('')) | length > 0
+      when: wsl_rehearsal_sid | length > 0
+
+    - name: The deny rights of the account go
+      ansible.windows.win_user_right:
+        name: "{{ item }}"
+        users: ["{{ wsl_rehearsal_sid }}"]
+        action: remove
+      loop: "{{ wsl_rehearsal_deny_rights }}"
+      when: wsl_rehearsal_sid | length > 0
+
+    - name: No value for the account on the sign-in screen
+      ansible.windows.win_regedit:
+        path: '{{ wsl_rehearsal_userlist_key }}'
+        name: "{{ wsl_rehearsal_account }}"
+        state: absent
 
     # Its .wslconfig, its hive and what is left of the distro go with it.
     - name: No profile of the account
       ansible.windows.win_powershell:
         parameters:
-          Sid: "{{ wsl_rehearsal_sid.output | last | default('') }}"
+          Sid: "{{ wsl_rehearsal_sid }}"
         script: |
           [CmdletBinding(SupportsShouldProcess)]
           param([string]$Sid)

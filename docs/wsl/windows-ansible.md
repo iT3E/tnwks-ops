@@ -530,15 +530,18 @@ now) removes each part, in this order:
    stops the VM of that account only: WSL keeps one session for each
    account. No task of the play runs `wsl.exe`.
 2. The play ends any process of the account that is left.
-3. It removes the tasks, the batch right, the profile (with `.wslconfig`
-   and the hive), the account, the folder (the scripts, the root file
+3. It removes the tasks, the batch right and the three deny rights (before
+   the account, so no SID with no account stays in the policy), the value
+   that hides the tile, the profile (with `.wslconfig` and the hive), the
+   account, the folder (the scripts, the root file
    system, the test disk file and the results), and the file of the write
    test.
 
-The same check play then reads the exit check: no account, no holder of
-the batch right that is the account or a SID with no account, no task, no
-profile and no folder. It shows the local accounts, the members of
-Administrators and the holders of the right.
+The same check play then reads the exit check: no account; no holder of
+the batch right or of a deny right that is the account or a SID with no
+account; no value for the tile; no task, no profile and no folder. It shows
+the local accounts, the members of Administrators and the holders of the
+rights.
 
 ## Check-only settings
 

@@ -368,7 +368,8 @@ def test_the_state_is_absent_and_the_controller_downloads_nothing():
 def test_the_removal_stops_the_vm_as_the_account_before_the_profile_goes():
     names = [task["name"] for task in absent()]
     order = ["The start task stops", "Script of the removal", "The task of the removal", "The removal runs as the account",
-             "No task of the account", "The account may no longer log on as a batch job", "No profile of the account",
+             "No task of the account", "The account may no longer log on as a batch job", "The deny rights of the account go",
+             "No value for the account on the sign-in screen", "No profile of the account",
              "No temporary account", "No folder of the rehearsal", "No file of the write test"]
     assert [name for name in names if name in order] == order
     block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'absent'")
@@ -389,14 +390,27 @@ def test_no_task_of_the_play_runs_wsl_exe():
     check = yaml.safe_load((ANSIBLE / "playbooks/windows-rehearsal-check.yml").read_text())[0]["tasks"]
     for task in check:
         script = task.get("ansible.windows.win_powershell", {}).get("script", "")
-        assert "wsl.exe" not in script.lower() and "--shutdown" not in script, task["name"]
+        # It names wsl.exe only to find its processes, and never runs it.
+        assert not re.search(r"(^|[;{(]\s*)(&|Start-Process)[^\n]*wsl", script, re.IGNORECASE | re.MULTILINE), task["name"]
+        assert "--shutdown" not in script and "--terminate" not in script, task["name"]
 
 
 def test_the_removal_takes_away_each_part_that_the_rehearsal_made():
     tasks = next(task for task in absent() if task["name"] == "No task of the account")
     assert tasks["tnwks_win_scheduled_task"]["state"] == "absent" and tasks["loop"] == "{{ wsl_rehearsal_tasks }}"
-    right = next(task for task in absent() if "ansible.windows.win_user_right" in task)["ansible.windows.win_user_right"]
-    assert right["name"] == "SeBatchLogonRight" and right["action"] == "remove"
+    rights = [task for task in absent() if "ansible.windows.win_user_right" in task]
+    assert [r["ansible.windows.win_user_right"]["name"] for r in rights] == ["SeBatchLogonRight", "{{ item }}"]
+    assert rights[1]["loop"] == "{{ wsl_rehearsal_deny_rights }}"
+    for r in rights:
+        assert r["ansible.windows.win_user_right"]["action"] == "remove"
+        assert r["ansible.windows.win_user_right"]["users"] == ["{{ wsl_rehearsal_sid }}"]
+        assert r["when"] == "wsl_rehearsal_sid | length > 0"
+    tile = next(task for task in absent() if "ansible.windows.win_regedit" in task)["ansible.windows.win_regedit"]
+    assert tile == {"path": "{{ wsl_rehearsal_userlist_key }}", "name": "{{ wsl_rehearsal_account }}", "state": "absent"}
+    block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'absent'")
+    assert block["vars"]["wsl_rehearsal_sid"] == "{{ wsl_rehearsal_user.output | default([]) | last | default('') }}"
+    read = next(task for task in absent() if task["name"] == "Read the temporary account")
+    assert read["check_mode"] is False and read["register"] == "wsl_rehearsal_user"
     profile = next(task for task in absent() if task["name"] == "No profile of the account")["ansible.windows.win_powershell"]
     assert "Remove-CimInstance" in profile["script"] and "$profile.Loaded" in profile["script"]
     account = next(task for task in absent() if task["name"] == "No temporary account")["ansible.windows.win_powershell"]
@@ -413,9 +427,12 @@ def test_the_exit_check_reads_the_accounts_and_the_batch_right():
     exit_check = next(t for t in tasks if t["name"] == "The exit check of the removal")
     assert checks["when"] == "wsl_rehearsal_state == 'present'" and exit_check["when"] == "wsl_rehearsal_state == 'absent'"
     script = exit_check["ansible.windows.win_powershell"]["script"]
-    for name in ("account", "batch", "tasks", "profile", "folder"):
+    for name in ("account", "rights", "tasks", "profile", "folder", "tile"):
         assert f"Add-Check '{name}'" in script
-    assert "SeBatchLogonRight" in script and "S-1-5-32-544" in script and "Start-ScheduledTask" not in script
+    params = exit_check["ansible.windows.win_powershell"]["parameters"]
+    assert params["Rights"] == "{{ ['SeBatchLogonRight'] + wsl_rehearsal_deny_rights }}"
+    assert params["UserList"] == "{{ wsl_rehearsal_userlist_key }}"
+    assert "secedit.exe /export /areas USER_RIGHTS" in script and "S-1-5-32-544" in script and "Start-ScheduledTask" not in script
 
 
 @needs_pwsh
