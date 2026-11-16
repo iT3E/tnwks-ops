@@ -1,14 +1,23 @@
 ---
 # Reads the restored scratch volume, read-only, and logs only safe facts:
-# directory names at the top two levels, counts and sizes, the names and
-# times of the newest start archive and the newest daily archive, and the
-# check of each (checksum, gzip, member count). It never prints the content
-# of a file, a config value or the name of an archive member: the volume
-# holds credentials. Loki: {namespace="agents-pilot", app="agent-restore-check"}.
+# counts and sizes, the names, owners and modes of the top-level directories,
+# for each path the check user cannot read its type, owner, mode and
+# top-level directory (no name below the top level), and the checks of the
+# newest start archive and the newest daily archive (checksum, gzip, member
+# count). It never prints the content of a file, a config value or the name
+# of an archive member: the volume holds credentials.
+# Loki: {namespace="agents-pilot", app="agent-restore-check"}.
+#
+# Run 2. Run 1 (agent-restore-check) stopped at "unreadable=11" before the
+# archive checks. This run mounts the volume at the path of the agent pod
+# (/home/node/data), so an absolute link resolves as it does for the agent,
+# runs with the pod identity of the agent (uid, gid and fsGroup 1000), and
+# reports what it cannot read instead of stopping.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: agent-restore-check
+  # One name for each run: a Job cannot run again.
+  name: agent-restore-check-2
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 900
@@ -23,10 +32,12 @@ spec:
       # No nodeSelector: the PV of the scratch volume has the node affinity
       # of the node the restore mover bound it on, and the scheduler follows
       # it. No network: default-deny (../../namespace.yaml) applies.
+      # The pod identity of agent/app/deployment.yaml.
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -38,42 +49,73 @@ spec:
           args:
             - |
               set -eu
-              D=/restore
+              D=/home/node/data
+              bad=""
               fail() { echo "restore-check result=failed reason=$1"; exit 1; }
+              echo "restore-check id=$(id -u):$(id -g) groups=$(id -G | tr ' ' ',')"
+              find "$D" -maxdepth 0 -printf 'restore-check root type=%y owner=%U:%G mode=%m\n'
+              find "$D" -mindepth 1 -maxdepth 1 -type d -printf 'restore-check top type=d owner=%U:%G mode=%m name=%f\n' | LC_ALL=C sort
+              find "$D" -mindepth 1 -maxdepth 1 ! -type d -printf 'restore-check top type=%y owner=%U:%G mode=%m\n' | LC_ALL=C sort
               test -d "$D/state" || fail no-state
               test -d "$D/archives" || fail no-archives
-              # Counts only below the top level: a directory name can say
-              # more than a log line should keep.
-              top=$(cd "$D" && find . -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
               second=$(cd "$D" && find . -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)
-              echo "restore-check directories top=$top second=$second"
               files=$(find "$D" -type f 2>/dev/null | wc -l)
               bytes=$(find "$D" -type f -printf '%s\n' 2>/dev/null | awk '{ s += $1 } END { printf "%d\n", s }')
-              unreadable=$(find "$D" ! -readable 2>/dev/null | wc -l)
-              echo "restore-check files=$files bytes=$bytes unreadable=$unreadable"
-              [ "$files" -gt 0 ] || fail empty
-              [ "$unreadable" -eq 0 ] || fail unreadable
+              links=$(find "$D" -type l 2>/dev/null | wc -l)
+              echo "restore-check second-level-directories=$second files=$files bytes=$bytes links=$links"
+
+              # Each path that uid 1000 cannot read (find -readable follows a
+              # link to its target): its type, the type of a link's target
+              # (N: missing, L: loop), owner, mode and top-level directory.
+              # Counted by that tuple; no name below the top level.
+              find "$D" -mindepth 1 ! -readable -printf '%y %Y %U:%G %m %P\n' 2>/dev/null \
+                | awk '{ split($5, p, "/"); print "type=" $1 " target=" $2 " owner=" $3 " mode=" $4 " top=" p[1] }' \
+                | LC_ALL=C sort | uniq -c | sed 's/^ */restore-check unreadable count=/'
+              unreadable=$(find "$D" -mindepth 1 ! -readable 2>/dev/null | wc -l)
+              # A link whose target is missing is not data the restore lost:
+              # the snapshot keeps the link as a link. Anything else that
+              # uid 1000 cannot read, the agent could not read either.
+              dangling=$(find "$D" -mindepth 1 -type l ! -readable 2>/dev/null | wc -l)
+              blocked=$((unreadable - dangling))
+              echo "restore-check unreadable=$unreadable dangling-links=$dangling blocked=$blocked"
+              [ "$files" -gt 0 ] || bad="$bad empty"
+              [ "$blocked" -eq 0 ] || bad="$bad unreadable"
 
               # The newest start archive by the time in its name
               # (openclaw-state-<release>-<time>.tar.gz).
               S="$D/archives/start"
               start=$(cd "$S" 2>/dev/null && ls -1 2>/dev/null | grep -E '^openclaw-state-.*-[0-9]{8}T[0-9]{6}Z\.tar\.gz$' \
                 | sed -E 's/^(.*-([0-9]{8}T[0-9]{6}Z)\.tar\.gz)$/\2 \1/' | LC_ALL=C sort | tail -n 1 | cut -d' ' -f2 || true)
-              [ -n "$start" ] || fail no-start-archive
-              (cd "$S" && sha256sum -c "$start.sha256" > /dev/null 2>&1) || fail start-checksum
-              tar -tzf "$S/$start" > /dev/null 2>&1 || fail start-tar
-              members=$(tar -tzf "$S/$start" 2>/dev/null | wc -l)
-              echo "restore-check start=$start mtime=$(date -u -r "$S/$start" +%Y-%m-%dT%H:%MZ) members=$members checksum=ok"
+              if [ -z "$start" ]; then
+                bad="$bad no-start-archive"
+              elif ! (cd "$S" && sha256sum -c "$start.sha256" > /dev/null 2>&1); then
+                bad="$bad start-checksum"
+              elif ! tar -tzf "$S/$start" > /dev/null 2>&1; then
+                bad="$bad start-tar"
+              else
+                members=$(tar -tzf "$S/$start" 2>/dev/null | wc -l)
+                echo "restore-check start=$start mtime=$(date -u -r "$S/$start" +%Y-%m-%dT%H:%MZ) members=$members checksum=ok"
+              fi
 
               # The newest daily archive (openclaw-backup-<day>.tar.gz).
               A="$D/archives/daily"
               daily=$(cd "$A" 2>/dev/null && ls -1 2>/dev/null | grep -E '^openclaw-backup-[0-9]{4}-[0-9]{2}-[0-9]{2}\.tar\.gz$' \
                 | LC_ALL=C sort | tail -n 1 || true)
-              [ -n "$daily" ] || fail no-daily-archive
-              gzip -t "$A/$daily" > /dev/null 2>&1 || fail daily-gzip
-              tar -tzf "$A/$daily" > /dev/null 2>&1 || fail daily-tar
-              members=$(tar -tzf "$A/$daily" 2>/dev/null | wc -l)
-              echo "restore-check daily=$daily mtime=$(date -u -r "$A/$daily" +%Y-%m-%dT%H:%MZ) members=$members gzip=ok"
+              if [ -z "$daily" ]; then
+                bad="$bad no-daily-archive"
+              elif ! gzip -t "$A/$daily" > /dev/null 2>&1; then
+                bad="$bad daily-gzip"
+              elif ! tar -tzf "$A/$daily" > /dev/null 2>&1; then
+                bad="$bad daily-tar"
+              else
+                members=$(tar -tzf "$A/$daily" 2>/dev/null | wc -l)
+                echo "restore-check daily=$daily mtime=$(date -u -r "$A/$daily" +%Y-%m-%dT%H:%MZ) members=$members gzip=ok"
+              fi
+
+              if [ -n "$bad" ]; then
+                echo "restore-check result=failed reason=$(echo $bad | tr ' ' ',')"
+                exit 1
+              fi
               echo "restore-check result=ok"
           securityContext:
             allowPrivilegeEscalation: false
@@ -87,8 +129,10 @@ spec:
             limits:
               memory: 256Mi
           volumeMounts:
+            # The path of the agent pod, so an absolute link inside the state
+            # resolves as it does for the agent.
             - name: restored
-              mountPath: /restore
+              mountPath: /home/node/data
               readOnly: true
       volumes:
         - name: restored
