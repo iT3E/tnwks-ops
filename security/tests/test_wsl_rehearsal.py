@@ -415,9 +415,9 @@ def test_each_stderr_redirect_runs_under_continue():
     function = script[script.index("function Invoke-Wsl"):script.index("function Get-Distros")]
     assert "$ErrorActionPreference = 'Continue'" in function and function.count("2>&1") == 1
     assert script.count("2>&1") == 1
-    tasks = (ROLE / "tasks/main.yml").read_text()
-    lines = [line for line in tasks.splitlines() if "2>&1" in line]
-    assert lines and all(re.search(r"& \{ \$ErrorActionPreference = 'Continue'; [^}]*2>&1", line) for line in lines)
+    for path in (ROLE / "tasks/main.yml", ANSIBLE / "playbooks/windows-rehearsal-check.yml"):
+        lines = [line for line in path.read_text().splitlines() if "2>&1" in line]
+        assert lines and all(re.search(r"& \{ \$ErrorActionPreference = 'Continue'; [^}]*2>&1", line) for line in lines), path.name
 
 
 def test_the_import_waits_for_the_hive_and_the_profile_of_the_account():
@@ -515,6 +515,57 @@ def test_the_exit_check_reads_the_accounts_and_the_batch_right():
     assert params["Rights"] == "{{ ['SeBatchLogonRight'] + wsl_rehearsal_deny_rights }}"
     assert params["UserList"] == "{{ wsl_rehearsal_userlist_key }}"
     assert "secedit.exe /export /areas USER_RIGHTS" in script and "S-1-5-32-544" in script and "Start-ScheduledTask" not in script
+
+
+EXIT_FAKES = r"""
+$Ansible = [pscustomobject]@{ Changed = $null }
+function Get-LocalUser { @([pscustomobject]@{ Name = 'admin1'; Enabled = $true }) }
+function Get-LocalGroupMember { param($SID) @([pscustomobject]@{ Name = 'host\admin1'; SID = [pscustomobject]@{ Value = 'S-1-5-21-7-7-7-1001' } }) }
+function Get-ItemProperty { param($LiteralPath, $Name, $ErrorAction) $null }
+function Get-ScheduledTask { param($TaskName, $ErrorAction) @() }
+function Get-CimInstance { param([Parameter(Position = 0)]$ClassName) @() }
+# secedit.exe: writes the policy that $env:FAKE_POLICY holds, and exits with $env:FAKE_EXIT.
+function secedit.exe {
+    $cfg = $args[[array]::IndexOf($args, '/cfg') + 1]
+    if ($env:FAKE_POLICY) { Set-Content -LiteralPath $cfg -Value $env:FAKE_POLICY }
+    Write-Error 'a line on stderr'
+    $global:LASTEXITCODE = [int]$env:FAKE_EXIT
+}
+"""
+
+
+def run_exit_check(tmp_path: Path, policy: str, code: int = 0) -> str:
+    play = yaml.safe_load((ANSIBLE / "playbooks/windows-rehearsal-check.yml").read_text())
+    task = next(t for t in play[0]["tasks"] if t["name"] == "The exit check of the removal")
+    body = EXIT_FAKES + f"""
+$env:TEMP = '{tmp_path}'
+$env:FAKE_POLICY = @'
+{policy}
+'@
+$env:FAKE_EXIT = '{code}'
+$f = {{
+{task["ansible.windows.win_powershell"]["script"]}
+}}
+try {{ $r = & $f -Account tnwks-rehearsal -Prefix tnwks-rehearsal -Dir '{tmp_path / "gone"}' -Rights @('SeBatchLogonRight', 'SeDenyNetworkLogonRight') -UserList 'x'
+  'rights {{0}} {{1}}' -f $r.rights.pass, $r.rights.value }}
+catch {{ 'failed ' + $_.Exception.Message }}
+"""
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    return run.stdout.strip().splitlines()[-1]
+
+
+@needs_pwsh
+def test_the_exit_check_reads_the_rights_from_secedit_and_stops_when_it_fails(tmp_path):
+    """The read of secedit runs under Continue, so a line on stderr stays text, and an
+    exit code that is not 0 stops the check. A holder that is the account fails it."""
+    clean = "[Privilege Rights]\nSeBatchLogonRight = Administrators,Backup Operators\nSeDenyNetworkLogonRight = Guest"
+    assert run_exit_check(tmp_path, clean) == (
+        "rights True SeBatchLogonRight: Administrators, Backup Operators; SeDenyNetworkLogonRight: Guest")
+    left = clean.replace("= Guest", "= Guest,host\\tnwks-rehearsal")
+    assert run_exit_check(tmp_path, left).startswith("rights False ")
+    assert run_exit_check(tmp_path, clean, code=1).startswith("failed secedit did not export the rights (1)")
+    assert run_exit_check(tmp_path, "", code=0).startswith("failed secedit did not export the rights (0)")
 
 
 @needs_pwsh

@@ -222,7 +222,11 @@
 
           # The holders of each right, from the local policy (secedit gives SIDs as *S-1-...).
           $file = Join-Path $env:TEMP 'tnwks-rehearsal-rights.inf'
-          & secedit.exe /export /areas USER_RIGHTS /cfg $file /quiet | Out-Null
+          # No file of an earlier read: the check reads only this export.
+          Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+          # Lines on stderr stay text: under Stop, Windows PowerShell 5.1 stops at the first.
+          $out = & { $ErrorActionPreference = 'Continue'; secedit.exe /export /areas USER_RIGHTS /cfg $file /quiet 2>&1 | ForEach-Object { "$_" } } | Out-String
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $file)) { throw "secedit did not export the rights ($LASTEXITCODE): $out" }
           $policy = @(Get-Content -LiteralPath $file)
           Remove-Item -LiteralPath $file -Force
           $pass = $true
