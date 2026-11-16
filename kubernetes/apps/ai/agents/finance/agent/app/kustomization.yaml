@@ -1,0 +1,19 @@
+---
+# The finance agent. Only the network policy is applied for now: it selects
+# the agent pod, and no such pod exists.
+#
+# Not listed yet, each on purpose:
+# - ./deployment.yaml (replicas 0): its Secret `agent-secret` does not exist.
+#   The owner makes the values (R4): OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY
+#   (the key `agents-finance` of the model gateway, docs/apps/litellm.md),
+#   TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOW_FROM, as `secret.sops.yaml` here.
+# - ./pvc.yaml: the state volume comes with its backup policy, in the
+#   backup repository of finance, which waits for the owner.
+# - The backup policy, the mover policy and the restore test
+#   (../restore-test/, a template).
+# The tool set is the pilot's without web search, Firefly or the notes vault,
+# until the owner decides the tool credentials (D3) and the vault (D4).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./networkpolicy.yaml

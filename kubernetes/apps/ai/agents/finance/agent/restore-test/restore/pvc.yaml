@@ -1,0 +1,27 @@
+---
+# TEMPLATE, not applied: no kustomization.yaml lists this directory. The
+# restore test of the finance agent's state, as the pilot's ran on
+# 2026-11-16 (two runs of the check; the second mounts the volume at the
+# path of the agent pod). To run it: set the snapshot name in
+# restore/restore.yaml and the repository in ks.yaml, then list
+# ./agent/restore-test/ks.yaml in ../../kustomization.yaml, in a pull request
+# with the owner's go; remove it in the next one.
+# The scratch volume of the restore test. An empty claim of the class of
+# `agent-state` (local-path: it binds on the node of its first pod, here the
+# restore mover, on any worker). Flux owns it, so the removal of this
+# directory deletes it, and the reclaim policy Delete of the class wipes its
+# directory on the node. The restored data holds credentials: it must not
+# stay behind.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-state-restore-test
+  labels:
+    app.kubernetes.io/name: agent-restore-test
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      # The size of agent-state (agent/app/pvc.yaml).
+      storage: 10Gi
