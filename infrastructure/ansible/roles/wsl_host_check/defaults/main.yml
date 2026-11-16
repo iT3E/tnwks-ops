@@ -2,22 +2,38 @@
 # wsl_host_check: the host check of the security platform in the WSL distro
 # (security/README.md, "The host check"). A timer runs
 # /usr/local/bin/tnwks-host-check every 6 hours, as wsl_distro_user. It
-# simulates an upgrade with apt-get and writes a .prom file into the
-# directory that role windows_host_check makes for the distro, which the
-# Windows host's windows_exporter reads.
+# simulates an upgrade with apt-get and writes a JSON document into the inbox
+# that role windows_host_check makes for the distro. The relay of that role,
+# as SYSTEM each hour, writes the .prom file of the distro that the Windows
+# host's windows_exporter reads (Design Doc 0004, section 5.9).
 #
 # present: installs and starts the check. absent: stops it and removes its
-# units, its script, its state and its .prom file.
+# units, its script, its state and its document.
 wsl_host_check_state: present
 
 wsl_host_check_name: tnwks-host-check
 
-# The distro's path of the Windows directory host_check_distro_dir of role
+# The distro's path of the inbox host_check_inbox_dir of role
 # windows_host_check.
-wsl_host_check_textfile_dir: /mnt/c/Program Files/windows_exporter/textfile_inputs/wsl-distro
-# A name that no file of the Windows host has: the exporter refuses two
-# files with the same name.
-wsl_host_check_file: tnwks_security_host_check_distro.prom
+wsl_host_check_inbox_dir: /mnt/c/ProgramData/tnwks-host-check-distro
+# The write test (Design Doc 0004, section 5.9): the distro's path of the
+# textfile directory of the host, host_check_textfile_dir of role
+# windows_host_check. Each run of the check and the last task of this role try
+# to make a file there. Only a refusal by Windows is the pass; any other
+# answer is the failed query textfile-write, and the run gives no result.
+wsl_host_check_write_test_dir: /mnt/c/Program Files/windows_exporter/textfile_inputs
+# Whether the answer of the last task of the role can fail the play: on where
+# the Windows host of the distro starts WSL with no elevation
+# (wsl_start_unelevated, group_vars/windows_hosts.yml) and the start step of
+# docs/wsl/windows-ansible.md is done (wsl_start_unelevated_done), and only
+# there (section 5.9 of the design). Until the start step, the play does not
+# fail on the write test; the security result of the check still shows it.
+wsl_host_check_write_test_fails_play: >-
+  {{ (hostvars[wsl_distro_windows_host].wsl_start_unelevated | default(false) | bool)
+  and (hostvars[wsl_distro_windows_host].wsl_start_unelevated_done | default(false) | bool) }}
+# The name of the document in the inbox: host_check_inbox_file of role
+# windows_host_check.
+wsl_host_check_file: tnwks_security_host_check_distro.json
 
 # An upgrade fails the check when it has waited longer than this, the same
 # limit as the Windows hosts.

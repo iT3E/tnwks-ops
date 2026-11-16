@@ -261,7 +261,17 @@ by a day.
 
 - Pause every host task that calls `wsl.exe`: `tnwks-wsl-watchdog`,
   `tnwks-usb-attach`, `tnwks-lan-bridge-sync`. Otherwise the watchdog
-  starts WSL again five minutes in.
+  starts WSL again five minutes in. On a host with `wsl_start_unelevated`
+  on, pause also `tnwks-wsl-keepalive`, `tnwks-lan-bridge-ip`, the UDP
+  relays (`tnwks-udp-relay*`) and `tnwks-wsl-service`: the service task
+  starts the keepalive again about five minutes into a drain, and the
+  keepalive starts WSL. The list is step 2 of the start step in
+  [windows-ansible.md](../wsl/windows-ansible.md#the-start-step-site-2-first).
+- On a host with `wsl_start_unelevated` on, the elevated SSH session of
+  the window runs only `wsl --shutdown`, `wsl --list`, `wsl --version` and
+  `wsl --update`. Any other `wsl` command in it can create the WSL VM or
+  start a process in the distro with elevation
+  ([the rule](../wsl/windows-ansible.md#start-wsl-with-no-elevation)).
 - Stop what's left on the cluster cleanly: cold-tier apps and zwave-js-ui
   scale to 0, then the Talos nodes shut down (worker-2, worker-1, control
   plane). The distro's BGP sessions drop with them, and the router sends
@@ -302,7 +312,14 @@ by a day.
 
 - Unpause the tasks from phase 3. The watchdog brings WSL and the distro
   back; confirm `systemd` is running and, on `DESKTOP-HKE05KI`, the
-  OpenClaw gateway unit is active.
+  OpenClaw gateway unit is active. On a host with `wsl_start_unelevated`
+  on, the keepalive task starts WSL with no elevation (start it with
+  `Start-ScheduledTask -TaskName tnwks-wsl-keepalive` rather than wait),
+  and nothing in the elevated SSH session starts the distro. Check it as
+  in step 5 of the start step: `readlink /proc/1/ns/mnt /proc/self/ns/mnt`
+  prints two equal lines. Run it in the distro from a window with no
+  elevation (`wsl -d Ubuntu -u root -e readlink ...`), or over SSH to the
+  distro itself, never from the elevated SSH session of the host.
 - The distro's WireGuard tunnel to the router is up again and its BGP
   sessions are established. Until the LAN bridge is retired, run its sync
   too: the WSL IP can change on reboot.

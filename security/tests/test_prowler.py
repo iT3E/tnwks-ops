@@ -11,6 +11,7 @@ import datetime
 import importlib.util
 import json
 import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -135,27 +136,63 @@ def test_the_command_sends_nothing_to_the_vendor(run, tmp_path):
     assert command[-1] == "--role=arn:aws:iam::123456789012:role/example"
 
 
-def fake_prowler(code=0, write=True, content='[{"status_code": "FAIL"}]'):
+def record(check):
+    return {"status_code": "FAIL", "metadata": {"event_code": check}}
+
+
+def fake_prowler(code=0, write=True, content=None, peak=2 * 2**20):
+    """A Prowler for each part. `code`, `write` and `content` are one value for each
+    part, or a dict from the service of the part to its value. The default content is
+    one record for each check of the part."""
     calls = []
+
+    def of(value, name, default):
+        return value.get(name, default) if isinstance(value, dict) else value
 
     def call(command):
         calls.append(command)
-        if write:
+        checks = json.loads(Path(command[command.index("--checks-file") + 1]).read_text())["aws"]
+        name = checks[0].split("_")[0]
+        if of(write, name, True):
             output = Path(command[command.index("--output-directory") + 1])
             output.mkdir(parents=True, exist_ok=True)
-            name = command[command.index("--output-filename") + 1]
-            (output / f"{name}.ocsf.json").write_text(content)
+            prefix = command[command.index("--output-filename") + 1]
+            text = of(content, name, None)
+            if text is None:
+                text = "[" + ",".join(json.dumps(record(check), indent=4) for check in checks) + "]"
+            (output / f"{prefix}.ocsf.json").write_text(text)
             (output / "compliance").mkdir()
-            (output / "compliance" / f"{name}_cis.csv").write_text("a table")
-        return code
+            (output / "compliance" / f"{prefix}_cis.csv").write_text("a table")
+        return of(code, name, 0), peak
     return call, calls
 
 
-def args(run, tmp_path, *extra):
+CHECKS = ["s3_bucket_one", "ec2_instance_one", "iam_user_one", "ec2_instance_two"]
+
+
+def args(run, tmp_path, *extra, checks=CHECKS):
     (tmp_path / "work").mkdir(exist_ok=True)
+    (tmp_path / "checks.json").write_text(json.dumps({"aws": checks}))
     return run.parse(["--provider=aws", "--system=aws-prod", f"--checks={tmp_path / 'checks.json'}",
                       f"--results={tmp_path / 'results'}", f"--accepted={tmp_path / 'accepted.json'}",
                       f"--work={tmp_path / 'work'}", "--", *extra])
+
+
+def test_the_scan_list_runs_in_one_part_for_each_service(run, tmp_path):
+    args(run, tmp_path)
+    assert run.parts(tmp_path / "checks.json", "aws") == [
+        ("ec2", ["ec2_instance_one", "ec2_instance_two"]), ("iam", ["iam_user_one"]), ("s3", ["s3_bucket_one"])]
+
+
+@pytest.mark.parametrize("provider", ["aws", "cloudflare"])
+def test_each_check_of_a_scan_list_is_in_one_part_with_its_service(run, provider):
+    path = APP / f"config/checks-{provider}.json"
+    checks = json.loads(path.read_text())[provider]
+    pieces = run.parts(path, provider)
+    assert sorted(check for _, part in pieces for check in part) == sorted(checks)
+    assert len({name for name, _ in pieces}) == len(pieces)
+    for name, part in pieces:
+        assert part and all(run.service(check) == name for check in part)
 
 
 def test_a_run_leaves_one_whole_file_with_the_time_of_its_end(run, tmp_path, capsys):
@@ -171,13 +208,33 @@ def test_a_run_leaves_one_whole_file_with_the_time_of_its_end(run, tmp_path, cap
     assert stat.S_IMODE((directory / files[0]).stat().st_mode) == 0o644
     assert stat.S_IMODE(directory.stat().st_mode) == 0o755
     assert stat.S_IMODE((tmp_path / "results/prowler").stat().st_mode) == 0o755
-    # The mutelist of the run, and nothing of Prowler's own output stays in the scratch space.
-    command = calls[0]
-    assert command[-1] == "--role=arn:aws:iam::123456789012:role/example"
+    # One JSON array with the records of each part, in the order of the parts.
+    joined = json.loads((directory / files[0]).read_text())
+    assert joined == [record(check) for check in ["ec2_instance_one", "ec2_instance_two", "iam_user_one", "s3_bucket_one"]]
+    # One process for each part, each with the checks of its part, the mutelist of the
+    # run and the arguments after --, and nothing of Prowler's own output stays in the
+    # scratch space.
+    assert len(calls) == 3
+    assert all(command[-1] == "--role=arn:aws:iam::123456789012:role/example" for command in calls)
+    assert len({command[command.index("--mutelist-file") + 1] for command in calls}) == 1
     assert list((tmp_path / "work").iterdir()) == []
     out = capsys.readouterr().out
     assert "1 accepted checks muted" in out and "check_open" not in out
+    assert "3 parts" in out
+    assert "part 1 of 3: ec2, 2 checks: starts" in out
+    assert "part 3 of 3: s3, 1 checks: ends, memory peak of the part: 2 MiB" in out
     assert "memory peak of the container" in out
+    assert "FAIL" not in out
+
+
+def test_each_part_gets_the_checks_of_its_service_only(run, tmp_path):
+    seen = []
+
+    def call(command):
+        seen.append(json.loads(Path(command[command.index("--checks-file") + 1]).read_text()))
+        return 1, None
+    run.run(args(run, tmp_path), now=lambda: NOW, call=call)
+    assert seen == [{"aws": ["ec2_instance_one", "ec2_instance_two"]}, {"aws": ["iam_user_one"]}, {"aws": ["s3_bucket_one"]}]
 
 
 def test_the_mutelist_of_the_run_has_the_accepted_checks(run, tmp_path):
@@ -186,20 +243,66 @@ def test_the_mutelist_of_the_run_has_the_accepted_checks(run, tmp_path):
 
     def call(command):
         seen.update(json.loads(Path(command[command.index("--mutelist-file") + 1]).read_text()))
-        return 1
+        return 1, None
     run.run(args(run, tmp_path), now=lambda: NOW, call=call)
     assert list(seen["Mutelist"]["Accounts"]["*"]["Checks"]) == ["^check_open$"]
 
 
 @pytest.mark.parametrize("code,write,content", [
-    (1, True, "[]"), (2, False, "[]"), (0, False, "[]"),
-    # An empty file is a bad file for the converter: the run fails.
-    (0, True, "")])
-def test_a_run_that_fails_moves_no_file(run, tmp_path, code, write, content):
-    call, _ = fake_prowler(code=code, write=write, content=content)
+    # A part that fails: Prowler ends with an error, or a signal ends it.
+    ({"iam": 1}, True, None), ({"iam": 2}, False, None), ({"iam": -9}, False, None),
+    # An empty file is a bad file for the converter: the part fails.
+    (0, True, {"iam": ""}),
+    # A file that is not one JSON array.
+    (0, True, {"iam": "{}"}), (0, True, {"iam": "[{}"}), (0, True, {"iam": "{}]"}), (0, True, {"iam": "  ]  "}),
+    (0, True, {"iam": "["}), (0, True, {"iam": "x"}), (0, True, {"iam": "   "}),
+    # No part leaves a record.
+    (0, False, None), (0, True, "[]"), (1, True, "[]")])
+def test_a_run_in_which_a_part_fails_moves_no_file(run, tmp_path, capsys, code, write, content):
+    call, calls = fake_prowler(code=code, write=write, content=content)
     assert run.run(args(run, tmp_path), now=lambda: NOW, call=call) != 0
     directory = tmp_path / "results/prowler/aws"
     assert not directory.exists() or not any(path.is_file() for path in directory.rglob("*"))
+    # Each part runs, so the log names each part that fails.
+    assert len(calls) == 3
+    out = capsys.readouterr().out
+    if isinstance(code, dict) or isinstance(content, dict):
+        assert "1 of 3 parts failed (iam): no file for the converter" in out
+        assert "part 2 of 3: iam, 1 checks: fails (" in out
+
+
+@pytest.mark.parametrize("content", [
+    # Prowler writes no file for a part with no finding, and the run goes on.
+    None, "[]", " [ \n ] \n"])
+def test_a_part_with_no_record_adds_nothing(run, tmp_path, content):
+    call, _ = fake_prowler(write={"iam": content is not None}, content={"iam": content})
+    assert run.run(args(run, tmp_path), now=lambda: NOW, call=call) == 0
+    (path,) = (tmp_path / "results/prowler/aws").glob("*.ocsf.json")
+    assert json.loads(path.read_text()) == [record(c) for c in ["ec2_instance_one", "ec2_instance_two", "s3_bucket_one"]]
+
+
+def test_the_records_are_copied_in_chunks_with_the_space_around_them(run, tmp_path, monkeypatch):
+    monkeypatch.setattr(run, "CHUNK", 3)
+    parts = ["  \n[\n" + json.dumps(record("a_one"), indent=4) + ",\n" + json.dumps(record("a_two")) + "\n]\n\n  ",
+             "[" + json.dumps(record("b_one")) + "]", "[ ]", "[" + " " * 10 + json.dumps(record("c_one")) + " " * 10 + "]"]
+    joined_path = tmp_path / "joined.json"
+    records = False
+    with joined_path.open("wb") as joined:
+        joined.write(b"[")
+        for index, text in enumerate(parts):
+            path = tmp_path / f"part{index}.json"
+            path.write_text(text)
+            records = run.append_records(path, joined, records)
+        joined.write(b"]")
+    assert records
+    assert json.loads(joined_path.read_text()) == [record(c) for c in ["a_one", "a_two", "b_one", "c_one"]]
+
+
+def test_a_part_reports_its_code_and_the_peak_of_its_process(run):
+    code, peak = run.child([sys.executable, "-c", "import sys; sys.exit(3)"])
+    assert code == 3 and peak > 2**20
+    code, _ = run.child([sys.executable, "-c", "import os, signal; os.kill(os.getpid(), signal.SIGKILL)"])
+    assert code == -9
 
 
 def test_files_older_than_14_days_and_leftovers_are_deleted(run, tmp_path):
@@ -228,9 +331,9 @@ def cronjobs():
     return documents
 
 
-# An AWS run ended OOMKilled at 768 MiB: Prowler takes about 345 MiB before it
-# scans and about 380 MiB more for its clients in 17 Regions. A Cloudflare run
-# has a few clients in one place.
+# The runs of the whole AWS scan list in one process ended at 768 MiB, then at
+# 1536 MiB: a run is now one process for each service (prowler/README.md,
+# "Memory"). A Cloudflare run has a few clients in one place.
 MEMORY_LIMITS = {"aws": "1536Mi", "cloudflare": "768Mi"}
 MEMORY_REQUESTS = {"aws": "1024Mi", "cloudflare": "512Mi"}
 

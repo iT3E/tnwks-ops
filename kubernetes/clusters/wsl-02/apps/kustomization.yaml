@@ -218,9 +218,9 @@ patches:
       metadata:
         name: cert-manager-prometheusrules
         namespace: flux-system
-  # kube-prometheus-stack here: no extra scrape jobs (homelab-wsl scrapes both
-  # Windows hosts and alerts on them), a smaller Prometheus, and only the
-  # cluster-level addon alerts (monitoring-addons/).
+  # kube-prometheus-stack here: homelab-wsl scrapes both Windows hosts and
+  # alerts on them; this site scrapes only their security series. A smaller
+  # Prometheus, and only the cluster-level addon alerts (monitoring-addons/).
   - patch: |-
       apiVersion: kustomize.toolkit.fluxcd.io/v1
       kind: Kustomization
@@ -233,7 +233,8 @@ patches:
               kind: HelmRelease
               name: kube-prometheus-stack
             patch: |-
-              # Only the other site's federation (peer-rules.yaml).
+              # The other site's federation (peer-rules.yaml), and the
+              # security series of both Windows hosts.
               - op: replace
                 path: /spec/values/prometheus/prometheusSpec/additionalScrapeConfigs
                 value:
@@ -246,16 +247,8 @@ patches:
                       match[]:
                         - 'cnpg_pg_stat_archiver_last_archived_wal_start_lsn'
                         - 'cnpg_pg_replication_in_recovery'
-                        # The two series of the security registry from the
-                        # host check (security/README.md, "What a source
-                        # must do"). homelab-wsl scrapes the textfile
-                        # collector of both Windows hosts, and each distro
-                        # writes to the directory of its host. The rules of
-                        # the registry run here only. Its own series, not a
-                        # copy of this site's.
-                        - 'homelab_security_check_result{source="host-check",source_site=""}'
-                        - 'homelab_security_last_result_timestamp_seconds{source="host-check",source_site=""}'
-                        # The same two series from Trivy Operator of
+                        # The two series of the security registry from
+                        # Trivy Operator of
                         # homelab-wsl (kubernetes/apps/security/trivy-operator/README.md).
                         - 'homelab_security_check_result{source="trivy",source_site=""}'
                         - 'homelab_security_last_result_timestamp_seconds{source="trivy",source_site=""}'
@@ -265,6 +258,37 @@ patches:
                         labels:
                           source_site: ${PEER_CLUSTER_NAME}
                           k8s_cluster: ${PEER_CLUSTER_NAME}
+                  # The host check of both Windows hosts and their distros
+                  # (security/README.md, "The host check"): the series of the
+                  # security registry from the textfile collector of each
+                  # host, and no other. The rules of the registry run here
+                  # only, so the results of the site 1 host and its distro do
+                  # not wait on the cluster of homelab-wsl (Design Doc 0004,
+                  # section 5.5). homelab-wsl scrapes the same series with
+                  # the label standby, and alerts on them only while this
+                  # site can not scrape that host. behind_site: the site
+                  # that the host sits behind. SecurityHostUnreachable fires
+                  # on its `up`, and the inhibit rules of Alertmanager hold
+                  # the late results behind that site with it.
+                  - job_name: windows-exporter-security
+                    scrape_interval: 30s
+                    scrape_timeout: 10s
+                    static_configs:
+                      - targets:
+                          - ${WINDOWS_HOST_IP}:9182
+                        labels:
+                          instance: ${WINDOWS_HOST_NAME}
+                          k8s_cluster: ${CLUSTER_NAME}
+                      - targets:
+                          - ${PEER_WINDOWS_HOST_ADDR}:9182
+                        labels:
+                          instance: ${PEER_WINDOWS_HOST_NAME}
+                          k8s_cluster: ${PEER_CLUSTER_NAME}
+                          behind_site: ${PEER_CLUSTER_NAME}
+                    metric_relabel_configs:
+                      - source_labels: [__name__]
+                        regex: homelab_security_.+
+                        action: keep
               # The kubelet's own figure of its node's memory (the working
               # set of the node's root cgroup, which here is the node
               # container), for NodeContainerMemoryNearLimit: one series for

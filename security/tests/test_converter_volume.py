@@ -74,20 +74,34 @@ def record(check, status_code, status="New"):
 
 def test_the_file_of_a_run_is_the_newest_result_of_its_system(run, tmp_path):
     ended = datetime.datetime(2026, 11, 13, 5, 10, 0, tzinfo=UTC)
-    produced = tmp_path / "produced.ocsf.json"
-    produced.write_text(json.dumps([record("check_a", "FAIL"), record("check_b", "FAIL", "Suppressed"),
-                                    record("check_c", "PASS")], indent=4))
+    # Two parts, one for each service, each with its own OCSF file.
+    produced = {"alpha": [record("alpha_check_a", "FAIL")],
+                "beta": [record("beta_check_b", "FAIL", "Suppressed"), record("beta_check_c", "PASS")]}
+
+    def call(command):
+        checks = json.loads(Path(command[command.index("--checks-file") + 1]).read_text())["aws"]
+        output = Path(command[command.index("--output-directory") + 1])
+        output.mkdir(parents=True)
+        name = command[command.index("--output-filename") + 1]
+        (output / f"{name}.ocsf.json").write_text(json.dumps(produced[run.service(checks[0])], indent=4))
+        return 0, None
+
+    (tmp_path / "checks.json").write_text(json.dumps({"aws": ["beta_check_b", "alpha_check_a", "beta_check_c"]}))
+    (tmp_path / "work").mkdir()
     results = tmp_path / "volume"
-    final = run.publish(produced, results, "aws", "aws-prod", ended)
-    assert final.parent == results / "prowler/aws"
+    args = run.parse(["--provider=aws", "--system=aws-prod", f"--checks={tmp_path / 'checks.json'}",
+                      f"--results={results}", f"--accepted={tmp_path / 'absent.json'}", f"--work={tmp_path / 'work'}"])
+    assert run.run(args, now=lambda: ended, call=call) == 0
+    assert [path.name for path in (results / "prowler/aws").glob("*.ocsf.json")] == ["aws-prod.20261113T051000Z.ocsf.json"]
     part = converter.ResultFiles(results, generate.converter_registry(generate.load()),
                                  clock=lambda: ended.timestamp() + 60)
     part.cycle()
     text = part.render().decode()
     assert f'{generate.LAST_RESULT}{{source="prowler",system="aws-prod"}} {ended.timestamp():.3f}' in text
+    assert f'{converter.FILES_SKIPPED}{{source="prowler"}} 0' in text
     found = {re.search(r'check="([^"]+)"', line)[1]: line.rsplit(" ", 1)[1]
              for line in text.splitlines() if line.startswith(generate.RESULT + "{")}
-    assert found == {"check_a": "1", "check_b": "0", "check_c": "0"}
+    assert found == {"alpha_check_a": "1", "beta_check_b": "0", "beta_check_c": "0"}
 
 
 # --- One list, read the same way --------------------------------------------------------

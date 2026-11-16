@@ -1,6 +1,7 @@
 ---
-# The providers of the workflow agents (scripts/providers.sh). Every 15
-# minutes it imports each new provider profile (providers/) into the sandbox
+# The providers of the workflow agents: the `providers` command of the image
+# of the workflow agents (src/providers/ in iT3E/tnwks-workflow-agents, whose
+# CI tests it). Every 15 minutes it imports each new provider profile (providers/) into the sandbox
 # gateway and updates each one that changed in git, updates model-gateway
 # with the key from the Secret workflow-providers-secret, then gets a new
 # installation token of the GitHub App of the reviewer and updates
@@ -47,13 +48,18 @@ spec:
               type: RuntimeDefault
           containers:
             - name: providers
-              # The image of the workflow agents holds the OpenShell CLI.
-              image: ghcr.io/it3e/tnwks-workflow-agents:0.2.0@sha256:afa99d46ca1a2a160a381ec5211d7395a419da198dcfbe73237ea7e046546378
+              # The image of the workflow agents holds the OpenShell CLI and the
+              # providers command (release 0.3.0 and later).
+              image: ghcr.io/it3e/tnwks-workflow-agents:0.3.1@sha256:542526e1a8efa548beea5a632fa25a682006b0f5483dcce8cfbf9798baae0803
               imagePullPolicy: IfNotPresent
-              command: ["sh", "/scripts/providers.sh"]
+              args: ["providers"]
               env:
                 - name: OPENSHELL_GATEWAY_URL
                   value: https://openshell.agents-workflows.svc.cluster.local:8080
+                - name: OPENSHELL_MTLS_DIR
+                  value: /mtls
+                - name: PROVIDER_PROFILES_DIR
+                  value: /profiles
                 - name: NO_COLOR
                   value: "1"
                 # The key of this trust domain at the model gateway (the
@@ -100,9 +106,6 @@ spec:
                 - name: profiles
                   mountPath: /profiles
                   readOnly: true
-                - name: scripts
-                  mountPath: /scripts
-                  readOnly: true
                 - name: github-app
                   mountPath: /github-app
                   readOnly: true
@@ -118,9 +121,6 @@ spec:
             - name: profiles
               configMap:
                 name: workflow-provider-profiles
-            - name: scripts
-              configMap:
-                name: workflow-providers-script
             # The private key of the GitHub App, readable by the group only.
             - name: github-app
               secret:

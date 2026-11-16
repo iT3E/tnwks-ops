@@ -13,7 +13,7 @@ the API checks"). On homelab-wsl-02 only.
 | Check | System | What it reads | What fails | Severity |
 | --- | --- | --- | --- | --- |
 | `routeros-firmware` (safeguard 12.1) | `sce-rtr01` | The version that the router runs: its version lines of the last 3 hours in the Loki of this site, and the label `version` of `mktxp_system_uptime` in the Prometheus of homelab-wsl, where mktxp reads the router with its read-only account (below). The newest stable release and its date: the release feed of the vendor, `https://cdn.mikrotik.com/routeros/latest-stable.rss` | The router runs an older version than a stable release that came out more than 14 days ago (Design Doc 0004, section 4.1.4), of each release that the job has seen | `high`, so a new fail alerts |
-| `tfc-mfa-required` (safeguards 6.3 and 6.5) | `tnwks-ops` | `collaborator-auth-policy` of `GET https://app.terraform.io/api/v2/organizations/tnwks-ops` ([the API of HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organizations#show-an-organization)) | The policy is not `two_factor_mandatory` | `medium` |
+| `tfc-mfa-required` (safeguards 6.3 and 6.5) | `tnwks-ops` | `collaborator-auth-policy` of `GET https://app.terraform.io/api/v2/organizations/tnwks-ops` ([the API of HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organizations#show-an-organization)) | The policy is not `two_factor_mandatory` | `high` (Design Doc 0004, section 5.8), so a new fail alerts |
 
 Each test reads, and none changes a setting. The test of the router needs no
 credential of the router: mktxp already reads it, and the REST API of the

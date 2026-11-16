@@ -54,6 +54,7 @@ One line for each system.
 | `site` | The cluster name of the site (`homelab-wsl`, `homelab-wsl-02`), or `none` for a system that is on no site |
 | `domain` | The domain of the system. It names no person and no age group |
 | `sources` | Optional. The sources that report on the system today. The rule for a late result watches each of them |
+| `behind_site` | Optional. The site whose Windows host or link the results of the system pass through on their way to homelab-wsl-02: the host of site 1, its distro and the router. Their late alerts carry it as a label, and Alertmanager holds them while `SecurityHostUnreachable` fires for that site |
 
 The types are fixed: `aws-account`, `cloudflare-account`,
 `github-organization`, `terraform-cloud-organization`, `cluster`,
@@ -226,36 +227,104 @@ does. Its value is the site whose Prometheus runs the rules. The label
 The source `host-check` runs on each host and each WSL distro of both
 sites, with the same settings. It writes a `.prom` file for the textfile collector of
 `windows_exporter` (`infrastructure/ansible/roles/windows_monitoring`).
-homelab-wsl scrapes the exporter of both Windows hosts, and `peer-federate`
-of homelab-wsl-02 brings the two series of the registry to its rules.
+homelab-wsl-02, where the rules run, scrapes the security series of the
+exporter of both Windows hosts itself (job `windows-exporter-security`), so
+a result of the site 1 host and its distro does not wait on the cluster of
+homelab-wsl (Design Doc 0004, section 5.5). homelab-wsl scrapes the same
+series in its job `windows-exporter` with the label `standby="true"`, as
+the standby: `SecurityFindingNew` fires there for a standby series only
+while homelab-wsl-02 does not scrape its host (the `up` of that host in
+`windows-exporter-security`, federated from homelab-wsl-02, is not 1).
 
 | Where | What runs | File |
 | --- | --- | --- |
 | Each Windows host | The SYSTEM scheduled task `tnwks-host-check`, every 6 hours and 10 minutes after boot (role `windows_host_check`) | `textfile_inputs\tnwks_security_host_check.prom` |
-| Each WSL distro | The systemd timer `tnwks-host-check`, as `wsl_distro_user`, every 6 hours and 10 minutes after boot (role `wsl_host_check`) | `textfile_inputs\wsl-distro\tnwks_security_host_check_distro.prom`, through `/mnt/c` |
+| Each WSL distro | The systemd timer `tnwks-host-check`, as `wsl_distro_user`, every 6 hours and 10 minutes after boot (role `wsl_host_check`) | A JSON document, `C:\ProgramData\tnwks-host-check-distro\tnwks_security_host_check_distro.json`, through `/mnt/c` |
+| Each Windows host, for its distro | The relay: the SYSTEM scheduled task `tnwks-host-check-relay`, each hour and 20 minutes after boot (role `windows_host_check`) | `textfile_inputs\tnwks_security_host_check_distro.prom` |
 
-The collector reads the subdirectories of `textfile_inputs` too. The
-distro's file has its own name, because the collector refuses two files
+**The relay of a distro** (Design Doc 0004, section 5.9). The distro does
+not write to the textfile directory, because the collector reads each
+`.prom` file there and can not tell who wrote it. The distro writes its
+document into an inbox, and the relay, the same script with `-Relay`,
+checks it and writes the `.prom` file of the distro. The inbox has no
+inherited rule: the Administrators own it, and SYSTEM and the Administrators
+have full control. The account of the distro has two rules: on the folder
+itself, it may list it and make files in it (no delete of the folder, no
+subfolder); on the files, it may change, replace and delete them, which its
+write (a new file, then a rename over the document) needs. A link or a
+junction at the inbox is refused by the relay and by the role: the role
+stops before it reads or sets a rule there.
+
+The relay takes a document only when it fits: at most 64 KiB, the name of
+the distro of that host (the distro whose `wsl_distro_windows_host` is the
+host), the checks `updates-pending` and `updates-held` only, each a whole
+number of 0 or more, a time at most 300 seconds ahead, and only the detail
+series of a distro, a label `uid` a number, and each series once (a detail
+that repeats a name and its labels is refused). The relay opens the document
+once, and refuses it when the inbox or the document is a link or a
+junction, when the open file is not the one at its path (a link or a
+junction on the way), or when the file has more than one name (a hard
+link). While it reads, the document can not be renamed, replaced or
+deleted. A document that does not fit, or no document, is the failed query
+`relay`: no result and no time, so the distro reads as late. The relay logs
+each run to `C:\ProgramData\tnwks-host-check\relay.log`, with the rule that
+the document broke and never a value of the document. A log larger than
+1 MiB moves to `relay.log.1`. The relay writes the time of the distro, not
+its own, so a distro that stops writing reads as late too. A document can wait up to an hour for
+the relay, which the late window of 12 hours covers.
+
+The distro's file has its own name, because the collector refuses two files
 with one name. The series that both files have use the same text, because
 the collector refuses a series with two texts.
 
 Each check gives the number of items that fail it, and 0 is a pass. Each
 result carries the label `severity`. `SecurityFindingNew` reads `high` and
 `critical` only, so the checks that section 4.1.4 of Design Doc 0004 names
-for the alert are `high`, and old signatures, which it does not name, are
-`medium`: they show on the board and do not alert.
+for the alert are `high`. Old signatures are `high` too (section 5.8): a
+fail alerts in one cycle, and not only on the board.
 
 | Check | What it reads | What fails | Severity |
 | --- | --- | --- | --- |
 | `defender-enabled` | `Get-MpComputerStatus` | Each of the Defender service, the antivirus and real-time protection that is off | `high` |
-| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `medium` |
+| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `high` (Design Doc 0004, section 5.8) |
 | `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off | `high` |
 | `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) | `high` |
-| `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each package whose upgrade this check first saw more than 14 days ago. A package list does not say when an upgrade came out, so the check keeps the first time it saw each upgrade in `/var/lib/tnwks-host-check/state.json`, and the clock of a package starts at the first run that sees it | `high` |
+| `updates-held` | An online search of Windows Update for software updates that are hidden, not installed and not optional: the search of `updates-pending` with `IsHidden=1` in place of `IsHidden=0` | Each such update released more than 14 days ago (Design Doc 0004, section 5.7). A hidden update never shows in `updates-pending`. An optional update (a preview, a feature update) counts in neither | `high` |
+| `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each upgrade that it offers, whose clock is older than 14 days (below) | `high` |
+| `updates-held` (distro) | A second simulation with `--ignore-hold` and each phased update, and `apt-mark showhold` | Each held package with a newer candidate, whose clock is older than 14 days (Design Doc 0004, section 5.7) | `high` |
+
+**The clock of an upgrade in a distro** (Design Doc 0004, sections 5.6 and
+5.7). A package list does not say when an upgrade came out, so the check
+keeps a clock for each package in `/var/lib/tnwks-host-check/state.json`.
+
+- **One clock for each package.** The second simulation lists each upgrade
+  that the sources offer, also a held package and a phased update that the
+  host is not yet eligible for. Each package of that list has one clock. It
+  keeps its clock when it moves from waiting to held or back, so a hold buys
+  no time, and a phased update has the right age when the host gets it. A
+  package loses its clock only when it leaves that list.
+- **The start of a clock.** The simulation names the lists of each upgrade
+  (the Label and the Suite of its Release file; apt prints an empty name for
+  a list with no Label, whatever its Origin). An upgrade
+  that a run sees first came out after the Date of its list at the last run
+  with a result, so its clock starts at that Date (the oldest one, for an
+  upgrade of two lists). With no such Date, it starts at the time 0, and the
+  upgrade counts as old: with no state file, with a state file of the old
+  form (its clocks stay), and for a list that the last run with a result did
+  not have. The run reads the Dates before the simulations, so a refresh of
+  the lists during a run can start a clock early, never late.
+- **Only a run with a result writes the state.** A run in which a query
+  failed leaves the state file as it was. A host that was off for a week
+  fails its first run on old lists. The next run dates the upgrades of the
+  week by the Dates of the last run with a result, not by the day it sees
+  them.
+- **What it can not see.** A pin in the APT preferences changes the
+  candidate itself, so no simulation sees it. A phase that the vendor halts
+  keeps an update out with no fail.
 
 The file also has series of the host check itself, which no rule of the
 registry reads: each protection and profile, the time of the signatures and
-of the newest scan, the count of pending updates, the time of the newest
+of the newest scan, the counts of pending and of held updates, the time of the newest
 install, a restart that an update waits for, and
 `homelab_security_host_check_failed_queries`.
 
@@ -280,9 +349,71 @@ each pending upgrade does not start again.
 SYSTEM runs the script from `C:\ProgramData\tnwks-host-check`. The role sets
 the rules of that directory on each run: no inherited rule, the
 Administrators own it, SYSTEM and the Administrators have full control, and
-Users may read. A file below it with a rule of its own, or another owner,
-gets the rules of the directory again. The account of the WSL distro may
-write only its own directory of the textfile collector.
+Users may read. A file below it with a rule of its own, or an owner other
+than the Administrators or SYSTEM, gets the rules of the directory again.
+SYSTEM may own a file there because it has full control anyway: the relay,
+as SYSTEM, makes its log there. The account of the WSL distro has no
+right on the textfile directory. The role removes the directory
+`textfile_inputs\wsl-distro`, where the distro wrote before the relay, and
+the right of the distro account on it.
+
+**The write test of a distro.** The distro must not be able to change the
+textfile directory of its host, because the exporter reads each `.prom` file
+under it and can not tell who wrote it (Design Doc 0004, section 5.9). So
+each run of the distro check starts with tries to make a file there, with
+a name that does not end in `.prom`. Only a refusal
+by Windows is the pass.
+
+- **Root tries first.** Linux checks the mode that `/mnt/c` shows before a
+  write reaches Windows, and a refusal there is no evidence. Root passes that
+  check, so the service runs a try as root before the check (`ExecStartPre`
+  with the prefix `+`), and writes its answer to
+  `/run/tnwks-host-check/write-test.json`, mode 0644, so that the check
+  can read it. The check, as the distro user, reads that answer and tries
+  once itself. The distro user owns that directory, so the check reads the
+  answer only from a regular file that root owns and that is not a link.
+  Any other file is answer 3. The check opens it with `O_NONBLOCK`, so a FIFO
+  in that place is answer 3 at once, and does not hold the run.
+- **The answers.** Each try asks the kernel first (`access()` with the
+  effective ids, the same check as `open()`), then makes the file with an
+  exclusive create. It is a series
+  `homelab_security_host_write_test_result{uid="<uid>"}`: 0 refused by
+  Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not
+  done (the directory is gone or can not be listed, or another error). The
+  message of each try names its uid, the mode and owner of the directory,
+  and the mount. A refusal is `EACCES` or `EPERM`. The message of a
+  refusal, and of a try that fails in another way, names the errno by
+  number and name. How drvfs maps a refusal of Windows to an errno is known
+  only on a host, so the first answers say it. The series
+  `homelab_security_host_write_test_errno{uid="<uid>"}` gives that errno,
+  or 0 when the try had none, so a read of the metrics shows it.
+- **The files of the test.** Each try removes the file that it made. The
+  host check of the Windows host, as SYSTEM, counts the files of the test
+  (`.tnwks-write-test-*.tmp`) in the textfile directory, as
+  `homelab_security_host_write_test_files`, which is 0. When it can not list
+  the directory, it leaves out the series, and no query fails.
+- **The failed query `textfile-write`.** Root has no answer 0 (or its answer
+  is missing or older than 15 minutes), or a try has 1 or 3. Then the run
+  gives no result. A try that wrote removes the file that it made, and
+  nothing else.
+- **What it can not see.** The check of the kernel covers the mode, the
+  groups and an ACL of the mount, but not what the Windows side of `/mnt/c`
+  decides by itself. A refusal by Windows for root is the evidence.
+
+The last task of role `wsl_host_check` runs the same try as root and as the
+distro user, and prints each answer with its uid. A check run skips it. The
+play fails only with `wsl_host_check_write_test_fails_play`, when root has no
+refusal by Windows or a try has 1 or 3. The switch is off until the owner
+turns it on (section 5.9 of the design). The pull request that starts each
+distro with no elevation turns it on, and a test there fails while that
+change is present and the switch is off.
+
+The design also names a try from an SSH session. The role connects to a
+distro over SSH, but `ansible_connection` is `local` when the hostname of
+the controller is the Windows host of that distro, as in that distro itself,
+which takes the Windows computer name (`group_vars/wsl_distros.yml`). On that
+site the tries of the role come from the processes of the controller, not
+from an SSH session.
 
 **The first result, then the source.** A host or a distro lists `host-check` in
 `sources` of `systems.yaml` only after its first result is on the board of
@@ -292,12 +423,20 @@ without it: `sources` only says which sources the rule for a late result
 watches.
 
 To run it now on a host: `Start-ScheduledTask -TaskName tnwks-host-check`.
-In a distro: `sudo systemctl start tnwks-host-check.service`.
+In a distro: `sudo systemctl start tnwks-host-check.service`, then on its
+host `Start-ScheduledTask -TaskName tnwks-host-check-relay`.
 The way back (Design Doc 0004, section 4.3): set `wsl_host_check_state:
 absent` and `host_check_state: absent` in the defaults of the two roles,
-which removes the timer, the task, the scripts and the files on each host
+which removes the timer, the tasks, the scripts, the inbox and the files on each host
 and distro, and remove `host-check` from `sources` of the hosts and distros
 in `systems.yaml`, in the same pull request.
+
+A revert of the clock of one package to the code before it is not a plain
+revert. That code reads only a state file of version 1, so it reads the
+version 2 file as a state that can not be read: each run of the distro gives
+no result until `/var/lib/tnwks-host-check/state.json` is deleted. With the
+file deleted, the next run counts each pending upgrade as old, so
+`updates-pending` can fail at once.
 
 ## The generator
 
@@ -328,8 +467,9 @@ two files, and `--check` holds them equal.
 Never edit an output. Change the registry, run the generator, and commit the
 outputs with the change. CI runs `generate.py --check` in the `contracts`
 job of `.github/workflows/observability.yaml`, so a change to the registry
-without its outputs fails. The same job runs the tests of the generator and
-the tests of the rules.
+without its outputs fails. The same job runs the tests of the generator. The
+`rule-tests` job runs the tests of the rules, when `observability/` or
+`security/` changed.
 
 ### What the generator checks
 
@@ -362,9 +502,18 @@ each source in `sources` of each system. For each pair it has two terms:
   `absent()` with a stated window, so a source that serves no time reads as
   late.
 
+A system with `behind_site` carries that label on its late alert.
+
 A second alert rule, `SecurityAcceptedFindingExpired`, fires for a system
 when the end date of one of its accepted findings has passed
 ([Accepted findings](#accepted-findings)).
+
+A third, `SecurityHostUnreachable`, fires when the scrape of a host target
+with `behind_site` in `windows-exporter-security` fails for 5 minutes. Two
+inhibit rules of Alertmanager (`alertmanager.yml`) hold, while it fires,
+each `SecurityResultLate` with the same `behind_site`, and
+`PeerSiteUnreachable` with the same `k8s_cluster`. So a loss of site 1 gives
+one alert, and a stop of the cluster of site 1 alone holds nothing.
 
 The query window of each rule is 10 minutes. A rule reads the newest sample
 in the window, so one missed scrape or a restart of a source is no gap. An
@@ -388,7 +537,8 @@ tests of the rules compare the whole text of a sample of each alert.
 
 The tests of the rules are generated too (`generated/rule-tests.yaml`,
 `generated/rule-tests-every-source.yaml`), and `promtool test rules` runs
-them in CI. They prove that an absent result gives "no evidence" and never a
+them in CI (the `rule-tests` job, through `observability/rule_tests.py`).
+They prove that an absent result gives "no evidence" and never a
 pass, that a line is a pass only when each system with a check passes, and
 that a source with no time fires the alert, and that a stream with a line
 for one cluster only is late for the other. The second file tests
@@ -440,10 +590,11 @@ security stream `findings` in Loki has the text of each finding.
 | Alert | What it means | What to do |
 | --- | --- | --- |
 | `SecurityResultLate` | The newest result of a source for a system is older than `late_after` of the source, or the source serves no time. The safeguards that rest on it show "No evidence" | Open the tab Sources of the board. Then look at the last run of the source: its Job or its pod in the namespace `security`, or the agent on the host. The alert ends when the source reports again |
+| `SecurityHostUnreachable` | homelab-wsl-02 can not scrape `windows_exporter` on the host of the other site for 5 minutes: that site is away (its power or its link), the link between the sites is down, or the exporter on that host stopped. The late alerts of the systems behind that site, and `PeerSiteUnreachable` of that site, are held while it fires | Check the power and the link of that site. If the site is up, check the service `windows_exporter` on its host, and the firewall rule `windows_exporter (Prometheus)`, which admits the address of WSL-02 (`windows_monitoring_remote_extra`) |
 | `SecurityAcceptedFindingExpired` | An accepted finding of the system has passed its end date | The owner reads the line in the list. The owner sets a new end date with a reason, or removes the line and the cause of the finding |
 | `SecurityAcceptedListUnread` | The security converter gets no entry from the list of accepted findings, for 30 minutes. The board shows no accepted finding, and the rule of Trivy Operator mutes none | The log of the converter names the line and the kind of its form. Fix that line of the list (`converter/README.md`, "The form that the converter reads") |
 | `SecurityAcceptedEntriesSkipped` | Entries of the list do not fit, for one hour, so their findings show as fails | The log of the converter names each entry by its number, and why. Fix those entries (`converter/README.md`, "An entry that the converter skips") |
-| `SecurityFindingNew` | A check of high or critical severity on the system fails, and one of these is true: it has more failed resources than at each time of the day before; it had none one hour before; or it had no result in the day before (a new check, or one that comes back after more than a day). Only high and critical alert, as the design asks for "a new failed check of high severity"; the other severities are on the board. A check that fails again after less than one hour at 0 does not alert again. It compares one value for each check (the labels `k8s_cluster`, `source`, `check` and `system`, from the record `homelab:security_check_result_high:max`), so a new pod of a source, with new `pod` and `instance` labels, or a change of the severity of a check, is not a new result. It is in `observability/rules.py`, and each site fires it for its own results. It ends after one hour. On the first day of a source, and on the first day of the record, each system with a check of high or critical severity that fails alerts one time | Open the tab Systems of the board, then the reports of the source (for Trivy Operator, `kubectl get clustercompliancereport k8s-cis-1.23 -o yaml` and the vulnerability reports in the namespace of the workload). Fix the cause, or accept the finding in the encrypted list |
+| `SecurityFindingNew` | A check of high or critical severity on the system fails, and one of these is true: it has more failed resources than at each time of the day before; it had none one hour before; or it had no result in the day before (a new check, or one that comes back after more than a day). Only high and critical alert, as the design asks for "a new failed check of high severity"; the other severities are on the board. A check that fails again after less than one hour at 0 does not alert again. It compares one value for each check (the labels `k8s_cluster`, `source`, `check`, `system` and `standby`, from the record `homelab:security_check_result_high:max`), so a new pod of a source, with new `pod` and `instance` labels, or a change of the severity of a check, is not a new result. It is in `observability/rules.py`, and each site fires it for its own results. On homelab-wsl, a result of the host check has the label `standby`, and alerts only while homelab-wsl-02 does not scrape its host. It ends after one hour. On the first day of a source, and on the first day of the record, each system with a check of high or critical severity that fails alerts one time | Open the tab Systems of the board, then the reports of the source (for Trivy Operator, `kubectl get clustercompliancereport k8s-cis-1.23 -o yaml` and the vulnerability reports in the namespace of the workload). Fix the cause, or accept the finding in the encrypted list |
 | `SecurityImagesNotScanned` | Images that run on a cluster with Trivy Operator have had no vulnerability report for 36 hours (the `late_after` of `trivy`). A report counts for a running image when it has its digest, or the same namespace, container and image reference (`kubernetes/apps/security/trivy-operator/README.md`, "The digest of a report"). While one image has no report, the check `image-vulnerabilities` of the cluster keeps a fail, and shows "no evidence" in place of a pass. It is in `observability/rules.py`; each site fires it for its own cluster | List the scan jobs and the log of the operator (`kubernetes/apps/security/trivy-operator/README.md`, "When a scan fails"). Add the registry to the policy of the scan jobs, or move the image to a public registry. For an image that no scan can read, add an entry to the accepted list (`accepted.json`), an object in the form `{"source": "trivy", "check": "images-not-scanned", "system": "<the cluster>", "reason": "<why>", "until": "YYYY-MM-DD"}`. It mutes the alert of that cluster until its end, and `SecurityAcceptedFindingExpired` tells the owner at the end. The entry also mutes a new image with no report on the cluster, so keep the end near. Its 36 hours start again at the end, and each time the count of images with no report is 0 for one evaluation |
 | `SecurityImagesScannedByTag` | For 7 days, containers on a cluster with Trivy Operator have run an image that no report has, and the report of their reference counts for them (`homelab:security_trivy_containers_by_reference:count` above 0). The tag was pushed again after the node pulled it, so the report is of the image that the tag points to now, not of the image that runs (`kubernetes/apps/security/trivy-operator/README.md`, "The digest of a report"). It is in `observability/rules.py`; each site fires it for its own cluster, and a cluster with no Trivy Operator has no count | The board (Sources, "Images scanned by tag only") shows the count. Restart the workload, so that it pulls the image of the tag, or pin a digest in its pod spec. To keep a tag that moves, add an entry to the accepted list in the form `{"source": "trivy", "check": "images-scanned-by-tag", "system": "<the cluster>", "reason": "<why>", "until": "YYYY-MM-DD"}`. It mutes the alert of that cluster until its end |
 

@@ -36,6 +36,11 @@ wsl_watchdog_args: -SkipGateway -SkipUsb -KeepAliveTask tnwks-wsl-keepalive
 # Nothing else here keeps a wsl.exe client open, so WSL would stop the distro
 # a few seconds after the watchdog starts it (seen 2026-11-05).
 wsl_keepalive_enabled: true
+# Site 2 first (Design Doc 0004, section 5.9): each task that starts a
+# process in the distro runs with no elevation. The services of the distro
+# take it at the next start of the distro (docs/wsl/windows-ansible.md, "Start
+# WSL with no elevation").
+wsl_start_unelevated: true
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true

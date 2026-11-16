@@ -406,7 +406,8 @@ def test_terraform_cloud_fails_when_the_organization_does_not_require_two_factor
     code, document = run(tmp_path, monkeypatch, get, token="fake-token-value")
     assert code == 0
     entry = by_check(document)["tfc-mfa-required"]
-    assert (entry["system"], entry["failed"], entry["severity"]) == ("tnwks-ops", failed, "medium")
+    # Design Doc 0004, section 5.8: high, so a fail alerts (SecurityFindingNew).
+    assert (entry["system"], entry["failed"], entry["severity"]) == ("tnwks-ops", failed, "high")
     url, headers = get.calls[-1]
     assert url == ORG
     assert headers["Authorization"] == "Bearer fake-token-value"

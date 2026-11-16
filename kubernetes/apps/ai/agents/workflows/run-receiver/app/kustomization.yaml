@@ -29,7 +29,3 @@ configMapGenerator:
     files:
       - workflow-model-gateway.yaml=./providers/workflow-model-gateway.yaml
       - workflow-github-reviewer.yaml=./providers/workflow-github-reviewer.yaml
-  - name: workflow-providers-script
-    files:
-      - providers.sh=./scripts/providers.sh
-      - github_app_token.py=./scripts/github_app_token.py

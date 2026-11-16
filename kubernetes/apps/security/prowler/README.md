@@ -3,7 +3,8 @@
 Prowler checks each AWS account and the Cloudflare account of the security
 registry each day. GitHub has no run ("GitHub", below). It is the source
 `prowler` of the registry (`security/README.md`). Each CronJob runs one
-system with the scan list of its provider, and leaves one OCSF file on the
+system with the scan list of its provider, one process of Prowler for each
+service of the list ("Memory"), and leaves one OCSF file on the
 volume of results. The converter reads the file and serves the result
 series (`security/converter/README.md`, "The files of results").
 On homelab-wsl-02 only.
@@ -33,7 +34,7 @@ The times keep one run at a time on the node.
 | `app/cronjob-cloudflare.yaml` | The run of the Cloudflare account |
 | `app/lease-cloudflare-token.yaml` | The end date of the Cloudflare token ("When a token ends") |
 | `app/secret-cloudflare.sops.yaml` | The owner's token, encrypted. Not in git until the owner makes it |
-| `app/scripts/run.py` | One run: the mutelist, Prowler, the file for the converter, the files older than 14 days, the peak of memory. Tests: `security/tests/test_prowler.py` |
+| `app/scripts/run.py` | One run: the mutelist, Prowler for each part, the file for the converter, the files older than 14 days, the peak of memory. Tests: `security/tests/test_prowler.py` |
 | `app/config/checks-<provider>.json` | The scan list of each provider that has a run (`aws`, `cloudflare`), in the form of `--checks-file`. `security/generate.py` writes them from the registry; never edit them |
 | `app/networkpolicy.yaml` | What a run of each provider can reach |
 
@@ -67,20 +68,34 @@ The claim `security-results` is in `../converter/app/pvc.yaml`.
      long or a nesting too deep for the parser, a key twice in one object,
      not an array) stops the run with code 2 and mutes nothing: the run can
      not know what to mute.
-2. **Prowler,** with `--checks-file`, the output format `json-ocsf`,
-   `--no-banner` and `--ignore-exit-code-3` (a failed check is a result, not
-   an error of the run).
-3. **The file for the converter.** Prowler writes to the scratch space of the
-   pod. The script copies the OCSF file to `prowler/<provider>/tmp/` on the
-   volume, then moves it to `prowler/<provider>/<system>.<time>.ocsf.json`,
-   with the time at which the scan ended. Each directory has the mode 0755
-   and each file 0644, for the converter. A run that fails moves no file, and
-   the Job fails. So does a run in which Prowler makes no finding at all,
-   for which it writes no file: a run that checked nothing is no result. A
-   run that leaves an empty OCSF file is a failed run too: the converter
-   reads an empty file as a bad file.
-4. **The files of the system older than 14 days** are deleted.
-5. **The peak of memory** of the container is the last line of the log.
+2. **Prowler, in parts.** One process of Prowler for each service of the scan
+   list, one after the other, each with the checks of its service in a
+   `--checks-file`, the output format `json-ocsf`, `--no-banner` and
+   `--ignore-exit-code-3` (a failed check is a result, not an error of the
+   run). The service of a check is the first word of its ID, as Prowler reads
+   it (`ec2` for `ec2_instance_imdsv2_enabled`). Each part runs, also after a
+   part that failed, so the log names each part that fails.
+3. **The file for the converter.** Each part writes to the scratch space of
+   the pod. The script copies the records of each part, in the order of the
+   parts, into one JSON array in `prowler/<provider>/tmp/` on the volume, and
+   deletes the output of the part. After the last part it moves the file to
+   `prowler/<provider>/<system>.<time>.ocsf.json`, with the time at which the
+   scan ended. So the converter reads one whole file for each run, as before.
+   Each directory has the mode 0755 and each file 0644, for the converter.
+   - A part with no finding writes no file, and adds nothing.
+   - **A part that fails fails the run:** Prowler ends with an error or a
+     signal, or leaves an empty file or a file that is not one JSON array (the
+     converter reads an empty file as a bad file). The run then moves no file,
+     and the Job fails. A file with the parts that ended would read as a
+     result of the whole list, with the checks of the failed part missing.
+   - A run in which no part makes a finding moves no file, and fails: a run
+     that checked nothing is no result.
+4. **The files of the system older than 14 days** are deleted, and the file
+   in `tmp/` of a run that failed.
+5. **The log.** A line when each part starts, with its service and its number
+   of checks, and a line when it ends or fails, with the peak of resident
+   memory of its process. The peak of memory of the container is the last
+   line.
 
 **Nothing goes to the vendor.** No run has `--push-to-cloud`, and Prowler
 looks for a new release only with `-v`. The network policy names no host of
@@ -119,53 +134,109 @@ DNS goes through Cilium's DNS proxy, as in each app of the namespace.
 | Each AWS run | 1024 MiB | 1536 MiB |
 | The Cloudflare run | 512 MiB | 768 MiB |
 
-The first two AWS runs ended with the status `OOMKilled` at the limit they
-had then, 768 MiB. The 466 MiB that set that limit came from a run of Prowler
-on one Kubernetes cluster, not on an AWS account. Measured without an
-account, with the image of the CronJob, its scan list and its settings:
+**Why a run is in parts.** The first AWS runs scanned the whole list in one
+process of Prowler. They ended at the limit they had: both runs of the first
+night at 768 MiB (`OOMKilled`), and both runs of the second night at 1536
+MiB, each after 4 to 5 minutes in which the working set of the container rose
+by about 300 to 400 MiB a minute (Prometheus of homelab-wsl-02). Prowler 5.49.0 frees nothing that it reads until its process
+ends:
 
-- **Before the scan:** Prowler takes about 345 MiB (its modules, the
-  metadata of its checks and its compliance frameworks).
-- **The AWS clients:** Prowler makes one boto3 client for each service and
-  each Region of the account. For the 62 services of the scan list in 17
-  Regions, that is about 1000 clients and about 380 MiB more. With one
-  Region, it is about 130 MiB.
+- **Before the scan,** its modules, the metadata of its checks and its
+  compliance frameworks: about 345 MiB.
+- **The client of each service.** Prowler makes it when the first check of
+  the service runs, and keeps it in a module for the rest of the process
+  (`prowler/providers/aws/services/<service>/<service>_client.py`): one boto3
+  client for each Region, ten threads, and each resource that it read.
+  Measured without an account, the clients of the services of the list in 17
+  Regions take about 380 MiB before they hold any resource.
+- **Each finding.** A check makes one object for each finding, with its own
+  copy of the metadata of the check (`prowler/lib/check/models.py`,
+  `Check_Report`): about 8 KiB each, measured with the image. Prowler keeps
+  all of them in one list (`prowler/lib/check/check.py`, `execute_checks`),
+  and at the end makes two more objects for each (the finding of the output
+  and the OCSF record) before it writes the file.
 
-That is about 725 MiB before Prowler keeps any resource or finding, so 768 MiB
-was too low. 1536 MiB is twice the limit that the runs went over. It holds
-until a run measures the peak:
+So the memory of one process grows with each service that it reads and each
+finding that it makes. One process for each service holds the base, one
+service and its findings, and then ends and gives its memory back. A check
+can read the client of another service too (an EC2 check can read the
+clients of VPC or SSM): that client then lives in the part of that check.
 
-1. The last line of the log of the run: `memory peak of the container: N MiB`
-   (the `memory.peak` of its cgroup).
-2. The same in Prometheus:
-   `max_over_time(container_memory_working_set_bytes{namespace="security",container="prowler"}[1d])`.
-3. A run over the limit ends with the status `OOMKilled`, and
-   `KubeJobFailed` fires. A run that fails is not tried again
-   (`backoffLimit: 0`): the next run is the next day. The peak of a run
-   comes from the resources of the account, so a second try at once would
-   end the same way and read each API again.
+**Measured without an account,** with the image of the CronJob, its scan list
+and `moto` (the AWS mock in the image) in place of AWS, in a container with
+no network:
+
+| Run | Peak |
+| --- | --- |
+| The whole list in one process | 2907 MiB, rising with each service |
+| One process for each service, each of the 59 services but `ec2` | 450 to 693 MiB of resident memory |
+| The `ec2` part | 1778 MiB |
+
+The mock is no account: it serves its own test data for each of its Regions,
+and for `ec2` it serves far more snapshots than an account of this size has.
+So the figures show the form (the base of each process, and a peak that
+follows the size of what the service reads), not the peak of a real run. The
+resident memory of a process also counts the pages of its libraries, which
+the working set of the container counts too.
+
+What a part costs: the start of each process. With the mock, the 60 parts
+took 851 seconds and the whole list in one process 84 seconds: about 13
+minutes more. Against AWS each start also reads the account and its Regions,
+and for the management account assumes the role again. That stays far under
+`activeDeadlineSeconds` (3 hours), and the run of the management account
+starts two hours after the run of prod.
+
+**Read a run:**
+
+1. The log of the run (the Loki of homelab-wsl-02 keeps the log of each Job
+   pod): `part N of M: <service>, K checks: starts`, then `ends` or `fails`
+   with the peak of memory of the part. A part that the kernel stops at the
+   limit stops the whole container, with the script: its `starts` line is
+   then the last line of the log.
+2. The same in Prometheus: one rise and fall of
+   `container_memory_working_set_bytes{namespace="security",container="prowler"}`
+   for each part, in the order of the services. The highest is the part to
+   look at: `max_over_time(container_memory_working_set_bytes{namespace="security",container="prowler"}[1d])`.
+3. Why the container ended:
+   `kube_pod_container_status_terminated_reason{namespace="security",container="prowler"}`
+   (`OOMKilled` at the limit, `Error` for a code). kube-state-metrics serves it
+   while the pod exists: the Job keeps its pod for a day
+   (`ttlSecondsAfterFinished`).
+4. A run over the limit ends with the status `OOMKilled`, and `KubeJobFailed`
+   fires. A run that fails is not tried again (`backoffLimit: 0`): the next
+   run is the next day. The peak of a part comes from the resources of the
+   account, so a second try at once would end the same way and read each API
+   again.
 
 After the first run that ends well, set the limit of both AWS runs to the
-measured peak and a margin of 25 %, in one pull request, and change the
-lines in `../README.md`.
+highest measured peak and a margin of 25 %, in one pull request, and change
+the lines in `../README.md`.
 
-Ways to bring the peak down, each with its cost. None of them is in use:
+If one part still reaches the limit, the log names its service. The next
+steps, each with its cost:
+
+- **That service in more than one part,** by its checks: each part then reads
+  the service again, so it saves only the findings of the other checks.
+- **That service in one part for each Region** (`--region`): its global
+  checks would then run in each part and give their findings more than once.
+- **A higher limit** for the size of that one service, with its measured
+  peak.
+
+Ways to bring the peak down that are not in use:
 
 - **Fewer Regions** (`--region` or `--excluded-region`): each Region costs
   about 15 MiB of clients, but the checks would not see a resource in a
   Region left out, and some checks of the registry ask for each Region. Not
   equal coverage.
-- **The scan list in parts, one process after the other**, with the OCSF
-  files joined into one: each check still runs once, but each process takes
-  the 345 MiB again, so two parts save less than half. The run takes longer,
-  and the script joins the files.
-- **One Region for each process:** the checks of the global services (IAM,
-  S3, CloudFront) run in each process and give their findings more than
-  once.
+- **`MALLOC_ARENA_MAX=2`:** fewer heaps of the C library for the threads of
+  Prowler. Measured with the mock, the peak of the whole list fell by 6 %. Too
+  little to stand for parts.
 - **Prowler 5.49.0 has no setting** for its number of threads (10 for each
   service, in the code) and no flag for its number of clients. The run
   writes only `json-ocsf`, and a run with `--checks-file` writes no
   compliance output, so there is nothing to turn off there.
+  `--scan-unused-services` is off (the default), which is the setting with
+  fewer findings.
 
 ## To start a provider
 
@@ -280,7 +351,9 @@ in the past, so the alert fires at once.
 - **A host that the policy does not name.** A new service of AWS under
   another domain. Add the name to `app/networkpolicy.yaml` and to the table
   above.
-- **Memory.** The status `OOMKilled`: see "Memory".
+- **Memory.** The status `OOMKilled`: see "Memory", "Read a run".
+- **A part.** `N of M parts failed (<services>)`: the line of each part that
+  fails says why.
 
 The next run is the next day. The time of the last result then ages, and
 `SecurityResultLate` fires after 36 hours.
@@ -305,8 +378,8 @@ flate test all -p kubernetes/clusters/wsl-02
 
 After the first run, with reads only:
 
-1. The Job ends with success, and its log has `wrote prowler/aws/aws-prod.<time>.ocsf.json`
-   and the peak of memory.
+1. The Job ends with success, and its log has a line `ends` for each part,
+   `wrote prowler/aws/aws-prod.<time>.ocsf.json` and the peak of memory.
 2. The converter (when it reads the files) serves
    `homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-prod"}`
    with the time of the name of the file.
