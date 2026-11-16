@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.177.0 - 2026-11-16
+
+### Added
+
+* Windows: the role windows_wsl_rehearsal, on WSL-02 only (wsl_rehearsal): a temporary standard account with a distro of its own, imported from a pinned Alpine root file system and started from its own S4U tasks with no elevation, and the play windows-rehearsal-check.yml that reads its checks.
+
 ## v2.176.0 - 2026-11-16
 
 ### Changed
