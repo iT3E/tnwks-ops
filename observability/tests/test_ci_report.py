@@ -47,6 +47,12 @@ def test_a_host_with_no_recap_line_did_not_run_and_the_run_fails(tmp_path):
     assert 'tnwks_windows_drift_check_failed{host="distro-a"} 1' in prom, "not checked counts as failed"
 
 
+def test_the_line_names_the_exit_only_when_the_run_fails(tmp_path):
+    summary, _ = report(tmp_path, LOG, "win-a,distro-a", rc=0)
+    assert "**Did not run:** `distro-a`. ansible-playbook stopped before its play.\n" in summary
+    assert "the run fails" not in summary
+
+
 def test_a_run_where_each_host_ran_has_no_line_for_a_host_that_did_not_run(tmp_path):
     log = LOG.replace("failed=1", "failed=0").replace("fatal: [win-a]: FAILED! => changed=false\n", "") + (
         "distro-a                   : ok=30   changed=0    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0\n")

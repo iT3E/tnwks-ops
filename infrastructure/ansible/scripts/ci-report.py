@@ -100,9 +100,8 @@ def main():
             continue
         out.append(f"| `{h}` | {t['ok']} | {t['changed']} | {t['failed']} | {t['unreachable']} | {t['skipped']} |")
     if missing:
-        out += ["", "**Did not run:** " + ", ".join(f"`{h}`" for h in missing) +
-                ". ansible-playbook stopped before its play, and the run fails (exit "
-                f"{a.rc})."]
+        line = "**Did not run:** " + ", ".join(f"`{h}`" for h in missing) + ". ansible-playbook stopped before its play"
+        out += ["", line + (f", and the run fails (exit {a.rc})." if a.rc else ".")]
     for status in ("failed", "changed"):
         hits = [(h, n) for h, s, n in events if s == status]
         if hits:
