@@ -230,19 +230,22 @@ spec:
 
         - alert: AgentInstructionCheckStale
           # No `instruction-check result=` line from the backup container of
-          # the pilot's agent pod in 26 hours: a day plus room. Only the pilot's
-          # agent pod ships its log (docs/apps/agent-platform.md, "Logs"). The
-          # check runs once a day, and not again when a new container finds
-          # the archive of the day there, so the rule waits until the backup
-          # container has run for 26 hours too. The newest line must be less
-          # than 26 hours old by its own time, not only be in the last 26
-          # hours of samples: a restart of the platform log agent reads the
-          # backup log again from its start, and an old line comes back with
-          # its old time.
+          # the agent pod of a trust domain in 26 hours: a day plus room. Each
+          # agent pod ships its log (the pod label logs.home.arpa/ship,
+          # docs/apps/agent-platform.md, "Logs"), so an agent pod whose log
+          # does not ship fires too: that is a fault of the pod. A trust
+          # domain with no agent pod (none yet, or replicas: 0) has no backup
+          # container and never fires. The check runs once a day, and not
+          # again when a new container finds the archive of the day there, so
+          # the rule waits until the backup container has run for 26 hours
+          # too. The newest line must be less than 26 hours old by its own
+          # time, not only be in the last 26 hours of samples: a restart of
+          # the platform log agent reads the backup log again from its start,
+          # and an old line comes back with its old time.
           expr: |
-            (time() - max by (namespace) (kube_pod_container_state_started{namespace="agents-pilot", container="backup"})) > 26 * 3600
+            (time() - max by (namespace) (kube_pod_container_state_started{namespace=~"agents-.+", container="backup"})) > 26 * 3600
             unless on (namespace)
-            label_replace(max by (pod_namespace) ((max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", check="instruction-check"}[26h]) > time() - 26 * 3600)), "namespace", "$1", "pod_namespace", "(.+)")
+            label_replace(max by (pod_namespace) ((max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+", check="instruction-check"}[26h]) > time() - 26 * 3600)), "namespace", "$1", "pod_namespace", "(.+)")
           for: 15m
           labels:
             severity: warning
@@ -253,13 +256,14 @@ spec:
             description: "kubectl -n {{ $labels.namespace }} logs deploy/agent -c backup shows the last daily-backup and instruction-check lines; a backup that waits on a gateway that is not ready logs nothing."
 
         - alert: AgentMemoryIndexFailed
-          # The newest `memory-index result=` line of the pilot's agent pod is
-          # result=failed: the init container memory-index
+          # The newest `memory-index result=` line of the agent pod of a trust
+          # domain is result=failed: the init container memory-index
           # (pilot/agent/config/scripts/memory-index.sh) could not bring the
           # memory index up to date at the start of the pod. The pod still
           # starts, and a stale index stays stale (each search returns no
-          # result) until a start that ends with result=ok. Only the pilot's
-          # agent pod ships its log. Two tests:
+          # result) until a start that ends with result=ok. Each trust domain
+          # counts apart, and a domain with no agent pod never fires. Two
+          # tests:
           # - the failed line is newer than each ok line, so the ok line of a
           #   later start clears it;
           # - the line is not older than the start of the newest pod with a
@@ -275,14 +279,14 @@ spec:
           expr: |
             max by (namespace) (
               label_replace(
-                max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", check="memory-index", result="failed"}[15d]))
-                >= max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", check="memory-index"}[15d])),
+                max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+", check="memory-index", result="failed"}[15d]))
+                >= max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+", check="memory-index"}[15d])),
                 "namespace", "$1", "pod_namespace", "(.+)")
             )
             >= on (namespace)
             max by (namespace) (
-              kube_pod_start_time{namespace="agents-pilot"}
-              and on (namespace, pod) kube_pod_init_container_info{namespace="agents-pilot", container="memory-index"}
+              kube_pod_start_time{namespace=~"agents-.+"}
+              and on (namespace, pod) kube_pod_init_container_info{namespace=~"agents-.+", container="memory-index"}
             )
           labels:
             severity: warning

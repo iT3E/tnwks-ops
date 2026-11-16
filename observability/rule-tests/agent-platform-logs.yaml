@@ -52,9 +52,6 @@ tests:
         values: 0x1700
       - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="instruction-check", result="ok"}
         values: _x30 3600 _x719 90000 _x900
-      # A container of another trust domain whose log does not ship.
-      - series: kube_pod_container_state_started{namespace="agents-main", pod="agent-2", container="backup"}
-        values: 0x1700
     alert_rule_test:
       - alertname: AgentInstructionCheckStale
         eval_time: 50h
@@ -202,13 +199,6 @@ tests:
         values: 1x29 _x100
       - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="memory-index", result="failed"}
         values: _x3 180 _x126
-      # Another trust domain's line never counts: only the pilot ships.
-      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-main", app="agent", check="memory-index", result="failed"}
-        values: _x3 180 _x126
-      - series: kube_pod_start_time{namespace="agents-main", pod="agent-9"}
-        values: 60x129
-      - series: kube_pod_init_container_info{namespace="agents-main", pod="agent-9", container="memory-index"}
-        values: 1x129
     alert_rule_test:
       - alertname: AgentMemoryIndexFailed
         eval_time: 20m
@@ -244,3 +234,61 @@ tests:
       - alertname: AgentMemoryIndexFailed
         eval_time: 61m
         exp_alerts: []
+
+  # Each trust domain with an agent pod counts apart. agents-finance has its
+  # namespace and no agent pod yet, or one at replicas: 0, so it has no
+  # backup container, no memory-index init container and no line.
+  - name: each trust domain counts apart, and a domain with no agent pod never fires
+    interval: 2m
+    input_series:
+      # The pilot: its check ran at 1h and 25h, so it is late only at 51h.
+      - series: kube_pod_container_state_started{namespace="agents-pilot", pod="agent-1", container="backup"}
+        values: 0x1700
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="instruction-check", result="ok"}
+        values: _x30 3600 _x719 90000 _x900
+      # A second trust domain with an agent pod whose log does not ship: no
+      # line at all, so it is late once its container has run 26 hours.
+      - series: kube_pod_container_state_started{namespace="agents-main", pod="agent-2", container="backup"}
+        values: 0x1700
+      # agents-finance: a namespace with checks and no agent pod.
+      - series: kube_pod_container_state_started{namespace="agents-finance", pod="platform-check-probe-1", container="probe"}
+        values: 0x1700
+    alert_rule_test:
+      - alertname: AgentInstructionCheckStale
+        eval_time: 26h
+        exp_alerts: []
+      - alertname: AgentInstructionCheckStale
+        eval_time: 27h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main}
+      - alertname: AgentInstructionCheckStale
+        eval_time: 52h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main}
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+
+  - name: a failed memory index fires for its own trust domain only, and never with no agent pod
+    interval: 1m
+    input_series:
+      # agents-main: a failed start at 3m, and its pod runs.
+      - series: kube_pod_start_time{namespace="agents-main", pod="agent-9"}
+        values: 60x129
+      - series: kube_pod_init_container_info{namespace="agents-main", pod="agent-9", container="memory-index"}
+        values: 1x129
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-main", app="agent", check="memory-index", result="failed"}
+        values: _x3 180 _x126
+      # The pilot: an ok start at 3m.
+      - series: kube_pod_start_time{namespace="agents-pilot", pod="agent-1"}
+        values: 60x129
+      - series: kube_pod_init_container_info{namespace="agents-pilot", pod="agent-1", container="memory-index"}
+        values: 1x129
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="memory-index", result="ok"}
+        values: _x3 180 _x126
+      # agents-finance: a failed line and no agent pod (replicas: 0).
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-finance", app="agent", check="memory-index", result="failed"}
+        values: _x3 180 _x126
+    alert_rule_test:
+      - alertname: AgentMemoryIndexFailed
+        eval_time: 20m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main}
