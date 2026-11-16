@@ -7,10 +7,13 @@
 # own and starts it from its own tasks (S4U, with no elevation), with nobody
 # signed in. WSL keeps one session and one VM for each account, so the
 # rehearsal touches no other distro, task or VM. The checks are
-# playbooks/windows-rehearsal-check.yml. A second pull request sets
-# wsl_rehearsal_state to absent, and its apply removes each part.
-
-wsl_rehearsal_state: present
+# playbooks/windows-rehearsal-check.yml.
+#
+# absent: the removal (Design Doc 0004, task 10.6). A task of the account
+# stops its distro and its VM and unregisters the distro, then the play
+# removes the tasks, the batch right, the profile, the account and the
+# folder, in that order. The check play then reads the exit check.
+wsl_rehearsal_state: absent
 
 # The temporary account. The play makes it with a random password that it
 # keeps nowhere: an S4U task needs no password. It is a member of Users only,
@@ -50,6 +53,8 @@ wsl_rehearsal_memory: 1GB
 # but the start, which holds one wsl.exe client as the keepalive does.
 wsl_rehearsal_task_prefix: tnwks-rehearsal
 wsl_rehearsal_steps: [probe, import, write, mount]
+# Every task the role has registered: the steps, the start and the removal.
+wsl_rehearsal_tasks: "{{ wsl_rehearsal_steps + ['start', 'remove'] }}"
 
 # The logons that the account does not need: at the keyboard, by Remote
 # Desktop, and from the network. The batch logon of its S4U tasks is another

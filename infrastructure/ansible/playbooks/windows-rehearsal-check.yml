@@ -23,6 +23,23 @@
 #   write    as root in the distro: refused, with EACCES or EPERM. Another
 #            answer, such as ENOENT or EIO, fails
 #   mount    wsl --mount --vhd <file> --bare, then wsl --unmount: both exit 0
+#
+# With wsl_rehearsal_state absent (the removal), it reads the exit check
+# instead, and starts no task. It needs the SID of the account, read before
+# the removal (Get-LocalUser tnwks-rehearsal):
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-rehearsal-check.yml --limit WSL-02 \
+#     -e wsl_rehearsal_removed_sid=<SID>
+#
+#   account   no local account of the rehearsal; the local accounts and the
+#             members of Administrators are shown
+#   rights    no holder of the batch right or of the three deny rights is the
+#             account or its SID; the holders are shown, and a SID of another
+#             origin that names no account is shown as a note
+#   tile      no value for the account under Winlogon\SpecialAccounts\UserList
+#   tasks     no task of the rehearsal
+#   profile   no profile of the account, and no folder <users folder>\<account>*
+#   folder    no folder of the rehearsal
 
 - name: The checks of the rehearsal
   hosts: windows_hosts
@@ -36,6 +53,7 @@
       when: not (wsl_rehearsal | bool)
 
     - name: Run the checks
+      when: wsl_rehearsal_state == 'present'
       ansible.windows.win_powershell:
         parameters:
           Account: "{{ wsl_rehearsal_account }}"
@@ -191,14 +209,98 @@
         ansible_become_user: SYSTEM
       register: wsl_rehearsal_checks
 
+    - name: The SID of the removed account is given
+      when: wsl_rehearsal_state == 'absent'
+      ansible.builtin.assert:
+        that: (wsl_rehearsal_removed_sid | default('')) is match('^S-1-5-21-[0-9]+-[0-9]+-[0-9]+-[0-9]+$')
+        fail_msg: >-
+          The exit check needs the SID of {{ wsl_rehearsal_account }}, read before the removal:
+          -e wsl_rehearsal_removed_sid=<SID>.
+        quiet: true
+
+    - name: The exit check of the removal
+      when: wsl_rehearsal_state == 'absent'
+      ansible.windows.win_powershell:
+        parameters:
+          Account: "{{ wsl_rehearsal_account }}"
+          RemovedSid: "{{ wsl_rehearsal_removed_sid }}"
+          Prefix: "{{ wsl_rehearsal_task_prefix }}"
+          Dir: "{{ wsl_rehearsal_dir }}"
+          Rights: "{{ ['SeBatchLogonRight'] + wsl_rehearsal_deny_rights }}"
+          UserList: "{{ wsl_rehearsal_userlist_key }}"
+        script: |
+          param([string]$Account, [string]$RemovedSid, [string]$Prefix, [string]$Dir, [string[]]$Rights, [string]$UserList)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $results = [ordered]@{}
+          function Add-Check([string]$Name, [bool]$Pass, [string]$Value) {
+              $results[$Name] = [ordered]@{ pass = $Pass; value = $Value }
+          }
+          $users = @(Get-LocalUser)
+          $admins = @(Get-LocalGroupMember -SID 'S-1-5-32-544' | ForEach-Object { "$($_.Name) ($($_.SID.Value))" })
+          $list = ($users | ForEach-Object { "$($_.Name) enabled=$($_.Enabled)" }) -join ', '
+          Add-Check 'account' (-not ($users.Name -contains $Account)) ("local accounts: {0}; Administrators: {1}" -f $list, ($admins -join ', '))
+
+          # The holders of each right, from the local policy (secedit gives SIDs as *S-1-...).
+          $file = Join-Path $env:TEMP 'tnwks-rehearsal-rights.inf'
+          # No file of an earlier read: the check reads only this export.
+          Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+          # Lines on stderr stay text: under Stop, Windows PowerShell 5.1 stops at the first.
+          $out = & { $ErrorActionPreference = 'Continue'; secedit.exe /export /areas USER_RIGHTS /cfg $file /quiet 2>&1 | ForEach-Object { "$_" } } | Out-String
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $file)) { throw "secedit did not export the rights ($LASTEXITCODE): $out" }
+          $policy = @(Get-Content -LiteralPath $file)
+          Remove-Item -LiteralPath $file -Force
+          $pass = $true
+          $shown = @()
+          foreach ($right in $Rights) {
+              $line = @($policy | Where-Object { $_ -match "^$right\s*=" })
+              $holders = @()
+              if ($line) { $holders = @(($line[0] -split '=', 2)[1].Split(',') | ForEach-Object { $_.Trim().TrimStart('*') } | Where-Object { $_ }) }
+              $named = @()
+              foreach ($h in $holders) {
+                  # The SID of the account fails the check, also when it names
+                  # no account. Another SID that names no account is a note.
+                  if ($h -eq $RemovedSid) { $pass = $false; $named += "$h (the account of the rehearsal)"; continue }
+                  try {
+                      $name = $h
+                      if ($h -like 'S-1-*') { $name = (New-Object Security.Principal.SecurityIdentifier $h).Translate([Security.Principal.NTAccount]).Value }
+                      if ($name -like "*\$Account" -or $name -eq $Account) { $pass = $false }
+                      $named += $name
+                  } catch { $named += "$h (note: names no account, not the SID of the rehearsal)" }
+              }
+              $shown += "{0}: {1}" -f $right, $(if ($named) { $named -join ', ' } else { 'none' })
+          }
+          Add-Check 'rights' $pass ($shown -join '; ')
+          $tile = Get-ItemProperty -LiteralPath $UserList -Name $Account -ErrorAction SilentlyContinue
+          Add-Check 'tile' (-not $tile) $(if ($tile) { "the value $Account is there" } else { 'no value' })
+
+          $tasks = @(Get-ScheduledTask -TaskName "$Prefix-*" -ErrorAction SilentlyContinue | ForEach-Object { $_.TaskName })
+          Add-Check 'tasks' ($tasks.Count -eq 0) $(if ($tasks) { $tasks -join ', ' } else { 'none' })
+          $profiles = @(Get-CimInstance Win32_UserProfile | Where-Object { $_.LocalPath -like "*\$Account*" } | ForEach-Object { $_.LocalPath })
+          # A folder of the account in the users folder with no profile entry
+          # could still hold the disk of a distro.
+          $list = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -Name ProfilesDirectory
+          $usersDir = [Environment]::ExpandEnvironmentVariables($list.ProfilesDirectory)
+          $folders = @(Get-ChildItem -LiteralPath $usersDir -Directory -Force -Filter "$Account*" | ForEach-Object { $_.FullName })
+          $left = @($profiles) + @($folders | Where-Object { $_ -notin $profiles })
+          Add-Check 'profile' ($left.Count -eq 0) $(if ($left) { $left -join ', ' } else { "none (no profile, no folder $usersDir\$Account*)" })
+          Add-Check 'folder' (-not (Test-Path -LiteralPath $Dir)) "$Dir exists: $(Test-Path -LiteralPath $Dir)"
+          $results
+      register: wsl_rehearsal_exit
+
+    - name: The result of the run
+      ansible.builtin.set_fact:
+        wsl_rehearsal_result: "{{ (wsl_rehearsal_checks if wsl_rehearsal_state == 'present' else wsl_rehearsal_exit).output[0] }}"
+
     - name: The value of each check
       ansible.builtin.debug:
-        msg: "{{ wsl_rehearsal_checks.output[0] }}"
+        msg: "{{ wsl_rehearsal_result }}"
 
     - name: Each check passes
       ansible.builtin.assert:
-        that: wsl_rehearsal_checks.output[0] | dict2items | rejectattr('value.pass') | list | length == 0
+        that: wsl_rehearsal_result | dict2items | rejectattr('value.pass') | list | length == 0
         fail_msg: >-
-          Failed: {{ wsl_rehearsal_checks.output[0] | dict2items | rejectattr('value.pass') | map(attribute='key') | join(', ') }}.
-          The change of the host stops before its step 1 (Design Doc 0004, section 9).
+          Failed: {{ wsl_rehearsal_result | dict2items | rejectattr('value.pass') | map(attribute='key') | join(', ') }}.
+          {{ 'The change of the host stops before its step 1 (Design Doc 0004, section 9).' if wsl_rehearsal_state == 'present'
+             else 'A part of the rehearsal is left: run the removal again, or remove it by hand.' }}
         quiet: true

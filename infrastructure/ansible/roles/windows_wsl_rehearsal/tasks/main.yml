@@ -298,3 +298,228 @@
             ansible_become: true
             ansible_become_method: ansible.builtin.runas
             ansible_become_user: SYSTEM
+
+# The removal (task 10.6). Each part goes, in this order: the distro and the
+# VM (as the account), the tasks, the profile, the batch right, the account,
+# the folder. A second run finds nothing and changes nothing. No task of the
+# play runs wsl.exe: the administrator session never stops WSL. The task of
+# the removal registers as in the state present (s4u_user, as SYSTEM), and
+# the service checks the new password with a batch logon, so the batch right
+# goes after the profile: while a profile is there, the account still holds
+# the right, and a second run can still run the task of the removal.
+- name: The rehearsal is absent
+  when: wsl_rehearsal_state == 'absent'
+  vars:
+    # The SID of the account, or empty when it is gone.
+    wsl_rehearsal_sid: "{{ wsl_rehearsal_user.output | default([]) | last | default('') }}"
+    # The folder of its profile, or empty when it has none.
+    wsl_rehearsal_profile_path: "{{ wsl_rehearsal_profile_read.output | default([]) | last | default('') }}"
+  block:
+    - name: Read the temporary account
+      ansible.windows.win_powershell:
+        parameters:
+          Name: "{{ wsl_rehearsal_account }}"
+        script: |
+          param([string]$Name)
+          $Ansible.Changed = $false
+          $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
+          if ($user) { $user.SID.Value } else { '' }
+      check_mode: false
+      register: wsl_rehearsal_user
+
+    # A read, also in a check run. The first task of the account makes its
+    # profile, so with no profile no task of the account ever ran.
+    - name: Read the profile of the account
+      ansible.windows.win_powershell:
+        parameters:
+          Sid: "{{ wsl_rehearsal_sid }}"
+        script: |
+          param([string]$Sid)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          if (-not $Sid) { return '' }
+          $found = Get-CimInstance Win32_UserProfile -Filter "SID = '$Sid'"
+          if ($found) { "$($found.LocalPath)" } else { '' }
+      check_mode: false
+      register: wsl_rehearsal_profile_read
+
+    # As the account: its own task ends the distro, unregisters it (with its
+    # disk in the profile), and shuts down the VM of its own session. The
+    # play first stops the start task, which ends the wsl.exe client that
+    # held the distro. With no profile, no task of the account ever ran: it
+    # has no hive, so no distro and no VM, and this part has nothing to do.
+    - name: The distro and the VM stop, as the account
+      when:
+        - wsl_rehearsal_sid | length > 0
+        - wsl_rehearsal_profile_path | length > 0
+        - not ansible_check_mode
+      block:
+        - name: The start task stops
+          ansible.windows.win_powershell:
+            parameters:
+              Task: "{{ wsl_rehearsal_task_prefix }}-start"
+            script: |
+              param([string]$Task)
+              $Ansible.Changed = $false
+              $task = Get-ScheduledTask -TaskName $Task -ErrorAction SilentlyContinue
+              if ($task -and $task.State -eq 'Running') {
+                  $Ansible.Changed = $true
+                  Stop-ScheduledTask -TaskName $Task
+              }
+          vars:
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
+
+        # The script with the step remove.
+        - name: Script of the removal
+          ansible.windows.win_copy:
+            src: Invoke-TnwksRehearsal.ps1
+            dest: '{{ wsl_rehearsal_dir }}\Invoke-TnwksRehearsal.ps1'
+
+        # A task that does not register stops the removal here, with the
+        # account and each part of the rehearsal in place.
+        - name: The task of the removal
+          block:
+            - name: The task of the removal
+              tnwks_win_scheduled_task:
+                name: "{{ wsl_rehearsal_task_prefix }}-remove"
+                xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
+                s4u_user: "{{ wsl_rehearsal_account }}"
+                s4u_description: "{{ wsl_rehearsal_account_description }}"
+              vars:
+                item: remove
+                ansible_become: true
+                ansible_become_method: ansible.builtin.runas
+                ansible_become_user: SYSTEM
+          rescue:
+            - name: The removal stops, with the account in place
+              ansible.builtin.fail:
+                msg: >-
+                  The task {{ wsl_rehearsal_task_prefix }}-remove did not register
+                  ({{ ansible_failed_result.msg | default('no message') }}). The removal stops here.
+                  Left in place: the account {{ wsl_rehearsal_account }}, its profile with any
+                  distro, its tasks, the batch right and the three deny rights, the value that
+                  hides its tile, and {{ wsl_rehearsal_dir }}. The start task is stopped. The rest
+                  of the removal waits for a run where the task registers.
+
+        - name: The removal runs as the account
+          ansible.windows.win_powershell:
+            parameters:
+              Task: "{{ wsl_rehearsal_task_prefix }}-remove"
+              Result: '{{ wsl_rehearsal_log_dir }}\remove.json'
+              Distro: "{{ wsl_rehearsal_distro }}"
+              Sid: "{{ wsl_rehearsal_sid }}"
+            script: |
+              param([string]$Task, [string]$Result, [string]$Distro, [string]$Sid)
+              $ErrorActionPreference = 'Stop'
+              $Ansible.Changed = $true
+              $before = (Get-ScheduledTaskInfo -TaskName $Task).LastRunTime
+              Start-ScheduledTask -TaskName $Task
+              $deadline = (Get-Date).AddMinutes(10)
+              do {
+                  Start-Sleep -Seconds 3
+                  $info = Get-ScheduledTaskInfo -TaskName $Task
+              } while (((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -or $info.LastRunTime -eq $before) -and (Get-Date) -lt $deadline)
+              if ($info.LastTaskResult -ne 0) { throw "$Task ended with $($info.LastTaskResult)" }
+              $out = Get-Content -LiteralPath $Result -Raw | ConvertFrom-Json
+              if (@($out.distros) -contains $Distro -or $out.shutdown_exit -ne 0) {
+                  throw "The removal of the distro did not end: $($out | ConvertTo-Json -Compress)"
+              }
+              # No process of the account may hold its profile. A process
+              # that is left is a process of the account: it ends here.
+              $deadline = (Get-Date).AddMinutes(2)
+              do {
+                  $left = @(Get-CimInstance Win32_Process | Where-Object {
+                      $owner = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue
+                      $owner -and $owner.Sid -eq $Sid })
+                  if ($left.Count -eq 0) { break }
+                  Start-Sleep -Seconds 5
+              } while ((Get-Date) -lt $deadline)
+              foreach ($p in $left) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
+              @{ result = $out; ended = @($left | ForEach-Object { "$($_.Name) $($_.ProcessId)" }) }
+          vars:
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
+
+    - name: No task of the account
+      tnwks_win_scheduled_task:
+        name: "{{ wsl_rehearsal_task_prefix }}-{{ item }}"
+        state: absent
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      loop: "{{ wsl_rehearsal_tasks }}"
+
+    # Its .wslconfig, its hive and what is left of the distro go with it.
+    - name: No profile of the account
+      ansible.windows.win_powershell:
+        parameters:
+          Sid: "{{ wsl_rehearsal_sid }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Sid)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          if (-not $Sid) { return }
+          # A check run stops no task, so a loaded profile stays loaded: it
+          # does not wait, and it reports the change.
+          $deadline = (Get-Date).AddMinutes(2)
+          do {
+              $profile = Get-CimInstance Win32_UserProfile -Filter "SID = '$Sid'"
+              if (-not $profile -or -not $profile.Loaded -or $WhatIfPreference) { break }
+              Start-Sleep -Seconds 5
+          } while ((Get-Date) -lt $deadline)
+          if (-not $profile) { return }
+          if ($profile.Loaded -and -not $WhatIfPreference) { throw "The profile of $Sid is still loaded. Nothing is removed." }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($profile.LocalPath, 'remove the profile')) { Remove-CimInstance -InputObject $profile }
+
+    # Each right goes before the account, so no SID with no account stays
+    # in the local policy.
+    - name: The account may no longer log on as a batch job
+      ansible.windows.win_user_right:
+        name: SeBatchLogonRight
+        users: ["{{ wsl_rehearsal_sid }}"]
+        action: remove
+      when: wsl_rehearsal_sid | length > 0
+
+    - name: The deny rights of the account go
+      ansible.windows.win_user_right:
+        name: "{{ item }}"
+        users: ["{{ wsl_rehearsal_sid }}"]
+        action: remove
+      loop: "{{ wsl_rehearsal_deny_rights }}"
+      when: wsl_rehearsal_sid | length > 0
+
+    - name: No value for the account on the sign-in screen
+      ansible.windows.win_regedit:
+        path: '{{ wsl_rehearsal_userlist_key }}'
+        name: "{{ wsl_rehearsal_account }}"
+        state: absent
+
+    - name: No temporary account
+      ansible.windows.win_powershell:
+        parameters:
+          Name: "{{ wsl_rehearsal_account }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Name)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          if (-not (Get-LocalUser -Name $Name -ErrorAction SilentlyContinue)) { return }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Name, 'remove the local account')) { Remove-LocalUser -Name $Name }
+
+    # The scripts, the root file system, the test disk file and the results.
+    - name: No folder of the rehearsal
+      ansible.windows.win_file:
+        path: "{{ wsl_rehearsal_dir }}"
+        state: absent
+
+    - name: No file of the write test
+      ansible.windows.win_file:
+        path: '{{ wsl_rehearsal_write_test_dir }}\tnwks-rehearsal-write-test.tmp'
+        state: absent

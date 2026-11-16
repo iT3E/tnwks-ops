@@ -124,7 +124,9 @@ the libusb shim build) also runs in check mode, since it only fills
 `win_powershell` scripts with `SupportsShouldProcess`, which compute "would
 change" without changing anything. On a host that never had the role, a
 check run skips the ACL and service-state tasks that need the directory tree
-and the service to exist.
+and the service to exist. A check run of the rehearsal's removal stops no
+task, so the profile of the account can stay loaded: the profile step
+reports the change and does not wait for the unload.
 
 ## Scheduled tasks
 
@@ -573,8 +575,39 @@ folders, its tasks), and says so.
 
 Run the checks after the apply, as the comment of
 `playbooks/windows-rehearsal-check.yml` says. The play reads, and changes
-no setting. A second change sets `wsl_rehearsal_state` to `absent` and
-removes each part.
+no setting.
+
+**The removal.** `wsl_rehearsal_state: absent` (the default of the role
+now) removes each part, in this order:
+
+1. When the account has a profile, the play stops the start task. A task
+   of the account then runs `wsl --terminate`, `wsl --unregister` and
+   `wsl --shutdown`. The shutdown stops the VM of that account only: WSL
+   keeps one session for each account. No task of the play runs `wsl.exe`.
+   With no profile, no task of the account ever ran (the first one makes
+   the profile), so it has no hive, no distro and no VM, and the play skips
+   this step and the next.
+   The task of the removal registers as the tasks of the state present do
+   (`s4u_user`, as SYSTEM, with a new password of the account). When it
+   does not register, the removal stops there: the account and each part
+   of the rehearsal stay, and the message says so.
+2. The play ends any process of the account that is left.
+3. It removes the tasks, the profile (with `.wslconfig` and the hive), the
+   batch right and the three deny rights (before the account, so no SID
+   with no account stays in the policy), the value that hides the tile, the
+   account, the folder (the scripts, the root file system, the test disk
+   file and the results), and the file of the write test. The batch right
+   goes after the profile: the service checks the new password with a
+   batch logon, so while a profile is there, a second run can still do
+   step 1.
+
+The same check play then reads the exit check, with the SID of the
+account read before the removal (`-e wsl_rehearsal_removed_sid=<SID>`): no
+account; no holder of the batch right or of a deny right that is the
+account or its SID; no value for the tile; no task; no profile, and no
+folder of the account in the users folder; and no folder of the rehearsal. It shows the local accounts, the members of Administrators and the
+holders of the rights, and a SID of another origin that names no account
+as a note.
 
 ## Check-only settings
 

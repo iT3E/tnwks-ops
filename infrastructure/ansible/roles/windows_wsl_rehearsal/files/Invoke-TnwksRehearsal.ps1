@@ -20,10 +20,13 @@ playbooks/windows-rehearsal-check.yml to say, from the document.
           directory of the host (write-test.sh), which removes a file that it
           made.
   mount   wsl --mount --vhd <disk> --bare, then wsl --unmount <disk>.
+  remove  The removal: wsl --terminate and wsl --unregister of the distro, then
+          wsl --shutdown. A task of the account runs it, so the shutdown stops
+          the VM of this account only (WSL keeps one session for each account).
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('probe', 'import', 'write', 'mount')][string]$Step,
+    [Parameter(Mandatory)][ValidateSet('probe', 'import', 'write', 'mount', 'remove')][string]$Step,
     [Parameter(Mandatory)][string]$LogDir,
     [string]$Distro,
     [string]$RootFs,
@@ -103,6 +106,17 @@ switch ($Step) {
         $mount = Invoke-Wsl @('--mount', '--vhd', $Disk, '--bare')
         $unmount = Invoke-Wsl @('--unmount', $Disk)
         Write-Result @{ mount_exit = $mount.exit; mount_output = $mount.output; unmount_exit = $unmount.exit; unmount_output = $unmount.output }
+    }
+    'remove' {
+        # --terminate of a distro that does not run gives an error: the result shows it.
+        $terminate = Invoke-Wsl @('--terminate', $Distro)
+        $unregister = @{ exit = 0; output = 'not registered' }
+        if ((Get-Distros) -contains $Distro) { $unregister = Invoke-Wsl @('--unregister', $Distro) }
+        $shutdown = Invoke-Wsl @('--shutdown')
+        Write-Result @{
+            terminate_exit = $terminate.exit; unregister_exit = $unregister.exit; unregister_output = $unregister.output
+            shutdown_exit = $shutdown.exit; shutdown_output = $shutdown.output; distros = @(Get-Distros)
+        }
     }
 }
 exit 0
