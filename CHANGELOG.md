@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.179.1 - 2026-11-16
+
+### Fixed
+
+* Windows: the tasks of the rehearsal account register. The module tnwks_win_scheduled_task takes s4u_user, which registers an S4U task for another account through the Schedule.Service object with that user, no password and the S4U logon type. Each task of the role windows_wsl_rehearsal and of the rehearsal check that registers, starts or stops a task of the account runs as SYSTEM (become, runas), since the Task Scheduler refuses that registration to the network logon of the SSH session; every other Windows task keeps become off. A failed registration names each exception of the chain with its HResult, in both paths.
+
 ## v2.179.0 - 2026-11-16
 
 ### Added
