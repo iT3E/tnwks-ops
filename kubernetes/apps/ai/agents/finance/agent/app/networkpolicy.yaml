@@ -3,9 +3,10 @@
 # loopback, the probes run in the pod, and default-deny (../../namespace.yaml)
 # denies ingress. Out, it reaches the model gateway, the sandbox gateway of
 # this trust domain, the trace collector and one host name, the Telegram Bot
-# API (and DNS, through allow-dns). Nothing else: no model vendor, no update
-# or telemetry service, no other trust domain, and no web search or other
-# tool until the owner decides the tool credentials of finance (D3).
+# API and the web search API (and DNS, through allow-dns). Nothing else: no
+# model vendor, no update or telemetry service, no other trust domain. The
+# finance app is not here: a sandbox calls it, through the proxy of its
+# supervisor, which the provider firefly allows (providers.yaml).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -52,6 +53,14 @@ spec:
     # The Telegram channel.
     - toFQDNs:
         - matchName: api.telegram.org
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # The web search of the gateway (the Brave plugin). The gateway process
+    # makes the call, not a sandbox.
+    - toFQDNs:
+        - matchName: api.search.brave.com
       toPorts:
         - ports:
             - port: "443"

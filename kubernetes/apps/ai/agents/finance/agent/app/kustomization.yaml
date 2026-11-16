@@ -7,13 +7,19 @@
 #   The owner makes the values (R4): OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY
 #   (the key `agents-finance` of the model gateway, docs/apps/litellm.md),
 #   TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOW_FROM, as `secret.sops.yaml` here.
+#   With it, ./secret-search.sops.yaml (BRAVE_API_KEY, the search key of
+#   finance), once the owner put the key in it.
+# - ./providers.yaml and ./secret-firefly.sops.yaml (FIREFLY_TOKEN), together,
+#   once the owner put the token of the finance app in the file. Before the
+#   Deployment: a sandbox of the agent needs the provider firefly.
 # - ./pvc.yaml and ./backup.yaml, together, after the ClusterRepository
 #   agents-finance is Ready (kopiur-system/agents-finance-repository): the
 #   state volume never runs without its backup policy. The grant of
 #   agents-finance in that repository comes first, and goes last.
 # - The restore test (../restore-test/, a template).
-# The tool set is the pilot's without web search, Firefly or the notes vault,
-# until the owner decides the tool credentials (D3) and the vault (D4).
+# The tool set is the pilot's (its own search key), the finance app through
+# the provider firefly, reads only, and the notes vault in the state volume
+# (docs/apps/agent-platform.md, "The finance agent").
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

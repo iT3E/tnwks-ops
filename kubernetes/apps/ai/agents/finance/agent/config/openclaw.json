@@ -16,9 +16,9 @@
   "session": {"dmScope": "per-channel-peer"},
   "tools": {
     "elevated": {"enabled": false},
-    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish", "web_search"],
-    "web": {"search": {"enabled": false}},
-    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get"]}}
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search"]}},
+    "web": {"search": {"enabled": true, "provider": "brave"}}
   },
   "memory": {
     "search": {
@@ -29,6 +29,7 @@
         "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"}
       },
       "sources": ["memory"],
+      "extraPaths": [{"path": "/home/node/data/vault", "pattern": "**/*.md"}],
       "rememberAcrossConversations": false
     }
   },
@@ -81,6 +82,7 @@
   },
   "plugins": {
     "allow": [
+      "brave",
       "diagnostics-otel",
       "memory-core",
       "openshell",
@@ -99,9 +101,11 @@
           "from": "docker.io/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
           "gatewayEndpoint": "https://openshell.agents-finance.svc.cluster.local:8080",
           "autoProviders": false,
+          "providers": ["firefly"],
           "timeoutSeconds": 300
         }
       },
+      "brave": {"enabled": true},
       "diagnostics-otel": {"enabled": true}
     }
   },

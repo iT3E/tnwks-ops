@@ -1,0 +1,122 @@
+---
+# The providers job of the finance agent (../config/scripts/providers.sh):
+# every 15 minutes it puts the token of the finance app into the provider
+# firefly of the sandbox gateway of this trust domain, and imports or updates
+# the profile of that provider (../config/providers/finance-firefly.yaml). A
+# sandbox of the agent gets a placeholder; the proxy of its supervisor puts
+# the token in a read of the API of the app, and in no other call
+# (docs/apps/agent-platform.md, "The finance agent"). The token is in this
+# job only: not in the agent pod, and not in a sandbox. Not applied until the
+# owner made the token (app/kustomization.yaml). A failed run fires
+# AgentPlatformCronJobFailed; its log names the step.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agent-providers
+  labels:
+    app.kubernetes.io/name: agent-providers
+spec:
+  # Off the minutes of the providers job of the workflow agents (:07).
+  schedule: "4,19,34,49 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: agent-providers
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: providers
+              # The agent image: the CLI of the sandbox gateway, and node.
+              image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+              imagePullPolicy: IfNotPresent
+              command: ["sh", "/scripts/providers.sh"]
+              env:
+                - name: HOME
+                  value: /tmp/home
+                - name: PROFILES
+                  value: /profiles
+                - name: TLS
+                  value: /openshell-tls
+                - name: FIREFLY_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: agent-firefly-secret
+                      key: FIREFLY_TOKEN
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: profiles
+                  mountPath: /profiles
+                  readOnly: true
+                - name: openshell-tls
+                  mountPath: /openshell-tls
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: agent-scripts
+            - name: profiles
+              configMap:
+                name: agent-provider-profiles
+            # The client certificate of this trust domain's sandbox gateway,
+            # as the agent pod uses it.
+            - name: openshell-tls
+              secret:
+                secretName: openshell-client-tls
+                defaultMode: 0440
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi
+---
+# The providers job reaches the sandbox gateway of this trust domain, and
+# nothing else (and DNS, through allow-dns).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: agent-providers
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent-providers
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/instance: openshell
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

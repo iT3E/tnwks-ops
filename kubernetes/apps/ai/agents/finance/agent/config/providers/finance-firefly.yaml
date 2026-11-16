@@ -1,0 +1,35 @@
+---
+# The provider profile of the finance app (Firefly III) for the finance agent
+# (docs/apps/agent-platform.md, "The finance agent"). In a sandbox,
+# FIREFLY_TOKEN holds a placeholder; the proxy of the sandbox puts the token
+# of the finance agent in the Authorization header of a read of the API of
+# the app at its in-cluster Service, and of no other call. The token of the
+# app has the rights of its user, so this profile is what keeps the agent to
+# reads. No annotations key here: the providers job adds it (sha256 of this
+# file).
+id: finance-firefly
+display_name: Finance app of the finance agent
+description: Reads of the API of the finance app (Firefly III), and nothing else
+category: data
+credentials:
+  - name: api_token
+    description: The personal access token of the finance agent at the finance app
+    env_vars: [FIREFLY_TOKEN]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+discovery:
+  credentials: [api_token]
+endpoints:
+  # The Service of the app (production/firefly, port 8080, plain HTTP inside
+  # the cluster, as the bank-sync job uses it).
+  - host: firefly.production.svc.cluster.local
+    port: 8080
+    protocol: rest
+    tls: ""
+    enforcement: enforce
+    rules:
+      - allow: { method: GET, path: "/api/v1/**" }
+binaries:
+  - /usr/local/bin/python3.13
+  - /usr/local/bin/python3

@@ -87,6 +87,11 @@ All API clients authenticate with a personal access token and use
 router's `internal.tnwks.us` wildcard and the `*.internal.tnwks.us`
 certificate, so clients on the WSL host need no DNS changes.
 
+The finance agent on the agent platform is the exception: a sandbox of the
+agent calls the Service, `http://firefly.production.svc.cluster.local:8080`,
+reads under `/api/v1/` only, with a token of its own that the proxy of the
+sandbox adds (`docs/apps/agent-platform.md`, "The finance agent").
+
 ## Looking at the data directly
 
 Read-only questions are best answered through the API. When the API seems

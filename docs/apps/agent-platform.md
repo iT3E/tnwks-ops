@@ -580,6 +580,123 @@ Then start the agent pod again by a delete of the pod
 the Signal channel finds the account. Not `rollout restart`: Flux removes
 its annotation at the next reconcile, which starts the pod one more time.
 
+## The finance agent
+
+The finance agent runs as the pilot does, in `agents-finance`
+(`kubernetes/apps/ai/agents/finance/`), with its own key at the model
+gateway, its own sandbox gateway and its own backup repository. It is in git
+and not applied yet: the Deployment, the volume, the backup policy, the
+providers job and their Secrets wait for the values of the owner (R4) and
+for the cutover. The tools that differ from the pilot:
+
+- **The finance app (Firefly III), reads only.** The finance agent only:
+  no other trust domain gets a token of the app.
+  - A sandbox makes the call, not the agent container: code that the model
+    writes runs in a sandbox (Python, `/usr/local/bin/python3`), and the
+    proxy of the sandbox's supervisor sends it on. The address is the
+    Service of the app in the cluster,
+    `http://firefly.production.svc.cluster.local:8080/api/v1/...`, not the
+    internal host name: that path goes through the ingress, which the
+    sandbox does not reach.
+  - The token is the credential of the provider `firefly` in the store of
+    the sandbox gateway of finance (profile `finance-firefly`,
+    `agent/config/providers/finance-firefly.yaml`). A sandbox holds a
+    placeholder in `FIREFLY_TOKEN`; the proxy puts the token in the
+    `Authorization` header of a `GET` under `/api/v1/` at that Service on
+    port 8080, and of no other call. That rule is the only way out to the
+    app: the sandbox gateway makes the egress policy of each supervisor
+    from it, and the agent pod has no rule to the app. A token of the app
+    has every right of its user, so the rule is what keeps the agent to
+    reads.
+  - The providers job (CronJob `agent-providers`, `agent/app/providers.yaml`,
+    every 15 minutes) imports or updates the profile and puts the token from
+    the Secret `agent-firefly-secret` (key `FIREFLY_TOKEN`) into the
+    provider. The token is in that job only: not in the agent pod, not in
+    a sandbox. It logs `agent-providers result=ok`, or
+    `agent-providers result=failed step=<step> name=<name>`, and a failed
+    run fires `AgentPlatformCronJobFailed`. The openshell entry of
+    `openclaw.json` names the provider (`providers: ["firefly"]`), so each
+    new sandbox gets it; a sandbox can not start while the provider is
+    missing, so the job runs before the agent starts.
+- **Web search,** as the pilot's ([The pilot agent](#the-pilot-agent)): the
+  Brave plugin, the official plugins step, `tools.web.search` and the rule
+  to `api.search.brave.com`, with a key of its own: `BRAVE_API_KEY` in the
+  Secret `agent-search-secret` of `agents-finance`
+  (`agent/app/secret-search.sops.yaml`), not the pilot's key. The gateway
+  process makes the call. The query goes to the vendor, and the query and
+  the result stay in the session store of the agent, so in its archives
+  and snapshots: the model can put words of a finance conversation in a
+  query.
+- **The notes vault,** read only. The owner decided on 2026-11-16: no sync
+  job. The owner copies the vault once into the state volume, at
+  `/home/node/data/vault`, and the backup of the volume holds it (the
+  policy `agent-state` copies the whole volume to the repository of
+  finance; the restore test counts its notes and fails with `no-vault`).
+  - The agent reads it with `memory_search` and `memory_get`: the config
+    names it in `memory.search.extraPaths`, Markdown files only
+    (`**/*.md`). The gateway process indexes it with the embeddings of
+    finance (`agents-finance-embeddings`, the Ollama of the host, so no
+    vendor gets the text of a note) and reads it from the volume. It is
+    outside the workspace, so no sandbox gets a copy, and no tool of the
+    agent writes it.
+  - **The copy is apart from the vault on the owner's devices.** After the
+    seed, a change on a device does not reach the agent, and the agent
+    changes nothing on a device. To bring the agent a newer vault, seed it
+    again (below).
+
+### The steps of the owner
+
+None of these values goes through an agent or a session: the owner makes
+each one and puts it straight into its encrypted file. The two files went
+into git with the placeholder `pending`, encrypted to the age recipients of
+`.sops.yaml` only, so the first command adds the KMS recipient.
+
+1. **The search key.** Make a second key at the search vendor, for finance
+   only. Then:
+
+   ```bash
+   F=kubernetes/apps/ai/agents/finance/agent/app/secret-search.sops.yaml
+   bin/sops updatekeys -y "$F"
+   bin/sops "$F"     # replace pending with the key, save
+   bin/sops -d --extract '["stringData"]["BRAVE_API_KEY"]' "$F" | tr -d '\n' \
+     | awk '{ print ($0 != "pending" && length($0) >= 20) ? "ok" : "not ok" }'
+   ```
+
+2. **The token of the finance app.** In the app: Options, Profile, OAuth,
+   "Personal access tokens", a new token named for the finance agent. The
+   app shows it once. Then:
+
+   ```bash
+   F=kubernetes/apps/ai/agents/finance/agent/app/secret-firefly.sops.yaml
+   bin/sops updatekeys -y "$F"
+   bin/sops "$F"     # replace pending with the token, save
+   bin/sops -d --extract '["stringData"]["FIREFLY_TOKEN"]' "$F" | tr -d '\n' \
+     | awk '{ print ($0 != "pending" && length($0) >= 100) ? "ok" : "not ok" }'
+   ```
+
+   After the cutover, revoke the token that the finance agent on the host
+   used, in the same page of the app: no token is shared by two places.
+3. **The seed of the vault,** in the state copy of the cutover: after the
+   state of the finance agent is on its volume and the pod runs, and before
+   the first chat. From the host, with the vault folder in `V`:
+
+   ```bash
+   kubectl -n agents-finance exec deploy/agent -c agent -- mkdir -p /home/node/data/vault
+   tar -C "$V" --exclude=.obsidian --exclude=.trash --exclude=.git -cf - . \
+     | kubectl -n agents-finance exec -i deploy/agent -c agent -- tar -C /home/node/data/vault --no-same-owner -xf -
+   kubectl -n agents-finance exec deploy/agent -c agent -- sh -c 'find /home/node/data/vault -type f -name "*.md" | wc -l'
+   ```
+
+   The count is the number of notes. The product watches the folder and
+   indexes the notes; the next start of the pod indexes them in any case
+   (the `memory-index` step). The next nightly snapshot holds the vault.
+   The skills and notes of the copied state that name the internal host
+   name of the finance app need the Service address above.
+   To seed a newer vault later, empty the folder first, so that a note
+   deleted on a device goes here too:
+   `kubectl -n agents-finance exec deploy/agent -c agent -- find /home/node/data/vault -mindepth 1 -delete`,
+   then the three commands again.
+
 ## The run receiver
 
 The one entry for a run of a workflow agent, in `agents-workflows`

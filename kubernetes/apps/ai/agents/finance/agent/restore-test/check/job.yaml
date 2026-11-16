@@ -88,6 +88,17 @@ spec:
               echo "restore-check unreadable=$unreadable dangling-links=$dangling blocked=$blocked"
               [ "$files" -gt 0 ] || bad="$bad empty"
               [ "$blocked" -eq 0 ] || bad="$bad unreadable"
+              # The notes vault that the owner seeded (docs/apps/agent-platform.md,
+              # "The finance agent"): the snapshot holds it with the state, and
+              # the agent reads its notes as uid 1000 (the unreadable count
+              # above covers it). Counts only, no name.
+              if [ -d "$D/vault" ]; then
+                notes=$(find "$D/vault" -type f -name '*.md' 2>/dev/null | wc -l)
+                echo "restore-check vault-notes=$notes"
+                [ "$notes" -gt 0 ] || bad="$bad empty-vault"
+              else
+                bad="$bad no-vault"
+              fi
 
               # The newest start archive by the time in its name
               # (openclaw-state-<release>-<time>.tar.gz).
