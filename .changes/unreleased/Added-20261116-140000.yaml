@@ -1,0 +1,3 @@
+kind: Added
+body: 'GitHub settings: the environment `run-receiver` (deployments from `main` only) for the token of the run receiver, and the repository variable `RENOVATE_REVIEW_ROUTE` at `host`, which keeps each Renovate review on the hook of the host until the owner changes it to `platform`. The docs of the review describe the two routes, the move and its way back.'
+time: 2026-11-16T14:00:00.000000+00:00
