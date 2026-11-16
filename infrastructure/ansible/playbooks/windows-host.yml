@@ -41,6 +41,16 @@
           tags: [usb-attach]
       tags: [usb-attach]
 
+    # Only when a host has the rehearsal on.
+    - name: Root file system of the rehearsal
+      ansible.builtin.include_role:
+        name: windows_wsl_rehearsal
+        tasks_from: controller.yml
+        apply:
+          tags: [wsl-rehearsal]
+      when: groups['windows_hosts'] | map('extract', hostvars, 'wsl_rehearsal') | select | list | length > 0
+      tags: [wsl-rehearsal]
+
 - name: Windows host
   hosts: windows_hosts
   gather_facts: false
@@ -136,3 +146,8 @@
     # Check-only settings; last, so a failed assertion stops nothing else.
     - role: windows_host_settings
       tags: [host-settings]
+    # The rehearsal of the account change (Design Doc 0004, section 9, step
+    # 0). After every other role, so a failed step of it stops no other role.
+    - role: windows_wsl_rehearsal
+      when: wsl_rehearsal | bool
+      tags: [wsl-rehearsal]

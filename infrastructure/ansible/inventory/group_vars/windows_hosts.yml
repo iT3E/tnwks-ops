@@ -25,6 +25,12 @@ wsl_start_unelevated: false
 # fail the distro play (role wsl_host_check). It needs wsl_start_unelevated.
 wsl_start_unelevated_done: false
 
+# The rehearsal of the account change (role windows_wsl_rehearsal, Design Doc
+# 0004, section 9, step 0): a temporary standard account with a distro of its
+# own. Per host, site 2 only; it gives an account a right, so the owner
+# approves the pull request that turns it on.
+wsl_rehearsal: false
+
 # Folders under C:\ProgramData that no role owns. The play gives each the
 # rules for SYSTEM and the Administrators only (tnwks_win_dir_acl, no writer,
 # readers: none): Users get no rule, and each item takes the owner

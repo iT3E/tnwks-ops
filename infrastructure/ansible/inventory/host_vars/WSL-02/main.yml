@@ -41,6 +41,8 @@ wsl_keepalive_enabled: true
 # take it at the next start of the distro (docs/wsl/windows-ansible.md, "Start
 # WSL with no elevation").
 wsl_start_unelevated: true
+# The rehearsal of the account change runs here (role windows_wsl_rehearsal).
+wsl_rehearsal: true
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true
