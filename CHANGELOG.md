@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.169.0 - 2026-11-16
+
+### Changed
+
+* Windows hosts: a per-host switch, wsl_start_unelevated (on for WSL-02 first), runs each task that starts a process in the WSL distro with no elevation, and moves the steps that need admin rights to tasks that start none: tnwks-wsl-service (SYSTEM) for the WSL service, and tnwks-lan-bridge-sync as SYSTEM with the VM address from the new task tnwks-lan-bridge-ip. The compaction no longer starts the distro itself under the switch. No elevated client creates the WSL VM or starts a process in a distro, and each directory that a task with no elevation writes is made by a new module, tnwks_win_dir_acl, which lets the account make and change files there but not change the directory itself. The services of a distro take the change at its next start, a step by hand with a runbook that stops WSL with wsl --shutdown (docs/wsl/windows-ansible.md). A second switch, wsl_start_unelevated_done, goes on after that step and its read, and only then can the write test of the distro fail its play.
+
 ## v2.168.2 - 2026-11-16
 
 ### Security
