@@ -50,7 +50,11 @@ function Write-Result([hashtable]$Data) {
 }
 
 function Invoke-Wsl([string[]]$Arguments) {
-    $out = (& (Join-Path $system 'wsl.exe') @Arguments 2>&1 | Out-String).Trim()
+    # Windows PowerShell 5.1 makes each line that a program writes to stderr an
+    # error record, which stops the script under Stop. wsl.exe writes its
+    # warnings there, so they are kept as text in the output.
+    $ErrorActionPreference = 'Continue'
+    $out = (& (Join-Path $system 'wsl.exe') @Arguments 2>&1 | ForEach-Object { "$_" } | Out-String).Trim()
     @{ exit = $LASTEXITCODE; output = $out }
 }
 

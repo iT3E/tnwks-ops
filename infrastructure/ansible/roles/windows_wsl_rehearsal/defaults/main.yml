@@ -20,6 +20,9 @@ wsl_rehearsal_state: absent
 # and it gets the right to log on as a batch job, which S4U needs. It may not
 # log on in any other way, and it has no tile on the sign-in screen.
 wsl_rehearsal_account: tnwks-rehearsal
+# The comment of the account. New-LocalUser of Windows PowerShell 5.1 takes a
+# name of 20 characters at most and a description of 48 at most.
+wsl_rehearsal_account_description: 'tnwks-ops: temporary account, WSL rehearsal'
 # Its distro, in its own profile (%LOCALAPPDATA%\<name>).
 wsl_rehearsal_distro: tnwks-rehearsal
 
