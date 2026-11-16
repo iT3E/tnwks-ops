@@ -331,11 +331,11 @@ def cronjobs():
     return documents
 
 
-# The runs of the whole AWS scan list in one process ended at 768 MiB, then at
-# 1536 MiB: a run is now one process for each service (prowler/README.md,
-# "Memory"). A Cloudflare run has a few clients in one place.
-MEMORY_LIMITS = {"aws": "1536Mi", "cloudflare": "768Mi"}
-MEMORY_REQUESTS = {"aws": "1024Mi", "cloudflare": "512Mi"}
+# An AWS run is one process for each service: its limit is the peak that the
+# first runs in parts measured and 25 % (prowler/README.md, "Memory"). A
+# Cloudflare run has a few clients in one place.
+MEMORY_LIMITS = {"aws": "896Mi", "cloudflare": "768Mi"}
+MEMORY_REQUESTS = {"aws": "704Mi", "cloudflare": "512Mi"}
 
 
 def test_each_cronjob_runs_one_system_of_the_registry_with_its_scan_list():

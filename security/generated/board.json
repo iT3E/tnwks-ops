@@ -359,7 +359,8 @@
       "site": "none",
       "domain": "infrastructure",
       "sources": [
-        "stream"
+        "stream",
+        "prowler"
       ]
     },
     {
@@ -368,7 +369,8 @@
       "site": "none",
       "domain": "infrastructure",
       "sources": [
-        "stream"
+        "stream",
+        "prowler"
       ]
     },
     {
@@ -569,10 +571,20 @@
       "check": "cloudtrail"
     },
     {
+      "source": "prowler",
+      "system": "aws-management",
+      "late_after_seconds": 129600
+    },
+    {
       "source": "stream",
       "system": "aws-prod",
       "late_after_seconds": 7200,
       "check": "cloudtrail"
+    },
+    {
+      "source": "prowler",
+      "system": "aws-prod",
+      "late_after_seconds": 129600
     },
     {
       "source": "stream",

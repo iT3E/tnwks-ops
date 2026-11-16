@@ -58,19 +58,17 @@ spec:
               envFrom:
                 - secretRef:
                     name: aws-security-audit-sts
-              # The limit of ../../README.md, "Memory" (../README.md, "Memory").
-              # The runs of the whole scan list in one process ended at 768 MiB,
-              # then at 1536 MiB: Prowler keeps each service and each finding
-              # until its process ends. One process for each service holds one
-              # service at a time. 1536 MiB holds until a run measures the
-              # peak: the script prints the peak of each part, and of the
-              # container as its last line.
+              # The limit of ../../README.md, "Memory" (../README.md, "Memory"):
+              # the highest peak of the container in the first runs in parts,
+              # 682 MiB, and 25 %, rounded up to a multiple of 64 MiB. The
+              # request is the highest working set, 646 MiB, rounded up the
+              # same way, so a run stays within its request.
               resources:
                 requests:
                   cpu: 100m
-                  memory: 1024Mi
+                  memory: 704Mi
                 limits:
-                  memory: 1536Mi
+                  memory: 896Mi
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -176,9 +174,9 @@ spec:
               resources:
                 requests:
                   cpu: 100m
-                  memory: 1024Mi
+                  memory: 704Mi
                 limits:
-                  memory: 1536Mi
+                  memory: 896Mi
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
