@@ -51,7 +51,7 @@ agents:
                 type: RuntimeDefault
             containers:
               - name: run-job
-                image: &image ghcr.io/it3e/tnwks-workflow-agents:0.3.1@sha256:542526e1a8efa548beea5a632fa25a682006b0f5483dcce8cfbf9798baae0803
+                image: &image ghcr.io/it3e/tnwks-workflow-agents:0.3.2@sha256:35998129d4db52274984e1721e110730f3cc9dfdb5dd6d0c6d7f73440242c881
                 imagePullPolicy: IfNotPresent
                 args: ["run-job"]
                 env:
