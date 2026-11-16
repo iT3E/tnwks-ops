@@ -239,10 +239,28 @@ while homelab-wsl-02 does not scrape its host (the `up` of that host in
 | Where | What runs | File |
 | --- | --- | --- |
 | Each Windows host | The SYSTEM scheduled task `tnwks-host-check`, every 6 hours and 10 minutes after boot (role `windows_host_check`) | `textfile_inputs\tnwks_security_host_check.prom` |
-| Each WSL distro | The systemd timer `tnwks-host-check`, as `wsl_distro_user`, every 6 hours and 10 minutes after boot (role `wsl_host_check`) | `textfile_inputs\wsl-distro\tnwks_security_host_check_distro.prom`, through `/mnt/c` |
+| Each WSL distro | The systemd timer `tnwks-host-check`, as `wsl_distro_user`, every 6 hours and 10 minutes after boot (role `wsl_host_check`) | A JSON document, `C:\ProgramData\tnwks-host-check-distro\tnwks_security_host_check_distro.json`, through `/mnt/c` |
+| Each Windows host, for its distro | The relay: the SYSTEM scheduled task `tnwks-host-check-relay`, each hour and 20 minutes after boot (role `windows_host_check`) | `textfile_inputs\tnwks_security_host_check_distro.prom` |
 
-The collector reads the subdirectories of `textfile_inputs` too. The
-distro's file has its own name, because the collector refuses two files
+**The relay of a distro** (Design Doc 0004, section 5.9). The distro does
+not write to the textfile directory, because the collector reads each
+`.prom` file there and can not tell who wrote it. The distro writes its
+document into an inbox, and the relay, the same script with `-Relay`,
+checks it and writes the `.prom` file of the distro. The inbox has no
+inherited rule: the Administrators own it, SYSTEM and the Administrators
+have full control, and the account of the distro may change files. The relay
+takes a document only when it fits: at most 64 KiB, not a link, the name of
+the distro of that host (the distro whose `wsl_distro_windows_host` is the
+host), the checks `updates-pending` and `updates-held` only, each a whole
+number of 0 or more, a time at most 300 seconds ahead, and only the detail
+series of a distro, a label `uid` a number. A document that does not fit,
+or no document, is the failed query `relay`: no result and no time, so the
+distro reads as late, and the task log names the rule that the document
+broke. The relay writes the time of the distro, not its own, so a distro
+that stops writing reads as late too. A document can wait up to an hour for
+the relay, which the late window of 12 hours covers.
+
+The distro's file has its own name, because the collector refuses two files
 with one name. The series that both files have use the same text, because
 the collector refuses a series with two texts.
 
@@ -319,14 +337,16 @@ SYSTEM runs the script from `C:\ProgramData\tnwks-host-check`. The role sets
 the rules of that directory on each run: no inherited rule, the
 Administrators own it, SYSTEM and the Administrators have full control, and
 Users may read. A file below it with a rule of its own, or another owner,
-gets the rules of the directory again. The account of the WSL distro may
-write only its own directory of the textfile collector.
+gets the rules of the directory again. The account of the WSL distro has no
+right on the textfile directory. The role removes the directory
+`textfile_inputs\wsl-distro`, where the distro wrote before the relay, and
+the right of the distro account on it.
 
 **The write test of a distro.** The distro must not be able to change the
 textfile directory of its host, because the exporter reads each `.prom` file
 under it and can not tell who wrote it (Design Doc 0004, section 5.9). So
-each run of the distro check starts with tries to make a file there, above
-its own directory, with a name that does not end in `.prom`. Only a refusal
+each run of the distro check starts with tries to make a file there, with
+a name that does not end in `.prom`. Only a refusal
 by Windows is the pass.
 
 - **Root tries first.** Linux checks the mode that `/mnt/c` shows before a
@@ -349,7 +369,14 @@ by Windows is the pass.
   and the mount. A refusal is `EACCES` or `EPERM`. The message of a
   refusal, and of a try that fails in another way, names the errno by
   number and name. How drvfs maps a refusal of Windows to an errno is known
-  only on a host, so the first answers say it.
+  only on a host, so the first answers say it. The series
+  `homelab_security_host_write_test_errno{uid="<uid>"}` gives that errno,
+  or 0 when the try had none, so a read of the metrics shows it.
+- **The files of the test.** Each try removes the file that it made. The
+  host check of the Windows host, as SYSTEM, counts the files of the test
+  (`.tnwks-write-test-*.tmp`) in the textfile directory, as
+  `homelab_security_host_write_test_files`, which is 0. When it can not list
+  the directory, it leaves out the series, and no query fails.
 - **The failed query `textfile-write`.** Root has no answer 0 (or its answer
   is missing or older than 15 minutes), or a try has 1 or 3. Then the run
   gives no result. A try that wrote removes the file that it made, and
@@ -381,10 +408,11 @@ without it: `sources` only says which sources the rule for a late result
 watches.
 
 To run it now on a host: `Start-ScheduledTask -TaskName tnwks-host-check`.
-In a distro: `sudo systemctl start tnwks-host-check.service`.
+In a distro: `sudo systemctl start tnwks-host-check.service`, then on its
+host `Start-ScheduledTask -TaskName tnwks-host-check-relay`.
 The way back (Design Doc 0004, section 4.3): set `wsl_host_check_state:
 absent` and `host_check_state: absent` in the defaults of the two roles,
-which removes the timer, the task, the scripts and the files on each host
+which removes the timer, the tasks, the scripts, the inbox and the files on each host
 and distro, and remove `host-check` from `sources` of the hosts and distros
 in `systems.yaml`, in the same pull request.
 

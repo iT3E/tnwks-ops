@@ -115,26 +115,85 @@
         path: "{{ host_check_textfile_dir }}"
         state: directory
 
-    - name: Directory of the distro
+    # The distro no longer writes under the textfile directory (Design Doc
+    # 0004, section 5.9). Its directory goes, with its .prom file and the
+    # right of the distro account on it, so the textfile directory keeps only
+    # the rights it inherits from Program Files.
+    - name: No directory of the distro under the textfile directory
       ansible.windows.win_file:
         path: "{{ host_check_distro_dir }}"
-        state: directory
-      register: host_check_distro_dir_result
+        state: absent
 
-    # The distro writes its file through drvfs as the account that owns it.
-    # That account may change files in this directory only: the rest of the
-    # textfile directory keeps the rights it inherits from Program Files.
-    - name: The account of the distro may write its directory
-      ansible.windows.win_acl:
-        path: "{{ host_check_distro_dir }}"
-        user: "{{ host_check_distro_account }}"
-        rights: Modify
-        type: allow
-        state: present
-        inherit: ContainerInherit, ObjectInherit
-        propagation: None
+    # The distro writes its document here through drvfs, as the account that
+    # owns it. The inbox does not inherit the rights of C:\ProgramData, which
+    # let each user make files and folders: no inherited rule, and the
+    # Administrators own it. SYSTEM and the Administrators have full control.
+    # The account of the distro has two rules: on the folder itself, list it
+    # and make files in it (no delete, no subfolder), so it can not remove the
+    # folder or put a link or a junction in its place; on the files, change,
+    # replace and delete them, which the write of the distro (a new file, then
+    # a rename over the document) needs.
+    - name: Inbox of the distro
+      ansible.windows.win_file:
+        path: "{{ host_check_inbox_dir }}"
+        state: directory
+      register: host_check_inbox_dir_result
+
+    - name: Only SYSTEM, the Administrators and the account of the distro may change the inbox
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ host_check_inbox_dir }}"
+          Account: "{{ host_check_distro_account }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path, [string]$Account)
+          $ErrorActionPreference = 'Stop'
+          # Get-Acl and Set-Acl follow a link or a junction, so the rules would
+          # go to its target. Stop, and change nothing.
+          $item = Get-Item -LiteralPath $Path -Force
+          if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+              throw "The inbox $Path is not a plain directory (a link or a junction?). Nothing is changed."
+          }
+          $sid = [System.Security.Principal.SecurityIdentifier]
+          $distro = (New-Object System.Security.Principal.NTAccount $Account).Translate($sid).Value
+          $all = 'ContainerInherit, ObjectInherit'
+          # Who, which rights, to which children, how far.
+          $want = @(
+              @('S-1-5-18', 'FullControl', $all, 'None'),
+              @('S-1-5-32-544', 'FullControl', $all, 'None'),
+              @($distro, 'ReadAndExecute, CreateFiles, Synchronize', 'None', 'None'),
+              @($distro, 'Modify, Synchronize', 'ObjectInherit', 'InheritOnly')
+          )
+          function Get-RuleKey($rules) {
+              @($rules | ForEach-Object {
+                  '{0}|{1}|{2}|{3}|{4}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights,
+                      [int]$_.InheritanceFlags, [int]$_.PropagationFlags, $_.AccessControlType
+              } | Sort-Object) -join ';'
+          }
+          $wantKey = @($want | ForEach-Object {
+              '{0}|{1}|{2}|{3}|Allow' -f $_[0], [int][System.Security.AccessControl.FileSystemRights]$_[1],
+                  [int][System.Security.AccessControl.InheritanceFlags]$_[2], [int][System.Security.AccessControl.PropagationFlags]$_[3]
+          } | Sort-Object) -join ';'
+          $have = Get-Acl -LiteralPath $Path
+          $same = $have.AreAccessRulesProtected -and
+              $have.GetOwner($sid).Value -eq 'S-1-5-32-544' -and
+              (Get-RuleKey $have.GetAccessRules($true, $true, $sid)) -eq $wantKey
+          $Ansible.Changed = -not $same
+          if (-not $same -and $PSCmdlet.ShouldProcess($Path, 'set the rules of the inbox of the distro')) {
+              $acl = New-Object System.Security.AccessControl.DirectorySecurity
+              $acl.SetOwner((New-Object $sid 'S-1-5-32-544'))
+              $acl.SetAccessRuleProtection($true, $false)
+              foreach ($rule in $want) {
+                  $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                      (New-Object $sid $rule[0]), [System.Security.AccessControl.FileSystemRights]$rule[1],
+                      [System.Security.AccessControl.InheritanceFlags]$rule[2],
+                      [System.Security.AccessControl.PropagationFlags]$rule[3],
+                      [System.Security.AccessControl.AccessControlType]::Allow)))
+              }
+              Set-Acl -LiteralPath $Path -AclObject $acl
+          }
       # A check run does not make the directory, so it has no ACL to read yet.
-      when: not (ansible_check_mode and host_check_distro_dir_result is changed)
+      when: not (ansible_check_mode and host_check_inbox_dir_result is changed)
 
     - name: Host check task (SYSTEM, every 6 hours and at boot)
       tnwks_win_scheduled_task:
@@ -142,15 +201,25 @@
         xml: "{{ lookup('ansible.builtin.template', 'host-check.xml.j2') }}"
       notify: Run the host check
 
+    # The relay starts at its next hour, not at once: the play of the distro,
+    # after this one, writes the first document.
+    - name: Relay task of the distro (SYSTEM, each hour and at boot)
+      tnwks_win_scheduled_task:
+        name: "{{ host_check_relay_task }}"
+        xml: "{{ lookup('ansible.builtin.template', 'host-check-relay.xml.j2') }}"
+
 # The way back of the Design Doc (section 4.3): the role with the state
 # absent. The task goes first, so no run writes a file after its removal.
 - name: Host check is absent
   when: host_check_state == 'absent'
   block:
-    - name: No host check task
+    - name: No host check tasks
       tnwks_win_scheduled_task:
-        name: "{{ host_check_task }}"
+        name: "{{ item }}"
         state: absent
+      loop:
+        - "{{ host_check_task }}"
+        - "{{ host_check_relay_task }}"
 
     - name: No host check files
       ansible.windows.win_file:
@@ -158,5 +227,7 @@
         state: absent
       loop:
         - '{{ host_check_textfile_dir }}\{{ host_check_file }}'
+        - '{{ host_check_textfile_dir }}\{{ host_check_distro_file }}'
         - "{{ host_check_distro_dir }}"
+        - "{{ host_check_inbox_dir }}"
         - "{{ host_check_dir }}"

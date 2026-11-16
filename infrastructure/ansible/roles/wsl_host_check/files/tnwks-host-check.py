@@ -5,12 +5,16 @@ Managed by tnwks-ops (role wsl_host_check). The timer tnwks-host-check runs
 this script every 6 hours. It reads, and it changes no setting of the
 distro: apt-get only simulates.
 
-It writes a .prom file into a directory of the Windows host's
-windows_exporter (role windows_host_check makes the directory and lets the
-distro write there). The file has the two series of the security registry
-(security/README.md, "The series") for the source host-check, and a few
-series of its own that say what it read. The check gives the number of items
-that fail it, and 0 is a pass:
+It writes a JSON document into the inbox of its Windows host,
+C:\\ProgramData\\tnwks-host-check-distro (Design Doc 0004, section 5.9). Role
+windows_host_check makes the inbox, where only SYSTEM, the Administrators and
+the account of the distro may change files, and runs a relay as SYSTEM each
+hour. The relay checks the document, and writes the .prom file of the distro
+for windows_exporter, with the name of the distro from the inventory. The
+distro can not write the textfile directory itself. The document has a
+version, the name of the distro, the time of the run, the result of each
+check, the names of the failed queries and the detail values. Each check
+gives the number of items that fail it, and 0 is a pass:
 
   updates-pending  each package with an upgrade that apt offers now, and
                    whose clock is older than --updates-max-age-days
@@ -36,9 +40,10 @@ failed, writes the state file, with the Dates that it read before the
 simulations.
 A run that fails leaves it as it was, so a stop never moves a clock late.
 
-When one query fails, the file has no result and no time of the last result,
-so the rules of the registry read the check as "no evidence" for this
-distro, and never as a pass. Old package lists are a failed query too: a
+When one query fails, the document has no result, only the names of the
+failed queries, so the relay writes no result and no time of the last
+result, and the rules of the registry read the check as "no evidence" for
+this distro, and never as a pass. Old package lists are a failed query too: a
 simulation on old lists can not see a new upgrade. The age that counts is
 the one of the oldest list of the updates and the security fixes of the
 distribution (a Release file with the Origin Ubuntu or Debian and a Suite
@@ -46,13 +51,13 @@ that ends in -updates or -security), so a fresh list of another source does
 not hide an old one. With no such list, the run has no result. A state file
 that is there and can not be read is a failed query, and the run then
 leaves it as it is, so it does not start the clock of each upgrade again.
-The file goes to its place in one step, so windows_exporter never reads
-half a file.
+The document goes to its place in one step, so the relay never reads half a
+file.
 
 The write test comes first in each run (Design Doc 0004, section 5.9). A try
-makes a file in the textfile directory of the host, above the directory of
-the distro, with a name that does not end in .prom, so the exporter never
-reads it. Only a refusal by Windows is the pass. Linux checks the mode of the
+makes a file in the textfile directory of the host, with a name that does
+not end in .prom, so the exporter never reads it. Only a refusal by Windows
+is the pass. Linux checks the mode of the
 directory first, as /mnt/c shows it, and a refusal there never reaches
 Windows: a try asks the kernel first (access() with the effective ids), and
 such a try is no evidence. Root passes that check, so the try as root is the
@@ -64,17 +69,15 @@ missing or old), or when a try succeeds, or when the directory is gone or can
 not be listed. A try removes the file that it made, and nothing else. Each
 try is a series homelab_security_host_write_test_result with the uid of its
 user: 0 refused by Windows, 1 the write succeeded, 2 refused by Linux before
-Windows, 3 not done. With --write-test-only, the script runs one try alone,
+Windows, 3 not done. The series homelab_security_host_write_test_errno gives
+the errno of each try, or 0 when the try had none, so a read of the metrics
+shows how drvfs maps a refusal. With --write-test-only, the script runs one try alone,
 prints its answer with its uid, and exits with that code.
 
-Each result carries the label severity: high, as Design Doc 0004, section
-4.1.4, alerts for updates pending for more than 14 days, and section 5.7
-gives a held update the same severity.
-
-The text of each series that the Windows host check also writes is the
-same as there: a series with two texts would stop the exporter from serving
-it. security/tests/test_host_check_distro.py checks that, and tests this
-file with fake answers.
+The relay gives each result the label severity: high (Design Doc 0004,
+sections 4.1.4 and 5.7). security/tests/test_host_check_distro.py tests this
+file with fake answers, and security/tests/test_host_check_windows.py tests
+the relay with the documents of this file.
 """
 
 from __future__ import annotations
@@ -93,41 +96,11 @@ import tempfile
 import time
 from pathlib import Path
 
-SOURCE = "host-check"
-SEVERITY = {"updates-pending": "high", "updates-held": "high"}
+# The checks of a distro: the relay takes these only.
+CHECKS = ("updates-pending", "updates-held")
 # The lists whose age counts: the updates and the security fixes of the distribution.
 ORIGINS = frozenset({"Ubuntu", "Debian"})
 SUITES = ("-updates", "-security")
-
-HELP = {
-    "homelab_security_check_result": (
-        "The number of items that fail one check of the security registry. 0 is a pass."
-    ),
-    "homelab_security_last_result_timestamp_seconds": (
-        "The Unix time of the newest result of a source of the security registry."
-    ),
-    "homelab_security_host_check_failed_queries": (
-        "The number of queries of the host check that failed in its last run."
-        " Above 0, the run gives no result."
-    ),
-    "homelab_security_host_updates_pending": (
-        "The number of updates that the host can install and has not installed."
-    ),
-    "homelab_security_host_updates_held": (
-        "The number of updates that the host holds back or hides, and has not installed."
-    ),
-    "homelab_security_host_package_lists_timestamp_seconds": (
-        "The Unix time of the oldest package list of the updates and the security fixes of the host,"
-        " from the Date of its Release file."
-    ),
-    "homelab_security_host_reboot_pending": (
-        "Whether the host waits for a restart to finish an update: 1 yes, 0 no."
-    ),
-    "homelab_security_host_write_test_result": (
-        "The write test of a WSL distro to the textfile directory of its host, by the uid that tried:"
-        " 0 refused by Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not done."
-    ),
-}
 
 # The answers of a try of the write test.
 REFUSED, WRITTEN, LINUX_REFUSED, NOT_DONE = 0, 1, 2, 3
@@ -354,6 +327,16 @@ def read_root_result(path: Path, now: float) -> tuple[int, int, str]:
         return 0, NOT_DONE, f"uid 0: the try as root left no answer ({type(error).__name__}: {error})"
 
 
+ERRNO = re.compile(r"\(errno (\d+) ")
+
+
+def errno_of(message: str) -> int:
+    """The errno that the message of a try names, or 0. The message carries it, also
+    the message of root through its answer file."""
+    found = ERRNO.search(message)
+    return int(found[1]) if found else 0
+
+
 def write_failed(tries: list[tuple[int, int, str]]) -> bool:
     """The failed query textfile-write: root has no refusal by Windows, or a try wrote,
     or a try could not be done. A refusal by Linux for another user is no evidence, and
@@ -438,6 +421,7 @@ def measure(
     tries = writes()
     for uid, answer, message in tries:
         details.append(("homelab_security_host_write_test_result", {"uid": str(uid)}, answer))
+        details.append(("homelab_security_host_write_test_errno", {"uid": str(uid)}, errno_of(message)))
         print(f"textfile-write: {message}", file=sys.stderr)
     if write_failed(tries):
         failed.append("textfile-write")
@@ -487,48 +471,31 @@ def measure(
     return {"results": results, "details": details, "failed": failed, "state": new_state}
 
 
-def label_value(value: str) -> str:
-    """The escapes of the text format of Prometheus."""
-    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-
-
-def series(name: str, labels: dict[str, str], value: float) -> str:
-    pairs = ",".join(f'{key}="{label_value(str(val))}"' for key, val in labels.items())
-    return f"{name}{{{pairs}}} {int(value) if float(value).is_integer() else value}"
-
-
-def render(system: str, measured: dict, now: float) -> str:
-    """The text of the .prom file: each family once, with its HELP and TYPE."""
-    families: dict[str, list[str]] = {}
-
-    def add(name: str, labels: dict[str, str], value: float) -> None:
-        families.setdefault(name, []).append(series(name, labels, value))
-
-    if not measured["failed"]:
-        for check, value in measured["results"].items():
-            labels = {"source": SOURCE, "check": check, "system": system, "severity": SEVERITY[check]}
-            add("homelab_security_check_result", labels, value)
-        add("homelab_security_last_result_timestamp_seconds", {"source": SOURCE, "system": system}, int(now))
-    add("homelab_security_host_check_failed_queries", {"system": system}, len(measured["failed"]))
-    for name, labels, value in measured["details"]:
-        add(name, {"system": system, **labels}, value)
-    lines = []
-    for name, rows in families.items():
-        lines += [f"# HELP {name} {HELP[name]}", f"# TYPE {name} gauge", *rows]
-    return "\n".join(lines) + "\n"
+def document(system: str, measured: dict, now: float) -> dict:
+    """The JSON document for the inbox of the host: the results only when no query
+    failed, the names of the failed queries, and each detail value."""
+    return {
+        "version": 1,
+        "system": system,
+        "time": int(now),
+        "results": {} if measured["failed"] else dict(measured["results"]),
+        "failed": list(measured["failed"]),
+        "details": [{"name": name, "labels": dict(labels), "value": value}
+                    for name, labels, value in measured["details"]],
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--system", required=True, help="the name of this distro in security/registry/systems.yaml")
-    parser.add_argument("--textfile-dir", type=Path, required=True, help="the directory of the .prom file")
+    parser.add_argument("--inbox-dir", type=Path, help="the inbox of the host for the document of the run")
     parser.add_argument("--write-test-dir", type=Path, required=True,
                         help="the textfile directory of the host, which the distro must not be able to change")
     parser.add_argument("--write-test-only", action="store_true",
                         help="run one try of the write test alone, and exit with its answer (0 refused by Windows)")
     parser.add_argument("--write-test-result", type=Path,
                         help="with --write-test-only: write the answer there; else: read the answer of root there")
-    parser.add_argument("--file-name", default="tnwks_security_host_check_distro.prom")
+    parser.add_argument("--file-name", default="tnwks_security_host_check_distro.json")
     parser.add_argument("--state-file", type=Path)
     parser.add_argument("--updates-max-age-days", type=int, default=14)
     parser.add_argument("--lists-max-age-hours", type=int, default=72)
@@ -545,8 +512,8 @@ def main(argv: list[str] | None = None) -> int:
                 ROOT_RESULT_MODE)
         print(f"write test of {args.system}: {message}")
         return answer
-    if args.state_file is None:
-        parser.error("--state-file is required")
+    if args.state_file is None or args.inbox_dir is None:
+        parser.error("--state-file and --inbox-dir are required")
 
     now = time.time()
     try:
@@ -565,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
                         else (0, NOT_DONE, "uid 0: no answer of root to read"),
                         write_test(args.write_test_dir)],
     )
-    write_atomic(args.textfile_dir / args.file_name, render(args.system, measured, now))
+    write_atomic(args.inbox_dir / args.file_name, json.dumps(document(args.system, measured, now)) + "\n")
     # Only a run with a result writes the state (Design Doc 0004, section 5.6). A run
     # that fails, on old lists or a state file that can not be read, leaves it as it
     # is: its clocks and the Dates of its lists stay those of the last run with a result.

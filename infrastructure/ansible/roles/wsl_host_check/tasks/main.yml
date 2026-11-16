@@ -54,8 +54,6 @@
           - /usr/local/bin/{{ wsl_host_check_name }}
           - --system
           - "{{ inventory_hostname }}"
-          - --textfile-dir
-          - "{{ wsl_host_check_textfile_dir }}"
           - --write-test-dir
           - "{{ wsl_host_check_write_test_dir }}"
           - --write-test-only
@@ -88,7 +86,7 @@
         state: stopped
       failed_when: false
 
-    - name: Host check units, script, state and file are gone
+    - name: Host check units, script, state and document are gone
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -97,7 +95,7 @@
         - /etc/systemd/system/{{ wsl_host_check_name }}.service
         - /usr/local/bin/{{ wsl_host_check_name }}
         - /var/lib/{{ wsl_host_check_name }}
-        - "{{ wsl_host_check_textfile_dir }}/{{ wsl_host_check_file }}"
+        - "{{ wsl_host_check_inbox_dir }}/{{ wsl_host_check_file }}"
       register: wsl_host_check_removed
 
     - name: Reload systemd after removing the units
