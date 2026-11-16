@@ -10,7 +10,7 @@ metadata:
   name: prowler-aws-prod
 spec:
   # UTC. One run at a time on the node: the management account runs later.
-  schedule: "17 3 * * *"
+  schedule: "47 8 * * *"
   timeZone: Etc/UTC
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 3600
@@ -122,7 +122,7 @@ kind: CronJob
 metadata:
   name: prowler-aws-management
 spec:
-  schedule: "17 5 * * *"
+  schedule: "47 9 * * *"
   timeZone: Etc/UTC
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 3600
