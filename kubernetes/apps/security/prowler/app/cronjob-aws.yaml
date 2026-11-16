@@ -1,8 +1,9 @@
 ---
 # Prowler for the AWS prod account, each day (../README.md). The session comes
 # from aws-security-audit-sts, which the refresher of ../../aws-credentials
-# writes. A run that fails moves no file and raises KubeJobFailed; the next
-# run is the next day.
+# writes. The run is one process of Prowler for each service of the scan list,
+# one after the other (../README.md, "Memory"). A run in which a part fails
+# moves no file and raises KubeJobFailed; the next run is the next day.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -58,10 +59,12 @@ spec:
                 - secretRef:
                     name: aws-security-audit-sts
               # The limit of ../../README.md, "Memory" (../README.md, "Memory").
-              # The first runs ended OOMKilled at 768 MiB. Prowler takes about
-              # 345 MiB before it scans and about 380 MiB more for its AWS
-              # clients in 17 Regions. 1536 MiB holds until a run measures the
-              # peak: the script prints it as its last line.
+              # The runs of the whole scan list in one process ended at 768 MiB,
+              # then at 1536 MiB: Prowler keeps each service and each finding
+              # until its process ends. One process for each service holds one
+              # service at a time. 1536 MiB holds until a run measures the
+              # peak: the script prints the peak of each part, and of the
+              # container as its last line.
               resources:
                 requests:
                   cpu: 100m
@@ -104,8 +107,9 @@ spec:
             - name: results
               persistentVolumeClaim:
                 claimName: security-results
-            # Prowler's own output (the OCSF file and the compliance tables)
-            # before the script copies the OCSF file to the volume.
+            # Prowler's own output for one part (the OCSF file and the
+            # compliance tables) before the script copies its records to the
+            # volume. One part at a time.
             - name: tmp
               emptyDir:
                 sizeLimit: 1Gi

@@ -61,7 +61,7 @@ to this table first, because the sum is the budget of the node.
 | Part | Runs on | Memory limit |
 | --- | --- | --- |
 | Trivy Operator | each cluster | 640 MiB for the operator (512 MiB until the owner raised it on 2026-11-15), 512 MiB for each container of a scan job, one scan job at a time as a rule (two for a short while in a burst of scans). On homelab-wsl the worst sum is 3712 MiB by limits, for a pod of 6 containers. The full cycle on homelab-wsl-02 (316 MiB for the operator, 97 MiB for one scan job) ran while one container of a job scanned at a time, and the owner kept these limits with it, for homelab-wsl too, on 2026-11-15. With the scan cache in memory, all the containers of a job scan at once: by a local test, an estimate and not a measure, a job of 6 containers takes 1032 to 1572 MiB, up to 2808 MiB with large old images (`trivy-operator/README.md`, "Memory") |
-| Prowler job | homelab-wsl-02, one run at a time: one for each system each day, at different hours | 1536 MiB for an AWS run, 768 MiB for the Cloudflare run (`prowler/README.md`, "Memory"). An AWS run is not measured yet: the first runs ended above 768 MiB |
+| Prowler job | homelab-wsl-02, one run at a time: one for each system each day, at different hours | 1536 MiB for an AWS run, 768 MiB for the Cloudflare run (`prowler/README.md`, "Memory"). An AWS run is not measured yet: the runs of the whole scan list in one process ended at 768 MiB, then at 1536 MiB. A run is now one process for each service |
 | The converter | homelab-wsl-02 | 128 MiB |
 | Trail copy job | homelab-wsl-02 | 128 MiB |
 | API checks job | homelab-wsl-02 | 128 MiB |
