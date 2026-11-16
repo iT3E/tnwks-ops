@@ -1477,7 +1477,12 @@ at a limit of the plan, wait.
 **Steps.**
 
 1. Read only: `kubectl -n agents-workflows get sandboxes.agents.x-k8s.io`
-   shows no run sandbox, and no alert of the platform fires. Start a watch
+   shows no run sandbox, and no alert of the platform's own rules
+   (`kubernetes/apps/ai/agents/monitoring/app/prometheusrule.yaml`, such as
+   `AgentRunSandboxTooOld`, `AgentWorkflowRunFailed`,
+   `AgentPlatformCronJobFailed` and `AgentPlatformWorkloadNotReady`) fires.
+   A chart alert `KubeJobFailed` for a failed Job kept from before the drill
+   can fire; note its Job names so a new one is clear. Start a watch
    that prints the run pod, the Sandbox records and the pods of each
    sandbox as they change, and follows the log of the run pod (`get` and
    `logs -f` only).
@@ -1536,8 +1541,10 @@ at a limit of the plan, wait.
 **Alerts during the drill.** `AgentWorkflowRunFailed` fires for each
 stopped run and clears 2 hours after the start of its Job. The chart rule
 `KubeJobFailed` fires for each failed run Job for as long as the Job stays
-(7 days). In case B, `AgentPlatformCronJobFailed` fires only if the sweep
-removed the record through the API, and clears at the next good sweep.
+(7 days). In case B, if the sweep removed the record through the API, its
+Job fails: `AgentPlatformCronJobFailed` fires and clears at the next good
+sweep, and `KubeJobFailed` fires for the failed sweep Job for as long as it
+is kept (the CronJob keeps the last 3 failed Jobs).
 
 **Rollback.** Nothing to roll back: the drill makes runs and deletes them.
 If a sandbox stays past 80 minutes, the alert fires and its section above
