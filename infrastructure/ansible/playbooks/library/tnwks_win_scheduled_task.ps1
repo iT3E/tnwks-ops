@@ -21,9 +21,18 @@ $spec = @{
         # true: start the task when it isn't running (long-running tasks).
         running = @{ type = 'bool'; default = $false }
         # The account of an S4U task whose principal is not the account of this
-        # session. Set: the module registers the task through the Schedule.Service
-        # object with this user, no password and TASK_LOGON_S4U. Empty (each other
-        # task): Register-ScheduledTask -Xml.
+        # session. Only for an account whose password nobody needs: the module
+        # RESETS it. Microsoft's rule (Security Contexts for Tasks, "Security for
+        # Registering Tasks",
+        # https://learn.microsoft.com/en-us/windows/win32/taskschd/security-contexts-for-running-tasks)
+        # asks an administrator, SYSTEM included, for the password of a different
+        # account to register an S4U task for it. So when the task must be
+        # registered (not in check mode, not when it compares equal), the module
+        # makes a fresh random password on the host, sets it on the account,
+        # registers through the Schedule.Service object with TASK_LOGON_S4U, and
+        # drops it. The password is not an argument, and no result, diff,
+        # warning, failure text or file holds it. With S4U the service stores no
+        # password. Empty (each other task): Register-ScheduledTask -Xml.
         s4u_user = @{ type = 'str'; default = '' }
     }
     required_if = @(, @('state', 'present', @(, 'xml')))
@@ -102,17 +111,36 @@ function Format-TnwksError($Exception) {
     $parts -join ' <- '
 }
 
-# An S4U task for another account: ITaskFolder.RegisterTask with the user, no
-# password and TASK_LOGON_S4U (2), as TASK_CREATE_OR_UPDATE (6). A folder that
-# is not there is made under the root.
+# A random password with an upper and a lower case letter, a digit and a sign,
+# 68 characters: within the limit of 127 of a local account.
+function New-TnwksPassword {
+    $bytes = New-Object byte[] 48
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    'Aa1!' + ([Convert]::ToBase64String($bytes) -replace '[+/=]', 'x')
+}
+
+# An S4U task for another account: a fresh password on the account, then
+# ITaskFolder.RegisterTask with the user, that password and TASK_LOGON_S4U (2),
+# as TASK_CREATE_OR_UPDATE (6). A folder that is not there is made under the
+# root. A failure throws its text with the password taken out.
 function Register-TnwksS4uTask($Service, [string]$Path, [string]$Name, [string]$Xml, [string]$User) {
-    $Service.Connect()
+    $fresh = New-TnwksPassword
     try {
-        $folder = $Service.GetFolder($Path)
+        Set-LocalUser -Name $User -Password (ConvertTo-SecureString $fresh -AsPlainText -Force)
+        $Service.Connect()
+        $folderPath = if ($Path.Trim('\')) { '\' + $Path.Trim('\') } else { '\' }
+        try {
+            $folder = $Service.GetFolder($folderPath)
+        } catch {
+            $folder = $Service.GetFolder('\').CreateFolder($Path.Trim('\'))
+        }
+        [void]$folder.RegisterTask($Name, $Xml, 6, $User, $fresh, 2)
     } catch {
-        $folder = $Service.GetFolder('\').CreateFolder($Path.Trim('\'))
+        throw [InvalidOperationException]::new((Format-TnwksError $_.Exception).Replace($fresh, '<password>'))
+    } finally {
+        $fresh = $null
     }
-    [void]$folder.RegisterTask($Name, $Xml, 6, $User, $null, 2)
 }
 
 $task = Get-ScheduledTask -TaskPath $path -TaskName $name -ErrorAction SilentlyContinue
@@ -142,16 +170,21 @@ if ($before -ne $after) {
     $module.Result.changed = $true
     if (-not $check) {
         $user = $module.Params.s4u_user
-        $call = if ($user) { "RegisterTask $path$name for $user by S4U" } else { "Register-ScheduledTask $path$name" }
-        try {
-            if ($user) {
+        $call = if ($user) { "RegisterTask $path$name for $user by S4U, with a new password" } else { "Register-ScheduledTask $path$name" }
+        if ($user) {
+            # The text only: the error record could carry the password.
+            try {
                 Register-TnwksS4uTask -Service (New-Object -ComObject Schedule.Service) -Path $path -Name $name -Xml $module.Params.xml -User $user
-                $task = Get-ScheduledTask -TaskPath $path -TaskName $name
-            } else {
-                $task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force
+            } catch {
+                $module.FailJson("$call failed: $($_.Exception.Message)")
             }
-        } catch {
-            $module.FailJson("$call failed: $(Format-TnwksError $_.Exception)", $_)
+            $task = Get-ScheduledTask -TaskPath $path -TaskName $name
+        } else {
+            try {
+                $task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force
+            } catch {
+                $module.FailJson("$call failed: $(Format-TnwksError $_.Exception)", $_)
+            }
         }
     }
 }
