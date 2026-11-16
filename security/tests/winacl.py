@@ -4,7 +4,7 @@ Windows has, so a test can run such a script in the pwsh of CI.
 Get-Item gives a directory (a link with $script:IsLink, nothing with $script:Exists off),
 New-Item makes it, Get-Acl gives $script:Have (New-TestAcl, New-TestRule), and Set-Acl and
 each command add to $script:Calls. New-Object fakes NTAccount (it translates to
-S-1-5-21-7-7-7-1001), SecurityIdentifier, FileSystemAccessRule and DirectorySecurity.
+S-1-5-21-7-7-7-1001), SecurityIdentifier, FileSystemAccessRule, DirectorySecurity and FileSecurity.
 Get-TestKeys gives the rules of an ACL as sorted text.
 """
 
@@ -44,7 +44,7 @@ function New-Object {
             $a = @($ArgumentList)
             return New-TestRule $a[0].Value $a[1] $a[2] $a[3]
         }
-        '*.DirectorySecurity' {
+        '*.*Security' {
             $acl = [pscustomobject]@{ Owner = $null; Protected = $null; Rules = [System.Collections.Generic.List[object]]::new() }
             $acl | Add-Member ScriptMethod SetOwner { param($Sid) $this.Owner = $Sid.Value }
             $acl | Add-Member ScriptMethod SetAccessRuleProtection { param($On, $Keep) $this.Protected = $On }
