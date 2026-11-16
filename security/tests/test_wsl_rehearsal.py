@@ -660,3 +660,69 @@ def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unc
     assert all(task["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_rehearsal_account }}" for task in named)
     others = [path for path in (ANSIBLE / "roles").glob("*/tasks/*.yml") if path.parent.parent.name != "windows_wsl_rehearsal"]
     assert others and not any("s4u_user" in path.read_text() for path in others)
+
+
+SYSTEM_BECOME = {
+    "ansible_become": True,
+    "ansible_become_method": "ansible.builtin.runas",
+    "ansible_become_user": "SYSTEM",
+}
+BECOME_KEYS = {"become", "become_user", "become_method", "become_flags"}
+
+
+def all_tasks(entries: list) -> list[dict]:
+    """Each task, block and play in a task file or a playbook, at any depth."""
+    out = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        out.append(entry)
+        for key in ("block", "rescue", "always", "tasks", "pre_tasks", "post_tasks", "handlers"):
+            out.extend(all_tasks(entry.get(key)))
+    return out
+
+
+def becomes(task: dict) -> bool:
+    """A task that sets become, by keyword or by variable, to anything but off."""
+    names = set((task.get("vars") or {}).keys())
+    if any(name.startswith(("ansible_become", "ansible_runas")) for name in names):
+        return True
+    return bool(BECOME_KEYS & set(task.keys())) and task.get("become") is not False
+
+
+def test_only_the_tasks_that_act_on_a_task_of_the_account_run_as_system():
+    windows = sorted((ANSIBLE / "roles").glob("windows_*/tasks/*.yml")) + [
+        ANSIBLE / "playbooks/windows-host.yml", ANSIBLE / "playbooks/windows-rehearsal-check.yml"]
+    becoming = {}
+    for path in windows:
+        for task in all_tasks(yaml.safe_load(path.read_text())):
+            if becomes(task):
+                becoming.setdefault(path.relative_to(ANSIBLE).as_posix(), []).append(task)
+    # No other task of any role or play, Linux ones included, uses runas or SYSTEM.
+    for path in sorted((ANSIBLE / "roles").glob("*/tasks/*.yml")) + sorted((ANSIBLE / "playbooks").glob("*.yml")):
+        for task in all_tasks(yaml.safe_load(path.read_text())):
+            values = [str(value) for key, value in {**task, **(task.get("vars") or {})}.items()
+                      if key in BECOME_KEYS or key.startswith(("ansible_become", "ansible_runas"))]
+            if any("runas" in value or value.upper() == "SYSTEM" for value in values):
+                assert task in becoming.get(path.relative_to(ANSIBLE).as_posix(), []), (path, task.get("name"))
+    rehearsal = "roles/windows_wsl_rehearsal/tasks/main.yml"
+    check = "playbooks/windows-rehearsal-check.yml"
+    assert sorted(becoming) == [check, rehearsal]
+    assert sorted(task["name"] for task in becoming[rehearsal]) == [
+        "Tasks of the temporary account",
+        "The import of the distro",
+        "The probe makes the profile of the account",
+        "The start of the distro, with nobody signed in",
+    ]
+    assert [task["name"] for task in becoming[check]] == ["Run the checks"]
+    for task in becoming[rehearsal] + becoming[check]:
+        become = {key: value for key, value in task["vars"].items() if key.startswith("ansible_become")}
+        assert become == SYSTEM_BECOME, task["name"]
+        assert not BECOME_KEYS & set(task.keys()), task["name"]
+    # Each task of the role that registers, starts or stops a task is one of them.
+    acting = [task for task in present() if "tnwks_win_scheduled_task" in task
+              or re.search(r"(Start|Stop|Unregister|Register)-ScheduledTask", str(task.get("ansible.windows.win_powershell", {}).get("script", "")))]
+    assert sorted(task["name"] for task in acting) == sorted(task["name"] for task in becoming[rehearsal])
+    # The inventory keeps become off for every other task of a Windows host.
+    group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
+    assert group["ansible_become"] is False

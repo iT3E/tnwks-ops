@@ -183,6 +183,12 @@
           $results.write = Test-TnwksWrite (Invoke-Step 'write')
           $results.mount = Test-TnwksMount (Invoke-Step 'mount')
           $results
+      # It starts tasks of the temporary account, so it runs as SYSTEM, as
+      # the role's tasks that act on them do.
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
       register: wsl_rehearsal_checks
 
     - name: The value of each check

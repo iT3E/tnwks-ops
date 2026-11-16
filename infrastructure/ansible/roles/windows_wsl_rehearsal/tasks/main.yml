@@ -166,12 +166,19 @@
           }
 
     # The principal is not the account of this session: the module registers
-    # each task for it by S4U, with no password.
+    # each task for it by S4U, with no password. The Task Scheduler refuses
+    # that to the network logon of this session, so each task that registers,
+    # starts or stops a task of the account runs as SYSTEM (runas, with the
+    # debug privilege of the session and no password).
     - name: Tasks of the temporary account
       tnwks_win_scheduled_task:
         name: "{{ wsl_rehearsal_task_prefix }}-{{ item }}"
         xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
         s4u_user: "{{ wsl_rehearsal_account }}"
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
       loop: "{{ wsl_rehearsal_steps + ['start'] }}"
       when: wsl_rehearsal_sid | length > 0
 
@@ -200,6 +207,10 @@
               if ($info.LastTaskResult -ne 0) { throw "$Task ended with $($info.LastTaskResult)" }
               $sid = (Get-LocalUser -Name $Account).SID.Value
               (Get-CimInstance Win32_UserProfile -Filter "SID = '$sid'").LocalPath
+          vars:
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
           register: wsl_rehearsal_profile
           # The probe reads. Its first run also makes the profile of the
           # account, which the change of the account task shows.
@@ -240,6 +251,10 @@
               Task: "{{ wsl_rehearsal_task_prefix }}-import"
               Account: "{{ wsl_rehearsal_account }}"
             script: *run_task
+          vars:
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
           # The next task reads whether it imported anything.
           changed_when: false
 
@@ -267,3 +282,6 @@
             running: true
           vars:
             item: start
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
