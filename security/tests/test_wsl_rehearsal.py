@@ -119,11 +119,11 @@ def test_the_account_has_no_admin_group_and_a_password_that_nothing_keeps():
     assert not re.search(r"password\s*:", text, re.IGNORECASE)
 
 
-def test_the_account_gets_one_right_and_the_rights_of_its_folders():
-    right = task_named("The temporary account may log on as a batch job")["ansible.windows.win_user_right"]
-    assert right == {"name": "SeBatchLogonRight", "users": ["{{ wsl_rehearsal_account }}"], "action": "add"}
+def test_the_account_gets_the_batch_right_and_the_rights_of_its_folders():
+    right = task_named("The temporary account may log on as a batch job")
+    assert right["ansible.windows.win_user_right"] == {"name": "SeBatchLogonRight", "users": ["{{ wsl_rehearsal_sid }}"], "action": "add"}
     rights = [task for task in present() if "ansible.windows.win_user_right" in task]
-    assert len(rights) == 1
+    assert len(rights) == 2, "the batch right, and the three logons it may not use"
     folder = task_named("Folder of the rehearsal")["tnwks_win_dir_acl"]
     assert folder.get("writer", "") == ""
     writers = task_named("Log and disk folders of the rehearsal")
@@ -132,6 +132,54 @@ def test_the_account_gets_one_right_and_the_rights_of_its_folders():
     for name in ("wsl_rehearsal_log_dir", "wsl_rehearsal_disk_dir"):
         assert DEFAULTS[name].startswith("{{ wsl_rehearsal_dir }}\\")
     assert DEFAULTS["wsl_rehearsal_disk"].startswith("{{ wsl_rehearsal_disk_dir }}\\")
+
+
+def test_the_account_may_not_log_on_in_another_way_and_has_no_tile():
+    deny = task_named("The temporary account may not log on at the keyboard, by Remote Desktop or from the network")
+    assert deny["ansible.windows.win_user_right"] == {"name": "{{ item }}", "users": ["{{ wsl_rehearsal_sid }}"], "action": "add"}
+    assert deny["loop"] == "{{ wsl_rehearsal_deny_rights }}"
+    assert DEFAULTS["wsl_rehearsal_deny_rights"] == [
+        "SeDenyInteractiveLogonRight", "SeDenyRemoteInteractiveLogonRight", "SeDenyNetworkLogonRight"]
+    assert "SeDenyBatchLogonRight" not in DEFAULTS["wsl_rehearsal_deny_rights"], "S4U is a batch logon"
+    tile = task_named("The temporary account is not on the sign-in screen")["ansible.windows.win_regedit"]
+    assert tile == {"path": "{{ wsl_rehearsal_userlist_key }}", "name": "{{ wsl_rehearsal_account }}", "data": 0, "type": "dword"}
+    assert DEFAULTS["wsl_rehearsal_userlist_key"] == "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\SpecialAccounts\\UserList"
+
+
+def test_a_check_run_before_the_account_exists_skips_what_names_it():
+    """A check run on a host with no account yet: each task that names the account (its
+    SID, the writer of its folders, the principal of its tasks) waits for the apply."""
+    block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'present'")
+    assert block["vars"]["wsl_rehearsal_sid"] == "{{ wsl_rehearsal_user.output | default([]) | last | default('') }}"
+    read = task_named("Read the temporary account")
+    assert read["check_mode"] is False and read["register"] == "wsl_rehearsal_user"
+    assert "$Ansible.Changed = $false" in read["ansible.windows.win_powershell"]["script"]
+    names = [task["name"] for task in present()]
+    assert names.index("The temporary account") < names.index("Read the temporary account") < names.index(
+        "The temporary account may log on as a batch job")
+    gated = {"The temporary account may log on as a batch job",
+             "The temporary account may not log on at the keyboard, by Remote Desktop or from the network",
+             "Log and disk folders of the rehearsal", "Tasks of the temporary account"}
+    for task in present():
+        text = yaml.safe_dump({k: v for k, v in task.items() if k != "name"})
+        names_it = "wsl_rehearsal_sid }}" in text or "writer" in text or task["name"] == "Tasks of the temporary account"
+        if names_it:
+            assert task["name"] in gated, task["name"]
+    for name in gated:
+        assert task_named(name)["when"] == "wsl_rehearsal_sid | length > 0", name
+    note = task_named("A check run before the account exists")
+    assert note["when"] == "wsl_rehearsal_sid | length == 0" and "does not exist yet" in note["ansible.builtin.debug"]["msg"]
+
+
+def test_the_play_stops_when_the_import_did_not_end_and_says_changed_only_for_an_import():
+    assert task_named("The probe makes the profile of the account")["changed_when"] is False
+    assert task_named("The import of the distro")["changed_when"] is False
+    names = [task["name"] for task in present()]
+    assert names.index("The import of the distro") + 1 == names.index("The distro is imported")
+    assert names.index("The distro is imported") < names.index("The start of the distro, with nobody signed in")
+    script = task_named("The distro is imported")["ansible.windows.win_powershell"]["script"]
+    assert "$import.exit -ne 0" in script and "-notcontains $Distro" in script and "throw" in script
+    assert "$Ansible.Changed = -not $import.existed" in script
 
 
 def test_the_wslconfig_has_a_memory_limit_and_no_key_for_networking():
@@ -164,6 +212,7 @@ def test_the_rehearsal_runs_on_the_site_2_host_only():
     hosts = next(p for p in play if p["hosts"] == "windows_hosts")
     role = next(r for r in hosts["roles"] if r["role"] == "windows_wsl_rehearsal")
     assert role["when"] == "wsl_rehearsal | bool"
+    assert hosts["roles"][-1] is role, "after every other role, so a failed step stops no other role"
 
 
 def test_the_apply_runs_no_task_in_a_check_run_and_writes_only_in_its_folder_and_profile():
@@ -174,6 +223,8 @@ def test_the_apply_runs_no_task_in_a_check_run_and_writes_only_in_its_folder_and
         args = next(iter(v for k, v in task.items() if k.startswith(("ansible.", "tnwks_"))), {})
         for key in ("dest", "path"):
             if isinstance(args, dict) and key in args:
+                if "ansible.windows.win_regedit" in task:
+                    continue  # a registry key, not a file
                 assert args[key].startswith(("{{ wsl_rehearsal_dir", "{{ wsl_rehearsal_log_dir", "{{ wsl_rehearsal_disk",
                                              "{{ wsl_rehearsal_profile.output", "{{ item }}",
                                              "{{ wsl_rehearsal_write_test_dir }}\\tnwks-rehearsal-write-test.tmp")), (task["name"], args[key])
@@ -293,3 +344,148 @@ def test_the_import_waits_for_the_hive_and_the_profile_of_the_account():
     assert guard < names.index("The import of the distro")
     script = task_named("The task of the account ran in its own profile")["ansible.windows.win_powershell"]["script"]
     assert "$probe.hive" in script and "Users" in script
+
+
+# --- the logic of the check play, the gate of step 1 --------------------------------------
+
+CHECK_PLAY = yaml.safe_load((ANSIBLE / "playbooks/windows-rehearsal-check.yml").read_text())[0]["tasks"]
+CHECK_SCRIPT = next(t for t in CHECK_PLAY if t["name"] == "Run the checks")["ansible.windows.win_powershell"]["script"]
+CHECK_LOGIC = CHECK_SCRIPT[CHECK_SCRIPT.index("# --- BEGIN logic"):CHECK_SCRIPT.index("# --- END logic")]
+ACCOUNT_SID = "S-1-5-21-7-7-7-1002"
+GOOD_PROBE = {"medium": True, "user": ACCOUNT_SID, "administrators": [], "hive": True,
+              "profile": "C:\\Users\\tnwks-rehearsal", "integrity_sids": ["S-1-16-8192"], "distros": ["tnwks-rehearsal"]}
+MEDIUM = f"user={ACCOUNT_SID} integrity=0x2000 elevation=3 admins=absent"
+
+
+def check(call: str, data: object) -> dict:
+    """Runs one Test-Tnwks* function of the check play on `data` (as JSON) and gives
+    its @{ pass; value }."""
+    body = CHECK_LOGIC + f"""
+$data = @'
+{json.dumps(data)}
+'@ | ConvertFrom-Json
+$out = {call}
+[Console]::Out.Write((ConvertTo-Json -Compress @{{ pass = $out.pass; value = $out.value }}))
+"""
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    return json.loads(run.stdout.splitlines()[-1])
+
+
+def probe(**change) -> dict:
+    return check("Test-TnwksProbe $data '" + ACCOUNT_SID + "' 'tnwks-rehearsal'", {**GOOD_PROBE, **change})
+
+
+@needs_pwsh
+def test_the_probe_check_takes_only_a_medium_token_of_the_account_with_no_administrators():
+    assert probe()["pass"] is True
+    assert probe(administrators=["Enabled"])["pass"] is False
+    assert probe(administrators=["Group used for deny only"])["pass"] is False, "the token of the task itself has no such group"
+    assert probe(medium=False, integrity_sids=["S-1-16-12288"])["pass"] is False
+    assert probe(user="S-1-5-21-7-7-7-1001")["pass"] is False
+    assert probe(hive=False)["pass"] is False
+    assert probe(profile="C:\\Users\\Default")["pass"] is False
+    assert probe(profile="C:\\Windows\\System32\\config\\systemprofile")["pass"] is False
+    assert check("Test-TnwksProbe $null 'x' 'y'", None)["pass"] is False
+
+
+@needs_pwsh
+def test_the_import_check_needs_exit_0_and_the_distro_in_a_later_task():
+    call = "Test-TnwksImport $data.import $data.probe 'tnwks-rehearsal'"
+    assert check(call, {"import": {"exit": 0}, "probe": GOOD_PROBE})["pass"] is True
+    assert check(call, {"import": {"exit": 1}, "probe": GOOD_PROBE})["pass"] is False
+    assert check(call, {"import": {"exit": 0}, "probe": {**GOOD_PROBE, "distros": []}})["pass"] is False
+    assert check(call, {"import": None, "probe": GOOD_PROBE})["pass"] is False
+
+
+def row(name: str, token: str = MEDIUM, mine: bool = True, pid: int = 10) -> dict:
+    return {"name": name, "id": pid, "mine": mine, "token": token}
+
+
+@needs_pwsh
+def test_the_token_check_counts_only_the_wsl_processes_of_the_account():
+    call = "Test-TnwksTokens @($data)"
+    good = [row("wsl"), row("wslhost", pid=11), row("wslrelay", pid=12)]
+    assert check(call, good)["pass"] is True
+    # A VM process, or a process of another user, is not counted, read or not.
+    vm = row("vmmemWSL", "error open 5", mine=False, pid=20)
+    other = row("wsl", "user=S-1-5-21-7-7-7-1001 integrity=0x3000 elevation=2 admins=enabled", mine=False, pid=21)
+    out = check(call, [*good, vm, other])
+    assert out["pass"] is True and "vmmemWSL 20 (not counted)" in out["value"]
+    # Each of these fails.
+    assert check(call, [*good, row("wslhost", "error open 5", pid=13)])["pass"] is False, "a process of the account not read"
+    assert check(call, [row("wsl", MEDIUM.replace("0x2000", "0x3000"))])["pass"] is False, "high integrity"
+    assert check(call, [row("wsl", MEDIUM.replace("0x2000", "0x1000"))])["pass"] is False, "low integrity"
+    assert check(call, [row("wsl", MEDIUM.replace("admins=absent", "admins=enabled"))])["pass"] is False
+    assert check(call, [row("wsl", MEDIUM.replace("admins=absent", "admins=deny-only"))])["pass"] is True
+    assert check(call, [row("wslhost")])["pass"] is False, "no wsl.exe of the account"
+    assert check(call, [])["pass"] is False
+
+
+@needs_pwsh
+def test_the_write_check_takes_only_eacces_or_eperm():
+    call = "Test-TnwksWrite $data"
+    for output, passes in [("refused EACCES sh: denied", True), ("refused EPERM sh: not permitted", True),
+                           ("refused ENOENT sh: no such file", False), ("other ENOENT sh: no such file", False),
+                           ("other EEXIST sh: file exists", False), ("other EIO sh: i/o error", False),
+                           ("other UNKNOWN sh: x", False), ("written", False), ("other NOT_LISTED ls: x", False),
+                           ("x refused EACCES", False), ("", False)]:
+        assert check(call, {"exit": 0, "output": output})["pass"] is passes, output
+    assert check("Test-TnwksWrite $null", None)["pass"] is False
+
+
+@needs_pwsh
+def test_the_mount_check_needs_both_exits_0():
+    call = "Test-TnwksMount $data"
+    assert check(call, {"mount_exit": 0, "unmount_exit": 0})["pass"] is True
+    assert check(call, {"mount_exit": 1, "unmount_exit": 0})["pass"] is False
+    assert check(call, {"mount_exit": 0, "unmount_exit": -1})["pass"] is False
+
+
+# --- the profile gate of the apply ---------------------------------------------------------
+
+RUN_TASK = task_named("The probe makes the profile of the account")["ansible.windows.win_powershell"]["script"]
+GUARD = task_named("The task of the account ran in its own profile")["ansible.windows.win_powershell"]["script"]
+TASK_FAKES = r"""
+$Ansible = [pscustomobject]@{ Changed = $null }
+$script:Runs = 0
+function Get-ScheduledTaskInfo { param($TaskName) [pscustomobject]@{ LastRunTime = $script:Runs; LastTaskResult = 0 } }
+function Start-ScheduledTask { param($TaskName) $script:Runs++ }
+function Get-ScheduledTask { param($TaskName) [pscustomobject]@{ State = 'Ready' } }
+function Start-Sleep { param($Seconds) }
+function Get-LocalUser { param($Name) [pscustomobject]@{ SID = [pscustomobject]@{ Value = "SID-of-$Name" } } }
+function Get-CimInstance {
+    param([Parameter(Position = 0)]$ClassName, $Filter)
+    $sid = [regex]::Match($Filter, "SID = '([^']+)'").Groups[1].Value
+    @{ 'SID-of-tnwks-rehearsal' = 'C:\Users\tnwks-rehearsal'; 'SID-of-someone' = 'C:\Users\someone' }[$sid] |
+        ForEach-Object { [pscustomobject]@{ LocalPath = $_ } }
+}
+"""
+
+
+@needs_pwsh
+def test_the_wslconfig_goes_to_the_profile_of_the_account_by_its_sid():
+    body = TASK_FAKES + "$f = {\n" + RUN_TASK + "\n}\n" + "[Console]::Out.Write((& $f -Task t -Account 'tnwks-rehearsal'))"
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip().splitlines()[-1] == "C:\\Users\\tnwks-rehearsal"
+
+
+def run_guard(tmp_path: Path, profile_arg: str, probe_doc: dict) -> str:
+    path = tmp_path / "probe.json"
+    path.write_text(json.dumps(probe_doc))
+    body = TASK_FAKES + "$f = {\n" + GUARD + f"\n}}\ntry {{ & $f -Path '{path}' -Profile '{profile_arg}'; 'ok' }} catch {{ $_.Exception.Message }}"
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    return run.stdout.strip().splitlines()[-1]
+
+
+@needs_pwsh
+def test_the_profile_gate_takes_only_the_profile_that_the_task_of_the_account_saw(tmp_path):
+    good = {"hive": True, "profile": "C:\\Users\\tnwks-rehearsal"}
+    assert run_guard(tmp_path, "C:\\Users\\tnwks-rehearsal", good) == "ok"
+    assert "not loaded" in run_guard(tmp_path, "C:\\Users\\tnwks-rehearsal", {**good, "hive": False})
+    assert "not one folder under Users" in run_guard(tmp_path, "C:\\Users\\someone", good), "another profile"
+    assert "not one folder under Users" in run_guard(tmp_path, "", good), "no profile"
+    assert "not one folder under Users" in run_guard(tmp_path, "C:\\", {**good, "profile": "C:\\"})
+    assert "not one folder under Users" in run_guard(tmp_path, "C:\\Users\\a\\b", {**good, "profile": "C:\\Users\\a\\b"})

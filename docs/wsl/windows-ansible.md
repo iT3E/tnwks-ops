@@ -507,10 +507,16 @@ distro, the tasks or the account of today.
 | --- | --- |
 | The account `tnwks-rehearsal` | A local account, a member of Users only. Its password is random, made on the host, and kept nowhere. The play stops if the account is a member of Administrators |
 | The right to log on as a batch job | For `tnwks-rehearsal` only (an S4U task needs it) |
+| No other logon, no tile | `tnwks-rehearsal` may not log on at the keyboard, by Remote Desktop or from the network (`SeDenyInteractiveLogonRight`, `SeDenyRemoteInteractiveLogonRight`, `SeDenyNetworkLogonRight`), and the `SpecialAccounts\UserList` value keeps it off the sign-in screen |
 | `C:\ProgramData\tnwks-rehearsal` | The scripts and the pinned Alpine root file system. Only SYSTEM and the Administrators may change them |
 | `...\log`, `...\disk` | `tnwks-rehearsal` may make and change files: the results of its tasks, and the empty test disk file `mount-test.vhdx` |
 | Five tasks `tnwks-rehearsal-<step>` | As `tnwks-rehearsal`, S4U, no elevation, no trigger: `probe`, `import`, `start` (holds the distro with nobody signed in), `write`, `mount` |
 | The profile of `tnwks-rehearsal` | Its `.wslconfig` (a memory limit, one processor, no swap, no networking key) and its distro `tnwks-rehearsal` |
+
+The role is the last of the play, so a failed step of it stops no other
+role. A check run on a host where the account does not exist yet does not
+check the tasks that name the account (its rights, the rules of its two
+folders, its tasks), and says so.
 
 Run the checks after the apply, as the comment of
 `playbooks/windows-rehearsal-check.yml` says. The play reads, and changes

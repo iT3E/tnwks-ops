@@ -14,7 +14,8 @@ wsl_rehearsal_state: present
 
 # The temporary account. The play makes it with a random password that it
 # keeps nowhere: an S4U task needs no password. It is a member of Users only,
-# and it gets the right to log on as a batch job, which S4U needs.
+# and it gets the right to log on as a batch job, which S4U needs. It may not
+# log on in any other way, and it has no tile on the sign-in screen.
 wsl_rehearsal_account: tnwks-rehearsal
 # Its distro, in its own profile (%LOCALAPPDATA%\<name>).
 wsl_rehearsal_distro: tnwks-rehearsal
@@ -46,6 +47,16 @@ wsl_rehearsal_memory: 1GB
 # but the start, which holds one wsl.exe client as the keepalive does.
 wsl_rehearsal_task_prefix: tnwks-rehearsal
 wsl_rehearsal_steps: [probe, import, write, mount]
+
+# The logons that the account does not need: at the keyboard, by Remote
+# Desktop, and from the network. The batch logon of its S4U tasks is another
+# right (SeBatchLogonRight).
+wsl_rehearsal_deny_rights:
+  - SeDenyInteractiveLogonRight
+  - SeDenyRemoteInteractiveLogonRight
+  - SeDenyNetworkLogonRight
+# A value 0 here, named for the account, keeps it off the sign-in screen.
+wsl_rehearsal_userlist_key: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList'
 
 # The textfile directory of windows_exporter, where the write test tries a
 # file (the same directory as the write test of the host check).

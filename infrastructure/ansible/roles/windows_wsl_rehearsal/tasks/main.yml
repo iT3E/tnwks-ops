@@ -4,6 +4,9 @@
 
 - name: The rehearsal is present
   when: wsl_rehearsal_state == 'present'
+  vars:
+    # The SID of the account, or empty in a check run before the account exists.
+    wsl_rehearsal_sid: "{{ wsl_rehearsal_user.output | default([]) | last | default('') }}"
   block:
     # A local account with no admin group, member of Users. Its password is
     # random, made here, and kept nowhere: an S4U task needs none. No other
@@ -41,13 +44,56 @@
           }
       no_log: true
 
+    # A read, also in a check run.
+    - name: Read the temporary account
+      ansible.windows.win_powershell:
+        parameters:
+          Name: "{{ wsl_rehearsal_account }}"
+        script: |
+          param([string]$Name)
+          $Ansible.Changed = $false
+          $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
+          if ($user) { $user.SID.Value } else { '' }
+      check_mode: false
+      register: wsl_rehearsal_user
+
+    # A check run before the first apply has no account to name: the tasks
+    # that name it (its rights, the rules of its folders, its tasks) wait for
+    # the apply that makes it.
+    - name: A check run before the account exists
+      ansible.builtin.debug:
+        msg: >-
+          {{ wsl_rehearsal_account }} does not exist yet. This check run does not
+          check its rights, the rules of its two folders or its tasks: the apply
+          makes the account first.
+      when: wsl_rehearsal_sid | length == 0
+
     # S4U needs it. Only Administrators, Backup Operators and Performance Log
     # Users hold it before.
     - name: The temporary account may log on as a batch job
       ansible.windows.win_user_right:
         name: SeBatchLogonRight
-        users: ["{{ wsl_rehearsal_account }}"]
+        users: ["{{ wsl_rehearsal_sid }}"]
         action: add
+      when: wsl_rehearsal_sid | length > 0
+
+    # The logons that the account does not need. None of the three is the
+    # batch logon of an S4U task (SeDenyBatchLogonRight is that one).
+    - name: The temporary account may not log on at the keyboard, by Remote Desktop or from the network
+      ansible.windows.win_user_right:
+        name: "{{ item }}"
+        users: ["{{ wsl_rehearsal_sid }}"]
+        action: add
+      loop: "{{ wsl_rehearsal_deny_rights }}"
+      when: wsl_rehearsal_sid | length > 0
+
+    # No tile for the account on the sign-in screen.
+    - name: The temporary account is not on the sign-in screen
+      ansible.windows.win_regedit:
+        path: '{{ wsl_rehearsal_userlist_key }}'
+        name: "{{ wsl_rehearsal_account }}"
+        data: 0
+        type: dword
 
     # Only SYSTEM and the Administrators may change the scripts and the root
     # file system; Users may read. The account writes only to the log folder,
@@ -61,6 +107,7 @@
         path: "{{ item }}"
         writer: "{{ wsl_rehearsal_account }}"
       loop: ["{{ wsl_rehearsal_log_dir }}", "{{ wsl_rehearsal_disk_dir }}"]
+      when: wsl_rehearsal_sid | length > 0
 
     - name: Scripts of the rehearsal
       ansible.windows.win_copy:
@@ -118,6 +165,7 @@
         name: "{{ wsl_rehearsal_task_prefix }}-{{ item }}"
         xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
       loop: "{{ wsl_rehearsal_steps + ['start'] }}"
+      when: wsl_rehearsal_sid | length > 0
 
     # The rest runs the tasks, so a check run stops here.
     - name: Run the tasks of the account
@@ -145,6 +193,9 @@
               $sid = (Get-LocalUser -Name $Account).SID.Value
               (Get-CimInstance Win32_UserProfile -Filter "SID = '$sid'").LocalPath
           register: wsl_rehearsal_profile
+          # The probe reads. Its first run also makes the profile of the
+          # account, which the change of the account task shows.
+          changed_when: false
 
         # WSL keeps the distros of an account in its registry hive, which is
         # loaded while a task of the account runs. No import without it, and
@@ -181,6 +232,24 @@
               Task: "{{ wsl_rehearsal_task_prefix }}-import"
               Account: "{{ wsl_rehearsal_account }}"
             script: *run_task
+          # The next task reads whether it imported anything.
+          changed_when: false
+
+        # The task of the import ends with 0 when its step ran, so the play
+        # reads its result: the import exited 0 and WSL lists the distro.
+        - name: The distro is imported
+          ansible.windows.win_powershell:
+            parameters:
+              Path: '{{ wsl_rehearsal_log_dir }}\import.json'
+              Distro: "{{ wsl_rehearsal_distro }}"
+            script: |
+              param([string]$Path, [string]$Distro)
+              $ErrorActionPreference = 'Stop'
+              $import = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+              if ($import.exit -ne 0 -or @($import.distros) -notcontains $Distro) {
+                  throw "The import did not end: exit $($import.exit), distros: $(@($import.distros) -join ','). $($import.output)"
+              }
+              $Ansible.Changed = -not $import.existed
 
         - name: The start of the distro, with nobody signed in
           tnwks_win_scheduled_task:
