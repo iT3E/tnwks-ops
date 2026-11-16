@@ -32,10 +32,18 @@ $spec = @{
         # registers through the Schedule.Service object with TASK_LOGON_S4U, and
         # drops it. The password is not an argument, and no result, diff,
         # warning, failure text or file holds it. With S4U the service stores no
-        # password. Empty (each other task): Register-ScheduledTask -Xml.
-        s4u_user = @{ type = 'str'; default = '' }
+        # password. Not set (each other task): Register-ScheduledTask -Xml.
+        # The module refuses, and changes nothing, when the account is a member
+        # of Administrators, when its Description is not s4u_description, when
+        # it is the account of this process, or when it has an interactive,
+        # network or remote logon session open (the account of the Ansible
+        # session, or a person signed in).
+        s4u_user = @{ type = 'str' }
+        # The Description that the account of s4u_user must have. Required with it.
+        s4u_description = @{ type = 'str' }
     }
     required_if = @(, @('state', 'present', @(, 'xml')))
+    required_by = @{ s4u_user = @(, 's4u_description') }
     supports_check_mode = $true
 }
 
@@ -120,14 +128,58 @@ function New-TnwksPassword {
     'Aa1!' + ([Convert]::ToBase64String($bytes) -replace '[+/=]', 'x')
 }
 
-# An S4U task for another account: a fresh password on the account, then
-# ITaskFolder.RegisterTask with the user, that password and TASK_LOGON_S4U (2),
-# as TASK_CREATE_OR_UPDATE (6). A folder that is not there is made under the
-# root. A failure throws its text with the password taken out.
-function Register-TnwksS4uTask($Service, [string]$Path, [string]$Name, [string]$Xml, [string]$User) {
+# The reads behind the refusals, each on its own so a test can replace it.
+function Get-TnwksAccountSid([string]$User) {
+    ([Security.Principal.NTAccount]::new($User)).Translate([Security.Principal.SecurityIdentifier]).Value
+}
+function Get-TnwksAccountDescription([string]$Sid) {
+    "$((Get-LocalUser -SID $Sid).Description)"
+}
+# The SIDs of the direct members of Administrators, by their objectSid: a
+# member that does not resolve to a name is still read.
+function Get-TnwksAdministratorSids {
+    $name = ([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')).Translate([Security.Principal.NTAccount]).Value.Split('\')[-1]
+    $group = [ADSI]"WinNT://$env:COMPUTERNAME/$name,group"
+    @($group.Invoke('Members') | ForEach-Object {
+        $bytes = $_.GetType().InvokeMember('objectSid', 'GetProperty', $null, $_, $null)
+        ([Security.Principal.SecurityIdentifier]::new([byte[]]$bytes, 0)).Value
+    })
+}
+function Get-TnwksCallerSid {
+    [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+}
+# The logon types of the sessions of the account that are open now.
+function Get-TnwksLogonTypes([string]$Sid) {
+    $name = ([Security.Principal.SecurityIdentifier]::new($Sid)).Translate([Security.Principal.NTAccount]).Value.Split('\')
+    @(Get-CimInstance Win32_LoggedOnUser | Where-Object { $_.Antecedent.Name -eq $name[-1] -and $_.Antecedent.Domain -eq $name[0] } |
+        ForEach-Object { (Get-CimInstance Win32_LogonSession -Filter "LogonId = '$($_.Dependent.LogonId)'").LogonType })
+}
+
+# Empty when the module may reset the password of the account, else why not.
+function Get-TnwksS4uRefusal([string]$User, [string]$Description) {
+    try { $sid = Get-TnwksAccountSid $User } catch { return "$User is not an account of this host" }
+    if ((Get-TnwksAdministratorSids) -contains $sid) { return "$User is a member of Administrators" }
+    $found = Get-TnwksAccountDescription $sid
+    if ($found -ne $Description) { return "the Description of $User is '$found', not '$Description'" }
+    if ($sid -eq (Get-TnwksCallerSid)) { return "$User is the account of this process" }
+    # 2 interactive, 3 network, 10 remote interactive, 11 cached interactive.
+    $open = @(Get-TnwksLogonTypes $sid | Where-Object { $_ -in 2, 3, 10, 11 })
+    if ($open) { return "$User has a logon session open (type $($open -join ', ')): the account of a session or of a person" }
+    ''
+}
+
+# An S4U task for another account: the refusals first, then a fresh password
+# on the account, then ITaskFolder.RegisterTask with the user, that password and
+# TASK_LOGON_S4U (2), as TASK_CREATE_OR_UPDATE (6). A folder that is not there
+# is made under the root. A failure throws its text with the password taken out.
+function Register-TnwksS4uTask($Service, [string]$Path, [string]$Name, [string]$Xml, [string]$User, [string]$Description) {
+    $refusal = Get-TnwksS4uRefusal -User $User -Description $Description
+    if ($refusal) { throw [InvalidOperationException]::new("refused, nothing is changed: $refusal. s4u_user resets the password of the account.") }
     $fresh = New-TnwksPassword
     try {
-        Set-LocalUser -Name $User -Password (ConvertTo-SecureString $fresh -AsPlainText -Force)
+        # No cmdlet takes the plain value: module logging would record it.
+        $secure = [Net.NetworkCredential]::new('', $fresh).SecurePassword
+        Set-LocalUser -Name $User -Password $secure
         $Service.Connect()
         $folderPath = if ($Path.Trim('\')) { '\' + $Path.Trim('\') } else { '\' }
         try {
@@ -174,7 +226,8 @@ if ($before -ne $after) {
         if ($user) {
             # The text only: the error record could carry the password.
             try {
-                Register-TnwksS4uTask -Service (New-Object -ComObject Schedule.Service) -Path $path -Name $name -Xml $module.Params.xml -User $user
+                Register-TnwksS4uTask -Service (New-Object -ComObject Schedule.Service) -Path $path -Name $name -Xml $module.Params.xml `
+                    -User $user -Description $module.Params.s4u_description
             } catch {
                 $module.FailJson("$call failed: $($_.Exception.Message)")
             }

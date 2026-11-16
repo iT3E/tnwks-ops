@@ -611,6 +611,14 @@ function New-FakeFolder([string]$Path) {
     }
     $f
 }
+# The reads behind the refusals: by default an account that the module may reset.
+$global:Sid = 'S-1-5-21-7-7-7-1002'; $global:Admins = @('S-1-5-21-7-7-7-500'); $global:Desc = 'd'
+$global:Caller = 'S-1-5-18'; $global:Types = @(4, 5); $global:NoSuch = $false
+function Get-TnwksAccountSid([string]$User) { if ($global:NoSuch) { throw 'No mapping' }; $global:Sid }
+function Get-TnwksAccountDescription([string]$Sid) { $global:Desc }
+function Get-TnwksAdministratorSids { $global:Admins }
+function Get-TnwksCallerSid { $global:Caller }
+function Get-TnwksLogonTypes([string]$Sid) { $global:Types }
 $service = [pscustomobject]@{}
 $service | Add-Member ScriptMethod Connect { $global:Calls.Add('connect') }
 $service | Add-Member ScriptMethod GetFolder {
@@ -634,12 +642,12 @@ PASSWORD = re.compile(r"password=(\S+)")
 def test_each_registration_sets_a_new_password_on_the_account_and_registers_by_s4u_with_it():
     out = run_module(r"""
 $global:Folders = @('\')
-$first = Register-TnwksS4uTask -Service $service -Path '\' -Name 'tnwks-rehearsal-probe' -Xml '<Task />' -User 'tnwks-rehearsal'
-$second = Register-TnwksS4uTask -Service $service -Path '\' -Name 'tnwks-rehearsal-import' -Xml '<Task />' -User 'tnwks-rehearsal'
+$first = Register-TnwksS4uTask -Service $service -Path '\' -Name 'tnwks-rehearsal-probe' -Xml '<Task />' -User 'tnwks-rehearsal' -Description 'd'
+$second = Register-TnwksS4uTask -Service $service -Path '\' -Name 'tnwks-rehearsal-import' -Xml '<Task />' -User 'tnwks-rehearsal' -Description 'd'
 $global:Folders = @('\')
-Register-TnwksS4uTask -Service $service -Path '\Rehearsal\' -Name 't' -Xml '<Task />' -User 'tnwks-rehearsal'
+Register-TnwksS4uTask -Service $service -Path '\Rehearsal\' -Name 't' -Xml '<Task />' -User 'tnwks-rehearsal' -Description 'd'
 $global:Folders = @('\', '\Rehearsal')
-Register-TnwksS4uTask -Service $service -Path '\Rehearsal\' -Name 'u' -Xml '<Task />' -User 'tnwks-rehearsal'
+Register-TnwksS4uTask -Service $service -Path '\Rehearsal\' -Name 'u' -Xml '<Task />' -User 'tnwks-rehearsal' -Description 'd'
 "output: $(@($first) + @($second) -join '|')"
 $global:Calls
 """)
@@ -669,10 +677,10 @@ def test_a_failed_registration_names_the_hresult_and_never_the_password():
     out = run_module(r"""
 $global:Folders = @('\')
 $global:Fail = $true
-try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u'; 'no failure' } catch { "text: $($_.Exception.Message)" }
+try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u' -Description 'd'; 'no failure' } catch { "text: $($_.Exception.Message)" }
 $global:Fail = $false
 $global:FailUser = $true
-try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u'; 'no failure' } catch { "text: $($_.Exception.Message)" }
+try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u' -Description 'd'; 'no failure' } catch { "text: $($_.Exception.Message)" }
 $global:Calls
 """)
     texts = [line for line in out if line.startswith("text: ")]
@@ -682,6 +690,41 @@ $global:Calls
     assert "System.InvalidOperationException 0x80131509: Set-LocalUser -Name u -Password <password> failed" in texts[1]
     for text in texts:
         assert not any(password in text for password in passwords)
+
+
+@needs_pwsh
+@pytest.mark.parametrize(("setup", "reason"), [
+    ("$global:NoSuch = $true", "u is not an account of this host"),
+    ("$global:Admins += $global:Sid", "u is a member of Administrators"),
+    ("$global:Desc = 'a person'", "the Description of u is 'a person', not 'd'"),
+    ("$global:Caller = $global:Sid", "u is the account of this process"),
+    ("$global:Types = @(4, 3)", "u has a logon session open (type 3): the account of a session or of a person"),
+    ("$global:Types = @(10)", "u has a logon session open (type 10): the account of a session or of a person"),
+    ("$global:Types = @(2, 11)", "u has a logon session open (type 2, 11): the account of a session or of a person"),
+])
+def test_the_module_refuses_to_reset_an_account_that_is_not_one_for_it_and_changes_nothing(setup, reason):
+    out = run_module(setup + r"""
+$global:Folders = @('\')
+try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u' -Description 'd'; 'no failure' } catch { "text: $($_.Exception.Message)" }
+"calls: $($global:Calls.Count)"
+""")
+    assert out[0] == f"text: refused, nothing is changed: {reason}. s4u_user resets the password of the account."
+    assert out[1] == "calls: 0", "no Set-LocalUser and no registration"
+
+
+def test_no_cmdlet_takes_the_plain_password():
+    module = TASK_MODULE.read_text()
+    function = module[module.index("function Register-TnwksS4uTask"):module.index("$task = Get-ScheduledTask")]
+    uses = [line.strip() for line in function.splitlines() if "$fresh" in line]
+    assert uses == [
+        "$fresh = New-TnwksPassword",
+        "$secure = [Net.NetworkCredential]::new('', $fresh).SecurePassword",
+        "[void]$folder.RegisterTask($Name, $Xml, 6, $User, $fresh, 2)",
+        "throw [InvalidOperationException]::new((Format-TnwksError $_.Exception).Replace($fresh, '<password>'))",
+        "$fresh = $null",
+    ]
+    assert "Set-LocalUser -Name $User -Password $secure" in function
+    assert "ConvertTo-SecureString" not in module and "AsPlainText" not in module
 
 
 @needs_pwsh
@@ -735,10 +778,13 @@ def test_a_task_that_fails_to_log_on_is_named_with_the_cause():
 def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unchanged():
     module = TASK_MODULE.read_text()
     assert "$task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force" in module
-    assert "s4u_user = @{ type = 'str'; default = '' }" in module
+    assert "s4u_user = @{ type = 'str' }" in module
+    assert "required_by = @{ s4u_user = @(, 's4u_description') }" in module
     named = [task for task in present() if "tnwks_win_scheduled_task" in task]
     assert sorted(task["name"] for task in named) == ["Tasks of the temporary account", "The start of the distro, with nobody signed in"]
     assert all(task["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_rehearsal_account }}" for task in named)
+    # The role passes the Description that the module checks before a reset.
+    assert all(task["tnwks_win_scheduled_task"]["s4u_description"] == "{{ wsl_rehearsal_account_description }}" for task in named)
     others = [path for path in (ANSIBLE / "roles").glob("*/tasks/*.yml") if path.parent.parent.name != "windows_wsl_rehearsal"]
     assert others and not any("s4u_user" in path.read_text() for path in others)
 

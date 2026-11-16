@@ -178,6 +178,7 @@
         name: "{{ wsl_rehearsal_task_prefix }}-{{ item }}"
         xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
         s4u_user: "{{ wsl_rehearsal_account }}"
+        s4u_description: "{{ wsl_rehearsal_account_description }}"
       vars:
         ansible_become: true
         ansible_become_method: ansible.builtin.runas
@@ -290,6 +291,7 @@
             name: "{{ wsl_rehearsal_task_prefix }}-start"
             xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
             s4u_user: "{{ wsl_rehearsal_account }}"
+            s4u_description: "{{ wsl_rehearsal_account_description }}"
             running: true
           vars:
             item: start

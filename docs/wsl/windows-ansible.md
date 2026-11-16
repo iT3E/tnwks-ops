@@ -546,7 +546,15 @@ and none when the task compares equal). The password never leaves the
 host. An S4U task stores no password, so a later reset does not touch the
 tasks before it; if one of them ever failed to log on at its start, the
 probe and the import say so. Use `s4u_user` only for an account whose
-password nobody needs. Each task that
+password nobody needs. Each registration after the profile exists resets
+the password again, so nothing that needs the account's DPAPI secrets may
+live in that profile. The module refuses, and changes nothing, when the
+account is a member of Administrators, when its Description is not the
+required `s4u_description` (the role passes
+`wsl_rehearsal_account_description`), when it is the account of the
+module's process, or when it has an interactive, network or remote logon
+session open (the account of the Ansible session, or a person signed in).
+Each task that
 registers, starts or stops a task of the account runs as SYSTEM, in its
 own `vars`: `ansible_become: true`,
 `ansible_become_method: ansible.builtin.runas` and
