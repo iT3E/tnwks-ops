@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.168.2 - 2026-11-16
+
+### Security
+
+* terraform: a backup prefix of rolesanywhere_backups_prefixed can be exclusive: a bucket policy denies its objects, and a list under it, to every principal but its own role and the break-glass roles. kopiur-agents/ is exclusive, with the AdministratorAccess role of IAM Identity Center as break-glass.
+
 ## v2.168.1 - 2026-11-16
 
 ### Fixed
