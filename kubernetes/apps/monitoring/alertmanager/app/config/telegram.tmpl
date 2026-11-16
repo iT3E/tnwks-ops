@@ -14,23 +14,28 @@
   `message` annotation, so that is the last fallback for the alert line.
 
   The graph link is the whole expression of the rule, URL-encoded. Telegram
-  answered ENTITIES_TOO_LONG (400) for the group of SecurityResultLate,
-  whose expression (a term for each system of the security registry) gave
-  a graph link of about 5 KB for each alert: two links, about 10 KB of
-  link text in one message. Telegram does not state the limit: its error
-  table says "too many styled message entities", and client libraries read
-  it as an entity with too much data or too many entities. So the bounds
-  come from what is known to deliver from this repository, messages with
-  graph links of 700 to 1600 characters:
-  - one graph link in a message, on the first alert (the alerts of a group
-    share their rule, so the link is the same for each);
-  - that link only up to 1600 characters, the longest known to deliver;
-  - the other links (runbook, dashboard or alerts board) on the first
-    three alerts only, the ones that print in full;
-  - so the link text of a message stays under 2560 characters, a quarter of
-    the refused message and about what a delivered message of one to a few
-    alerts carried. observability/tests/test_telegram_message.py checks it
-    for each alert of the repository in a group of eight.
+  answered ENTITIES_TOO_LONG (400) for each message of SecurityResultLate
+  from 2026-11-15 23:11 UTC: two alerts, each with a graph link of about
+  5100 characters, about 10500 characters of link text. Telegram does not
+  state the limit (its error table says "too many styled message
+  entities"). The bounds are chosen from two measured points, not from a
+  documented limit:
+  - refused: the message above, 10460 characters of link text;
+  - delivered: the longest graph link of a rule that fired in the 30 days
+    before with no Telegram failure is AgentPlatformCronJobFailed, 1444
+    characters, 1643 characters of link text in a message of one alert.
+    SecurityResultLate itself delivered only as one alert, before its
+    expression grew: graph links of at most 1337 characters (2026-11-13
+    and 11-14).
+  The lengths are from observability/tests/test_telegram_message.py, upper
+  estimates. So:
+  - a graph link only on the first alert (the alerts of a group share their
+    rule), up to 1500 characters in a message of one alert, and up to 1000
+    in a message of more, where up to three alerts carry links;
+  - the other links (runbook, dashboard or alerts board) on the first three
+    alerts only, the ones that print in full;
+  - the link text of a message at most 1700 characters, which the test
+    checks for each alert of the repository in a group of eight.
 
   The first three alerts of a group print their text and links; the next
   five print their labels only. Eight texts of the longest rules (about 600
@@ -54,7 +59,7 @@
 {{- if lt $i 3 }}
 {{- if $a.Annotations.runbook_url }} <a href="{{ $a.Annotations.runbook_url }}">runbook</a>{{ end }}
 {{- if $a.Annotations.dashboard_url }} <a href="{{ $a.Annotations.dashboard_url }}{{ template "telegram.range" $a }}">dashboard</a>
-{{- else if and $a.Labels.cluster (match "^https://alertmanager\\." $.ExternalURL) }} <a href="{{ reReplaceAll "^https://alertmanager\\." "https://grafana." $.ExternalURL }}/d/tnwks-alerts?var-cluster={{ $a.Labels.cluster }}{{ template "telegram.range" $a }}">alerts</a>{{ end }}{{ if and (eq $i 0) $a.GeneratorURL (le (len $a.GeneratorURL) 1600) }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
+{{- else if and $a.Labels.cluster (match "^https://alertmanager\\." $.ExternalURL) }} <a href="{{ reReplaceAll "^https://alertmanager\\." "https://grafana." $.ExternalURL }}/d/tnwks-alerts?var-cluster={{ $a.Labels.cluster }}{{ template "telegram.range" $a }}">alerts</a>{{ end }}{{ if and (eq $i 0) $a.GeneratorURL (or (and (eq (len $.Alerts) 1) (le (len $a.GeneratorURL) 1500)) (le (len $a.GeneratorURL) 1000)) }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
 {{- end }}
 {{ end }}{{ end -}}
 {{ if gt (len .Alerts) 8 }}

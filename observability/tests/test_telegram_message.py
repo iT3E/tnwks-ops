@@ -10,15 +10,22 @@ resolved. Each message must fit what the Bot API and Alertmanager require:
   (the parser of the Bot API, TDLib's parse_html, refuses anything else);
 - at most 4096 characters of text after the tags and entities, and at most 32768
   bytes in all (over either, Alertmanager v0.35 sends a fixed text in its place);
-- each link an http or https URL; one graph link at most, of at most 1600
-  characters; at most 2560 characters of link text in all. Telegram answers
-  ENTITIES_TOO_LONG past a limit that it does not state; these are the bounds of
-  the template, from what is known to deliver (see its comment);
+- each link an http or https URL; one graph link at most, of at most 1500
+  characters in a message of one alert and 1000 in a message of more; at most 1700
+  characters of link text in all. Telegram answers ENTITIES_TOO_LONG past a limit
+  that it does not state; these are the bounds of the template, chosen from a
+  measured delivered message and a measured refused one (see its comment);
 - at most 100 entities (tags), the number past which Telegram ignores formatting.
 
 The annotations are rendered as Prometheus would for their simple forms ($labels,
 $externalLabels, Flux variables); any other template action becomes "1", so a text
 that a query fills in is shorter here than live.
+
+The lengths of links are upper estimates. The generator URL here is built from the
+expression as the YAML holds it; Prometheus builds it from the parsed expression
+(no comments, spacing made even), which is not longer. The Prometheus URL in front
+of it is a guess: the repository sets no external URL for Prometheus, and the
+operator's default is about this long.
 """
 
 import json
@@ -38,8 +45,11 @@ CONFIG = ROOT / "kubernetes/apps/monitoring/alertmanager/app"
 TEMPLATE = CONFIG / "config/telegram.tmpl"
 # The URL of a Prometheus as the operator names it, for the graph link of an alert.
 PROMETHEUS_URL = "http://prometheus-kube-prometheus-stack-prometheus.monitoring:9090"
-GRAPH_LIMIT = 1600
-LINK_TEXT_LIMIT = 2560
+GRAPH_LIMIT_ONE = 1500
+GRAPH_LIMIT_MANY = 1000
+LINK_TEXT_LIMIT = 1700
+# The alerts of a group that print their text and their links.
+IN_FULL = 3
 ENTITY_LIMIT = 100
 TAGS = {"a", "b", "strong", "i", "em", "s", "strike", "del", "u", "ins", "span", "tg-spoiler", "tg-emoji",
         "tg-time", "pre", "code", "blockquote"}
@@ -168,11 +178,14 @@ def test_the_parser_of_this_test_refuses_what_telegram_refuses():
             parse_telegram_html(bad)
 
 
-def test_the_template_gives_one_graph_link_and_leaves_it_out_over_the_limit():
+def test_the_template_gives_one_graph_link_and_leaves_it_out_over_the_limits():
     template = TEMPLATE.read_text()
-    assert f"{{{{ if and (eq $i 0) $a.GeneratorURL (le (len $a.GeneratorURL) {GRAPH_LIMIT}) }}}}" in template
-    assert template.count("$a.GeneratorURL") == 3, "the link only where the condition holds"
-    assert f"{GRAPH_LIMIT} characters" in template and f"{LINK_TEXT_LIMIT} characters" in template
+    assert ("{{ if and (eq $i 0) $a.GeneratorURL (or (and (eq (len $.Alerts) 1) "
+            f"(le (len $a.GeneratorURL) {GRAPH_LIMIT_ONE})) (le (len $a.GeneratorURL) {GRAPH_LIMIT_MANY})) }}}}") in template
+    assert template.count("$a.GeneratorURL") == 4, "the link only where the condition holds"
+    for limit in (GRAPH_LIMIT_ONE, GRAPH_LIMIT_MANY, LINK_TEXT_LIMIT):
+        assert f"{limit} characters" in template or f"up to {limit}" in template, limit
+    assert template.count(f"{{{{ if lt $i {IN_FULL} }}}}") == 1 and template.count(f"{{{{- if lt $i {IN_FULL} }}}}") == 1
 
 
 @pytest.fixture(scope="module")
@@ -228,7 +241,8 @@ def test_each_alert_renders_to_a_message_that_telegram_takes(messages):
         if entities > ENTITY_LIMIT:
             problems.append((alert, status, f"{entities} entities"))
         graphs = [link for link in links if "/graph?" in link]
-        if len(graphs) > 1 or any(len(link) > GRAPH_LIMIT for link in graphs):
+        limit = GRAPH_LIMIT_ONE if status == "resolved" else GRAPH_LIMIT_MANY  # 1 alert, or 8
+        if len(graphs) > 1 or any(len(link) > limit for link in graphs):
             problems.append((alert, status, f"graph links of {[len(link) for link in graphs]} characters"))
         if sum(map(len, links)) > LINK_TEXT_LIMIT:
             problems.append((alert, status, f"{sum(map(len, links))} characters of link text"))
@@ -248,4 +262,16 @@ def test_the_late_result_of_the_security_registry_keeps_its_board_link_and_drops
         assert any("/d/tnwks-security?" in link for link in links)
         assert not any("/graph?" in link for link in links)
     rule = next(rule for rule in rules() if rule["alert"] == "SecurityResultLate")
-    assert len(generator_url(rule["expr"])) > GRAPH_LIMIT
+    assert len(generator_url(rule["expr"])) > GRAPH_LIMIT_ONE
+
+
+def test_in_a_group_of_eight_the_first_three_alerts_print_their_text_and_links(messages):
+    """The rest print their labels only, so the text and the link text stay bounded."""
+    for message, alert, status in messages.values():
+        if alert != "SecurityResultLate" or status != "firing":
+            continue
+        lines = [line for line in message.split("\n") if line.startswith("•")]
+        assert len(lines) == 8
+        assert sum("The newest result of" in line for line in lines) == IN_FULL
+        assert message.count(">dashboard</a>") == IN_FULL
+        assert all("dashboard" not in line and "<code>" in line for line in lines[IN_FULL:])
