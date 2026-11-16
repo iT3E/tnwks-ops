@@ -1,3 +1,0 @@
-kind: Added
-body: 'Agent platform: a scaffold of the finance agent in `agents-finance` (its config, the scripts of the pilot and its network policy; the Deployment at zero replicas and the state volume are in git and not applied), an embedding entry `agents-finance-embeddings` on the model gateway, and a template of its restore test.'
-time: 2026-11-17T01:10:00.000000+00:00
