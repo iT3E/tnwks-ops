@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.176.0 - 2026-11-16
+
+### Changed
+
+* Windows hosts: each folder of a role under C:\ProgramData lets only SYSTEM and the Administrators make or change files, and Users read (tnwks_win_dir_acl). At each run, each item below takes the owner Administrators and the rules of the folder; the log and address folders keep their own rules. A folder that no role owns, listed in windows_locked_dirs, is for SYSTEM and the Administrators only (readers: none).
+
 ## v2.175.1 - 2026-11-16
 
 ### Fixed
