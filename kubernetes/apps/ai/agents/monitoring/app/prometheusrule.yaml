@@ -56,7 +56,8 @@ spec:
           # the CronJob's last success: the last run failed and no run passed
           # since. It resolves at the next good run. KubeJobFailed, the chart
           # rule, keeps firing while the failed Job is kept
-          # (failedJobsHistoryLimit), also after a good run. Covers the
+          # (failedJobsHistoryLimit), also after a good run, so Alertmanager
+          # drops it for these Jobs (its route for KubeJobFailed). Covers the
           # providers job (its `workflow-providers result=failed` line comes
           # with exit 1, scripts/providers.sh), the sweep and the daily checks.
           # reason!="": kube-state-metrics also reports the failed pods of a
@@ -174,7 +175,8 @@ spec:
         - alert: AgentWorkflowRunFailed
           # A run job of a workflow agent that failed, for 2 hours from its
           # start (a run lives 40 minutes at most). KubeJobFailed fires for the
-          # same Job for the 7 days that it stays. The caller tries again with
+          # same Job for the 7 days that it stays, and Alertmanager drops it
+          # (its route for KubeJobFailed). The caller tries again with
           # a new key (at most 3 attempts), so one alert can come with a
           # review that passed later.
           expr: |

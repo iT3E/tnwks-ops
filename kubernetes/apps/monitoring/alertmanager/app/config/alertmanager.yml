@@ -63,6 +63,21 @@ route:
     - receiver: "null"
       matchers:
         - alertname = "InfoInhibitor"
+    # The Jobs of the agent platform have alerts of their own, and each one
+    # resolves when its cause goes (docs/apps/agent-platform.md, "Alerts"):
+    # AgentPlatformCronJobFailed for the daily checks, the providers job and
+    # the sweep (with AgentPlatformCheckStale and WorkflowProvidersStale),
+    # and AgentWorkflowRunFailed for a run, for 2 hours. KubeJobFailed fires
+    # for such a Job while the Job is kept (a failed CronJob run until three
+    # newer runs fail, a run for 7 days), also after a good run, and all of
+    # them share one group. Dropped here for those Job names only. Any other
+    # failed Job in a trust domain (a backup mover, a Job made by hand, a new
+    # CronJob) still fires it, and so does each Job of the household apps.
+    - receiver: "null"
+      matchers:
+        - alertname = "KubeJobFailed"
+        - namespace =~ "agents-.+"
+        - job_name =~ "(platform-check-isolation|platform-check-probe|workflow-providers|workflow-sweep)-[0-9]+|run-.+"
     # Pushed by the finance-sync CronJob after it has already corrected the
     # balance. It fires on timing (a bank balance moves before its
     # transactions reach Simplifi, then the correction reverses next run) and

@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'alerts: Alertmanager drops KubeJobFailed for the run jobs and the four CronJobs of the agent platform, which have alerts of their own that resolve with their cause, so an old failed Job no longer keeps a group open in the alert channel; any other failed Job still reaches it, and a test checks each route'
+time: 2026-11-16T07:00:00.000000000Z
