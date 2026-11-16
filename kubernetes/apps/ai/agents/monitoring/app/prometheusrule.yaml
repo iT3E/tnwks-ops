@@ -356,7 +356,7 @@ spec:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentbackuprepositorynotready"
             summary: "The backup repository {{ $labels.name }} of the agent trust domains is {{ $labels.phase }} for an hour."
-            description: "kubectl get clusterrepository {{ $labels.name }} -o yaml: the Ready condition names the cause. Then the refresher of its session (kubectl -n kopiur-system get cronjob aws-backup-credentials-agents) and the discovery Job in kopiur-system."
+            description: "kubectl get clusterrepository {{ $labels.name }} -o yaml: the Ready condition names the cause. Then the refresher of its session (kubectl -n kopiur-system get cronjob aws-backup-credentials-{{ $labels.name }}) and the discovery Job in kopiur-system."
 
         - alert: ModelBridgeRateLimited
           # The model bridge in `ai` logged an engine_error line with the kind

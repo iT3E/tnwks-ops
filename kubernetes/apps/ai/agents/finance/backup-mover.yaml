@@ -1,0 +1,32 @@
+---
+# The movers of kopiur (the backup operator) in this namespace: the Jobs that
+# copy the state volume of the finance agent to its Kopia repository
+# (agent/app/backup.yaml), and the restore movers. default-deny
+# (namespace.yaml) covers them too. Out: the S3 endpoint of the repository
+# (kopiur-system/agents-finance-repository/app/clusterrepository.yaml), and
+# the API server, where a mover writes the status of its run (ClusterRole
+# kopiur-mover). DNS comes through allow-dns. No mover runs until the backup
+# policy is applied.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: backup-mover
+  namespace: agents-finance
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: kopiur
+  egress:
+    - toFQDNs:
+        - matchName: s3.us-west-2.amazonaws.com
+        - matchPattern: "*.s3.us-west-2.amazonaws.com"
+        # Kopia reaches the bucket on the dual-stack name; "*" in a pattern
+        # matches one label only.
+        - matchName: s3.dualstack.us-west-2.amazonaws.com
+        - matchPattern: "*.s3.dualstack.us-west-2.amazonaws.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver

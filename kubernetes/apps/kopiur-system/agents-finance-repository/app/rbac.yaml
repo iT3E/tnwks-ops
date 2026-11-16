@@ -1,0 +1,33 @@
+---
+# The refresher of the finance repository: its own ServiceAccount, which may
+# patch only the session Secret of this repository.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aws-backup-credentials-agents-finance
+  namespace: kopiur-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aws-backup-credentials-agents-finance
+  namespace: kopiur-system
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["aws-backup-sts-agents-finance"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aws-backup-credentials-agents-finance
+  namespace: kopiur-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aws-backup-credentials-agents-finance
+subjects:
+  - kind: ServiceAccount
+    name: aws-backup-credentials-agents-finance
+    namespace: kopiur-system

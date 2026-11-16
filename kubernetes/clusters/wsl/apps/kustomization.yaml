@@ -46,6 +46,12 @@ resources:
   # and role (docs/operations/backups.md, "Credentials").
   # This cluster only, like the agent platform.
   - ../../../apps/kopiur-system/agents-repository/ks.yaml
+  # The kopiur repository of the finance trust domain, the same way. Listed
+  # after the Terraform apply of its role, with the two keys
+  # RA_AGENTS_FINANCE_BACKUPS_* in cluster-settings.yaml: without them each
+  # run of its refresher stops at its start (docs/operations/backups.md,
+  # "Credentials").
+  # - ../../../apps/kopiur-system/agents-finance-repository/ks.yaml
   # Fence a warm app's Postgres when its site lease names this site.
   - ../../../apps/databases/site-lease-fence/ks.yaml
   - ../../../apps/flux-system

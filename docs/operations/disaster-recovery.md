@@ -43,6 +43,7 @@ desktop, a dead desktop takes it too: that is what the off-site kit is for.
 | Roles Anywhere CA key | `environments/prod/aws/rolesanywhere/ca-key.sops.yaml` | covered by the age keys |
 | `KOPIA_PASSWORD` (decrypts the kopiur backups) | Secret `kopiur-system/kopiur-repository` (SOPS) | **off-site kit** (the SOPS copy needs a working age key) |
 | `KOPIA_PASSWORD` of the agents repository (decrypts the backups of the agent trust domains, `kopiur-agents/`) | Secret `kopiur-system/kopiur-repository-agents` (SOPS) | **off-site kit** (the SOPS copy needs a working age key) |
+| `KOPIA_PASSWORD` of the finance repository (decrypts the backups of the finance trust domain, `kopiur-finance/`) | Secret `kopiur-system/kopiur-repository-agents-finance` (SOPS) | **off-site kit** (the SOPS copy needs a working age key) |
 | Terraform Cloud | the owner's TFC account | n/a |
 | AWS root / admin access | the owner | **off-site kit**: root MFA recovery |
 | Google account | the owner | its own recovery options |

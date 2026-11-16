@@ -75,6 +75,17 @@ variable "rolesanywhere_backups_prefixed" {
     condition     = alltrue([for v in values(var.rolesanywhere_backups_prefixed) : endswith(v.prefix, "/") && length(v.prefix) > 1])
     error_message = "Each prefix must end in / and not be the bucket root."
   }
+  # The list deny of an exclusive prefix (s3_backups.tf) matches the prefix
+  # without its final / and anything after it, so it would also refuse a list
+  # of another role whose prefix starts with that name.
+  validation {
+    condition = alltrue(flatten([
+      for ka, a in var.rolesanywhere_backups_prefixed : [
+        for kb, b in var.rolesanywhere_backups_prefixed : ka == kb || !startswith(b.prefix, trimsuffix(a.prefix, "/"))
+      ]
+    ]))
+    error_message = "No prefix may start with another prefix without its final /."
+  }
 }
 
 variable "backups_break_glass_role_arn_patterns" {

@@ -539,9 +539,9 @@ Not tested.
 
 ### AgentBackupRepositoryNotReady
 
-**What it means.** The backup repository of the agent trust domains
-(ClusterRepository `agents`) has been `Pending` or `Initializing` for an
-hour. It never got `Ready`, so no snapshot of a trust domain runs, and the
+**What it means.** A backup repository of the agent trust domains
+(ClusterRepository `agents`, or `agents-finance`: the label `name`) has been
+`Pending` or `Initializing` for an hour. It never got `Ready`, so no snapshot of a trust domain runs, and the
 policies have no failure to show. `Failed` or `Degraded` is the chart rule
 `KopiurRepositoryNotReady` instead.
 
@@ -552,6 +552,10 @@ kubectl get clusterrepository agents -o yaml          # the Ready condition
 kubectl -n kopiur-system get cronjob aws-backup-credentials-agents
 kubectl -n kopiur-system get secret aws-backup-sts-agents -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
 kubectl -n kopiur-system get jobs | grep agents
+# for agents-finance: the same, with the names of that repository
+kubectl get clusterrepository agents-finance -o yaml
+kubectl -n kopiur-system get cronjob aws-backup-credentials-agents-finance
+kubectl -n kopiur-system get secret aws-backup-sts-agents-finance -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
 ```
 
 **Seen so far.** Never.

@@ -3,7 +3,7 @@
 # restore test of the finance agent's state, as the pilot's ran on
 # 2026-11-16 (two runs of the check; the second mounts the volume at the
 # path of the agent pod). To run it: set the snapshot name in
-# restore/restore.yaml and the repository in ks.yaml, then list
+# restore/restore.yaml, then list
 # ./agent/restore-test/ks.yaml in ../../kustomization.yaml, in a pull request
 # with the owner's go; remove it in the next one.
 # Reads the restored scratch volume, read-only, and logs only safe facts:
