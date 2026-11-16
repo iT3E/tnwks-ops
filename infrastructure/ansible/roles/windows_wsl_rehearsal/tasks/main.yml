@@ -15,9 +15,10 @@
       ansible.windows.win_powershell:
         parameters:
           Name: "{{ wsl_rehearsal_account }}"
+          Description: "{{ wsl_rehearsal_account_description }}"
         script: |
           [CmdletBinding(SupportsShouldProcess)]
-          param([string]$Name)
+          param([string]$Name, [string]$Description)
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
           $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
@@ -28,7 +29,7 @@
                   [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
                   $secret = ConvertTo-SecureString ([Convert]::ToBase64String($bytes) + 'aA1!') -AsPlainText -Force
                   $user = New-LocalUser -Name $Name -Password $secret -PasswordNeverExpires -AccountNeverExpires `
-                      -UserMayNotChangePassword -Description 'tnwks-ops: the rehearsal of the account change (temporary)'
+                      -UserMayNotChangePassword -Description $Description
                   $secret.Dispose()
               }
           }
@@ -158,7 +159,8 @@
           if ($PSCmdlet.ShouldProcess($Path, 'make the test disk file')) {
               $script = Join-Path $env:TEMP 'tnwks-rehearsal-disk.txt'
               "create vdisk file=`"$Path`" maximum=$SizeMiB type=expandable" | Set-Content -LiteralPath $script -Encoding ASCII
-              $out = diskpart.exe /s $script 2>&1 | Out-String
+              # Lines on stderr stay text: under Stop, Windows PowerShell 5.1 stops at the first.
+              $out = & { $ErrorActionPreference = 'Continue'; diskpart.exe /s $script 2>&1 | ForEach-Object { "$_" } } | Out-String
               Remove-Item -LiteralPath $script -Force
               if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Path)) { throw "diskpart did not make $Path ($LASTEXITCODE): $out" }
           }

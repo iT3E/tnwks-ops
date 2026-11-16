@@ -114,9 +114,69 @@ def test_the_account_has_no_admin_group_and_a_password_that_nothing_keeps():
     assert "RandomNumberGenerator" in script and "New-LocalUser" in script
     assert "S-1-5-32-545" in script and "is a member of Administrators" in script
     assert "Add-LocalGroupMember -SID 'S-1-5-32-544'" not in script
-    assert set(account["ansible.windows.win_powershell"]["parameters"]) == {"Name"}, "no password goes in"
+    assert set(account["ansible.windows.win_powershell"]["parameters"]) == {"Name", "Description"}, "no password goes in"
     text = (ROLE / "tasks/main.yml").read_text() + (ROLE / "defaults/main.yml").read_text()
     assert not re.search(r"password\s*:", text, re.IGNORECASE)
+
+
+def test_the_name_and_the_description_of_the_account_fit_new_localuser():
+    r"""New-LocalUser of Windows PowerShell 5.1 takes a name of 1 to 20 characters,
+    without " / \ [ ] : ; | = , + * ? < > @, and a description of 0 to 48. A check run
+    never calls it, so only these tests see its limits."""
+    name, description = DEFAULTS["wsl_rehearsal_account"], DEFAULTS["wsl_rehearsal_account_description"]
+    assert 1 <= len(name) <= 20 and not set(name) & set('"/\\[]:;|=,+*?<>@') and name.strip(". ")
+    assert len(description) <= 48
+    parameters = task_named("The temporary account")["ansible.windows.win_powershell"]["parameters"]
+    assert parameters == {"Name": "{{ wsl_rehearsal_account }}", "Description": "{{ wsl_rehearsal_account_description }}"}
+
+
+# A fake of each cmdlet of local accounts that the task calls. New-LocalUser has the
+# parameter sets and the limits of Windows PowerShell 5.1 (its documentation: a name
+# of 1 to 20 characters, a description of 0 to 48, a password of 127 at most).
+ACCOUNT_FAKES = r"""
+$Ansible = [pscustomobject]@{ Changed = $null }
+$script:Made = $null
+$script:Users = @()
+function Get-LocalUser { param($Name, $ErrorAction) $script:Made }
+function New-LocalUser {
+    [CmdletBinding(DefaultParameterSetName = 'Password')]
+    param(
+        [Parameter(Mandatory, Position = 0)][ValidateLength(1, 20)][string]$Name,
+        [Parameter(Mandatory, ParameterSetName = 'Password')][SecureString]$Password,
+        [Parameter(ParameterSetName = 'Password')][switch]$PasswordNeverExpires,
+        [Parameter(Mandatory, ParameterSetName = 'NoPassword')][switch]$NoPassword,
+        [DateTime]$AccountExpires, [switch]$AccountNeverExpires, [switch]$Disabled, [string]$FullName,
+        [switch]$UserMayNotChangePassword, [ValidateLength(0, 48)][string]$Description)
+    $plain = [Net.NetworkCredential]::new('', $Password).Password
+    if ($plain.Length -gt 127) { throw "a password of $($plain.Length) characters" }
+    $script:Made = [pscustomobject]@{ Name = $Name; Description = $Description; Length = $plain.Length
+                                      SID = [pscustomobject]@{ Value = 'S-1-5-21-7-7-7-1002' } }
+    $script:Made
+}
+function Get-LocalGroupMember { param($SID) if ($SID -eq 'S-1-5-32-545') { $script:Users } }
+function Add-LocalGroupMember { param($SID, $Member) $script:Users += $Member }
+"""
+
+
+def run_account_task(description: str) -> str:
+    task = task_named("The temporary account")["ansible.windows.win_powershell"]
+    body = ACCOUNT_FAKES + "$f = {\n" + task["script"] + "\n}\n" + (
+        f"try {{ & $f -Name '{DEFAULTS['wsl_rehearsal_account']}' -Description '{description}' | Out-Null\n"
+        "  'made {0} {1} {2} users {3}' -f $script:Made.Name, $script:Made.Description.Length, $script:Made.Length, "
+        "@($script:Users).Count }\n"
+        "catch { 'failed ' + $_.Exception.Message }")
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    return run.stdout.strip().splitlines()[-1]
+
+
+@needs_pwsh
+def test_the_account_task_calls_new_localuser_within_its_limits():
+    """The path of a real apply, with the fakes: the account is made with the
+    description of the defaults and a password of 68 characters, and joins Users."""
+    description = DEFAULTS["wsl_rehearsal_account_description"]
+    assert run_account_task(description) == f"made tnwks-rehearsal {len(description)} 68 users 1"
+    assert run_account_task("x" * 49).startswith("failed "), "the fake holds the limit of the description"
 
 
 def test_the_account_gets_the_batch_right_and_the_rights_of_its_folders():
@@ -335,6 +395,28 @@ def test_the_mount_step_mounts_bare_and_unmounts(tmp_path):
     out = run_step(tmp_path, "mount", wsl=f'echo "$@" >> {calls}; exit 0', extra="-Disk 'C:\\x\\mount-test.vhdx'")
     assert calls.read_text().splitlines() == ["--mount --vhd C:\\x\\mount-test.vhdx --bare", "--unmount C:\\x\\mount-test.vhdx"]
     assert out["mount_exit"] == 0 and out["unmount_exit"] == 0
+
+
+@needs_pwsh
+def test_a_warning_of_wsl_on_stderr_stays_text_in_the_result(tmp_path):
+    wsl = 'echo "wsl: a warning on stderr" >&2; echo "done"; exit 0'
+    out = run_step(tmp_path, "mount", wsl=wsl, extra="-Disk 'C:\\x\\mount-test.vhdx'")
+    # The two streams of the fake reach the pipe in either order.
+    assert out["mount_exit"] == 0 and sorted(out["mount_output"].splitlines()) == ["done", "wsl: a warning on stderr"]
+
+
+def test_each_stderr_redirect_runs_under_continue():
+    """Under Stop, Windows PowerShell 5.1 stops at the first line that a program
+    writes to stderr when it is redirected; PowerShell 7 does not, so the test of the
+    step above can not see it. Each 2>&1 of the role runs where the preference is
+    Continue: in Invoke-Wsl, or in its own script block."""
+    script = SCRIPT.read_text()
+    function = script[script.index("function Invoke-Wsl"):script.index("function Get-Distros")]
+    assert "$ErrorActionPreference = 'Continue'" in function and function.count("2>&1") == 1
+    assert script.count("2>&1") == 1
+    tasks = (ROLE / "tasks/main.yml").read_text()
+    lines = [line for line in tasks.splitlines() if "2>&1" in line]
+    assert lines and all(re.search(r"& \{ \$ErrorActionPreference = 'Continue'; [^}]*2>&1", line) for line in lines)
 
 
 def test_the_import_waits_for_the_hive_and_the_profile_of_the_account():
