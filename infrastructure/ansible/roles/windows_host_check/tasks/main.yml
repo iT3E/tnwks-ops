@@ -88,9 +88,12 @@
               } | Sort-Object) -join ';'
           }
           $parent = Get-RuleKey ((Get-Acl -LiteralPath $Path).GetAccessRules($true, $false, $sid))
+          # The owner is the Administrators group, or SYSTEM, which has full
+          # control here anyway: the relay, as SYSTEM, makes its log here.
+          $owners = @($admins.Value, 'S-1-5-18')
           $children = @(Get-ChildItem -LiteralPath $Path -Recurse -Force | Where-Object {
               $child = Get-Acl -LiteralPath $_.FullName
-              $child.AreAccessRulesProtected -or $child.GetOwner($sid).Value -ne $admins.Value -or
+              $child.AreAccessRulesProtected -or $owners -notcontains $child.GetOwner($sid).Value -or
                   @($child.GetAccessRules($true, $false, $sid)).Count -gt 0 -or
                   (Get-RuleKey $child.GetAccessRules($false, $true, $sid)) -ne $parent
           })
@@ -129,10 +132,11 @@
     # let each user make files and folders: no inherited rule, and the
     # Administrators own it. SYSTEM and the Administrators have full control.
     # The account of the distro has two rules: on the folder itself, list it
-    # and make files in it (no delete, no subfolder), so it can not remove the
-    # folder or put a link or a junction in its place; on the files, change,
-    # replace and delete them, which the write of the distro (a new file, then
-    # a rename over the document) needs.
+    # and make files in it (no delete of the folder, no subfolder); on the
+    # files, change, replace and delete them, which the write of the distro (a
+    # new file, then a rename over the document) needs. A link or a junction
+    # at the inbox is refused by the relay and by the role (the next task stops
+    # before it reads or sets a rule).
     - name: Inbox of the distro
       ansible.windows.win_file:
         path: "{{ host_check_inbox_dir }}"

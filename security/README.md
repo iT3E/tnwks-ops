@@ -247,17 +247,30 @@ not write to the textfile directory, because the collector reads each
 `.prom` file there and can not tell who wrote it. The distro writes its
 document into an inbox, and the relay, the same script with `-Relay`,
 checks it and writes the `.prom` file of the distro. The inbox has no
-inherited rule: the Administrators own it, SYSTEM and the Administrators
-have full control, and the account of the distro may change files. The relay
-takes a document only when it fits: at most 64 KiB, not a link, the name of
+inherited rule: the Administrators own it, and SYSTEM and the Administrators
+have full control. The account of the distro has two rules: on the folder
+itself, it may list it and make files in it (no delete of the folder, no
+subfolder); on the files, it may change, replace and delete them, which its
+write (a new file, then a rename over the document) needs. A link or a
+junction at the inbox is refused by the relay and by the role: the role
+stops before it reads or sets a rule there.
+
+The relay takes a document only when it fits: at most 64 KiB, the name of
 the distro of that host (the distro whose `wsl_distro_windows_host` is the
 host), the checks `updates-pending` and `updates-held` only, each a whole
 number of 0 or more, a time at most 300 seconds ahead, and only the detail
-series of a distro, a label `uid` a number. A document that does not fit,
-or no document, is the failed query `relay`: no result and no time, so the
-distro reads as late, and the task log names the rule that the document
-broke. The relay writes the time of the distro, not its own, so a distro
-that stops writing reads as late too. A document can wait up to an hour for
+series of a distro, a label `uid` a number, and each series once (a detail
+that repeats a name and its labels is refused). The relay opens the document
+once, and refuses it when the inbox or the document is a link or a
+junction, when the open file is not the one at its path (a link or a
+junction on the way), or when the file has more than one name (a hard
+link). While it reads, the document can not be renamed, replaced or
+deleted. A document that does not fit, or no document, is the failed query
+`relay`: no result and no time, so the distro reads as late. The relay logs
+each run to `C:\ProgramData\tnwks-host-check\relay.log`, with the rule that
+the document broke and never a value of the document. A log larger than
+1 MiB moves to `relay.log.1`. The relay writes the time of the distro, not
+its own, so a distro that stops writing reads as late too. A document can wait up to an hour for
 the relay, which the late window of 12 hours covers.
 
 The distro's file has its own name, because the collector refuses two files
@@ -336,8 +349,10 @@ each pending upgrade does not start again.
 SYSTEM runs the script from `C:\ProgramData\tnwks-host-check`. The role sets
 the rules of that directory on each run: no inherited rule, the
 Administrators own it, SYSTEM and the Administrators have full control, and
-Users may read. A file below it with a rule of its own, or another owner,
-gets the rules of the directory again. The account of the WSL distro has no
+Users may read. A file below it with a rule of its own, or an owner other
+than the Administrators or SYSTEM, gets the rules of the directory again.
+SYSTEM may own a file there because it has full control anyway: the relay,
+as SYSTEM, makes its log there. The account of the WSL distro has no
 right on the textfile directory. The role removes the directory
 `textfile_inputs\wsl-distro`, where the distro wrote before the relay, and
 the right of the distro account on it.

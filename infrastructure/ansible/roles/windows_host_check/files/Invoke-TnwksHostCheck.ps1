@@ -47,7 +47,8 @@ updates-pending and updates-held only, each a whole number of 0 or more, a
 time at most 300 seconds ahead, and the detail series of a distro only,
 each name and labels once. The inbox and the document must be what their
 names say: the relay opens the document once, and refuses it when the open
-file is not the one at its path (a link or a junction on the way). A
+file is not the one at its path (a link or a junction on the way), or when
+the file has more than one name (a hard link). A
 document that does not fit, or no document, is the failed query relay: no
 result and no time, so the distro reads as late. The relay logs each run to
 -LogPath, in the directory of this script, which only SYSTEM and the
@@ -405,8 +406,21 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 public static class TnwksFinalPath {
+    [StructLayout(LayoutKind.Sequential)]
+    struct FileInformation {
+        public uint Attributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME Creation, LastAccess, LastWrite;
+        public uint VolumeSerialNumber, SizeHigh, SizeLow, NumberOfLinks, IndexHigh, IndexLow;
+    }
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern uint GetFinalPathNameByHandleW(SafeFileHandle file, StringBuilder path, uint length, uint flags);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetFileInformationByHandle(SafeFileHandle file, out FileInformation information);
+    public static uint Links(SafeFileHandle file) {
+        FileInformation information;
+        if (!GetFileInformationByHandle(file, out information)) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+        return information.NumberOfLinks;
+    }
     public static string Of(SafeFileHandle file) {
         StringBuilder path = new StringBuilder(1024);
         uint length = GetFinalPathNameByHandleW(file, path, (uint)path.Capacity, 0);
@@ -432,13 +446,28 @@ function Get-TnwksOpenPath([IO.FileStream]$Stream) {
     [IO.File]::ResolveLinkTarget("/proc/self/fd/$($Stream.SafeFileHandle.DangerousGetHandle())", $false).FullName
 }
 
+function Get-TnwksOpenLinks([IO.FileStream]$Stream) {
+    <#
+    .SYNOPSIS
+    How many names the file that a stream has open has: more than one is a hard
+    link, which the check of the final path does not see.
+    #>
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        if (-not ('TnwksFinalPath' -as [type])) { Add-Type -TypeDefinition $script:FinalPathCode }
+        return [int][TnwksFinalPath]::Links($Stream.SafeFileHandle)
+    }
+    # Not Windows (the tests in CI): the link count of the open file descriptor.
+    [int](& stat -L -c '%h' "/proc/$PID/fd/$($Stream.SafeFileHandle.DangerousGetHandle())")
+}
+
 function Open-TnwksPlainFile([string]$Path) {
     <#
     .SYNOPSIS
     Opens a file to read, once, and refuses it when the open file is not the
     one at its path: a link or a junction at the file or at a directory above
-    it. No FileShare.Delete: while the stream is open, the file at the path
-    can not be renamed, replaced or deleted.
+    it, or a file with a second name (a hard link). No FileShare.Delete: while
+    the stream is open, the file at the path can not be renamed, replaced or
+    deleted.
     #>
     $full = [IO.Path]::GetFullPath($Path)
     $stream = [IO.File]::Open($full, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
@@ -446,6 +475,7 @@ function Open-TnwksPlainFile([string]$Path) {
         if (-not [string]::Equals((Get-TnwksOpenPath $stream), $full, [StringComparison]::OrdinalIgnoreCase)) {
             Stop-TnwksRelay 'the document or its directory is a link'
         }
+        if ((Get-TnwksOpenLinks $stream) -gt 1) { Stop-TnwksRelay 'the document has more than one name (a hard link)' }
     } catch {
         $stream.Dispose()
         throw
