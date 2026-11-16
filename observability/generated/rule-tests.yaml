@@ -1261,6 +1261,60 @@ tests:
         description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
           when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
           has the steps. The alert ends at the next run of the refresher.'
+- name: a fail of defender-signatures at high starts SecurityFindingNew, and at medium it does not
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",source="host-check",check="defender-signatures",system="DESKTOP-HKE05KI",severity="high"}
+    values: 1+0x30
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",source="host-check",check="defender-signatures",system="DESKTOP-HKE05KI-medium",severity="medium"}
+    values: 1+0x30
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 5m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 15m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: host-check
+        system: DESKTOP-HKE05KI
+      exp_annotations:
+        summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+- name: a fail of tfc-mfa-required at high starts SecurityFindingNew, and at medium it does not
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",source="api-check",check="tfc-mfa-required",system="tnwks-ops",severity="high"}
+    values: 1+0x30
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",source="api-check",check="tfc-mfa-required",system="tnwks-ops-medium",severity="medium"}
+    values: 1+0x30
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 5m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 15m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: api-check
+        system: tnwks-ops
+      exp_annotations:
+        summary: A new finding of high severity on tnwks-ops, from api-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
 - name: the first refused request of the audit sink alerts, though its counter starts at 1
   interval: 1m
   input_series:
@@ -1595,6 +1649,199 @@ tests:
   - alertname: SecurityImagesNotScanned
     eval_time: 35h
     exp_alerts: []
+  - alertname: SecurityImagesNotScanned
+    eval_time: 37h
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+      exp_annotations:
+        summary: 1 running images on homelab-wsl have no scan report of Trivy Operator
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'Images that run on this cluster have had no vulnerability report for 36 hours: a private image,
+          a registry that the network policy of the scan jobs does not name, or a scan that fails. While one image
+          has no report, the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of
+          a pass. kubernetes/apps/security/trivy-operator/README.md (When a scan fails) has the steps. For an image
+          that no scan can read, an entry of the accepted list with the check images-not-scanned mutes the alert
+          of the cluster until its end.'
+- name: 'a pod with the digest of an image index and a report with the digest of the platform image: the report
+    counts'
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-1",container="postgres",image_spec="ghcr.io/example/postgres:16",image="ghcr.io/example/postgres:16",image_id="ghcr.io/example/postgres@sha256:index1"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="16",image_digest="sha256:platform1",severity="Critical"}
+    values: 2+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:2.0",image="ghcr.io/example/app:2.0",image_id="ghcr.io/example/app@sha256:platform2"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="2.0",image_digest="sha256:index2",severity="Critical"}
+    values: 1+0x90
+  promql_expr_test:
+  - expr: count by (k8s_cluster, digest) ((homelab:security_trivy_running_containers:info{source_site=""}) unless
+      on (k8s_cluster, digest) (homelab:security_trivy_reports:max{source_site=""}) unless on (k8s_cluster, namespace,
+      container, image_ref) (homelab:security_trivy_reports:max{source_site=""}))
+    eval_time: 5m
+    exp_samples: []
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 3
+- name: the reference of a report matches the image of the pod spec as the operator parses it
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="db-1",container="db",image_spec="postgres:16-alpine",image="postgres:16-alpine",image_id="postgres@sha256:a1"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-db",resource_kind="ReplicaSet",resource_name="w",container_name="db",image_registry="index.docker.io",image_repository="library/postgres",image_tag="16-alpine",image_digest="sha256:b1",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="tool-1",container="tool",image_spec="docker.io/example/tool",image="docker.io/example/tool",image_id="docker.io/example/tool@sha256:a2"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-tool",resource_kind="ReplicaSet",resource_name="w",container_name="tool",image_registry="index.docker.io",image_repository="example/tool",image_tag="latest",image_digest="sha256:b2",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="proxy-1",container="proxy",image_spec="quay.io/example/proxy:1.2@sha256:a3",image="quay.io/example/proxy:1.2@sha256:a3",image_id="quay.io/example/proxy@sha256:a3"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-proxy",resource_kind="ReplicaSet",resource_name="w",container_name="proxy",image_registry="quay.io",image_repository="example/proxy",image_tag="1.2",image_digest="sha256:b3",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="cache-1",container="cache",image_spec="registry.example:5000/cache:7",image="registry.example:5000/cache:7",image_id="registry.example:5000/cache@sha256:a4"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-cache",resource_kind="ReplicaSet",resource_name="w",container_name="cache",image_registry="registry.example:5000",image_repository="cache",image_tag="7",image_digest="sha256:b4",severity="Critical"}
+    values: 0+0x90
+  promql_expr_test:
+  - expr: count by (k8s_cluster, digest) ((homelab:security_trivy_running_containers:info{source_site=""}) unless
+      on (k8s_cluster, digest) (homelab:security_trivy_reports:max{source_site=""}) unless on (k8s_cluster, namespace,
+      container, image_ref) (homelab:security_trivy_reports:max{source_site=""}))
+    eval_time: 5m
+    exp_samples: []
+- name: a report of the same reference in another namespace, of another container or of another tag does not count
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-1",container="postgres",image_spec="ghcr.io/example/postgres:16",image="ghcr.io/example/postgres:16",image_id="ghcr.io/example/postgres@sha256:c1"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="other",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="16",image_digest="sha256:d1",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-2",container="postgres",image_spec="ghcr.io/example/postgres:17",image="ghcr.io/example/postgres:17",image_id="ghcr.io/example/postgres@sha256:c2"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-sidecar",resource_kind="ReplicaSet",resource_name="w",container_name="sidecar",image_registry="ghcr.io",image_repository="example/postgres",image_tag="17",image_digest="sha256:d2",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-3",container="postgres",image_spec="ghcr.io/example/postgres:18",image="ghcr.io/example/postgres:18",image_id="ghcr.io/example/postgres@sha256:c3"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="18.1",image_digest="sha256:d3",severity="Critical"}
+    values: 0+0x90
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-4",container="postgres",image_spec="ghcr.io/example/postgres@sha256:c4",image="ghcr.io/example/postgres@sha256:c4",image_id="ghcr.io/example/postgres@sha256:c4"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="latest",image_digest="sha256:d4",severity="Critical"}
+    values: 0+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-gone",resource_kind="ReplicaSet",resource_name="w",container_name="gone",image_registry="ghcr.io",image_repository="example/gone",image_tag="1",image_digest="sha256:d5",severity="Critical"}
+    values: 9+0x90
+  promql_expr_test:
+  - expr: count by (k8s_cluster, digest) ((homelab:security_trivy_running_containers:info{source_site=""}) unless
+      on (k8s_cluster, digest) (homelab:security_trivy_reports:max{source_site=""}) unless on (k8s_cluster, namespace,
+      container, image_ref) (homelab:security_trivy_reports:max{source_site=""}))
+    eval_time: 5m
+    exp_samples:
+    - labels: '{k8s_cluster="homelab-wsl",digest="sha256:c1"}'
+      value: 1
+    - labels: '{k8s_cluster="homelab-wsl",digest="sha256:c2"}'
+      value: 1
+    - labels: '{k8s_cluster="homelab-wsl",digest="sha256:c3"}'
+      value: 1
+    - labels: '{k8s_cluster="homelab-wsl",digest="sha256:c4"}'
+      value: 1
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 5m
+    exp_samples: []
+- name: 'a tag moves between two scans while the pod runs the old image: the report of the running digest counts,
+    alone'
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d1"}
+    values: 1+0x120
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d1",severity="Critical"}
+    values: 2+0x30
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d2",severity="Critical"}
+    values: _x31 3+0x89
+  - series: homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl",name="k8s-cis-1.23"}
+    values: 1700000000+0x120
+  promql_expr_test:
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 45m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 2
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 45m
+    exp_samples:
+    - labels: homelab:security_trivy_containers_by_reference:count{k8s_cluster="homelab-wsl"}
+      value: 0
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 100m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 3
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 100m
+    exp_samples:
+    - labels: homelab:security_trivy_containers_by_reference:count{k8s_cluster="homelab-wsl"}
+      value: 1
+- name: after a restart on a moved tag, the report of the old ReplicaSet does not count next to the new one
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-2",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d2"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-old-app",resource_kind="ReplicaSet",resource_name="old",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d1",severity="Critical"}
+    values: 4+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d2",severity="Critical"}
+    values: 0+0x90
+  promql_expr_test:
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 45m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 0
+- name: 'a tag moved twice and the pod runs an older image: one report of the reference counts, the worst'
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d0"}
+    values: 1+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-old-app",resource_kind="ReplicaSet",resource_name="old",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d1",severity="Critical"}
+    values: 4+0x90
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="web",name="replicaset-w-app",resource_kind="ReplicaSet",resource_name="w",container_name="app",image_registry="ghcr.io",image_repository="example/app",image_tag="1",image_digest="sha256:d2",severity="Critical"}
+    values: 3+0x90
+  - series: homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl",name="k8s-cis-1.23"}
+    values: 1700000000+0x90
+  promql_expr_test:
+  - expr: homelab_security_check_result{source="trivy"}
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab_security_check_result{k8s_cluster="homelab-wsl",system="homelab-wsl",source="trivy",check="image-vulnerabilities",severity="critical"}
+      value: 4
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab:security_trivy_containers_by_reference:count{k8s_cluster="homelab-wsl"}
+      value: 1
+- name: a cluster with no Trivy Operator has no count of containers matched by reference
+  interval: 1m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="web",pod="app-1",container="app",image_spec="ghcr.io/example/app:1",image="ghcr.io/example/app:1",image_id="ghcr.io/example/app@sha256:d1"}
+    values: 1+0x90
+  promql_expr_test:
+  - expr: homelab:security_trivy_containers_by_reference:count
+    eval_time: 5m
+    exp_samples: []
+- name: an image with a report under another digest does not alert; an image with no report still alerts after 36
+    hours
+  interval: 2m
+  input_series:
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="pg-1",container="postgres",image_spec="ghcr.io/example/postgres:16",image="ghcr.io/example/postgres:16",image_id="ghcr.io/example/postgres@sha256:index1"}
+    values: 1+0x1200
+  - series: trivy_image_vulnerabilities{k8s_cluster="homelab-wsl",namespace="db",name="replicaset-w-postgres",resource_kind="ReplicaSet",resource_name="w",container_name="postgres",image_registry="ghcr.io",image_repository="example/postgres",image_tag="16",image_digest="sha256:platform1",severity="Critical"}
+    values: 0+0x1200
+  - series: kube_pod_container_info{k8s_cluster="homelab-wsl",namespace="db",pod="db-1",container="db",image_spec="postgres:16-alpine",image="postgres:16-alpine",image_id="postgres@sha256:e1"}
+    values: 1+0x1200
+  - series: homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl",name="k8s-cis-1.23"}
+    values: 1700000000+0x1200
+  alert_rule_test:
   - alertname: SecurityImagesNotScanned
     eval_time: 37h
     exp_alerts:
@@ -1961,3 +2208,132 @@ tests:
   - alertname: SecurityFindingNew
     eval_time: 1260m
     exp_alerts: []
+- name: a new finding of a standby series is held while site 2 scrapes its host
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1620
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 1560m
+    exp_alerts: []
+- name: a new finding of a standby series alerts while site 2 is away
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1400
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1490m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: host-check
+        system: DESKTOP-HKE05KI
+      exp_annotations:
+        summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+- name: a new finding of a standby series alerts while site 2 answers but can not scrape its host
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1500 0+0x120
+  - series: up{job="windows-exporter-security",instance="WSL-02",k8s_cluster="homelab-wsl-02",source_site="homelab-wsl-02"}
+    values: 1+0x1620
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: host-check
+        system: DESKTOP-HKE05KI
+      exp_annotations:
+        summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+- name: the hold of one host does not hold the standby series of the other host
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl-02",job="windows-exporter",instance="WSL-02",source="host-check",system="WSL-02",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1620
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+        source: host-check
+        system: WSL-02
+      exp_annotations:
+        summary: A new finding of high severity on WSL-02, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+- name: a finding that failed while held is not new when the hold ends
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x60 1+0x1560
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1500
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 1560m
+    exp_alerts: []
+- name: a series with no standby label is not held by the scrape of site 2
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1620
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: host-check
+        system: DESKTOP-HKE05KI
+      exp_annotations:
+        summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'

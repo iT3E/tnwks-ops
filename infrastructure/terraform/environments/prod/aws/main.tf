@@ -34,6 +34,24 @@ module "aws" {
       write_prefixes = ["cnpg/*/homelab-wsl-02*/*", "kopiur-homelab-wsl-02/*"]
     }
   }
+  # The Kopia repository of the agent trust domains on homelab-wsl, with its own
+  # certificate: the session that the backup operator copies into an agent
+  # namespace reaches only this prefix (docs/apps/agent-platform.md, "Backups of
+  # the agent trust domains").
+  rolesanywhere_backups_prefixed = {
+    "agents" = {
+      common_names = ["homelab-wsl-agent-backups"]
+      prefix       = "kopiur-agents/"
+      # The bucket policy denies kopiur-agents/ to every other principal but
+      # the break-glass role below (modules/aws/s3_backups.tf).
+      exclusive = true
+    }
+  }
+  # The owner's way into an exclusive prefix: the AdministratorAccess
+  # permission set of IAM Identity Center in this account.
+  backups_break_glass_role_arn_patterns = [
+    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-reserved/sso.amazonaws.com/*AWSReservedSSO_AdministratorAccess_*",
+  ]
   sops_role_arn = "arn:aws:iam::654654220436:role/iam-role-sops"
 }
 

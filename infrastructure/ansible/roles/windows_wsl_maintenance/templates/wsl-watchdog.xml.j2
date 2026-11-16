@@ -8,7 +8,7 @@
     <Principal id="Author">
       <UserId>{{ wsl_maintenance_user | e }}</UserId>
       <LogonType>S4U</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
+      <RunLevel>{{ 'LeastPrivilege' if wsl_start_unelevated | bool else 'HighestAvailable' }}</RunLevel>
     </Principal>
   </Principals>
   <Settings>
@@ -42,7 +42,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>powershell.exe</Command>
-      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ wsl_watchdog_dir | e }}\Watch-TnwksWsl.ps1"{% if wsl_watchdog_args %} {{ wsl_watchdog_args | e }}{% endif %}</Arguments>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ wsl_watchdog_dir | e }}\Watch-TnwksWsl.ps1"{% if wsl_watchdog_args %} {{ wsl_watchdog_args | e }}{% endif %}{% if wsl_start_unelevated | bool %} -LogDir "{{ wsl_watchdog_log_dir | e }}"{% endif %}</Arguments>
     </Exec>
   </Actions>
 </Task>

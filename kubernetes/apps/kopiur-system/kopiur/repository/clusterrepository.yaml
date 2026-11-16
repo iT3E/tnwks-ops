@@ -39,9 +39,14 @@ spec:
       - media
       - production
       - selfhosted
-      # The pilot of the agent platform (docs/apps/agent-platform.md): the
-      # volumes of the agent and the Signal daemon. Only homelab-wsl runs it.
-      - agents-pilot
+      # Not the agent trust domains (agents-*): they back up to the agents
+      # repository of their own (kopiur-system/agents-repository). Their
+      # snapshots from before the move stay here; a restore of one adds the
+      # namespace back for that restore (docs/apps/agent-platform-runbook.md).
+      # A namespace that leaves this repository stays in the list until its
+      # old policies are gone, and leaves it in a second change
+      # (docs/apps/agent-platform.md, "Move a trust domain to another
+      # repository").
   credentialProjection:
     allowed: true
   identityDefaults:

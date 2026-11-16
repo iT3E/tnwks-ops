@@ -62,6 +62,11 @@ function Get-CanonicalXml([string]$text) {
     $ri = $doc.SelectSingleNode('/t:Task/t:RegistrationInfo', $ns)
     if ($ri -and -not $ri.HasChildNodes) { [void]$ri.ParentNode.RemoveChild($ri) }
     foreach ($n in $doc.SelectNodes('//t:UserId', $ns)) { $n.InnerText = ConvertTo-Sid $n.InnerText }
+    # LeastPrivilege is the default run level, and Export-ScheduledTask leaves
+    # the element out for it. A template that names it is the same task.
+    foreach ($n in @($doc.SelectNodes('//t:Principal/t:RunLevel', $ns))) {
+        if ($n.InnerText.Trim() -eq 'LeastPrivilege') { [void]$n.ParentNode.RemoveChild($n) }
+    }
     $settings = New-Object Xml.XmlWriterSettings
     $settings.Indent = $true
     $settings.OmitXmlDeclaration = $true

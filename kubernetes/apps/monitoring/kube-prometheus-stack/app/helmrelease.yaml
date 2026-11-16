@@ -211,6 +211,15 @@ spec:
                 # UniFi (unpoller runs where the controller runs), so the
                 # dashboards on either site see the APs.
                 - '{__name__=~"unpoller_.*"}'
+                # The accepted findings of Trivy Operator, from the reader of
+                # the encrypted list on homelab-wsl-02: the exception list of
+                # the rule of the result series here (observability/rules.py).
+                - 'homelab_security_accepted_until_timestamp_seconds{source="trivy",source_site=""}'
+                # Whether homelab-wsl-02 scrapes the security series of each
+                # Windows host: while it does, the series of the job
+                # windows-exporter here are the standby, and do not alert
+                # (SecurityFindingNew, observability/rules.py).
+                - 'up{job="windows-exporter-security",source_site=""}'
             static_configs:
               - targets:
                   - ${PEER_WINDOWS_HOST_ADDR}:9090
@@ -235,6 +244,16 @@ spec:
                 labels:
                   instance: ${PEER_WINDOWS_HOST_NAME}
                   k8s_cluster: ${PEER_CLUSTER_NAME}
+            # The series of the security registry (the host check) are the
+            # standby of the ones that homelab-wsl-02 scrapes for itself (job
+            # windows-exporter-security there). SecurityFindingNew reads one
+            # with this label only while homelab-wsl-02 does not scrape its
+            # host (Design Doc 0004, section 5.5).
+            metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: homelab_security_.+
+                target_label: standby
+                replacement: "true"
 
           # SMART disk health on the Windows host. smartctl_exporter runs there as the
           # SYSTEM scheduled task \Prometheus\smartctl_exporter and re-reads the drives

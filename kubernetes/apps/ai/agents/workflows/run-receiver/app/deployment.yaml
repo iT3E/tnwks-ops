@@ -42,7 +42,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: run-receiver
-          image: ghcr.io/it3e/tnwks-workflow-agents:0.1.5@sha256:66f2a946099c6d38d3f8c590d8eea959be2680656eb452028f31fc045441bd75
+          image: ghcr.io/it3e/tnwks-workflow-agents:0.3.2@sha256:35998129d4db52274984e1721e110730f3cc9dfdb5dd6d0c6d7f73440242c881
           imagePullPolicy: IfNotPresent
           args: ["run-receiver"]
           ports:

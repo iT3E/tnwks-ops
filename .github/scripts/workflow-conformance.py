@@ -5,6 +5,7 @@
 
 Each domain and group is an output of ci.yaml's `changes` job and has a job
 gated on it, and Build Success needs every job and runs unless cancelled.
+A tier (TIERS) has no job of its own: its domain's job passes it as an input.
 In every workflow, every job that runs github-workflows' actions/terraform
 first runs .github/scripts/sops-mask.py, gated on matrix.mask_sops (the
 public log masks a root's SOPS values before Terraform can quote them), and
@@ -30,6 +31,12 @@ from pathlib import Path
 
 errors: list[str] = []
 
+# Tier domain -> the domain whose job takes it as an input (domains.toml).
+TIERS = {
+    "observability_long_tests": "observability",
+    "observability_rehearsals": "observability",
+}
+
 
 def err(path: Path, msg: str) -> None:
     errors.append(f"::error file={path}::{msg}")
@@ -54,9 +61,15 @@ def check_ci(root: Path) -> None:
     gate_id = next(k for k, v in jobs.items() if v is gate)
     needs = set(gate.get("needs") or [])
     for d in sorted(domains):
-        if d not in outputs and d != "observability_rehearsals":
+        if d not in outputs:
             err(path, f"domain {d}: not an output of the changes job")
-    for d in sorted(domains - {"observability_rehearsals"}):
+    for tier, parent in sorted(TIERS.items()):
+        if tier not in domains or parent not in domains:
+            err(path, f"tier {tier} of {parent}: not both in domains.toml")
+            continue
+        if f"needs.changes.outputs.{tier} == 'true'" not in str((jobs.get(parent) or {}).get("with", "")):
+            err(path, f"job {parent}: doesn't pass needs.changes.outputs.{tier} as an input")
+    for d in sorted(domains - set(TIERS)):
         job = jobs.get(d)
         if job is None:
             err(path, f"domain {d}: no job named {d}")

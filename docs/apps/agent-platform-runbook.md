@@ -94,7 +94,9 @@ kubectl -n flux-system get kustomizations | grep -E 'agents|litellm|model-bridge
 run passed since: the providers job, the sweep, or a daily check
 (`platform-check-isolation`, `platform-check-probe`). It resolves at the next
 good run. The chart rule `KubeJobFailed` fires for the same Job and keeps
-firing while the failed Job is kept, so read this alert for the state of now.
+firing while the failed Job is kept, so Alertmanager drops it for these Jobs
+and for the run jobs; it stays in the Alertmanager UI. Read this alert for
+the state of now.
 
 **First checks.**
 
@@ -258,6 +260,21 @@ The log of the sweep is in Loki,
 `{namespace="agents-workflows", app="workflow-sweep"}`.
 
 **Seen so far.** Never. The stopped-run drill below is the test of this path.
+
+**A record with no pod.** This alert reads pods, so it does not see a
+Sandbox record that the gateway left with no pod (OpenShell 0.1.8 can answer
+a delete with success and forget the sandbox). The run receiver checks the
+record of each run after its end. A record that stays is one line in its
+log, and the Job annotation `workflow-agents/sandbox-record` says
+`left: <sandbox>`:
+
+```text
+{namespace="agents-workflows", app="run-receiver"} |= "Sandbox record"
+```
+
+The sweep removes the record after one hour and fails once
+(AgentPlatformCronJobFailed), with an `ERROR sweep:` line that names the
+sandbox.
 
 **Fix.** The route that deletes a sandbox through the sandbox gateway is the
 sweep: it deletes each run sandbox older than one hour, by its name and
@@ -520,6 +537,30 @@ denial of this policy since it was added on 2026-11-14
 
 Not tested.
 
+### AgentBackupRepositoryNotReady
+
+**What it means.** The backup repository of the agent trust domains
+(ClusterRepository `agents`) has been `Pending` or `Initializing` for an
+hour. It never got `Ready`, so no snapshot of a trust domain runs, and the
+policies have no failure to show. `Failed` or `Degraded` is the chart rule
+`KopiurRepositoryNotReady` instead.
+
+**First checks.**
+
+```sh
+kubectl get clusterrepository agents -o yaml          # the Ready condition
+kubectl -n kopiur-system get cronjob aws-backup-credentials-agents
+kubectl -n kopiur-system get secret aws-backup-sts-agents -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
+kubectl -n kopiur-system get jobs | grep agents
+```
+
+**Seen so far.** Never.
+
+**Fix.** A session that is not there or has expired: run the refresher once
+(`docs/operations/backups.md`, "Credentials"). A `suspend: true` on the
+repository: remove it by a pull request. Anything else: the condition
+message and the log of the discovery Job.
+
 ### ModelBridgeRateLimited
 
 **What it means.** The model bridge logged an `engine_error` line with the
@@ -583,14 +624,20 @@ git.
 ### KopiurLastBackupFailed
 
 **What it means.** A rule of the kopiur chart: the last snapshot of a
-SnapshotPolicy failed. On the platform the policies are `agent-state` (and
-`signal-state` when Signal is on) in `agents-pilot`.
+SnapshotPolicy failed. On the platform the policies are `agent-state-v2` (and
+`signal-state` when Signal is on) in `agents-pilot`. They write to the
+repository of the agent trust domains, ClusterRepository `agents`
+([`agent-platform.md`](agent-platform.md#backups-of-the-agent-trust-domains)).
 
 **First checks.**
 
 ```sh
 kubectl -n agents-pilot get snapshotpolicies,snapshots
 kubectl -n agents-pilot describe snapshot <snapshot>
+kubectl get clusterrepository agents
+kubectl -n kopiur-system get cronjob aws-backup-credentials-agents
+kubectl -n kopiur-system get pods -l app.kubernetes.io/name=aws-backup-credentials-agents
+kubectl -n kopiur-system get secret aws-backup-sts-agents -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
 ```
 
 **Seen so far.** The first snapshot of the pilot's state volume failed on
@@ -600,7 +647,11 @@ not allow it (`5e219085`). The first scheduled snapshot after the fix
 passed the same day.
 
 **Fix.** Fix the policy or the network rule in git. The schedule `H 2 * * *`
-runs in local time, not in UTC. [`backups.md`](../operations/backups.md) has
+runs in local time, not in UTC. An S3 error of access names the session of
+the agents repository: its refresher, its certificate, or the role kept to
+`kopiur-agents/` (a policy of the agents repository that names another prefix
+fails here by design). A repository in `Failed` after a session error: run the
+refresher once (`docs/operations/backups.md`, "Credentials"). [`backups.md`](../operations/backups.md) has
 the rest.
 
 ### KopiurBackupStale
@@ -679,6 +730,11 @@ morning when the scheduled turn did not complete.
    In Loki, the `call` and `engine_error` lines of the bridge
    (`{namespace="ai", app="model-bridge"}`) for the minutes of the message.
    A plan limit is [its own case](#at-a-limit-of-the-claude-plan).
+   The start line of the gateway lists the plugins that loaded
+   (`kubectl -n agents-pilot logs deploy/agent -c agent | grep 'http server listening'`):
+   `brave, diagnostics-otel, memory-core, openshell, telegram`. A plugin
+   that is missing there is missing from `plugins.allow` or its entry in
+   `openclaw.json` ([agent-platform.md](agent-platform.md), "Plugins").
 2. **Read only, by the owner.** The log of the `agent` container
    (`kubectl -n agents-pilot logs deploy/agent -c agent --since=30m`). It
    can hold chat content, so it never ships to Loki; the owner reads it, and
@@ -734,36 +790,56 @@ result.
 | `provider_error: Search failed (HTTP 429)`, "Check this search provider's quota or try again later" | The vendor's rate limit or the plan's quota. The key is shared with another deployment of the owner, and the vendor counts both |
 | `provider_error: Search failed (HTTP 5xx)`, "Check this search provider's configuration and connection" | The vendor is down |
 | `Search timed out after 30s` | No answer in 30 seconds: the vendor is slow, or the network policy drops the flow (below) |
+| `web_search is unavailable. Enable or select a bundled or verified official search provider for sandboxed agents.` In the `agent` container's log: `[tools] dispatch_action failed: ... web_search is unavailable ...`. The tool span ends with an error in a few milliseconds, and no flow goes to the vendor | The Brave plugin loaded, but not as a verified official install. A sandboxed session (each session of the pilot) uses a search provider only when it is bundled or a verified official install, and a plugin from `plugins.load.paths` is neither. The `official-plugins` init container makes it one (below) |
 | No `web_search` tool at all | The tool is not in the allow list of a sandboxed session, or the plugin did not load (below) |
 
-(The messages come from `src/web-search/runtime-error.ts:36-70` of the
-product at 2026.11.3.)
+(The messages come from `src/web-search/runtime-error.ts:36-70` and
+`src/web-search/runtime.ts:568-573` of the product at 2026.11.3; the
+sandbox filter is `src/plugins/web-provider-resolution-shared.ts:85-90`.)
 
 1. **Read only.** The pod and its start:
    ```sh
    kubectl -n agents-pilot get pods -l app.kubernetes.io/name=agent
    kubectl -n agents-pilot get deploy agent -o jsonpath='{.spec.template.spec.containers[0].image}'
    ```
-   The image must be 0.3.0 or later: earlier images have no Brave plugin.
-2. **Read only, by the owner.** The start lines of the `agent` container
+   The image must be 0.4.0 or later: earlier images load the Brave plugin
+   from a path, and a sandboxed session refuses it.
+2. **Read only.** The official plugins step of this start:
+   ```sh
+   kubectl -n agents-pilot logs deploy/agent -c official-plugins | grep '^official-plugins'
+   ```
+   `official-plugins id=brave version=<release> result=installed` is good:
+   the step installs the plugin again from the image at each start.
+   `result=failed` stops the start of the whole pod (below), and the lines
+   above it are the product's installer.
+3. **Read only, by the owner.** The start lines of the `agent` container
    (`kubectl -n agents-pilot logs deploy/agent -c agent | grep -E 'http server listening|plugins\]'`).
-   - `http server listening (18 plugins: ... brave ...)` means the plugin
-     loaded. With no `brave` in that list, check the plugin path and the
-     entry `plugins.entries.brave` in `openclaw.json`.
+   - `http server listening (5 plugins: brave, ...)` means the plugin
+     loaded. With no `brave` in that list, check the step above and the
+     entries `plugins.entries.brave` and `plugins.allow` in `openclaw.json`.
    - A line `OpenClaw can't verify where this plugin came from. Review it
-     with 'openclaw plugins inspect brave'` is expected. The product says it
-     for each plugin that loads from a path, and the config names that path
-     in `plugins.load.paths`. The same line comes for `openshell`.
+     with 'openclaw plugins inspect brave'` means the plugin loaded from a
+     path, not as a verified official install: a sandboxed session refuses
+     it. Take its path out of `plugins.load.paths`. The same line for
+     `openshell` is expected: the sandbox backend loads from a path, and
+     needs no trust.
    - `WEB_SEARCH_PROVIDER_INVALID_AUTODETECT` means the provider `brave`
      is set but no plugin gives it: the plugin did not load.
-3. **Read only.** The allow list of a sandboxed session: each session of
+   - The check of trust, in the `agent` container:
+     `openclaw plugins inspect brave --json` must show `"origin": "global"`,
+     `"trustedOfficialInstall": true` and `"reason": "trusted-official"`.
+     `openclaw sandbox explain` is not this check: it shows the tool policy
+     (the names a sandbox allows, with `web_search` in it), not whether the
+     provider behind the tool is trusted. So it shows `web_search` as
+     allowed while each call fails.
+4. **Read only.** The allow list of a sandboxed session: each session of
    the pilot is sandboxed, and the product leaves `web_search` out of one
    by default. It must be in `tools.sandbox.tools.alsoAllow`, and
    `tools.web.search.enabled` must be `true`:
    ```sh
    kubectl -n agents-pilot get configmap agent-config -o jsonpath='{.data.openclaw\.json}' | jq '.tools'
    ```
-4. **Read only.** The network path: a dropped flow to the vendor shows in
+5. **Read only.** The network path: a dropped flow to the vendor shows in
    Hubble, through a read-only port-forward to `hubble-relay` in
    `kube-system`:
    ```sh
@@ -774,7 +850,7 @@ product at 2026.11.3.)
    `FORWARDED`. A `DROPPED` flow means that the rule of
    `pilot/agent/app/networkpolicy.yaml` does not match. A flow from any
    other pod of the namespace must stay `DROPPED`.
-5. **Fix, through a merge.**
+6. **Fix, through a merge.**
    - **A wrong or revoked key:** the owner makes a new key at the vendor,
      puts it in `kubernetes/apps/ai/agents/pilot/agent/app/secret-search.sops.yaml`
      (`sops <file>`) in a pull request, and changes the other deployment
@@ -785,11 +861,54 @@ product at 2026.11.3.)
    - **The allow list, the plugin or the network rule:** a pull request
      that puts back the lines of [agent-platform.md](agent-platform.md),
      "Web search".
-6. **Turn search off,** through a merge: set `tools.web.search.enabled` to
+   - **Not a verified official install:** the image at 0.4.0 or later, the
+     `official-plugins` init container before `doctor`, and no Brave path
+     in `plugins.load.paths`.
+7. **Turn search off,** through a merge: set `tools.web.search.enabled` to
    `false` in `openclaw.json` and take `web_search` out of
    `tools.sandbox.tools.alsoAllow`. The change of the config starts the pod
    again. Then the agent has no search tool, and nothing goes to the
    vendor.
+
+## The official plugins step fails
+
+The pod of the pilot does not start: its `official-plugins` init container
+failed, and `AgentPlatformWorkloadNotReady` fires after 10 minutes. The
+step installs the Brave plugin from the image at each start
+([agent-platform.md](agent-platform.md), "Web search"). It stops the whole
+pod on purpose, and does not let the gateway start without it, for two
+reasons:
+
+- The step also checks the state volume for plugins that the image did not
+  put there: an install record of another plugin, or any file in
+  `state/extensions`. Such a plugin would run in `doctor` and in the
+  gateway, with the secrets of the agent. A start that goes on would run
+  it.
+- With no plugin, `doctor` tries to install it from the npm registry. The
+  pod has no route there, so `doctor` waits for its timeouts and records an
+  unfinished upgrade of the plugin.
+
+1. **Read only.** The line of the step:
+   ```sh
+   kubectl -n agents-pilot logs deploy/agent -c official-plugins | grep '^official-plugins'
+   ```
+   - `result=failed reason=an install record of another plugin: <id>` or
+     `reason=files in .../extensions`: something wrote a plugin to the
+     state volume. Treat it as a security event: keep the pod down, take a
+     copy of the volume for the review, and find the writer before a
+     restore.
+   - `id=brave ... result=failed`: the install itself failed. The lines
+     above it are the product's installer. An image of a bad build fails
+     the same step in CI, so look at the release first.
+2. **Fix.**
+   - **A failed install:** revert the image pin to the last release that
+     started, through a merge.
+   - **A plugin that the image did not put there:** do not revert the
+     image; an image before 0.4.0 has no step and would start with that
+     plugin. Restore the state from a backup taken before the write
+     ([Restore the state of an agent](#restore-the-state-of-an-agent)),
+     with owner approval.
+   - Turning web search off does not skip the step.
 
 ## Memory search finds nothing
 
@@ -988,23 +1107,31 @@ steps is tested.
 
 The backup container makes the daily archive of a UTC day in the first hour
 of that day, or at the first start of the pod that day: it checks once an
-hour (`agent/config/scripts/daily-backup.sh`). The snapshot runs each day at
-10:30 UTC, so the snapshot of a day holds the daily archive of that day when
-the pod ran.
+hour (`agent/config/scripts/daily-backup.sh`). The snapshot runs each day
+between 02:00 and 03:00 local time, at a minute that kopiur derives from the
+schedule object (`H 2 * * *`; 10:30 UTC for `agent-state`, read
+`kubectl -n agents-pilot get snapshots` for `agent-state-v2`). So the snapshot
+of a day holds the daily archive of that day when the pod ran.
 
 1. **Read the state of the backups and of the volume.** Read only.
    ```sh
    kubectl -n agents-pilot get snapshots --sort-by=.metadata.creationTimestamp
+   kubectl get clusterrepository agents
    kubectl -n agents-pilot get pvc agent-state
    kubectl get pv "$(kubectl -n agents-pilot get pvc agent-state -o jsonpath='{.spec.volumeName}')" \
      -o jsonpath='{.spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values}'
    kubectl get nodes
    ```
    Pick the snapshot by its name, from before the fault, with phase
-   `Succeeded`. Not the newest by default: the schedule runs each day at
-   10:30 UTC during an outage too, so the newest can be a copy of an empty
-   or broken volume. The read of 2026-11-14 showed one snapshot each day,
-   each `Succeeded` from 2026-11-12.
+   `Succeeded`. Not the newest by default: the schedule runs each day
+   during an outage too, so the newest can be a copy of an empty or broken
+   volume. The read of 2026-11-14 showed one snapshot each day, each
+   `Succeeded` from 2026-11-12.
+   These are the snapshots of the policy `agent-state-v2`, in the repository
+   `agents`. The snapshots from before the move (policy `agent-state`) are in
+   the shared repository `s3` and have no Snapshot object any more: kopiur
+   deleted the objects with the old policy and kept the snapshots. Restore
+   one by [the steps for a snapshot from before the move](#a-snapshot-from-before-the-move).
 2. **Decide the node and the volume first.** This decides each step after
    it. A `local-path` volume lives on one node (its PV has a node affinity,
    and the class binds at the first pod: `WaitForFirstConsumer`). The agent
@@ -1051,7 +1178,7 @@ the pod ran.
    on this cluster.
 3. **Stop the agent and the snapshots.** Owner approval. One pull request
    sets `replicas: 0` in `pilot/agent/app/deployment.yaml`, and
-   `suspend: true` in the SnapshotSchedule `agent-state` of `backup.yaml`, so
+   `suspend: true` in the SnapshotSchedule `agent-state-v2` of `backup.yaml`, so
    no new snapshot copies the broken volume. For B and C it also takes
    `./pvc.yaml` out of `kustomization.yaml`, and for C it changes the
    `nodeSelector`. After the merge, wait until
@@ -1093,6 +1220,50 @@ the pod ran.
    Wait for the phase `Completed` of the Restore
    (`kubectl -n agents-pilot get restores`). `KopiurRestoreFailed` fires on
    a failed one.
+
+   #### A snapshot from before the move
+
+   `kubectl -n agents-pilot get snapshots.kopiur.home-operations.com` can show
+   the snapshots from before the move as `Discovered` objects (they came while
+   `s3` allowed `agents-pilot` again for the delete of the old policy,
+   [`agent-platform.md`](agent-platform.md#move-a-trust-domain-to-another-repository)).
+   Their `status.snapshot` holds the identity and the snapshot ID to use below.
+
+   The shared repository `s3` does not allow `agents-pilot` after the move, so the
+   pull request of this step also adds `agents-pilot` back to
+   `allowedNamespaces` in
+   `kubernetes/apps/kopiur-system/kopiur/repository/clusterrepository.yaml`,
+   and the Restore names the repository and the kopia identity of the old
+   policy instead of `source.snapshotRef`. The identity is fixed by the
+   `identityDefaults` of `s3` (host: the namespace; user: the namespace, a
+   dash and the policy name) and the source path of the PVC, as the old
+   Snapshot objects showed it:
+
+   ```yaml
+   spec:
+     repository:
+       kind: ClusterRepository
+       name: s3
+     source:
+       identity:
+         username: agents-pilot-agent-state
+         hostname: agents-pilot
+         sourcePath: /pvc/agent-state
+         # One of the three:
+         asOf: "2026-11-14T12:00:00Z"   # the newest snapshot at or before this time
+         # offset: 0                    # 0 the newest, 1 the one before
+         # snapshotID: <ID>             # from the list kept at the move
+   ```
+
+   `asOf` with a time from before the fault is the usual pick. A
+   `snapshotID` comes from the list that the owner kept at the move
+   (`kubectl -n agents-pilot get snapshots.kopiur.home-operations.com
+   -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,END:.status.timing.endTime,ID:.status.snapshot.kopiaSnapshotID`,
+   run before the merge). For that restore the mover gets the session and
+   the password of the shared repository, which reach every snapshot of the
+   household apps. So the pull request of step 6 removes `agents-pilot` from
+   that list again, and no snapshot schedule of the pilot names `s3`. Not
+   tested.
 5. **Restore the daily archive.** Owner approval. The snapshot copies the
    live files of a running pod, so its database can be torn; the daily
    archive in it is the consistent copy. A pull request removes the list
@@ -1110,7 +1281,9 @@ the pod ran.
    retry names the archive of the day before.
 6. **Start the agent and the snapshots.** Owner approval. A pull request
    removes the Restore and the Job, sets `replicas: 1`, and removes
-   `suspend: true`. For B and C, keep `dataSourceRef` in `pvc.yaml`: the
+   `suspend: true` from the SnapshotSchedule `agent-state-v2`. After a
+   snapshot from before the move, it also removes `agents-pilot` from the
+   `allowedNamespaces` of `s3` again. For B and C, keep `dataSourceRef` in `pvc.yaml`: the
    field cannot change on a PVC that exists, so a removal fails the apply.
    The `archive` init container makes an archive of the restored state, and
    `doctor` checks it.
@@ -1286,42 +1459,94 @@ multiplying.
 ## Drill: a run job stopped in the middle
 
 A proposal for the readiness of the workflow agents: a run job that stops
-in the middle leaves no run sandbox behind. It is not run yet. Each step
-that changes the cluster needs the owner's yes at that time, and the drill
-runs only when the owner has approved it.
+in the middle leaves no run sandbox behind, and a Sandbox record that stays
+is seen and removed. It is not run yet. Each step that changes the cluster
+needs the owner's yes at that time, and the drill runs only when the owner
+has approved it. These steps are for run receiver 0.2.0 and later.
 
 **Why.** The run job deletes its sandbox at its end and on SIGTERM; the sweep
-deletes a run sandbox older than one hour. Neither path has run on the
-cluster for a stopped job.
+deletes a run sandbox older than one hour; the receiver checks the Sandbox
+record of each run 60 s after its end. None of these has run on the cluster
+for a stopped job.
 
-**When.** Not near a run of the providers job (:07, :22, :37, :52) or of the
-sweep (:00, :15, :30, :45), so each step is one cause. A real review needs a
-Renovate pull request at a new head, and one model call; at a limit of the
-plan, wait.
+**When.** Not near a run of the providers job (:07, :22, :37, :52), of the
+sweep (:00, :15, :30, :45) or of the daily checks (04:17, 04:47), so each
+step is one cause. A start at :09 to :12, :24 to :27, :39 to :42 or :54 to
+:57 leaves the run and its record check clear of them. A real review needs
+a Renovate pull request at a head with no review yet, and one model call;
+at a limit of the plan, wait.
 
 **Steps.**
 
 1. Read only: `kubectl -n agents-workflows get sandboxes.agents.x-k8s.io`
-   shows no run sandbox, and no alert of the platform fires.
-2. Owner approval: start one run through the caller (a real review, or the
-   call script of the receiver with the token, never on the screen).
-3. Read only: wait until `get sandboxes.agents.x-k8s.io` shows the run
-   sandbox `default--run-*` ready, and the run pod running.
+   shows no run sandbox, and no alert of the platform's own rules
+   (`kubernetes/apps/ai/agents/monitoring/app/prometheusrule.yaml`, such as
+   `AgentRunSandboxTooOld`, `AgentWorkflowRunFailed`,
+   `AgentPlatformCronJobFailed` and `AgentPlatformWorkloadNotReady`) fires.
+   A chart alert `KubeJobFailed` for a failed Job kept from before the drill
+   can fire; note its Job names so a new one is clear. Start a watch
+   that prints the run pod, the Sandbox records and the pods of each
+   sandbox as they change, and follows the log of the run pod (`get` and
+   `logs -f` only).
+2. Owner approval: start one run with one call to the receiver, with no
+   retry (a real review, with the token in the shell of the owner and never
+   on the screen).
+3. Read only: wait for the line `INFO run_job: sandbox <name> is ready after
+   N s` in the log of the run pod. The input goes to the agent right after
+   it, and a review takes 15 to 50 s, so the stop comes 2 to 5 s after that
+   line.
 4. **Case A, a stop with SIGTERM.** Owner approval:
-   `kubectl -n agents-workflows delete pod <run pod>`. Pass: the run job logs
-   exit 5, its sandbox is gone within 90 seconds, and the receiver keeps
-   the result `failed` on the Job.
+   `kubectl -n agents-workflows delete pod <run pod> --wait=false`. Pass:
+   - the run job logs exit 5 and `sandbox <name> deleted`, and its result
+     line says `failed`, `"error": "the run job was stopped"` and
+     `"sandbox_deleted": true`;
+   - the call gets `502` with that result, and the Job keeps it in the
+     annotation `workflow-agents/result`;
+   - within 90 s, `get sandboxes.agents.x-k8s.io` shows no run sandbox and
+     no sandbox pod is left;
+   - about 60 to 70 s after the end of the Job, the annotation
+     `workflow-agents/sandbox-record` of the Job says `gone`, and the
+     receiver logs no `Sandbox record` line.
+   A value `left: <sandbox>` with one `ERROR run_receiver: run <job>: the
+   Sandbox record of <sandbox> is still there` line is the fault of the
+   gateway that answers a delete with success and keeps the record: case B
+   then applies to it.
 5. **Case B, a stop with no time to clean.** Owner approval, on a second
    run: `kubectl -n agents-workflows delete pod <run pod> --grace-period=0 --force`.
-   The kubelet ends the container at once, as when a node goes away. Pass:
-   the sandbox stays at first, the sweep deletes it once it is one hour old
-   (within 75 minutes of its start), and `AgentRunSandboxTooOld` does not
-   fire.
+   The pod object goes at once. The kubelet still sends SIGTERM and gives
+   the container about 2 s before it kills it, which is too short for the
+   delete of the sandbox in most cases; if the run job logs `sandbox <name>
+   deleted`, the case did not leave a sandbox, and its pass is that of case
+   A. Pass:
+   - the Job fails with no result line; the receiver keeps `failed` with
+     `"output_kept": false`;
+   - about 60 to 70 s after the end of the Job, the annotation
+     `workflow-agents/sandbox-record` says `left: <sandbox>`, found by the
+     prefix of the run key, and the receiver logs one ERROR line for it;
+   - the sandbox and its pods stay at first (the agent can still post its
+     comment);
+   - the first sweep after the record is one hour old (within 75 minutes of
+     its start) deletes it: the sweep log says `<sandbox> deleted: its
+     Sandbox record is gone`, or, if the gateway kept the record, `the
+     gateway answered the delete and left the Sandbox record; removed
+     through the API` (a delete under the admission policy
+     `workflow-sweep-deletes`, and one failed sweep);
+   - `AgentRunSandboxTooOld` does not fire.
 6. Read only, after each case: no run sandbox in
-   `get sandboxes.agents.x-k8s.io`, no sandbox pod, and the sweep's log line
-   for case B.
+   `get sandboxes.agents.x-k8s.io`, no sandbox pod, and the lines above in
+   Loki: `{namespace="agents-workflows", app="workflow-run"}`,
+   `{namespace="agents-workflows", app="run-receiver"} |= "Sandbox record"`
+   and `{namespace="agents-workflows", app="workflow-sweep"}`.
 7. Record the times, the commands and each pass or fail in the readiness
    checklist of the platform.
+
+**Alerts during the drill.** `AgentWorkflowRunFailed` fires for each
+stopped run and clears 2 hours after the start of its Job. The chart rule
+`KubeJobFailed` fires for each failed run Job for as long as the Job stays
+(7 days). In case B, if the sweep removed the record through the API, its
+Job fails: `AgentPlatformCronJobFailed` fires and clears at the next good
+sweep, and `KubeJobFailed` fires for the failed sweep Job for as long as it
+is kept (the CronJob keeps the last 3 failed Jobs).
 
 **Rollback.** Nothing to roll back: the drill makes runs and deletes them.
 If a sandbox stays past 80 minutes, the alert fires and its section above

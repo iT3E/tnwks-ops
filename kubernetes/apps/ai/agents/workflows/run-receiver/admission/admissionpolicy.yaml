@@ -13,6 +13,9 @@
 #     other ones;
 #   - one container, run-job, from the image of the workflow agents, pinned
 #     by digest, and a sandbox of that same image;
+#   - the entrypoint of the image with the one argument run-job: no command,
+#     no other argument, no lifecycle hook and no probe (a probe or a hook
+#     with exec runs a command too);
 #   - the service account workflow-run, with no token;
 #   - no secret but the client certificate of the sandbox gateway, and no
 #     variable from a secret;
@@ -20,6 +23,11 @@
 #     sandbox after one hour).
 # A new workflow agent adds its line to `providers` below, in the same pull
 # request as its entry in ../app/agents.yaml.
+#
+# The policy runs on CREATE and on UPDATE, so a Job that the receiver
+# changes must still meet each rule. What an UPDATE may change is the rule of
+# workflow-run-job-updates, below. tests/run.sh tests both policies on a
+# throwaway API server in containers.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -76,6 +84,21 @@ spec:
         (!has(variables.pod.ephemeralContainers) ||
         variables.pod.ephemeralContainers.size() == 0)
       message: A run job has one container, run-job, and no other one.
+    # The receiver sets args: ["run-job"] from the template, and no command:
+    # the entrypoint of the image runs the run job. An exec probe or a
+    # lifecycle hook would run another command in the same container.
+    - expression: >-
+        (!has(variables.container.command) ||
+        variables.container.command.size() == 0) &&
+        has(variables.container.args) &&
+        variables.container.args == ['run-job'] &&
+        !has(variables.container.lifecycle) &&
+        !has(variables.container.livenessProbe) &&
+        !has(variables.container.readinessProbe) &&
+        !has(variables.container.startupProbe)
+      message: >-
+        A run job runs the entrypoint of the image with the one argument
+        run-job: no command, no lifecycle hook and no probe.
     - expression: >-
         variables.container.image.matches('^ghcr[.]io/it3e/tnwks-workflow-agents:[^@]+@sha256:[0-9a-f]{64}$') &&
         variables.env.filter(e, e.name == 'SANDBOX_IMAGE').size() == 1 &&
@@ -121,6 +144,133 @@ metadata:
   name: workflow-run-jobs
 spec:
   policyName: workflow-run-jobs
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: agents-workflows
+---
+# What an UPDATE of a run job by the run receiver may change: the two
+# annotations that the receiver writes after a run (a merge patch of
+# metadata.annotations), workflow-agents/result (the kept answer) and
+# workflow-agents/sandbox-record (the check of the Sandbox record). The spec,
+# the labels, the owner references, the finalizers and each other annotation
+# stay as they are.
+#
+# It binds the service account of the receiver only (matchConditions), so the
+# Job controller, the TTL controller and the garbage collector are not
+# bound: they act as their own accounts. The Job controller writes the
+# status through the status subresource, which this policy does not match
+# (resources: jobs only), and puts its finalizer on the pods, not on the
+# Job. A DELETE with foreground propagation sets the finalizer of the Job in
+# the DELETE request, which is not an UPDATE.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: workflow-run-job-updates
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: sent-by-the-run-receiver
+      expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:agents-workflows:run-receiver'
+  variables:
+    - name: written
+      expression: >-
+        ['workflow-agents/result', 'workflow-agents/sandbox-record']
+    - name: before
+      expression: >-
+        has(oldObject.metadata.annotations) ?
+        oldObject.metadata.annotations : {}
+    - name: after
+      expression: >-
+        has(object.metadata.annotations) ? object.metadata.annotations : {}
+  validations:
+    - expression: object.spec == oldObject.spec
+      message: An update of a run job by the receiver changes nothing in its spec.
+    - expression: >-
+        (has(object.metadata.labels) ? object.metadata.labels : {}) ==
+        (has(oldObject.metadata.labels) ? oldObject.metadata.labels : {})
+      message: An update of a run job by the receiver changes no label.
+    - expression: >-
+        (has(object.metadata.ownerReferences) ?
+        object.metadata.ownerReferences : []) ==
+        (has(oldObject.metadata.ownerReferences) ?
+        oldObject.metadata.ownerReferences : [])
+      message: An update of a run job by the receiver changes no owner reference.
+    - expression: >-
+        (has(object.metadata.finalizers) ? object.metadata.finalizers : []) ==
+        (has(oldObject.metadata.finalizers) ? oldObject.metadata.finalizers : [])
+      message: An update of a run job by the receiver changes no finalizer.
+    - expression: >-
+        variables.after.all(k, k in variables.written ||
+        (k in variables.before && variables.before[k] == variables.after[k])) &&
+        variables.before.all(k, k in variables.written || k in variables.after)
+      message: >-
+        An update of a run job by the receiver changes only the annotations
+        workflow-agents/result and workflow-agents/sandbox-record.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: workflow-run-job-updates
+spec:
+  policyName: workflow-run-job-updates
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: agents-workflows
+---
+# The second control on the sweep (../app/sweep.yaml). Its Role can delete any
+# Sandbox record of the namespace, because RBAC can't limit a delete by label
+# and the names of run records are not known ahead. This policy refuses a
+# delete by the service account of the sweep unless the record is one that
+# OpenShell made for a run sandbox: the label openshell.ai/managed-by is
+# openshell, and openshell.ai/sandbox-name has the name of a run
+# (run-<7 hex>-<base 36>, iT3E/tnwks-workflow-agents, src/run_job/names.py).
+# The record of the platform probe, and any other record, stays. The age of a
+# record is the code's check: the policy has no clock.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: workflow-sweep-deletes
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["agents.x-k8s.io"]
+        apiVersions: ["*"]
+        operations: ["DELETE"]
+        resources: ["sandboxes"]
+  matchConditions:
+    - name: sent-by-the-sweep
+      expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:agents-workflows:workflow-sweep'
+  validations:
+    - expression: >-
+        oldObject != null &&
+        has(oldObject.metadata.labels) &&
+        'openshell.ai/managed-by' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['openshell.ai/managed-by'] == 'openshell' &&
+        'openshell.ai/sandbox-name' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['openshell.ai/sandbox-name'].matches('^run-[0-9a-f]{7}-[0-9a-z]{1,7}$')
+      message: The sweep deletes the Sandbox record of a run sandbox only.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: workflow-sweep-deletes
+spec:
+  policyName: workflow-sweep-deletes
   validationActions: ["Deny"]
   matchResources:
     namespaceSelector:

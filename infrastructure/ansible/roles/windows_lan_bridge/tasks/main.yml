@@ -52,7 +52,29 @@
     state: absent
   loop: "{{ lan_bridge_retired_tcp_ports }}"
 
-- name: Sync task (desktop user, at logon and after a WSL vNIC reset)
+# The account may make and change files here, but not change the directory
+# itself, the script or the port list (tnwks_win_dir_acl). The sync task
+# takes from the file only an address of the WSL VM.
+- name: Directory of the address file
+  tnwks_win_dir_acl:
+    path: "{{ lan_bridge_ip_dir }}"
+    writer: "{{ lan_bridge_user }}"
+  when: wsl_start_unelevated | bool
+
+- name: Address task (desktop user, no elevation)
+  tnwks_win_scheduled_task:
+    name: "{{ lan_bridge_ip_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'lan-bridge-ip.xml.j2') }}"
+  when: wsl_start_unelevated | bool
+  notify: Run the LAN bridge sync
+
+- name: No address task while the sync task is elevated
+  tnwks_win_scheduled_task:
+    name: "{{ lan_bridge_ip_task }}"
+    state: absent
+  when: not (wsl_start_unelevated | bool)
+
+- name: Sync task (desktop user elevated, or SYSTEM with no wsl.exe)
   tnwks_win_scheduled_task:
     name: "{{ lan_bridge_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'lan-bridge-sync.xml.j2') }}"

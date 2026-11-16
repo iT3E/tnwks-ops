@@ -58,6 +58,34 @@ variable "rolesanywhere_backups_sites" {
   default = {}
 }
 
+variable "rolesanywhere_backups_prefixed" {
+  description = <<-EOT
+    Backup roles kept to one prefix of the bucket (rolesanywhere.tf), keyed by name (agents): the certificate CNs
+    allowed a session, and the prefix (ending in /) that the role may list, read, write and delete. It reaches
+    nothing else in the bucket. With exclusive = true, a bucket policy (s3_backups.tf) also denies that prefix to
+    every other principal but backups_break_glass_role_arn_patterns.
+  EOT
+  type = map(object({
+    common_names = list(string)
+    prefix       = string
+    exclusive    = optional(bool, false)
+  }))
+  default = {}
+  validation {
+    condition     = alltrue([for v in values(var.rolesanywhere_backups_prefixed) : endswith(v.prefix, "/") && length(v.prefix) > 1])
+    error_message = "Each prefix must end in / and not be the bucket root."
+  }
+}
+
+variable "backups_break_glass_role_arn_patterns" {
+  description = <<-EOT
+    IAM role ARNs (ArnLike patterns) that keep access to an exclusive prefix of rolesanywhere_backups_prefixed next to
+    its own role: the owner's way in for a restore by hand or a delete. An exclusive prefix needs at least one.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "rolesanywhere_backups_common_names" {
   description = "Certificate CNs allowed a Roles Anywhere session as the homelab backup role (S3 read/write on the backup bucket)."
   type        = list(string)

@@ -398,7 +398,8 @@
       "site": "homelab-wsl",
       "domain": "infrastructure",
       "sources": [
-        "stream"
+        "stream",
+        "trivy"
       ]
     },
     {
@@ -453,7 +454,8 @@
       "site": "none",
       "domain": "infrastructure",
       "sources": [
-        "stream"
+        "stream",
+        "api-check"
       ]
     },
     {
@@ -579,6 +581,11 @@
       "check": "k8s-audit"
     },
     {
+      "source": "trivy",
+      "system": "homelab-wsl",
+      "late_after_seconds": 129600
+    },
+    {
       "source": "stream",
       "system": "homelab-wsl-02",
       "late_after_seconds": 900,
@@ -614,6 +621,11 @@
       "system": "sce-rtr01",
       "late_after_seconds": 900,
       "check": "routeros"
+    },
+    {
+      "source": "api-check",
+      "system": "sce-rtr01",
+      "late_after_seconds": 129600
     }
   ]
 }

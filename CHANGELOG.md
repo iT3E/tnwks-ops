@@ -3,6 +3,246 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.171.3 - 2026-11-16
+
+### Fixed
+
+* logs: the platform log agent keeps its read positions on the node (/var/lib/vector-agent-platform), as the audit reader does, so a restart no longer sends each line of the pods it selects to Loki again with a new time
+
+## v2.171.2 - 2026-11-16
+
+### Fixed
+
+* alerts: Alertmanager drops KubeJobFailed for the run jobs and the four CronJobs of the agent platform, which have alerts of their own that resolve with their cause, so an old failed Job no longer keeps a group open in the alert channel; any other failed Job still reaches it, and a test checks each route
+
+## v2.171.1 - 2026-11-16
+
+### Fixed
+
+* Windows hosts: the scheduled task module reads a task with the run level LeastPrivilege as unchanged. Export-ScheduledTask leaves out the RunLevel element for that default, so each check and the nightly drift run reported such a task as changed, and each apply registered it again.
+
+## v2.171.0 - 2026-11-16
+
+### Changed
+
+* The two AWS runs of Prowler run once today at 08:47 and 09:47 UTC, ahead of the night. A second change sets them back to 03:17 and 05:17 UTC.
+
+## v2.170.1 - 2026-11-16
+
+### Fixed
+
+* ci: a manifest change no longer waits 10 minutes for the observability checks. promtool on the generated rule tests and the PowerShell tests are their own jobs, which run only when observability/, security/ or the host check roles changed, and the rule tests run in shards, one promtool per core
+
+## v2.170.0 - 2026-11-16
+
+### Changed
+
+* agents-workflows: the CronJob workflow-providers runs the providers command of the image of the workflow agents, which its CI tests, in place of the providers script and the GitHub App token script of this repo. The steps, the log lines and the exit codes stay the same.
+
+## v2.169.4 - 2026-11-16
+
+### Fixed
+
+* Alerting: Telegram answered ENTITIES_TOO_LONG for the messages of SecurityResultLate, two alerts each with a graph link of about 5100 characters (its whole expression). The Telegram message now has one graph link, on the first alert, up to 1500 characters in a message of one alert and 1000 in a message of more; the text and the other links of the first three alerts of a group only, and the labels of the next five; at most 1700 characters of link text. The bounds are chosen from a measured delivered message (a graph link of 1444 characters, 1643 of link text) and the measured refused one (10460), not from a documented limit. A test renders each alert of the repository through the template with amtool and checks the tags, the number of entities, the text length, the size and the links.
+
+## v2.169.3 - 2026-11-16
+
+### Fixed
+
+* Each Prowler run of AWS runs one process of Prowler for each service of the scan list, and joins their records into one OCSF file. A process holds one service at a time, and a run in which a part fails leaves no file.
+
+## v2.169.2 - 2026-11-16
+
+### Security
+
+* agents-workflows: the admission policy of the run jobs pins the run job container to the entrypoint of the image with the one argument run-job (no command, lifecycle hook or probe), and a new policy, workflow-run-job-updates, lets an update of a run Job by the run receiver change only its two annotations (the kept answer and the check of the Sandbox record). Both bind the account of the receiver only. A test harness (admission/tests/run.sh) runs them on a throwaway API server in containers.
+
+## v2.169.1 - 2026-11-16
+
+### Fixed
+
+* terraform: the bucket policy of an exclusive backup prefix did not apply, because S3 refuses the s3:prefix condition on s3:ListBucketMultipartUploads. The list deny now names ListBucket and ListBucketVersions only.
+
+## v2.169.0 - 2026-11-16
+
+### Changed
+
+* Windows hosts: a per-host switch, wsl_start_unelevated (on for WSL-02 first), runs each task that starts a process in the WSL distro with no elevation, and moves the steps that need admin rights to tasks that start none: tnwks-wsl-service (SYSTEM) for the WSL service, and tnwks-lan-bridge-sync as SYSTEM with the VM address from the new task tnwks-lan-bridge-ip. The compaction no longer starts the distro itself under the switch. No elevated client creates the WSL VM or starts a process in a distro, and each directory that a task with no elevation writes is made by a new module, tnwks_win_dir_acl, which lets the account make and change files there but not change the directory itself. The services of a distro take the change at its next start, a step by hand with a runbook that stops WSL with wsl --shutdown (docs/wsl/windows-ansible.md). A second switch, wsl_start_unelevated_done, goes on after that step and its read, and only then can the write test of the distro fail its play.
+
+## v2.168.2 - 2026-11-16
+
+### Security
+
+* terraform: a backup prefix of rolesanywhere_backups_prefixed can be exclusive: a bucket policy denies its objects, and a list under it, to every principal but its own role and the break-glass roles. kopiur-agents/ is exclusive, with the AdministratorAccess role of IAM Identity Center as break-glass.
+
+## v2.168.1 - 2026-11-16
+
+### Fixed
+
+* Security: the relay of the WSL distro host check also refuses a document that has more than one name (a hard link). The task that resets the files of C:\ProgramData\tnwks-host-check accepts SYSTEM as their owner, so the relay log that SYSTEM makes there is no change for a check run. The security README describes the inbox rules, the relay log and the checks of the relay as they are.
+
+## v2.168.0 - 2026-11-16
+
+### Added
+
+* Security: the host check of each WSL distro gives the errno of each try of the write test as a series, and the host check of each Windows host counts the files of the write test in its textfile directory.
+
+### Changed
+
+* Security: the host check of each WSL distro writes a JSON document into an inbox, C:\ProgramData\tnwks-host-check-distro, where the account of the distro may make and change files but not change the folder itself. A relay on its Windows host, a SYSTEM task each hour, checks the document and writes the .prom file of the distro; a document that does not fit, a repeated series, or a link on the way gives no result. The relay logs each run to C:\ProgramData\tnwks-host-check\relay.log. The distro account loses its right on the textfile directory, and its directory wsl-distro goes.
+
+## v2.167.0 - 2026-11-15
+
+### Added
+
+* Security: the host checks of each Windows host and each WSL distro add the check updates-held, for a held package or a hidden update that is not optional, older than 14 days (severity high). In a distro, each package has one clock whether it waits, is held or is phased; an upgrade that a run sees first is dated by the Date of its package list (by its Label), read before the simulations of the last run with a result, or counts as old with no such Date; and only a run with a result writes the state file.
+
+### Fixed
+
+* Security: the host check of each WSL distro reads the answer of the write test of root only from a regular file, and opens it without waiting, so a FIFO in its place is "not done" at once and does not hold the run.
+
+## v2.166.1 - 2026-11-15
+
+### Fixed
+
+* security: a Trivy scan reads the layers of an image one at a time (scan.parallel 1), not 5, so a scan container of a large image no longer reaches its limit of 512 MiB and is killed with no report; the limit stays
+
+## v2.166.0 - 2026-11-15
+
+### Changed
+
+* Security: the check of the Defender signatures of each Windows host and the MFA check of Terraform Cloud have the severity high, so a new fail of either starts SecurityFindingNew, as Design Doc 0004, section 5.8, selects.
+
+## v2.165.0 - 2026-11-15
+
+### Added
+
+* Security: the host check of each WSL distro first tries to make a file in the textfile directory of its host, as root (a step of the service before the check) and as the distro user. Only a refusal by Windows for root is the pass; a write, a missing directory or no answer of root is the failed query textfile-write. The role runs the same tries and prints each answer with its uid.
+
+## v2.164.0 - 2026-11-15
+
+### Added
+
+* Security: homelab-wsl-02 scrapes the security series of both Windows hosts itself (job windows-exporter-security), in place of the federation of the host check through homelab-wsl. homelab-wsl keeps them with the label standby, and SecurityFindingNew fires there for them only while homelab-wsl-02 does not scrape their host. SecurityHostUnreachable fires when homelab-wsl-02 can not scrape the host of site 1 for 5 minutes, and two inhibit rules hold the late results behind that site (behind_site in systems.yaml) and PeerSiteUnreachable of that site while it fires.
+
+## v2.163.0 - 2026-11-15
+
+### Added
+
+* DESKTOP-HKE05KI's windows_exporter and smartctl_exporter also admit WSL-02's address, so homelab-wsl-02's Prometheus can scrape the security series of the site 1 host over the LAN (`windows_monitoring_remote_extra`, as WSL-02 has for the other way).
+
+## v2.162.1 - 2026-11-15
+
+### Security
+
+* kopiur: the shared repository no longer allows agents-pilot, now that the old pilot policy agent-state is gone; its snapshots stay there under their kopia identity.
+
+## v2.162.0 - 2026-11-15
+
+### Changed
+
+* security: the memory limit of the Trivy Operator raises from 512 to 640 MiB on both sites, with GOMEMLIMIT at 576 MiB (90%): on homelab-wsl the first cycle peaked at 473 MiB, under 8% below the old limit
+
+## v2.161.3 - 2026-11-15
+
+### Fixed
+
+* kopiur: the shared repository allows agents-pilot again until the old pilot policy agent-state finishes its delete, which the admission webhook refuses without the grant. The docs give the two-step order for moving a trust domain to another repository.
+
+## v2.161.2 - 2026-11-15
+
+### Fixed
+
+* security: a Trivy report of an image holds its critical vulnerabilities only, by an ignore policy in the scan containers, so the report of an image with many fixed vulnerabilities fits in one object of the API server ("etcdserver: request is too large"); trivy.severity keeps every severity, which the compliance report reads
+
+## v2.161.1 - 2026-11-15
+
+### Fixed
+
+* security: Trivy Operator keeps the scan cache of each scan in memory, so the containers of one scan job no longer stop on the lock of the file cache ("cache may be in use by another process: timeout") and leave their images with no report; the vulnerability databases stay on the volume. The containers of a job now scan at the same time: the memory of a job is an estimate until the first cycle measures it
+
+## v2.161.0 - 2026-11-15
+
+### Changed
+
+* security: homelab-wsl lists `trivy` in its sources, after its first result, so SecurityResultLate watches Trivy Operator there. A pending source in the test of the sources of a cluster now has a last day and must be reached, and the federation test covers the series of `trivy` from homelab-wsl and the accepted findings of `trivy` on homelab-wsl
+
+## v2.160.0 - 2026-11-15
+
+### Added
+
+* security: Trivy Operator on homelab-wsl, with the values of homelab-wsl-02. `peer-federate` of homelab-wsl-02 brings the two series of the registry of `trivy` from homelab-wsl, and `peer-federate` of homelab-wsl brings the accepted findings of `trivy` from homelab-wsl-02. The limits are those of homelab-wsl-02, where a full cycle peaked at 316 MiB of 512 MiB for the operator and 97 MiB for the containers of one scan job. homelab-wsl lists `trivy` in its sources in a later pull request, after its first result, so the late alert does not fire before the first scans; a test names the pending pair until then
+
+## v2.159.2 - 2026-11-15
+
+### Fixed
+
+* agents-workflows: a Sandbox record that the sandbox gateway left after a delete is now seen and removed. The run receiver can list Sandbox records, to check the record of each run after its end; the sweep runs as its own service account workflow-sweep with list and delete on Sandbox records, an admission policy (workflow-sweep-deletes) holds its deletes to run records, and its own network policy adds the API server. The run jobs keep no token and the gateway as their only egress.
+
+## v2.159.1 - 2026-11-15
+
+### Security
+
+* kopiur: the agent trust domains back up to a Kopia repository of their own (ClusterRepository agents, prefix kopiur-agents/, its own password and role). The pilot agent policy is now agent-state-v2; the snapshots of agent-state stay in the shared repository, which no longer allows agents-pilot. New alert AgentBackupRepositoryNotReady for a repository of the trust domains that never gets Ready.
+
+## v2.159.0 - 2026-11-15
+
+### Added
+
+* kopiur: the credentials of a Kopia repository for the agent trust domains (homelab-wsl): its own password, and a refresher that turns its own certificate into an S3 session for the role kept to kopiur-agents/
+
+## v2.158.1 - 2026-11-15
+
+### Fixed
+
+* ci: the observability contracts job has 25 minutes instead of 15, since its rule tests alone take 6 to 9 minutes on a hosted runner and the job reached 11.5 minutes on main
+
+## v2.158.0 - 2026-11-15
+
+### Added
+
+* terraform: a Roles Anywhere backup role and profile kept to one prefix of the backup bucket (list, read, write and delete under it, nothing else), with its own certificate CN, for the Kopia repository of the agent trust domains
+
+## v2.157.0 - 2026-11-15
+
+### Added
+
+* security: the alert SecurityImagesScannedByTag (warning) fires when containers on a cluster with Trivy Operator have matched their vulnerability report by reference only, not by digest, for 7 days: the tag moved after the node pulled it, so the report is of another image; restart the workload or pin a digest. An entry of the accepted list with the check images-scanned-by-tag mutes it for the cluster
+
+### Fixed
+
+* security: a vulnerability report of Trivy Operator counts for a running container by its digest, or, when no report has that digest, by the same namespace, container and image reference, so an image whose pod and report show different digests of the same reference (a tag that moved, or an image index and a platform image) is not counted as not scanned, and its critical vulnerabilities count once in image-vulnerabilities (when two reports have the reference and neither has the running digest, the one with the most critical vulnerabilities); the security board shows the number of containers matched by reference only
+
+## v2.156.3 - 2026-11-15
+
+### Fixed
+
+* agents: the pilot config names no Brave plugin path any more (the plugin is a verified official install from the agent image since 0.4.0), so the gateway logs no load path warning at each start
+
+## v2.156.2 - 2026-11-15
+
+### Security
+
+* agents: the pilot agent loads only the plugins that it names in plugins.allow (brave, diagnostics-otel, memory-core, openshell, telegram), not each plugin that the product finds in its state directory or bundles
+
+## v2.156.1 - 2026-11-15
+
+### Fixed
+
+* agents: web search works in the sandboxed sessions of the pilot agent: the Brave plugin is a verified official install from the agent image 0.4.0 (the official-plugins init container, which installs it again at each start and stops the start on a plugin in the state that the image did not put there), not a plugin from plugins.load.paths, which a sandboxed session refuses
+
+## v2.156.0 - 2026-11-15
+
+### Added
+
+* security: the router lists `api-check` in its sources, now that the API checks have its first result on homelab-wsl-02, so `SecurityResultLate` watches it
+
+## v2.155.0 - 2026-11-15
+
+### Added
+
+* github: the client ID of the release App on the agent image repository, for its releases
+
 ## v2.154.2 - 2026-11-15
 
 ### Fixed

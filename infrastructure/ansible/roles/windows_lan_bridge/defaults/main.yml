@@ -15,6 +15,13 @@ lan_bridge_src: Sync-TnwksLanBridge.ps1
 lan_bridge_task: tnwks-lan-bridge-sync
 # The account that owns the WSL distro (its wsl.exe reads the VM's address).
 lan_bridge_user: "{{ windows_desktop_user }}"
+# With wsl_start_unelevated (group_vars/windows_hosts.yml): the task
+# tnwks-lan-bridge-ip, with no elevation, writes the address of the WSL VM to
+# a file in a directory that the account may change, and the sync task runs
+# as SYSTEM with that file and no wsl.exe.
+lan_bridge_ip_task: tnwks-lan-bridge-ip
+lan_bridge_ip_dir: '{{ lan_bridge_dir }}\wsl-ip'
+lan_bridge_ip_file: '{{ lan_bridge_ip_dir }}\address.json'
 lan_bridge_listen_address: 0.0.0.0
 
 #   port      LAN-facing port on the Windows host

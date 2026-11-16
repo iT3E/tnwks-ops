@@ -4,14 +4,17 @@
 - name: Run the LAN bridge sync
   ansible.windows.win_powershell:
     parameters:
-      Task: "{{ lan_bridge_task }}"
+      # With wsl_start_unelevated, the address task first: the sync reads its file.
+      Tasks: "{{ ([lan_bridge_ip_task] if wsl_start_unelevated | bool else []) + [lan_bridge_task] }}"
     script: |
       [CmdletBinding(SupportsShouldProcess)]
-      param([string]$Task)
-      if ($PSCmdlet.ShouldProcess($Task, 'run')) {
-          Start-ScheduledTask -TaskName $Task
-          $deadline = (Get-Date).AddMinutes(2)
-          do { Start-Sleep -Seconds 2 } while ((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -and (Get-Date) -lt $deadline)
-          $r = (Get-ScheduledTaskInfo -TaskName $Task).LastTaskResult
-          if ($r -ne 0) { throw "$Task finished with $r; see sync.log" }
+      param([string[]]$Tasks)
+      foreach ($Task in $Tasks) {
+          if ($PSCmdlet.ShouldProcess($Task, 'run')) {
+              Start-ScheduledTask -TaskName $Task
+              $deadline = (Get-Date).AddMinutes(2)
+              do { Start-Sleep -Seconds 2 } while ((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -and (Get-Date) -lt $deadline)
+              $r = (Get-ScheduledTaskInfo -TaskName $Task).LastTaskResult
+              if ($r -ne 0) { throw "$Task finished with $r; see sync.log or ip.log" }
+          }
       }

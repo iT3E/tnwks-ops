@@ -28,11 +28,18 @@
 # volume mount (wsl.exe every minute), and the usbipd --auto-attach watchers,
 # which outlive wsl --shutdown. WSL starts new watchers itself when it boots.
 
+#
+# With -NoDistroStart (wsl_start_unelevated), the script runs only
+# `wsl --shutdown` and `wsl --list`: this task is elevated, and no elevated
+# client may create the WSL VM or start a process in a distro
+# (docs/wsl/windows-ansible.md, "Start WSL with no elevation"). At the end it
+# starts the keepalive first, with no elevation, which starts WSL.
 [CmdletBinding()]
 param(
     [string]$Distro,
     [string]$Vhdx,
-    [string]$LogDir
+    [string]$LogDir,
+    [switch]$NoDistroStart
 )
 if (-not $Distro) { $Distro = 'Ubuntu' }
 if (-not $Vhdx)   { $Vhdx   = 'E:\WSL\Ubuntu\ext4.vhdx' }
@@ -58,7 +65,7 @@ Write-Log 'watchdog task disabled'
 
 # tnwks-wsl-keepalive (where present) restarts on failure and would start WSL
 # again mid-compaction.
-$Paused = @('tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-usb-attach', 'tnwks-lan-bridge-sync', 'tnwks-wsl-keepalive', 'tnwks-observability-mount')
+$Paused = @('tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-usb-attach', 'tnwks-lan-bridge-sync', 'tnwks-lan-bridge-ip', 'tnwks-wsl-keepalive', 'tnwks-observability-mount')
 
 try {
     foreach ($t in $Paused) {
@@ -102,15 +109,19 @@ catch {
     & diskpart.exe /s $dp2 2>&1 | Out-Null
 }
 finally {
-    & wsl.exe -d $Distro -e true
-    Write-Log 'wsl started'
+    if ($NoDistroStart) {
+        Write-Log 'wsl not started here: the keepalive and the watchdog start it with no elevation'
+    } else {
+        & wsl.exe -d $Distro -e true
+        Write-Log 'wsl started'
+    }
     Enable-ScheduledTask -TaskName 'tnwks-wsl-watchdog' | Out-Null
     foreach ($t in $Paused) { Enable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
     Start-Sleep -Seconds 30
     # usb-attach re-attaches the Z-Stick; lan-bridge-sync points the
     # portproxy at WSL's (possibly new) IP; the relays run until stopped;
     # observability-mount re-attaches the monitoring disk.
-    foreach ($t in @('tnwks-wsl-keepalive', 'tnwks-usb-attach', 'tnwks-lan-bridge-sync', 'tnwks-observability-mount', 'tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-wsl-watchdog')) {
+    foreach ($t in @('tnwks-wsl-keepalive', 'tnwks-usb-attach', 'tnwks-lan-bridge-ip', 'tnwks-lan-bridge-sync', 'tnwks-observability-mount', 'tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-wsl-watchdog')) {
         Start-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
     }
     Write-Log "re-enabled and started: watchdog, $($Paused -join ', ')"

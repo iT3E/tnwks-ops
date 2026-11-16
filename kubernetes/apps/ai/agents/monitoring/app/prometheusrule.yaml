@@ -8,10 +8,13 @@
 # (kubernetes/apps/monitoring/vector/agent-platform).
 # AgentBackupMoverConfigMapDenied reads a counter of the API server that only
 # homelab-wsl keeps (kubernetes/clusters/wsl/apps/kustomization.yaml).
+# AgentBackupRepositoryNotReady reads the phase gauge of the backup operator.
 # Already covered elsewhere, so not here: a failed or late snapshot of a
 # state volume (the kopiur chart's rules, KopiurLastBackupFailed and
-# KopiurBackupStale, match each SnapshotPolicy), and a crash loop (the
-# chart rules of kube-prometheus-stack).
+# KopiurBackupStale, match each SnapshotPolicy), a repository in Failed or
+# Degraded (KopiurRepositoryNotReady), a failed run of the refresher of the
+# backup session (KubeJobFailed), and a crash loop (the chart rules of
+# kube-prometheus-stack).
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -53,9 +56,10 @@ spec:
           # the CronJob's last success: the last run failed and no run passed
           # since. It resolves at the next good run. KubeJobFailed, the chart
           # rule, keeps firing while the failed Job is kept
-          # (failedJobsHistoryLimit), also after a good run. Covers the
+          # (failedJobsHistoryLimit), also after a good run, so Alertmanager
+          # drops it for these Jobs (its route for KubeJobFailed). Covers the
           # providers job (its `workflow-providers result=failed` line comes
-          # with exit 1, scripts/providers.sh), the sweep and the daily checks.
+          # with exit 1, the providers command of the image), the sweep and the daily checks.
           # reason!="": kube-state-metrics also reports the failed pods of a
           # Job that still retries (backoffLimit), with reason="". The max by
           # on the right of each join keeps it one-to-one when two
@@ -171,7 +175,8 @@ spec:
         - alert: AgentWorkflowRunFailed
           # A run job of a workflow agent that failed, for 2 hours from its
           # start (a run lives 40 minutes at most). KubeJobFailed fires for the
-          # same Job for the 7 days that it stays. The caller tries again with
+          # same Job for the 7 days that it stays, and Alertmanager drops it
+          # (its route for KubeJobFailed). The caller tries again with
           # a new key (at most 3 attempts), so one alert can come with a
           # review that passed later.
           expr: |
@@ -329,6 +334,25 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentbackupmoverconfigmapdenied"
             summary: "The admission policy refused a ConfigMap write of a backup mover in a trust domain."
             description: "The audit log (security stream k8s-audit) names the namespace, the ConfigMap and the ServiceAccount: an objectRef with resource configmaps, code 422, and the user kopiur-mover, kopiur-snapshot-replication-mover or kopiur-stream-mover of that namespace. Treat it as an attack on the config of an agent until a release of the backup operator explains it."
+
+        - alert: AgentBackupRepositoryNotReady
+          # The Kopia repository of the agent trust domains (ClusterRepository
+          # agents, or agents-<domain> later) stays Pending or Initializing:
+          # it never got Ready, so no snapshot of a trust domain runs. The
+          # chart rule KopiurRepositoryNotReady covers Failed and Degraded
+          # only, and KopiurBackupStale does not fire for a policy that never
+          # ran. A bootstrap takes minutes; 1h leaves room for one refresh of
+          # the session (every 30 minutes).
+          expr: |
+            max by (name, phase) (kopiur_resource_phase{kind="ClusterRepository", name=~"agents(-.+)?", phase=~"Pending|Initializing"}) == 1
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentbackuprepositorynotready"
+            summary: "The backup repository {{ $labels.name }} of the agent trust domains is {{ $labels.phase }} for an hour."
+            description: "kubectl get clusterrepository {{ $labels.name }} -o yaml: the Ready condition names the cause. Then the refresher of its session (kubectl -n kopiur-system get cronjob aws-backup-credentials-agents) and the discovery Job in kopiur-system."
 
         - alert: ModelBridgeRateLimited
           # The model bridge in `ai` logged an engine_error line with the kind

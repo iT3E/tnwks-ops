@@ -259,7 +259,8 @@ def test_terraform_cloud_fails_when_the_organization_does_not_require_two_factor
     code, document = run(tmp_path, monkeypatch, get, token="fake-token-value")
     assert code == 0
     entry = by_check(document)["tfc-mfa-required"]
-    assert (entry["system"], entry["failed"], entry["severity"]) == ("tnwks-ops", failed, "medium")
+    # Design Doc 0004, section 5.8: high, so a fail alerts (SecurityFindingNew).
+    assert (entry["system"], entry["failed"], entry["severity"]) == ("tnwks-ops", failed, "high")
     url, headers = get.calls[-1]
     assert url == ORG
     assert headers["Authorization"] == "Bearer fake-token-value"
@@ -375,10 +376,11 @@ def test_each_check_of_the_job_is_a_line_of_the_registry_for_its_system():
                     lines.setdefault((item["check"], system_type), []).append(control["id"])
     assert lines[("routeros-firmware", systems[checks.ROUTER]["type"])] == ["12.1"]
     assert lines[("tfc-mfa-required", systems[checks.TFC_ORGANIZATION]["type"])] == ["6.3", "6.5"]
-    # The router lists the source after the first result is on site 2, in a follow-up:
-    # before that the rule for a late result would fire. The results reach the line
-    # without it.
-    assert "api-check" not in systems[checks.ROUTER]["sources"]
+    # The router lists the source since its first result was on site 2, so the rule for
+    # a late result watches it. The Terraform Cloud organization lists it once its
+    # token exists and its first result is there.
+    assert "api-check" in systems[checks.ROUTER]["sources"]
+    assert "api-check" not in systems[checks.TFC_ORGANIZATION].get("sources", [])
 
 
 # --- The manifests ----------------------------------------------------------------------

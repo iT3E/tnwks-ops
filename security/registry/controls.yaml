@@ -814,6 +814,7 @@
     cluster: []
     windows-host:
       - { source: host-check, check: updates-pending }
+      - { source: host-check, check: updates-held }
       - { source: wazuh, check: "26368" }
       - { source: wazuh, check: "26441" }
       - { source: wazuh, check: "26473" }
@@ -825,6 +826,7 @@
       - { source: wazuh, check: "26481" }
     wsl-distro:
       - { source: host-check, check: updates-pending }
+      - { source: host-check, check: updates-held }
     laptop: []
     router: []
 - id: "7.4"
