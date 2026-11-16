@@ -165,10 +165,13 @@
               if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Path)) { throw "diskpart did not make $Path ($LASTEXITCODE): $out" }
           }
 
+    # The principal is not the account of this session: the module registers
+    # each task for it by S4U, with no password.
     - name: Tasks of the temporary account
       tnwks_win_scheduled_task:
         name: "{{ wsl_rehearsal_task_prefix }}-{{ item }}"
         xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
+        s4u_user: "{{ wsl_rehearsal_account }}"
       loop: "{{ wsl_rehearsal_steps + ['start'] }}"
       when: wsl_rehearsal_sid | length > 0
 
@@ -260,6 +263,7 @@
           tnwks_win_scheduled_task:
             name: "{{ wsl_rehearsal_task_prefix }}-start"
             xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
+            s4u_user: "{{ wsl_rehearsal_account }}"
             running: true
           vars:
             item: start

@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Windows: the module tnwks_win_scheduled_task takes s4u_user, which registers an S4U task for another account through the Schedule.Service object with that user, no password and the S4U logon type. The role windows_wsl_rehearsal uses it for the tasks of its temporary account; each other task registers as before. A failed registration names each exception of the chain with its HResult, in both paths.'
+time: 2026-11-16T19:00:00.000000000Z

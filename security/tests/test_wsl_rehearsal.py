@@ -571,3 +571,92 @@ def test_the_profile_gate_takes_only_the_profile_that_the_task_of_the_account_sa
     assert "not one folder under Users" in run_guard(tmp_path, "", good), "no profile"
     assert "not one folder under Users" in run_guard(tmp_path, "C:\\", {**good, "profile": "C:\\"})
     assert "not one folder under Users" in run_guard(tmp_path, "C:\\Users\\a\\b", {**good, "profile": "C:\\Users\\a\\b"})
+
+
+# --- the registration of an S4U task for the account (tnwks_win_scheduled_task) ------------
+
+TASK_MODULE = ANSIBLE / "playbooks/library/tnwks_win_scheduled_task.ps1"
+
+
+def module_functions() -> str:
+    module = TASK_MODULE.read_text()
+    return module[module.index("function ConvertTo-Sid"):module.index("$task = Get-ScheduledTask")]
+
+
+# A fake of the Schedule.Service object: each call goes to $global:Calls, and
+# $global:Folders names the folders that are there.
+SERVICE_FAKE = r"""
+$global:Calls = New-Object System.Collections.Generic.List[string]
+function New-FakeFolder([string]$Path) {
+    $f = [pscustomobject]@{ Path = $Path }
+    $f | Add-Member ScriptMethod RegisterTask {
+        param($Name, $Xml, $Flags, $User, $Password, $LogonType)
+        $global:Calls.Add("register $($this.Path) $Name flags=$Flags user=$User password-null=$($null -eq $Password) logon=$LogonType xml=$($Xml.Length)")
+        if ($global:Fail) { throw $global:Fail }
+    }
+    $f | Add-Member ScriptMethod CreateFolder { param($Name) $global:Calls.Add("create $Name"); New-FakeFolder "\$Name" }
+    $f
+}
+$service = [pscustomobject]@{}
+$service | Add-Member ScriptMethod Connect { $global:Calls.Add('connect') }
+$service | Add-Member ScriptMethod GetFolder {
+    param($Path)
+    if ($Path -notin $global:Folders) { throw [Runtime.InteropServices.COMException]::new('The system cannot find the file specified.', -2147024894) }
+    New-FakeFolder $Path
+}
+"""
+
+
+def run_module(body: str) -> list[str]:
+    run = pwsh(module_functions() + SERVICE_FAKE + body)
+    assert run.returncode == 0, run.stderr
+    return run.stdout.strip().splitlines()
+
+
+@needs_pwsh
+def test_an_s4u_task_for_the_account_is_registered_with_its_user_no_password_and_s4u():
+    out = run_module(r"""
+$global:Folders = @('\')
+Register-TnwksS4uTask -Service $service -Path '\' -Name 'tnwks-rehearsal-probe' -Xml '<Task />' -User 'tnwks-rehearsal'
+$global:Folders = @('\')
+Register-TnwksS4uTask -Service $service -Path '\Rehearsal\' -Name 't' -Xml '<Task />' -User 'tnwks-rehearsal'
+$global:Calls
+""")
+    assert out == ["connect", "register \\ tnwks-rehearsal-probe flags=6 user=tnwks-rehearsal password-null=True logon=2 xml=8",
+                   "connect", "create Rehearsal", "register \\Rehearsal t flags=6 user=tnwks-rehearsal password-null=True logon=2 xml=8"]
+
+
+@needs_pwsh
+def test_a_failed_registration_names_each_exception_with_its_hresult():
+    out = run_module(r"""
+$global:Folders = @('\')
+$global:Fail = [Runtime.InteropServices.COMException]::new('Access is denied.', -2147024891)
+try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u' } catch { Format-TnwksError $_.Exception }
+$inner = [Runtime.InteropServices.COMException]::new('The user name or password is incorrect.', -2147023570)
+Format-TnwksError ([InvalidOperationException]::new('outer', $inner))
+class FakeCimException : Exception {
+    [int]$StatusCode = 1
+    $ErrorData = [pscustomobject]@{ CimInstanceProperties = @(
+        [pscustomobject]@{ Name = 'error_Code'; Value = 2147942405 },
+        [pscustomobject]@{ Name = 'Message'; Value = 'Access is denied.' },
+        [pscustomobject]@{ Name = 'CIMStatusCode'; Value = $null },
+        [pscustomobject]@{ Name = 'ErrorSource'; Value = 'PS_ScheduledTask' }) }
+    FakeCimException([string]$m) : base($m) {}
+}
+Format-TnwksError ([FakeCimException]::new('A general error occurred that is not covered by a more specific error code.'))
+""")
+    assert "System.Runtime.InteropServices.COMException 0x80070005: Access is denied." in out[0]
+    assert out[1] == ("System.InvalidOperationException 0x80131509: outer <- "
+                      "System.Runtime.InteropServices.COMException 0x8007052E: The user name or password is incorrect.")
+    assert out[2].endswith("(status 1) [error_Code=2147942405; Message=Access is denied.]")
+
+
+def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unchanged():
+    module = TASK_MODULE.read_text()
+    assert "$task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force" in module
+    assert "s4u_user = @{ type = 'str'; default = '' }" in module
+    named = [task for task in present() if "tnwks_win_scheduled_task" in task]
+    assert sorted(task["name"] for task in named) == ["Tasks of the temporary account", "The start of the distro, with nobody signed in"]
+    assert all(task["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_rehearsal_account }}" for task in named)
+    others = [path for path in (ANSIBLE / "roles").glob("*/tasks/*.yml") if path.parent.parent.name != "windows_wsl_rehearsal"]
+    assert others and not any("s4u_user" in path.read_text() for path in others)

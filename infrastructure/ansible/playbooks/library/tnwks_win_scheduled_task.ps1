@@ -20,6 +20,11 @@ $spec = @{
         state = @{ type = 'str'; default = 'present'; choices = @('present', 'absent') }
         # true: start the task when it isn't running (long-running tasks).
         running = @{ type = 'bool'; default = $false }
+        # The account of an S4U task whose principal is not the account of this
+        # session. Set: the module registers the task through the Schedule.Service
+        # object with this user, no password and TASK_LOGON_S4U. Empty (each other
+        # task): Register-ScheduledTask -Xml.
+        s4u_user = @{ type = 'str'; default = '' }
     }
     required_if = @(, @('state', 'present', @(, 'xml')))
     supports_check_mode = $true
@@ -77,6 +82,39 @@ function Get-CanonicalXml([string]$text) {
     return $sb.ToString() + "`n"
 }
 
+# Each exception of the chain, outer first: its type, its HResult and its
+# message. A CimException of the provider of ScheduledTasks also gives its
+# status and the fields of its error data that hold a code or a message.
+function Format-TnwksError($Exception) {
+    $parts = @()
+    $e = $Exception
+    while ($e) {
+        $part = '{0} 0x{1:X8}: {2}' -f $e.GetType().FullName, $e.HResult, "$($e.Message)".Trim()
+        if ($e.PSObject.Properties['StatusCode']) { $part += " (status $($e.StatusCode))" }
+        if ($e.PSObject.Properties['ErrorData'] -and $e.ErrorData) {
+            $fields = @($e.ErrorData.CimInstanceProperties | Where-Object { $_.Name -match 'Code|Message' -and $null -ne $_.Value } |
+                ForEach-Object { "$($_.Name)=$($_.Value)" })
+            if ($fields) { $part += " [$($fields -join '; ')]" }
+        }
+        $parts += $part
+        $e = $e.InnerException
+    }
+    $parts -join ' <- '
+}
+
+# An S4U task for another account: ITaskFolder.RegisterTask with the user, no
+# password and TASK_LOGON_S4U (2), as TASK_CREATE_OR_UPDATE (6). A folder that
+# is not there is made under the root.
+function Register-TnwksS4uTask($Service, [string]$Path, [string]$Name, [string]$Xml, [string]$User) {
+    $Service.Connect()
+    try {
+        $folder = $Service.GetFolder($Path)
+    } catch {
+        $folder = $Service.GetFolder('\').CreateFolder($Path.Trim('\'))
+    }
+    [void]$folder.RegisterTask($Name, $Xml, 6, $User, $null, 2)
+}
+
 $task = Get-ScheduledTask -TaskPath $path -TaskName $name -ErrorAction SilentlyContinue
 $before = ''
 if ($task) {
@@ -103,10 +141,17 @@ $module.Diff.after = $after
 if ($before -ne $after) {
     $module.Result.changed = $true
     if (-not $check) {
+        $user = $module.Params.s4u_user
+        $call = if ($user) { "RegisterTask $path$name for $user by S4U" } else { "Register-ScheduledTask $path$name" }
         try {
-            $task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force
+            if ($user) {
+                Register-TnwksS4uTask -Service (New-Object -ComObject Schedule.Service) -Path $path -Name $name -Xml $module.Params.xml -User $user
+                $task = Get-ScheduledTask -TaskPath $path -TaskName $name
+            } else {
+                $task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force
+            }
         } catch {
-            $module.FailJson("Register-ScheduledTask $path$name failed: $($_.Exception.Message)", $_)
+            $module.FailJson("$call failed: $(Format-TnwksError $_.Exception)", $_)
         }
     }
 }
