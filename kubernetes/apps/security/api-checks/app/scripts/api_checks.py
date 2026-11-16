@@ -196,7 +196,7 @@ def http_get(url: str, headers: dict[str, str] | None = None) -> tuple[int, byte
 
 
 def version_key(text: str) -> tuple[int, ...]:
-    """7.25.1 -> (7, 25, 1). The leading number of a label such as "7.25.1 (stable)"."""
+    """7.90.1 -> (7, 90, 1). The leading number of a label such as "7.90.1 (stable)"."""
     match = re.match(r"\s*([0-9]+(?:\.[0-9]+)*)", text)
     if not match:
         raise QueryError("not a version")
@@ -290,8 +290,10 @@ def router_version(args: argparse.Namespace, now: datetime.datetime, get=http_ge
         answer = None
     if lines:
         (line,) = lines
-        if answer is not None and answer != line:
-            raise QueryError("the version lines and Prometheus give two versions")
+        if answer is not None:
+            if answer != line:
+                raise QueryError("the version lines and Prometheus give two versions")
+            print(f"routeros-firmware for {args.router}: the version lines and Prometheus agree", flush=True)
         return line
     print(f"routeros-firmware for {args.router}: no version line in {LINE_WINDOW_HOURS} hours", flush=True)
     if answer is None:

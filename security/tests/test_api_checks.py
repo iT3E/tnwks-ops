@@ -188,15 +188,21 @@ def firmware_entry(tmp_path, monkeypatch, get):
 
 
 @pytest.mark.parametrize("lines", [(line("7.90.1 (stable)"),), (line("7.90.1"),) * 3])
-def test_lines_that_agree_give_a_result_with_no_answer_of_prometheus(tmp_path, monkeypatch, lines):
+def test_lines_that_agree_give_a_result_with_no_answer_of_prometheus(tmp_path, monkeypatch, capsys, lines):
     code, entry = firmware_entry(tmp_path, monkeypatch, fake(running=NO_PROMETHEUS, newest="7.90.2", lines=lines))
     assert code == 0
     assert entry["failed"] == 1, "7.90.1 runs, and 7.90.2 is out for 30 days"
+    out = capsys.readouterr().out
+    assert "routeros-firmware for sce-rtr01: the lines decide" in out and "agree" not in out
 
 
-def test_lines_that_agree_with_prometheus_give_a_result(tmp_path, monkeypatch):
+def test_lines_that_agree_with_prometheus_give_a_result(tmp_path, monkeypatch, capsys):
+    """The log of the job names the source of the version: here both agree."""
     code, entry = firmware_entry(tmp_path, monkeypatch, fake(lines=(line("7.90.1"),) * 3))
     assert (code, entry["failed"]) == (0, 0)
+    out = capsys.readouterr().out
+    assert "routeros-firmware for sce-rtr01: the version lines and Prometheus agree\n" in out
+    assert "no version line" not in out and "the lines decide" not in out
 
 
 def test_with_no_line_in_the_window_prometheus_decides(tmp_path, monkeypatch, capsys):
@@ -204,7 +210,8 @@ def test_with_no_line_in_the_window_prometheus_decides(tmp_path, monkeypatch, ca
     The log of the job says that no line came."""
     code, entry = firmware_entry(tmp_path, monkeypatch, fake(newest="7.90.2", lines=()))
     assert (code, entry["failed"]) == (0, 1)
-    assert "no version line in 3 hours" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "no version line in 3 hours" in out and "agree" not in out
 
 
 def test_with_no_answer_of_loki_prometheus_decides(tmp_path, monkeypatch):
@@ -276,16 +283,25 @@ def test_the_version_line_of_the_router_is_the_line_that_the_job_reads():
 
 @pytest.mark.parametrize(("event", "versions"), [
     # The form that the syslog source gives: the prefix is the tag.
-    (stored("router=sce-rtr01 version=7.25"), {(7, 25)}),
+    (stored("router=sce-rtr01 version=7.90"), {(7, 90)}),
     (stored("router=sce-rtr01 version=7.90.1 (stable)"), {(7, 90, 1)}),
     (stored("router=sce-rtr01 version=7.90.1 (stable) and more"), None),
     (stored("router=sce-rtr01"), None),
+    (stored("router=sce-rtr01 version=x"), None),
+    # A tag that only contains the prefix is not the tag of the version line.
+    (stored("router=sce-rtr01 version=7.90.1", appname="my-tnwks-routeros-version"), None),
+    (stored("router=sce-rtr01 version=7.90.1", appname="tnwks-routeros-versions"), None),
     # The whole line in message, with another tag or none.
     (stored("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)", appname="script,info"), {(7, 90, 1)}),
     (json.dumps({"message": "script,info tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)"}), {(7, 90, 1)}),
     (json.dumps({"message": "tnwks-routeros-version router=sce-rtr01 version=7.90.1"}), {(7, 90, 1)}),
     (stored("user admin ran tnwks-routeros-version router=sce-rtr01 version=7.90.1", appname="system,info"), None),
     (json.dumps({"message": "tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable) and more"}), None),
+    # A line that is not the JSON of an event is read as it is.
+    ("  tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)\n", {(7, 90, 1)}),
+    ("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable) and more", None),
+    (json.dumps(["tnwks-routeros-version router=sce-rtr01 version=7.90.1"]), None),
+    (json.dumps({"appname": "tnwks-routeros-version", "message": 7}), None),
 ])
 def test_the_job_reads_only_the_whole_version_line_as_the_filter_does(event, versions):
     """The same forms as the filter of the aggregator (observability/vector-tests/

@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Security: the log of each run of the API checks job says when the version lines of the router and Prometheus agree, so it names the source of the version in each case. The tests of the version line add a tag that only contains the prefix, a version that is not one, and a line that is not the JSON of an event.'
+time: 2026-11-16T15:00:00.000000000Z

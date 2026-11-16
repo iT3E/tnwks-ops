@@ -46,7 +46,9 @@ decides:
 A line that disagrees with another line, or with an answering Prometheus,
 gives no result. A fault of mktxp alone shows as a late result while the
 lines still come. An upgrade of the router in the 3 hours before a run also
-gives no result that day.
+gives no result that day. The log of each run names the source of the version:
+the version lines and Prometheus agree, the lines decide, or no version line
+came in 3 hours.
 
 **The way back** of the version line is a revert of its merge, and three
 steps that a revert does not do. The apply of Terraform removes the
