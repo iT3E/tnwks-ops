@@ -10,3 +10,6 @@ resources:
   # only (docs/apps/agent-platform.md, "The pilot agent").
   # - ./signal-daemon/ks.yaml
   - ./agent/ks.yaml
+  # A restore test into a scratch volume (restore-test/ks.yaml). Remove it
+  # with its directory when the result is read.
+  - ./restore-test/ks.yaml

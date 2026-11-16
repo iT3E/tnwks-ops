@@ -1,0 +1,20 @@
+---
+# The scratch volume of the restore test. An empty claim of the class of
+# `agent-state` (local-path: it binds on the node of its first pod, here the
+# restore mover, on any worker). Flux owns it, so the removal of this
+# directory deletes it, and the reclaim policy Delete of the class wipes its
+# directory on the node. The restored data holds credentials: it must not
+# stay behind.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-state-restore-test
+  labels:
+    app.kubernetes.io/name: agent-restore-test
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      # The size of agent-state (agent/app/pvc.yaml).
+      storage: 10Gi
