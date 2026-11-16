@@ -554,6 +554,39 @@ def test_the_removal_takes_away_each_part_that_the_rehearsal_made():
     assert any(f["path"].endswith("tnwks-rehearsal-write-test.tmp") and f["state"] == "absent" for f in files)
 
 
+PROFILE_FAKES = r"""
+$Ansible = [pscustomobject]@{ Changed = $null }
+$global:Calls = New-Object System.Collections.Generic.List[string]
+$global:Minutes = 0
+function Get-Date { [datetime]::new(2026, 1, 1).AddMinutes($global:Minutes) }
+function Start-Sleep { param($Seconds) $global:Calls.Add('sleep'); $global:Minutes += 1 }
+function Get-CimInstance { param($ClassName, $Filter) [pscustomobject]@{ LocalPath = 'C:\\Users\\x'; Loaded = [bool]$env:FAKE_LOADED } }
+function Remove-CimInstance { param($InputObject) $global:Calls.Add('remove') }
+"""
+
+
+def run_profile_step(loaded: bool, check: bool) -> str:
+    task = next(t for t in absent() if t["name"] == "No profile of the account")["ansible.windows.win_powershell"]
+    what_if = " -WhatIf" if check else ""
+    body = PROFILE_FAKES + f"$env:FAKE_LOADED = '{'1' if loaded else ''}'\n$f = {{\n" + task["script"] + "\n}\n" + (
+        f"try {{ & $f -Sid 'S-1-5-21-7-7-7-1002'{what_if} | Out-Null; 'changed ' + $Ansible.Changed + ' [' + ($global:Calls -join ',') + ']' }}\n"
+        "catch { 'failed ' + $_.Exception.Message }")
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    return run.stdout.strip().splitlines()[-1]
+
+
+@needs_pwsh
+def test_a_check_run_reports_the_profile_and_does_not_wait_for_it():
+    """A check run stops no task, so the profile of a running rehearsal stays
+    loaded. The check reports the change at once; a real run waits for the unload."""
+    assert run_profile_step(loaded=True, check=True) == "changed True []"
+    assert run_profile_step(loaded=False, check=True) == "changed True []"
+    assert run_profile_step(loaded=False, check=False) == "changed True [remove]"
+    failed = run_profile_step(loaded=True, check=False)
+    assert failed.startswith("failed The profile of S-1-5-21-7-7-7-1002 is still loaded"), failed
+
+
 def test_the_exit_check_reads_the_accounts_and_the_batch_right():
     play = yaml.safe_load((ANSIBLE / "playbooks/windows-rehearsal-check.yml").read_text())
     tasks = play[0]["tasks"]

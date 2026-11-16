@@ -464,14 +464,16 @@
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
           if (-not $Sid) { return }
+          # A check run stops no task, so a loaded profile stays loaded: it
+          # does not wait, and it reports the change.
           $deadline = (Get-Date).AddMinutes(2)
           do {
               $profile = Get-CimInstance Win32_UserProfile -Filter "SID = '$Sid'"
-              if (-not $profile -or -not $profile.Loaded) { break }
+              if (-not $profile -or -not $profile.Loaded -or $WhatIfPreference) { break }
               Start-Sleep -Seconds 5
           } while ((Get-Date) -lt $deadline)
           if (-not $profile) { return }
-          if ($profile.Loaded) { throw "The profile of $Sid is still loaded. Nothing is removed." }
+          if ($profile.Loaded -and -not $WhatIfPreference) { throw "The profile of $Sid is still loaded. Nothing is removed." }
           $Ansible.Changed = $true
           if ($PSCmdlet.ShouldProcess($profile.LocalPath, 'remove the profile')) { Remove-CimInstance -InputObject $profile }
 

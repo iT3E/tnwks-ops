@@ -124,7 +124,9 @@ the libusb shim build) also runs in check mode, since it only fills
 `win_powershell` scripts with `SupportsShouldProcess`, which compute "would
 change" without changing anything. On a host that never had the role, a
 check run skips the ACL and service-state tasks that need the directory tree
-and the service to exist.
+and the service to exist. A check run of the rehearsal's removal stops no
+task, so the profile of the account can stay loaded: the profile step
+reports the change and does not wait for the unload.
 
 ## Scheduled tasks
 
