@@ -116,10 +116,6 @@
       tags: [usb-attach]
     - role: windows_wsl_maintenance
       tags: [wsl-maintenance]
-    # The rehearsal of the account change (Design Doc 0004, section 9, step 0).
-    - role: windows_wsl_rehearsal
-      when: wsl_rehearsal | bool
-      tags: [wsl-rehearsal]
     - role: windows_observability_storage
       when: observability_storage_enabled | default(false) | bool
       tags: [observability-storage]
@@ -141,3 +137,8 @@
     # Check-only settings; last, so a failed assertion stops nothing else.
     - role: windows_host_settings
       tags: [host-settings]
+    # The rehearsal of the account change (Design Doc 0004, section 9, step
+    # 0). After every other role, so a failed step of it stops no other role.
+    - role: windows_wsl_rehearsal
+      when: wsl_rehearsal | bool
+      tags: [wsl-rehearsal]

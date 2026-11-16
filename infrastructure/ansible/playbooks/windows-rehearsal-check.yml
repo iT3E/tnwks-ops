@@ -15,12 +15,11 @@
 #   import   the import exited 0, and a later task of the account (the probe)
 #            finds the distro registered
 #   start    the start task runs, with nobody signed in
-#   tokens   each WSL process whose token is the account's (wsl, wslhost,
-#            wslrelay): medium integrity, and the Administrators group absent
-#            or deny-only, with at least one wsl.exe client. A WSL process that
-#            this read can not open fails the check. A VM process (vmmem) whose
-#            token is another user's, such as the account of a VM, is listed
-#            with its values and no user
+#   tokens   each wsl, wslhost and wslrelay process whose owner is the account
+#            (by WMI): medium integrity, and the Administrators group absent or
+#            deny-only, with at least one wsl.exe. Such a process that this read
+#            can not open fails the check. A VM process (vmmem) is shown and
+#            not counted, and a process of another user is not read
 #   write    as root in the distro: refused, with EACCES or EPERM. Another
 #            answer, such as ENOENT or EIO, fails
 #   mount    wsl --mount --vhd <file> --bare, then wsl --unmount: both exit 0
@@ -59,10 +58,49 @@
           param([string]$Account, [string]$Distro, [string]$Prefix, [string]$LogDir)
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
-          $results = [ordered]@{}
-          function Add-Check([string]$Name, [bool]$Pass, [string]$Value) {
-              $results[$Name] = [ordered]@{ pass = $Pass; value = $Value }
+
+          # --- BEGIN logic (security/tests/test_wsl_rehearsal.py runs this part with fakes)
+          # Each function takes what was read and gives @{ pass; value }.
+          function Test-TnwksProbe($Probe, [string]$Sid, [string]$Account) {
+              if (-not $Probe) { return @{ pass = $false; value = 'the probe task gave no result' } }
+              $admins = @($Probe.administrators)
+              $own = $Probe.profile -match '^[A-Za-z]:\\Users\\' -and (Split-Path -Leaf $Probe.profile) -like "$Account*"
+              $pass = [bool]($Probe.medium -and $Probe.user -eq $Sid -and $admins.Count -eq 0 -and $Probe.hive -and $own)
+              $value = 'integrity {0}; Administrators {1}; hive loaded {2}; profile {3}' -f (@($Probe.integrity_sids) -join ','),
+                  $(if ($admins.Count) { $admins -join ',' } else { 'absent' }), $Probe.hive, $Probe.profile
+              @{ pass = $pass; value = $value }
           }
+          function Test-TnwksImport($Import, $Probe, [string]$Distro) {
+              if (-not $Import) { return @{ pass = $false; value = 'no result' } }
+              $later = if ($Probe) { @($Probe.distros) } else { @() }
+              @{ pass = [bool]($Import.exit -eq 0 -and $later -contains $Distro)
+                 value = "exit $($Import.exit); distros of the account: $($later -join ',')" }
+          }
+          # Rows: @{ name; id; mine; token }. mine: a wsl, wslhost or wslrelay
+          # process whose owner is the account. token: the read of its token,
+          # or "error ...". Only those rows count; a VM process is shown.
+          function Test-TnwksTokens($Rows) {
+              $own = @($Rows | Where-Object { $_.mine })
+              $failed = @($own | Where-Object { $_.token -like 'error*' })
+              $read = @($own | Where-Object { $_.token -notlike 'error*' })
+              $bad = @($read | Where-Object { $_.token -notmatch ' integrity=0x2000 ' -or $_.token -notmatch ' admins=(absent|deny-only)$' })
+              $clients = @($read | Where-Object { $_.name -eq 'wsl' })
+              $vms = @($Rows | Where-Object { -not $_.mine -and $_.name -like 'vmmem*' })
+              $shown = @($own | ForEach-Object { "$($_.name) $($_.id): $($_.token -replace '^user=\S+ ', '')" }) +
+                  @($vms | ForEach-Object { "$($_.name) $($_.id) (not counted): $($_.token -replace '^user=\S+ ', '')" })
+              @{ pass = [bool]($failed.Count -eq 0 -and $bad.Count -eq 0 -and $clients.Count -gt 0); value = $shown -join '; ' }
+          }
+          function Test-TnwksWrite($Write) {
+              if (-not $Write) { return @{ pass = $false; value = 'the write task gave no result' } }
+              @{ pass = [bool]("$($Write.output)" -match '^refused (EACCES|EPERM) '); value = "$($Write.output) (exit $($Write.exit))" }
+          }
+          function Test-TnwksMount($Mount) {
+              if (-not $Mount) { return @{ pass = $false; value = 'the mount task gave no result' } }
+              @{ pass = [bool]($Mount.mount_exit -eq 0 -and $Mount.unmount_exit -eq 0)
+                 value = "mount exit $($Mount.mount_exit) ($($Mount.mount_output)); unmount exit $($Mount.unmount_exit) ($($Mount.unmount_output))" }
+          }
+          # --- END logic
+
           function Read-Step([string]$Step) {
               $path = Join-Path $LogDir "$Step.json"
               if (-not (Test-Path -LiteralPath $path)) { return $null }
@@ -81,27 +119,16 @@
               Read-Step $Step
           }
           $sid = (Get-LocalUser -Name $Account).SID.Value
+          $results = [ordered]@{}
 
-          # The probe, as a task of the account.
           $probe = Invoke-Step 'probe'
-          if ($probe) {
-              $admins = @($probe.administrators)
-              Add-Check 'probe' ($probe.medium -and $probe.user -eq $sid -and $admins.Count -eq 0 -and $probe.hive -and $probe.profile -like "*\$Account*") `
-                  ("integrity {0}; Administrators {1}; hive loaded {2}; profile {3}" -f (@($probe.integrity_sids) -join ','),
-                      $(if ($admins.Count) { $admins -join ',' } else { 'absent' }), $probe.hive, $probe.profile)
-          } else { Add-Check 'probe' $false 'the probe task gave no result' }
-
-          # The import, as the apply ran it, and the distro as a later task sees it.
-          $import = Read-Step 'import'
-          $later = if ($probe) { @($probe.distros) } else { @() }
-          Add-Check 'import' ([bool]$import -and $import.exit -eq 0 -and $later -contains $Distro) `
-              $(if ($import) { "exit $($import.exit); distros of the account: $($later -join ',')" } else { 'no result' })
-
-          # The start task holds the distro.
+          $results.probe = Test-TnwksProbe $probe $sid $Account
+          $results.import = Test-TnwksImport (Read-Step 'import') $probe $Distro
           $state = "$((Get-ScheduledTask -TaskName "$Prefix-start").State)"
-          Add-Check 'start' ($state -eq 'Running') "task state $state"
+          $results.start = @{ pass = ($state -eq 'Running'); value = "task state $state" }
 
-          # The token of each WSL process of the account.
+          # The token of each WSL process of the account. The owner of a
+          # process comes from WMI, so a process of another user is not opened.
           Add-Type -TypeDefinition @'
           using System;
           using System.Runtime.InteropServices;
@@ -127,8 +154,9 @@
                   if (process == IntPtr.Zero) return "error open " + Marshal.GetLastWin32Error();
                   IntPtr token;
                   if (!OpenProcessToken(process, 0x0008, out token)) { int e = Marshal.GetLastWin32Error(); CloseHandle(process); return "error token " + e; }
+                  IntPtr user = IntPtr.Zero, label = IntPtr.Zero, elevation = IntPtr.Zero, groups = IntPtr.Zero;
                   try {
-                      IntPtr user = Info(token, 1), label = Info(token, 25), elevation = Info(token, 18), groups = Info(token, 2);
+                      user = Info(token, 1); label = Info(token, 25); elevation = Info(token, 18); groups = Info(token, 2);
                       if (user == IntPtr.Zero || label == IntPtr.Zero || elevation == IntPtr.Zero || groups == IntPtr.Zero) return "error info";
                       string userSid = new SecurityIdentifier(Marshal.ReadIntPtr(user)).Value;
                       SecurityIdentifier labelSid = new SecurityIdentifier(Marshal.ReadIntPtr(label));
@@ -145,42 +173,27 @@
                           int attributes = Marshal.ReadInt32(entry + IntPtr.Size);
                           if (sid.Value == "S-1-5-32-544") admins = (attributes & 0x10) != 0 ? "deny-only" : "enabled";
                       }
-                      foreach (IntPtr p in new[] { user, label, elevation, groups }) Marshal.FreeHGlobal(p);
                       return "user=" + userSid + " integrity=0x" + rid.ToString("x") + " elevation=" + type + " admins=" + admins;
-                  } finally { CloseHandle(token); CloseHandle(process); }
+                  } finally {
+                      foreach (IntPtr p in new[] { user, label, elevation, groups }) if (p != IntPtr.Zero) Marshal.FreeHGlobal(p);
+                      CloseHandle(token); CloseHandle(process);
+                  }
               }
           }
           '@
-          # Each process of the account, by the user of its token. A VM process
-          # of another user is listed apart, with no user.
-          $read = @()
-          $vms = @()
-          $failed = @()
-          foreach ($p in @(Get-Process -Name wsl, wslhost, wslrelay, vmmemWSL, vmmem -ErrorAction SilentlyContinue)) {
-              $token = [TnwksRehearsalToken]::Read($p.Id)
-              if ($token -like 'error*') { $failed += "$($p.Name) $($p.Id): $token"; continue }
-              $mine = $token -like "user=$sid *"
-              $value = "$($p.Name) $($p.Id): $($token -replace '^user=\S+ ', '')"
-              if ($mine) { $read += $value } elseif ($p.Name -like 'vmmem*') { $vms += "not the account, $value" }
+          $rows = @()
+          $filter = "Name = 'wsl.exe' OR Name = 'wslhost.exe' OR Name = 'wslrelay.exe' OR Name LIKE 'vmmem%'"
+          foreach ($p in @(Get-CimInstance Win32_Process -Filter $filter)) {
+              $name = $p.Name -replace '\.exe$', ''
+              $owner = Invoke-CimMethod -InputObject $p -MethodName GetOwnerSid -ErrorAction SilentlyContinue
+              $mine = $name -in @('wsl', 'wslhost', 'wslrelay') -and $owner -and $owner.Sid -eq $sid
+              if (-not $mine -and $name -notlike 'vmmem*') { continue }
+              $rows += @{ name = $name; id = $p.ProcessId; mine = $mine; token = [TnwksRehearsalToken]::Read([int]$p.ProcessId) }
           }
-          $bad = @($read | Where-Object { $_ -notmatch 'integrity=0x2000 ' -or $_ -match 'admins=enabled' })
-          $clients = @($read | Where-Object { $_ -like 'wsl *' })
-          Add-Check 'tokens' ($failed.Count -eq 0 -and $clients.Count -gt 0 -and $bad.Count -eq 0) `
-              ((@($read) + @($vms) + @($failed | ForEach-Object { "not read: $_" })) -join '; ')
+          $results.tokens = Test-TnwksTokens $rows
 
-          # The write test, as root in the distro.
-          $write = Invoke-Step 'write'
-          if ($write) {
-              Add-Check 'write' ($write.output -match '^refused (EACCES|EPERM) ') "$($write.output) (exit $($write.exit))"
-          } else { Add-Check 'write' $false 'the write task gave no result' }
-
-          # The mount of the test disk file, with --bare.
-          $mount = Invoke-Step 'mount'
-          if ($mount) {
-              Add-Check 'mount' ($mount.mount_exit -eq 0 -and $mount.unmount_exit -eq 0) `
-                  "mount exit $($mount.mount_exit) ($($mount.mount_output)); unmount exit $($mount.unmount_exit) ($($mount.unmount_output))"
-          } else { Add-Check 'mount' $false 'the mount task gave no result' }
-
+          $results.write = Test-TnwksWrite (Invoke-Step 'write')
+          $results.mount = Test-TnwksMount (Invoke-Step 'mount')
           $results
       register: wsl_rehearsal_checks
 
