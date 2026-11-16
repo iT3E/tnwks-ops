@@ -18,3 +18,8 @@ configMapGenerator:
       - daily-backup.sh=./scripts/daily-backup.sh
       - memory-index.sh=./scripts/memory-index.sh
       - sandbox-start.sh=./scripts/sandbox-start.sh
+    # The sandbox gateway of this trust domain, for sandbox-start.sh (the
+    # same address as the openshell entry of openclaw.json). It is in the
+    # same ConfigMap as the script, so both change in one apply.
+    literals:
+      - sandbox-gateway-endpoint=https://openshell.agents-pilot.svc.cluster.local:8080

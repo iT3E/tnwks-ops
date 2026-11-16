@@ -48,9 +48,11 @@ spec:
           type: RuntimeDefault
       containers:
         - name: check
-          # The image of the agent (agent/app/deployment.yaml): the tools
-          # the archive scripts use.
-          image: ghcr.io/it3e/tnwks-agent-image:0.4.0@sha256:43ee2f3a1a11dff2294795250091c685ac8b7b8b988a9eeb93c1adffef6f971d
+          # The image of the agent, the same release and digest as
+          # agent/app/deployment.yaml: the tools the archive scripts use.
+          # Renovate reads every YAML file under kubernetes/, listed or not,
+          # so one update PR moves both lines together.
+          image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
           command: ["sh", "-c"]
           args:
             - |
