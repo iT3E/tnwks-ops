@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.180.0 - 2026-11-16
+
+### Changed
+
+* Renovate review: the repository variable `RENOVATE_REVIEW_ROUTE` is `platform`, so each review goes to the run receiver of the workflow agents and its answer is one comment on the pull request. The hook of the host gets no review while the variable is `platform`; setting it to `host` again is the way back.
+
 ## v2.179.1 - 2026-11-16
 
 ### Fixed
