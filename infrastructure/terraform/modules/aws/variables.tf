@@ -77,7 +77,10 @@ variable "rolesanywhere_backups_prefixed" {
   }
   # The list deny of an exclusive prefix (s3_backups.tf) matches the prefix
   # without its final / and anything after it, so it would also refuse a list
-  # of another role whose prefix starts with that name.
+  # of another role whose prefix starts with that name. This check sees only
+  # the entries of this variable: not the prefixes that the shared backup
+  # role or the site roles write (rolesanywhere_backups_sites, kopiur/,
+  # cnpg/). Compare a new exclusive prefix with those by hand.
   validation {
     condition = alltrue(flatten([
       for ka, a in var.rolesanywhere_backups_prefixed : [

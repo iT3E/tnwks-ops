@@ -276,8 +276,10 @@ grant:
    bin/sops --set "[\"stringData\"][\"tls.key\"] $(jq -Rs . < "$T/homelab-wsl-agents-finance-backups.key")" "$D/secret-certificate.sops.yaml"
    rm -rf "$T"
    bin/sops --set "[\"stringData\"][\"KOPIA_PASSWORD\"] \"$(openssl rand -hex 32)\"" "$D/secret-password.sops.yaml"
-   # 64, not 7 ("pending"); only the length is shown
-   bin/sops -d --extract '["stringData"]["KOPIA_PASSWORD"]' "$D/secret-password.sops.yaml" | tr -d '\n' | wc -c
+   # The password check: "ok" for 64 hex characters (the pattern above),
+   # "not ok" for the placeholder or anything else. No value is shown.
+   bin/sops -d --extract '["stringData"]["KOPIA_PASSWORD"]' "$D/secret-password.sops.yaml" \
+     | tr -d '\n' | awk '{ v = v $0 } END { print (v ~ /^[0-9a-f]+$/ && length(v) == 64) ? "ok" : "not ok" }'
    ```
 
    Copy `secret-password.sops.yaml` as it is to the off-site kit, next to
@@ -297,10 +299,24 @@ grant:
    kubectl -n kopiur-system get secret aws-backup-sts-agents-finance -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
    ```
 
-4. **The repository.** List `clusterrepository.yaml` in
+4. **The repository, only when the password check prints `ok`.** Kopia
+   creates the repository with the password it finds at its first
+   bootstrap, the placeholder too, and a new password does not change an
+   existing repository. So run the check of step 2 again on the branch of
+   this step, right before its merge:
+
+   ```bash
+   D=kubernetes/apps/kopiur-system/agents-finance-repository/app
+   bin/sops -d --extract '["stringData"]["KOPIA_PASSWORD"]' "$D/secret-password.sops.yaml" \
+     | tr -d '\n' | awk '{ v = v $0 } END { print (v ~ /^[0-9a-f]+$/ && length(v) == 64) ? "ok" : "not ok" }'
+   ```
+
+   On `not ok`, stop: set the password (step 2) first. On `ok`, list
+   `clusterrepository.yaml` in
    `agents-finance-repository/app/kustomization.yaml`. It grants
    `agents-finance`. Then `kubectl get clusterrepository agents-finance`
-   shows `Ready`.
+   shows `Ready`. (The certificate needs no check of its own: with the
+   placeholder, the refresh of step 3 fails.)
 5. **The policy, with the volume.** List `pvc.yaml` and `backup.yaml` in
    `kubernetes/apps/ai/agents/finance/agent/app/kustomization.yaml`
    together, at the cutover of the finance agent. The first snapshot runs at
