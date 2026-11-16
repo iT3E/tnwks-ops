@@ -45,11 +45,17 @@ def prometheus_answer(*versions: str) -> bytes:
         {"metric": {"version": version}, "value": [1794571200, "1"]} for version in versions]}}).encode()
 
 
+def stored(message: str, appname: str = "tnwks-routeros-version", router: str = "sce-rtr01") -> str:
+    """A line of the stream job="routeros" as Loki keeps it: the event of the syslog
+    source of the aggregator as JSON. The source takes the first word of the router's
+    text as the tag (appname) and keeps the rest in message."""
+    return json.dumps({"appname": appname, "facility": "daemon", "host": router, "hostname": router,
+                       "message": message, "severity": "info", "source_ip": "192.0.2.1", "source_type": "syslog"})
+
+
 def line(version: str, router: str = "sce-rtr01") -> str:
-    """A line of the stream job="routeros" as the aggregator writes it: the syslog event
-    as JSON."""
-    return json.dumps({"message": f"tnwks-routeros-version router={router} version={version}",
-                       "hostname": router, "severity": "info", "appname": "script"})
+    """The version line of the router, in the form that Loki keeps."""
+    return stored(f"router={router} version={version}", router=router)
 
 
 def loki_answer(*lines: str) -> bytes:
@@ -191,10 +197,12 @@ def test_lines_that_agree_with_prometheus_give_a_result(tmp_path, monkeypatch):
     assert (code, entry["failed"]) == (0, 0)
 
 
-def test_with_no_line_in_the_window_prometheus_decides(tmp_path, monkeypatch):
-    """Reviewer's note: zero lines and an answer of Prometheus give the result of today."""
+def test_with_no_line_in_the_window_prometheus_decides(tmp_path, monkeypatch, capsys):
+    """Reviewer's note: zero lines and an answer of Prometheus give the result of today.
+    The log of the job says that no line came."""
     code, entry = firmware_entry(tmp_path, monkeypatch, fake(newest="7.90.2", lines=()))
     assert (code, entry["failed"]) == (0, 1)
+    assert "no version line in 3 hours" in capsys.readouterr().out
 
 
 def test_with_no_answer_of_loki_prometheus_decides(tmp_path, monkeypatch):
@@ -212,7 +220,7 @@ BROKEN_LINES = {
         "lines": (line("7.90.1"),), "running": (200, prometheus_answer("7.90.1", "7.90.2"))},
     "lines and an HTTP error of Prometheus": {"lines": (line("7.90.1"),), "running": (503, b"")},
     "a line of the router with no version": {
-        "lines": (line("7.90.1"), json.dumps({"message": "tnwks-routeros-version router=sce-rtr01 version=x"}))},
+        "lines": (line("7.90.1"), stored("router=sce-rtr01 version=x"))},
     "no line and no answer of Prometheus": {"lines": (), "running": NO_PROMETHEUS},
     "more lines than the limit": {"lines": (line("7.90.1"),) * 31, "running": NO_PROMETHEUS},
     "an answer of Loki that does not fit": {"lines": (200, b"{}"), "running": NO_PROMETHEUS},
@@ -248,7 +256,8 @@ def test_the_job_reads_the_lines_of_the_last_3_hours_from_the_stream_of_the_rout
     query = dict(item.split("=", 1) for item in url.split("?", 1)[1].split("&"))
     end = int(NOW.timestamp()) * 10**9
     assert (int(query["start"]), int(query["end"])) == (end - 3 * 3600 * 10**9, end)
-    assert checks.urllib.parse.unquote_plus(query["query"]) == '{job="routeros"} |= "tnwks-routeros-version "'
+    assert checks.urllib.parse.unquote_plus(query["query"]) == '{job="routeros"} |= "tnwks-routeros-version"'
+    assert 'tnwks-routeros-version"' in json.dumps(json.loads(line("7.90.1"))), "the line filter finds the stored line"
     assert int(query["limit"]) == checks.LINE_LIMIT + 1
 
 
@@ -263,17 +272,24 @@ def test_the_version_line_of_the_router_is_the_line_that_the_job_reads():
     assert checks.VERSION_LINE.fullmatch("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)")[2] == "7.90.1"
 
 
-@pytest.mark.parametrize(("message", "versions"), [
-    ("script,info tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)", {(7, 90, 1)}),
-    ("tnwks-routeros-version router=sce-rtr01 version=7.90.1", {(7, 90, 1)}),
-    ("system,info user admin ran tnwks-routeros-version router=sce-rtr01 version=7.90.1", None),
-    ("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable) and more", None),
+@pytest.mark.parametrize(("event", "versions"), [
+    # The form that the syslog source gives: the prefix is the tag.
+    (stored("router=sce-rtr01 version=7.25"), {(7, 25)}),
+    (stored("router=sce-rtr01 version=7.90.1 (stable)"), {(7, 90, 1)}),
+    (stored("router=sce-rtr01 version=7.90.1 (stable) and more"), None),
+    (stored("router=sce-rtr01"), None),
+    # The whole line in message, with another tag or none.
+    (stored("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)", appname="script,info"), {(7, 90, 1)}),
+    (json.dumps({"message": "script,info tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)"}), {(7, 90, 1)}),
+    (json.dumps({"message": "tnwks-routeros-version router=sce-rtr01 version=7.90.1"}), {(7, 90, 1)}),
+    (stored("user admin ran tnwks-routeros-version router=sce-rtr01 version=7.90.1", appname="system,info"), None),
+    (json.dumps({"message": "tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable) and more"}), None),
 ])
-def test_the_job_reads_only_the_whole_version_line_as_the_filter_does(message, versions):
-    """The same form as the filter of the aggregator: the topics in front, or none. A line
-    that holds the prefix elsewhere gives no result."""
+def test_the_job_reads_only_the_whole_version_line_as_the_filter_does(event, versions):
+    """The same forms as the filter of the aggregator (observability/vector-tests/
+    routeros-version-line.yaml). A line that holds the prefix elsewhere gives no result."""
     answer = json.dumps({"status": "success", "data": {"resultType": "streams", "result": [
-        {"stream": {"job": "routeros"}, "values": [["1794571200000000000", json.dumps({"message": message})]]}]}})
+        {"stream": {"job": "routeros"}, "values": [["1794571200000000000", event]]}]}})
     get = Fake({LOKI: (200, answer.encode())})
     if versions is None:
         with pytest.raises(checks.QueryError):

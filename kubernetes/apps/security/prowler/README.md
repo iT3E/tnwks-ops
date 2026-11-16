@@ -131,7 +131,7 @@ DNS goes through Cilium's DNS proxy, as in each app of the namespace.
 
 | Run | Request | Limit |
 | --- | --- | --- |
-| Each AWS run | 1024 MiB | 1536 MiB |
+| Each AWS run | 704 MiB | 896 MiB |
 | The Cloudflare run | 512 MiB | 768 MiB |
 
 **Why a run is in parts.** The first AWS runs scanned the whole list in one
@@ -186,31 +186,66 @@ and for the management account assumes the role again. That stays far under
 `activeDeadlineSeconds` (3 hours), and the run of the management account
 starts two hours after the run of prod.
 
+**The first runs in parts** (2026-11-16, homelab-wsl-02): each AWS run took
+about 20 minutes, and each of its 60 parts ended. The largest parts, by the
+peak of the process of the part, for `aws-prod` and `aws-management`: `ec2`
+491 and 497 MiB, `rds` 459 and 462 MiB, `efs` 420 and 426 MiB, `ssm` 410 and
+417 MiB. The four runs of that day:
+
+| Run | Peak of the container (last line of the log) | Working set (Prometheus, one sample a minute) |
+| --- | --- | --- |
+| `aws-prod`, 07:50 UTC | 682 MiB | 646 MiB |
+| `aws-management`, 08:11 UTC | 497 MiB | 446 MiB |
+| `aws-prod`, 08:47 UTC | 491 MiB | 486 MiB |
+| `aws-management`, 09:47 UTC | 498 MiB | 492 MiB |
+
+The peak of the container counts the page cache too: the 682 MiB of the first
+run of the day holds the cache of its joined file.
+
+- **The limit** is the highest peak and 25 %, rounded up to a multiple of 64
+  MiB: 682 MiB and 25 % is 853 MiB, so 896 MiB.
+- **The request** is the highest working set, rounded up to a multiple of 64
+  MiB: 646 MiB, so 704 MiB. With a lower request a run is over its request,
+  and among the first pods that the kubelet evicts when the node is short of
+  memory.
+
 **Read a run:**
 
-1. The log of the run (the Loki of homelab-wsl-02 keeps the log of each Job
-   pod): `part N of M: <service>, K checks: starts`, then `ends` or `fails`
-   with the peak of memory of the part. A part that the kernel stops at the
-   limit stops the whole container, with the script: its `starts` line is
-   then the last line of the log.
+1. The log of the run, in the Loki of homelab-wsl-02. The pod of a Job is
+   deleted within a minute of its end, as the threshold of terminated pods of
+   the cluster is 1 (`terminated-pod-gc-threshold` in
+   `talos/wsl-02/patches/controlplane.yaml`). The Job stays a day, but no
+   series of the pod and no log on the node stays: the log in Loki is what
+   stays. Its stream has no label of the pod. Each line is the JSON of Vector,
+   with the text in `message` and the name of the pod in
+   `kubernetes.pod_name`. Each run has a pod of its own, so one run is the
+   lines of one pod name. The runs of prod, each with its pod name:
+   `{namespace="security", app="prowler"} | json | kubernetes_pod_name=~"prowler-aws-prod-.+" | line_format "{{.kubernetes_pod_name}} {{.message}}"`.
+   A run starts with `prowler aws for <system>: ...` and ends with
+   `memory peak of the container: N MiB`. Each part has
+   `part N of M: <service>, K checks: starts`, then `ends` or `fails` with
+   the peak of memory of the part. A part that the kernel stops at the limit
+   stops the whole container, with the script: its `starts` line is then the
+   last line of the run.
 2. The same in Prometheus: one rise and fall of
    `container_memory_working_set_bytes{namespace="security",container="prowler"}`
    for each part, in the order of the services. The highest is the part to
    look at: `max_over_time(container_memory_working_set_bytes{namespace="security",container="prowler"}[1d])`.
-3. Why the container ended:
-   `kube_pod_container_status_terminated_reason{namespace="security",container="prowler"}`
-   (`OOMKilled` at the limit, `Error` for a code). kube-state-metrics serves it
-   while the pod exists: the Job keeps its pod for a day
-   (`ttlSecondsAfterFinished`).
+3. **Why a run ended is in its log only.** Prometheus keeps no reason: with
+   the pod gone, kube-state-metrics serves no
+   `kube_pod_container_status_terminated_reason` and no waiting reason for
+   it. A kill at the limit is a kill of the memory cgroup, with the script in
+   the same group: the kernel log of the node shows it, and the log of the
+   run ends at the `starts` line of the part.
 4. A run over the limit ends with the status `OOMKilled`, and `KubeJobFailed`
    fires. A run that fails is not tried again (`backoffLimit: 0`): the next
    run is the next day. The peak of a part comes from the resources of the
    account, so a second try at once would end the same way and read each API
    again.
 
-After the first run that ends well, set the limit of both AWS runs to the
-highest measured peak and a margin of 25 %, in one pull request, and change
-the lines in `../README.md`.
+The limit follows the measure: when a run measures a higher peak, set the
+limit to that peak and 25 % in one pull request, with the lines in
+`../README.md`.
 
 If one part still reaches the limit, the log names its service. The next
 steps, each with its cost:
@@ -278,6 +313,10 @@ never prints it. In one pull request:
 4. Name the Secret, the Lease and the CronJob under `resources` in
    `app/kustomization.yaml`, the Secret first.
 5. Merge. The run is at the next 07:17 UTC.
+6. After its first result is on the board, add `prowler` to `sources` of
+   `cloudflare` in `security/registry/systems.yaml`, in a pull request of
+   its own, so that `SecurityResultLate` watches it (`security/README.md`,
+   "A new check").
 
 The Cloudflare token: **My Profile, API Tokens, Create Custom Token.**
 
@@ -344,7 +383,7 @@ in the past, so the alert fires at once.
 
 ## When a run fails
 
-`KubeJobFailed` fires for the Job. The log of its pod says why:
+`KubeJobFailed` fires for the Job. The log of the run says why ("Read a run"):
 
 - **The session.** `aws-security-audit-sts` has `pending`, or its time has
   passed: see `../aws-credentials/README.md`.
@@ -356,7 +395,10 @@ in the past, so the alert fires at once.
   fails says why.
 
 The next run is the next day. The time of the last result then ages, and
-`SecurityResultLate` fires after 36 hours.
+`SecurityResultLate` fires after 36 hours: `aws-prod` and `aws-management`
+list `prowler` in `sources` of `security/registry/systems.yaml`. The
+Cloudflare account lists it in the pull request after its first result
+("To start a provider").
 
 ## The way back
 

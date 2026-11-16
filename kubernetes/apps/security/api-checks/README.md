@@ -26,8 +26,11 @@ homelab-wsl only, so the router also logs one line each hour,
 sends that line to the host of homelab-wsl-02, whose UDP relay admits the
 router only, and the aggregator there writes it to the stream
 `job="routeros"` of this site's Loki. The aggregators keep it out of the
-security stream `routeros`. The job and the filter of the aggregator read
-the same form: the whole line, with or without the topics of the router in
+security stream `routeros`. The syslog source of the aggregator takes the
+prefix as the tag of the line: Loki keeps the event as JSON with `appname`
+`tnwks-routeros-version` and `message` `router=<identity> version=<version>`.
+The job and the filter of the aggregator read the same forms: that one, and
+the whole line in `message`, with or without the topics of the router in
 front (`script,info`). The job reads the lines of the last 3 hours, and
 decides:
 
