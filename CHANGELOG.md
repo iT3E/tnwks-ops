@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.169.3 - 2026-11-16
+
+### Fixed
+
+* Each Prowler run of AWS runs one process of Prowler for each service of the scan list, and joins their records into one OCSF file. A process holds one service at a time, and a run in which a part fails leaves no file.
+
 ## v2.169.2 - 2026-11-16
 
 ### Security
