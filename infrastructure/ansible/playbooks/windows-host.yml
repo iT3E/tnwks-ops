@@ -88,6 +88,14 @@
         windows_wsl_address: "{{ windows_wsl_ip.output[0].address }}"
         windows_wsl_subnet: "{{ windows_wsl_ip.output[0].subnet }}"
       tags: [always]
+
+    # Before the roles, so a failed check of a later role does not skip it.
+    - name: Other folders under C:\ProgramData
+      tnwks_win_dir_acl:
+        path: "{{ item }}"
+        items: reset
+      loop: "{{ windows_locked_dirs }}"
+      tags: [locked-dirs]
   # A host without the hardware or service a role is for sets its list empty
   # in host_vars, and the role is skipped (WSL-02: no Coral, no Z-Stick).
   roles:

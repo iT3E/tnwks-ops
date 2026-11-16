@@ -1,9 +1,11 @@
 #!powershell
 
 # Copyright: tnwks-ops contributors
-# A directory with a fixed, protected set of rules, for a directory that a
-# task with no elevation writes to and that SYSTEM or an elevated task also
-# reads (docs/wsl/windows-ansible.md, "Start WSL with no elevation").
+# A directory with a fixed, protected set of rules: the folder of a role
+# under C:\ProgramData, which SYSTEM or an elevated task reads, and a
+# directory that a task with no elevation writes to and that SYSTEM or an
+# elevated task also reads (docs/wsl/windows-ansible.md, "Start WSL with no
+# elevation").
 #
 # The directory inherits no rule, the Administrators own it, SYSTEM and the
 # Administrators have full control, and Users may read it. With `writer`, that
@@ -12,9 +14,20 @@
 # put a link or a junction in its place; on the files it may change, replace
 # and delete them (a new file, then a rename over the old one).
 #
+# With `items: reset`, each file and folder below, but for the folders of
+# `keep` and what is in them, gets the Administrators as its owner and only
+# the rules that it inherits from the directory, unless it has them already
+# (an owner of SYSTEM stays). A folder of a role holds the scripts and the
+# configuration that SYSTEM or an elevated task reads, so no item there may
+# keep an owner or a rule of its own: an owner can change the rules of the
+# item. The folders of `keep` have their own call of this module, with a
+# writer.
+#
 # The module stops, and changes nothing, when the path is a link or a
 # junction: Get-Acl and Set-Acl follow one, so the rules would go to its
-# target. It makes the directory when it is missing.
+# target. A link or a junction below, outside `keep`, stops it in the same
+# way, before it changes any item. It makes the directory when it is
+# missing.
 
 #AnsibleRequires -CSharpUtil Ansible.Basic
 
@@ -85,6 +98,58 @@ function Invoke-TnwksDirAcl {
     }
     $true
 }
+
+function Get-TnwksDirItems {
+    <#
+    .SYNOPSIS
+    Each file and folder below the directory, but for the folders of Keep and
+    what is in them. Stops at a link or a junction.
+    #>
+    param([string]$Path, [string[]]$Keep)
+    $skip = @($Keep | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') })
+    $out = [System.Collections.Generic.List[object]]::new()
+    $todo = [System.Collections.Generic.Queue[string]]::new()
+    $todo.Enqueue($Path)
+    while ($todo.Count -gt 0) {
+        foreach ($child in @(Get-ChildItem -LiteralPath $todo.Dequeue() -Force)) {
+            if ($skip -contains $child.FullName.TrimEnd('\')) { continue }
+            if ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw "$($child.FullName) is a link or a junction. No item is changed."
+            }
+            $out.Add($child)
+            if ($child.PSIsContainer) { $todo.Enqueue($child.FullName) }
+        }
+    }
+    , $out
+}
+
+function Invoke-TnwksDirItems {
+    <#
+    .SYNOPSIS
+    Gives each item below the directory the owner Administrators and only its
+    inherited rules; gives the number of items it changed (or would, with -Check).
+    #>
+    param([string]$Path, [string[]]$Keep, [bool]$Check)
+    $sid = [System.Security.Principal.SecurityIdentifier]
+    $owners = @('S-1-5-32-544', 'S-1-5-18')
+    $items = Get-TnwksDirItems -Path $Path -Keep $Keep
+    $reset = @($items | Where-Object {
+        $acl = Get-Acl -LiteralPath $_.FullName
+        $acl.AreAccessRulesProtected -or $owners -notcontains $acl.GetOwner($sid).Value -or
+            @($acl.GetAccessRules($true, $false, $sid)).Count -gt 0
+    })
+    if (-not $Check) {
+        foreach ($item in $reset) {
+            $kind = 'System.Security.AccessControl.FileSecurity'
+            if ($item.PSIsContainer) { $kind = 'System.Security.AccessControl.DirectorySecurity' }
+            $acl = New-Object $kind
+            $acl.SetOwner((New-Object $sid 'S-1-5-32-544'))
+            $acl.SetAccessRuleProtection($false, $false)
+            Set-Acl -LiteralPath $item.FullName -AclObject $acl
+        }
+    }
+    $reset.Count
+}
 # --- END logic
 
 $spec = @{
@@ -92,13 +157,23 @@ $spec = @{
         path = @{ type = 'path'; required = $true }
         # The account that writes files here with no elevation; none: read only.
         writer = @{ type = 'str'; default = '' }
+        # reset: each item below takes the owner and the rules of the directory.
+        items = @{ type = 'str'; default = 'keep'; choices = @('keep', 'reset') }
+        # Folders below that the reset leaves as they are, with what is in them.
+        keep = @{ type = 'list'; elements = 'path'; default = @() }
     }
     supports_check_mode = $true
 }
 
 $module = [Ansible.Basic.AnsibleModule]::Create($args, $spec)
 try {
-    $module.Result.changed = Invoke-TnwksDirAcl -Path $module.Params.path -Writer $module.Params.writer -Check $module.CheckMode
+    $changed = Invoke-TnwksDirAcl -Path $module.Params.path -Writer $module.Params.writer -Check $module.CheckMode
+    $module.Result.items_reset = 0
+    # A check run does not make a missing directory, so there is nothing below it to read.
+    if ($module.Params.items -eq 'reset' -and (Test-Path -LiteralPath $module.Params.path)) {
+        $module.Result.items_reset = Invoke-TnwksDirItems -Path $module.Params.path -Keep $module.Params.keep -Check $module.CheckMode
+    }
+    $module.Result.changed = $changed -or $module.Result.items_reset -gt 0
 } catch {
     $module.FailJson($_.Exception.Message, $_)
 }

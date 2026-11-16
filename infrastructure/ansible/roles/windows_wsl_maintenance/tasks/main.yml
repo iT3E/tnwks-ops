@@ -1,9 +1,19 @@
 ---
+# Only SYSTEM and the Administrators may make or change files here, and
+# Users may read (tnwks_win_dir_acl, no writer). The folder inherits nothing
+# from C:\ProgramData, which lets each user make files. Each item in it takes
+# the owner Administrators and the rules of the folder, at each run.
 - name: Directories
-  ansible.windows.win_file:
-    path: "{{ item }}"
-    state: directory
-  loop: ["{{ wsl_watchdog_dir }}", "{{ vhdx_compact_dir }}"]
+  tnwks_win_dir_acl:
+    path: "{{ item.path }}"
+    items: reset
+    keep: "{{ item.keep }}"
+  loop:
+    # The two log directories have their own rules (below).
+    - { path: "{{ wsl_watchdog_dir }}", keep: ["{{ wsl_watchdog_log_dir }}", "{{ wsl_service_log_dir }}"] }
+    - { path: "{{ vhdx_compact_dir }}", keep: [] }
+  loop_control:
+    label: "{{ item.path }}"
 
 # Both tasks start their script fresh on every run.
 - name: Scripts

@@ -205,7 +205,8 @@ def test_the_logs_of_the_tasks_with_no_elevation_are_apart_from_their_scripts():
         tasks = yaml.safe_load((ROLES / role / "tasks/main.yml").read_text())
         assert not any("ansible.windows.win_acl" in task for task in tasks), role
         for task in tasks:
-            if "tnwks_win_dir_acl" in task:
+            # The folder of the role itself has no writer (test_windows_role_folders.py).
+            if "tnwks_win_dir_acl" in task and task["tnwks_win_dir_acl"].get("items") != "reset":
                 assert task["when"] == "wsl_start_unelevated | bool", role
                 for item in task.get("loop", [task["tnwks_win_dir_acl"]]):
                     found[item["path"]] = item["writer"]

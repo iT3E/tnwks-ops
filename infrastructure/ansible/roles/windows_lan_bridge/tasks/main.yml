@@ -1,8 +1,14 @@
 ---
+# Only SYSTEM and the Administrators may make or change files here, and
+# Users may read (tnwks_win_dir_acl, no writer). The folder inherits nothing
+# from C:\ProgramData, which lets each user make files. Each item in it takes
+# the owner Administrators and the rules of the folder, at each run.
 - name: LAN bridge directory
-  ansible.windows.win_file:
+  tnwks_win_dir_acl:
     path: "{{ lan_bridge_dir }}"
-    state: directory
+    items: reset
+    # Its own rules: the address task writes there (below).
+    keep: ["{{ lan_bridge_ip_dir }}"]
 
 - name: Sync script
   ansible.windows.win_copy:

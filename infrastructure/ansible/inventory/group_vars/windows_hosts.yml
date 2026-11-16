@@ -25,6 +25,12 @@ wsl_start_unelevated: false
 # fail the distro play (role wsl_host_check). It needs wsl_start_unelevated.
 wsl_start_unelevated_done: false
 
+# Folders under C:\ProgramData that no role owns. The play gives each the
+# rules of a folder of a role (tnwks_win_dir_acl, no writer): only SYSTEM and
+# the Administrators may make or change files, Users may read, and each item
+# takes the owner Administrators. Per host.
+windows_locked_dirs: []
+
 # The keys sshd accepts (role windows_sshd): one per controller, so each can
 # be revoked on its own.
 windows_sshd_authorized_keys:
