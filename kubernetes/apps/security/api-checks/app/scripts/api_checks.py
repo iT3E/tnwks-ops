@@ -4,8 +4,17 @@ The CronJob of ../ runs this script each day on homelab-wsl-02. It uses the
 Python standard library only. Each test reads, and none changes a setting:
 
   routeros-firmware  sce-rtr01 (router). The version that the router runs, from
-                     the series mktxp_system_uptime of the Prometheus of
-                     homelab-wsl, where mktxp reads the router. The newest
+                     its version lines of the last 3 hours in the Loki of this
+                     site (the router logs one each hour, Design Doc 0004,
+                     section 5.5), and from the series mktxp_system_uptime of
+                     the Prometheus of homelab-wsl, where mktxp reads the
+                     router. Each line must give the same version. When that
+                     Prometheus gives an HTTP answer, it must give one version,
+                     the one of the lines. With no connection or no HTTP
+                     answer, the lines decide; with no line, the answer of
+                     Prometheus decides. Lines that differ, a line of the
+                     router with no version, or an answer that does not match
+                     give no result. The newest
                      stable release, from the release feed of the vendor. The
                      feed holds the newest release only, so the job keeps each
                      newest release it saw, with its date, in
@@ -57,6 +66,18 @@ FEED = "https://cdn.mikrotik.com/routeros/latest-stable.rss"
 GRACE_DAYS = 14
 TFC_API = "https://app.terraform.io/api/v2"
 TFC_ORGANIZATION = "tnwks-ops"
+LOKI = "http://loki-gateway.monitoring.svc.cluster.local"
+# The version line of the router (the scheduler version_line of its Terraform):
+# "tnwks-routeros-version router=<identity> version=<version>". The router
+# sends one each hour, so the window holds about three.
+# The whole line, with or without the topics of the router in front (script,info),
+# as the filter of the aggregator matches it.
+VERSION_LINE = re.compile(r"(?:[a-z]+(?:,[a-z]+)* )?tnwks-routeros-version router=(\S+) version=([0-9][0-9.]*)"
+                          r"(?: \([a-z]+\))?")
+LINE_QUERY = '{job="routeros"} |= "tnwks-routeros-version "'
+LINE_WINDOW_HOURS = 3
+# More lines than this in the window is not the hourly line: no result.
+LINE_LIMIT = 30
 
 
 RELEASES = "routeros-releases.json"
@@ -64,6 +85,10 @@ RELEASES = "routeros-releases.json"
 
 class QueryError(Exception):
     """A query gave no answer that a test can trust."""
+
+
+class NoAnswer(QueryError):
+    """No connection, or no HTTP answer: the source is away, and says nothing."""
 
 
 class UnreadableList(Exception):
@@ -153,7 +178,7 @@ def http_get(url: str, headers: dict[str, str] | None = None) -> tuple[int, byte
     except urllib.error.HTTPError as error:
         return error.code, b""
     except (urllib.error.URLError, OSError, ValueError) as error:
-        raise QueryError(f"no answer from {urllib.parse.urlsplit(url).hostname}: {type(error).__name__}") from None
+        raise NoAnswer(f"no answer from {urllib.parse.urlsplit(url).hostname}: {type(error).__name__}") from None
     if len(body) > LIMIT:
         raise QueryError(f"the answer of {urllib.parse.urlsplit(url).hostname} is larger than {LIMIT} bytes")
     return status, body
@@ -185,6 +210,71 @@ def running_version(prometheus: str, router: str, get=http_get) -> tuple[int, ..
     if len(versions) != 1:
         raise QueryError(f"Prometheus has {len(versions)} versions of the router, not one")
     return version_key(versions.pop())
+
+
+def line_versions(loki: str, router: str, now: datetime.datetime, get=http_get) -> set[tuple[int, ...]]:
+    """The versions in the version lines of the router of the last LINE_WINDOW_HOURS, from
+    the stream job="routeros" of Loki. An empty set: no line. Loki that does not answer
+    with 200 is NoAnswer: the lines are then not a source. A line of the router with no
+    version, or more lines than LINE_LIMIT, is a QueryError. A line of another router
+    does not count."""
+    end = int(now.timestamp()) * 1_000_000_000
+    start = end - LINE_WINDOW_HOURS * 3600 * 1_000_000_000
+    url = f"{loki.rstrip('/')}/loki/api/v1/query_range?" + urllib.parse.urlencode({
+        "query": LINE_QUERY, "start": start, "end": end, "limit": LINE_LIMIT + 1, "direction": "backward"})
+    status, body = get(url)
+    if status != 200:
+        raise NoAnswer(f"Loki answered {status}")
+    try:
+        data = json.loads(body)
+        streams = data["data"]["result"] if data.get("status") == "success" else None
+        lines = [value[1] for stream in streams for value in stream["values"]]
+    except (ValueError, KeyError, TypeError, IndexError) as error:
+        raise QueryError(f"the answer of Loki does not fit: {type(error).__name__}") from None
+    if len(lines) > LINE_LIMIT:
+        raise QueryError(f"Loki has more than {LINE_LIMIT} version lines in {LINE_WINDOW_HOURS} hours")
+    versions = set()
+    for line in lines:
+        # The aggregator writes the syslog event as JSON, with the text in `message`. A
+        # line in another form is not the whole version line: no result.
+        try:
+            event = json.loads(line)
+            text = event.get("message") if isinstance(event, dict) else None
+        except ValueError:
+            text = None
+        match = VERSION_LINE.fullmatch((text if isinstance(text, str) else str(line)).strip())
+        if not match:
+            raise QueryError("a version line gives no version")
+        if match[1] == router:
+            versions.add(version_key(match[2]))
+    return versions
+
+
+def router_version(args: argparse.Namespace, now: datetime.datetime, get=http_get) -> tuple[int, ...]:
+    """The version of the router from its lines and from Prometheus (Design Doc 0004,
+    section 5.5). Each line must agree. An HTTP answer of Prometheus must give one
+    version, and it must be the one of the lines. With no answer of Prometheus the lines
+    decide, and with no line Prometheus decides."""
+    try:
+        lines = line_versions(args.loki, args.router, now, get)
+    except NoAnswer as error:
+        print(f"routeros-firmware for {args.router}: no version line ({error})", flush=True)
+        lines = set()
+    if len(lines) > 1:
+        raise QueryError(f"the version lines of the last {LINE_WINDOW_HOURS} hours differ")
+    try:
+        answer = running_version(args.prometheus, args.router, get)
+    except NoAnswer as error:
+        print(f"routeros-firmware for {args.router}: the lines decide ({error})", flush=True)
+        answer = None
+    if lines:
+        (line,) = lines
+        if answer is not None and answer != line:
+            raise QueryError("the version lines and Prometheus give two versions")
+        return line
+    if answer is None:
+        raise QueryError(f"no version line in {LINE_WINDOW_HOURS} hours, and no answer of Prometheus")
+    return answer
 
 
 def newest_release(get=http_get, feed: str = FEED) -> tuple[tuple[int, ...], datetime.datetime]:
@@ -281,7 +371,7 @@ def tests(args: argparse.Namespace, now: datetime.datetime, get=http_get) -> tup
             # The date of the feed, or now if the feed gives a later one.
             releases[show(newest)] = min(published.timestamp(), now.timestamp())
             write_json(args.results, RELEASES, {"version": 1, "first_seen": releases})
-        running = running_version(args.prometheus, args.router, get)
+        running = router_version(args, now, get)
         late = firmware(running, releases, now, args.grace_days)
         entry = {"check": "routeros-firmware", "system": args.router, "failed": int(bool(late)), "severity": "high"}
         if late:
@@ -360,6 +450,7 @@ def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), get=ht
 def parse(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--prometheus", required=True, help="the Prometheus where mktxp reads the router")
+    parser.add_argument("--loki", default=LOKI, help="the Loki of this site, with the version lines of the router")
     parser.add_argument("--router", default=ROUTER)
     parser.add_argument("--feed", default=FEED)
     parser.add_argument("--grace-days", type=int, default=GRACE_DAYS)

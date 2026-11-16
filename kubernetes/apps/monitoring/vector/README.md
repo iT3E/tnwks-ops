@@ -67,7 +67,7 @@ each way is on purpose:
 | Stream | Path in `vector.yaml` | When Loki is away |
 | --- | --- | --- |
 | The audit log | `audit_source`, `audit_time`, `loki_security_audit` | The sink waits and tries again, and each part before it waits too. No line is lost while the audit files on the node last. An acknowledgement goes back to the sender only when Loki took the line |
-| The router log | `routeros_syslog`, `loki_security_routeros` | The sink holds 500 events and then drops the newest (`vector_buffer_discarded_events_total`). The sink `loki_routeros` to the Loki of the own cluster does not wait |
+| The router log | `routeros_syslog`, `routeros_security` (leaves out the hourly version line of the API checks), `loki_security_routeros` | The sink holds 500 events and then drops the newest (`vector_buffer_discarded_events_total`). The sink `loki_routeros` to the Loki of the own cluster does not wait |
 
 Three rules keep the other logs safe:
 

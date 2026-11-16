@@ -1,0 +1,79 @@
+# The router log of the security stream routeros (routeros_security) leaves
+# out the version line that the API checks read (Design Doc 0004, section
+# 5.5), and keeps each other line. Each test feeds a line made up here.
+config: kubernetes/apps/monitoring/vector/aggregator/config/vector.yaml
+tests:
+  - name: the version line stays out of the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: log
+        log_fields:
+          message: "tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)"
+          hostname: sce-rtr01
+          severity: info
+    no_outputs_from:
+      - routeros_security
+  - name: the version line with its topics in front stays out of the security stream too
+    inputs:
+      - insert_at: routeros_security
+        type: log
+        log_fields:
+          message: "script,info tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)"
+          hostname: sce-rtr01
+          severity: info
+    no_outputs_from:
+      - routeros_security
+  - name: a line that holds the prefix elsewhere stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: log
+        log_fields:
+          message: "system,info user admin ran tnwks-routeros-version router=sce-rtr01 version=7.90.1"
+          hostname: sce-rtr01
+          severity: info
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert!(contains(string!(.message), "user admin ran"))
+  - name: a line that starts with the prefix and goes on stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: log
+        log_fields:
+          message: "tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable) and more"
+          hostname: sce-rtr01
+          severity: info
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert!(ends_with(string!(.message), "and more"))
+  - name: each other line of the router stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: log
+        log_fields:
+          message: "user admin logged in from 192.0.2.2 via ssh"
+          hostname: sce-rtr01
+          severity: info
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "user admin logged in from 192.0.2.2 via ssh")
+  - name: a line with no message stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: log
+        log_fields:
+          hostname: sce-rtr01
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.hostname, "sce-rtr01")

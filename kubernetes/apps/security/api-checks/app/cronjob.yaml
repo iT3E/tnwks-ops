@@ -27,8 +27,8 @@ spec:
             app.kubernetes.io/name: api-checks
         spec:
           restartPolicy: Never
-          # The job calls Prometheus and two hosts on the internet, and never
-          # the API server: no token.
+          # The job calls Prometheus, the Loki of this site and two hosts on
+          # the internet, and never the API server: no token.
           automountServiceAccountToken: false
           enableServiceLinks: false
           # Placement and memory: ../../README.md.
@@ -50,6 +50,9 @@ spec:
                 # The Prometheus of homelab-wsl, where mktxp reads the router,
                 # at the address that peer-federate of this site scrapes.
                 - --prometheus=http://${PEER_WINDOWS_HOST_ADDR}:9090
+                # The Loki of this site, with the hourly version line of the
+                # router (Design Doc 0004, section 5.5).
+                - --loki=http://loki-gateway.monitoring.svc.cluster.local
               env:
                 - name: PYTHONDONTWRITEBYTECODE
                   value: "1"

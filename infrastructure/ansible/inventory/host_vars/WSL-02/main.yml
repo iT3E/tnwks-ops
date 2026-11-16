@@ -18,11 +18,18 @@ ansible_ssh_common_args: >-
   -i {{ hostvars['WSL-02-ubuntu'].ansible_ssh_private_key_file }}
   {{ ansible_user }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}"
 
-# Not on this host (yet): no Coral, no Z-Stick, no UDP relays (no cluster to
-# relay to). An empty list skips the role (playbooks/windows-host.yml).
+# Not on this host (yet): no Coral, no Z-Stick. An empty list skips the role
+# (playbooks/windows-host.yml).
 coral_detector_devices: []
 usb_attach_bound_devices: []
-udp_relays: []
+# One UDP relay: the router's version line of the security platform, to
+# homelab-wsl-02's vector-aggregator (Design Doc 0004, section 5.5). The router
+# sends nothing else here (its logging rule version_line, Terraform). Only the
+# router's address, as on DESKTOP-HKE05KI. No NetFlow relay.
+udp_relays:
+  - task: tnwks-udp-relay-syslog
+    port: 6001
+    remote: [10.10.91.1]
 # The watchdog only keeps WSL and the distro up here: no OpenClaw gateway, no
 # Z-Stick (and so no worker-2 restart after a cold start).
 wsl_watchdog_args: -SkipGateway -SkipUsb -KeepAliveTask tnwks-wsl-keepalive

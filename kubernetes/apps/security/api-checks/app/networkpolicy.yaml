@@ -1,9 +1,10 @@
 ---
 # What a run of the API checks may reach, on top of default-deny
 # (../../namespace.yaml): DNS, the Prometheus of homelab-wsl on the address of
-# its Windows host (the target of peer-federate), the release feed of the
-# router's vendor, and the API of Terraform Cloud, on 443. Nothing calls it,
-# and it calls no API server.
+# its Windows host (the target of peer-federate), the Loki gateway of this
+# site (the version line of the router), the release feed of the router's
+# vendor, and the API of Terraform Cloud, on 443. Nothing calls it, and it
+# calls no API server.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -32,6 +33,18 @@ spec:
       toPorts:
         - ports:
             - port: "9090"
+              protocol: TCP
+    # The gateway pods of the loki HelmRelease of this cluster: the Service
+    # loki-gateway is port 80, and its pods listen on 8080.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: loki
+            app.kubernetes.io/component: gateway
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
               protocol: TCP
     - toFQDNs:
         - matchName: cdn.mikrotik.com
