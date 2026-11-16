@@ -94,7 +94,9 @@ address", and the failure actions restart it until the address is there
 restarted sshd 30s later). Since Ansible itself runs inside WSL, sshd is
 always back by the time anything needs it. The sessions get the admin's full
 token (`High Mandatory Level`), so no `become` is needed
-(`ansible_become: false` in `group_vars/windows_hosts.yml`).
+(`ansible_become: false` in `group_vars/windows_hosts.yml`). The one
+exception is the tasks of the rehearsal that act on a task of its account
+([below](#the-rehearsal-of-the-account-change)).
 
 Verified 2026-11-03: key login works, a password login is refused
 (`Permission denied (publickey)`), and `netstat` shows sshd only on
@@ -146,7 +148,9 @@ Write templates in full. Task Scheduler fills in defaults
 leaves them out reports a change on every run. To add a task: register it once
 by hand or from a draft template, copy `Export-ScheduledTask -TaskName <name>`
 into the template, and check that `--check` reports no change. S4U tasks
-(desktop user, no stored password) register fine over the SSH session.
+(desktop user, no stored password) register fine over the SSH session when
+their principal is the account of the session. For a different account, see
+the option `s4u_user` ([below](#the-rehearsal-of-the-account-change)).
 
 ## Start WSL with no elevation
 
@@ -528,6 +532,39 @@ distro, the tasks or the account of today.
 | `...\log`, `...\disk` | `tnwks-rehearsal` may make and change files: the results of its tasks, and the empty test disk file `mount-test.vhdx` |
 | Five tasks `tnwks-rehearsal-<step>` | As `tnwks-rehearsal`, S4U, no elevation, no trigger: `probe`, `import`, `start` (holds the distro with nobody signed in), `write`, `mount` |
 | The profile of `tnwks-rehearsal` | Its `.wslconfig` (a memory limit, one processor, no swap, no networking key) and its distro `tnwks-rehearsal` |
+
+The tasks of the account run as `tnwks-rehearsal`, by S4U, not as the
+account of the Ansible session. Microsoft's rule for registering tasks
+([Security Contexts for Tasks](https://learn.microsoft.com/en-us/windows/win32/taskschd/security-contexts-for-running-tasks),
+"Security for Registering Tasks") asks an administrator for the password
+of a different account to register an S4U task for it, and SYSTEM counts as
+an administrator there. The account has a random password that nothing
+keeps. So `tnwks_win_scheduled_task` with `s4u_user` makes a new random
+password on the host, sets it on the account, registers the task with it,
+and drops it, once for each task that it must register (none in check mode
+and none when the task compares equal). The password never leaves the
+host. An S4U task stores no password, so a later reset does not touch the
+tasks before it; if one of them ever failed to log on at its start, the
+probe and the import say so. Use `s4u_user` only for an account whose
+password nobody needs. Each registration after the profile exists resets
+the password again, so nothing that needs the account's DPAPI secrets may
+live in that profile. The module refuses, and changes nothing, when the
+account is a member of Administrators, when its Description is not the
+required `s4u_description` (the role passes
+`wsl_rehearsal_account_description`), when it is the account of the
+module's process, or when it has an interactive, network or remote logon
+session open (the account of the Ansible session, or a person signed in).
+Each task that
+registers, starts or stops a task of the account runs as SYSTEM, in its
+own `vars`: `ansible_become: true`,
+`ansible_become_method: ansible.builtin.runas` and
+`ansible_become_user: SYSTEM`. These are the role's tasks "Tasks of the
+temporary account", "The probe makes the profile of the account", "The
+import of the distro" and "The start of the distro, with nobody signed
+in", and "Run the checks" in the check play. runas takes the
+SYSTEM token with the debug privilege of the session and needs no password.
+The first use of become starts the Secondary Logon service (`seclogon`)
+when it is stopped, a change of the host that the role does not declare.
 
 The role is the last of the play, so a failed step of it stops no other
 role. A check run on a host where the account does not exist yet does not

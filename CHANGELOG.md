@@ -3,6 +3,36 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.180.1 - 2026-11-16
+
+### Fixed
+
+* Windows: the tasks of the rehearsal account register. Microsoft asks an administrator, SYSTEM included, for the password of a different account to register an S4U task for it. With s4u_user, tnwks_win_scheduled_task now makes a new random password on the host, sets it on the account, registers the task with it and drops it; it does so only when the task must be registered, never in check mode, and the password is in no argument, result, diff or failure text. Only for an account whose password nobody needs: the temporary account of the rehearsal. The module refuses, and changes nothing, for a member of Administrators, an account whose Description is not the required s4u_description, the account of its own process, and an account with an interactive, network or remote logon session open. No cmdlet takes the plain password. The probe and the import name a task that fails to log on at its start.
+
+## v2.180.0 - 2026-11-16
+
+### Changed
+
+* Renovate review: the repository variable `RENOVATE_REVIEW_ROUTE` is `platform`, so each review goes to the run receiver of the workflow agents and its answer is one comment on the pull request. The hook of the host gets no review while the variable is `platform`; setting it to `host` again is the way back.
+
+## v2.179.1 - 2026-11-16
+
+### Fixed
+
+* Windows: the tasks of the rehearsal account register. The module tnwks_win_scheduled_task takes s4u_user, which registers an S4U task for another account through the Schedule.Service object with that user, no password and the S4U logon type. Each task of the role windows_wsl_rehearsal and of the rehearsal check that registers, starts or stops a task of the account runs as SYSTEM (become, runas), since the Task Scheduler refuses that registration to the network logon of the SSH session; every other Windows task keeps become off. A failed registration names each exception of the chain with its HResult, in both paths.
+
+## v2.179.0 - 2026-11-16
+
+### Added
+
+* renovate-review.yaml: a second review job that asks the run receiver of the workflow agents for the review (`POST /runs`), with the retry rule of a caller: the key `renovate-review-<pr>-<sha7>-<n>`, a new attempt only after a failed or timed out answer, and 3 attempts at the most for one head over all the runs. It runs only when the repository variable `RENOVATE_REVIEW_ROUTE` is `platform`; until then each review goes to the hook of the host, as before.
+
+## v2.178.0 - 2026-11-16
+
+### Added
+
+* GitHub settings: the environment `run-receiver` (deployments from `main` only) for the token of the run receiver, and the repository variable `RENOVATE_REVIEW_ROUTE` at `host`, which keeps each Renovate review on the hook of the host until the owner changes it to `platform`. The docs of the review describe the two routes, the move and its way back.
+
 ## v2.177.1 - 2026-11-16
 
 ### Fixed

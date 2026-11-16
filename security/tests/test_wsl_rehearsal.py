@@ -834,3 +834,285 @@ def test_the_profile_gate_takes_only_the_profile_that_the_task_of_the_account_sa
     assert "not one folder under Users" in run_guard(tmp_path, "", good), "no profile"
     assert "not one folder under Users" in run_guard(tmp_path, "C:\\", {**good, "profile": "C:\\"})
     assert "not one folder under Users" in run_guard(tmp_path, "C:\\Users\\a\\b", {**good, "profile": "C:\\Users\\a\\b"})
+
+
+# --- the registration of an S4U task for the account (tnwks_win_scheduled_task) ------------
+
+TASK_MODULE = ANSIBLE / "playbooks/library/tnwks_win_scheduled_task.ps1"
+
+
+def module_functions() -> str:
+    module = TASK_MODULE.read_text()
+    return module[module.index("function ConvertTo-Sid"):module.index("$task = Get-ScheduledTask")]
+
+
+# A fake of Set-LocalUser and of the Schedule.Service object: each call goes to
+# $global:Calls, with the password in clear so the test can follow it, and
+# $global:Folders names the folders that are there. $global:Fail makes
+# RegisterTask throw an access denied whose message holds every argument;
+# $global:FailUser does the same in Set-LocalUser.
+SERVICE_FAKE = r"""
+$global:Calls = New-Object System.Collections.Generic.List[string]
+function Set-LocalUser([string]$Name, [securestring]$Password) {
+    $clear = [Net.NetworkCredential]::new('', $Password).Password
+    $global:Calls.Add("set-localuser $Name password=$clear")
+    if ($global:FailUser) { throw [InvalidOperationException]::new("Set-LocalUser -Name $Name -Password $clear failed") }
+}
+function New-FakeFolder([string]$Path) {
+    $f = [pscustomobject]@{ Path = $Path }
+    $f | Add-Member ScriptMethod RegisterTask {
+        param($Name, $Xml, $Flags, $User, $Password, $LogonType)
+        $global:Calls.Add("register $($this.Path) $Name flags=$Flags user=$User password=$Password logon=$LogonType xml=$($Xml.Length)")
+        if ($global:Fail) {
+            throw [Runtime.InteropServices.COMException]::new("RegisterTask($Name, $Flags, $User, $Password, $LogonType): Access is denied.", -2147024891)
+        }
+    }
+    $f | Add-Member ScriptMethod CreateFolder {
+        param($Name)
+        if ("\$Name" -in $global:Folders) { throw [Runtime.InteropServices.COMException]::new('Cannot create a file when that file already exists.', -2147024713) }
+        $global:Calls.Add("create $Name"); New-FakeFolder "\$Name"
+    }
+    $f
+}
+# The reads behind the refusals: by default an account that the module may reset.
+$global:Sid = 'S-1-5-21-7-7-7-1002'; $global:Admins = @('S-1-5-21-7-7-7-500'); $global:Desc = 'd'
+$global:Caller = 'S-1-5-18'; $global:Types = @(4, 5); $global:NoSuch = $false
+function Get-TnwksAccountSid([string]$User) { if ($global:NoSuch) { throw 'No mapping' }; $global:Sid }
+function Get-TnwksAccountDescription([string]$Sid) { $global:Desc }
+function Get-TnwksAdministratorSids { $global:Admins }
+function Get-TnwksCallerSid { $global:Caller }
+function Get-TnwksLogonTypes([string]$Sid) { $global:Types }
+$service = [pscustomobject]@{}
+$service | Add-Member ScriptMethod Connect { $global:Calls.Add('connect') }
+$service | Add-Member ScriptMethod GetFolder {
+    param($Path)
+    if ($Path -notin $global:Folders) { throw [Runtime.InteropServices.COMException]::new('The system cannot find the file specified.', -2147024894) }
+    New-FakeFolder $Path
+}
+"""
+
+
+def run_module(body: str) -> list[str]:
+    run = pwsh(module_functions() + SERVICE_FAKE + body)
+    assert run.returncode == 0, run.stderr
+    return run.stdout.strip().splitlines()
+
+
+PASSWORD = re.compile(r"password=(\S+)")
+
+
+@needs_pwsh
+def test_each_registration_sets_a_new_password_on_the_account_and_registers_by_s4u_with_it():
+    out = run_module(r"""
+$global:Folders = @('\')
+$first = Register-TnwksS4uTask -Service $service -Path '\' -Name 'tnwks-rehearsal-probe' -Xml '<Task />' -User 'tnwks-rehearsal' -Description 'd'
+$second = Register-TnwksS4uTask -Service $service -Path '\' -Name 'tnwks-rehearsal-import' -Xml '<Task />' -User 'tnwks-rehearsal' -Description 'd'
+$global:Folders = @('\')
+Register-TnwksS4uTask -Service $service -Path '\Rehearsal\' -Name 't' -Xml '<Task />' -User 'tnwks-rehearsal' -Description 'd'
+$global:Folders = @('\', '\Rehearsal')
+Register-TnwksS4uTask -Service $service -Path '\Rehearsal\' -Name 'u' -Xml '<Task />' -User 'tnwks-rehearsal' -Description 'd'
+"output: $(@($first) + @($second) -join '|')"
+$global:Calls
+""")
+    assert out[0] == "output: ", "the function gives nothing back"
+    calls = [PASSWORD.sub("password=<p>", line) for line in out[1:]]
+    assert calls == [
+        "set-localuser tnwks-rehearsal password=<p>", "connect",
+        "register \\ tnwks-rehearsal-probe flags=6 user=tnwks-rehearsal password=<p> logon=2 xml=8",
+        "set-localuser tnwks-rehearsal password=<p>", "connect",
+        "register \\ tnwks-rehearsal-import flags=6 user=tnwks-rehearsal password=<p> logon=2 xml=8",
+        "set-localuser tnwks-rehearsal password=<p>", "connect", "create Rehearsal",
+        "register \\Rehearsal t flags=6 user=tnwks-rehearsal password=<p> logon=2 xml=8",
+        "set-localuser tnwks-rehearsal password=<p>", "connect",
+        "register \\Rehearsal u flags=6 user=tnwks-rehearsal password=<p> logon=2 xml=8",
+    ]
+    passwords = [PASSWORD.search(line)[1] for line in out[1:] if "password=" in line]
+    # The value set on the account is the value that registers, and each registration has its own.
+    assert passwords[0::2] == passwords[1::2]
+    assert len(set(passwords[0::2])) == 4
+    for password in passwords:
+        assert len(password) <= 127 and re.search(r"[A-Z]", password) and re.search(r"[a-z]", password)
+        assert re.search(r"[0-9]", password) and re.search(r"[^A-Za-z0-9]", password)
+
+
+@needs_pwsh
+def test_a_failed_registration_names_the_hresult_and_never_the_password():
+    out = run_module(r"""
+$global:Folders = @('\')
+$global:Fail = $true
+try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u' -Description 'd'; 'no failure' } catch { "text: $($_.Exception.Message)" }
+$global:Fail = $false
+$global:FailUser = $true
+try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u' -Description 'd'; 'no failure' } catch { "text: $($_.Exception.Message)" }
+$global:Calls
+""")
+    texts = [line for line in out if line.startswith("text: ")]
+    passwords = {PASSWORD.search(line)[1] for line in out if line.startswith(("set-localuser", "register"))}
+    assert len(texts) == 2 and len(passwords) == 2
+    assert "System.Runtime.InteropServices.COMException 0x80070005: RegisterTask(t, 6, u, <password>, 2): Access is denied." in texts[0]
+    assert "System.InvalidOperationException 0x80131509: Set-LocalUser -Name u -Password <password> failed" in texts[1]
+    for text in texts:
+        assert not any(password in text for password in passwords)
+
+
+@needs_pwsh
+@pytest.mark.parametrize(("setup", "reason"), [
+    ("$global:NoSuch = $true", "u is not an account of this host"),
+    ("$global:Admins += $global:Sid", "u is a member of Administrators"),
+    ("$global:Desc = 'a person'", "the Description of u is 'a person', not 'd'"),
+    ("$global:Caller = $global:Sid", "u is the account of this process"),
+    ("$global:Types = @(4, 3)", "u has a logon session open (type 3): the account of a session or of a person"),
+    ("$global:Types = @(10)", "u has a logon session open (type 10): the account of a session or of a person"),
+    ("$global:Types = @(2, 11)", "u has a logon session open (type 2, 11): the account of a session or of a person"),
+])
+def test_the_module_refuses_to_reset_an_account_that_is_not_one_for_it_and_changes_nothing(setup, reason):
+    out = run_module(setup + r"""
+$global:Folders = @('\')
+try { Register-TnwksS4uTask -Service $service -Path '\' -Name 't' -Xml '<Task />' -User 'u' -Description 'd'; 'no failure' } catch { "text: $($_.Exception.Message)" }
+"calls: $($global:Calls.Count)"
+""")
+    assert out[0] == f"text: refused, nothing is changed: {reason}. s4u_user resets the password of the account."
+    assert out[1] == "calls: 0", "no Set-LocalUser and no registration"
+
+
+def test_no_cmdlet_takes_the_plain_password():
+    module = TASK_MODULE.read_text()
+    function = module[module.index("function Register-TnwksS4uTask"):module.index("$task = Get-ScheduledTask")]
+    uses = [line.strip() for line in function.splitlines() if "$fresh" in line]
+    assert uses == [
+        "$fresh = New-TnwksPassword",
+        "$secure = [Net.NetworkCredential]::new('', $fresh).SecurePassword",
+        "[void]$folder.RegisterTask($Name, $Xml, 6, $User, $fresh, 2)",
+        "throw [InvalidOperationException]::new((Format-TnwksError $_.Exception).Replace($fresh, '<password>'))",
+        "$fresh = $null",
+    ]
+    assert "Set-LocalUser -Name $User -Password $secure" in function
+    assert "ConvertTo-SecureString" not in module and "AsPlainText" not in module
+
+
+@needs_pwsh
+def test_the_exception_chain_names_each_hresult_and_the_fields_of_a_cim_error():
+    out = run_module(r"""
+Format-TnwksError ([Runtime.InteropServices.COMException]::new('Access is denied.', -2147024891))
+$inner = [Runtime.InteropServices.COMException]::new('The user name or password is incorrect.', -2147023570)
+Format-TnwksError ([InvalidOperationException]::new('outer', $inner))
+class FakeCimException : Exception {
+    [int]$StatusCode = 1
+    $ErrorData = [pscustomobject]@{ CimInstanceProperties = @(
+        [pscustomobject]@{ Name = 'error_Code'; Value = 2147942405 },
+        [pscustomobject]@{ Name = 'Message'; Value = 'Access is denied.' },
+        [pscustomobject]@{ Name = 'CIMStatusCode'; Value = $null },
+        [pscustomobject]@{ Name = 'ErrorSource'; Value = 'PS_ScheduledTask' }) }
+    FakeCimException([string]$m) : base($m) {}
+}
+Format-TnwksError ([FakeCimException]::new('A general error occurred that is not covered by a more specific error code.'))
+""")
+    assert out[0] == "System.Runtime.InteropServices.COMException 0x80070005: Access is denied."
+    assert out[1] == ("System.InvalidOperationException 0x80131509: outer <- "
+                      "System.Runtime.InteropServices.COMException 0x8007052E: The user name or password is incorrect.")
+    assert out[2].endswith("(status 1) [error_Code=2147942405; Message=Access is denied.]")
+
+
+def test_the_password_is_reset_only_for_a_registration_and_reaches_no_output():
+    module = TASK_MODULE.read_text()
+    main = module[module.index("$task = Get-ScheduledTask"):]
+    changed = main.index("if ($before -ne $after) {")
+    not_check = main.index("if (-not $check) {", changed)
+    call = main.index("Register-TnwksS4uTask -Service")
+    # The reset sits inside the registration: not when equal, not in check mode.
+    assert changed < not_check < call < main.index("\nif ($module.Params.running)")
+    assert module.count("New-TnwksPassword") == 2 and module.count("Set-LocalUser") == 1
+    function = module[module.index("function Register-TnwksS4uTask"):module.index("$task = Get-ScheduledTask")]
+    assert "New-TnwksPassword" in function and "Set-LocalUser" in function
+    # The failure of the S4U path passes only its text, never the error record.
+    assert '$module.FailJson("$call failed: $($_.Exception.Message)")' in main
+    # Nothing that goes to the result, the diff or a warning names the password.
+    assert not any("password" in line.lower() for line in module.splitlines() if "$module." in line)
+
+
+@needs_pwsh
+def test_a_task_that_fails_to_log_on_is_named_with_the_cause():
+    script = task_named("The probe makes the profile of the account")["ansible.windows.win_powershell"]["script"]
+    assert "if ($code -eq '0x8007052E')" in script and "an earlier password " in script and "of the account does not start" in script
+    out = pwsh(r"""'0x{0:X8}' -f [uint32]2147943726; '0x{0:X8}' -f [int]-2147023570""")
+    assert out.stdout.split() == ["0x8007052E", "0x8007052E"]
+
+
+def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unchanged():
+    module = TASK_MODULE.read_text()
+    assert "$task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force" in module
+    assert "s4u_user = @{ type = 'str' }" in module
+    assert "required_by = @{ s4u_user = @(, 's4u_description') }" in module
+    named = [task for task in present() if "tnwks_win_scheduled_task" in task]
+    assert sorted(task["name"] for task in named) == ["Tasks of the temporary account", "The start of the distro, with nobody signed in"]
+    assert all(task["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_rehearsal_account }}" for task in named)
+    # The role passes the Description that the module checks before a reset.
+    assert all(task["tnwks_win_scheduled_task"]["s4u_description"] == "{{ wsl_rehearsal_account_description }}" for task in named)
+    others = [path for path in (ANSIBLE / "roles").glob("*/tasks/*.yml") if path.parent.parent.name != "windows_wsl_rehearsal"]
+    assert others and not any("s4u_user" in path.read_text() for path in others)
+
+
+SYSTEM_BECOME = {
+    "ansible_become": True,
+    "ansible_become_method": "ansible.builtin.runas",
+    "ansible_become_user": "SYSTEM",
+}
+BECOME_KEYS = {"become", "become_user", "become_method", "become_flags"}
+
+
+def all_tasks(entries: list) -> list[dict]:
+    """Each task, block and play in a task file or a playbook, at any depth."""
+    out = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        out.append(entry)
+        for key in ("block", "rescue", "always", "tasks", "pre_tasks", "post_tasks", "handlers"):
+            out.extend(all_tasks(entry.get(key)))
+    return out
+
+
+def becomes(task: dict) -> bool:
+    """A task that sets become, by keyword or by variable, to anything but off."""
+    names = set((task.get("vars") or {}).keys())
+    if any(name.startswith(("ansible_become", "ansible_runas")) for name in names):
+        return True
+    return bool(BECOME_KEYS & set(task.keys())) and task.get("become") is not False
+
+
+def test_only_the_tasks_that_act_on_a_task_of_the_account_run_as_system():
+    windows = sorted((ANSIBLE / "roles").glob("windows_*/tasks/*.yml")) + [
+        ANSIBLE / "playbooks/windows-host.yml", ANSIBLE / "playbooks/windows-rehearsal-check.yml"]
+    becoming = {}
+    for path in windows:
+        for task in all_tasks(yaml.safe_load(path.read_text())):
+            if becomes(task):
+                becoming.setdefault(path.relative_to(ANSIBLE).as_posix(), []).append(task)
+    # No other task of any role or play, Linux ones included, uses runas or SYSTEM.
+    for path in sorted((ANSIBLE / "roles").glob("*/tasks/*.yml")) + sorted((ANSIBLE / "playbooks").glob("*.yml")):
+        for task in all_tasks(yaml.safe_load(path.read_text())):
+            values = [str(value) for key, value in {**task, **(task.get("vars") or {})}.items()
+                      if key in BECOME_KEYS or key.startswith(("ansible_become", "ansible_runas"))]
+            if any("runas" in value or value.upper() == "SYSTEM" for value in values):
+                assert task in becoming.get(path.relative_to(ANSIBLE).as_posix(), []), (path, task.get("name"))
+    rehearsal = "roles/windows_wsl_rehearsal/tasks/main.yml"
+    check = "playbooks/windows-rehearsal-check.yml"
+    assert sorted(becoming) == [check, rehearsal]
+    assert sorted(task["name"] for task in becoming[rehearsal]) == [
+        "Tasks of the temporary account",
+        "The import of the distro",
+        "The probe makes the profile of the account",
+        "The start of the distro, with nobody signed in",
+    ]
+    assert [task["name"] for task in becoming[check]] == ["Run the checks"]
+    for task in becoming[rehearsal] + becoming[check]:
+        become = {key: value for key, value in task["vars"].items() if key.startswith("ansible_become")}
+        assert become == SYSTEM_BECOME, task["name"]
+        assert not BECOME_KEYS & set(task.keys()), task["name"]
+    # Each task of the role that registers, starts or stops a task is one of them.
+    acting = [task for task in present() if "tnwks_win_scheduled_task" in task
+              or re.search(r"(Start|Stop|Unregister|Register)-ScheduledTask", str(task.get("ansible.windows.win_powershell", {}).get("script", "")))]
+    assert sorted(task["name"] for task in acting) == sorted(task["name"] for task in becoming[rehearsal])
+    # The inventory keeps become off for every other task of a Windows host.
+    group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
+    assert group["ansible_become"] is False

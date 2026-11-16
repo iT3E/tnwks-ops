@@ -14,6 +14,14 @@ name: "Renovate review"
 #   select  (GitHub-hosted)  which PRs are eligible right now
 #   review  (openclaw-hooks) POST /hooks/agent on the WSL gateway, wait for
 #                            the run to finish, fail if it didn't end ok
+#   review-platform          the same gates, then POST /runs on the run
+#           (openclaw-hooks) receiver of the workflow agents; the answer is
+#                            one comment on the PR, never a merge or a label
+#
+# The repository variable RENOVATE_REVIEW_ROUTE picks one review job:
+# "platform" runs review-platform, and any other value (or none) runs
+# review. Only the owner changes it, in Terraform (docs/operations/renovate.md,
+# "The route of a review").
 #
 # A PR is eligible when it is open, opened by Renovate from this repo, labeled
 # impact/high and owner/review, not labeled ori/blocked, not waiting on the
@@ -58,6 +66,9 @@ env:
   # OpenClaw gateway on the WSL host, as seen from the cluster's pod network
   # (the Talos docker bridge gateway).
   OPENCLAW_URL: "http://10.5.0.1:18789"
+  # The run receiver of the workflow agents. Its network policy lets in the
+  # runner pods of the openclaw-hooks scale set only.
+  RUN_RECEIVER_URL: "http://run-receiver.agents-workflows.svc.cluster.local:8080"
 
 jobs:
   select:
@@ -155,7 +166,9 @@ jobs:
   review:
     name: "Review #${{ matrix.pr }}"
     needs: select
-    if: needs.select.outputs.prs != '[]' && needs.select.outputs.prs != ''
+    if: >-
+      needs.select.outputs.prs != '[]' && needs.select.outputs.prs != '' &&
+      vars.RENOVATE_REVIEW_ROUTE != 'platform'
     runs-on: openclaw-hooks
     # Holds the hook token (secret) and the Telegram destination (variables).
     # Deployments are limited to main, so a PR branch's copy of this file
@@ -242,3 +255,143 @@ jobs:
           if [[ "$delivered" != true ]]; then
             echo "::warning::#${PR}: review finished but the Telegram summary was not delivered"
           fi
+
+  review-platform:
+    name: "Review #${{ matrix.pr }} (platform)"
+    needs: select
+    if: >-
+      needs.select.outputs.prs != '[]' && needs.select.outputs.prs != '' &&
+      vars.RENOVATE_REVIEW_ROUTE == 'platform'
+    runs-on: openclaw-hooks
+    # Holds the token of the run receiver (secret RUN_RECEIVER_TOKEN). Its
+    # deployments are limited to main, so a PR branch's copy of this file
+    # can't read it. No other job names this environment.
+    environment: run-receiver
+    permissions:
+      pull-requests: read
+    # The same group as the review job, so the two routes never overlap for
+    # one PR.
+    concurrency:
+      group: renovate-review-${{ matrix.pr }}
+      cancel-in-progress: false
+    # 3 attempts of at most 41 minutes each: the Job deadline of the reviewer
+    # (2400 s, agents.yaml) and the 60 s that the receiver adds.
+    timeout-minutes: 135
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.prs) }}
+    steps:
+      - name: Still eligible
+        id: still
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ matrix.pr }}
+          SHA: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          pr="$(curl -sS --fail-with-body -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/pulls/${PR}")"
+          if jq -e --arg sha "$SHA" '.state == "open" and .head.sha == $sha and
+              ([.labels[].name] | (index("ori/blocked") | not) and (index("owner/review") != null) and
+                (index("ori/awaiting-approval") == null or index("owner/approved") != null))' \
+              <<<"$pr" >/dev/null; then
+            echo "go=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "#${PR}: no longer eligible at ${SHA:0:7}, skipping"
+            echo "go=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Ask the run receiver for a review
+        if: steps.still.outputs.go == 'true'
+        env:
+          RUN_RECEIVER_TOKEN: ${{ secrets.RUN_RECEIVER_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ matrix.pr }}
+          SHA: ${{ matrix.sha }}
+        # .github/scripts/test_renovate_review_call.py runs this script against
+        # a fake receiver.
+        run: |
+          set -euo pipefail
+          # The retry rule of a caller (docs/apps/agent-platform.md, "Run
+          # receiver"): the key of attempt n is renovate-review-<pr>-<sha7>-<n>,
+          # a new attempt only after a failed (502) or timed out (504) answer,
+          # and 3 attempts at the most for one head. A call with no answer, or
+          # 503, goes again with the same key: it gets the same run.
+          sha7="${SHA:0:7}"
+          answer="${RUNNER_TEMP}/answer.json"
+          # The token goes to curl in a header file (mode 0600, from mktemp),
+          # never in an argument list or the log. printf is a builtin, so no
+          # process gets the token as an argument. The file goes at the end.
+          auth="$(mktemp "${RUNNER_TEMP}/receiver-auth.XXXXXX")"
+          trap 'rm -f "$auth"' EXIT
+          printf 'Authorization: Bearer %s\n' "$RUN_RECEIVER_TOKEN" >"$auth"
+          unset RUN_RECEIVER_TOKEN
+          # One call; its HTTP code, or 000 when there is no answer. A call
+          # with no answer, or 503, goes again, 3 calls at the most.
+          call() {
+            local c try
+            for try in 1 2 3; do
+              c="$(curl -sS -o "$answer" -w '%{http_code}' -H "@${auth}" "$@")" || c=000
+              [[ "$c" == 000 || "$c" == 503 ]] || break
+              echo "#${PR}: no answer (${c}), call ${try} of 3" >&2
+              if (( try < 3 )); then sleep 30; fi
+            done
+            echo "$c"
+          }
+          get() { call --max-time 30 "${RUN_RECEIVER_URL}/runs/$1"; }
+          # One line for the log. The error text of a failed run stays out of
+          # it: it is in the annotation workflow-agents/result of the Job.
+          show() {
+            jq -r --arg code "$1" '"HTTP \($code):", "status \(.status // "-"),",
+              "job \(.job // "-"),", "review \(.output.status // "-"),",
+              "verdict \(.output.verdict // "-"),", "comment \(.output.comment_url // "-"),",
+              "reason \(.output.reason // "-")"' "$answer" 2>/dev/null | paste -sd ' ' ||
+              echo "HTTP $1: the answer is not JSON"
+          }
+
+          # Where this head is. The Jobs of earlier attempts stay 7 days, so
+          # the 3 attempts hold over all the runs of this workflow.
+          n=1
+          while (( n <= 3 )); do
+            key="renovate-review-${PR}-${sha7}-${n}"
+            code="$(get "$key")"
+            case "$code" in
+              404) break ;;
+              202) break ;; # running: the call below joins it with the same key
+              200) show "$code"; echo "#${PR}: ${key} ended well before; no new run"; exit 0 ;;
+              502 | 504) show "$code"; n=$((n + 1)) ;;
+              *) echo "::error::#${PR}: GET /runs/${key} answered ${code}"; exit 1 ;;
+            esac
+          done
+
+          while (( n <= 3 )); do
+            key="renovate-review-${PR}-${sha7}-${n}"
+            body="$(jq -nc --arg repo "$REPO" --argjson pr "$PR" --arg sha "$SHA" --arg key "$key" \
+              '{agent: "renovate-reviewer", input: {repo: $repo, pr: $pr, head_sha: $sha}, key: $key, wait: true}')"
+            code="$(call --max-time 2520 -H "Content-Type: application/json" --data "$body" "${RUN_RECEIVER_URL}/runs")"
+            # 202: the run has not ended. Read its state until it does, for 10
+            # minutes at the most.
+            for read in $(seq 1 20); do
+              [[ "$code" == 202 ]] || break
+              sleep 30
+              code="$(get "$key")"
+              if [[ "$code" == 000 || "$code" == 503 ]]; then
+                echo "#${PR}: ${key}: no answer to read ${read} of 20"
+                code=202
+              fi
+            done
+            show "$code"
+            case "$code" in
+              200) exit 0 ;;
+              502 | 504)
+                echo "::warning::#${PR}: attempt ${n} of 3 at ${sha7} ended with ${code}"
+                n=$((n + 1))
+                ;;
+              *) echo "::error::#${PR}: ${key} answered ${code}; no new attempt"; exit 1 ;;
+            esac
+          done
+          echo "::error::#${PR}: 3 attempts at ${sha7} failed; no more attempts for this head"
+          exit 1

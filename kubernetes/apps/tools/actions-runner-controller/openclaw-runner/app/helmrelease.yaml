@@ -1,13 +1,15 @@
 ---
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2beta2.json
 # Runner for .github/workflows/renovate-review.yaml, `runs-on: openclaw-hooks`.
-# Its one job is a curl to the OpenClaw gateway on the WSL host (reached from
-# the pod network at the docker bridge gateway, 10.5.0.1), which then waits
-# for Ori's reviewer agent to finish. See docs/operations/renovate.md.
+# Its one job is a curl that waits for a review to finish: to the OpenClaw
+# gateway on the WSL host (reached from the pod network at the docker bridge
+# gateway, 10.5.0.1), or to the run receiver of the workflow agents, by the
+# variable RENOVATE_REVIEW_ROUTE. See docs/operations/renovate.md.
 #
 # One runner at a time is the review queue: GitHub holds the next job until
 # this one finishes, so reviews never overlap. It has no secrets of its own;
-# the hook token comes from the workflow's `openclaw-hooks` environment.
+# each token comes from the environment of its job (`openclaw-hooks` or
+# `run-receiver`).
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
