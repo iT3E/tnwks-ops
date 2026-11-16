@@ -58,7 +58,7 @@ spec:
           # rule, keeps firing while the failed Job is kept
           # (failedJobsHistoryLimit), also after a good run. Covers the
           # providers job (its `workflow-providers result=failed` line comes
-          # with exit 1, scripts/providers.sh), the sweep and the daily checks.
+          # with exit 1, the providers command of the image), the sweep and the daily checks.
           # reason!="": kube-state-metrics also reports the failed pods of a
           # Job that still retries (backoffLimit), with reason="". The max by
           # on the right of each join keeps it one-to-one when two
