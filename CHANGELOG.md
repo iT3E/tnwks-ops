@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.170.1 - 2026-11-16
+
+### Fixed
+
+* ci: a manifest change no longer waits 10 minutes for the observability checks. promtool on the generated rule tests and the PowerShell tests are their own jobs, which run only when observability/, security/ or the host check roles changed, and the rule tests run in shards, one promtool per core
+
 ## v2.170.0 - 2026-11-16
 
 ### Changed
