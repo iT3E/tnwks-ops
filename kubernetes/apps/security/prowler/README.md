@@ -197,11 +197,13 @@ starts two hours after the run of prod.
    `container_memory_working_set_bytes{namespace="security",container="prowler"}`
    for each part, in the order of the services. The highest is the part to
    look at: `max_over_time(container_memory_working_set_bytes{namespace="security",container="prowler"}[1d])`.
-3. Why the container ended:
-   `kube_pod_container_status_terminated_reason{namespace="security",container="prowler"}`
-   (`OOMKilled` at the limit, `Error` for a code). kube-state-metrics serves it
-   while the pod exists: the Job keeps its pod for a day
-   (`ttlSecondsAfterFinished`).
+3. **The log is the only record that a failed run leaves.** For the failed
+   runs of the second night, Prometheus of homelab-wsl-02 kept no
+   `kube_pod_container_status_terminated_reason` and no waiting reason: the
+   pods were gone from kube-state-metrics within the hour. The kernel log of
+   the node showed the kill at the limit (a kill of the memory cgroup, with
+   the script in the same group). So read why a run ended in its log, in the
+   Loki of homelab-wsl-02.
 4. A run over the limit ends with the status `OOMKilled`, and `KubeJobFailed`
    fires. A run that fails is not tried again (`backoffLimit: 0`): the next
    run is the next day. The peak of a part comes from the resources of the
