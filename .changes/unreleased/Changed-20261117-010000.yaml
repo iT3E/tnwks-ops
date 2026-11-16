@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Agent platform alerts: `AgentInstructionCheckStale` and `AgentMemoryIndexFailed` count each trust domain with an agent pod, not the pilot only. A trust domain with no agent pod, or one at zero replicas, never fires them.'
+time: 2026-11-17T01:00:00.000000+00:00
