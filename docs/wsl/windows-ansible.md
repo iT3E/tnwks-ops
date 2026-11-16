@@ -199,6 +199,19 @@ change; if one is not met, stop and say which.
 - Developer mode is off: `(Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock -ErrorAction SilentlyContinue).AllowDevelopmentWithoutDevLicense` is `0` or empty. With it on, an account may make a symbolic link with no privilege.
 - The inherited rules of the three directories of the tasks: `(Get-Acl C:\ProgramData\tnwks-watchdog).Access`, the same for `C:\ProgramData\tnwks-lan-bridge` and `C:\ProgramData\tnwks-udp-relay`. Note who may make files there.
 - The `wsl.exe` processes and their start times, to compare after the apply: `Get-Process wsl -ErrorAction SilentlyContinue | Format-Table Id, StartTime`.
+- None of the four new directories exists yet. The module sets the rules of a directory that is already there, but does not look at what it holds. This prints `False` four times:
+
+  ```powershell
+  'C:\ProgramData\tnwks-watchdog\log', 'C:\ProgramData\tnwks-watchdog\service-log', 'C:\ProgramData\tnwks-udp-relay\log', 'C:\ProgramData\tnwks-lan-bridge\wsl-ip' | ForEach-Object { Test-Path -LiteralPath $_ }
+  ```
+
+  If one prints `True`, read its owner (`(Get-Acl <path>).Owner`) and its files (`Get-ChildItem -Force <path>`) first, and remove what the role did not make.
+- No other elevated task or startup command starts WSL. In an elevated window, the first command lists only the compaction (`tnwks-vhdx-compact`), and the second gives nothing:
+
+  ```powershell
+  Get-ScheduledTask | Where-Object { $_.State -ne 'Disabled' -and $_.Principal.RunLevel -eq 'Highest' -and (($_.Actions.Execute + ' ' + $_.Actions.Arguments) -match 'wsl|bash\.exe|ubuntu') } | Format-Table TaskName, TaskPath
+  Get-CimInstance Win32_StartupCommand | Where-Object Command -match 'wsl|bash|ubuntu|docker' | Format-Table Name, Command, User
+  ```
 
 ### The start step (site 2 first)
 
@@ -215,7 +228,20 @@ step 5: about 10 minutes, at most about 25 (an estimate from the parts
 below, not a measured time). The whole runbook takes about 30 minutes with
 its checks. Merge nothing under `infrastructure/ansible` during the window:
 an apply registers the paused tasks again, so enables them, and starts the
-keepalive.
+keepalive. That includes the merges of Renovate: it merges its own pull
+requests for `infrastructure/ansible/requirements.yml` when they are green,
+at any hour. To hold each apply, disable the workflow before step 1 and
+enable it after step 6:
+
+```sh
+gh workflow disable ansible-hosts.yaml -R iT3E/tnwks-ops
+gh workflow enable ansible-hosts.yaml -R iT3E/tnwks-ops
+```
+
+If a pull request under `infrastructure/ansible` merged while it was off,
+dispatch `ansible-hosts` with the mode `apply` after step 6. Keep the window
+away from the nightly drift run (12:30 UTC), which fails red with WSL
+down.
 
 **Never leave the host in the state after step 2 across a restart of
 Windows**: with the tasks disabled, nothing starts WSL at boot. To stop
@@ -228,6 +254,12 @@ site 1 reaches the host of site 2 through the tunnel in its distro), and
 silence of one hour in the Alertmanager of site 1 with
 `alertname=~"PeerSiteUnreachable|SecurityHostUnreachable|WindowsHostDown"`,
 and expire it after step 6.
+
+The commands are for Windows PowerShell 5.1, the PowerShell of "Run as
+administrator". It does not escape a double quote inside an argument of a
+native program, so no argument for `wsl` here holds one: a command for `sh
+-c` with quotes inside is a PowerShell string in double quotes with single
+quotes inside, never the other way round.
 
 Open two windows on the host, and keep to them:
 
@@ -260,12 +292,24 @@ host, use the name from its host_vars.
    above, stop here: the apply did not reach the host. Nothing is changed
    yet.
 
+   Then the four directories and the log of `tnwks-wsl-service`:
+
+   ```powershell
+   'C:\ProgramData\tnwks-watchdog\log', 'C:\ProgramData\tnwks-watchdog\service-log', 'C:\ProgramData\tnwks-udp-relay\log', 'C:\ProgramData\tnwks-lan-bridge\wsl-ip' |
+     ForEach-Object { $acl = Get-Acl -LiteralPath $_; '{0} protected={1} owner={2}' -f $_, $acl.AreAccessRulesProtected, $acl.Owner }
+   Get-Item 'C:\ProgramData\tnwks-watchdog\service-log\watchdog.log' | Format-Table Length, LastWriteTime
+   ```
+
+   Check: each directory shows `protected=True owner=BUILTIN\Administrators`,
+   and `watchdog.log` in `service-log` grows: run the last line again after
+   5 minutes, and its time is newer.
+
    Then, in window B, the reads as root of what the distro uses under
    `/mnt` (open files, Docker mounts, units, fstab and cron):
 
    ```powershell
    wsl -d Ubuntu -u root -e sh -c "find /proc/[0-9]*/fd -lname '/mnt/*' -printf '%l\n' 2>/dev/null | sort -u"
-   wsl -d Ubuntu -u root -e sh -c 'docker ps -q | xargs -r docker inspect -f "{{.Name}} {{range .Mounts}}{{.Source}} {{end}}" | grep /mnt/'
+   wsl -d Ubuntu -u root -e sh -c "docker ps -q | xargs -r docker inspect -f '{{.Name}} {{range .Mounts}}{{.Source}} {{end}}' | grep /mnt/ || true"
    wsl -d Ubuntu -u root -e sh -c 'grep -rls /mnt/ /etc/systemd/system /etc/fstab /etc/cron* /var/spool/cron 2>/dev/null'
    ```
 

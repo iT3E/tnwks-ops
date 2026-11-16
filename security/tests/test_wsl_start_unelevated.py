@@ -262,8 +262,9 @@ def test_the_directory_module_sets_the_split_rule_and_changes_nothing_in_place()
     reader = run_dir_acl(an_acl(DIR_RULES), writer="")
     assert reader["changed"] is False and reader["sets"] == []
     old = [rule for rule in WRITER_RULES if not rule.startswith(WRITER)] + [f"{WRITER}|Modify|ContainerInherit, ObjectInherit|None"]
+    other_owner = an_acl(WRITER_RULES).replace("New-TestAcl $true 'S-1-5-32-544'", f"New-TestAcl $true '{WRITER}'")
     for have in (an_acl(old), an_acl(WRITER_RULES).replace("New-TestAcl $true", "New-TestAcl $false"),
-                 an_acl(DIR_RULES)):
+                 an_acl(DIR_RULES), other_owner):
         out = run_dir_acl(have)
         assert out["changed"] is True and out["sets"] == [{"owner": "S-1-5-32-544", "protected": True, "rules": WRITER_RULES}]
         checked = run_dir_acl(have, check=True)
@@ -484,6 +485,35 @@ def test_the_sync_reads_the_address_file_once_and_refuses_a_link_on_the_way(tmp_
     assert out["plain"] == "172.25.20.7"
     assert "not a plain file" in out["link"] and "not a plain file" in out["above"], out
     assert "not a JSON object" in out["not JSON"] and "SECRET" not in out["not JSON"], out
+
+
+@needs_pwsh
+def test_the_sync_reads_at_most_1_kib_of_the_address_file(tmp_path):
+    script = ROLES / "windows_lan_bridge/files/Sync-TnwksLanBridge.ps1"
+    document = b'{"address": "172.25.20.7"}'
+    body = f". '{script}' -Library\n$subnet = [pscustomobject]@{{ Address = '172.25.16.1'; PrefixLength = 20 }}\n"
+    for size in (1024, 1025):
+        (tmp_path / f"{size}.json").write_bytes(document + b" " * (size - len(document)))
+        body += (f"try {{ [Console]::Out.WriteLine('{size}: ' + (Read-WslIpFile -Path '{tmp_path}/{size}.json' -Subnet $subnet)) }}"
+                 f" catch {{ [Console]::Out.WriteLine('{size}: ' + $_.Exception.Message) }}\n")
+    out = dict(line.split(": ", 1) for line in pwsh(body).stdout.splitlines())
+    assert out["1024"] == "172.25.20.7"
+    assert "larger than 1 KiB" in out["1025"], out
+
+
+def test_the_sync_opens_the_address_file_with_no_share_of_delete():
+    """While the sync reads, the file can not be renamed, replaced or deleted. Only
+    Windows enforces the share mode, so this reads the one open of the script."""
+    text = (ROLES / "windows_lan_bridge/files/Sync-TnwksLanBridge.ps1").read_text()
+    assert re.findall(r"\[IO\.File\]::Open\((.*)\)", text) == [
+        "$full, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite"]
+    assert "OpenRead" not in text and "FileStream]::new" not in text and "Get-Content" not in text.split("function Read-WslIpFile")[1].split("\nfunction ")[0]
+
+
+def test_an_apply_starts_the_keepalive_when_it_is_not_running():
+    tasks = yaml.safe_load((ROLES / "windows_wsl_maintenance/tasks/main.yml").read_text())
+    keepalive = [task for task in tasks if task.get("tnwks_win_scheduled_task", {}).get("name") == "{{ wsl_keepalive_task }}"]
+    assert [task["tnwks_win_scheduled_task"].get("running") for task in keepalive] == [True]
 
 
 @needs_pwsh
