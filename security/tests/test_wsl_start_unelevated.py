@@ -28,8 +28,14 @@ INVENTORY = ANSIBLE / "inventory"
 PWSH = shutil.which("pwsh")
 SYSTEM = "S-1-5-18"
 
-needs_pwsh = pytest.mark.skipif(PWSH is None and not os.environ.get("CI"),
-                                reason="no pwsh on this workstation; CI runs these tests")
+no_pwsh = pytest.mark.skipif(PWSH is None and not os.environ.get("CI"),
+                             reason="no pwsh on this workstation; CI runs these tests")
+
+
+def needs_pwsh(test):
+    """A test that runs PowerShell: CI runs these in their own job (conftest.py)."""
+    return pytest.mark.pwsh(no_pwsh(test))
+
 
 SWITCH_BLOCK = re.compile(r"\{% if wsl_start_unelevated \| bool %\}(.*?)(?:\{% else %\}(.*?))?\{% endif %\}", re.DOTALL)
 SWITCH_INLINE = re.compile(r"\{\{ '([^']*)' if wsl_start_unelevated \| bool else '([^']*)' \}\}")

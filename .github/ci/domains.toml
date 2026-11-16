@@ -46,6 +46,24 @@ paths = [
   ".github/workflows/observability.yaml",
 ]
 
+# The tiers of the observability domain: jobs of observability.yaml that run
+# only when what they read changed. ci.yaml passes each as an input of the
+# `observability` job, so a path here must also be a path of that domain.
+#
+# The long tests: promtool on the generated rule tests (days of simulated
+# time) and the tests that start PowerShell. They read the generated files,
+# the registry and the Ansible roles, and nothing in kubernetes/: a manifest
+# change runs `contracts` without them.
+[domains.observability_long_tests]
+paths = [
+  "observability/**",
+  "security/**",
+  "infrastructure/ansible/roles/windows_wsl_maintenance/**",
+  "infrastructure/ansible/roles/windows_host_check/**",
+  "infrastructure/ansible/roles/wsl_host_check/**",
+  ".github/workflows/observability.yaml",
+]
+
 # The disposable Garage/Thanos and Grafana rehearsals (about two minutes)
 # read only these.
 [domains.observability_rehearsals]

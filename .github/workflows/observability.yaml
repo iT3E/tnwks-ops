@@ -4,6 +4,10 @@ on:
   # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
   workflow_call:
     inputs:
+      long_tests:
+        description: Run promtool on the generated rule tests, and the PowerShell tests
+        type: boolean
+        default: true
       rehearse:
         description: Run the disposable Garage/Thanos and Grafana rehearsals
         type: boolean
@@ -12,17 +16,19 @@ on:
 permissions:
   contents: read
 
-# Two tiers. `contracts` checks generated resources, schemas and rules
-# whenever the observability domain is on (validate_health.py scans all of
-# kubernetes/). `rehearsals` stands up disposable Garage/Thanos, Alloy and Grafana
-# (browser and renderer), about two minutes, and runs only when what they
-# read changed (the observability_rehearsals domain, passed as `rehearse`).
+# Three tiers, and the jobs of a run start together. `contracts` checks
+# generated resources, schemas and the rules written by hand whenever the
+# observability domain is on (validate_health.py scans all of kubernetes/).
+# `rule-tests` and `powershell` are the long tests: they read nothing in
+# kubernetes/, and run only when what they read changed (the
+# observability_long_tests domain, passed as `long_tests`). `rehearsals`
+# stands up disposable Garage/Thanos, Alloy and Grafana (browser and
+# renderer), about two minutes, and runs only when what they read changed
+# (the observability_rehearsals domain, passed as `rehearse`).
 jobs:
   contracts:
     runs-on: ubuntu-26.04
-    # The rule tests alone take 6 to 9 minutes on a hosted runner, and the job
-    # 7 to 11 minutes on main: 25 leaves room for a slow runner.
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,23 +65,77 @@ jobs:
       # HelmRepository and checked against the index digest.
       - name: Render maintained Grafana and authenticated renderer
         run: uv run --project observability python observability/validate_grafana.py
-      - name: Recording rules and failure fixtures
-        run: |
-          image=$(python3 -I -c "import runpy; print(runpy.run_path('observability/versions.py')['PROMETHEUS'])")
-          docker run --rm --network none --entrypoint /bin/promtool \
-            --mount type=bind,src="$PWD/observability/generated",dst=/rules,readonly \
-            "$image" test rules /rules/rule-tests.yaml
-      # The control registry (security/README.md): its schema, its generated
-      # outputs, and the rules that give "no evidence" for an absent result.
-      - name: Security registry, its outputs and its rules
+      # The control registry (security/README.md): its schema and its generated
+      # outputs. The tests that start PowerShell are the `powershell` job.
+      - name: Security registry and its outputs
         run: |
           uv run --project observability python security/generate.py --check
           uv run --project observability ruff check --config observability/pyproject.toml security
-          uv run --project observability pytest security/tests -q
-          image=$(python3 -I -c "import runpy; print(runpy.run_path('observability/versions.py')['PROMETHEUS'])")
-          docker run --rm --network none --entrypoint /bin/promtool \
-            --mount type=bind,src="$PWD/security/generated",dst=/rules,readonly \
-            "$image" test rules /rules/rule-tests.yaml /rules/rule-tests-every-source.yaml
+          uv run --project observability pytest security/tests -q -m "not pwsh"
+
+  # promtool on the generated rule tests: the recording rules and failure
+  # fixtures of observability/, and the rules of the control registry that
+  # give "no evidence" for an absent result. They hold days of simulated
+  # time, which promtool evaluates minute by minute: rule_tests.py splits
+  # each file into shards and runs one promtool per core.
+  rule-tests:
+    name: rule-tests (${{ matrix.suite }})
+    if: inputs.long_tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # rule-tests-week.yaml runs in `contracts` (test_week_rule_tests.py).
+          - suite: observability
+            files: observability/generated/rule-tests.yaml
+          - suite: security
+            files: security/generated/rule-tests.yaml security/generated/rule-tests-every-source.yaml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          # PR caches are scoped to their PR and no other PR can read them;
+          # saving one per PR evicted the main entries every PR restores from.
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+          prune-cache: true
+          cache-dependency-glob: observability/uv.lock
+      - name: Install pinned toolchain
+        run: uv sync --project observability --locked --python 3.13
+      - name: Generated rule tests
+        env:
+          FILES: ${{ matrix.files }}
+        run: |
+          read -ra files <<<"$FILES"
+          uv run --project observability python observability/rule_tests.py "${files[@]}"
+
+  # The tests of security/ that start PowerShell (the `pwsh` mark,
+  # security/tests/conftest.py): the host check of a Windows host and the
+  # folder ACL module.
+  powershell:
+    if: inputs.long_tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          # PR caches are scoped to their PR and no other PR can read them;
+          # saving one per PR evicted the main entries every PR restores from.
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+          prune-cache: true
+          cache-dependency-glob: observability/uv.lock
+      - name: Install pinned toolchain
+        run: uv sync --project observability --locked --python 3.13
+      - name: PowerShell tests
+        run: uv run --project observability pytest security/tests -q -m pwsh
 
   rehearsals:
     if: inputs.rehearse

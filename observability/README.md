@@ -69,6 +69,7 @@ aggregate must keep it in their `by` clause or their dashboards go blank.
 ```bash
 uv sync --project observability --locked --python 3.13
 uv run --project observability python observability/generate.py --check
+uv run --project observability python observability/rule_tests.py observability/generated/rule-tests.yaml
 uv run --project observability ruff check observability
 uv run --project observability pytest observability/tests -q
 uv run --project observability python observability/validate.py
