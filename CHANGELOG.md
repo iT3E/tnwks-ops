@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.169.4 - 2026-11-16
+
+### Fixed
+
+* Alerting: Telegram answered ENTITIES_TOO_LONG for the messages of SecurityResultLate, two alerts each with a graph link of about 5100 characters (its whole expression). The Telegram message now has one graph link, on the first alert, up to 1500 characters in a message of one alert and 1000 in a message of more; the text and the other links of the first three alerts of a group only, and the labels of the next five; at most 1700 characters of link text. The bounds are chosen from a measured delivered message (a graph link of 1444 characters, 1643 of link text) and the measured refused one (10460), not from a documented limit. A test renders each alert of the repository through the template with amtool and checks the tags, the number of entities, the text length, the size and the links.
+
 ## v2.169.3 - 2026-11-16
 
 ### Fixed
