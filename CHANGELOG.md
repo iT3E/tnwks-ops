@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.179.0 - 2026-11-16
+
+### Added
+
+* renovate-review.yaml: a second review job that asks the run receiver of the workflow agents for the review (`POST /runs`), with the retry rule of a caller: the key `renovate-review-<pr>-<sha7>-<n>`, a new attempt only after a failed or timed out answer, and 3 attempts at the most for one head over all the runs. It runs only when the repository variable `RENOVATE_REVIEW_ROUTE` is `platform`; until then each review goes to the hook of the host, as before.
+
 ## v2.178.0 - 2026-11-16
 
 ### Added
