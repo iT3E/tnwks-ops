@@ -70,14 +70,26 @@ route:
     # and AgentWorkflowRunFailed for a run, for 2 hours. KubeJobFailed fires
     # for such a Job while the Job is kept (a failed CronJob run until three
     # newer runs fail, a run for 7 days), also after a good run, and all of
-    # them share one group. Dropped here for those Job names only. Any other
-    # failed Job in a trust domain (a backup mover, a Job made by hand, a new
-    # CronJob) still fires it, and so does each Job of the household apps.
+    # them share one group. Dropped here for those Job names only, each in
+    # its own namespaces. Any other failed Job in a trust domain (a backup
+    # mover, a Job made by hand, a new CronJob) still fires it, and so does
+    # each Job of the household apps. A regex matcher matches the whole value.
+    # The daily checks run in each trust domain; a CronJob names its Job
+    # <cronjob>-<scheduled minute>.
     - receiver: "null"
       matchers:
         - alertname = "KubeJobFailed"
         - namespace =~ "agents-.+"
-        - job_name =~ "(platform-check-isolation|platform-check-probe|workflow-providers|workflow-sweep)-[0-9]+|run-.+"
+        - job_name =~ "platform-check-(isolation|probe)-[0-9]+"
+    # The providers job, the sweep and the run jobs are in agents-workflows
+    # only. The run receiver names a run job run-<the first 20 hex of the
+    # SHA-256 of its key> (iT3E/tnwks-workflow-agents, src/run_receiver/app.py,
+    # job_name).
+    - receiver: "null"
+      matchers:
+        - alertname = "KubeJobFailed"
+        - namespace = "agents-workflows"
+        - job_name =~ "workflow-(providers|sweep)-[0-9]+|run-[0-9a-f]{20}"
     # Pushed by the finance-sync CronJob after it has already corrected the
     # balance. It fires on timing (a bank balance moves before its
     # transactions reach Simplifi, then the correction reverses next run) and

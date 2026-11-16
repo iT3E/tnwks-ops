@@ -51,6 +51,16 @@ CASES = [
     ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "agent-state-20260101103000"}, "telegram"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "providers-now"}, "telegram"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "platform-check-other-29900000"}, "telegram"),
+    # Names that only look like a run job (run-<20 hex>, agents-workflows
+    # only): the matcher must match the whole name.
+    ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "run-by-hand"}, "telegram"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "run-by-hand"}, "telegram"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "run-0123456789abcdef0123"}, "telegram"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "run-0123456789abcdef0123-x"}, "telegram"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "run-0123456789ABCDEF0123"}, "telegram"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "my-run-0123456789abcdef0123"}, "telegram"),
+    # The CronJobs of agents-workflows in another trust domain.
+    ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "workflow-providers-29900000"}, "telegram"),
     # The same names outside a trust domain, and the household apps.
     ({"alertname": "KubeJobFailed", "namespace": "default", "job_name": "run-0123456789abcdef0123"}, "telegram"),
     ({"alertname": "KubeJobFailed", "namespace": "production", "job_name": "finance-sync-29900000"}, "telegram"),
