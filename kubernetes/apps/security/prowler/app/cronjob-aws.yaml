@@ -61,11 +61,12 @@ spec:
               # The limit of ../../README.md, "Memory" (../README.md, "Memory"):
               # the highest peak of the container in the first runs in parts,
               # 682 MiB, and 25 %, rounded up to a multiple of 64 MiB. The
-              # request is the use of a run: at most 479 MiB resident.
+              # request is the highest working set, 646 MiB, rounded up the
+              # same way, so a run stays within its request.
               resources:
                 requests:
                   cpu: 100m
-                  memory: 512Mi
+                  memory: 704Mi
                 limits:
                   memory: 896Mi
               securityContext:
@@ -173,7 +174,7 @@ spec:
               resources:
                 requests:
                   cpu: 100m
-                  memory: 512Mi
+                  memory: 704Mi
                 limits:
                   memory: 896Mi
               securityContext:

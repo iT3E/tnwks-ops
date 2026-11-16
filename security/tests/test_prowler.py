@@ -335,7 +335,7 @@ def cronjobs():
 # first runs in parts measured and 25 % (prowler/README.md, "Memory"). A
 # Cloudflare run has a few clients in one place.
 MEMORY_LIMITS = {"aws": "896Mi", "cloudflare": "768Mi"}
-MEMORY_REQUESTS = {"aws": "512Mi", "cloudflare": "512Mi"}
+MEMORY_REQUESTS = {"aws": "704Mi", "cloudflare": "512Mi"}
 
 
 def test_each_cronjob_runs_one_system_of_the_registry_with_its_scan_list():
