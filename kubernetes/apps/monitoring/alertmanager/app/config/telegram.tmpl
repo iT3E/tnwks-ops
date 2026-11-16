@@ -12,7 +12,20 @@
   Flux events (flux-system/addons/alerts) carry their error text in the
   `message` annotation, so that is the last fallback for the alert line.
 
-  Rendered with: amtool template render --template.glob=telegram.tmpl \
+  The graph link is the whole expression of the rule, URL-encoded, and goes
+  in only up to 2048 characters. The Bot API names no limit for a link, and
+  the expression of SecurityResultLate (a term for each system of the
+  security registry) gives one of about 5 KB, three times the next longest.
+  The dashboard link stays.
+
+  The first three alerts of a group print their text; the next five print
+  their labels and links only. Eight texts of the longest rules (about 600
+  characters each) would pass the 4096 characters that Telegram takes, and
+  Alertmanager then sends a fixed line in place of the message.
+  observability/tests/test_telegram_message.py renders each alert of the
+  repository through this template and checks the limits of Telegram.
+
+  Rendered with: amtool template render --template.glob=telegram.tmpl --template.type=html \
     --template.text='{{ template "telegram.message" . }}'
 */}}
 
@@ -22,11 +35,11 @@
 <i>{{ . }}</i>
 {{- end }}
 {{ range $i, $a := .Alerts }}{{ if lt $i 8 }}
-• {{ with $a.Annotations.description }}{{ . }}{{ else }}{{ with $a.Annotations.summary }}{{ . }}{{ else }}{{ with $a.Annotations.message }}{{ . }}{{ end }}{{ end }}{{ end }}
-{{ template "telegram.labels" $a }}
+• {{ if lt $i 3 }}{{ with $a.Annotations.description }}{{ . }}{{ else }}{{ with $a.Annotations.summary }}{{ . }}{{ else }}{{ with $a.Annotations.message }}{{ . }}{{ end }}{{ end }}{{ end }}
+{{ end }}{{ template "telegram.labels" $a }}
 {{- if $a.Annotations.runbook_url }} <a href="{{ $a.Annotations.runbook_url }}">runbook</a>{{ end }}
 {{- if $a.Annotations.dashboard_url }} <a href="{{ $a.Annotations.dashboard_url }}{{ template "telegram.range" $a }}">dashboard</a>
-{{- else if and $a.Labels.cluster (match "^https://alertmanager\\." $.ExternalURL) }} <a href="{{ reReplaceAll "^https://alertmanager\\." "https://grafana." $.ExternalURL }}/d/tnwks-alerts?var-cluster={{ $a.Labels.cluster }}{{ template "telegram.range" $a }}">alerts</a>{{ end }}{{ if $a.GeneratorURL }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
+{{- else if and $a.Labels.cluster (match "^https://alertmanager\\." $.ExternalURL) }} <a href="{{ reReplaceAll "^https://alertmanager\\." "https://grafana." $.ExternalURL }}/d/tnwks-alerts?var-cluster={{ $a.Labels.cluster }}{{ template "telegram.range" $a }}">alerts</a>{{ end }}{{ if and $a.GeneratorURL (le (len $a.GeneratorURL) 2048) }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
 {{ end }}{{ end -}}
 {{ if gt (len .Alerts) 8 }}
 …and {{ len .Alerts | printf "%d" }} total, see Alertmanager.
