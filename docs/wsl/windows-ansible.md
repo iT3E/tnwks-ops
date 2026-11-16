@@ -156,7 +156,9 @@ a task that runs no `wsl.exe` (Design Doc 0004, section 5.9).
 
 **The rule: no elevated client ever creates the WSL VM or starts a process
 in a distro.** The `wsl.exe` commands that do neither are `--shutdown`,
-`--terminate`, `--list`, `--status` and `--version`. A start of a distro,
+`--terminate`, `--list`, `--status`, `--version` and `--update`
+(`--update` goes to the upgrade of the package, with no session and no
+`_CreateVm`; no task calls it, so the test does not list it). A start of a distro,
 `--mount`, and `--manage` (resize, compact, set-version) create the VM when
 none runs (the callers of `_CreateVm` in
 `src/windows/service/exe/LxssUserSession.cpp`, microsoft/WSL). A test
@@ -206,12 +208,14 @@ change; if one is not met, stop and say which.
   ```
 
   If one prints `True`, read its owner (`(Get-Acl <path>).Owner`) and its files (`Get-ChildItem -Force <path>`) first, and remove what the role did not make.
-- No other elevated task or startup command starts WSL. In an elevated window, the first command lists only the compaction (`tnwks-vhdx-compact`), and the second gives nothing:
+- No other elevated task or startup command starts WSL. In an elevated window, each command gives nothing. The first leaves out the tasks of the roles (`tnwks-*`, which the switch changes) and SYSTEM, whose `wsl.exe` can not see the distro of the user:
 
   ```powershell
-  Get-ScheduledTask | Where-Object { $_.State -ne 'Disabled' -and $_.Principal.RunLevel -eq 'Highest' -and (($_.Actions.Execute + ' ' + $_.Actions.Arguments) -match 'wsl|bash\.exe|ubuntu') } | Format-Table TaskName, TaskPath
+  Get-ScheduledTask | Where-Object { $_.State -ne 'Disabled' -and $_.Principal.RunLevel -eq 'Highest' -and $_.TaskName -notlike 'tnwks-*' -and $_.Principal.UserId -notin 'SYSTEM', 'S-1-5-18' -and (($_.Actions.Execute + ' ' + $_.Actions.Arguments) -match 'wsl|bash\.exe|ubuntu') } | Format-Table TaskName, TaskPath
   Get-CimInstance Win32_StartupCommand | Where-Object Command -match 'wsl|bash|ubuntu|docker' | Format-Table Name, Command, User
   ```
+
+  These read only the action line of a task and the command of a startup entry: a script that calls `wsl.exe` inside does not show. For the scripts of the roles, the test in the repository reads them.
 
 ### The start step (site 2 first)
 
@@ -230,18 +234,36 @@ its checks. Merge nothing under `infrastructure/ansible` during the window:
 an apply registers the paused tasks again, so enables them, and starts the
 keepalive. That includes the merges of Renovate: it merges its own pull
 requests for `infrastructure/ansible/requirements.yml` when they are green,
-at any hour. To hold each apply, disable the workflow before step 1 and
-enable it after step 6:
+at any hour. To hold each apply, disable the workflow before step 1:
 
 ```sh
 gh workflow disable ansible-hosts.yaml -R iT3E/tnwks-ops
+gh run list -R iT3E/tnwks-ops --workflow ansible-hosts.yaml --json status,databaseId -q '.[] | select(.status != "completed")'
+```
+
+The second command must print nothing. A disable does not cancel a run
+that already exists: an apply job for site 2 that was queued before it waits
+for the runner, and applies when the cluster comes back at step 5. If a run
+shows, wait for it to end before step 1. After step 6, enable the workflow:
+
+```sh
 gh workflow enable ansible-hosts.yaml -R iT3E/tnwks-ops
 ```
 
-If a pull request under `infrastructure/ansible` merged while it was off,
-dispatch `ansible-hosts` with the mode `apply` after step 6. Keep the window
-away from the nightly drift run (12:30 UTC), which fails red with WSL
-down.
+While the workflow is off, GitHub drops its events; it does not queue
+them:
+
+- **A merge under `infrastructure/ansible`** gets no apply. Dispatch
+  `ansible-hosts` with the mode `apply` after the enable. The dispatch has
+  no site input: it applies each site.
+- **A pull request under `infrastructure/ansible`** pushed in the window
+  gets no check run until its next push, and the merge helper does not see
+  the check that is missing. Push to it again before a merge.
+- **The nightly drift run** (12:30 UTC) is skipped, and the alert for a
+  stale drift result fires after 30 hours with no run. If the window
+  crossed 12:30 UTC, dispatch the mode `drift` after the enable. Better,
+  keep the window away from 12:30 UTC: with the workflow on, that run fails
+  red with WSL down.
 
 **Never leave the host in the state after step 2 across a restart of
 Windows**: with the tasks disabled, nothing starts WSL at boot. To stop

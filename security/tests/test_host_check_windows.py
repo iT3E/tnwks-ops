@@ -535,6 +535,17 @@ def test_the_files_that_the_relay_makes_as_system_are_no_change():
     assert out == {"changed": False, "sets": []}
 
 
+def test_the_owners_that_the_reset_accepts_are_the_administrators_and_system_only():
+    """A file below the host check directory may be owned by the Administrators or by
+    SYSTEM, which has full control there anyway. Any other owner is reset."""
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    task = next(task for task in tasks if task["name"] == "The files of the host check directory take its owner and rules")
+    script = task["ansible.windows.win_powershell"]["script"]
+    assert re.findall(r"^\s*\$owners = (.*)$", script, re.MULTILINE) == ["@($admins.Value, 'S-1-5-18')"]
+    assert "$admins = New-Object $sid 'S-1-5-32-544'" in script
+    assert script.count("$owners") == 2 and "$owners -notcontains $child.GetOwner($sid).Value" in script
+
+
 @needs_pwsh
 @pytest.mark.parametrize("child", [
     ("S-1-5-21-7-7-7-1001", DIR_RULES),

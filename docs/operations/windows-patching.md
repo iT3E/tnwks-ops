@@ -315,9 +315,11 @@ by a day.
   OpenClaw gateway unit is active. On a host with `wsl_start_unelevated`
   on, the keepalive task starts WSL with no elevation (start it with
   `Start-ScheduledTask -TaskName tnwks-wsl-keepalive` rather than wait),
-  and nothing in the SSH session starts the distro. Check it as in step 5
-  of the start step: `readlink /proc/1/ns/mnt /proc/self/ns/mnt` in the
-  distro prints two equal lines.
+  and nothing in the elevated SSH session starts the distro. Check it as
+  in step 5 of the start step: `readlink /proc/1/ns/mnt /proc/self/ns/mnt`
+  prints two equal lines. Run it in the distro from a window with no
+  elevation (`wsl -d Ubuntu -u root -e readlink ...`), or over SSH to the
+  distro itself, never from the elevated SSH session of the host.
 - The distro's WireGuard tunnel to the router is up again and its BGP
   sessions are established. Until the LAN bridge is retired, run its sync
   too: the WSL IP can change on reboot.
