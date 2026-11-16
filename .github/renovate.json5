@@ -1,190 +1,201 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:best-practices",
-    "docker:enableMajor",
-    ":disableRateLimiting",
-    ":dependencyDashboard",
-    ":semanticCommits",
-    ":enablePreCommit",
-    "github>iT3E/tnwks-ops//.github/renovate/autoMerge.json5",
-    "github>iT3E/tnwks-ops//.github/renovate/commitMessage.json5",
-    "github>iT3E/tnwks-ops//.github/renovate/groups.json5",
-    "github>iT3E/tnwks-ops//.github/renovate/labels.json5",
-    "github>iT3E/tnwks-ops//.github/renovate/semanticCommits.json5",
-    "helpers:pinGitHubActionDigests"
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:best-practices',
+    'docker:enableMajor',
+    ':disableRateLimiting',
+    ':dependencyDashboard',
+    ':semanticCommits',
+    ':enablePreCommit',
+    'github>iT3E/tnwks-ops//.github/renovate/autoMerge.json5',
+    'github>iT3E/tnwks-ops//.github/renovate/commitMessage.json5',
+    'github>iT3E/tnwks-ops//.github/renovate/groups.json5',
+    'github>iT3E/tnwks-ops//.github/renovate/labels.json5',
+    'github>iT3E/tnwks-ops//.github/renovate/semanticCommits.json5',
+    'helpers:pinGitHubActionDigests',
   ],
-  // best-practices also pins every image to a digest and refreshes lock files
-  // weekly. Pinning would rewrite every HelmRelease in one PR and add a digest
-  // PR per rebuild; lock-file refreshes are real Terraform provider upgrades
-  // (AWS applies on merge). Both stay off.
-  "ignorePresets": ["docker:pinDigests", ":maintainLockFilesWeekly"],
-  // Automerge through a PR so .github/workflows/ci.yaml runs, and only
-  // when every status check is green. Renovate merges it itself
-  // (platformAutomerge off), squash per the main ruleset.
-  "automergeType": "pr",
-  "platformAutomerge": false,
-  "automergeStrategy": "squash",
-  "ignoreTests": false,
-  "dependencyDashboard": true,
-  "dependencyDashboardTitle": "Renovate Dashboard 🤖",
-  "dependencyDashboardOSVVulnerabilitySummary": "all",
-  "osvVulnerabilityAlerts": true,
-  // Security fixes remain visible even for packages whose routine upgrades
-  // wait on compatibility review. They still pass CI and the impact review.
-  "vulnerabilityAlerts": {
-    "enabled": true,
-    "dependencyDashboardApproval": false
-  },
-  "suppressNotifications": ["prIgnoreNotification"],
-  "rebaseWhen": "conflicted",
-  "schedule": ["before 7am"],
-  // Cap the volume during the modernization sweep so reviews stay tractable.
-  // Tighten further (or remove) once the bulk catch-up settles.
-  "prHourlyLimit": 4,
-  "prConcurrentLimit": 12,
-  "packageRules": [
-    {
-      // Renovate PRs run Terraform plans with real credentials
-      // (terraform.yaml, from ci.yaml), and providers
-      // execute during a plan. A release has to be 3 days old before its PR
-      // opens, so a pulled or compromised release is usually gone first.
-      "description": "Terraform providers and modules: 3 days after release",
-      "matchDatasources": ["terraform-provider", "terraform-module"],
-      "minimumReleaseAge": "3 days",
-      "internalChecksFilter": "strict"
-    },
-    {
-      "description": "Terraform CLI: 3 days after release",
-      "matchPackageNames": ["hashicorp/terraform"],
-      "minimumReleaseAge": "3 days",
-      "internalChecksFilter": "strict"
-    },
-    {
-      "description": "Coral: queue NumPy majors until its Windows runtime supports them",
-      "matchFileNames": ["infrastructure/ansible/roles/windows_coral_detector/**"],
-      "matchPackageNames": ["numpy"],
-      "matchUpdateTypes": ["major"],
-      "dependencyDashboardApproval": true,
-      "dependencyDashboardCategory": "Compatibility review",
-      "groupName": "Coral NumPy compatibility",
-      "prBodyNotes": [
-        "The Windows Coral runtime currently requires NumPy 1.x and Python 3.9. Review docs/operations/dependency-compatibility.md before approving this update. Security fixes bypass dashboard approval."
-      ]
-    },
-    {
-      "description": "UniFi: queue MongoDB release-line changes until supported by the application",
-      "matchFileNames": ["kubernetes/apps/networking/unifi/**"],
-      "matchPackageNames": ["docker.io/library/mongo"],
-      "matchUpdateTypes": ["major", "minor"],
-      "dependencyDashboardApproval": true,
-      "dependencyDashboardCategory": "Compatibility review",
-      "groupName": "UniFi MongoDB compatibility",
-      "prBodyNotes": [
-        "Confirm the deployed UniFi application supports the proposed MongoDB release line; see docs/operations/dependency-compatibility.md. Compatible patch updates remain enabled."
-      ]
-    },
-    {
-      "description": "Recheck MongoDB support whenever the UniFi image changes",
-      "matchFileNames": ["kubernetes/apps/networking/unifi/**"],
-      "matchPackageNames": ["ghcr.io/linuxserver/unifi-network-application"],
-      "prBodyNotes": [
-        "Recheck UniFi's supported MongoDB versions and the pending MongoDB updates in the Dependency Dashboard. A weekly compatibility watch also tracks upstream documentation changes."
-      ]
-    },
-    {
-      // prConcurrentLimit is easy to fill with stale PRs. cloudflared is the
-      // public edge, so its updates jump the queue instead of sitting
-      // rate-limited on the dashboard (2026.10.x emSign fix sat there).
-      "description": "Open cloudflared updates ahead of everything else",
-      "matchPackageNames": ["docker.io/cloudflare/cloudflared"],
-      "prPriority": 10
-    },
-    {
-      // ghcr.io/berriai/litellm carries several tag schemes: plain vX.Y.Z
-      // releases, unprefixed X.Y.Z copies, vX.Y.Z-rc.N / -dev.N, the retired
-      // vX.Y.Z-stable(.patchN) line, and moving main-* tags. Follow only the
-      // plain releases.
-      "description": "LiteLLM: release tags only",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/berriai/litellm"],
-      "allowedVersions": "/^v\\d+\\.\\d+\\.\\d+$/"
-    },
-    {
-      // Base images (python, busybox, mosquitto) re-push the same tag several
-      // times a week, and each re-push was its own digest PR and CI run (14
-      // in the 30 days to 2026-11-08). Open them on Monday only: a PR that's
-      // still open keeps moving to the newest digest. Our own images
-      // (ghcr.io/it3e/*) aren't held.
-      "description": "Container digest updates: open on Mondays",
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["digest"],
-      "matchPackageNames": ["!/^ghcr\\.io\\/it3e\\//"],
-      "schedule": ["before 7am on monday"]
-    }
+  ignorePresets: [
+    'docker:pinDigests',
+    ':maintainLockFilesWeekly',
   ],
-  "pre-commit": {
-    "enabled": true
+  automergeType: 'pr',
+  platformAutomerge: false,
+  automergeStrategy: 'squash',
+  ignoreTests: false,
+  dependencyDashboard: {
+    enabled: true,
+    title: 'Renovate Dashboard 🤖',
+    osvVulnerabilitySummary: 'all',
   },
-  "flux": {
-    "managerFilePatterns": [
-      "/kubernetes/.+\\.ya?ml$/"
-    ]
+  osvVulnerabilityAlerts: true,
+  vulnerabilityAlerts: {
+    enabled: true,
+    dependencyDashboardApproval: false,
   },
-  "helm-values": {
-    "managerFilePatterns": [
-      "/kubernetes/.+\\.ya?ml$/"
-    ]
-  },
-  "kubernetes": {
-    "managerFilePatterns": [
-      "/ansible/.+\\.ya?ml(\\.j2)?$/",
-      "/kubernetes/.+\\.ya?ml$/"
-    ]
-  },
-  "customManagers": [
+  suppressNotifications: [
+    'prIgnoreNotification',
+  ],
+  rebaseWhen: 'conflicted',
+  schedule: [
+    'before 7am',
+  ],
+  prHourlyLimit: 4,
+  prConcurrentLimit: 12,
+  packageRules: [
     {
-      "customType": "regex",
-      "description": "Process generic # renovate: datasource=… depName=… version comments",
-      "managerFilePatterns": [
-        "/ansible/.+\\.ya?ml(\\.j2)?$/",
-        "/kubernetes/.+\\.ya?ml$/",
-        "/^talos/.+\\.ya?ml$/",
-        "/\\.github/workflows/.+\\.ya?ml$/"
+      description: 'Terraform providers and modules: 3 days after release',
+      matchDatasources: [
+        'terraform-provider',
+        'terraform-module',
       ],
-      "matchStrings": [
-        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( registryUrl=(?<registryUrl>\\S+))?\\n.*?[\"']?(?<currentValue>[^\"'\\s]+)[\"']?\\n"
-      ],
-      "datasourceTemplate": "{{#if datasource}}{{{datasource}}}{{else}}github-releases{{/if}}"
+      minimumReleaseAge: '3 days',
+      internalChecksFilter: 'strict',
     },
     {
-      // Home Assistant card resources: the ?v= cache-buster on the URL must
-      // move with the card version in helmrelease.yaml, or browsers keep the
-      // old entry file and 404 on the new version's chunks. Same depName, so
-      // both land in one PR. The trailing "cache-bust" keeps the generic
-      // manager above from also matching these comments.
-      "customType": "regex",
-      "description": "Bump ?v= on Home Assistant Lovelace resources with their card version",
-      "managerFilePatterns": [
-        "/kubernetes/apps/home-automation/home-assistant/app/config/configuration\\.yaml$/"
+      description: 'Terraform CLI: 3 days after release',
+      matchPackageNames: [
+        'hashicorp/terraform',
       ],
-      "matchStrings": [
-        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) cache-bust\\n\\s*- url: \\S+\\?v=(?<currentValue>[^\\s\"']+)\\n"
-      ],
-      "extractVersionTemplate": "^v?(?<version>.+)$"
+      minimumReleaseAge: '3 days',
+      internalChecksFilter: 'strict',
     },
     {
-      // The observability contracts and rehearsals run these pins, and most
-      // mirror a manifest pin (Grafana, the renderer, Thanos, Garage, Caddy).
-      // Each is spelled like its manifest, so both land in one PR and the
-      // validators that compare them stay green.
-      "customType": "regex",
-      "description": "Image pins in observability/versions.py",
-      "managerFilePatterns": ["/^observability/versions\\.py$/"],
-      "matchStrings": [
-        "= \"(?<depName>[a-z0-9./_-]+):(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
+      description: 'Coral: queue NumPy majors until its Windows runtime supports them',
+      matchFileNames: [
+        'infrastructure/ansible/roles/windows_coral_detector/**',
       ],
-      "datasourceTemplate": "docker"
-    }
-  ]
+      matchPackageNames: [
+        'numpy',
+      ],
+      matchUpdateTypes: [
+        'major',
+      ],
+      dependencyDashboardApproval: true,
+      dependencyDashboardCategory: 'Compatibility review',
+      groupName: 'Coral NumPy compatibility',
+      prBodyNotes: [
+        'The Windows Coral runtime currently requires NumPy 1.x and Python 3.9. Review docs/operations/dependency-compatibility.md before approving this update. Security fixes bypass dashboard approval.',
+      ],
+    },
+    {
+      description: 'UniFi: queue MongoDB release-line changes until supported by the application',
+      matchFileNames: [
+        'kubernetes/apps/networking/unifi/**',
+      ],
+      matchPackageNames: [
+        'docker.io/library/mongo',
+      ],
+      matchUpdateTypes: [
+        'major',
+        'minor',
+      ],
+      dependencyDashboardApproval: true,
+      dependencyDashboardCategory: 'Compatibility review',
+      groupName: 'UniFi MongoDB compatibility',
+      prBodyNotes: [
+        'Confirm the deployed UniFi application supports the proposed MongoDB release line; see docs/operations/dependency-compatibility.md. Compatible patch updates remain enabled.',
+      ],
+    },
+    {
+      description: 'Recheck MongoDB support whenever the UniFi image changes',
+      matchFileNames: [
+        'kubernetes/apps/networking/unifi/**',
+      ],
+      matchPackageNames: [
+        'ghcr.io/linuxserver/unifi-network-application',
+      ],
+      prBodyNotes: [
+        "Recheck UniFi's supported MongoDB versions and the pending MongoDB updates in the Dependency Dashboard. A weekly compatibility watch also tracks upstream documentation changes.",
+      ],
+    },
+    {
+      description: 'Open cloudflared updates ahead of everything else',
+      matchPackageNames: [
+        'docker.io/cloudflare/cloudflared',
+      ],
+      prPriority: 10,
+    },
+    {
+      description: 'LiteLLM: release tags only',
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        'ghcr.io/berriai/litellm',
+      ],
+      allowedVersions: '/^v\\d+\\.\\d+\\.\\d+$/',
+    },
+    {
+      description: 'Container digest updates: open on Mondays',
+      matchDatasources: [
+        'docker',
+      ],
+      matchUpdateTypes: [
+        'digest',
+      ],
+      matchPackageNames: [
+        '!/^ghcr\\.io\\/it3e\\//',
+      ],
+      schedule: [
+        'before 7am on monday',
+      ],
+    },
+  ],
+  'pre-commit': {
+    enabled: true,
+  },
+  flux: {
+    managerFilePatterns: [
+      '/kubernetes/.+\\.ya?ml$/',
+    ],
+  },
+  'helm-values': {
+    managerFilePatterns: [
+      '/kubernetes/.+\\.ya?ml$/',
+    ],
+  },
+  kubernetes: {
+    managerFilePatterns: [
+      '/ansible/.+\\.ya?ml(\\.j2)?$/',
+      '/kubernetes/.+\\.ya?ml$/',
+    ],
+  },
+  customManagers: [
+    {
+      customType: 'regex',
+      description: 'Process generic # renovate: datasource=… depName=… version comments',
+      managerFilePatterns: [
+        '/ansible/.+\\.ya?ml(\\.j2)?$/',
+        '/kubernetes/.+\\.ya?ml$/',
+        '/^talos/.+\\.ya?ml$/',
+        '/\\.github/workflows/.+\\.ya?ml$/',
+      ],
+      matchStrings: [
+        'datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( registryUrl=(?<registryUrl>\\S+))?\\n.*?["\']?(?<currentValue>[^"\'\\s]+)["\']?\\n',
+      ],
+      datasourceTemplate: '{{#if datasource}}{{{datasource}}}{{else}}github-releases{{/if}}',
+    },
+    {
+      customType: 'regex',
+      description: 'Bump ?v= on Home Assistant Lovelace resources with their card version',
+      managerFilePatterns: [
+        '/kubernetes/apps/home-automation/home-assistant/app/config/configuration\\.yaml$/',
+      ],
+      matchStrings: [
+        'datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) cache-bust\\n\\s*- url: \\S+\\?v=(?<currentValue>[^\\s"\']+)\\n',
+      ],
+      extractVersionTemplate: '^v?(?<version>.+)$',
+    },
+    {
+      customType: 'regex',
+      description: 'Image pins in observability/versions.py',
+      managerFilePatterns: [
+        '/^observability/versions\\.py$/',
+      ],
+      matchStrings: [
+        '= "(?<depName>[a-z0-9./_-]+):(?<currentValue>[^@"]+)@(?<currentDigest>sha256:[a-f0-9]{64})"',
+      ],
+      datasourceTemplate: 'docker',
+    },
+  ],
 }
