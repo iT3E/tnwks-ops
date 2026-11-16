@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.178.0 - 2026-11-16
+
+### Added
+
+* GitHub settings: the environment `run-receiver` (deployments from `main` only) for the token of the run receiver, and the repository variable `RENOVATE_REVIEW_ROUTE` at `host`, which keeps each Renovate review on the hook of the host until the owner changes it to `platform`. The docs of the review describe the two routes, the move and its way back.
+
 ## v2.177.1 - 2026-11-16
 
 ### Fixed

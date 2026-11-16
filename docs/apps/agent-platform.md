@@ -592,7 +592,8 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
 | Address | `http://run-receiver.agents-workflows.svc.cluster.local:8080` |
 | A run | `POST /runs` with `Authorization: Bearer <token>` and `{"agent": "<name>", "input": {...}, "key": "<key>", "wait": true}` |
 | The state of a run | `GET /runs/<key>`, with the token |
-| Token | `RUN_RECEIVER_TOKEN` in the Secret `run-receiver-secret` (`app/secret.sops.yaml`). The workflow that calls the receiver holds the same value |
+| Token | `RUN_RECEIVER_TOKEN` in the Secret `run-receiver-secret` (`app/secret.sops.yaml`). The workflow that calls the receiver holds the same value, in the secret of its environment `run-receiver` |
+| Caller | The platform job of `.github/workflows/renovate-review.yaml`, when the variable `RENOVATE_REVIEW_ROUTE` is `platform` (`docs/operations/renovate.md`, "The route of a review") |
 
 - **The list of agents** (`app/agents.yaml`, the ConfigMap
   `run-receiver-agents`) has the Job template of each agent: the image, the
