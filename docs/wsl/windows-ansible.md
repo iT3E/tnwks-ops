@@ -184,6 +184,22 @@ monitoring volume have no part with no elevation yet, and the play refuses
 the switch on a host that runs them (the first task of the play, with each
 tag).
 
+**The folders of the roles.** On each host, with the switch on or off, each
+folder of a role under `C:\ProgramData` gets its rules from the same module,
+with no writer: no inherited rule, the Administrators own it, SYSTEM and the
+Administrators have full control, and Users may read. That is the folder of
+the LAN bridge, the watchdog, the compaction, the UDP relays, the USB attach
+and the monitoring volume. At each run, each file and folder below takes the
+owner Administrators and only the rules that it inherits, unless it has them
+already (an owner of SYSTEM stays). The log and address folders above keep
+their own rules, and the module does not read them. A link or a junction
+below stops the module before it changes an item. The folders of the host
+check and of the detector set the same rules in their own roles. A folder
+that no role owns gets the rules for SYSTEM and the Administrators only from
+`windows_locked_dirs` (per host, `readers: none`: Users get no rule).
+A test (`security/tests/test_windows_role_folders.py`) reads the rules of
+each folder, and which task writes where.
+
 **The services take the change at the next start of WSL**, the start step
 below. The merge and the apply of the switch leave the plays green: the last
 task of `wsl_host_check` (the write test) can fail the distro play only when

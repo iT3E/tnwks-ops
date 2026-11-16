@@ -31,6 +31,12 @@ wsl_start_unelevated_done: false
 # approves the pull request that turns it on.
 wsl_rehearsal: false
 
+# Folders under C:\ProgramData that no role owns. The play gives each the
+# rules for SYSTEM and the Administrators only (tnwks_win_dir_acl, no writer,
+# readers: none): Users get no rule, and each item takes the owner
+# Administrators. Per host.
+windows_locked_dirs: []
+
 # The keys sshd accepts (role windows_sshd): one per controller, so each can
 # be revoked on its own.
 windows_sshd_authorized_keys:

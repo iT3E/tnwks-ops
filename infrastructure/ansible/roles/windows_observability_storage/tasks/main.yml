@@ -1,11 +1,17 @@
 ---
-- name: Monitoring volume directories
+- name: Disk directory
   ansible.windows.win_file:
-    path: "{{ item }}"
+    path: C:\WSL
     state: directory
-  loop:
-    - C:\WSL
-    - "{{ observability_storage_dir }}"
+
+# Only SYSTEM and the Administrators may make or change files here, and
+# Users may read (tnwks_win_dir_acl, no writer). The folder inherits no rule.
+# Each item in it takes the owner Administrators and the rules of the folder,
+# at each run.
+- name: Monitoring volume directory
+  tnwks_win_dir_acl:
+    path: "{{ observability_storage_dir }}"
+    items: reset
 
 - name: Guarded monitoring volume scripts
   ansible.windows.win_copy:

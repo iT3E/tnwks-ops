@@ -1,9 +1,85 @@
 # The router log of the security stream routeros (routeros_security) leaves
 # out the version line that the API checks read (Design Doc 0004, section
 # 5.5), and keeps each other line. Each test feeds a line made up here.
+#
+# The first tests feed the datagram of the router through parse_syslog, the
+# parser of the syslog source (routeros_syslog), so the event has the fields
+# that the source gives: the first word of the router's text is the tag
+# (appname), and message holds the rest. The source adds host, source_ip and
+# source_type, which the filter does not read. The tests after them feed the
+# fields by hand, for the other forms that the filter takes.
 config: kubernetes/apps/monitoring/vector/aggregator/config/vector.yaml
 tests:
-  - name: the version line stays out of the security stream
+  - name: the version line as the syslog source parses it stays out of the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: vrl
+        source: |
+          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01 version=7.25")
+          assert_eq!(.appname, "tnwks-routeros-version")
+          assert_eq!(.message, "router=sce-rtr01 version=7.25")
+    no_outputs_from:
+      - routeros_security
+  - name: the version line with its channel as the syslog source parses it stays out too
+    inputs:
+      - insert_at: routeros_security
+        type: vrl
+        source: |
+          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)")
+    no_outputs_from:
+      - routeros_security
+  - name: the version line in the form that Loki keeps stays out of the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: log
+        log_fields:
+          appname: tnwks-routeros-version
+          facility: daemon
+          host: sce-rtr01
+          hostname: sce-rtr01
+          message: "router=sce-rtr01 version=7.25"
+          severity: info
+          source_ip: 192.0.2.1
+          source_type: syslog
+    no_outputs_from:
+      - routeros_security
+  - name: a line with the tag of the version line that goes on stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: vrl
+        source: |
+          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01 version=7.25 and more")
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert!(ends_with(string!(.message), "and more"))
+  - name: a line with the tag of the version line and no version stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: vrl
+        source: |
+          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01")
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "router=sce-rtr01")
+  - name: a line of the router as the syslog source parses it stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: vrl
+        source: |
+          . = parse_syslog!("<38>2026-11-16T09:15:00.000+00:00 sce-rtr01 user admin logged in from 192.0.2.2 via ssh")
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert!(contains(string!(.message), "logged in from 192.0.2.2"))
+  - name: the whole version line in message stays out of the security stream
     inputs:
       - insert_at: routeros_security
         type: log
@@ -13,7 +89,7 @@ tests:
           severity: info
     no_outputs_from:
       - routeros_security
-  - name: the version line with its topics in front stays out of the security stream too
+  - name: the whole version line with its topics in front stays out of the security stream too
     inputs:
       - insert_at: routeros_security
         type: log
@@ -28,7 +104,8 @@ tests:
       - insert_at: routeros_security
         type: log
         log_fields:
-          message: "system,info user admin ran tnwks-routeros-version router=sce-rtr01 version=7.90.1"
+          appname: system,info
+          message: "user admin ran tnwks-routeros-version router=sce-rtr01 version=7.90.1"
           hostname: sce-rtr01
           severity: info
     outputs:

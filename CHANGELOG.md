@@ -3,6 +3,30 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.176.0 - 2026-11-16
+
+### Changed
+
+* Windows hosts: each folder of a role under C:\ProgramData lets only SYSTEM and the Administrators make or change files, and Users read (tnwks_win_dir_acl). At each run, each item below takes the owner Administrators and the rules of the folder; the log and address folders keep their own rules. A folder that no role owns, listed in windows_locked_dirs, is for SYSTEM and the Administrators only (readers: none).
+
+## v2.175.1 - 2026-11-16
+
+### Fixed
+
+* Security: the filter of the aggregators and the reader of the API checks now read the router's version line in the form that the syslog source gives (the prefix as the tag, appname, and the identity and version in message). The filter keeps that line out of the security stream routeros, and the job finds it in the Loki of homelab-wsl-02 (its line filter has no space after the prefix). With no line in 3 hours, the job says so in its log.
+
+## v2.175.0 - 2026-11-16
+
+### Changed
+
+* The AWS runs of Prowler have the memory limit of their measured peak and 25 %, and a request of 704 MiB, the highest working set rounded up. The two AWS systems list prowler as a source, so SecurityResultLate fires when a run has no result for 36 hours.
+
+## v2.174.0 - 2026-11-16
+
+### Changed
+
+* The two AWS runs of Prowler run at 03:17 and 05:17 UTC again, after their run of one day.
+
 ## v2.173.0 - 2026-11-16
 
 ### Added
