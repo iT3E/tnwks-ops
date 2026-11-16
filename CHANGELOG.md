@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.169.2 - 2026-11-16
+
+### Security
+
+* agents-workflows: the admission policy of the run jobs pins the run job container to the entrypoint of the image with the one argument run-job (no command, lifecycle hook or probe), and a new policy, workflow-run-job-updates, lets an update of a run Job by the run receiver change only its two annotations (the kept answer and the check of the Sandbox record). Both bind the account of the receiver only. A test harness (admission/tests/run.sh) runs them on a throwaway API server in containers.
+
 ## v2.169.1 - 2026-11-16
 
 ### Fixed
