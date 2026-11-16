@@ -3,7 +3,7 @@
 # restore test of the finance agent's state, as the pilot's ran on
 # 2026-11-16 (two runs of the check; the second mounts the volume at the
 # path of the agent pod). To run it: set the snapshot name in
-# restore/restore.yaml and the repository in ks.yaml, then list
+# restore/restore.yaml, then list
 # ./agent/restore-test/ks.yaml in ../../kustomization.yaml, in a pull request
 # with the owner's go; remove it in the next one.
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
@@ -31,8 +31,8 @@ spec:
     name: flux-system
   dependsOn:
     # The Restore CRD, and the repository the snapshot is in: the
-    # repository of finance, which waits for the owner (set its name).
-    - name: kopiur-agents-repository
+    # repository of finance (ClusterRepository agents-finance).
+    - name: kopiur-agents-finance-repository
   # Ready only when the Restore is Completed and the scratch volume is
   # Bound. kstatus alone calls a Restore with no status yet Current, so the
   # phase conditions of kopiur decide (Completed: Ready=True; Failed:

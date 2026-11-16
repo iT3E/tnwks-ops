@@ -156,6 +156,7 @@ to the shared repository of the other apps
 | Password | `kopiur-system/kopiur-repository-agents` (SOPS), its own value, on the off-site media |
 | S3 session | CronJob `aws-backup-credentials-agents`: certificate CN `homelab-wsl-agent-backups` to the role `tnwks-rolesanywhere-backups-agents`, which lists, reads and writes `kopiur-agents/` and nothing else (`rolesanywhere_backups_prefixed` in `environments/prod/aws/main.tf`). Secret `aws-backup-sts-agents` |
 | Policies | `agents-pilot`: `agent-state-v2` (the agent) and `signal-state` (the Signal daemon), in `pilot/*/app/backup.yaml` |
+| Finance | Its own repository: ClusterRepository `agents-finance`, prefix `kopiur-finance/`, password `kopiur-system/kopiur-repository-agents-finance`, role `tnwks-rolesanywhere-backups-agents-finance` (certificate CN `homelab-wsl-agents-finance-backups`), Secret `aws-backup-sts-agents-finance`, policy `agent-state` in `finance/agent/app/backup.yaml`. Set up in steps, and not all applied yet ([`backups.md`](../operations/backups.md#the-finance-repository)) |
 
 kopiur copies this session and this password into the namespace of the trust
 domain before each mover run. So a mover there, and anything that reads the
@@ -165,11 +166,14 @@ password that decrypts them. The shared repository does not allow
 `agents-pilot` once the move ends ([Move a trust domain to another
 repository](#move-a-trust-domain-to-another-repository)).
 
-One repository holds every trust domain for now. A mover of one trust domain
-can still reach the snapshots of the other trust domains in it. One repository
-for each trust domain (one more entry of `rolesanywhere_backups_prefixed`, one
-more directory like `agents-repository/`) is the stricter form, before a second
-trust domain gets a policy.
+One repository for each trust domain: a mover of one trust domain reaches
+the snapshots of its own trust domain only. The repository `agents` holds the
+pilot. Finance has its own (one more entry of `rolesanywhere_backups_prefixed`,
+one more directory like `agents-repository/`, `agents-finance-repository/`),
+and each later trust domain gets one the same way before its first policy.
+No prefix may start with the name of another one (`kopiur-finance/`, not
+`kopiur-agents-finance/`), as the list deny of the bucket policy matches the
+start of a prefix.
 
 The snapshots of the pilot agent from before the move (policy `agent-state`)
 stay in the shared repository. The policy was replaced, not edited: kopiur

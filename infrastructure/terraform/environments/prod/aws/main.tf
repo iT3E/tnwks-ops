@@ -46,6 +46,17 @@ module "aws" {
       # the break-glass role below (modules/aws/s3_backups.tf).
       exclusive = true
     }
+    # The repository of the finance trust domain only: one repository for each
+    # trust domain, so a mover in agents-finance reaches no other snapshot
+    # (docs/apps/agent-platform.md, "Backups of the agent trust domains").
+    # Not kopiur-agents-finance/: the deny of a list for "agents" matches every
+    # prefix that starts with kopiur-agents, and would refuse the list of this
+    # role. No exclusive prefix may start with the name of another one.
+    "agents-finance" = {
+      common_names = ["homelab-wsl-agents-finance-backups"]
+      prefix       = "kopiur-finance/"
+      exclusive    = true
+    }
   }
   # The owner's way into an exclusive prefix: the AdministratorAccess
   # permission set of IAM Identity Center in this account.
