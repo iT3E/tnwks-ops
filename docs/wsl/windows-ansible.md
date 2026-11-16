@@ -514,8 +514,25 @@ distro, the tasks or the account of today.
 
 Run the checks after the apply, as the comment of
 `playbooks/windows-rehearsal-check.yml` says. The play reads, and changes
-no setting. A second change sets `wsl_rehearsal_state` to `absent` and
-removes each part.
+no setting.
+
+**The removal.** `wsl_rehearsal_state: absent` (the default of the role
+now) removes each part, in this order:
+
+1. The play stops the start task. A task of the account then runs
+   `wsl --terminate`, `wsl --unregister` and `wsl --shutdown`. The shutdown
+   stops the VM of that account only: WSL keeps one session for each
+   account. No task of the play runs `wsl.exe`.
+2. The play ends any process of the account that is left.
+3. It removes the tasks, the batch right, the profile (with `.wslconfig`
+   and the hive), the account, the folder (the scripts, the root file
+   system, the test disk file and the results), and the file of the write
+   test.
+
+The same check play then reads the exit check: no account, no holder of
+the batch right that is the account or a SID with no account, no task, no
+profile and no folder. It shows the local accounts, the members of
+Administrators and the holders of the right.
 
 ## Check-only settings
 

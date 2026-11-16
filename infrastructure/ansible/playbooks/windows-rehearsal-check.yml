@@ -24,6 +24,17 @@
 #   write    as root in the distro: refused, with EACCES or EPERM. Another
 #            answer, such as ENOENT or EIO, fails
 #   mount    wsl --mount --vhd <file> --bare, then wsl --unmount: both exit 0
+#
+# With wsl_rehearsal_state absent (the removal), it reads the exit check
+# instead, and starts no task:
+#
+#   account   no local account of the rehearsal; the local accounts and the
+#             members of Administrators are shown
+#   batch     no holder of the right to log on as a batch job is the account or
+#             a SID that names no account; the holders are shown
+#   tasks     no task of the rehearsal
+#   profile   no profile of the account
+#   folder    no folder of the rehearsal
 
 - name: The checks of the rehearsal
   hosts: windows_hosts
@@ -37,6 +48,7 @@
       when: not (wsl_rehearsal | bool)
 
     - name: Run the checks
+      when: wsl_rehearsal_state == 'present'
       ansible.windows.win_powershell:
         parameters:
           Account: "{{ wsl_rehearsal_account }}"
@@ -172,14 +184,66 @@
           $results
       register: wsl_rehearsal_checks
 
+    - name: The exit check of the removal
+      when: wsl_rehearsal_state == 'absent'
+      ansible.windows.win_powershell:
+        parameters:
+          Account: "{{ wsl_rehearsal_account }}"
+          Prefix: "{{ wsl_rehearsal_task_prefix }}"
+          Dir: "{{ wsl_rehearsal_dir }}"
+        script: |
+          param([string]$Account, [string]$Prefix, [string]$Dir)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $results = [ordered]@{}
+          function Add-Check([string]$Name, [bool]$Pass, [string]$Value) {
+              $results[$Name] = [ordered]@{ pass = $Pass; value = $Value }
+          }
+          $users = @(Get-LocalUser)
+          $admins = @(Get-LocalGroupMember -SID 'S-1-5-32-544' | ForEach-Object { "$($_.Name) ($($_.SID.Value))" })
+          $list = ($users | ForEach-Object { "$($_.Name) enabled=$($_.Enabled)" }) -join ', '
+          Add-Check 'account' (-not ($users.Name -contains $Account)) ("local accounts: {0}; Administrators: {1}" -f $list, ($admins -join ', '))
+
+          # The holders of the right, from the local policy (secedit gives SIDs as *S-1-...).
+          $file = Join-Path $env:TEMP 'tnwks-rehearsal-rights.inf'
+          & secedit.exe /export /areas USER_RIGHTS /cfg $file /quiet | Out-Null
+          $line = @(Get-Content -LiteralPath $file | Where-Object { $_ -like 'SeBatchLogonRight*' })
+          Remove-Item -LiteralPath $file -Force
+          $holders = @()
+          if ($line) { $holders = @(($line[0] -split '=', 2)[1].Split(',') | ForEach-Object { $_.Trim().TrimStart('*') } | Where-Object { $_ }) }
+          $named = @()
+          $orphans = @()
+          foreach ($h in $holders) {
+              try {
+                  $name = $h
+                  if ($h -like 'S-1-*') { $name = (New-Object Security.Principal.SecurityIdentifier $h).Translate([Security.Principal.NTAccount]).Value }
+                  $named += "$name ($h)"
+              } catch { $orphans += $h }
+          }
+          Add-Check 'batch' (($named | Where-Object { $_ -like "*\$Account *" -or $_ -like "$Account *" }).Count -eq 0 -and $orphans.Count -eq 0) `
+              ("holders: {0}{1}" -f ($named -join ', '), $(if ($orphans) { "; no account: $($orphans -join ', ')" } else { '' }))
+
+          $tasks = @(Get-ScheduledTask -TaskName "$Prefix-*" -ErrorAction SilentlyContinue | ForEach-Object { $_.TaskName })
+          Add-Check 'tasks' ($tasks.Count -eq 0) $(if ($tasks) { $tasks -join ', ' } else { 'none' })
+          $profiles = @(Get-CimInstance Win32_UserProfile | Where-Object { $_.LocalPath -like "*\$Account*" } | ForEach-Object { $_.LocalPath })
+          Add-Check 'profile' ($profiles.Count -eq 0) $(if ($profiles) { $profiles -join ', ' } else { 'none' })
+          Add-Check 'folder' (-not (Test-Path -LiteralPath $Dir)) "$Dir exists: $(Test-Path -LiteralPath $Dir)"
+          $results
+      register: wsl_rehearsal_exit
+
+    - name: The result of the run
+      ansible.builtin.set_fact:
+        wsl_rehearsal_result: "{{ (wsl_rehearsal_checks if wsl_rehearsal_state == 'present' else wsl_rehearsal_exit).output[0] }}"
+
     - name: The value of each check
       ansible.builtin.debug:
-        msg: "{{ wsl_rehearsal_checks.output[0] }}"
+        msg: "{{ wsl_rehearsal_result }}"
 
     - name: Each check passes
       ansible.builtin.assert:
-        that: wsl_rehearsal_checks.output[0] | dict2items | rejectattr('value.pass') | list | length == 0
+        that: wsl_rehearsal_result | dict2items | rejectattr('value.pass') | list | length == 0
         fail_msg: >-
-          Failed: {{ wsl_rehearsal_checks.output[0] | dict2items | rejectattr('value.pass') | map(attribute='key') | join(', ') }}.
-          The change of the host stops before its step 1 (Design Doc 0004, section 9).
+          Failed: {{ wsl_rehearsal_result | dict2items | rejectattr('value.pass') | map(attribute='key') | join(', ') }}.
+          {{ 'The change of the host stops before its step 1 (Design Doc 0004, section 9).' if wsl_rehearsal_state == 'present'
+             else 'A part of the rehearsal is left: run the removal again, or remove it by hand.' }}
         quiet: true
