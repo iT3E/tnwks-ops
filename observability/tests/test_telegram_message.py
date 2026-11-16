@@ -10,9 +10,11 @@ resolved. Each message must fit what the Bot API and Alertmanager require:
   (the parser of the Bot API, TDLib's parse_html, refuses anything else);
 - at most 4096 characters of text after the tags and entities, and at most 32768
   bytes in all (over either, Alertmanager v0.35 sends a fixed text in its place);
-- each link an http or https URL of at most 2048 characters. The Bot API names no
-  limit for a link; this is the bound of the template, and the graph link of a rule
-  with a longer expression is left out.
+- each link an http or https URL; one graph link at most, of at most 1600
+  characters; at most 2560 characters of link text in all. Telegram answers
+  ENTITIES_TOO_LONG past a limit that it does not state; these are the bounds of
+  the template, from what is known to deliver (see its comment);
+- at most 100 entities (tags), the number past which Telegram ignores formatting.
 
 The annotations are rendered as Prometheus would for their simple forms ($labels,
 $externalLabels, Flux variables); any other template action becomes "1", so a text
@@ -36,7 +38,9 @@ CONFIG = ROOT / "kubernetes/apps/monitoring/alertmanager/app"
 TEMPLATE = CONFIG / "config/telegram.tmpl"
 # The URL of a Prometheus as the operator names it, for the graph link of an alert.
 PROMETHEUS_URL = "http://prometheus-kube-prometheus-stack-prometheus.monitoring:9090"
-LINK_LIMIT = 2048
+GRAPH_LIMIT = 1600
+LINK_TEXT_LIMIT = 2560
+ENTITY_LIMIT = 100
 TAGS = {"a", "b", "strong", "i", "em", "s", "strike", "del", "u", "ins", "span", "tg-spoiler", "tg-emoji",
         "tg-time", "pre", "code", "blockquote"}
 
@@ -112,10 +116,11 @@ def entity_length(text: str, i: int) -> int:
     return 0
 
 
-def parse_telegram_html(message: str) -> tuple[int, list[str]]:
-    """Parse as TDLib's parse_html does; give the length of the text and the links,
-    or raise ValueError where the Bot API answers "can't parse entities"."""
-    text, links, open_tags, i = 0, [], [], 0
+def parse_telegram_html(message: str) -> tuple[int, list[str], int]:
+    """Parse as TDLib's parse_html does; give the length of the text, the links and
+    the number of entities, or raise ValueError where the Bot API answers "can't parse
+    entities"."""
+    text, links, open_tags, entities, i = 0, [], [], 0, 0
     while i < len(message):
         char = message[i]
         if char == "&" and (length := entity_length(message, i)):
@@ -148,24 +153,26 @@ def parse_telegram_html(message: str) -> tuple[int, list[str]]:
             elif attributes.strip():
                 raise ValueError(f"<{name}> with attributes at {i}")
             open_tags.append(name.lower())
+            entities += 1
         i = end + 1
     if open_tags:
         raise ValueError(f"Unclosed tags {open_tags}")
-    return text, links
+    return text, links, entities
 
 
 def test_the_parser_of_this_test_refuses_what_telegram_refuses():
     assert parse_telegram_html('<b>x</b> <a href="https://a.example/?a=1&amp;b=2">y</a> &lt; &#43;') == (
-        7, ["https://a.example/?a=1&b=2"])
+        7, ["https://a.example/?a=1&b=2"], 2)
     for bad in ("<b>x", "<b>x</i>", "<div>x</div>", "<a href='x' title='y'>z</a>", "x </b>", "<i class=\"y\">x</i>"):
         with pytest.raises(ValueError):
             parse_telegram_html(bad)
 
 
-def test_the_template_leaves_out_a_graph_link_over_the_limit():
+def test_the_template_gives_one_graph_link_and_leaves_it_out_over_the_limit():
     template = TEMPLATE.read_text()
-    assert f"(le (len $a.GeneratorURL) {LINK_LIMIT})" in template
+    assert f"{{{{ if and (eq $i 0) $a.GeneratorURL (le (len $a.GeneratorURL) {GRAPH_LIMIT}) }}}}" in template
     assert template.count("$a.GeneratorURL") == 3, "the link only where the condition holds"
+    assert f"{GRAPH_LIMIT} characters" in template and f"{LINK_TEXT_LIMIT} characters" in template
 
 
 @pytest.fixture(scope="module")
@@ -210,7 +217,7 @@ def test_each_alert_renders_to_a_message_that_telegram_takes(messages):
             problems.append((alert, status, "empty"))
             continue
         try:
-            text, links = parse_telegram_html(message)
+            text, links, entities = parse_telegram_html(message)
         except ValueError as error:
             problems.append((alert, status, str(error)))
             continue
@@ -218,9 +225,16 @@ def test_each_alert_renders_to_a_message_that_telegram_takes(messages):
             problems.append((alert, status, f"{text} characters of text"))
         if len(message.encode()) > 1 << 15:
             problems.append((alert, status, f"{len(message.encode())} bytes"))
+        if entities > ENTITY_LIMIT:
+            problems.append((alert, status, f"{entities} entities"))
+        graphs = [link for link in links if "/graph?" in link]
+        if len(graphs) > 1 or any(len(link) > GRAPH_LIMIT for link in graphs):
+            problems.append((alert, status, f"graph links of {[len(link) for link in graphs]} characters"))
+        if sum(map(len, links)) > LINK_TEXT_LIMIT:
+            problems.append((alert, status, f"{sum(map(len, links))} characters of link text"))
         for link in links:
-            if len(link) > LINK_LIMIT or not re.match(r"https?://[^/]*\.", link):
-                problems.append((alert, status, f"a link of {len(link)} characters: {link[:60]}"))
+            if not re.match(r"https?://[^/]*\.", link):
+                problems.append((alert, status, f"not an http link: {link[:60]}"))
     assert not problems, "\n".join(map(str, problems))
 
 
@@ -230,8 +244,8 @@ def test_the_late_result_of_the_security_registry_keeps_its_board_link_and_drops
     late = [message for message, alert, status in messages.values() if alert == "SecurityResultLate"]
     assert late
     for message in late:
-        _, links = parse_telegram_html(message)
+        _, links, _ = parse_telegram_html(message)
         assert any("/d/tnwks-security?" in link for link in links)
         assert not any("/graph?" in link for link in links)
     rule = next(rule for rule in rules() if rule["alert"] == "SecurityResultLate")
-    assert len(generator_url(rule["expr"])) > LINK_LIMIT
+    assert len(generator_url(rule["expr"])) > GRAPH_LIMIT
