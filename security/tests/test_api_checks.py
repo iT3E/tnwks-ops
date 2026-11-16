@@ -441,6 +441,17 @@ def test_a_stop_of_the_job_never_moves_the_fail_late(tmp_path, monkeypatch, back
         assert run_at(tmp_path, monkeypatch, 14.01, "7.90.3", 8) == 1
 
 
+def test_a_run_with_no_version_of_the_router_still_advances_the_last_read(tmp_path, monkeypatch):
+    """The list is written after the read of the feed and before the read of the router.
+    A run that gives no result for the router still keeps its read of the feed."""
+    seed(tmp_path, {"7.90.1": (NOW - datetime.timedelta(days=60)).timestamp()}, NOW.timestamp() - 86400)
+    code, document = run(tmp_path, monkeypatch, fake(running=NO_PROMETHEUS, newest="7.90.2", age_days=3))
+    assert code == 1 and "routeros-firmware" not in by_check(document)
+    seen = json.loads(releases_file(tmp_path).read_text())
+    assert seen["last_read"] == NOW.timestamp()
+    assert seen["first_seen"]["7.90.2"] == (NOW - datetime.timedelta(days=3)).timestamp()
+
+
 def test_a_last_read_from_a_clock_that_was_ahead_dates_a_new_release_as_old(tmp_path, monkeypatch):
     """The clock reads day 30 at the run of day 0, so the list keeps a last read of day
     30. The clock is set right, and the job stops. B comes out on day 2 and C on day 8,
