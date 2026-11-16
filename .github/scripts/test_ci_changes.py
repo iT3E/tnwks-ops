@@ -59,6 +59,38 @@ class Domains(unittest.TestCase):
         self.assertEqual(domains, {"kubernetes", "observability"})
         self.assertEqual(groups["terraform"], [])
 
+    def test_manifest_change_skips_the_long_tests(self):
+        for path in ["kubernetes/apps/media/sonarr/app/helmrelease.yaml",
+                     "kubernetes/apps/monitoring/grafana/app/helmrelease.yaml",
+                     "talos/wsl-02/patches/audit-policy.yaml"]:
+            domains, _ = on([path])
+            self.assertIn("observability", domains, path)
+            self.assertNotIn("observability_long_tests", domains, path)
+
+    def test_what_the_long_tests_read_runs_them(self):
+        for path in ["observability/generated/rule-tests.yaml",
+                     "observability/rules.py",
+                     "observability/rule_tests.py",
+                     "observability/versions.py",
+                     "security/generated/rules-for-test.yaml",
+                     "security/registry/systems.yaml",
+                     "security/tests/test_host_check_windows.py",
+                     "infrastructure/ansible/roles/windows_host_check/files/Invoke-TnwksHostCheck.ps1",
+                     "infrastructure/ansible/roles/windows_wsl_maintenance/templates/wsl-service.xml.j2",
+                     ".github/workflows/observability.yaml"]:
+            domains, _ = on([path])
+            self.assertLessEqual({"observability", "observability_long_tests"}, domains, path)
+
+    def test_a_tier_runs_only_with_its_domain(self):
+        """The jobs of a tier are in the workflow of the observability domain:
+        a path of a tier that is no path of the domain would run nothing."""
+        parent = CONFIG["domains"]["observability"]["paths"]
+        for tier in ("observability_long_tests", "observability_rehearsals"):
+            for pattern in CONFIG["domains"][tier]["paths"]:
+                # The same glob, or below a `dir/**` of the domain.
+                covered = any(pattern == p or (p.endswith("/**") and pattern.startswith(p[:-2])) for p in parent)
+                self.assertTrue(covered, f"{tier}: {pattern} is no path of observability")
+
     def test_monitoring_change_runs_rehearsals(self):
         domains, _ = on(["kubernetes/apps/monitoring/grafana/app/helmrelease.yaml"])
         self.assertIn("observability_rehearsals", domains)

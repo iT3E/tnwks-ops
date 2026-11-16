@@ -39,8 +39,14 @@ RESULT = "homelab_security_check_result"
 LAST = "homelab_security_last_result_timestamp_seconds"
 FAILED = "homelab_security_host_check_failed_queries"
 
-needs_pwsh = pytest.mark.skipif(PWSH is None and not os.environ.get("CI"),
-                                reason="no pwsh on this workstation; CI runs these tests")
+no_pwsh = pytest.mark.skipif(PWSH is None and not os.environ.get("CI"),
+                             reason="no pwsh on this workstation; CI runs these tests")
+
+
+def needs_pwsh(test):
+    """A test that runs PowerShell: CI runs these in their own job (conftest.py)."""
+    return pytest.mark.pwsh(no_pwsh(test))
+
 
 # A host where each query answers, and each check passes.
 FAKES = r"""

@@ -467,8 +467,9 @@ two files, and `--check` holds them equal.
 Never edit an output. Change the registry, run the generator, and commit the
 outputs with the change. CI runs `generate.py --check` in the `contracts`
 job of `.github/workflows/observability.yaml`, so a change to the registry
-without its outputs fails. The same job runs the tests of the generator and
-the tests of the rules.
+without its outputs fails. The same job runs the tests of the generator. The
+`rule-tests` job runs the tests of the rules, when `observability/` or
+`security/` changed.
 
 ### What the generator checks
 
@@ -536,7 +537,8 @@ tests of the rules compare the whole text of a sample of each alert.
 
 The tests of the rules are generated too (`generated/rule-tests.yaml`,
 `generated/rule-tests-every-source.yaml`), and `promtool test rules` runs
-them in CI. They prove that an absent result gives "no evidence" and never a
+them in CI (the `rule-tests` job, through `observability/rule_tests.py`).
+They prove that an absent result gives "no evidence" and never a
 pass, that a line is a pass only when each system with a check passes, and
 that a source with no time fires the alert, and that a stream with a line
 for one cluster only is late for the other. The second file tests

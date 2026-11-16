@@ -48,6 +48,7 @@ jobs:
       home_assistant: ${{ steps.domains.outputs.home_assistant }}
       kubernetes: ${{ steps.domains.outputs.kubernetes }}
       observability: ${{ steps.domains.outputs.observability }}
+      observability_long_tests: ${{ steps.domains.outputs.observability_long_tests }}
       observability_rehearsals: ${{ steps.domains.outputs.observability_rehearsals }}
       security_regressions: ${{ steps.domains.outputs.security_regressions }}
       workflows: ${{ steps.domains.outputs.workflows }}
@@ -94,6 +95,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/observability.yaml
     with:
+      long_tests: ${{ needs.changes.outputs.observability_long_tests == 'true' }}
       rehearse: ${{ needs.changes.outputs.observability_rehearsals == 'true' }}
 
   home_assistant:
