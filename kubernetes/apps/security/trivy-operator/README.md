@@ -378,7 +378,7 @@ deleted, in samples of one minute): the operator at 361 MiB of its 640 MiB,
 with no restart; the largest scan container at 287 MiB of its 512 MiB; the
 largest sum of the containers of one scan job at 627 MiB; at most one scan
 job at a time; no kill in the kernel log of the machine; at least 15.0 GiB
-of memory free on `SECURITY_NODE`. The owner's decision of 2026-11-15 puts
+of memory available on `SECURITY_NODE`. The owner's decision of 2026-11-15 puts
 that peak in the line of `../README.md`. homelab-wsl-02 is not measured
 with these settings yet.
 
@@ -451,10 +451,9 @@ usual causes:
   `talos/wsl/patches/controlplane.yaml` and
   `talos/wsl-02/patches/controlplane.yaml`), so the garbage collection of
   terminated pods can remove a finished scan pod before the operator reads
-  its output.
-  That scan then leaves no report and no log line, and the workload is
-  scanned again at the next resync (about 10 hours, below) or at its next
-  change.
+  its output. That scan then leaves no report and no line at the default
+  log level, and the workload is scanned again at the next resync (about
+  10 hours, below) or at its next change.
 - **Containers of one job at the same time.** A scan job has one container
   for each container of the workload, and they run at the same time. With
   the scan cache in files on `trivy-cache`, each container opens one file
