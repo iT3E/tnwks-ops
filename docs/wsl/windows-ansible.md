@@ -94,7 +94,9 @@ address", and the failure actions restart it until the address is there
 restarted sshd 30s later). Since Ansible itself runs inside WSL, sshd is
 always back by the time anything needs it. The sessions get the admin's full
 token (`High Mandatory Level`), so no `become` is needed
-(`ansible_become: false` in `group_vars/windows_hosts.yml`).
+(`ansible_become: false` in `group_vars/windows_hosts.yml`). The one
+exception is the tasks of the rehearsal that act on a task of its account
+([below](#the-rehearsal-of-the-account-change)).
 
 Verified 2026-11-03: key login works, a password login is refused
 (`Permission denied (publickey)`), and `netstat` shows sshd only on
@@ -528,6 +530,20 @@ distro, the tasks or the account of today.
 | `...\log`, `...\disk` | `tnwks-rehearsal` may make and change files: the results of its tasks, and the empty test disk file `mount-test.vhdx` |
 | Five tasks `tnwks-rehearsal-<step>` | As `tnwks-rehearsal`, S4U, no elevation, no trigger: `probe`, `import`, `start` (holds the distro with nobody signed in), `write`, `mount` |
 | The profile of `tnwks-rehearsal` | Its `.wslconfig` (a memory limit, one processor, no swap, no networking key) and its distro `tnwks-rehearsal` |
+
+The tasks of the account run as `tnwks-rehearsal`, not as the account of
+the Ansible session, and the Task Scheduler refuses to register such a
+task by S4U for a network logon such as the SSH session. So each task that
+registers, starts or stops a task of the account runs as SYSTEM, in its
+own `vars`: `ansible_become: true`,
+`ansible_become_method: ansible.builtin.runas` and
+`ansible_become_user: SYSTEM`. These are the role's tasks "Tasks of the
+temporary account", "The probe makes the profile of the account", "The
+import of the distro" and "The start of the distro, with nobody signed
+in", and "Run the checks" in the check play. runas takes the
+SYSTEM token with the debug privilege of the session and needs no password.
+The first use of become starts the Secondary Logon service (`seclogon`)
+when it is stopped, a change of the host that the role does not declare.
 
 The role is the last of the play, so a failed step of it stops no other
 role. A check run on a host where the account does not exist yet does not
