@@ -74,7 +74,7 @@ locals {
         # workflow agents). Any value but "platform" is the host. A change of
         # this line, merged by the owner, is the move and its way back
         # (docs/operations/renovate.md, "The route of a review").
-        RENOVATE_REVIEW_ROUTE = "host"
+        RENOVATE_REVIEW_ROUTE = "platform"
       }
 
       environments = {

@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Renovate review: the repository variable `RENOVATE_REVIEW_ROUTE` is `platform`, so each review goes to the run receiver of the workflow agents and its answer is one comment on the pull request. The hook of the host gets no review while the variable is `platform`; setting it to `host` again is the way back.'
+time: 2026-11-16T23:00:00.000000+00:00
