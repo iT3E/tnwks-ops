@@ -96,11 +96,14 @@
         type: dword
 
     # Only SYSTEM and the Administrators may change the scripts and the root
-    # file system; Users may read. The account writes only to the log folder,
-    # and reads and writes the test disk file.
+    # file system; Users may read, and each item takes the owner
+    # Administrators. The account writes only to the log folder, and reads
+    # and writes the test disk file: those two keep their own rules.
     - name: Folder of the rehearsal
       tnwks_win_dir_acl:
         path: "{{ wsl_rehearsal_dir }}"
+        items: reset
+        keep: ["{{ wsl_rehearsal_log_dir }}", "{{ wsl_rehearsal_disk_dir }}"]
 
     - name: Log and disk folders of the rehearsal
       tnwks_win_dir_acl:
