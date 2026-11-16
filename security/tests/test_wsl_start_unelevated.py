@@ -536,3 +536,58 @@ $config.RetiredTcpPorts = @(2222)
 [Console]::Out.WriteLine((Test-PortProxyInPlace -Config $config -Current $current -WslIp '172.25.20.7'))
 """
     assert pwsh(body).stdout.split() == ["True", "False", "False"]
+
+
+TASK_MODULE = ANSIBLE / "playbooks/library/tnwks_win_scheduled_task.ps1"
+RUN_LEVEL = re.compile(r"\s*<RunLevel>LeastPrivilege</RunLevel>")
+
+
+def canonical(texts: list[str]) -> list[str]:
+    """The canonical form of the module tnwks_win_scheduled_task, the one that check mode compares."""
+    module = TASK_MODULE.read_text()
+    functions = module[module.index("function ConvertTo-Sid"):module.index("$task = Get-ScheduledTask")]
+    encoded = [base64.b64encode(text.encode()).decode() for text in texts]
+    body = functions + f"""
+$out = @(foreach ($e in @('{"','".join(encoded)}')) {{ Get-CanonicalXml ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($e))) }})
+[Console]::Out.Write((ConvertTo-Json -Compress @($out)))
+"""
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    return json.loads(run.stdout)
+
+
+def as_task(path: Path) -> str:
+    """The template with the switch on, and each other value of Jinja a fixed one."""
+    text = re.sub(r"<UserId>\{\{.*?\}\}</UserId>", "<UserId>S-1-5-21-7-7-7-1001</UserId>", render(path, True))
+    return re.sub(r"\{%.*?%\}", "", re.sub(r"\{\{.*?\}\}", "x", text))
+
+
+def as_exported(task: str, name: str) -> str:
+    """The task as Export-ScheduledTask gives it back: with its URI, and with no
+    RunLevel element for LeastPrivilege, the default."""
+    exported = RUN_LEVEL.sub("", task)
+    if "<RegistrationInfo>" in exported:
+        return exported.replace("<RegistrationInfo>", f"<RegistrationInfo>\n    <URI>\\{name}</URI>", 1)
+    return exported.replace('task">', f'task">\n  <RegistrationInfo>\n    <URI>\\{name}</URI>\n  </RegistrationInfo>', 1)
+
+
+@needs_pwsh
+def test_a_task_with_no_elevation_is_the_same_as_its_export():
+    """Each task with no elevation reads as unchanged once it is registered, so a check
+    run and the nightly drift run report no change and an apply registers it once."""
+    least = [path for path in templates() if RUN_LEVEL.search(as_task(path))]
+    assert {path.name for path in least} >= {"wsl-keepalive.xml.j2", "wsl-watchdog.xml.j2", "lan-bridge-ip.xml.j2", "udp-relay.xml.j2"}
+    tasks = [as_task(path) for path in least]
+    out = canonical(tasks + [as_exported(task, path.stem) for task, path in zip(tasks, least)])
+    assert out[:len(tasks)] == out[len(tasks):]
+    assert all("RunLevel" not in text for text in out)
+
+
+@needs_pwsh
+def test_a_change_of_the_run_level_is_still_a_change():
+    keepalive = as_task(ROLES / "windows_wsl_maintenance/templates/wsl-keepalive.xml.j2")
+    elevated = keepalive.replace("<RunLevel>LeastPrivilege</RunLevel>", "<RunLevel>HighestAvailable</RunLevel>")
+    exported = as_exported(keepalive, "tnwks-wsl-keepalive")
+    least, highest, export = canonical([keepalive, elevated, exported])
+    assert least == export and highest != export
+    assert "<RunLevel>HighestAvailable</RunLevel>" in highest
