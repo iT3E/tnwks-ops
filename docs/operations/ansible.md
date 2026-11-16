@@ -161,7 +161,11 @@ How a run goes:
 comments. The job log, job summary and PR comment carry only the per-host
 recap counts and the names of changed and failed tasks
 (`scripts/ci-report.py`); the job summary adds the ten slowest tasks and
-their seconds (`ansible.posix.profile_tasks`, enabled in CI only). The full
+their seconds (`ansible.posix.profile_tasks`, enabled in CI only). A host
+with no recap line reads "did not run": ansible-playbook stops before
+`wsl-distro.yml` when the play of `windows-host.yml` ends with a failure, so
+a failed Windows host leaves its distro without a run that time. The
+metrics count such a host as failed, and the run fails. The full
 output, with the diffs and every task's time, is the run's
 `ansible-<site>-log` artifact, encrypted to the owner's age key:
 

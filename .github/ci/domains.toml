@@ -39,6 +39,9 @@ paths = [
   "infrastructure/ansible/roles/windows_wsl_maintenance/**",
   "infrastructure/ansible/scripts/*monitoring*.py",
   "infrastructure/ansible/tests/test_observability_storage.py",
+  # The summary and the drift metrics of the hosts workflow
+  # (observability/tests/test_ci_report.py).
+  "infrastructure/ansible/scripts/ci-report.py",
   # The host check of the security platform: security/tests/test_host_check_*.py
   # test the scripts of both roles.
   "infrastructure/ansible/roles/windows_host_check/**",
