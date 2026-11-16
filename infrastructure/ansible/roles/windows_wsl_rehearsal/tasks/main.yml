@@ -300,9 +300,13 @@
             ansible_become_user: SYSTEM
 
 # The removal (task 10.6). Each part goes, in this order: the distro and the
-# VM (as the account), the tasks, the batch right, the profile, the account,
+# VM (as the account), the tasks, the profile, the batch right, the account,
 # the folder. A second run finds nothing and changes nothing. No task of the
-# play runs wsl.exe: the administrator session never stops WSL.
+# play runs wsl.exe: the administrator session never stops WSL. The task of
+# the removal registers as in the state present (s4u_user, as SYSTEM), and
+# the service checks the new password with a batch logon, so the batch right
+# goes after the profile: while a profile is there, the account still holds
+# the right, and a second run can still run the task of the removal.
 - name: The rehearsal is absent
   when: wsl_rehearsal_state == 'absent'
   vars:
@@ -362,6 +366,10 @@
                   $Ansible.Changed = $true
                   Stop-ScheduledTask -TaskName $Task
               }
+          vars:
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
 
         # The script with the step remove.
         - name: Script of the removal
@@ -377,8 +385,13 @@
               tnwks_win_scheduled_task:
                 name: "{{ wsl_rehearsal_task_prefix }}-remove"
                 xml: "{{ lookup('ansible.builtin.template', 'rehearsal-task.xml.j2') }}"
+                s4u_user: "{{ wsl_rehearsal_account }}"
+                s4u_description: "{{ wsl_rehearsal_account_description }}"
               vars:
                 item: remove
+                ansible_become: true
+                ansible_become_method: ansible.builtin.runas
+                ansible_become_user: SYSTEM
           rescue:
             - name: The removal stops, with the account in place
               ansible.builtin.fail:
@@ -425,12 +438,42 @@
               } while ((Get-Date) -lt $deadline)
               foreach ($p in $left) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
               @{ result = $out; ended = @($left | ForEach-Object { "$($_.Name) $($_.ProcessId)" }) }
+          vars:
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
 
     - name: No task of the account
       tnwks_win_scheduled_task:
         name: "{{ wsl_rehearsal_task_prefix }}-{{ item }}"
         state: absent
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
       loop: "{{ wsl_rehearsal_tasks }}"
+
+    # Its .wslconfig, its hive and what is left of the distro go with it.
+    - name: No profile of the account
+      ansible.windows.win_powershell:
+        parameters:
+          Sid: "{{ wsl_rehearsal_sid }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Sid)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          if (-not $Sid) { return }
+          $deadline = (Get-Date).AddMinutes(2)
+          do {
+              $profile = Get-CimInstance Win32_UserProfile -Filter "SID = '$Sid'"
+              if (-not $profile -or -not $profile.Loaded) { break }
+              Start-Sleep -Seconds 5
+          } while ((Get-Date) -lt $deadline)
+          if (-not $profile) { return }
+          if ($profile.Loaded) { throw "The profile of $Sid is still loaded. Nothing is removed." }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($profile.LocalPath, 'remove the profile')) { Remove-CimInstance -InputObject $profile }
 
     # Each right goes before the account, so no SID with no account stays
     # in the local policy.
@@ -454,28 +497,6 @@
         path: '{{ wsl_rehearsal_userlist_key }}'
         name: "{{ wsl_rehearsal_account }}"
         state: absent
-
-    # Its .wslconfig, its hive and what is left of the distro go with it.
-    - name: No profile of the account
-      ansible.windows.win_powershell:
-        parameters:
-          Sid: "{{ wsl_rehearsal_sid }}"
-        script: |
-          [CmdletBinding(SupportsShouldProcess)]
-          param([string]$Sid)
-          $ErrorActionPreference = 'Stop'
-          $Ansible.Changed = $false
-          if (-not $Sid) { return }
-          $deadline = (Get-Date).AddMinutes(2)
-          do {
-              $profile = Get-CimInstance Win32_UserProfile -Filter "SID = '$Sid'"
-              if (-not $profile -or -not $profile.Loaded) { break }
-              Start-Sleep -Seconds 5
-          } while ((Get-Date) -lt $deadline)
-          if (-not $profile) { return }
-          if ($profile.Loaded) { throw "The profile of $Sid is still loaded. Nothing is removed." }
-          $Ansible.Changed = $true
-          if ($PSCmdlet.ShouldProcess($profile.LocalPath, 'remove the profile')) { Remove-CimInstance -InputObject $profile }
 
     - name: No temporary account
       ansible.windows.win_powershell:

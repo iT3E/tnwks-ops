@@ -585,16 +585,19 @@ now) removes each part, in this order:
    With no profile, no task of the account ever ran (the first one makes
    the profile), so it has no hive, no distro and no VM, and the play skips
    this step and the next.
-   When the task of the removal does not register, the removal stops
-   there: the account and each part of the rehearsal stay, and the message
-   says so.
+   The task of the removal registers as the tasks of the state present do
+   (`s4u_user`, as SYSTEM, with a new password of the account). When it
+   does not register, the removal stops there: the account and each part
+   of the rehearsal stay, and the message says so.
 2. The play ends any process of the account that is left.
-3. It removes the tasks, the batch right and the three deny rights (before
-   the account, so no SID with no account stays in the policy), the value
-   that hides the tile, the profile (with `.wslconfig` and the hive), the
-   account, the folder (the scripts, the root file
-   system, the test disk file and the results), and the file of the write
-   test.
+3. It removes the tasks, the profile (with `.wslconfig` and the hive), the
+   batch right and the three deny rights (before the account, so no SID
+   with no account stays in the policy), the value that hides the tile, the
+   account, the folder (the scripts, the root file system, the test disk
+   file and the results), and the file of the write test. The batch right
+   goes after the profile: the service checks the new password with a
+   batch logon, so while a profile is there, a second run can still do
+   step 1.
 
 The same check play then reads the exit check, with the SID of the
 account read before the removal (`-e wsl_rehearsal_removed_sid=<SID>`): no

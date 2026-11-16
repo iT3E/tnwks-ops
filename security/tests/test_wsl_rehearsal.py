@@ -453,15 +453,15 @@ def test_the_state_is_absent_and_the_controller_downloads_nothing():
 def test_the_removal_stops_the_vm_as_the_account_before_the_profile_goes():
     names = [task["name"] for task in absent()]
     order = ["The start task stops", "Script of the removal", "The task of the removal", "The removal runs as the account",
-             "No task of the account", "The account may no longer log on as a batch job", "The deny rights of the account go",
-             "No value for the account on the sign-in screen", "No profile of the account",
+             "No task of the account", "No profile of the account", "The account may no longer log on as a batch job",
+             "The deny rights of the account go", "No value for the account on the sign-in screen",
              "No temporary account", "No folder of the rehearsal", "No file of the write test"]
     assert [name for name in names if name in order] == order
     block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'absent'")
     stop = next(task for task in block["block"] if task["name"] == "The distro and the VM stop, as the account")
     assert "not ansible_check_mode" in stop["when"]
     remove = next(task for task in absent() if task["name"] == "The task of the removal")
-    assert remove["vars"] == {"item": "remove"}
+    assert remove["vars"] == {"item": "remove", **SYSTEM_BECOME}
     run = next(task for task in absent() if task["name"] == "The removal runs as the account")["ansible.windows.win_powershell"]
     assert "Start-ScheduledTask -TaskName $Task" in run["script"] and "shutdown_exit" in run["script"]
 
@@ -1043,8 +1043,14 @@ def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unc
     assert "$task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force" in module
     assert "s4u_user = @{ type = 'str' }" in module
     assert "required_by = @{ s4u_user = @(, 's4u_description') }" in module
-    named = [task for task in present() if "tnwks_win_scheduled_task" in task]
-    assert sorted(task["name"] for task in named) == ["Tasks of the temporary account", "The start of the distro, with nobody signed in"]
+    named = [task for task in present() + absent()
+             if "tnwks_win_scheduled_task" in task and task["tnwks_win_scheduled_task"].get("state", "present") == "present"]
+    assert sorted(task["name"] for task in named) == [
+        "Tasks of the temporary account", "The start of the distro, with nobody signed in", "The task of the removal"]
+    # An unregistration names no user and resets nothing.
+    removed = [task for task in absent() if task.get("tnwks_win_scheduled_task", {}).get("state") == "absent"]
+    assert [task["name"] for task in removed] == ["No task of the account"]
+    assert not {"s4u_user", "s4u_description"} & set(removed[0]["tnwks_win_scheduled_task"])
     assert all(task["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_rehearsal_account }}" for task in named)
     # The role passes the Description that the module checks before a reset.
     assert all(task["tnwks_win_scheduled_task"]["s4u_description"] == "{{ wsl_rehearsal_account_description }}" for task in named)
@@ -1098,19 +1104,23 @@ def test_only_the_tasks_that_act_on_a_task_of_the_account_run_as_system():
     rehearsal = "roles/windows_wsl_rehearsal/tasks/main.yml"
     check = "playbooks/windows-rehearsal-check.yml"
     assert sorted(becoming) == [check, rehearsal]
-    assert sorted(task["name"] for task in becoming[rehearsal]) == [
+    assert sorted(task["name"] for task in becoming[rehearsal]) == sorted([
         "Tasks of the temporary account",
         "The import of the distro",
         "The probe makes the profile of the account",
         "The start of the distro, with nobody signed in",
-    ]
+        "The start task stops",
+        "The task of the removal",
+        "The removal runs as the account",
+        "No task of the account",
+    ])
     assert [task["name"] for task in becoming[check]] == ["Run the checks"]
     for task in becoming[rehearsal] + becoming[check]:
         become = {key: value for key, value in task["vars"].items() if key.startswith("ansible_become")}
         assert become == SYSTEM_BECOME, task["name"]
         assert not BECOME_KEYS & set(task.keys()), task["name"]
     # Each task of the role that registers, starts or stops a task is one of them.
-    acting = [task for task in present() if "tnwks_win_scheduled_task" in task
+    acting = [task for task in present() + absent() if "tnwks_win_scheduled_task" in task
               or re.search(r"(Start|Stop|Unregister|Register)-ScheduledTask", str(task.get("ansible.windows.win_powershell", {}).get("script", "")))]
     assert sorted(task["name"] for task in acting) == sorted(task["name"] for task in becoming[rehearsal])
     # The inventory keeps become off for every other task of a Windows host.
