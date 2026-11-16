@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'terraform: the bucket policy of an exclusive backup prefix did not apply, because S3 refuses the s3:prefix condition on s3:ListBucketMultipartUploads. The list deny now names ListBucket and ListBucketVersions only.'
-time: 2026-11-15T20:30:00.000000000-08:00

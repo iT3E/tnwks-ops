@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.169.1 - 2026-11-16
+
+### Fixed
+
+* terraform: the bucket policy of an exclusive backup prefix did not apply, because S3 refuses the s3:prefix condition on s3:ListBucketMultipartUploads. The list deny now names ListBucket and ListBucketVersions only.
+
 ## v2.169.0 - 2026-11-16
 
 ### Changed
