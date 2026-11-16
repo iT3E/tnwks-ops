@@ -94,7 +94,9 @@ kubectl -n flux-system get kustomizations | grep -E 'agents|litellm|model-bridge
 run passed since: the providers job, the sweep, or a daily check
 (`platform-check-isolation`, `platform-check-probe`). It resolves at the next
 good run. The chart rule `KubeJobFailed` fires for the same Job and keeps
-firing while the failed Job is kept, so read this alert for the state of now.
+firing while the failed Job is kept, so Alertmanager drops it for these Jobs
+and for the run jobs; it stays in the Alertmanager UI. Read this alert for
+the state of now.
 
 **First checks.**
 

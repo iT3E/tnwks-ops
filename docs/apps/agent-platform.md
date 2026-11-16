@@ -946,8 +946,15 @@ by hand, and the steps at a limit of the Claude plan.
   ([Logs](#logs)).
 - **A failed Job.** The chart rule `KubeJobFailed` also fires for each
   failed Job, and keeps firing while the Job is kept: a run job for 7 days,
-  a failed CronJob run until three newer runs fail. Read
-  `AgentPlatformCronJobFailed` for the state of now.
+  a failed CronJob run until three newer runs fail. Alertmanager drops it
+  for the run jobs and the Jobs of the CronJobs `platform-check-isolation`,
+  `platform-check-probe`, `workflow-providers` and `workflow-sweep`, which
+  the alerts above cover (the route in
+  `kubernetes/apps/monitoring/alertmanager/app/config/alertmanager.yml`, and
+  its cases in `observability/tests/test_alertmanager_routes.py`). It still
+  reaches the channel for any other Job of a trust domain: a backup mover, a
+  Job made by hand, or a new CronJob. It stays in Prometheus and in the
+  Alertmanager UI for all of them.
 - **The drift line.** The Vector aggregator turns each line of a pod in a
   namespace `agents-*` that starts with `<check> result=<result>` into the
   gauge `homelab_agent_platform_result_timestamp_seconds{pod_namespace, app,
