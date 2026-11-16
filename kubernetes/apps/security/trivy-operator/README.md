@@ -316,7 +316,7 @@ scan.
 | Part | Request | Limit | Source |
 | --- | --- | --- | --- |
 | The operator | 256 MiB | 640 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). On homelab-wsl the first cycle peaked at 473 MiB of the next limit, 512 MiB (about 260 MiB at rest, no kill), and the owner raised it to 640 MiB on 2026-11-15. `GOMEMLIMIT` is 576 MiB, 90% of the limit (go.dev/doc/gc-guide) |
-| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`). The full cycle on homelab-wsl-02 (one scan container at 25 MiB, one job at 97 MiB, 2026-11-15) ran while one container of a job scanned at a time; a job is not measured since the scan cache is in memory (below) |
+| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`). The full cycle on homelab-wsl-02 (one scan container at 25 MiB, one job at 97 MiB, 2026-11-15) ran while one container of a job scanned at a time. The first cycle on homelab-wsl with the scan cache in memory and one layer at a time (2026-11-16): one scan container at 287 MiB, one job at 627 MiB (below) |
 
 The operator counts its scan jobs from its cache before it starts one
 (`pkg/operator/jobs/limit_checker.go` of the release). A job that it has
@@ -337,6 +337,7 @@ of Trivy on that cluster, while such a pod has its scan:
 | Limits | 640 MiB | 6 x 512 MiB | 3712 MiB |
 | Estimate from a local test, scan cache in memory | 640 MiB (its limit) | 1032 to 1572 MiB, up to 2808 MiB with large old images | 1672 to 2212 MiB, up to 3448 MiB |
 | Measured on homelab-wsl-02, one container of a job that scans | 316 MiB | 97 MiB | 413 MiB or less |
+| Measured on homelab-wsl, scan cache in memory, one layer at a time (2026-11-16) | 361 MiB | 627 MiB | 988 MiB or less; 1267 MiB with the operator at its limit, as the budget counts it |
 
 The measured line is the peak of a full cycle on homelab-wsl-02, in samples
 of one minute (step 9 of "Tests"): the operator at 316 MiB of its 512 MiB
@@ -371,6 +372,16 @@ as the budget counts it. It is an estimate, not a measure. The
 first full cycle after the change measures it on each cluster (step 10 of
 "Tests"), and the owner decides the line of `../README.md` with it.
 
+The first cycle on homelab-wsl with the scan cache in memory and one
+layer at a time (2026-11-16, 07:46 to 10:48 UTC, after the reports were
+deleted, in samples of one minute): the operator at 361 MiB of its 640 MiB,
+with no restart; the largest scan container at 287 MiB of its 512 MiB; the
+largest sum of the containers of one scan job at 627 MiB; at most one scan
+job at a time; no kill in the kernel log of the machine; at least 15.0 GiB
+of memory available on `SECURITY_NODE`. The owner's decision of 2026-11-15 puts
+that peak in the line of `../README.md`. homelab-wsl-02 is not measured
+with these settings yet.
+
 **One layer at a time.** Trivy reads the layers of an image 5 at a time by
 default (`--parallel`, default 5, in the CLI reference of Trivy 0.76), and
 it holds each file under 100 MB of a layer in memory while its analyzers
@@ -393,8 +404,10 @@ which a scan maps read-only, the Java database, and the files of 100 MB
 or more of the layers, which Trivy writes to temporary files. The kernel takes those back near the limit. The download
 of the Java database alone took 33 MiB of anonymous memory. The scan cache
 in memory holds what Trivy found in each layer (lists of packages), small
-next to the files that it reads. A scan with one layer at a time took up to
-about 55% longer locally (the largest image: 117 s against 111 s, the
+next to the files that it reads. `scan.parallel: 1` also reads the files
+inside a layer one at a time, not 5 (`pkg/fanal/artifact/image/image.go`),
+which is part of why a scan is slower. A scan with one layer at a time
+took up to about 55% longer locally (the largest image: 117 s against 111 s, the
 others 1 to 21 s more), under the timeout of 5 minutes (`trivy.timeout`). The estimate
 lines above come from tests with 5 layers at a time, so they are high for
 this setting.
@@ -433,6 +446,14 @@ usual causes:
   not name fails. Add its hosts to `app/networkpolicy.yaml` and to the table
   above.
 - **A private image.** The operator reads no pull secret (above).
+- **The scan pod removed before the operator reads it.** Each cluster
+  keeps one terminated pod (`terminated-pod-gc-threshold` 1 in
+  `talos/wsl/patches/controlplane.yaml` and
+  `talos/wsl-02/patches/controlplane.yaml`), so the garbage collection of
+  terminated pods can remove a finished scan pod before the operator reads
+  its output. That scan then leaves no report and no line at the default
+  log level, and the workload is scanned again at the next resync (about
+  10 hours, below) or at its next change.
 - **Containers of one job at the same time.** A scan job has one container
   for each container of the workload, and they run at the same time. With
   the scan cache in files on `trivy-cache`, each container opens one file

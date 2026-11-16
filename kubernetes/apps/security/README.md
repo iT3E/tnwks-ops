@@ -60,7 +60,7 @@ to this table first, because the sum is the budget of the node.
 
 | Part | Runs on | Memory limit |
 | --- | --- | --- |
-| Trivy Operator | each cluster | 640 MiB for the operator (512 MiB until the owner raised it on 2026-11-15), 512 MiB for each container of a scan job, one scan job at a time as a rule (two for a short while in a burst of scans). On homelab-wsl the worst sum is 3712 MiB by limits, for a pod of 6 containers. The full cycle on homelab-wsl-02 (316 MiB for the operator, 97 MiB for one scan job) ran while one container of a job scanned at a time, and the owner kept these limits with it, for homelab-wsl too, on 2026-11-15. With the scan cache in memory, all the containers of a job scan at once: by a local test, an estimate and not a measure, a job of 6 containers takes 1032 to 1572 MiB, up to 2808 MiB with large old images (`trivy-operator/README.md`, "Memory") |
+| Trivy Operator | each cluster | 640 MiB for the operator (512 MiB until the owner raised it on 2026-11-15), 512 MiB for each container of a scan job, one scan job at a time as a rule (two for a short while in a burst of scans). On homelab-wsl the worst sum is 3712 MiB by limits, for a pod of 6 containers. The full cycle on homelab-wsl-02 (316 MiB for the operator, 97 MiB for one scan job) ran while one container of a job scanned at a time, and the owner kept these limits with it, for homelab-wsl too, on 2026-11-15. With the scan cache in memory, all the containers of a job scan at once. Measured on homelab-wsl in its first cycle with the scan cache in memory and one layer at a time (2026-11-16): the operator 361 MiB, one scan container 287 MiB, one scan job 627 MiB (the sum of its containers), one scan job at a time. The local estimate before it was 1032 to 1572 MiB for a job of 6 containers, up to 2808 MiB with large old images (`trivy-operator/README.md`, "Memory") |
 | Prowler job | homelab-wsl-02, one run at a time: one for each system each day, at different hours | 896 MiB for an AWS run: the highest peak of four runs, 682 MiB, and 25 % (2026-11-16, one process for each service), with a request of 704 MiB, the highest working set rounded up. 768 MiB for the Cloudflare run (`prowler/README.md`, "Memory") |
 | The converter | homelab-wsl-02 | 128 MiB |
 | Trail copy job | homelab-wsl-02 | 128 MiB |
@@ -74,7 +74,7 @@ to this table first, because the sum is the budget of the node.
 
 | Budget | Sum |
 | --- | --- |
-| homelab-wsl | 1 GiB |
+| homelab-wsl | 1 GiB. Trivy by the count of the budget: the operator by its limit, 640, and one scan job by its measured peak, 627: 1267 MiB while a scan job runs, 243 MiB over the line, and 640 MiB between scans. By the measure alone, 361 + 627 = 988 MiB. The owner accepted one scan job at a time at its measured size |
 | homelab-wsl-02, worker 1 | 6 GiB. Step 1: about 2.0 GiB (2028 MiB) with the old measure of a scan job, about 3.8 to 4.9 GiB (3898 to 4978 MiB) with the estimate. The parts that always run, by their limits: the operator of Trivy 640, the converter 128, the TLS proxy 64. The jobs, by their measured peak or else their limit: two scan jobs (in a burst), 2 x 97 by the old measure, which no longer describes a job, or 2 x 1032 to 1572 by the estimate, until a cycle measures them; Prowler 682 (the measured peak of an AWS run), the trail copy 128, the API checks 128, the credential refresher 64. Step 2: 4.6 GiB (4672 MiB) for the Wazuh server. The two steps sum to about 6.5 GiB (6700 MiB) with the old measure, about 8.4 to 9.4 GiB (8570 to 9650 MiB) with the estimate, over the budget: a part goes down, or the budget up, before step 2. |
 
 The audit reader reads files of the control plane node, so it does not run
@@ -95,6 +95,15 @@ MiB, Trivy then takes 1672 to 2212 MiB while a pod of 6 containers has its
 scan, up to 3448 MiB with large old images, and 3712 MiB by limits: over the
 1 GiB of homelab-wsl, for the length of that scan, once a day. The owner
 accepted on 2026-11-15 that Trivy on homelab-wsl goes over its line during
-a scan job. It is an estimate, not a measure: the first full cycle measures
-each cluster (`trivy-operator/README.md`, "Tests", step 10), and its peak
-goes in this table then (`trivy-operator/README.md`, "Memory").
+a scan job, and decided that the peak of the first cycle goes in this
+table. The first cycle on homelab-wsl (2026-11-16, 07:46 to 10:48 UTC,
+after the reports were deleted, in samples of one minute) measured the
+operator at 361 MiB of its 640 MiB, the largest scan container at 287 MiB of
+its 512 MiB, and the largest scan job at 627 MiB, the sum of its
+containers, with at most one scan job at a time and no kill. So Trivy takes
+1267 MiB by the count of the budget while a scan job runs (the operator by
+its limit), 243 MiB over the 1 GiB of homelab-wsl for the length of that
+job, and 988 MiB by the measure alone. The estimate of the local test was
+high: it read 5 layers at a time, and it counted 6 times the largest
+container. homelab-wsl-02 has no such cycle yet: its line keeps the
+estimate.
