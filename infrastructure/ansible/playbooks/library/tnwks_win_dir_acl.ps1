@@ -2,13 +2,12 @@
 
 # Copyright: tnwks-ops contributors
 # A directory with a fixed, protected set of rules: the folder of a role
-# under C:\ProgramData, which SYSTEM or an elevated task reads, and a
-# directory that a task with no elevation writes to and that SYSTEM or an
-# elevated task also reads (docs/wsl/windows-ansible.md, "Start WSL with no
-# elevation").
+# under C:\ProgramData, and a directory that a task with no elevation writes
+# to (docs/wsl/windows-ansible.md, "Start WSL with no elevation").
 #
 # The directory inherits no rule, the Administrators own it, SYSTEM and the
-# Administrators have full control, and Users may read it. With `writer`, that
+# Administrators have full control, and Users may read it (with `readers:
+# none`, Users get no rule: only SYSTEM and the Administrators). With `writer`, that
 # account has two rules: on the directory itself it may list it and make
 # files (no delete, no subdirectory), so it can not remove the directory or
 # put a link or a junction in its place; on the files it may change, replace
@@ -17,11 +16,8 @@
 # With `items: reset`, each file and folder below, but for the folders of
 # `keep` and what is in them, gets the Administrators as its owner and only
 # the rules that it inherits from the directory, unless it has them already
-# (an owner of SYSTEM stays). A folder of a role holds the scripts and the
-# configuration that SYSTEM or an elevated task reads, so no item there may
-# keep an owner or a rule of its own: an owner can change the rules of the
-# item. The folders of `keep` have their own call of this module, with a
-# writer.
+# (an owner of SYSTEM stays). The folders of `keep` have their own call of
+# this module, with a writer.
 #
 # The module stops, and changes nothing, when the path is a link or a
 # junction: Get-Acl and Set-Acl follow one, so the rules would go to its
@@ -32,14 +28,16 @@
 #AnsibleRequires -CSharpUtil Ansible.Basic
 
 # --- BEGIN logic (security/tests/test_wsl_start_unelevated.py runs this part with fakes)
-function Get-TnwksDirAclWant([string]$WriterSid) {
+function Get-TnwksDirAclWant([string]$WriterSid, [string]$Readers = 'users') {
     # Who, which rights, to which children, how far.
     $all = 'ContainerInherit, ObjectInherit'
     $want = @(
         @('S-1-5-18', 'FullControl', $all, 'None'),
-        @('S-1-5-32-544', 'FullControl', $all, 'None'),
-        @('S-1-5-32-545', 'ReadAndExecute, Synchronize', $all, 'None')
+        @('S-1-5-32-544', 'FullControl', $all, 'None')
     )
+    if ($Readers -ne 'none') {
+        $want += , @('S-1-5-32-545', 'ReadAndExecute, Synchronize', $all, 'None')
+    }
     if ($WriterSid) {
         $want += , @($WriterSid, 'ReadAndExecute, CreateFiles, Synchronize', 'None', 'None')
         $want += , @($WriterSid, 'Modify, Synchronize', 'ObjectInherit', 'InheritOnly')
@@ -60,7 +58,7 @@ function Invoke-TnwksDirAcl {
     Makes the directory and sets its rules; gives whether it changed anything.
     With -Check, it changes nothing and gives whether it would.
     #>
-    param([string]$Path, [string]$Writer, [bool]$Check)
+    param([string]$Path, [string]$Writer, [bool]$Check, [string]$Readers = 'users')
     $sid = [System.Security.Principal.SecurityIdentifier]
     $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if ($null -eq $item) {
@@ -73,7 +71,7 @@ function Invoke-TnwksDirAcl {
     }
     $writerSid = ''
     if ($Writer) { $writerSid = (New-Object System.Security.Principal.NTAccount $Writer).Translate($sid).Value }
-    $want = Get-TnwksDirAclWant $writerSid
+    $want = Get-TnwksDirAclWant $writerSid $Readers
     $wantKey = @($want | ForEach-Object {
         '{0}|{1}|{2}|{3}|Allow' -f $_[0], [int][System.Security.AccessControl.FileSystemRights]$_[1],
             [int][System.Security.AccessControl.InheritanceFlags]$_[2], [int][System.Security.AccessControl.PropagationFlags]$_[3]
@@ -150,6 +148,21 @@ function Invoke-TnwksDirItems {
     }
     $reset.Count
 }
+
+function Invoke-TnwksDirAclModule([hashtable]$Params, [bool]$Check) {
+    <#
+    .SYNOPSIS
+    The whole run of the module: the rules of the directory, then with
+    items=reset each item below. Gives @{ changed; items_reset }.
+    #>
+    $changed = Invoke-TnwksDirAcl -Path $Params.path -Writer $Params.writer -Check $Check -Readers $Params.readers
+    $count = 0
+    # A check run does not make a missing directory, so there is nothing below it to read.
+    if ($Params.items -eq 'reset' -and (Test-Path -LiteralPath $Params.path)) {
+        $count = Invoke-TnwksDirItems -Path $Params.path -Keep $Params.keep -Check $Check
+    }
+    @{ changed = [bool]($changed -or $count -gt 0); items_reset = $count }
+}
 # --- END logic
 
 $spec = @{
@@ -157,6 +170,8 @@ $spec = @{
         path = @{ type = 'path'; required = $true }
         # The account that writes files here with no elevation; none: read only.
         writer = @{ type = 'str'; default = '' }
+        # none: Users get no rule, so only SYSTEM and the Administrators may open it.
+        readers = @{ type = 'str'; default = 'users'; choices = @('users', 'none') }
         # reset: each item below takes the owner and the rules of the directory.
         items = @{ type = 'str'; default = 'keep'; choices = @('keep', 'reset') }
         # Folders below that the reset leaves as they are, with what is in them.
@@ -167,13 +182,9 @@ $spec = @{
 
 $module = [Ansible.Basic.AnsibleModule]::Create($args, $spec)
 try {
-    $changed = Invoke-TnwksDirAcl -Path $module.Params.path -Writer $module.Params.writer -Check $module.CheckMode
-    $module.Result.items_reset = 0
-    # A check run does not make a missing directory, so there is nothing below it to read.
-    if ($module.Params.items -eq 'reset' -and (Test-Path -LiteralPath $module.Params.path)) {
-        $module.Result.items_reset = Invoke-TnwksDirItems -Path $module.Params.path -Keep $module.Params.keep -Check $module.CheckMode
-    }
-    $module.Result.changed = $changed -or $module.Result.items_reset -gt 0
+    $run = Invoke-TnwksDirAclModule -Params $module.Params -Check $module.CheckMode
+    $module.Result.items_reset = $run.items_reset
+    $module.Result.changed = $run.changed
 } catch {
     $module.FailJson($_.Exception.Message, $_)
 }

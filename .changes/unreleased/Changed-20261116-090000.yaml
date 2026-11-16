@@ -1,3 +1,3 @@
 kind: Changed
-body: 'Windows hosts: each folder of a role under C:\ProgramData lets only SYSTEM and the Administrators make or change files, and Users read (tnwks_win_dir_acl). At each run, each item below takes the owner Administrators and the rules of the folder; the log and address folders keep their own rules. A folder that no role owns gets the same rules through windows_locked_dirs.'
+body: 'Windows hosts: each folder of a role under C:\ProgramData lets only SYSTEM and the Administrators make or change files, and Users read (tnwks_win_dir_acl). At each run, each item below takes the owner Administrators and the rules of the folder; the log and address folders keep their own rules. A folder that no role owns, listed in windows_locked_dirs, is for SYSTEM and the Administrators only (readers: none).'
 time: 2026-11-16T09:00:00.000000000Z

@@ -57,9 +57,9 @@
 # --- the attach task ---------------------------------------------------------
 
 # Only SYSTEM and the Administrators may make or change files here, and
-# Users may read (tnwks_win_dir_acl, no writer). The folder inherits nothing
-# from C:\ProgramData, which lets each user make files. Each item in it takes
-# the owner Administrators and the rules of the folder, at each run.
+# Users may read (tnwks_win_dir_acl, no writer). The folder inherits no rule.
+# Each item in it takes the owner Administrators and the rules of the folder,
+# at each run.
 - name: USB attach directory
   tnwks_win_dir_acl:
     path: "{{ usb_attach_dir }}"

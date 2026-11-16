@@ -1,9 +1,8 @@
 """The folders of the Windows roles under C:\\ProgramData (Design Doc 0004, section 7, row 23).
 
-C:\\ProgramData lets each user make files and folders, and a folder there inherits that
-right. A folder of a role holds the scripts and the configuration that SYSTEM or an
-elevated task reads. So each folder of a role lets only SYSTEM and the Administrators
-make or change files, and Users read. The account that owns the distro writes only to
+Each folder of a role lets only SYSTEM and the Administrators make or change files, and
+Users read. A folder that no role owns (windows_locked_dirs) is for SYSTEM and the
+Administrators only. The account that owns the distro writes only to
 the log and address folders and the inbox, each with rules of its own. These tests read
 the rules that the play sets for each folder, the owner that each item below takes, and
 which task with no elevation writes where.
@@ -128,7 +127,7 @@ def test_the_folders_of_the_host_check_and_the_detector_let_no_user_make_files()
     assert inheritance["ansible.windows.win_acl_inheritance"]["state"] == "absent"
 
 
-def test_a_folder_that_no_role_owns_gets_the_same_rules():
+def test_a_folder_that_no_role_owns_is_for_system_and_the_administrators_only():
     group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
     assert group["windows_locked_dirs"] == []
     site1 = yaml.safe_load((INVENTORY / "host_vars/DESKTOP-HKE05KI/main.yml").read_text())
@@ -136,7 +135,7 @@ def test_a_folder_that_no_role_owns_gets_the_same_rules():
     play = yaml.safe_load((ANSIBLE / "playbooks/windows-host.yml").read_text())
     hosts = next(p for p in play if p["hosts"] == "windows_hosts")
     task = next(t for t in hosts["pre_tasks"] if "tnwks_win_dir_acl" in t)
-    assert task["tnwks_win_dir_acl"] == {"path": "{{ item }}", "items": "reset"}
+    assert task["tnwks_win_dir_acl"] == {"path": "{{ item }}", "readers": "none", "items": "reset"}
     assert task["loop"] == "{{ windows_locked_dirs }}" and "when" not in task
 
 
@@ -264,3 +263,55 @@ Add-TestItem '{TOP}\sub' 'elsewhere' $true (& $plain '{ADMINS}') $true
     out = run_items(tree, keep=[f"{TOP}\\log"])
     assert out["thrown"] and "link or a junction" in out["thrown"]
     assert out["sets"] == []
+
+
+IN_PLACE = rf"""
+$all = 'ContainerInherit, ObjectInherit'
+$script:Have = New-TestAcl $true '{ADMINS}' @(
+    (New-TestRule '{SYSTEM}' 'FullControl' $all 'None'),
+    (New-TestRule '{ADMINS}' 'FullControl' $all 'None'),
+    (New-TestRule 'S-1-5-32-545' 'ReadAndExecute, Synchronize' $all 'None'))
+"""
+
+
+def run_module(setup: str, items: str, readers: str = "users", keep: list[str] | None = None) -> dict:
+    """The entry of the module, Invoke-TnwksDirAclModule, as the module runs it."""
+    text = MODULE.read_text()
+    logic = text[text.index("# --- BEGIN logic"):text.index("# --- END logic")]
+    keep_list = ",".join(f"'{path}'" for path in (keep or [])) or ""
+    body = ACL_FAKES + ITEM_FAKES + logic + f"""
+function Test-Path {{ param([string]$LiteralPath) $script:Exists }}
+$plain = {{ param($Owner) New-TestAcl $false $Owner @((New-TestRule 'S-1-5-32-545' 'ReadAndExecute' 'None' 'None' $true)) }}
+{setup}
+$run = Invoke-TnwksDirAclModule -Params @{{ path = '{TOP}'; writer = ''; readers = '{readers}'; items = '{items}'; keep = @({keep_list}) }} -Check $false
+$sets = @($script:Calls | Where-Object {{ $_ -is [hashtable] }} | ForEach-Object {{
+    @{{ path = $_.Path; owner = $_.Acl.Owner; rules = @(Get-TestKeys $_.Acl.Rules) }} }})
+[Console]::Out.Write((ConvertTo-Json -Depth 5 -Compress @{{ changed = $run.changed; items_reset = $run.items_reset; sets = $sets }}))
+"""
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    return json.loads(run.stdout.splitlines()[-1])
+
+
+@needs_pwsh
+def test_the_module_resets_the_items_and_says_changed_when_only_an_item_changes():
+    out = run_module(IN_PLACE + TREE, items="reset", keep=[f"{TOP}\\log"])
+    assert out["items_reset"] == 4 and out["changed"] is True
+    assert TOP not in [s["path"] for s in out["sets"]], "the folder itself is in place"
+    assert len(out["sets"]) == 4
+
+
+@needs_pwsh
+def test_the_module_leaves_the_items_with_items_keep():
+    out = run_module(IN_PLACE + TREE, items="keep")
+    assert (out["items_reset"], out["changed"], out["sets"]) == (0, False, [])
+
+
+@needs_pwsh
+def test_readers_none_leaves_users_out_of_the_folder():
+    out = run_module(IN_PLACE, items="reset", readers="none")
+    (folder,) = [s for s in out["sets"] if s["path"] == TOP]
+    assert folder["owner"] == ADMINS and out["changed"] is True
+    assert [rule.split("|")[0] for rule in folder["rules"]] == [SYSTEM, ADMINS]
+    again = run_module(IN_PLACE, items="reset")
+    assert again["sets"] == [] and again["changed"] is False, "with Users as readers the folder is in place"

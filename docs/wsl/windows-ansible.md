@@ -194,7 +194,8 @@ already (an owner of SYSTEM stays). The log and address folders above keep
 their own rules, and the module does not read them. A link or a junction
 below stops the module before it changes an item. The folders of the host
 check and of the detector set the same rules in their own roles. A folder
-that no role owns gets the same rules from `windows_locked_dirs` (per host).
+that no role owns gets the rules for SYSTEM and the Administrators only from
+`windows_locked_dirs` (per host, `readers: none`: Users get no rule).
 A test (`security/tests/test_windows_role_folders.py`) reads the rules of
 each folder, and which task writes where.
 

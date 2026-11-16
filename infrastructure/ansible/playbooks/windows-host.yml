@@ -93,6 +93,7 @@
     - name: Other folders under C:\ProgramData
       tnwks_win_dir_acl:
         path: "{{ item }}"
+        readers: none
         items: reset
       loop: "{{ windows_locked_dirs }}"
       tags: [locked-dirs]
