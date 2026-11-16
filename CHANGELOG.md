@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.177.1 - 2026-11-16
+
+### Fixed
+
+* Windows: the role windows_wsl_rehearsal makes its temporary account with a description of 48 characters at most, the limit of New-LocalUser in Windows PowerShell 5.1, from the new default wsl_rehearsal_account_description. A warning that wsl.exe or diskpart writes to stderr stays text in the result of the step and no longer stops it.
+
 ## v2.177.0 - 2026-11-16
 
 ### Added

@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Windows: the role windows_wsl_rehearsal makes its temporary account with a description of 48 characters at most, the limit of New-LocalUser in Windows PowerShell 5.1, from the new default wsl_rehearsal_account_description. A warning that wsl.exe or diskpart writes to stderr stays text in the result of the step and no longer stops it.'
-time: 2026-11-16T17:00:00.000000000Z
