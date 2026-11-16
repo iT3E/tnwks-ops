@@ -84,6 +84,13 @@ data:
         litellm_params:
           model: ollama/embeddinggemma-300m-q8
           api_base: ${OLLAMA_BASE_URL}
+      # The same for the finance agent, on its own name: only the key
+      # agents-finance lists it (docs/apps/litellm.md), so no other trust
+      # domain can send text to it, and finance text goes to no vendor.
+      - model_name: agents-finance-embeddings
+        litellm_params:
+          model: ollama/embeddinggemma-300m-q8
+          api_base: ${OLLAMA_BASE_URL}
 
     router_settings:
       # The name of each trust domain of the agent platform, and the one

@@ -72,11 +72,12 @@ name from one to the other, by one line in git.
   format as it came (tools, thinking, cache marks), while a
   `bedrock/converse/` model goes through its chat-completion translation.
   The agents call `/v1/messages`.
-- **The embedding entry** serves `/v1/embeddings` for the memory search of
-  the pilot agent ([agent-platform.md](agent-platform.md#the-pilot-agent)).
+- **The embedding entries** serve `/v1/embeddings` for the memory search of
+  the pilot agent ([agent-platform.md](agent-platform.md#the-pilot-agent))
+  and of the finance agent, one entry each, on the key of its trust domain.
   It is on the Ollama of the host, so no vendor gets the text of the
-  memory. It is an entry, not a name in `model_group_alias`, and it doesn't
-  move with a name. It sets no `num_retries`, as the other entries that
+  memory. Each is an entry, not a name in `model_group_alias`, and doesn't
+  move with a name. They set no `num_retries`, as the other entries that
   aren't the bridge: the router default (2 retries) applies.
 - Agent keys can't call an entry by its own name; only the master key can.
   The one exception is `agents-pilot-embeddings`, which the key
@@ -221,15 +222,15 @@ To add one: generate a value (`sk-<app>-` and random hex), add the entry to
 
 Each trust domain of the agent platform (`docs/apps/agent-platform.md`) gets
 one key of its own, whose model list is the name of that trust domain and
-nothing else, and no key serves two trust domains. The pilot's key also
-lists its embedding entry. The agents of a trust
+nothing else, and no key serves two trust domains. The keys of the pilot
+and of finance also list their own embedding entry. The agents of a trust
 domain call `http://litellm-app.ai.svc.cluster.local:4000` with it (the chart
 names the Service `litellm-app`).
 
 | Alias | Models | Trust domain (namespace) | The agent's copy |
 | --- | --- | --- | --- |
 | `agents-main` | `["agents-main"]` | `agents-main` | Secret `agent-secret`, key `LITELLM_API_KEY` |
-| `agents-finance` | `["agents-finance"]` | `agents-finance` | Secret `agent-secret`, key `LITELLM_API_KEY` |
+| `agents-finance` | `["agents-finance", "agents-finance-embeddings"]` | `agents-finance` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 | `agents-workflows` | `["agents-workflows"]` | `agents-workflows` | Secret `workflow-providers-secret`, key `MODEL_GATEWAY_KEY`: the provider `model-gateway` of the sandbox gateway holds it, and a sandbox gets a placeholder ([agent-platform.md](agent-platform.md#the-run-receiver)) |
 | `agents-pilot` | `["agents-pilot", "agents-pilot-embeddings"]` | `agents-pilot` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 

@@ -1,0 +1,49 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The config of the finance agent (openclaw.json) and the scripts of its pod.
+# No ${VAR} substitution here: each ${NAME} in the config is for the product,
+# which reads it from an env var of the pod. The scripts are the pilot's
+# (pilot/agent/config/scripts), so the two trust domains run the same steps.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-agent-config
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/agent/config
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The finance agent (docs/apps/agent-platform.md). For now its network policy
+# only: app/kustomization.yaml says what joins it, and when.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-agent
+  namespace: flux-system
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/agent/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The config and the scripts the pod mounts.
+    - name: agents-finance-agent-config
+    # The client certificate, and the gateway of the sandboxes.
+    - name: agents-finance-sandbox-gateway
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
