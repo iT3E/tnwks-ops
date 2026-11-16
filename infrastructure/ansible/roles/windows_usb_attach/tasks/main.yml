@@ -56,10 +56,14 @@
 
 # --- the attach task ---------------------------------------------------------
 
+# Only SYSTEM and the Administrators may make or change files here, and
+# Users may read (tnwks_win_dir_acl, no writer). The folder inherits no rule.
+# Each item in it takes the owner Administrators and the rules of the folder,
+# at each run.
 - name: USB attach directory
-  ansible.windows.win_file:
+  tnwks_win_dir_acl:
     path: "{{ usb_attach_dir }}"
-    state: directory
+    items: reset
 
 # The task starts the script fresh every run, so a new copy needs no restart.
 - name: Sync script
