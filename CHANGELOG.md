@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.171.3 - 2026-11-16
+
+### Fixed
+
+* logs: the platform log agent keeps its read positions on the node (/var/lib/vector-agent-platform), as the audit reader does, so a restart no longer sends each line of the pods it selects to Loki again with a new time
+
 ## v2.171.2 - 2026-11-16
 
 ### Fixed
