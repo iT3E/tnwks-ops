@@ -659,7 +659,7 @@ into git with the placeholder `pending`, encrypted to the age recipients of
    bin/sops updatekeys -y "$F"
    bin/sops "$F"     # replace pending with the key, save
    bin/sops -d --extract '["stringData"]["BRAVE_API_KEY"]' "$F" | tr -d '\n' \
-     | awk '{ print ($0 != "pending" && length($0) >= 20) ? "ok" : "not ok" }'
+     | awk '{ v = v $0 } END { print (v != "pending" && length(v) >= 20) ? "ok" : "not ok" }'
    ```
 
 2. **The token of the finance app.** In the app: Options, Profile, OAuth,
@@ -671,7 +671,7 @@ into git with the placeholder `pending`, encrypted to the age recipients of
    bin/sops updatekeys -y "$F"
    bin/sops "$F"     # replace pending with the token, save
    bin/sops -d --extract '["stringData"]["FIREFLY_TOKEN"]' "$F" | tr -d '\n' \
-     | awk '{ print ($0 != "pending" && length($0) >= 100) ? "ok" : "not ok" }'
+     | awk '{ v = v $0 } END { print (v != "pending" && length(v) >= 100) ? "ok" : "not ok" }'
    ```
 
    After the cutover, revoke the token that the finance agent on the host
