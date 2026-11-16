@@ -971,7 +971,8 @@ def test_the_relay_takes_each_detail_and_each_check_of_a_distro_and_has_a_text_f
                        "homelab_security_host_package_lists_timestamp_seconds",
                        "homelab_security_host_updates_pending", "homelab_security_host_updates_held",
                        "homelab_security_host_reboot_pending"}
-    relay_details = set(re.findall(r"^\s+(homelab_\w+)\s+=", relay_block("RelayDetails"), re.MULTILINE))
+    text = (WINDOWS / "files/Invoke-TnwksHostCheck.ps1").read_text()
+    relay_details = set(re.findall(r"^\$script:RelayDetails\['(homelab_\w+)'\] =", text, re.MULTILINE))
     assert written == relay_details
     text = (WINDOWS / "files/Invoke-TnwksHostCheck.ps1").read_text()
     help_block = text[text.index("$script:Help"):text.index("$script:Source")]
