@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.183.0 - 2026-11-16
+
+### Removed
+
+* Windows: the rehearsal of the account change on WSL-02 is removed (windows_wsl_rehearsal, state absent). A task of the temporary account, registered like the others (s4u_user, as SYSTEM), stops and unregisters its distro and shuts down its own VM; the play then removes its tasks, its profile, its batch right and its deny rights, the value that hides its tile, the account and its folder. windows-rehearsal-check.yml reads the exit check.
+
 ## v2.182.0 - 2026-11-16
 
 ### Added
