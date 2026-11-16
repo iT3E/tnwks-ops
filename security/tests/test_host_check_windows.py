@@ -405,8 +405,8 @@ def inbox_lock() -> dict:
 def test_the_inbox_has_no_inherited_rule_and_a_split_rule_for_the_distro():
     """Only SYSTEM, the Administrators and the account of the distro may change the
     inbox. It does not inherit the rights of C:\\ProgramData, where each user may make
-    files and folders. On the folder itself the account may only list it and make files,
-    so it can not remove the folder or put a junction in its place."""
+    files and folders. On the folder itself the account may only list it and make files.
+    A link or a junction at the inbox is refused by the relay and by the role."""
     tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
     names = [task["name"] for task in tasks]
     lock = inbox_lock()
@@ -454,7 +454,7 @@ function New-Object {
             $a = @($ArgumentList)
             return New-TestRule $a[0].Value $a[1] $a[2] $a[3]
         }
-        '*.DirectorySecurity' {
+        '*.*Security' {
             $acl = [pscustomobject]@{ Owner = $null; Protected = $null; Rules = [System.Collections.Generic.List[object]]::new() }
             $acl | Add-Member ScriptMethod SetOwner { param($Sid) $this.Owner = $Sid.Value }
             $acl | Add-Member ScriptMethod SetAccessRuleProtection { param($On, $Keep) $this.Protected = $On }
@@ -548,6 +548,64 @@ def test_a_link_or_junction_in_the_place_of_the_inbox_stops_the_task_before_any_
     out = run_inbox_lock(WANT_ACL, link=True)
     assert out["thrown"] and "not a plain directory" in out["thrown"]
     assert out["calls"] == ["Get-Item"] and out["sets"] == []
+
+
+# The rules that the host check directory passes down, in the form of New-TestRule.
+DIR_RULES = ("(New-TestRule 'S-1-5-18' 'FullControl' 'ContainerInherit, ObjectInherit' 'None' $true),"
+             "(New-TestRule 'S-1-5-32-544' 'FullControl' 'ContainerInherit, ObjectInherit' 'None' $true),"
+             "(New-TestRule 'S-1-5-32-545' 'ReadAndExecute, Synchronize' 'ContainerInherit, ObjectInherit' 'None' $true)")
+
+
+def run_files_reset(children: dict[str, str], what_if: bool = False) -> dict:
+    """Run the script of the task that gives the files of the host check directory its
+    owner and rules, with fakes; `children` maps a file name to the owner of the file
+    and its rules. Give what it changed."""
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    task = next(task for task in tasks if task["name"] == "The files of the host check directory take its owner and rules")
+    encoded = base64.b64encode(task["ansible.windows.win_powershell"]["script"].encode()).decode()
+    acls = "\n".join(f"$script:Acls['C:\\dir\\{name}'] = New-TestAcl $false '{owner}' @({rules})"
+                     for name, (owner, rules) in children.items())
+    names = ", ".join(f"'{name}'" for name in children)
+    body = ACL_FAKES + f"""
+$script:Acls = @{{}}
+$script:Acls['C:\\dir'] = New-TestAcl $true 'S-1-5-32-544' @({DIR_RULES.replace(" $true)", ")")})
+{acls}
+function Get-Acl {{ param([string]$LiteralPath) $script:Acls[$LiteralPath] }}
+function Get-ChildItem {{
+    param([string]$LiteralPath, [switch]$Recurse, [switch]$Force)
+    foreach ($name in @({names})) {{ [pscustomobject]@{{ FullName = "C:\\dir\\$name"; PSIsContainer = $false }} }}
+}}
+$text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))
+& ([scriptblock]::Create($text)) -Path 'C:\\dir' -WhatIf:${str(what_if).lower()} 6>$null | Out-Null
+$sets = @($script:Calls | Where-Object {{ $_ -is [hashtable] }} | ForEach-Object {{
+    @{{ path = $_.Path; owner = $_.Acl.Owner; protected = $_.Acl.Protected; rules = @(Get-TestKeys $_.Acl.Rules) }} }})
+[Console]::Out.Write((ConvertTo-Json -Depth 5 -Compress @{{ changed = $Ansible.Changed; sets = $sets }}))
+"""
+    return json.loads(pwsh(body).stdout.splitlines()[-1])
+
+
+@needs_pwsh
+def test_the_files_that_the_relay_makes_as_system_are_no_change():
+    """The relay, as SYSTEM, makes its log in the host check directory and rolls it over.
+    SYSTEM may own a file there: it has full control anyway, so the nightly check run
+    reads no change after the log first appears or rolls over."""
+    out = run_files_reset({"Invoke-TnwksHostCheck.ps1": ("S-1-5-32-544", DIR_RULES),
+                           "relay.log": ("S-1-5-18", DIR_RULES), "relay.log.1": ("S-1-5-18", DIR_RULES)})
+    assert out == {"changed": False, "sets": []}
+
+
+@needs_pwsh
+@pytest.mark.parametrize("child", [
+    ("S-1-5-21-7-7-7-1001", DIR_RULES),
+    ("S-1-5-18", DIR_RULES + ",(New-TestRule 'S-1-5-32-545' 'Modify' 'None' 'None')"),
+    ("S-1-5-32-544", DIR_RULES.replace("'ReadAndExecute, Synchronize'", "'Modify, Synchronize'")),
+], ids=["another owner", "an explicit rule", "other inherited rules"])
+def test_a_file_of_another_owner_or_with_other_rules_takes_the_owner_and_rules_of_the_directory(child):
+    out = run_files_reset({"Invoke-TnwksHostCheck.ps1": ("S-1-5-32-544", DIR_RULES), "relay.log": child})
+    assert out["changed"] is True
+    assert out["sets"] == [{"path": "C:\\dir\\relay.log", "owner": "S-1-5-32-544", "protected": False, "rules": []}]
+    checked = run_files_reset({"relay.log": child}, what_if=True)
+    assert checked == {"changed": True, "sets": []}, "a check run changes nothing"
 
 
 def test_the_relay_task_runs_the_relay_as_system_each_hour_for_the_distro_of_the_host():
@@ -669,9 +727,10 @@ def good_document(**changes) -> dict:
     return document
 
 
-def relay(tmp_path, document=None, raw=None, system=DISTRO, inbox=None, log=""):
+def relay(tmp_path, document=None, raw=None, system=DISTRO, inbox=None, log="", before=""):
     """Run the relay of the script on one document; give its exit code, its output and
-    the families of the .prom file of the distro."""
+    the families of the .prom file of the distro. `before` runs first, after the script
+    is loaded."""
     inbox, out = inbox or tmp_path / "inbox", tmp_path / "textfile"
     inbox.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
@@ -680,7 +739,8 @@ def relay(tmp_path, document=None, raw=None, system=DISTRO, inbox=None, log=""):
         (inbox / INBOX_FILE).write_bytes(raw)
     elif document is not None:
         (inbox / INBOX_FILE).write_text(json.dumps(document))
-    result = pwsh(f"""$now = [datetime]::SpecifyKind([datetime]'2026-11-13T12:00:00', 'Utc')
+    result = pwsh(f"""{before}
+$now = [datetime]::SpecifyKind([datetime]'2026-11-13T12:00:00', 'Utc')
 Invoke-TnwksRelay -System '{system}' -InboxDir '{inbox}' -InboxFile '{INBOX_FILE}' -TextfileDir '{out}' `
     -FileName '{DISTRO_FILE}' -Now $now -LogPath '{log}'
 """, check=False)
@@ -782,6 +842,23 @@ def test_a_document_that_does_not_fit_gives_no_result_and_names_the_rule(tmp_pat
 
 
 @needs_pwsh
+def test_an_error_of_another_kind_names_its_type_and_not_its_message(tmp_path):
+    """An error of PowerShell or .NET can quote what it read, so the reason gives only
+    its type."""
+    before = ("function Open-TnwksPlainFile([string]$Path) { "
+              "throw (New-Object System.UnauthorizedAccessException 'SECRET-IN-THE-MESSAGE') }")
+    log = tmp_path / "log" / "relay.log"
+    log.parent.mkdir()
+    log.parent.chmod(0o777)
+    code, output, families = relay(tmp_path, good_document(), log=str(log), before=before)
+    assert code == 1
+    reason = "the document does not fit: the document could not be read (System.UnauthorizedAccessException)"
+    assert reason in output and reason in log.read_text()
+    assert "SECRET" not in output and "SECRET" not in log.read_text()
+    assert_no_result(families)
+
+
+@needs_pwsh
 def test_the_reason_quotes_no_value_of_the_document(tmp_path):
     for index, (document, raw) in enumerate(((good_document(**{"SECRET-FIELD-NAME": 1}), None),
                                              (None, b'{"version": SECRETTOKEN}'),
@@ -859,6 +936,32 @@ def test_a_link_above_the_inbox_gives_no_result(tmp_path):
     assert_no_result(families)
     code, _, families = relay(tmp_path, inbox=real / "inbox")
     assert code == 0 and RESULT in families
+
+
+@needs_pwsh
+def test_a_document_with_a_second_name_gives_no_result(tmp_path):
+    """The check of the final path does not see a hard link: the open file is at its
+    path. The relay refuses a document that has more than one name."""
+    (tmp_path / "inbox").mkdir()
+    (tmp_path / "inbox" / INBOX_FILE).write_text(json.dumps(good_document()))
+    os.link(tmp_path / "inbox" / INBOX_FILE, tmp_path / "elsewhere.json")
+    code, output, families = relay(tmp_path)
+    assert code == 1 and "the document has more than one name (a hard link)" in output, output
+    assert_no_result(families)
+    (tmp_path / "elsewhere.json").unlink()
+    code, _, families = relay(tmp_path)
+    assert code == 0 and RESULT in families
+
+
+def test_the_relay_opens_the_document_with_no_share_of_delete():
+    """While the relay reads, the document can not be renamed, replaced or deleted. Only
+    Windows enforces the share mode, so this reads the one open of the relay."""
+    text = SCRIPT.read_text()
+    body = text[text.index("function Open-TnwksPlainFile"):text.index("function Read-TnwksDistroText")]
+    assert re.findall(r"\[IO\.File\]::Open\((.*)\)", body) == [
+        "$full, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite"]
+    assert "Delete" not in body.split("#>")[1]
+    assert text.count("[IO.File]::Open(") == 1 and "OpenRead" not in text and "FileStream]::new" not in text
 
 
 @needs_pwsh
