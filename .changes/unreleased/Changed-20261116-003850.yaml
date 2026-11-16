@@ -1,0 +1,3 @@
+kind: Changed
+body: The AWS runs of Prowler have the memory limit of their measured peak and 25 %, and a request of 512 MiB. The two AWS systems list prowler as a source, so SecurityResultLate fires when a run has no result for 36 hours.
+time: 2026-11-16T00:38:50.219702711-08:00
