@@ -738,12 +738,19 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   namespace, because the Job sets its pod. So each Job that the receiver
   sends must match the rules of a template: an agent of the list with its
   own providers, one container from the image of the workflow agents pinned
-  by digest (and a sandbox of the same image), the service account
+  by digest (and a sandbox of the same image), run with the one argument
+  `run-job` and no command, lifecycle hook or probe, the service account
   `workflow-run` with no token, no secret but the client certificate, one
-  try, and a time limit of one hour at most. The two objects are
-  cluster-scoped, so they have a Flux Kustomization of their own with no
-  `targetNamespace` (`agents-workflows-run-admission`), and the receiver
-  depends on it. A new agent adds its providers to the policy in the same
+  try, and a time limit of one hour at most. A second policy,
+  `workflow-run-job-updates`, lets an update of a Job by the receiver change
+  only its two annotations `workflow-agents/result` and
+  `workflow-agents/sandbox-record`: nothing in the spec, the labels, the
+  owner references, the finalizers or the other annotations. Both bind the
+  account of the receiver only, so the Job, TTL and garbage collector
+  controllers are not bound. `admission/tests/run.sh` tests them on a
+  throwaway API server in containers. The objects are cluster-scoped, so
+  they have a Flux Kustomization of their own with no `targetNamespace`
+  (`agents-workflows-run-admission`), and the receiver depends on it. A new agent adds its providers to the policy in the same
   pull request as its entry in `agents.yaml`.
 - **The sweep** (CronJob `workflow-sweep`, every 15 minutes) deletes each
   run sandbox that is older than one hour, by its name and label, through
