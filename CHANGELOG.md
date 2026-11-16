@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.174.0 - 2026-11-16
+
+### Changed
+
+* The two AWS runs of Prowler run at 03:17 and 05:17 UTC again, after their run of one day.
+
 ## v2.173.0 - 2026-11-16
 
 ### Added
