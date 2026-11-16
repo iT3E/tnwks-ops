@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.168.1 - 2026-11-16
+
+### Fixed
+
+* Security: the relay of the WSL distro host check also refuses a document that has more than one name (a hard link). The task that resets the files of C:\ProgramData\tnwks-host-check accepts SYSTEM as their owner, so the relay log that SYSTEM makes there is no change for a check run. The security README describes the inbox rules, the relay log and the checks of the relay as they are.
+
 ## v2.168.0 - 2026-11-16
 
 ### Added
