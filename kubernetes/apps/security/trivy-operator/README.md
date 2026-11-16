@@ -404,8 +404,10 @@ which a scan maps read-only, the Java database, and the files of 100 MB
 or more of the layers, which Trivy writes to temporary files. The kernel takes those back near the limit. The download
 of the Java database alone took 33 MiB of anonymous memory. The scan cache
 in memory holds what Trivy found in each layer (lists of packages), small
-next to the files that it reads. A scan with one layer at a time took up to
-about 55% longer locally (the largest image: 117 s against 111 s, the
+next to the files that it reads. `scan.parallel: 1` also reads the files
+inside a layer one at a time, not 5 (`pkg/fanal/artifact/image/image.go`),
+which is part of why a scan is slower. A scan with one layer at a time
+took up to about 55% longer locally (the largest image: 117 s against 111 s, the
 others 1 to 21 s more), under the timeout of 5 minutes (`trivy.timeout`). The estimate
 lines above come from tests with 5 layers at a time, so they are high for
 this setting.
@@ -444,6 +446,15 @@ usual causes:
   not name fails. Add its hosts to `app/networkpolicy.yaml` and to the table
   above.
 - **A private image.** The operator reads no pull secret (above).
+- **The scan pod removed before the operator reads it.** Each cluster
+  keeps one terminated pod (`terminated-pod-gc-threshold` 1 in
+  `talos/wsl/patches/controlplane.yaml` and
+  `talos/wsl-02/patches/controlplane.yaml`), so the garbage collection of
+  terminated pods can remove a finished scan pod before the operator reads
+  its output.
+  That scan then leaves no report and no log line, and the workload is
+  scanned again at the next resync (about 10 hours, below) or at its next
+  change.
 - **Containers of one job at the same time.** A scan job has one container
   for each container of the workload, and they run at the same time. With
   the scan cache in files on `trivy-cache`, each container opens one file
