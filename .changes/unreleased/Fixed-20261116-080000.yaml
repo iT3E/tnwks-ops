@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Windows hosts: the scheduled task module reads a task with the run level LeastPrivilege as unchanged. Export-ScheduledTask leaves out the RunLevel element for that default, so each check and the nightly drift run reported such a task as changed, and each apply registered it again.'
-time: 2026-11-16T08:00:00.000000000Z

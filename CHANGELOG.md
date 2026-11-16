@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.171.1 - 2026-11-16
+
+### Fixed
+
+* Windows hosts: the scheduled task module reads a task with the run level LeastPrivilege as unchanged. Export-ScheduledTask leaves out the RunLevel element for that default, so each check and the nightly drift run reported such a task as changed, and each apply registered it again.
+
 ## v2.171.0 - 2026-11-16
 
 ### Changed
