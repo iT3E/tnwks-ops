@@ -26,6 +26,12 @@
 # and -SkipUsb (task arguments, wsl_watchdog_args in host_vars): checks 3 and
 # 4 and the worker-2 restart are skipped, so it only keeps WSL and the distro
 # up.
+#
+# With no elevation (wsl_start_unelevated), this task can not repair the WSL
+# service. A second task, tnwks-wsl-service, runs this script as SYSTEM with
+# -ServiceOnly: check 1 and the start of the keepalive task, and no wsl.exe.
+# SYSTEM's wsl.exe can not see the distro of the user, so that task never
+# starts a process in it.
 
 [CmdletBinding()]
 param(
@@ -36,7 +42,10 @@ param(
     [switch]$SkipUsb,
     # A scheduled task holding a wsl.exe client open (tnwks-wsl-keepalive);
     # started again when it isn't running, e.g. after a wsl --shutdown.
-    [string]$KeepAliveTask
+    [string]$KeepAliveTask,
+    # Check 1 and the keepalive task only, with no wsl.exe: the SYSTEM task
+    # tnwks-wsl-service.
+    [switch]$ServiceOnly
 )
 
 $ErrorActionPreference = 'Continue'
@@ -66,9 +75,28 @@ function Rotate-Log {
     Move-Item -Path $script:LogFile -Destination $archive -Force -ErrorAction SilentlyContinue
 }
 
+function Test-Admin {
+    try {
+        $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+        (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch {
+        $false
+    }
+}
+
 function Test-WslService {
     $svc = Get-Service -Name 'WSLService' -ErrorAction SilentlyContinue
     if (-not $svc) { Write-Log 'WSLService not found on this host.' 'WARN'; return $false }
+
+    if (-not (Test-Admin)) {
+        # No elevation: the SYSTEM task tnwks-wsl-service repairs the service.
+        # A service that is not disabled starts on demand when wsl.exe calls it.
+        if ($svc.StartType -eq 'Disabled') {
+            Write-Log 'WSLService StartType=Disabled; the task tnwks-wsl-service repairs it.' 'ERROR'
+            return $false
+        }
+        return $true
+    }
 
     if ($svc.StartType -eq 'Disabled') {
         Write-Log 'WSLService StartType=Disabled (Store upgrade side effect); setting to Manual.' 'WARN'
@@ -154,6 +182,20 @@ function Sync-UsbDevices {
     }
 }
 
+function Start-KeepAliveTask {
+    if (-not $KeepAliveTask) { return }
+    $ka = Get-ScheduledTask -TaskName $KeepAliveTask -ErrorAction SilentlyContinue
+    if (-not $ka) {
+        Write-Log ("keepalive task '{0}' not found." -f $KeepAliveTask) 'WARN'
+    }
+    elseif ("$($ka.State)" -ne 'Running') {
+        # The task runs as its own principal, whoever starts it.
+        Write-Log ("keepalive task '{0}' is {1}; starting it." -f $KeepAliveTask, $ka.State) 'WARN'
+        Start-ScheduledTask -TaskName $KeepAliveTask -ErrorAction SilentlyContinue
+        $script:Actions += 'keepalive-started'
+    }
+}
+
 # ---------------- main ----------------
 Rotate-Log
 
@@ -162,22 +204,20 @@ if (-not (Test-WslService)) {
     exit 1
 }
 
+if ($ServiceOnly) {
+    # No wsl.exe in this mode: it starts no process in the distro.
+    Start-KeepAliveTask
+    if ($script:Actions.Count -eq 0) { Write-Log 'service: healthy.' }
+    else { Write-Log ('service: recovery actions: ' + ($script:Actions -join ', ')) 'WARN' }
+    exit 0
+}
+
 $distroWasUp = Test-DistroRunning
 if (-not $distroWasUp) {
     if (-not (Start-Distro)) { Write-Log 'aborting: distro failed to start.' 'ERROR'; exit 1 }
 }
 
-if ($KeepAliveTask) {
-    $ka = Get-ScheduledTask -TaskName $KeepAliveTask -ErrorAction SilentlyContinue
-    if (-not $ka) {
-        Write-Log ("keepalive task '{0}' not found." -f $KeepAliveTask) 'WARN'
-    }
-    elseif ("$($ka.State)" -ne 'Running') {
-        Write-Log ("keepalive task '{0}' is {1}; starting it." -f $KeepAliveTask, $ka.State) 'WARN'
-        Start-ScheduledTask -TaskName $KeepAliveTask -ErrorAction SilentlyContinue
-        $script:Actions += 'keepalive-started'
-    }
-}
+Start-KeepAliveTask
 
 if (-not $SkipUsb) {
     Sync-UsbDevices

@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 import textfile
 import yaml
+from winacl import ACL_FAKES
 
 ROOT = Path(__file__).resolve().parents[2]
 ANSIBLE = ROOT / "infrastructure/ansible"
@@ -420,66 +421,6 @@ def test_the_inbox_has_no_inherited_rule_and_a_split_rule_for_the_distro():
     assert "ansible_check_mode" in lock["when"]
 
 
-ACL_FAKES = r"""
-$script:Calls = New-Object System.Collections.Generic.List[object]
-$Ansible = [pscustomobject]@{ Changed = $null }
-$script:IsLink = $false
-function Get-Item {
-    param([string]$LiteralPath, [switch]$Force)
-    $script:Calls.Add('Get-Item')
-    $attributes = [IO.FileAttributes]::Directory
-    if ($script:IsLink) { $attributes = $attributes -bor [IO.FileAttributes]::ReparsePoint }
-    [pscustomobject]@{ PSIsContainer = $true; Attributes = $attributes }
-}
-function New-TestRule($Sid, $Rights, $Inheritance, $Propagation, $Inherited = $false) {
-    [pscustomobject]@{
-        IdentityReference = [pscustomobject]@{ Value = [string]$Sid }
-        FileSystemRights  = [System.Security.AccessControl.FileSystemRights]$Rights
-        InheritanceFlags  = [System.Security.AccessControl.InheritanceFlags]$Inheritance
-        PropagationFlags  = [System.Security.AccessControl.PropagationFlags]$Propagation
-        AccessControlType = 'Allow'
-        IsInherited       = $Inherited
-    }
-}
-function New-Object {
-    param([Parameter(Position = 0)]$TypeName, [Parameter(Position = 1)]$ArgumentList)
-    switch -Wildcard ("$TypeName") {
-        '*.NTAccount' {
-            $account = [pscustomobject]@{ Name = $ArgumentList }
-            $account | Add-Member ScriptMethod Translate { param($Type) [pscustomobject]@{ Value = 'S-1-5-21-7-7-7-1001' } }
-            return $account
-        }
-        '*.SecurityIdentifier' { return [pscustomobject]@{ Value = [string]$ArgumentList } }
-        '*.FileSystemAccessRule' {
-            $a = @($ArgumentList)
-            return New-TestRule $a[0].Value $a[1] $a[2] $a[3]
-        }
-        '*.*Security' {
-            $acl = [pscustomobject]@{ Owner = $null; Protected = $null; Rules = [System.Collections.Generic.List[object]]::new() }
-            $acl | Add-Member ScriptMethod SetOwner { param($Sid) $this.Owner = $Sid.Value }
-            $acl | Add-Member ScriptMethod SetAccessRuleProtection { param($On, $Keep) $this.Protected = $On }
-            $acl | Add-Member ScriptMethod AddAccessRule { param($Rule) $this.Rules.Add($Rule) }
-            return $acl
-        }
-        default { throw "no fake for $TypeName" }
-    }
-}
-function New-TestAcl([bool]$Protected, [string]$Owner, $Rules) {
-    $acl = [pscustomobject]@{ AreAccessRulesProtected = $Protected; Owner = $Owner; Rules = @($Rules) }
-    $acl | Add-Member ScriptMethod GetOwner { param($Type) [pscustomobject]@{ Value = $this.Owner } }
-    $acl | Add-Member ScriptMethod GetAccessRules {
-        param($Explicit, $Inherited, $Type)
-        @($this.Rules | Where-Object { ($Explicit -and -not $_.IsInherited) -or ($Inherited -and $_.IsInherited) })
-    }
-    $acl
-}
-function Get-Acl { param([string]$LiteralPath) $script:Calls.Add('Get-Acl'); $script:Have }
-function Set-Acl { param([string]$LiteralPath, $AclObject) $script:Calls.Add(@{ Path = $LiteralPath; Acl = $AclObject }) }
-function Get-TestKeys($Rules) {
-    @($Rules | ForEach-Object { '{0}|{1}|{2}|{3}' -f $_.IdentityReference.Value, $_.FileSystemRights, $_.InheritanceFlags, $_.PropagationFlags } | Sort-Object)
-}
-"""
-
 # The rules of the inbox as the role wants them, in the form of Get-TestKeys.
 DISTRO_SID = "S-1-5-21-7-7-7-1001"
 INBOX_RULES = sorted([
@@ -592,6 +533,17 @@ def test_the_files_that_the_relay_makes_as_system_are_no_change():
     out = run_files_reset({"Invoke-TnwksHostCheck.ps1": ("S-1-5-32-544", DIR_RULES),
                            "relay.log": ("S-1-5-18", DIR_RULES), "relay.log.1": ("S-1-5-18", DIR_RULES)})
     assert out == {"changed": False, "sets": []}
+
+
+def test_the_owners_that_the_reset_accepts_are_the_administrators_and_system_only():
+    """A file below the host check directory may be owned by the Administrators or by
+    SYSTEM, which has full control there anyway. Any other owner is reset."""
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    task = next(task for task in tasks if task["name"] == "The files of the host check directory take its owner and rules")
+    script = task["ansible.windows.win_powershell"]["script"]
+    assert re.findall(r"^\s*\$owners = (.*)$", script, re.MULTILINE) == ["@($admins.Value, 'S-1-5-18')"]
+    assert "$admins = New-Object $sid 'S-1-5-32-544'" in script
+    assert script.count("$owners") == 2 and "$owners -notcontains $child.GetOwner($sid).Value" in script
 
 
 @needs_pwsh

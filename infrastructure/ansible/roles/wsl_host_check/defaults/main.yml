@@ -22,10 +22,15 @@ wsl_host_check_inbox_dir: /mnt/c/ProgramData/tnwks-host-check-distro
 # to make a file there. Only a refusal by Windows is the pass; any other
 # answer is the failed query textfile-write, and the run gives no result.
 wsl_host_check_write_test_dir: /mnt/c/Program Files/windows_exporter/textfile_inputs
-# Whether the answer of the last task of the role can fail the play. Off until
-# the owner turns it on (section 5.9 of the design). The change that starts
-# each distro with no elevation turns it on, and a test holds it on there.
-wsl_host_check_write_test_fails_play: false
+# Whether the answer of the last task of the role can fail the play: on where
+# the Windows host of the distro starts WSL with no elevation
+# (wsl_start_unelevated, group_vars/windows_hosts.yml) and the start step of
+# docs/wsl/windows-ansible.md is done (wsl_start_unelevated_done), and only
+# there (section 5.9 of the design). Until the start step, the play does not
+# fail on the write test; the security result of the check still shows it.
+wsl_host_check_write_test_fails_play: >-
+  {{ (hostvars[wsl_distro_windows_host].wsl_start_unelevated | default(false) | bool)
+  and (hostvars[wsl_distro_windows_host].wsl_start_unelevated_done | default(false) | bool) }}
 # The name of the document in the inbox: host_check_inbox_file of role
 # windows_host_check.
 wsl_host_check_file: tnwks_security_host_check_distro.json

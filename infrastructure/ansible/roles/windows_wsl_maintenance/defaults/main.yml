@@ -7,12 +7,23 @@
 #   tnwks-vhdx-compact  on demand: offline compaction of the WSL vhdx on E:
 #                       (stops WSL and the cluster; homelab-windows-host notes).
 #
-# Both run as the desktop user (S4U, elevated): WSL distros are per-user.
+# Both run as the desktop user (S4U): WSL distros are per-user. Elevated,
+# unless wsl_start_unelevated (group_vars/windows_hosts.yml) is on: then the
+# watchdog and the keepalive run with no elevation, tnwks-wsl-service (SYSTEM)
+# repairs the WSL service, and the compaction, which stays elevated for
+# diskpart, does not start the distro itself.
 
 wsl_maintenance_user: "{{ windows_desktop_user }}"
 
 wsl_watchdog_dir: 'C:\ProgramData\tnwks-watchdog'
 wsl_watchdog_task: tnwks-wsl-watchdog
+# With wsl_start_unelevated: the log of the watchdog, which the account may
+# change (the scripts stay where it may not), and the SYSTEM task that does
+# the part of the watchdog that needs admin rights, with no wsl.exe.
+wsl_watchdog_log_dir: '{{ wsl_watchdog_dir }}\log'
+wsl_service_task: tnwks-wsl-service
+# The log of that SYSTEM task: only SYSTEM and the Administrators may change it.
+wsl_service_log_dir: '{{ wsl_watchdog_dir }}\service-log'
 # Extra arguments for Watch-TnwksWsl.ps1: `-SkipGateway -SkipUsb` on a host
 # without the OpenClaw gateway or the Z-Stick.
 wsl_watchdog_args: ""
