@@ -315,7 +315,7 @@ scan.
 
 | Part | Request | Limit | Source |
 | --- | --- | --- | --- |
-| The operator | 256 MiB | 512 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). `GOMEMLIMIT` is 460 MiB, 90% of the limit (go.dev/doc/gc-guide) |
+| The operator | 256 MiB | 640 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). On homelab-wsl the first cycle peaked at 473 MiB of the next limit, 512 MiB (about 260 MiB at rest, no kill), and the owner raised it to 640 MiB on 2026-11-15. `GOMEMLIMIT` is 576 MiB, 90% of the limit (go.dev/doc/gc-guide) |
 | Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`). The full cycle on homelab-wsl-02 (one scan container at 25 MiB, one job at 97 MiB, 2026-11-15) ran while one container of a job scanned at a time; a job is not measured since the scan cache is in memory (below) |
 
 The operator counts its scan jobs from its cache before it starts one
@@ -334,19 +334,21 @@ of Trivy on that cluster, while such a pod has its scan:
 
 | By | The operator | The scan job | Sum |
 | --- | --- | --- | --- |
-| Limits | 512 MiB | 6 x 512 MiB | 3584 MiB |
-| Estimate from a local test, scan cache in memory | 512 MiB (its limit) | 1032 to 1572 MiB, up to 2808 MiB with large old images | 1544 to 2084 MiB, up to 3320 MiB |
+| Limits | 640 MiB | 6 x 512 MiB | 3712 MiB |
+| Estimate from a local test, scan cache in memory | 640 MiB (its limit) | 1032 to 1572 MiB, up to 2808 MiB with large old images | 1672 to 2212 MiB, up to 3448 MiB |
 | Measured on homelab-wsl-02, one container of a job that scans | 316 MiB | 97 MiB | 413 MiB or less |
 
 The measured line is the peak of a full cycle on homelab-wsl-02, in samples
-of one minute (step 9 of "Tests"): the operator at 316 MiB of its 512 MiB,
+of one minute (step 9 of "Tests"): the operator at 316 MiB of its 512 MiB
+then,
 one scan container at 25 MiB at most, and the containers of one scan job
 together at 97 MiB at most. No sample had more than one scan job. The two
 peaks need not be at the same time, so their sum is an upper bound.
 homelab-wsl runs more workloads, and the cache of the operator grows with
-them, so the operator can take more there; its limit leaves 196 MiB above
-the peak of homelab-wsl-02. The owner kept the limits with that measure,
-for homelab-wsl too (2026-11-15). That cycle ran with the scan cache in
+them, so the operator can take more there; its limit of 640 MiB leaves
+324 MiB above the peak of homelab-wsl-02. The owner kept the limits of then
+with that measure, for homelab-wsl too (2026-11-15), and raised the limit
+of the operator to 640 MiB later that day. That cycle ran with the scan cache in
 files on `trivy-cache`: one container of a job took the lock of the cache
 and scanned, and the others stopped within 5 seconds ("When a scan fails").
 So 97 MiB is the sum of the pod while one container scanned and the others
@@ -369,6 +371,34 @@ as the budget counts it. It is an estimate, not a measure. The
 first full cycle after the change measures it on each cluster (step 10 of
 "Tests"), and the owner decides the line of `../README.md` with it.
 
+**One layer at a time.** Trivy reads the layers of an image 5 at a time by
+default (`--parallel`, default 5, in the CLI reference of Trivy 0.76), and
+it holds each file under 100 MB of a layer in memory while its analyzers
+read it (`pkg/fanal/walker/cached_file.go`). The chart's `trivy.slow` gives
+the flag `--slow`, which Trivy 0.76 keeps as a deprecated flag and no longer
+reads. In the first scans with the scan cache in memory, two scan
+containers on homelab-wsl reached their limit of 512 MiB and were killed.
+The values set `scan.parallel: 1` in `trivy.configFile`. A local test with
+the pinned Trivy and the settings of this app, as nobody with 0.5 CPU, read
+the anonymous memory of the container (`memory.stat`, every 50 ms), which
+the kernel can not reclaim:
+
+| Images | Parallel 5 | Parallel 1 |
+| --- | --- | --- |
+| The two images that were killed, 7 runs each | 337 to 491 MiB | 240 to 319 MiB |
+| The 5 largest other images on homelab-wsl, 2 to 7 runs each | 102 to 338 MiB | 82 to 303 MiB |
+
+The rest of the memory of a scan is files: the vulnerability database,
+which a scan maps read-only, the Java database, and the files of 100 MB
+or more of the layers, which Trivy writes to temporary files. The kernel takes those back near the limit. The download
+of the Java database alone took 33 MiB of anonymous memory. The scan cache
+in memory holds what Trivy found in each layer (lists of packages), small
+next to the files that it reads. A scan with one layer at a time took up to
+about 55% longer locally (the largest image: 117 s against 111 s, the
+others 1 to 21 s more), under the timeout of 5 minutes (`trivy.timeout`). The estimate
+lines above come from tests with 5 layers at a time, so they are high for
+this setting.
+
 Each container of a scan job also has a CPU limit of 500m, so a job of 6
 containers can take 3 cores of `SECURITY_NODE` for the length of the scan.
 With the file cache, the other containers stopped after 5 seconds; now all
@@ -383,8 +413,8 @@ deletes the job and its pod at once (`pkg/vulnerabilityreport/controller/scanjob
 of the release, with no `scanJobTTL`). So the chart rule `KubeJobFailed`,
 which needs the failed Job for 15 minutes, is not expected to fire. The image of that
 container has no report. The next scan of the workload ("When a scan
-fails") runs the same image with the same limit and fails the same way,
-each time, until the limit or the image changes. The signals: the log of
+fails") runs the same image with the same limit, and can fail the same
+way: the peak of a scan of one image varies from run to run (above). The signals: the log of
 the operator has "Scan job container" with `status.reason` `OOMKilled`, and
 `SecurityImagesNotScanned` fires after 36 hours.
 

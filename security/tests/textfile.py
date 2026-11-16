@@ -71,3 +71,28 @@ def value(families: dict, name: str, **labels) -> float | None:
     """The value of the one sample of a family with these labels, or None."""
     wanted = tuple(sorted(labels.items()))
     return series(families, name).get(wanted)
+
+
+def relayed(document: dict) -> dict:
+    """The families that the relay of the Windows host check writes for a document of a
+    WSL distro that fits (role windows_host_check, -Relay): a model of the relay for the
+    tests of the distro. security/tests/test_host_check_windows.py holds the relay itself
+    to it. Each family has samples only."""
+    system = document["system"]
+    families: dict = {}
+
+    def add(name: str, labels: dict, number: float) -> None:
+        samples = families.setdefault(name, {"help": None, "type": "gauge", "samples": {}})["samples"]
+        key = frozenset({"system": system, **labels}.items())
+        assert key not in samples, f"the same series twice: {name} {labels}"
+        samples[key] = float(number)
+
+    if not document["failed"]:
+        for check, number in document["results"].items():
+            add("homelab_security_check_result",
+                {"source": "host-check", "check": check, "severity": "high"}, number)
+        add("homelab_security_last_result_timestamp_seconds", {"source": "host-check"}, document["time"])
+    add("homelab_security_host_check_failed_queries", {}, len(document["failed"]))
+    for detail in document["details"]:
+        add(detail["name"], detail["labels"], detail["value"])
+    return families

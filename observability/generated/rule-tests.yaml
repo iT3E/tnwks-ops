@@ -1261,6 +1261,60 @@ tests:
         description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
           when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
           has the steps. The alert ends at the next run of the refresher.'
+- name: a fail of defender-signatures at high starts SecurityFindingNew, and at medium it does not
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",source="host-check",check="defender-signatures",system="DESKTOP-HKE05KI",severity="high"}
+    values: 1+0x30
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",source="host-check",check="defender-signatures",system="DESKTOP-HKE05KI-medium",severity="medium"}
+    values: 1+0x30
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 5m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 15m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: host-check
+        system: DESKTOP-HKE05KI
+      exp_annotations:
+        summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+- name: a fail of tfc-mfa-required at high starts SecurityFindingNew, and at medium it does not
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",source="api-check",check="tfc-mfa-required",system="tnwks-ops",severity="high"}
+    values: 1+0x30
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",source="api-check",check="tfc-mfa-required",system="tnwks-ops-medium",severity="medium"}
+    values: 1+0x30
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 5m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 15m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: api-check
+        system: tnwks-ops
+      exp_annotations:
+        summary: A new finding of high severity on tnwks-ops, from api-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
 - name: the first refused request of the audit sink alerts, though its counter starts at 1
   interval: 1m
   input_series:
@@ -2154,3 +2208,132 @@ tests:
   - alertname: SecurityFindingNew
     eval_time: 1260m
     exp_alerts: []
+- name: a new finding of a standby series is held while site 2 scrapes its host
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1620
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 1560m
+    exp_alerts: []
+- name: a new finding of a standby series alerts while site 2 is away
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1400
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1490m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: host-check
+        system: DESKTOP-HKE05KI
+      exp_annotations:
+        summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+- name: a new finding of a standby series alerts while site 2 answers but can not scrape its host
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1500 0+0x120
+  - series: up{job="windows-exporter-security",instance="WSL-02",k8s_cluster="homelab-wsl-02",source_site="homelab-wsl-02"}
+    values: 1+0x1620
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: host-check
+        system: DESKTOP-HKE05KI
+      exp_annotations:
+        summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+- name: the hold of one host does not hold the standby series of the other host
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl-02",job="windows-exporter",instance="WSL-02",source="host-check",system="WSL-02",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1620
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+        source: host-check
+        system: WSL-02
+      exp_annotations:
+        summary: A new finding of high severity on WSL-02, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+- name: a finding that failed while held is not new when the hold ends
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high",standby="true"}
+    values: 0+0x60 1+0x1560
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1500
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts: []
+  - alertname: SecurityFindingNew
+    eval_time: 1560m
+    exp_alerts: []
+- name: a series with no standby label is not held by the scrape of site 2
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{k8s_cluster="homelab-wsl",job="windows-exporter",instance="DESKTOP-HKE05KI",source="host-check",system="DESKTOP-HKE05KI",check="defender-enabled",severity="high"}
+    values: 0+0x1500 1+0x120
+  - series: up{job="windows-exporter-security",instance="DESKTOP-HKE05KI",k8s_cluster="homelab-wsl",source_site="homelab-wsl-02"}
+    values: 1+0x1620
+  alert_rule_test:
+  - alertname: SecurityFindingNew
+    eval_time: 1515m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        source: host-check
+        system: DESKTOP-HKE05KI
+      exp_annotations:
+        summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'

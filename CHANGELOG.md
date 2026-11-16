@@ -3,6 +3,74 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.168.1 - 2026-11-16
+
+### Fixed
+
+* Security: the relay of the WSL distro host check also refuses a document that has more than one name (a hard link). The task that resets the files of C:\ProgramData\tnwks-host-check accepts SYSTEM as their owner, so the relay log that SYSTEM makes there is no change for a check run. The security README describes the inbox rules, the relay log and the checks of the relay as they are.
+
+## v2.168.0 - 2026-11-16
+
+### Added
+
+* Security: the host check of each WSL distro gives the errno of each try of the write test as a series, and the host check of each Windows host counts the files of the write test in its textfile directory.
+
+### Changed
+
+* Security: the host check of each WSL distro writes a JSON document into an inbox, C:\ProgramData\tnwks-host-check-distro, where the account of the distro may make and change files but not change the folder itself. A relay on its Windows host, a SYSTEM task each hour, checks the document and writes the .prom file of the distro; a document that does not fit, a repeated series, or a link on the way gives no result. The relay logs each run to C:\ProgramData\tnwks-host-check\relay.log. The distro account loses its right on the textfile directory, and its directory wsl-distro goes.
+
+## v2.167.0 - 2026-11-15
+
+### Added
+
+* Security: the host checks of each Windows host and each WSL distro add the check updates-held, for a held package or a hidden update that is not optional, older than 14 days (severity high). In a distro, each package has one clock whether it waits, is held or is phased; an upgrade that a run sees first is dated by the Date of its package list (by its Label), read before the simulations of the last run with a result, or counts as old with no such Date; and only a run with a result writes the state file.
+
+### Fixed
+
+* Security: the host check of each WSL distro reads the answer of the write test of root only from a regular file, and opens it without waiting, so a FIFO in its place is "not done" at once and does not hold the run.
+
+## v2.166.1 - 2026-11-15
+
+### Fixed
+
+* security: a Trivy scan reads the layers of an image one at a time (scan.parallel 1), not 5, so a scan container of a large image no longer reaches its limit of 512 MiB and is killed with no report; the limit stays
+
+## v2.166.0 - 2026-11-15
+
+### Changed
+
+* Security: the check of the Defender signatures of each Windows host and the MFA check of Terraform Cloud have the severity high, so a new fail of either starts SecurityFindingNew, as Design Doc 0004, section 5.8, selects.
+
+## v2.165.0 - 2026-11-15
+
+### Added
+
+* Security: the host check of each WSL distro first tries to make a file in the textfile directory of its host, as root (a step of the service before the check) and as the distro user. Only a refusal by Windows for root is the pass; a write, a missing directory or no answer of root is the failed query textfile-write. The role runs the same tries and prints each answer with its uid.
+
+## v2.164.0 - 2026-11-15
+
+### Added
+
+* Security: homelab-wsl-02 scrapes the security series of both Windows hosts itself (job windows-exporter-security), in place of the federation of the host check through homelab-wsl. homelab-wsl keeps them with the label standby, and SecurityFindingNew fires there for them only while homelab-wsl-02 does not scrape their host. SecurityHostUnreachable fires when homelab-wsl-02 can not scrape the host of site 1 for 5 minutes, and two inhibit rules hold the late results behind that site (behind_site in systems.yaml) and PeerSiteUnreachable of that site while it fires.
+
+## v2.163.0 - 2026-11-15
+
+### Added
+
+* DESKTOP-HKE05KI's windows_exporter and smartctl_exporter also admit WSL-02's address, so homelab-wsl-02's Prometheus can scrape the security series of the site 1 host over the LAN (`windows_monitoring_remote_extra`, as WSL-02 has for the other way).
+
+## v2.162.1 - 2026-11-15
+
+### Security
+
+* kopiur: the shared repository no longer allows agents-pilot, now that the old pilot policy agent-state is gone; its snapshots stay there under their kopia identity.
+
+## v2.162.0 - 2026-11-15
+
+### Changed
+
+* security: the memory limit of the Trivy Operator raises from 512 to 640 MiB on both sites, with GOMEMLIMIT at 576 MiB (90%): on homelab-wsl the first cycle peaked at 473 MiB, under 8% below the old limit
+
 ## v2.161.3 - 2026-11-15
 
 ### Fixed
