@@ -110,13 +110,16 @@ data "aws_iam_policy_document" "homelab_backups_bucket" {
   }
 
   # A list without a prefix still shows the key names under it (content-addressed
-  # names of Kopia, no data); a list under the prefix is denied.
+  # names of Kopia, no data); a list under the prefix is denied. Not
+  # s3:ListBucketMultipartUploads: it does not take the s3:prefix condition key,
+  # and S3 refuses the whole policy with it (MalformedPolicy). It shows only the
+  # key names of uploads in progress; their parts are objects, denied above.
   dynamic "statement" {
     for_each = local.backups_exclusive_prefixes
     content {
       sid       = "DenyListOutside${replace(title(replace(statement.key, "-", " ")), " ", "")}"
       effect    = "Deny"
-      actions   = ["s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads"]
+      actions   = ["s3:ListBucket", "s3:ListBucketVersions"]
       resources = [aws_s3_bucket.homelab_backups.arn]
       principals {
         type        = "*"
