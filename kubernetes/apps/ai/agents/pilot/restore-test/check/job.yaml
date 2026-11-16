@@ -42,8 +42,11 @@ spec:
               fail() { echo "restore-check result=failed reason=$1"; exit 1; }
               test -d "$D/state" || fail no-state
               test -d "$D/archives" || fail no-archives
-              echo "restore-check directories:"
-              (cd "$D" && find . -mindepth 1 -maxdepth 2 -type d 2>/dev/null | LC_ALL=C sort)
+              # Counts only below the top level: a directory name can say
+              # more than a log line should keep.
+              top=$(cd "$D" && find . -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+              second=$(cd "$D" && find . -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)
+              echo "restore-check directories top=$top second=$second"
               files=$(find "$D" -type f 2>/dev/null | wc -l)
               bytes=$(find "$D" -type f -printf '%s\n' 2>/dev/null | awk '{ s += $1 } END { printf "%d\n", s }')
               unreadable=$(find "$D" ! -readable 2>/dev/null | wc -l)
