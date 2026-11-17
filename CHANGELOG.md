@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.189.5 - 2026-11-17
+
+### Fixed
+
+* agents: one merge gives one rollout of an agent pod (pilot and finance): the config and the scripts are ConfigMaps with a hash in their names, in the Flux Kustomization of the pod, and Reloader watches the Secrets only; the official plugins step prints the reason of a failure (OPENCLAW_DEBUG=1); the docs say what a rollout costs, and how to turn the scheduled jobs off before a revert
+
 ## v2.189.4 - 2026-11-17
 
 ### Fixed
