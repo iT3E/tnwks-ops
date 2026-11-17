@@ -1491,7 +1491,7 @@ WAYBACK_ORDER = ("The group steps of this way back", "Read the last marker befor
                  "The import back task of A can not start before the way back",
                  "A may log on as a batch job, for a way back with no group step",
                  "The icon in the folder of A, before a way back with no group step", "The window procedure, way back mode",
-                 "The icon in the folder of A, after A left the group", "A may log on as a batch job again, with no group",
+                 "A may log on as a batch job again, with no group", "The icon in the folder of A, after A left the group",
                  "No VM of the rehearsal before the start task of A", "The start task of A, started by the play")
 
 
@@ -1541,9 +1541,57 @@ def test_the_switch_of_the_group_steps_sets_the_request_and_each_step_of_the_way
         assert ran == expected, (switch, marker, ran)
 
 
+RUNS_READ = "Read the runs of the window task and the boot task"
+RUNS_CHECK = "No run of the window task or the boot task goes on"
+
+
+def test_the_way_back_reads_that_no_run_of_the_procedure_goes_on_before_any_change():
+    """The procedure has no lock, and the window task and the boot task are two tasks: a
+    way back must not start beside a run of either. The read and its check come first in
+    the phase, before the block of its changes, and the read runs in a check run too."""
+    doc = yaml.safe_load((ROLE / "tasks/wayback.yml").read_text())
+    names = [t.get("name") for t in doc]
+    read, check = names.index(RUNS_READ), names.index(RUNS_CHECK)
+    block = names.index("The way back, and the reads after it")
+    assert read + 1 == check < names.index("The group steps of this way back") < block
+    assert all("block" not in t and t.get("ansible.builtin.include_tasks") in (None, "live.yml", "groups.yml",
+               "read_accounts.yml", "host_files.yml") for t in doc[:read])
+    task = doc[read]
+    assert task["check_mode"] is False and "when" not in task and "when" not in doc[check]
+    assert task["ansible.windows.win_powershell"]["parameters"]["Tasks"] == [
+        "{{ wsl_move_rehearsal_window_task }}", "{{ wsl_move_rehearsal_boot_task }}"]
+
+
+@needs_both
+def test_a_run_of_the_window_task_or_the_boot_task_stops_the_way_back_with_nothing_changed(tmp_path):
+    tasks = ["tnwks-moverh-window", "tnwks-moverh-boot"]
+
+    def read(states: dict, code: int = 0) -> list:
+        return run_script(tmp_path, "wayback.yml", RUNS_READ, {"Tasks": tasks}, stand_ins=TASKS + (
+            f"$global:Code = {code}\n$global:TaskStates = @{{ " +
+            "; ".join(f"{ps_str(k)} = {ps_str(v)}" for k, v in states.items()) + " }\n"))
+
+    idle = read({})
+    assert idle[-1]["busy"] == [] and idle[-1]["states"] == [f"{t} Ready 0x0" for t in tasks]
+    boot = read({"tnwks-moverh-boot": "Running"})
+    window = read({"tnwks-moverh-window": "Queued"})
+    # A task that never ran can read Ready with the result 0x41301 (the task is running).
+    pending = read({}, code=0x41301)
+    assert boot[-1]["busy"] == ["tnwks-moverh-boot"] and window[-1]["busy"] == ["tnwks-moverh-window"]
+    assert pending[-1]["busy"] == tasks
+    # A disabled task, or one that ended with an error, is no run.
+    assert read({"tnwks-moverh-boot": "Disabled"}, code=1)[-1]["busy"] == []
+    results = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_wayback_runs": registered(out)},
+                                    "tasks": checks_of("wayback.yml", (RUNS_CHECK,))} for out in (idle, boot, window, pending)])
+    assert not passed(results[0]), passed(results[0])
+    for result in results[1:]:
+        assert failed_by_assert(result, RUNS_CHECK)
+        assert "Nothing is changed" in next(r["msg"] for r in result["results"] if r["name"] == RUNS_CHECK)
+
+
 @needs_both
 def test_a_way_back_with_no_group_step_after_a_boot_run_that_failed_passes_the_checks(tmp_path):
-    """The state after a boot run that failed at its import back: A's disk file at its path
+    """The state after a boot run that did not end the way back (it stopped at its import back): A's disk file at its path
     with the saved rules, no list of a done way back, the markers window-started then
     boot-run. The way back mode with no group step moves nothing, imports A back, enables
     A's start task and starts it; the checks of the phase pass with the group steps off,

@@ -24,7 +24,11 @@
 # A its own batch right first (A holds it after the phase interrupt), and the
 # procedure starts A's start task itself. The phase also ends a started
 # window that did not end (the last marker window-started or boot-run, as
-# after a boot run that failed), as the way back mode of the procedure does.
+# after a boot run that did not end the way back), as the way back mode of
+# the procedure does. So before any change, the phase reads that no run of
+# the window task or of the boot task goes on, and stops with nothing changed
+# when one does: the procedure has no lock, and a second way back must not
+# run beside the first.
 # The check that A's import task can not start runs only after a done window
 # (the phase window took A's batch right), with the group steps on.
 #
@@ -51,6 +55,49 @@
   ansible.builtin.include_tasks: host_files.yml
   vars:
     wsl_move_rehearsal_host_files: assert
+
+# No run of the procedure goes on: the procedure has no lock, and the boot
+# task and the window task are two tasks. A run that a phase restart left
+# going (its wait timed out), or a forward run, must end first. A read only,
+# also in a check run, before any change of the phase. A task reads as
+# running while its state is Running or Queued, or its last result is
+# 0x41301 (the task is running), as the waits of the role read it.
+- name: Read the runs of the window task and the boot task
+  ansible.windows.win_powershell:
+    parameters:
+      Tasks:
+        - "{{ wsl_move_rehearsal_window_task }}"
+        - "{{ wsl_move_rehearsal_boot_task }}"
+    script: |
+      param([string[]]$Tasks)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $states = @()
+      $busy = @()
+      foreach ($name in $Tasks) {
+          $state = "$((Get-ScheduledTask -TaskName $name).State)"
+          $code = [int64](Get-ScheduledTaskInfo -TaskName $name).LastTaskResult
+          $states += "$name $state $('0x{0:x}' -f $code)"
+          if ($state -in @('Running', 'Queued') -or $code -eq 0x41301) { $busy += $name }
+      }
+      [pscustomobject]@{ states = $states; busy = $busy }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  check_mode: false
+  register: wsl_move_rehearsal_wayback_runs
+
+- name: No run of the window task or the boot task goes on
+  vars:
+    runs: "{{ wsl_move_rehearsal_wayback_runs.output | last }}"
+  ansible.builtin.assert:
+    that:
+      - runs.busy | length == 0
+    fail_msg: >-
+      A run of {{ runs.busy | join(' and ') }} goes on ({{ runs.states | join('; ') }}): a way back may be running.
+      Wait for its end and read its log. Nothing is changed.
+    quiet: true
 
 - name: The group steps of this way back
   ansible.builtin.set_fact:
@@ -152,19 +199,20 @@
           rehearsal_group_test: "{{ wsl_move_rehearsal_wayback_group }}"
         wsl_move_rehearsal_last_markers: [window-done, window-started, boot-run]
 
-    # The import back ran with A in Administrators, and the end of the run
-    # took A out: an icon that it made then can be the group's.
-    - name: The icon in the folder of A, after A left the group
-      when: wsl_move_rehearsal_wayback_group
-      ansible.builtin.include_tasks: icon.yml
-      vars:
-        wsl_move_rehearsal_icon_action: remove
-
     - name: A may log on as a batch job again, with no group
       ansible.windows.win_user_right:
         name: SeBatchLogonRight
         users: ["{{ wsl_move_rehearsal_sids.a }}"]
         action: add
+
+    # The import back ran with A in Administrators, and the end of the run
+    # took A out: an icon that it made then can be the group's. After the
+    # batch right: a removal that fails leaves A with its right.
+    - name: The icon in the folder of A, after A left the group
+      when: wsl_move_rehearsal_wayback_group
+      ansible.builtin.include_tasks: icon.yml
+      vars:
+        wsl_move_rehearsal_icon_action: remove
 
     # The import back started A's VM while A was in Administrators; the
     # procedure ran A's stop task before A left the group. A VM process shows

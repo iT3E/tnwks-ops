@@ -7,8 +7,8 @@
 #
 # Why: WSL writes this file at each import in place, as the importing
 # account (the service impersonates its caller), with CREATE_ALWAYS, and an
-# error there fails the import (WSL 3.0.5, LxssUserSession.cpp,
-# _ProcessImportResultMessage). A file that an account makes while it is in
+# error there fails the import (the WSL source of the installed release,
+# LxssUserSession.cpp, _ProcessImportResultMessage). A file that an account makes while it is in
 # Administrators can get the Administrators as its owner, and the CREATOR
 # OWNER rule of A's folder then names the group, not A. Such an icon stays
 # the group's: a standard A can not replace it at its import, nor delete it
