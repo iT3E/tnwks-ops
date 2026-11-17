@@ -580,13 +580,17 @@ no setting.
 **The removal.** `wsl_rehearsal_state: absent` (the default of the role
 now) removes each part, in this order:
 
-1. When the account has a profile, the play stops the start task. A task
+1. When the account has a profile and something of it is left to stop
+   (the start task runs, a process of the account runs, or the list of
+   distros in its hive names one), the play stops the start task. A task
    of the account then runs `wsl --terminate`, `wsl --unregister` and
    `wsl --shutdown`. The shutdown stops the VM of that account only: WSL
    keeps one session for each account. No task of the play runs `wsl.exe`.
    With no profile, no task of the account ever ran (the first one makes
    the profile), so it has no hive, no distro and no VM, and the play skips
-   this step and the next.
+   this step and the next. With nothing left to stop, an earlier run did
+   this step, and the play skips it too: each task of the account loads its
+   profile, and the profile must unload before it goes.
    The task of the removal registers as the tasks of the state present do
    (`s4u_user`, as SYSTEM, with a new password of the account). When it
    does not register, the removal stops there: the account and each part
@@ -599,7 +603,13 @@ now) removes each part, in this order:
    file and the results), and the file of the write test. The batch right
    goes after the profile: the service checks the new password with a
    batch logon, so while a profile is there, a second run can still do
-   step 1.
+   step 1. The play waits up to 2 minutes for the profile to unload. When
+   it stays loaded, the removal stops there, and the message says what
+   stays: run the removal again once the profile unloads, at the latest
+   after the next restart of the host. Each run of an S4U task adds a
+   reference to the profile of its account that the system does not
+   release, so a profile that such a task loaded stays loaded until the
+   next restart of the host.
 
 The same check play then reads the exit check, with the SID of the
 account read before the removal (`-e wsl_rehearsal_removed_sid=<SID>`): no
