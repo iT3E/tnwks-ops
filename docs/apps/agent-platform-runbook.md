@@ -1616,12 +1616,17 @@ of the vault work. The lead reads; the owner makes the turns.
    - `vault-notes` **equals** the `vault-notes` of the restore Job of step
      4 (no tool of the agent writes the vault). The reader compares them:
      the count is not in git.
-   - `workspace-files` is **at least** `copy-files`, the plain files of the
-     copy of the cutover (the Job checks it, `workspace-below-copy`): the
-     agent adds files to its workspace.
-   - `bytes` **equals** the size that the snapshot records:
+   - `workspace-files` and `copy-files`: the files of the workspace now,
+     and the plain files of the copy of the cutover. The agent adds files,
+     so the first is most often higher. `copy-files-missing` counts the
+     files of the copy that are not in the workspace any more (no name):
+     the agent may delete a file it no longer needs, so it is a count to
+     read, not a failure. A high count is a finding.
+   - `bytes` is **close to** the size that the snapshot records:
      `kubectl -n agents-finance get snapshots.kopiur.home-operations.com <name> -o jsonpath='{.status.stats.sizeBytes}'`.
-     A difference is a finding to read, not a pass.
+     The snapshot records the total logical size, and `bytes` is the sum
+     of the plain files, so the two can differ. A difference is a finding
+     to read, not a failed check.
 
    A failed check Job fires `KubeJobFailed` (`agents-finance`,
    `agent-restore-check`); a failed or stuck Restore fires

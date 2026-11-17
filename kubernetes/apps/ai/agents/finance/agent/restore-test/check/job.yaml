@@ -113,7 +113,10 @@ spec:
               # ARCHIVE, agent/app/restore-job.yaml). The copy held the
               # workspace only, so its plain files are the files= of the
               # line of that Job. The agent writes its workspace, so the
-              # snapshot has at least those files, not the same count.
+              # count of the snapshot is most often higher; and it may
+              # delete a file it no longer needs, so a file of the copy that
+              # is not there is a count to read, not a failure:
+              # copy-files-missing (no name).
               C="$D/archives/$COPY"
               workspace=$(find "$D/state/workspace" -type f 2>/dev/null | wc -l)
               if [ ! -f "$C" ]; then
@@ -122,8 +125,10 @@ spec:
                 bad="$bad copy-tar"
               else
                 copy=$(tar -tvzf "$C" 2>/dev/null | grep -c '^-' || true)
-                echo "restore-check workspace-files=$workspace copy-files=$copy"
-                [ "$workspace" -ge "$copy" ] || bad="$bad workspace-below-copy"
+                missing=$(tar -tzf "$C" 2>/dev/null | grep -v '/$' | while IFS= read -r f; do
+                  [ -f "$D/state/$f" ] || echo x
+                done | wc -l)
+                echo "restore-check workspace-files=$workspace copy-files=$copy copy-files-missing=$missing"
               fi
 
               # The newest start archive by the time in its name
