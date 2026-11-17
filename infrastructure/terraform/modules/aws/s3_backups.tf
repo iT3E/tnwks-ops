@@ -109,8 +109,11 @@ data "aws_iam_policy_document" "homelab_backups_bucket" {
     }
   }
 
-  # A list without a prefix still shows the key names under it (content-addressed
-  # names of Kopia, no data); a list under the prefix is denied. Not
+  # A list with no prefix, or with a prefix shorter than the exclusive prefix
+  # without its final / (for kopiur-finance/, a prefix such as "kopiur" or
+  # "kopiur-fin"), still shows the key names under it (content-addressed names
+  # of Kopia, no data); a list with a prefix that starts with that name is
+  # denied. Not
   # s3:ListBucketMultipartUploads: it does not take the s3:prefix condition key,
   # and S3 refuses the whole policy with it (MalformedPolicy). It shows only the
   # key names of uploads in progress; their parts are objects, denied above.
