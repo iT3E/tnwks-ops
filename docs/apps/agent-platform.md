@@ -588,7 +588,8 @@ The finance agent runs as the pilot does, in `agents-finance`
 (`kubernetes/apps/ai/agents/finance/`), with its own key at the model
 gateway, its own sandbox gateway and its own backup repository. It is in git
 and not applied yet: the Deployment, the volume and the backup policy wait
-for the values of the owner (R4) and for the cutover. The tools that differ
+for the values of the owner (R4) and for the cutover, whose steps are in the
+runbook ([The cutover of the finance agent](agent-platform-runbook.md#the-cutover-of-the-finance-agent)). The tools that differ
 from the pilot:
 
 - **Web search,** as the pilot's ([The pilot agent](#the-pilot-agent)): the
@@ -626,24 +627,24 @@ None of these values goes through an agent or a session. The search key is
 done: `agent/app/secret-search.sops.yaml` is in git with its value, and is
 listed with the Deployment.
 
-1. **The seed of the vault,** in the state copy of the cutover: after the
-   state of the finance agent is on its volume and the pod runs, and before
-   the first chat. From the host, with the vault folder in `V`:
+1. **The seed of the vault,** in the state copy of the cutover: through
+   the inbox pod, before the agent starts
+   ([The copy of the state](agent-platform-runbook.md#the-copy-of-the-state),
+   step 6). The `memory-index` step of the first start indexes the notes,
+   and the next nightly snapshot holds the vault. To seed a newer vault
+   later, while the pod runs, from the host, with the vault folder in `V`:
+   empty the folder first, so that a note deleted on a device goes here
+   too, then copy and count:
 
    ```bash
-   kubectl -n agents-finance exec deploy/agent -c agent -- mkdir -p /home/node/data/vault
+   kubectl -n agents-finance exec deploy/agent -c agent -- find /home/node/data/vault -mindepth 1 -delete
    tar -C "$V" --exclude=.obsidian --exclude=.trash --exclude=.git -cf - . \
      | kubectl -n agents-finance exec -i deploy/agent -c agent -- tar -C /home/node/data/vault --no-same-owner -xf -
    kubectl -n agents-finance exec deploy/agent -c agent -- sh -c 'find /home/node/data/vault -type f -name "*.md" | wc -l'
    ```
 
    The count is the number of notes. The product watches the folder and
-   indexes the notes; the next start of the pod indexes them in any case
-   (the `memory-index` step). The next nightly snapshot holds the vault.
-   To seed a newer vault later, empty the folder first, so that a note
-   deleted on a device goes here too:
-   `kubectl -n agents-finance exec deploy/agent -c agent -- find /home/node/data/vault -mindepth 1 -delete`,
-   then the three commands again.
+   indexes the notes; the next start of the pod indexes them in any case.
 
 ## The finance app
 

@@ -1,0 +1,113 @@
+---
+# Not applied yet: step 4 of the cutover lists it in kustomization.yaml, with
+# ARCHIVE set to the name of the copy, and step 5 takes it out again
+# (docs/apps/agent-platform-runbook.md, "The cutover of the finance agent").
+#
+# The restore Job of the runbook ("The restore Job"), with the image and the
+# node of deployment.yaml. The agent is at zero replicas. It checks the
+# archive against its checksum file, moves the state of now aside to
+# state.before-restore-<time>, and puts the archive in place as state/. Its
+# script uses no variable in braces, because Flux substitutes those in this
+# directory.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # One name for each run: agent-restore-list, agent-restore, agent-restore-2.
+  name: agent-restore
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-restore
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          imagePullPolicy: IfNotPresent
+          env:
+            # start/openclaw-state-<release>-<time>.tar.gz: the copy of the
+            # owner, with its .sha256 file next to it. Or list.
+            - name: ARCHIVE
+              value: start/openclaw-state-SET-ME.tar.gz
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              DATA=/home/node/data
+              if [ "$ARCHIVE" = daily/newest ]; then
+                ARCHIVE=daily/$(cd "$DATA/archives/daily" && ls openclaw-backup-*.tar.gz | tail -n 1)
+                echo "restore archive=$ARCHIVE"
+              fi
+              A="$DATA/archives/$ARCHIVE"
+              stamp=$(date -u +%Y%m%dT%H%M%SZ)
+              stage="$DATA/restore-$stamp"
+              if [ "$ARCHIVE" = list ]; then
+                ls -l --time-style=+%Y-%m-%dT%H:%MZ "$DATA/archives/start" "$DATA/archives/daily"
+                exit 0
+              fi
+              test -f "$A"
+              case "$ARCHIVE" in
+                start/*)
+                  (cd "$(dirname "$A")" && sha256sum -c "$(basename "$A").sha256")
+                  mkdir -m 0700 "$stage"
+                  tar -xzf "$A" -C "$stage"
+                  new="$stage"
+                  ;;
+                daily/*)
+                  made=$(tar -xzOf "$A" --wildcards '*/manifest.json' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).runtimeVersion))')
+                  here=$(node /app/openclaw.mjs --version | grep -oE '[0-9]{4}\.[0-9]+\.[0-9]+' | head -n 1)
+                  if [ "$made" != "$here" ]; then
+                    echo "restore result=failed reason=release archive=$made image=$here"
+                    exit 1
+                  fi
+                  node /app/openclaw.mjs backup restore "$A" --target "$stage"
+                  new=$(find "$stage" -type d -path '*/payload/posix/home/node/data/state' | head -n 1)
+                  test -n "$new"
+                  ;;
+                *)
+                  echo "restore result=failed reason=archive"
+                  exit 1
+                  ;;
+              esac
+              if [ -d "$DATA/state" ]; then mv "$DATA/state" "$DATA/state.before-restore-$stamp"; fi
+              mv "$new" "$DATA/state"
+              chmod 0700 "$DATA/state"
+              rm -rf "$stage"
+              echo "restore result=ok archive=$ARCHIVE kept=state.before-restore-$stamp"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /home/node/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: agent-state
+        - name: tmp
+          emptyDir: {}
