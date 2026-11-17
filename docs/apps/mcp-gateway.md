@@ -14,7 +14,7 @@ finance; the others get a route when they get a tool.
 | Address | `http://mcp-gateway.ai.svc.cluster.local:3000/<domain>/mcp` |
 | Clients | `finance` (the finance agent), `finance-probe` and `no-tools` (the gateway probe) |
 | Logs | Loki, `{namespace="ai", app="mcp-gateway"}` |
-| Metrics | Prometheus, `agentgateway_mcp_requests_total` and the request series |
+| Metrics | Prometheus, the request and connection series; no tool name (the tool of each request is in the log) |
 
 ## Why here
 
@@ -37,7 +37,8 @@ servers, so a key of one domain is not a key of another.
   the proxy puts the token of the agent in its place
   ([agent-platform.md](agent-platform.md), "The finance app").
 - **No Secret, no app token, no model key, no database.** The values of the
-  keys are in the Secrets of the clients only.
+  keys are in the Secrets of the clients only, and the gateway sees each key
+  only in the request that carries it.
 - **No service account token** (`automountServiceAccountToken: false`).
   The pod meets the `restricted` level: non-root, a read-only root file
   system, no capability, the runtime's seccomp profile.
@@ -57,6 +58,15 @@ the gateway refuses another tool with a 400 (JSON-RPC error `unknown
 resource`, the same as for a tool that does not exist) and sends nothing on.
 The rules are `allow` rules only: a `deny` rule whose expression fails does
 not deny.
+
+The client is the one of the key, never one that a header names. After the
+key check, only the headers that MCP needs go on to the MCP server
+(`Accept`, `Content-Type`, `Mcp-Protocol-Version`, `Mcp-Session-Id`,
+`Last-Event-Id`, a `transformations` policy of the route); the gateway adds
+its own `Authorization`. Each other header of the client (a cookie, a key of
+another kind, a forwarded address, a trace) is dropped. The container test
+puts a recorder in front of the MCP server and checks the headers that
+arrive.
 
 | Route | Client | May list | May call |
 | --- | --- | --- | --- |
@@ -146,11 +156,24 @@ reason=hash` when the SHA-256 of its key is not the hash of the client
 wall behind it. For finance: every tool of the MCP server (the gateway's
 rule no longer holds), but the proxy still refuses each delete, trigger,
 rule write and each call off its allow list, and the app token stays in the
-proxy. It gives no model key, no app token and no key of a client (the
-config holds hashes). It does see each tool call of each domain while the
-call passes through it, with its arguments and its result: the finance data
-of a call passes through this pod. A domain added later adds its tools and
-its data to this.
+proxy. It gives no model key and no app token. The config holds only hashes
+of the client keys, but each client sends its key in each request, so a
+compromised gateway sees each key that arrives while it is compromised, and
+can call the gateway as that client. It also sees each tool call of each
+domain while the call passes through it, with its arguments and its result:
+the finance data of a call passes through this pod. A domain added later
+adds its tools, its key and its data to this. After a compromise, the owner
+makes new keys for every client (as in the steps below).
+
+## Traffic in the cluster
+
+The MCP traffic is plain HTTP: from the agent pod to the gateway, and from
+the gateway to the MCP server. Traffic inside the cluster is not encrypted
+between nodes, as for the model gateway today (the agents call it over plain
+HTTP too). So the key of a client and the arguments and results of its tool
+calls cross the network between the nodes in clear. The network policies
+decide which pods may connect; they do not hide the content from a party on
+the network between the nodes.
 
 ## Logs and metrics
 
@@ -168,9 +191,14 @@ refused tool:
 
 The pod has the label `logs.home.arpa/ship: "true"`, so the platform log
 agent ships its lines to Loki as they are, like the lines of the model
-bridge. The PodMonitor scrapes `agentgateway_mcp_requests_total` (by route,
-method, server and tool) and the request and connection series. The alert
-`AgentPlatformWorkloadNotReady` covers the Deployment.
+bridge. The PodMonitor scrapes the request series (`agentgateway_requests_total`
+and the durations, by route and status) and the connection series. The MCP
+request counter is not made (`config.metrics.remove`) and the scrape drops
+it too: its label `resource` is the tool name that the client sends, also a
+refused one, so a client could make any number of series. The tool of each
+request is in the access log. The container test calls a made-up tool and
+finds no tool name in the metrics. The alert `AgentPlatformWorkloadNotReady`
+covers the Deployment.
 
 ## The probe
 
@@ -184,11 +212,14 @@ agent does, with two keys of its own and none of the agent's:
    the list from the same config file); its `get_about` reaches the app
    through the MCP server and the proxy (a 401 of the app with the
    placeholder token, an answer with the real one); `delete_transaction`,
-   `trigger_rule` and `create_tag` are refused at the gateway.
+   `trigger_rule` and `create_tag` are refused at the gateway, and
+   `create_tag` is refused also with headers that name the client `finance`.
 4. The key `no-tools` lists nothing, and its `get_about` is refused.
 
 With the placeholder keys, 3 and 4 print `skipped: the key is pending` and
-pass. It can not run as the identity of the agent pod (a pod with its
+pass, for as long as the keys are placeholders. The owner's values step
+(below) ends that; 1 and 2 always run. The runbook says so at
+`AgentPlatformCronJobFailed`. It can not run as the identity of the agent pod (a pod with its
 labels would be an agent pod), so the policy of the MCP server, which lets
 in the gateway only, is a test in git as well.
 
@@ -207,6 +238,8 @@ and the container test runs the new image with the config of the repo.
 ## What is left
 
 - **No tool pin and no argument check** at the gateway (above).
+- **Plain HTTP inside the cluster** (above): keys and tool calls cross the
+  network between the nodes in clear, as the model calls do.
 - **One replica.** While it is down or rolls, the agents have no tools; they
   keep their model and their sandboxes.
 - **Stateless MCP.** Each request opens its own session with the MCP

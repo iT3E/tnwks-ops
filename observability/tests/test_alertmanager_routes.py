@@ -49,6 +49,7 @@ CASES = [
     ({"alertname": "KubeJobFailed", "namespace": "agents-main", "job_name": "platform-check-isolation-29900000"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "platform-check-firefly-probe-29900000"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "platform-check-firefly-dns-29900000"}, "null"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "platform-check-mcp-gateway-probe-29900000"}, "null"),
     # A backup mover of a trust domain, a Job made by hand, a new CronJob.
     ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "agent-state-20260101103000"}, "telegram"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "providers-now"}, "telegram"),
@@ -70,6 +71,7 @@ CASES = [
     # The platform's own alerts still reach the channel.
     ({"alertname": "AgentPlatformCronJobFailed", "namespace": "agents-finance", "cronjob": "platform-check-probe"}, "telegram"),
     ({"alertname": "AgentPlatformCronJobFailed", "namespace": "agents-finance", "cronjob": "platform-check-firefly-probe"}, "telegram"),
+    ({"alertname": "AgentPlatformCronJobFailed", "namespace": "agents-finance", "cronjob": "platform-check-mcp-gateway-probe"}, "telegram"),
     ({"alertname": "AgentWorkflowRunFailed", "namespace": "agents-workflows", "job_name": "run-0123456789abcdef0123"}, "telegram"),
 ]
 

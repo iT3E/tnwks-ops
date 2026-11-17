@@ -667,12 +667,14 @@ PENDING = "pending"
 SKIPPED = "skipped: the key is pending"
 
 
-def mcp_request(key: str | None, method: str, params: dict) -> tuple[int, object]:
+def mcp_request(key: str | None, method: str, params: dict,
+                extra: dict | None = None) -> tuple[int, object]:
     """One JSON-RPC request to the gateway (streamable HTTP, stateless: no
-    session), with the key as a bearer or with no key. The status and the
-    answer (JSON, or the last server-sent event)."""
+    session), with the key as a bearer or with no key, and other headers of
+    the client if given. The status and the answer (JSON, or the last
+    server-sent event)."""
     headers = {"Content-Type": "application/json",
-               "Accept": "application/json, text/event-stream"}
+               "Accept": "application/json, text/event-stream", **(extra or {})}
     if key is not None:
         headers["Authorization"] = f"Bearer {key}"
     request = urllib.request.Request(
@@ -712,7 +714,7 @@ def listed_names(key: str) -> list[str] | None:
         return None
 
 
-def called(key: str, name: str, arguments: dict) -> str:
+def called(key: str, name: str, arguments: dict, extra: dict | None = None) -> str:
     """The outcome of a tool call through the gateway. The gateway refuses a
     tool that its rule does not name for the key with a 400 and the JSON-RPC
     error "unknown resource" (agentgateway 1.7.0), and sends nothing on. A
@@ -720,7 +722,7 @@ def called(key: str, name: str, arguments: dict) -> str:
     (fireflyiii-mcp 1.0.1, formatError): the app's 401 with the placeholder
     token, and an answer with the real one."""
     try:
-        status, body = mcp_request(key, "tools/call", {"name": name, "arguments": arguments})
+        status, body = mcp_request(key, "tools/call", {"name": name, "arguments": arguments}, extra)
     except OSError as e:
         return f"failed: {type(e).__name__}"
     if status == 401:
@@ -778,6 +780,13 @@ def mcp_gateway() -> None:
                 ("probe key: a write of the rule (create_tag), not the probe's",
                  "create_tag", {"tag": "probe"}, "refused: gateway")):
             report(check, target, expected, called(probe_key, tool, arguments))
+        # The client is the one of the key: headers that name another client
+        # give nothing (the gateway also drops them before the MCP server).
+        report(check, "probe key with headers that name the client finance: a write",
+               "refused: gateway",
+               called(probe_key, "create_tag", {"tag": "probe"},
+                      {"X-Client": "finance", "X-Api-Key": "finance", "Cookie": "client=finance",
+                       "X-Forwarded-For": "127.0.0.1"}))
     no_tools_key = os.environ.get("NO_TOOLS_KEY", PENDING)
     if no_tools_key == PENDING:
         report(check, "key with no tool", SKIPPED, SKIPPED)

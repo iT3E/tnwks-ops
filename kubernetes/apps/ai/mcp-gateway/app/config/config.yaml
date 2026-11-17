@@ -21,6 +21,12 @@ config:
   # probe of the kubelet.
   statsAddr: 0.0.0.0:15020
   readinessAddr: 0.0.0.0:15021
+  # The MCP request counter has a label with the tool name that the client
+  # sends, also for a refused name, so a client could make any number of
+  # series. It is not made; the access log has the tool of each request.
+  metrics:
+    remove:
+      - agentgateway_mcp_requests_total
   # Stateless MCP (each request stands alone, as below): no session to
   # protect, and the config is read-only, so no key is generated.
   session:
@@ -65,6 +71,13 @@ routes:
             metadata: {client: no-tools}
       timeout:
         requestTimeout: 60s
+      # Only the headers that MCP needs go on to the MCP server, after the
+      # key is checked: each other header that a client sets (a cookie, a
+      # key of another kind, a forwarded address, a trace) is dropped. The
+      # gateway then sets its own Authorization (backendAuth below).
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
       # The tool rule of finance. The list is the kept tools of the MCP
       # server of the finance app, by exact name, from the dump of its pinned
       # image (../../tools/firefly.json, written by ../../tools/mcp_tools.py).

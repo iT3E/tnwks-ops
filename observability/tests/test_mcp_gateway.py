@@ -191,6 +191,20 @@ def test_the_log_adds_the_client_and_nothing_of_a_call():
         assert word not in re.sub(r"(?m)^\s*#.*$", "", text), word
 
 
+def test_only_the_headers_of_mcp_go_on_and_no_tool_name_is_a_metric():
+    """The route lets only the headers of MCP through to the MCP server, and
+    the counter whose label a client sets is not made and not scraped (the
+    container tests show both)."""
+    allowed = ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"]
+    for r in config()["routes"]:
+        replace = r["policies"]["transformations"]["request"]["replace"]
+        assert replace == f"request.headers.filterKeys(k, k in {json.dumps(allowed)})"
+    assert config()["config"]["metrics"]["remove"] == ["agentgateway_mcp_requests_total"]
+    (endpoint,) = kind(GATEWAY / "app/podmonitor.yaml", "PodMonitor")["spec"]["podMetricsEndpoints"]
+    assert endpoint["metricRelabelings"] == [
+        {"sourceLabels": ["__name__"], "regex": "agentgateway_mcp_requests_total", "action": "drop"}]
+
+
 def test_flux_finds_no_variable_in_the_config():
     assert "${" not in CONFIG.read_text()
 
@@ -322,6 +336,52 @@ class H(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0", 8080), H).serve_forever()
 '''
 
+# A recorder in front of the MCP server: it writes the headers of each
+# request that the gateway sends on, then forwards it to the server.
+RECORDER = r'''
+import json, sys, urllib.request, urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+UP = sys.argv[1]
+HOP = {"host", "content-length", "connection", "transfer-encoding"}
+class H(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    def log_message(self, *a):
+        pass
+    def forward(self, method):
+        n = int(self.headers.get("content-length") or 0)
+        body = self.rfile.read(n) if n else None
+        with open("/rec/mcp.jsonl", "a") as f:
+            f.write(json.dumps({"method": method,
+                                "headers": {k.lower(): v for k, v in self.headers.items()}}) + "\n")
+        request = urllib.request.Request(UP + self.path, data=body, method=method,
+                                         headers={k: v for k, v in self.headers.items() if k.lower() not in HOP})
+        try:
+            r = urllib.request.urlopen(request, timeout=30)
+            status, headers, data = r.status, r.headers, r.read()
+        except urllib.error.HTTPError as e:
+            status, headers, data = e.code, e.headers, e.read()
+        self.send_response(status)
+        for k in ("content-type", "mcp-session-id"):
+            if headers.get(k):
+                self.send_header(k, headers.get(k))
+        self.send_header("content-length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+    def do_POST(self): self.forward("POST")
+    def do_GET(self): self.forward("GET")
+    def do_DELETE(self): self.forward("DELETE")
+ThreadingHTTPServer(("0.0.0.0", 3000), H).serve_forever()
+'''
+
+# Headers that a client sets, which must not reach the MCP server.
+CLIENT_HEADERS = {"Cookie": "session=gateway-test-header", "X-Api-Key": "gateway-test-header",
+                  "X-Client": "finance", "X-Forwarded-For": "192.0.2.1",
+                  "Traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"}
+# What reaches the MCP server: the headers of MCP that the gateway lets
+# through, the ones it sets itself, and the bearer of the server.
+UPSTREAM_HEADERS = {"accept", "content-type", "content-length", "host", "authorization",
+                    "mcp-method", "mcp-name", "mcp-protocol-version", "mcp-session-id"}
+
 # Calls of the finance key, as the agent makes them, through the probe's
 # own functions.
 FINANCE_CALLS = r'''
@@ -335,6 +395,8 @@ print(json.dumps({
     "create_tag": p.called(key, "create_tag", {"tag": "gateway-test-argument"}),
     "delete_transaction": p.called(key, "delete_transaction", {"id": "0"}),
     "update_rule": p.called(key, "update_rule", {"id": "0", "title": "gateway-test-argument"}),
+    "with_headers": p.called(key, "get_about", {}, json.loads(sys.argv[2])),
+    "made_up": p.called(key, "zz_made_up_tool_name", {}),
 }))
 '''
 
@@ -346,6 +408,7 @@ def lab():
     (work / "rec").mkdir(mode=0o777)
     (work / "rec").chmod(0o777)
     (work / "app.py").write_text(FAKE_APP)
+    (work / "recorder.py").write_text(RECORDER)
     keys = {client: f"test-{client}-{uuid.uuid4().hex}" for client in ("finance", "finance-probe", "no-tools")}
     text = CONFIG.read_text()
     for i, client in enumerate(("finance", "finance-probe", "no-tools")):
@@ -358,7 +421,7 @@ def lab():
             path.chmod(0o644)
     tag = uuid.uuid4().hex[:8]
     front, back = f"mcpgw-front-{tag}", f"mcpgw-back-{tag}"
-    names = {n: f"mcpgw-{n}-{tag}" for n in ("app", "mcp", "gateway")}
+    names = {n: f"mcpgw-{n}-{tag}" for n in ("app", "mcp", "recorder", "gateway")}
     python = probe_python()
     try:
         for net in (front, back):
@@ -371,9 +434,14 @@ def lab():
         server = kind(MCP, "Deployment")["spec"]["template"]["spec"]["containers"][0]
         env = [x for e in server["env"] for x in ("-e", f"{e['name']}={e['value']}")]
         run([tool, "run", "-d", "--name", names["mcp"], "--network", back,
-             "--network-alias", "firefly-mcp.agents-finance.svc.cluster.local",
+             "--network-alias", "firefly-mcp-upstream",
              "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL", "--user", "1000",
              *env, mcp_image(), *server["command"]])
+        # The gateway reaches the server through the recorder, at its name.
+        run([tool, "run", "-d", "--name", names["recorder"], "--network", back,
+             "--network-alias", "firefly-mcp.agents-finance.svc.cluster.local",
+             "-v", f"{work}/recorder.py:/recorder.py:ro", "-v", f"{work}/rec:/rec",
+             python, "python3", "-I", "/recorder.py", "http://firefly-mcp-upstream:3000"])
         # The gateway is on both networks; the probe and the agent's calls
         # are on the front one only, so the MCP server is out of their
         # reach, as the network policy makes it in the cluster.
@@ -440,6 +508,11 @@ def gateway_log(lab: dict) -> str:
     return result.stdout + result.stderr
 
 
+def upstream_requests(lab: dict) -> list[dict]:
+    path = lab["work"] / "rec/mcp.jsonl"
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
 def app_requests(lab: dict) -> list[dict]:
     path = lab["work"] / "rec/app.jsonl"
     return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
@@ -471,6 +544,7 @@ def test_the_probe_passes_and_the_app_sees_only_its_read(lab):
     assert got["probe key: lists the 73 tools of the rule"] == "same"
     assert got["probe key: allowed read (get_about)"] == "reached: ok"
     assert got["key with no tool: tools/list"] == "tools: 0"
+    assert got["probe key with headers that name the client finance: a write"] == "refused: gateway"
     assert not [k for k in got if "skipped" in got[k]]
     calls = app_requests(lab)[before:]
     assert [(c["method"], c["path"]) for c in calls] == [("GET", "/api/v1/about")]
@@ -488,8 +562,9 @@ def test_the_probe_skips_and_passes_with_pending_keys(lab):
 
 def test_the_finance_key_gets_its_tools_and_nothing_else(lab):
     before = len(app_requests(lab))
+    before_upstream = len(upstream_requests(lab))
     result = on_front(lab["tool"], lab["front"], lab["python"], "python3", "-c", FINANCE_CALLS,
-                      lab["keys"]["finance"],
+                      lab["keys"]["finance"], json.dumps(CLIENT_HEADERS),
                       env={"OWN_NAMESPACE": "agents-finance", "TRUST_DOMAIN_NAMESPACES": "agents-finance",
                            "MCP_GATEWAY_URL": probe_env()["MCP_GATEWAY_URL"]})
     out = json.loads(result.stdout)
@@ -498,11 +573,42 @@ def test_the_finance_key_gets_its_tools_and_nothing_else(lab):
     assert out["create_tag"] == "reached: ok"
     assert out["delete_transaction"] == "refused: gateway"
     assert out["update_rule"] == "refused: gateway"
+    assert out["with_headers"] == "reached: ok"
+    assert out["made_up"] == "refused: gateway"
     calls = app_requests(lab)[before:]
-    assert [c["method"] for c in calls] == ["GET", "POST"]
+    assert [c["method"] for c in calls] == ["GET", "POST", "GET"]
     assert not [c for c in calls if c["method"] == "DELETE" or "/rules" in c["path"]]
     # The app gets the fixed bearer, never a key of a client.
     assert {c["authorization"] for c in app_requests(lab)} == {"Bearer none"}
+    # The MCP server gets the headers of MCP and its bearer only: no header
+    # that the client set, and no key.
+    upstream = upstream_requests(lab)[before_upstream:]
+    assert upstream
+    for request in upstream:
+        assert set(request["headers"]) <= UPSTREAM_HEADERS, request["headers"]
+        assert request["headers"]["authorization"] == "Bearer none"
+        text = json.dumps(request["headers"])
+        assert "gateway-test-header" not in text and "192.0.2.1" not in text
+        assert lab["keys"]["finance"] not in text
+    assert {r["headers"].get("mcp-name") for r in upstream} >= {"get_about", "create_tag"}
+
+
+def test_the_metrics_hold_no_tool_name(lab):
+    """A client sets the tool name of a request, also of a refused one: no
+    metric carries it, so a client can not make series."""
+    code = ("import sys, urllib.request\n"
+            "sys.path.insert(0, '/scripts')\n"
+            "import platform_checks as p\n"
+            "assert p.called(sys.argv[1], 'zz_made_up_tool_name', {}) == 'refused: gateway'\n"
+            "assert p.called(sys.argv[1], 'get_about', {}) == 'reached: ok'\n"
+            "print(urllib.request.urlopen('http://mcp-gateway.ai.svc.cluster.local:15020/metrics', timeout=10).read().decode())")
+    metrics = on_front(lab["tool"], lab["front"], lab["python"], "python3", "-c", code, lab["keys"]["finance"],
+                       env={"OWN_NAMESPACE": "agents-finance", "TRUST_DOMAIN_NAMESPACES": "agents-finance",
+                            "MCP_GATEWAY_URL": probe_env()["MCP_GATEWAY_URL"]}).stdout
+    assert "agentgateway_requests_total" in metrics
+    assert "agentgateway_mcp_requests_total" not in metrics
+    for name in ("zz_made_up_tool_name", "get_about", "delete_transaction"):
+        assert name not in metrics
 
 
 def test_the_log_has_one_line_a_request_with_the_client_and_no_argument(lab):
@@ -510,6 +616,7 @@ def test_the_log_has_one_line_a_request_with_the_client_and_no_argument(lab):
     for key in lab["keys"].values():
         assert key not in log
     assert "gateway-test-argument" not in log
+    assert "gateway-test-header" not in log
     lines = [json.loads(x) for x in log.splitlines() if x.startswith("{") and '"scope":"request"' in x]
     calls = [x for x in lines if x.get("mcp.method.name") == "tools/call"]
     assert calls

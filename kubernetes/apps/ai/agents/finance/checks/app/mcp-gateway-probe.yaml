@@ -9,13 +9,17 @@
 #   read (get_about) reaches the app through the MCP server and the proxy (a
 #   401 of the app with the placeholder token, an answer with the real one),
 #   and a delete, a rule trigger and a write are refused at the gateway, so
-#   nothing reaches the MCP server;
+#   nothing reaches the MCP server, also with headers that name the client
+#   finance (the client is the one of the key);
 # - the key with no tool (client no-tools): it lists nothing and its read
 #   is refused;
 # - a straight connection to the MCP server fails: only the gateway may
 #   reach it (../../firefly-mcp/app/networkpolicy.yaml).
 # Until the owner's values step the two keys are placeholders: the checks
-# that need them print "skipped: the key is pending" and pass. It changes no
+# that need them print "skipped: the key is pending" and pass, and the
+# values step ends that (docs/apps/agent-platform-runbook.md,
+# AgentPlatformCronJobFailed). The checks with no key and with an unknown
+# key, and the straight connection, always run. It changes no
 # data. A failed run alerts as the other checks do
 # (AgentPlatformCronJobFailed, AgentPlatformCheckStale).
 apiVersion: batch/v1
@@ -33,8 +37,8 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      # The worst case, in seconds: the straight connection 5, then nine
-      # MCP requests of 30 each (270). That is 275.
+      # The worst case, in seconds: the straight connection 5, then ten
+      # MCP requests of 30 each (300). That is 305.
       activeDeadlineSeconds: 600
       template:
         metadata:

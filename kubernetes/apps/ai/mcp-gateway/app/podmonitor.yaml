@@ -1,8 +1,10 @@
 ---
-# The metrics of the MCP gateway: agentgateway_mcp_requests_total by route,
-# MCP method, server and tool, and the request and connection series
-# (docs/apps/mcp-gateway.md, "Logs and metrics"). No client key and no
-# argument is a label.
+# The metrics of the MCP gateway: the request series by route and status,
+# and the connection series (docs/apps/mcp-gateway.md, "Logs and metrics").
+# No client key, no argument and no tool name is a label: the gateway makes
+# no agentgateway_mcp_requests_total (config.metrics.remove), whose tool
+# label a client sets, and the scrape drops it as well, in case a release
+# makes it again.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
@@ -16,3 +18,7 @@ spec:
     - port: metrics
       path: /metrics
       interval: 60s
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: agentgateway_mcp_requests_total
+          action: drop
