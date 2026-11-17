@@ -620,6 +620,26 @@ from the pilot:
 - **The finance app,** read and write, never delete, through the MCP
   gateway, the MCP server of the app and its proxy
   ([The finance app](#the-finance-app)).
+- **The memory file is over the limit of one bootstrap file.** The doctor
+  step of the first start: `MEMORY.md` has 34,376 characters, and the
+  product puts 20,000 of them in the prompt (`bootstrapMaxChars`, default
+  20000; 42 % left out). All bootstrap files have 46,585 characters, under
+  the limit of all files (`bootstrapTotalMaxChars`, 60000). The host had
+  the same limits, so nothing changed with the move. Left as it is, for
+  now:
+  - The product's way is a short `MEMORY.md`: the detail goes in daily
+    files `memory/YYYY-MM-DD.md`, which `memory_search` finds on demand
+    (the product docs, "User model"). The agent can do that in a chat.
+  - The other way is `agents.defaults.bootstrapMaxChars: 40000` in
+    `openclaw.json`: all of the file in the prompt, with room to grow. The
+    cost: about 14,400 characters more in each model request, about 3,600
+    to 4,100 tokens (3.5 to 4 characters a token), most of it read from
+    the prompt cache. The files would then be 78 % of the limit of all
+    files.
+  - A scheduled job gets no `MEMORY.md` in either case: the product
+    leaves the memory file out of a scheduled session (a lab with the
+    image: a scheduled turn got `AGENTS.md` and no `MEMORY.md`, a chat turn
+    got both).
 
 ### The steps of the owner
 

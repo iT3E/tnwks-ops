@@ -212,6 +212,26 @@ refuses as duplicate samples). A container test runs Prometheus with the
 relabelings of the PodMonitor against odd methods. The alert `AgentPlatformWorkloadNotReady`
 covers the Deployment.
 
+**A 405 at level error on each start of a client.** After `initialize`, the
+MCP client of the agent (the MCP TypeScript SDK 1.32.1 in the agent image)
+opens the optional stream of the protocol: a `GET` to the route. A
+stateless route offers no stream, so the gateway answers `405` and logs it
+at level `error` (`"http.method":"GET"`, `"http.status":405`, `"error":"mcp:
+method not allowed; must be GET, POST, or DELETE"`). The protocol allows
+that answer, and the client goes on with no stream. It is noise, not a
+fault:
+
+- No setting of the client stops it: the SDK opens the stream after each
+  `notifications/initialized` that gets a `202`, with no option, and the
+  config of the product has no field for it.
+- A route of the gateway could answer the `GET` itself (`directResponse`,
+  status 405): a lab with agentgateway v1.7.0 logs it at level `info`. But
+  that route has no key check, against the rule that each route denies by
+  default, so it is not done.
+- No alert counts it: no rule reads the log lines of the gateway, and no
+  rule reads `agentgateway_requests_total` (a test checks the rules of
+  git for it).
+
 ## The probe
 
 `platform-check-mcp-gateway-probe` (`agents/finance/checks/app/`, daily at
