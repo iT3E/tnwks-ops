@@ -382,3 +382,17 @@ def test_the_values_check_refuses_a_key_whose_hash_is_not_the_one_of_finance(con
     assert code != 0
     assert out == "values-check result=failed key=MCP_GATEWAY_KEY reason=hash"
     assert hashlib.sha256(VALUE.encode()).hexdigest() not in out
+
+
+def test_the_restore_test_is_never_listed_with_the_placeholder_snapshot():
+    """The restore test (agent/restore-test/) is listed by the
+    kustomization.yaml of agents-finance for one run only, and only with the
+    name of a real snapshot in restore/restore.yaml."""
+    finance = yaml.safe_load((APP.parents[1] / "kustomization.yaml").read_text())["resources"]
+    if "./agent/restore-test/ks.yaml" not in finance:
+        return
+    (restore,) = [d for d in yaml.safe_load_all(
+        (APP.parent / "restore-test/restore/restore.yaml").read_text()) if d]
+    name = restore["spec"]["source"]["snapshotRef"]["name"]
+    assert "SET-ME" not in name
+    assert re.fullmatch(r"agent-state-\d{14}", name), name
