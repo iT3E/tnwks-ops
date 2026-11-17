@@ -470,12 +470,15 @@ LAST_OUTPUT = re.compile(r"\{\{ (\w+)\.output \| default\(\[\]\) \| last \| defa
 LENGTH = re.compile(r"(\w+) \| length > 0")
 
 
-def stop_block_runs(user_output: list, profile_output: list, check_mode: bool = False) -> bool:
+def stop_block_runs(user_output: list, profile_output: list, check_mode: bool = False,
+                    left_output: list | None = None) -> bool:
     """Whether "The distro and the VM stop, as the account" runs, by its `when` and the
-    vars of the absent block, from what the two reads gave. The test knows the two
+    vars of the absent block, from what the three reads gave. The test knows the two
     forms that the block uses, as Jinja reads them, and fails on any other."""
     block = next(task for task in TASKS if task.get("when") == "wsl_rehearsal_state == 'absent'")
-    outputs = {"wsl_rehearsal_user": user_output, "wsl_rehearsal_profile_read": profile_output}
+    left = ["the start task runs"] if left_output is None else left_output
+    outputs = {"wsl_rehearsal_user": user_output, "wsl_rehearsal_profile_read": profile_output,
+               "wsl_rehearsal_left_read": left}
     values = {}
     for name, expression in block["vars"].items():
         m = LAST_OUTPUT.fullmatch(expression)
@@ -513,6 +516,60 @@ def test_with_no_profile_the_task_of_the_removal_is_neither_registered_nor_run()
     names = [task["name"] for task in absent()]
     assert names.index("Read the temporary account") < names.index("Read the profile of the account") < names.index(
         "The start task stops")
+
+
+def test_with_nothing_of_the_account_left_no_task_of_the_account_runs_again():
+    """An earlier run stopped the distro and the VM, and the profile stayed loaded. A
+    later run then runs no task of the account: that would load its profile again."""
+    sid, profile = "S-1-5-21-7-7-7-1002", ["C:\\Users\\tnwks-rehearsal"]
+    assert stop_block_runs([sid], profile, left_output=["the start task runs; the distros tnwks-rehearsal"]) is True
+    assert stop_block_runs([sid], profile, left_output=[""]) is False
+    assert stop_block_runs([sid], profile, left_output=[]) is False
+    read = next(task for task in absent() if task["name"] == "Read what of the account is left to stop")
+    assert read["check_mode"] is False and read["register"] == "wsl_rehearsal_left_read"
+    names = [task["name"] for task in absent()]
+    assert names.index("Read the profile of the account") < names.index("Read what of the account is left to stop") < names.index(
+        "The start task stops")
+
+
+LEFT_FAKES = r"""
+$Ansible = [pscustomobject]@{ Changed = $null }
+function Get-ScheduledTask { param($TaskName, $ErrorAction) if ($env:FAKE_START) { [pscustomobject]@{ State = $env:FAKE_START } } }
+function Get-CimInstance { param($ClassName)
+    [pscustomobject]@{ Owner = 'S-1-5-18' }
+    if ([int]$env:FAKE_PROCS) { [pscustomobject]@{ Owner = 'S-1-5-21-7-7-7-1002' } } }
+function Invoke-CimMethod { param($InputObject, $MethodName, $ErrorAction) [pscustomobject]@{ Sid = $InputObject.Owner } }
+function Test-Path { param($LiteralPath) $global:Read = $LiteralPath; [bool]$env:FAKE_HIVE }
+function Get-ChildItem { param($LiteralPath) @('a', 'b', 'c') | ForEach-Object { [pscustomobject]@{ PSPath = $_ } } }
+function Get-ItemProperty { param($LiteralPath, $ErrorAction)
+    $names = @{ a = $env:FAKE_DISTRO; b = ''; c = $null }
+    [pscustomobject]@{ DistributionName = $names[$LiteralPath] } }
+"""
+
+
+def run_left_read(start: str = "", procs: int = 0, hive: bool = False, distro: str = "") -> str:
+    task = next(t for t in absent() if t["name"] == "Read what of the account is left to stop")["ansible.windows.win_powershell"]
+    env = (f"$env:FAKE_START = '{start}'; $env:FAKE_PROCS = '{procs}'; $env:FAKE_HIVE = '{'1' if hive else ''}'; "
+           f"$env:FAKE_DISTRO = '{distro}'\n")
+    body = LEFT_FAKES + env + "$f = {\n" + task["script"] + "\n}\n" + (
+        "$out = & $f -Sid 'S-1-5-21-7-7-7-1002' -Task 'tnwks-rehearsal-start'\n"
+        "'[' + $out + '] read ' + $global:Read")
+    run = pwsh(body)
+    assert run.returncode == 0, run.stderr
+    return run.stdout.strip().splitlines()[-1]
+
+
+@needs_pwsh
+def test_the_read_names_what_of_the_account_is_left_to_stop():
+    lxss = "Registry::HKEY_USERS\\S-1-5-21-7-7-7-1002\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss"
+    assert run_left_read() == f"[] read {lxss}"
+    assert run_left_read(hive=True) == f"[] read {lxss}"
+    assert run_left_read(start="Ready", hive=True) == f"[] read {lxss}"
+    assert run_left_read(start="Running") == f"[the start task runs] read {lxss}"
+    assert run_left_read(procs=1) == f"[1 process(es) of the account] read {lxss}"
+    assert run_left_read(hive=True, distro="tnwks-rehearsal") == f"[the distros tnwks-rehearsal] read {lxss}"
+    assert run_left_read(start="Running", procs=1, hive=True, distro="tnwks-rehearsal") == (
+        f"[the start task runs; 1 process(es) of the account; the distros tnwks-rehearsal] read {lxss}")
 
 
 def test_no_task_of_the_play_runs_wsl_exe():
@@ -585,6 +642,9 @@ def test_a_check_run_reports_the_profile_and_does_not_wait_for_it():
     assert run_profile_step(loaded=False, check=False) == "changed True [remove]"
     failed = run_profile_step(loaded=True, check=False)
     assert failed.startswith("failed The profile of S-1-5-21-7-7-7-1002 is still loaded"), failed
+    for part in ("The removal stops here", "the account and the folder stay", "Run the removal again once the profile unloads",
+                 "after the next restart of the host", "runs no task of the account"):
+        assert part in failed, part
 
 
 def test_the_exit_check_reads_the_accounts_and_the_batch_right():

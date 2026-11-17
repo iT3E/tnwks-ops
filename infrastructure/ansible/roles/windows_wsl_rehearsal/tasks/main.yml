@@ -302,7 +302,10 @@
 # The removal (task 10.6). Each part goes, in this order: the distro and the
 # VM (as the account), the tasks, the profile, the batch right, the account,
 # the folder. A second run finds nothing and changes nothing. No task of the
-# play runs wsl.exe: the administrator session never stops WSL. The task of
+# play runs wsl.exe: the administrator session never stops WSL. A run runs a
+# task of the account only while something of the account is left to stop:
+# each task of the account loads its profile, and the profile must unload
+# before it goes. The task of
 # the removal registers as in the state present (s4u_user, as SYSTEM), and
 # the service checks the new password with a batch logon, so the batch right
 # goes after the profile: while a profile is there, the account still holds
@@ -314,6 +317,8 @@
     wsl_rehearsal_sid: "{{ wsl_rehearsal_user.output | default([]) | last | default('') }}"
     # The folder of its profile, or empty when it has none.
     wsl_rehearsal_profile_path: "{{ wsl_rehearsal_profile_read.output | default([]) | last | default('') }}"
+    # What of the account is left to stop, or empty when nothing is.
+    wsl_rehearsal_left: "{{ wsl_rehearsal_left_read.output | default([]) | last | default('') }}"
   block:
     - name: Read the temporary account
       ansible.windows.win_powershell:
@@ -343,15 +348,52 @@
       check_mode: false
       register: wsl_rehearsal_profile_read
 
+    # A read, also in a check run: what of the account is left to stop. The
+    # start task running, a process of the account, or a distro in the list
+    # that WSL keeps in the hive of the account. The hive is loaded while a
+    # task of the account runs, and stays loaded until its profile unloads.
+    # With the hive not loaded and nothing of the account running, no VM of
+    # the account runs, and the profile goes with its distro list and the
+    # disk of its distro.
+    - name: Read what of the account is left to stop
+      ansible.windows.win_powershell:
+        parameters:
+          Sid: "{{ wsl_rehearsal_sid }}"
+          Task: "{{ wsl_rehearsal_task_prefix }}-start"
+        script: |
+          param([string]$Sid, [string]$Task)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          if (-not $Sid) { return '' }
+          $left = @()
+          $start = Get-ScheduledTask -TaskName $Task -ErrorAction SilentlyContinue
+          if ($start -and $start.State -eq 'Running') { $left += 'the start task runs' }
+          $own = @(Get-CimInstance Win32_Process | Where-Object {
+              $owner = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue
+              $owner -and $owner.Sid -eq $Sid })
+          if ($own.Count -gt 0) { $left += "$($own.Count) process(es) of the account" }
+          $lxss = "Registry::HKEY_USERS\$Sid\Software\Microsoft\Windows\CurrentVersion\Lxss"
+          if (Test-Path -LiteralPath $lxss) {
+              $distros = @(Get-ChildItem -LiteralPath $lxss | ForEach-Object {
+                  (Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).DistributionName } | Where-Object { $_ })
+              if ($distros.Count -gt 0) { $left += "the distros $($distros -join ', ')" }
+          }
+          $left -join '; '
+      check_mode: false
+      register: wsl_rehearsal_left_read
+
     # As the account: its own task ends the distro, unregisters it (with its
     # disk in the profile), and shuts down the VM of its own session. The
     # play first stops the start task, which ends the wsl.exe client that
     # held the distro. With no profile, no task of the account ever ran: it
     # has no hive, so no distro and no VM, and this part has nothing to do.
+    # With nothing of the account left to stop, an earlier run did this part,
+    # and a task of the account would only load its profile again.
     - name: The distro and the VM stop, as the account
       when:
         - wsl_rehearsal_sid | length > 0
         - wsl_rehearsal_profile_path | length > 0
+        - wsl_rehearsal_left | length > 0
         - not ansible_check_mode
       block:
         - name: The start task stops
@@ -473,7 +515,12 @@
               Start-Sleep -Seconds 5
           } while ((Get-Date) -lt $deadline)
           if (-not $profile) { return }
-          if ($profile.Loaded -and -not $WhatIfPreference) { throw "The profile of $Sid is still loaded. Nothing is removed." }
+          if ($profile.Loaded -and -not $WhatIfPreference) {
+              throw ("The profile of $Sid is still loaded after 2 minutes. The removal stops here: the profile, the batch right " +
+                  "and the three deny rights, the value that hides the tile, the account and the folder stay. Run the removal " +
+                  "again once the profile unloads, at the latest after the next restart of the host. A run with nothing of the " +
+                  "account left to stop runs no task of the account, so it does not load the profile again.")
+          }
           $Ansible.Changed = $true
           if ($PSCmdlet.ShouldProcess($profile.LocalPath, 'remove the profile')) { Remove-CimInstance -InputObject $profile }
 
