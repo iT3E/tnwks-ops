@@ -138,11 +138,12 @@ def ps_str(value: str | Path) -> str:
 
 
 def run_script(tmp_path: Path, file: str, name: str, params: dict, stand_ins: str = "", depth: int | None = None,
-               edits: tuple[tuple[str, str], ...] = (), fails: bool = False):
+               edits: tuple[tuple[str, str], ...] = (), fails: bool = False, changed: bool = False):
     """Runs the script of a win_powershell task as the module does, and gives its output.
 
     edits: texts of the script to replace, for a path that only Windows has.
     fails: the script must throw; the result is then its error text.
+    changed: give the output and the value of $Ansible.Changed, as a pair.
     """
     module = find_task(file, name)["ansible.windows.win_powershell"]
     script = module["script"]
@@ -164,13 +165,14 @@ $sb = [scriptblock]::Create((Get-Content -LiteralPath {ps_str(script_file)} -Raw
 $out = @(& $sb @params)
 $list = [Collections.Generic.List[object]]::new()
 foreach ($item in $out) {{ $list.Add((ConvertTo-TnwksModuleOutput $item {depth - 1})) }}
-[Console]::Out.Write((ConvertTo-Json -InputObject $list -Depth 50 -Compress))
+[Console]::Out.Write((ConvertTo-Json -InputObject @{{ out = $list; changed = [bool]$Ansible.Changed }} -Depth 50 -Compress))
 """)
     if fails:
         assert run.returncode != 0, run.stdout
         return run.stderr
     assert run.returncode == 0, run.stderr + run.stdout
-    return json.loads(run.stdout)
+    result = json.loads(run.stdout)
+    return (result["out"], result["changed"]) if changed else result["out"]
 
 
 def registered(output: list) -> dict:
@@ -643,7 +645,8 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     as_saved = disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)
     other = disk_read(tmp_path, "saved", [saved.replace(f"O:{A_SID}", "O:BA")], saved=saved)
     no_saved = disk_read(tmp_path, "saved", [saved])
-    names = ("The window starts after setup", "A owns the distro at its path")
+    names = ("The window starts after setup", "After a way back, A's disk file had its saved rules",
+             "A owns the distro at its path")
 
     def play(before, disk, checks=(check_a, check_b)):
         return {"vars": {"wsl_move_rehearsal_before": registered(before), "wsl_move_rehearsal_disk_last": disk[-1],
@@ -658,12 +661,129 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     results = run_plays(tmp_path, plays)
     assert not passed(results[0]), passed(results[0])
     assert not passed(results[1]), passed(results[1])
-    # After a way back, the file had its saved rules; B lists no distro; A's distro
-    # starts with the rules of an older WSL.
-    for result in results[2:6]:
+    # After a way back, the file had its saved rules.
+    for result in results[2:4]:
         assert failed_by_assert(result, names[1]) and not failed_by_assert(result, names[0])
+        assert not failed_by_assert(result, names[2])
+    # B lists no distro; A's distro starts with the rules of an older WSL.
+    for result in results[4:6]:
+        assert failed_by_assert(result, names[2]) and not failed_by_assert(result, names[1])
     for name, result in zip(wrong, results[6:], strict=True):
         assert failed_by_assert(result, names[0]), name
+
+
+# The rules of a file as .NET gives them (FileSecurity), kept in a JSON file between runs:
+# the protection and the explicit rules, each a SID, a right, a type and its inheritance.
+# A SID that is not one (not S-1-...) throws, as Windows does.
+OLDER_STAND_INS = r"""
+function Read-Rules { Get-Content -LiteralPath $global:RulesFile -Raw | ConvertFrom-Json }
+function New-Rule([string]$Sid, [string]$Rights, [string]$Type) {
+    $rule = [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = $Sid }
+        FileSystemRights = [Security.AccessControl.FileSystemRights]$Rights; AccessControlType = $Type; InheritanceFlags = 'None' }
+    $rule | Add-Member -MemberType ScriptMethod -Name Key -Value { '{0}|{1}|{2}' -f $this.IdentityReference.Value, [int]$this.FileSystemRights, $this.AccessControlType }
+    $rule
+}
+function New-Object {
+    param([string]$TypeName, [object[]]$ArgumentList)
+    if ($TypeName -eq 'Security.Principal.SecurityIdentifier') {
+        if ("$($ArgumentList[0])" -notmatch '^S-1-[0-9-]+$') { throw 'Exception calling ".ctor" with "1" argument(s): "Value was invalid."' }
+        return [pscustomobject]@{ Value = "$($ArgumentList[0])" }
+    }
+    if ($TypeName -eq 'Security.AccessControl.FileSystemAccessRule') {
+        return New-Rule $ArgumentList[0].Value $ArgumentList[1] $ArgumentList[2]
+    }
+    Microsoft.PowerShell.Utility\New-Object -TypeName $TypeName -ArgumentList $ArgumentList
+}
+function Get-Item {
+    param([string]$LiteralPath)
+    $item = [pscustomobject]@{ FullName = $LiteralPath }
+    $item | Add-Member -MemberType ScriptMethod -Name GetAccessControl -Value {
+        param($Sections)
+        $read = Read-Rules
+        $acl = [pscustomobject]@{ AreAccessRulesProtected = [bool]$read.protected
+            Rules = [Collections.ArrayList]@($read.rules | ForEach-Object { New-Rule $_.sid $_.rights $_.type }) }
+        $acl | Add-Member -MemberType ScriptMethod -Name GetAccessRules -Value { param($e, $i, $t) @($this.Rules) }
+        $acl | Add-Member -MemberType ScriptMethod -Name SetAccessRuleProtection -Value { param($p, $keep) $this.AreAccessRulesProtected = $p }
+        $acl | Add-Member -MemberType ScriptMethod -Name RemoveAccessRuleSpecific -Value {
+            param($r) $hit = @($this.Rules | Where-Object { $_.Key() -eq $r.Key() })[0]; if ($hit) { $this.Rules.Remove($hit) } }
+        $acl | Add-Member -MemberType ScriptMethod -Name AddAccessRule -Value { param($r) [void]$this.Rules.Add($r) }
+        $acl
+    }
+    $item | Add-Member -MemberType ScriptMethod -Name SetAccessControl -Value {
+        param($acl)
+        $old = Read-Rules
+        [pscustomobject]@{ protected = $acl.AreAccessRulesProtected; writes = [int]$old.writes + 1
+            rules = @($acl.Rules | ForEach-Object { @{ sid = $_.IdentityReference.Value; rights = "$($_.FileSystemRights)"; type = "$($_.AccessControlType)" } })
+        } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $global:RulesFile
+    }
+    $item
+}
+"""
+
+
+@needs_pwsh
+def test_the_older_form_of_a_s_disk_file_is_set_once_and_then_changes_nothing(tmp_path):
+    """The script of older_disk.yml on the file that a newer WSL makes (A the owner, full
+    control for A and the Administrators, protected), with a rule of A's VM: the first
+    run gives no protection and one explicit rule for A, and keeps the VM rule; a second
+    run reports no change and writes nothing."""
+    rules = tmp_path / "rules.json"
+    vm = "S-1-5-83-1-1111-2222-3333-4444"
+    rules.write_text(json.dumps({"protected": True, "writes": 0, "rules": [
+        {"sid": A_SID, "rights": "FullControl", "type": "Allow"},
+        {"sid": "S-1-5-32-544", "rights": "FullControl", "type": "Allow"},
+        {"sid": vm, "rights": "ReadAndExecute, Write, Synchronize", "type": "Allow"}]}))
+    stand_ins = OLDER_STAND_INS + f"$global:RulesFile = {ps_str(rules)}\n"
+    params = {"Path": str(tmp_path / "ext4.vhdx"), "Sid": A_SID}
+    name = "A's disk file like a file of an older WSL"
+    _, first = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True)
+    after = json.loads(rules.read_text())
+    assert first is True and after["writes"] == 1 and after["protected"] is False
+    assert sorted(r["sid"] for r in after["rules"]) == sorted([A_SID, vm])
+    _, second = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True)
+    assert second is False and json.loads(rules.read_text())["writes"] == 1
+
+
+@needs_pwsh
+def test_no_script_of_the_role_has_two_variables_that_differ_only_by_case(tmp_path):
+    """PowerShell names ignore case: a local $sid is the parameter $Sid. Per function (or
+    the script itself), each variable has one spelling, in each embedded script of the
+    task files and each script file of the role."""
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for file in sorted(p.name for p in (ROLE / "tasks").glob("*.yml")):
+        for i, task in enumerate(tasks_in(file)):
+            module = task.get("ansible.windows.win_powershell")
+            if isinstance(module, dict) and isinstance(module.get("script"), str):
+                (scripts / f"{Path(file).stem}--{i:03d}.ps1").write_text(module["script"])
+    for script in (ROLE / "files").glob("*.ps1"):
+        (scripts / script.name).write_text(script.read_text())
+    run = pwsh(f"""
+$skip = @('_', 'args', 'true', 'false', 'null', 'input', 'this', 'psitem', 'matches', 'lastexitcode', 'erroractionpreference',
+    'pscmdlet', 'psboundparameters', 'ansible')
+$found = @()
+foreach ($f in Get-ChildItem -LiteralPath {ps_str(scripts)} -Filter *.ps1) {{
+    $ast = [Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$null)
+    $groups = @{{}}
+    foreach ($v in $ast.FindAll({{ $args[0] -is [Management.Automation.Language.VariableExpressionAst] }}, $true)) {{
+        if ($v.VariablePath.DriveName -and $v.VariablePath.DriveName -notin @('script', 'global', 'local', 'private', 'using')) {{ continue }}
+        $name = $v.VariablePath.UserPath -replace '^(script|global|local|private|using):', ''
+        if ($name.ToLowerInvariant() -in $skip) {{ continue }}
+        $p = $v.Parent; while ($p -and $p -isnot [Management.Automation.Language.FunctionDefinitionAst]) {{ $p = $p.Parent }}
+        $key = if ($p) {{ "function $($p.Name)" }} else {{ 'script' }}
+        if (-not $groups[$key]) {{ $groups[$key] = @{{}} }}
+        $low = $name.ToLowerInvariant()
+        if (-not $groups[$key][$low]) {{ $groups[$key][$low] = New-Object System.Collections.Generic.HashSet[string] }}
+        [void]$groups[$key][$low].Add($name)
+    }}
+    foreach ($k in $groups.Keys) {{ foreach ($low in $groups[$k].Keys) {{
+        if ($groups[$k][$low].Count -gt 1) {{ $found += '{{0}} [{{1}}]: {{2}}' -f $f.Name, $k, (@($groups[$k][$low]) -join ' ') }} }} }}
+}}
+$found -join "`n"
+""")
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip() == "", run.stdout
+    assert len(list(scripts.glob("*.ps1"))) > 40
 
 
 def test_setup_and_the_window_give_a_s_disk_file_the_rules_of_an_older_wsl_from_one_task_file():
@@ -678,13 +798,15 @@ def test_setup_and_the_window_give_a_s_disk_file_the_rules_of_an_older_wsl_from_
     setup = names("setup.yml")
     assert (setup.index("A imports the distro into its folder") < setup.index("A's disk file like a file of an older WSL")
             < setup.index("A reads its distro"))
-    # In the window: the read against the saved rules first, then the rules of an
-    # older WSL, then the read of the state, A's read and its assert.
+    # In the window: the read against the saved rules, the read of the state and
+    # their asserts, then the rules of an older WSL, then A's and B's reads and their
+    # assert.
     window = names("window.yml")
+    # Every read and check of the start state comes before the first change.
     order = ["The rules of A's disk file as the last way back left them", "Keep the read of A's disk file before its rules change",
-             "A's disk file like a file of an older WSL", "Read the state before the window",
-             "The window starts after setup or after a way back", "A reads its distro before the window",
-             "A owns the distro at its path"]
+             "Read the state before the window", "The window starts after setup or after a way back",
+             "After a way back, A's disk file had its saved rules", "A's disk file like a file of an older WSL",
+             "A reads its distro before the window", "B lists no distro before the window", "A owns the distro at its path"]
     at = [next(i for i, n in enumerate(window) if n.startswith(o)) for o in order]
     assert at == sorted(at), at
     # One text of the rule of the folder, in setup and in the task file.

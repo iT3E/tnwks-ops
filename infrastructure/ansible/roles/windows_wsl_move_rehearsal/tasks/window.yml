@@ -17,9 +17,10 @@
 # case; window step 3 stops it.
 #
 # First, a read of A's disk file against the rules that the last window saved
-# (after a way back), then the rules of an older WSL on A's disk file and its
-# folder (older_disk.yml, the same tasks as setup), so that each window starts
-# from that form. A stays the owner of the file, with full control, so its
+# (after a way back), the read of the state and their checks, all before any
+# change. Then the rules of an older WSL on A's disk file and its folder
+# (older_disk.yml, the same tasks as setup), so that each window starts from
+# that form. A stays the owner of the file, with full control, so its
 # start and the rule that WSL adds for its VM need nothing more; A's read
 # after it shows that its distro starts.
 
@@ -47,9 +48,6 @@
     - name: Keep the read of A's disk file before its rules change
       ansible.builtin.set_fact:
         wsl_move_rehearsal_disk_last: "{{ wsl_move_rehearsal_disk.output | last }}"
-
-    - name: A's disk file like a file of an older WSL
-      ansible.builtin.include_tasks: older_disk.yml
 
     - name: Read the state before the window
       ansible.windows.win_powershell:
@@ -113,6 +111,23 @@
         fail_msg: "The state before the window is not the one that it starts from. Nothing is changed: {{ before }}"
         quiet: true
 
+    # After a way back, the file had the rules that window step 4 saved, and
+    # a rule of a VM at most for each start since. The read comes before the
+    # rules of an older WSL, and this check before any change.
+    - name: After a way back, A's disk file had its saved rules
+      vars:
+        before: "{{ wsl_move_rehearsal_before.output | last }}"
+        disk_a: "{{ wsl_move_rehearsal_disk_last }}"
+      ansible.builtin.assert:
+        that:
+          - before.last_marker == '' or (disk_a.saved and disk_a.rules_ok)
+        fail_msg: "A's disk file has not the rules that the last window saved. Nothing is changed: {{ disk_a }}"
+        quiet: true
+
+    # The first change of the phase, after the checks of the state.
+    - name: A's disk file like a file of an older WSL
+      ansible.builtin.include_tasks: older_disk.yml
+
     - name: A reads its distro before the window
       ansible.builtin.include_tasks: run_task.yml
       vars:
@@ -132,15 +147,11 @@
       ansible.builtin.debug:
         msg: "{{ wsl_move_rehearsal_disk.output | last }}"
 
-    # After a way back, the file had the rules that window step 4 saved, and
-    # a rule of a VM at most for each start since (the read before the rules
-    # of an older WSL). A reads its distro with the rules of an older WSL.
-    - name: A owns the distro at its path, B lists none, and the file had its saved rules after a way back
+    # A reads its distro with the rules of an older WSL.
+    - name: A owns the distro at its path, and B lists none
       vars:
-        before: "{{ wsl_move_rehearsal_before.output | last }}"
         check_a: "{{ wsl_move_rehearsal_runs.check[-2] }}"
         check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
-        disk_a: "{{ wsl_move_rehearsal_disk_last }}"
       ansible.builtin.assert:
         that:
           - check_a.result.registered
@@ -149,8 +160,7 @@
           - check_a.result.disk | lower == (wsl_move_rehearsal_accounts.a.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
           - check_a.result.token == wsl_move_rehearsal_data_token
           - not check_b.result.registered
-          - before.last_marker == '' or (disk_a.saved and disk_a.rules_ok)
-        fail_msg: "The window does not start: {{ check_a }} {{ check_b }} {{ disk_a }}"
+        fail_msg: "The window does not start: {{ check_a }} {{ check_b }}"
         quiet: true
 
     - name: Read when the password of B was last set

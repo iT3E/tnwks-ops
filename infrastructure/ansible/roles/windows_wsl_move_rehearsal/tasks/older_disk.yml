@@ -76,8 +76,9 @@
       $Ansible.Changed = $false
       $file = Get-Item -LiteralPath $Path
       $acl = $file.GetAccessControl('Access')
-      $sid = [Security.Principal.SecurityIdentifier]
-      $explicit = @($acl.GetAccessRules($true, $false, $sid))
+      # The type as written: a variable $sid would be the parameter $Sid
+      # (PowerShell names ignore case).
+      $explicit = @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))
       # A rule of a VM is WSL's: it stays, and it counts as no rule.
       $vm = @($explicit | Where-Object { $_.IdentityReference.Value -like 'S-1-5-83-*' })
       $own = @($explicit | Where-Object { $_.IdentityReference.Value -notlike 'S-1-5-83-*' })
