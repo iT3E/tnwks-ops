@@ -60,10 +60,17 @@
         script: |
           param([string]$Path)
           $ErrorActionPreference = 'Stop'
-          $base = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+          $text = "$(Get-Content -LiteralPath $Path -Raw)"
+          $base = $text | ConvertFrom-Json
           $Ansible.Changed = -not $base.restarted
-          $base | Add-Member -NotePropertyName restarted -NotePropertyValue $true -Force
-          [IO.File]::WriteAllText($Path, ($base | ConvertTo-Json -Depth 5))
+          if ($base.restarted) { return }
+          # The key goes into the text that the play wrote: the rest of the
+          # baseline does not go through ConvertTo-Json of Windows PowerShell
+          # 5.1, which may write an array as {"value": [...], "Count": n}.
+          $end = $text.LastIndexOf('}')
+          if ($end -lt 1) { throw "The baseline is not a JSON object: $Path" }
+          [IO.File]::WriteAllText($Path, $text.Substring(0, $end).TrimEnd() + ', "restarted": true}')
+          if (-not (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json).restarted) { throw "The mark did not read back: $Path" }
 
     - name: Wait for the end of the run of the boot task
       ansible.windows.win_powershell:
@@ -75,12 +82,17 @@
           $Ansible.Changed = $false
           $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
           $deadline = (Get-Date).AddMinutes(60)
+          $info = $null
           do {
-              $info = Get-ScheduledTaskInfo -TaskName $Task
-              $done = $info.LastRunTime -gt $boot -and (Get-ScheduledTask -TaskName $Task).State -ne 'Running'
+              # Task Scheduler may not answer yet just after the boot: a read
+              # that fails is a read with no run yet.
+              try {
+                  $info = Get-ScheduledTaskInfo -TaskName $Task
+                  $done = $info.LastRunTime -gt $boot -and "$((Get-ScheduledTask -TaskName $Task).State)" -ne 'Running'
+              } catch { $done = $false }
               if (-not $done) { Start-Sleep -Seconds 10 }
           } while (-not $done -and (Get-Date) -lt $deadline)
-          [pscustomobject]@{ done = $done; code = [int64]$info.LastTaskResult }
+          [pscustomobject]@{ done = $done; code = $(if ($info) { [int64]$info.LastTaskResult } else { -1 }) }
       register: wsl_move_rehearsal_boot_wait
       failed_when: not (wsl_move_rehearsal_boot_wait.output | last).done
 

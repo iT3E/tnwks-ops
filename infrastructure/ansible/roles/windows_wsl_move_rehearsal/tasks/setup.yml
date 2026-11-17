@@ -362,7 +362,7 @@
         that:
           - check.result.registered
           - check.result.read_exit == 0
-          - check.result.repeated_keys | length == 0
+          - check.result.repeated_count == 0
           - check.result.token == wsl_move_rehearsal_data_token
           - check.result.user_uid == '1000'
           - check.result.distribution_conf_sha256 == wsl_move_rehearsal_distribution_conf | hash('sha256')

@@ -18,6 +18,9 @@
         parameters:
           Log: "{{ wsl_move_rehearsal_log_file }}"
           State: "{{ wsl_move_rehearsal_state_file }}"
+        # The runs are lists of lines: win_powershell keeps two levels of
+        # output by default, and would give each run as one text.
+        depth: 4
         script: &read_boot |
           param([string]$Log, [string]$State)
           $ErrorActionPreference = 'Stop'
@@ -63,7 +66,7 @@
         check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
       ansible.builtin.assert:
         that:
-          - boot.results[:1] == ['result: done']
+          - "boot.results[:1] == ['result: done']"
           - boot.markers[-3:] == ['window-started', 'boot-run', 'wayback-done']
           - "boot.runs[0] | select('match', '^group: ') | list | length == 0"
           - boot.runs[0] | select('match', '^would restart') | list | length == 1
@@ -96,6 +99,7 @@
         parameters:
           Log: "{{ wsl_move_rehearsal_log_file }}"
           State: "{{ wsl_move_rehearsal_state_file }}"
+        depth: 4
         script: *read_boot
       vars:
         ansible_become: true

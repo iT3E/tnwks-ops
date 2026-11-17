@@ -371,7 +371,7 @@ function Invoke-TnwksForward {
     }
     # (1) The version, before any change.
     $version = Get-TnwksWslVersion
-    $savedVersion = (Get-Content -LiteralPath $cfg.version_file -Raw).Trim()
+    $savedVersion = ("$(Get-Content -LiteralPath $cfg.version_file -Raw)").Trim()
     if ($version -ne $savedVersion) {
         Write-Log "stop at step 1: WSL $version is not the saved $savedVersion. Nothing is changed."
         return 'stopped'
@@ -464,7 +464,7 @@ function Invoke-TnwksWayBack {
         # Window step 4 saved the rules before the move: with no saved rules,
         # no move back.
         Assert-Tnwks (Test-Path -LiteralPath $cfg.acl_file) 'no saved rules of the disk file: no move back'
-        $saved = (Get-Content -LiteralPath $cfg.acl_file -Raw).Trim()
+        $saved = ("$(Get-Content -LiteralPath $cfg.acl_file -Raw)").Trim()
         Assert-Tnwks ($saved -like 'O:*') 'the saved rules of the disk file are empty: no move back'
         $size = (Get-Item -LiteralPath $newPath).Length
         Move-Item -LiteralPath $newPath -Destination $oldPath
@@ -550,7 +550,7 @@ try {
         }
         'wayback' {
             $version = Get-TnwksWslVersion
-            $saved = (Get-Content -LiteralPath $cfg.version_file -Raw).Trim()
+            $saved = ("$(Get-Content -LiteralPath $cfg.version_file -Raw)").Trim()
             if ($version -ne $saved) {
                 Write-Log "stop: WSL $version is not the saved $saved. Nothing is changed."
                 $outcome = 'stopped'
@@ -567,7 +567,7 @@ try {
             } else {
                 Add-Marker 'boot-run'
                 $version = Get-TnwksWslVersion
-                $saved = (Get-Content -LiteralPath $cfg.version_file -Raw).Trim()
+                $saved = ("$(Get-Content -LiteralPath $cfg.version_file -Raw)").Trim()
                 if ($version -ne $saved) {
                     Write-Log "stop: WSL $version is not the saved $saved. Nothing is changed."
                     $outcome = 'stopped'

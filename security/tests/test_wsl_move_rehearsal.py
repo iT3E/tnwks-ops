@@ -216,7 +216,7 @@ def test_after_the_way_back_of_the_group_test_the_play_starts_a_and_reads_its_to
     assert "$_.ProcessId" in script and "CreationDate.ToUniversalTime().ToString('o')" in script
     assert '"$($_.id) $($_.created)"' in script and poll["failed_when"] == "not (wsl_move_rehearsal_vm_count.output | last).same"
     live = (ROLE / "files/Get-TnwksMoveLiveState.ps1").read_text()
-    assert "id = [int]$_.ProcessId" in live and "created = $_.CreationDate.ToUniversalTime().ToString('o')" in live
+    assert "id = [int]$_.ProcessId" in live and "$_.CreationDate.ToUniversalTime().ToString('o')" in live
     tokens = (ROLE / "tasks/tokens.yml").read_text()
     assert "(attributes & 0x4) != 0" in tokens and "-contains 'S-1-5-32-544'" in tokens
     boot = (ROLE / "tasks/after-boot.yml").read_text()
@@ -669,7 +669,7 @@ def test_the_account_steps_write_and_read_the_distro_through_windows_powershell_
     check = run_account(tmp_path / "1", "check", registered="b")
     result = check["result"]
     assert result["read_exit"] == 0 and result["token"] == "token" and result["user_uid"] == "1000"
-    assert result["repeated_keys"] == []
+    assert result["repeated_count"] == 0 and result["repeated_keys"] == ""
     assert result["uid"].isdigit() and result["mem_total_kib"] == 2014784
     assert result["distribution_conf_sha256"] == hashlib.sha256(DISTRIBUTION_CONF.encode()).hexdigest()
     assert result["wsl_conf_sha256"] == hashlib.sha256(b"[user]\ndefault = moverh\n").hexdigest()
@@ -691,6 +691,10 @@ def test_the_role_reads_back_each_file_that_it_writes_in_the_distro():
     assert "check.result.user_uid == '1000'" in that and "check.result.mem_total_kib | int > 0" in that
     cycle = next(t for t in tasks_of("b_cycle.yml") if t.get("name", "").startswith("The second import of B"))
     assert "check.result.wsl_conf_sha256 == wsl_move_rehearsal_wsl_conf | hash('sha256')" in cycle["ansible.builtin.assert"]["that"]
+    # A key that comes twice reads as no value: each read of the check step fails on it.
+    window = next(t for t in tasks_of("window.yml") if t.get("name", "").startswith("B owns the distro"))
+    for task in (setup, window, cycle):
+        assert "check.result.repeated_count == 0" in task["ansible.builtin.assert"]["that"], task["name"]
     assert hashlib.sha256(base64.b64decode(DEFAULTS["wsl_move_rehearsal_icon_base64"])).hexdigest() == \
         DEFAULTS["wsl_move_rehearsal_icon_sha256"]
     configs = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_account_config_common"]

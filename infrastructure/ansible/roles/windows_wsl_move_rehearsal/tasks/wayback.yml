@@ -57,12 +57,18 @@
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
           $read = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
-          $base = @($read.vm | ForEach-Object { "$($_.id) $($_.created)" } | Sort-Object)
+          # win_powershell keeps two levels of the output of the live read, so
+          # the baseline holds each VM process as text, "@{id=..; name=..;
+          # created=..}". An object (a deeper read) is taken too.
+          $base = @(@($read.vm) | Where-Object { $_ } | ForEach-Object {
+              if ($_ -is [string]) {
+                  if ($_ -match '\bid=(\d+);.*\bcreated=([^;}]+)') { "$($Matches[1]) $($Matches[2].Trim())" } else { "unread: $_" }
+              } else { "$($_.id) $($_.created)" } } | Sort-Object)
           $by = if ($read.restarted) { 'count' } else { 'process ID and start time' }
           $deadline = (Get-Date).AddMinutes(2)
           do {
               $now = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'vmmem*' } | ForEach-Object {
-                  "$([int]$_.ProcessId) $($_.CreationDate.ToUniversalTime().ToString('o'))" } | Sort-Object)
+                  "$([int]$_.ProcessId) $(if ($_.CreationDate) { $_.CreationDate.ToUniversalTime().ToString('o') })" } | Sort-Object)
               $same = if ($read.restarted) { $now.Count -eq $base.Count } else { ($now -join ' | ') -eq ($base -join ' | ') }
               if (-not $same) { Start-Sleep -Seconds 3 }
           } while (-not $same -and (Get-Date) -lt $deadline)
@@ -140,7 +146,7 @@
               disk_a = [bool](Test-Path -LiteralPath $Disk)
               disk_b = [bool](Test-Path -LiteralPath $DiskB)
               owner_as_saved = (Test-Path -LiteralPath $Disk) -and
-                  ((Get-Owner (Get-Acl -LiteralPath $Disk).Sddl) -eq (Get-Owner (Get-Content -LiteralPath $Saved -Raw).Trim()))
+                  ((Get-Owner (Get-Acl -LiteralPath $Disk).Sddl) -eq (Get-Owner ("$(Get-Content -LiteralPath $Saved -Raw)").Trim()))
           }
       vars:
         ansible_become: true

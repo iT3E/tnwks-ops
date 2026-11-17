@@ -5,12 +5,8 @@
 - name: "Move the disk file of B to the {{ wsl_move_rehearsal_side_to }}"
   ansible.windows.win_powershell:
     parameters:
-      From: >-
-        {{ (wsl_move_rehearsal_accounts.b.folder if wsl_move_rehearsal_side_to == 'side' else wsl_move_rehearsal_side)
-           ~ '\\' ~ wsl_move_rehearsal_disk_name }}
-      To: >-
-        {{ (wsl_move_rehearsal_side if wsl_move_rehearsal_side_to == 'side' else wsl_move_rehearsal_accounts.b.folder)
-           ~ '\\' ~ wsl_move_rehearsal_disk_name }}
+      From: "{{ b_disk if wsl_move_rehearsal_side_to == 'side' else side_disk }}"
+      To: "{{ side_disk if wsl_move_rehearsal_side_to == 'side' else b_disk }}"
       Marker: '{{ wsl_move_rehearsal_accounts.b.folder }}\{{ wsl_move_rehearsal_marker_name }}'
     script: |
       param([string]$From, [string]$To, [string]$Marker)
@@ -25,7 +21,11 @@
           catch { if ((Get-Date) -gt $deadline) { throw } ; Start-Sleep -Seconds 3 }
       }
       (-not (Test-Path -LiteralPath $From)) -and (Get-Item -LiteralPath $To).Length -eq $size
+  # Each backslash of a path is outside the braces: in a template, a backslash
+  # inside a Jinja string stays doubled.
   vars:
+    b_disk: '{{ wsl_move_rehearsal_accounts.b.folder }}\{{ wsl_move_rehearsal_disk_name }}'
+    side_disk: '{{ wsl_move_rehearsal_side }}\{{ wsl_move_rehearsal_disk_name }}'
     ansible_become: true
     ansible_become_method: ansible.builtin.runas
     ansible_become_user: SYSTEM

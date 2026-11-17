@@ -188,7 +188,7 @@ switch ($Step) {
         Exit-Tnwks 0 @{
             # S-1-16-8192 is Medium Mandatory Level.
             medium = ($label.Count -eq 1 -and $label[0] -eq 'S-1-16-8192')
-            integrity_sids = $label
+            integrity_sids = $label -join ','
             administrators = ($admins.Count -gt 0)
             user = $user
             hive = [bool](Test-Path -LiteralPath "Registry::HKEY_USERS\$user")
@@ -287,7 +287,10 @@ switch ($Step) {
             $data.read_exit = $read.exit
             $parsed = ConvertFrom-WslValues $read.output
             $values = $parsed.values
-            $data.repeated_keys = @($parsed.repeated)
+            # A count and one text: Windows PowerShell 5.1 may write an array
+            # as {"value": [...], "Count": n}, and the play only counts.
+            $data.repeated_count = @($parsed.repeated).Count
+            $data.repeated_keys = @($parsed.repeated) -join ','
             foreach ($key in @('uid', 'user_uid', 'token', 'distribution_conf_sha256', 'wsl_conf_sha256', 'icon_sha256')) { $data[$key] = $values[$key] }
             $data.mem_total_kib = if ($values.mem_total_kib -match '^[0-9]+$') { [int64]$values.mem_total_kib } else { $null }
         }
