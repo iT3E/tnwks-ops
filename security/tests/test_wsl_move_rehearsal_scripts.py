@@ -1590,7 +1590,7 @@ def test_a_run_of_the_window_task_or_the_boot_task_stops_the_way_back_with_nothi
 
 
 @needs_both
-def test_a_way_back_with_no_group_step_after_a_boot_run_that_failed_passes_the_checks(tmp_path):
+def test_a_way_back_with_no_group_step_after_a_boot_run_that_did_not_end_passes_the_checks(tmp_path):
     """The state after a boot run that did not end the way back (it stopped at its import back): A's disk file at its path
     with the saved rules, no list of a done way back, the markers window-started then
     boot-run. The way back mode with no group step moves nothing, imports A back, enables
