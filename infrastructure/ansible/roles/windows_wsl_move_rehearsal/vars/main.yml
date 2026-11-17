@@ -18,11 +18,13 @@ wsl_move_rehearsal_older_folder_rule: (A;OIIO;FR;;;AU)
 # The scripts of the rehearsal on the host, and the SHA-256 that each copy
 # on the host must have (host_files.yml, run_procedure.yml), by its path: the
 # bytes of each script of the role, and the text of each config as
-# host_files.yml writes it (to_nice_json).
+# host_files.yml writes it (to_nice_json). The read of the live parts only
+# reads: live.yml copies it before each read, at any marker.
 wsl_move_rehearsal_scripts:
   - Invoke-TnwksWslAccountTask.ps1
   - Invoke-TnwksMoveWindow.ps1
   - Invoke-TnwksStartTask.ps1
+  - Get-TnwksMoveLiveState.ps1
 wsl_move_rehearsal_file_hashes: >-
   {%- set out = {} -%}
   {%- for name in wsl_move_rehearsal_scripts -%}

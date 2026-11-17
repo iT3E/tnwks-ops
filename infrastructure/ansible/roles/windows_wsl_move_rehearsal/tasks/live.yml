@@ -9,7 +9,23 @@
 # not show its account: after the first restart (the phase restart marks the
 # baseline), the lead's read of the nodes covers the live VM.
 
-# A check run before the setup has no script on the host: it reads nothing.
+# The script of the read only reads: each read first makes its copy on the
+# host the role's, at any marker, also in the middle of a window
+# (host_files.yml checks its SHA-256 with the other copies). A check run
+# before the setup has no folder of the rehearsal, and the phase remove reads
+# before it removes that folder: then nothing is copied or read.
+- name: The folder of the rehearsal is on the host
+  ansible.windows.win_stat:
+    path: "{{ wsl_move_rehearsal_dir }}"
+    get_checksum: false
+  register: wsl_move_rehearsal_live_dir
+
+- name: The read of the live parts
+  ansible.windows.win_copy:
+    src: Get-TnwksMoveLiveState.ps1
+    dest: '{{ wsl_move_rehearsal_dir }}\Get-TnwksMoveLiveState.ps1'
+  when: wsl_move_rehearsal_live_dir.stat.exists
+
 - name: The read of the live parts is on the host
   ansible.windows.win_stat:
     path: '{{ wsl_move_rehearsal_dir }}\Get-TnwksMoveLiveState.ps1'

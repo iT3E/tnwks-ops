@@ -718,7 +718,11 @@ differs, only when no window is started (the last marker is empty or
 `wayback-done`); otherwise it stops with nothing changed. `wayback`,
 `restart` and `after-boot` change nothing and stop when a copy differs from
 the role's, as the window that they end started with the copies that are
-there. `remove-before-restart` prints each copy that differs and goes on;
+there: end that window with the release that started it, then run `window`
+or setup again. The read of the live parts (`Get-TnwksMoveLiveState.ps1`)
+is one of the scripts, but it only reads: `tasks/live.yml` copies it before
+each read, at any marker, so its copy is the role's in every phase.
+`remove-before-restart` prints each copy that differs and goes on;
 `remove` runs no script. Then the play reads the SHA-256 of each copy on the
 host and compares it with the role's: the bytes of each script, and the text
 of each config as the play writes it (`wsl_move_rehearsal_file_hashes`).
@@ -735,8 +739,8 @@ of B) is registered by the refresh too; the phase `wayback` still registers
 the port proxy, the NAT networks, the VM processes, and the registrations
 of the distros of the account of the host's person (from its loaded hive,
 as a count and a SHA-256, so the output names no path). The first read is
-the baseline, in the state folder: the setup makes the folder and copies
-the read before it, and stops before its first account unless the baseline
+the baseline, in the state folder: the setup makes the folder before it
+(the read copies its script into the folder), and stops before its first account unless the baseline
 is there and it read the registrations (with the hive not loaded, the read
 says "not read"). A later read that differs stops the
 phase: run the removal. A VM process does not show its account, so the
@@ -820,18 +824,25 @@ of window step 1 acts on it.
 
 What a folder gives a file comes from Windows' own inheritance function,
 `CreatePrivateObjectSecurityEx`: the folder's rules as the parent, the
-owner of the file as the creator with an empty DACL, the generic mapping of
-files, and an object that is not a container. So each rule of the folder
-that reaches a file (OI, with or without IO and NP; CI alone does not)
-comes with the flag ID, CREATOR OWNER names the owner of the file, and each
-generic right becomes the rights of a file. The unit tests hold that rule
+owner and the group of the file as the creator with an empty DACL, the
+generic mapping of files, and an object that is not a container. So each
+rule of the folder that reaches a file (OI, with or without IO and NP; CI
+alone does not) comes with the flag ID, CREATOR OWNER names the owner of
+the file, CREATOR GROUP names its group, and each generic right becomes the
+rights of a file. The unit tests hold that rule
 in a stand-in, on three forms of a folder; the hand test runs the function
 of Windows on the same forms against a real write. Another way, a probe
 file in the folder, is a write, and the file gets the owner of the writer.
 Before any change, window step 1 reads the disk file: a file with no
-protection must have the inherited rules that its folder gives. A file
-that has others stops the window with nothing changed (exit 3), and the
-log holds both sets, each account masked; the boot run never reads it. Step
+protection must have the inherited rules that its folder gives. It must
+also have no rule that the check of the way back refuses: no deny rule,
+explicit or inherited (the way back writes the explicit ones back, and the
+folder gives the inherited ones again, so its check would fail on each
+run), at most one rule of the capability SID, and no explicit rule of a
+virtual machine SID or a capability SID in another form than WSL's. A
+file that has other inherited rules or such a rule stops the window with
+nothing changed (exit 3), and the log names each reason, each account
+masked; the boot run never reads it. Step
 2 removes the saved rules of an earlier window before the marker of a
 started window, so a way back restores only rules that step 4 of its own
 window saved. In setup, and again at the start of each window, A's disk file
@@ -842,7 +853,8 @@ the folder are so already, the inherited rules that the folder gives
 included, and runs only after setup or a way back). It reads and writes the
 file with the functions of the procedure, from its copy on the host: the
 take of ownership for the Administrators, then the owner and the rules in
-one write. The play prints A's rules right after it (before A's read
+one write. A write of the rules that fails puts the owner back, so the file
+keeps its owner and its old rules. The play prints A's rules right after it (before A's read
 starts the distro) and asserts that the file has the inherited rules of its
 folder then; it prints them again after A's read, and the log of window
 step 4 holds them after A's stop, with no assert on the inherited rules:

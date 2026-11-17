@@ -18,6 +18,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from test_wsl_rehearsal import SYSTEM_BECOME, all_tasks, becomes
 from test_wsl_start_unelevated import TASK_MODULE, needs_pwsh, pwsh
@@ -149,10 +150,10 @@ def test_each_task_that_acts_on_a_scheduled_task_runs_as_system():
 def test_the_baseline_of_the_live_parts_is_read_before_the_first_account():
     names = [t["name"] for t in yaml.safe_load((ROLE / "tasks/setup.yml").read_text())]
     order = ["The root file system is in the controller cache",
-             "The state file holds no marker", "Folder of the rehearsal", "Folders of the procedure", "The read of the live parts", "The live parts at the start",
+             "The state file holds no marker", "Folder of the rehearsal", "Folders of the procedure", "The live parts at the start",
              "The baseline of the live parts is kept, and it read the registrations", "The accounts of the rehearsal"]
     assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
-    gate = next(t for t in tasks_of("setup.yml") if t.get("name") == order[6])
+    gate = next(t for t in tasks_of("setup.yml") if t.get("name") == order[5])
     assert "(wsl_move_rehearsal_baseline.output | last).registrations is not match('not read')" in gate["ansible.builtin.assert"]["that"]
     # The cached root file system is read on the controller first, before any
     # change of the host, and the message names the limit that downloads it.
@@ -849,13 +850,21 @@ class TnwksSecurity {
         if (-not [IO.File]::Exists($Path)) { throw [IO.FileNotFoundException]::new($Path) }
         if ($global:Acls.ContainsKey($Path)) { return $global:Acls[$Path] }
         # A file that SYSTEM made: the rules that its folder gives, owner the Administrators.
-        return 'O:BA' + [TnwksSecurity]::FileGives([TnwksSecurity]::ReadSddl([IO.Path]::GetDirectoryName($Path)), 'BA')
+        return 'O:BA' + [TnwksSecurity]::FileGives([TnwksSecurity]::ReadSddl([IO.Path]::GetDirectoryName($Path)), 'BA', [TnwksSecurity]::ReadGroup($Path))
+    }
+    # $global:Groups: the group of a file (by its path, or by folder/name); SYSTEM by default.
+    static [string] ReadGroup([string]$Path) {
+        if ($global:Groups) {
+            foreach ($k in @($Path, [TnwksSecurity]::Leaf($Path))) { if ($global:Groups.ContainsKey($k)) { return $global:Groups[$k] } }
+        }
+        return 'SY'
     }
     # What a folder gives a new file in it, by the rule of inheritance (the stand-in of
     # CreatePrivateObjectSecurityEx): each rule of the folder that reaches a file (OI,
     # with or without IO and NP; CI alone does not), with the flag ID only, CREATOR
-    # OWNER as the owner of the file, and each generic right as the rights of a file.
-    static [string] FileGives([string]$FolderSddl, [string]$Owner) {
+    # OWNER as the owner of the file, CREATOR GROUP as its group, and each generic
+    # right as the rights of a file.
+    static [string] FileGives([string]$FolderSddl, [string]$Owner, [string]$Group) {
         $names = @{ GA = [int64]0x10000000; GR = [int64]2147483648; GW = [int64]0x40000000; GX = [int64]0x20000000
             FA = [int64]0x1F01FF; FR = [int64]0x120089; FW = [int64]0x120116; FX = [int64]0x1200A0
             CC = [int64]0x1; DC = [int64]0x2; LC = [int64]0x4; SW = [int64]0x8; RP = [int64]0x10; WP = [int64]0x20
@@ -873,7 +882,7 @@ class TnwksSecurity {
             if ($f[2] -match '^0x') { $mask = [Convert]::ToInt64($f[2].Substring(2), 16) }
             else { for ($i = 0; $i + 1 -lt $f[2].Length; $i += 2) { $mask = $mask -bor $names[$f[2].Substring($i, 2)] } }
             foreach ($g in $generic.Keys) { if ($mask -band $g) { $mask = ($mask -band (-bnot $g)) -bor $generic[$g] } }
-            $sid = if ($f[5] -in @('CO', 'S-1-3-0')) { $Owner } else { $f[5] }
+            $sid = if ($f[5] -in @('CO', 'S-1-3-0')) { $Owner } elseif ($f[5] -in @('CG', 'S-1-3-1')) { $Group } else { $f[5] }
             $out += '({0};ID;0x{1:x};;;{2})' -f $f[0], $mask, $sid
         }
         return 'D:AI' + $out
@@ -881,6 +890,7 @@ class TnwksSecurity {
     static [void] SetOwner([string]$Path, [string]$Owner) {
         $s = [TnwksSecurity]::ReadSddl($Path)
         $global:SecCalls.Add("owner $([TnwksSecurity]::Leaf($Path)) $Owner")
+        if ($global:SecLog) { [IO.File]::AppendAllLines($global:SecLog, [string[]]@("owner $([TnwksSecurity]::Leaf($Path)) $Owner")) }
         $global:Acls[$Path] = 'O:' + $Owner + $s.Substring($s.IndexOf('D:'))
     }
     static [void] SetRules([string]$Path, [string]$Sddl) {
@@ -890,6 +900,8 @@ class TnwksSecurity {
             $global:SecCalls.Add("refused rules $([TnwksSecurity]::Leaf($Path))")
             throw [UnauthorizedAccessException]::new('Access is denied.')
         }
+        # $global:FailRules: a write of the rules that Windows refuses.
+        if ($global:FailRules) { throw [UnauthorizedAccessException]::new('a write that fails') }
         $owner = $Sddl.Substring(2, $Sddl.IndexOf('D:') - 2)
         $dacl = $Sddl.Substring($Sddl.IndexOf('D:'))
         if ($dacl -match ';[A-Z]*ID[A-Z]*;') { throw "an inherited rule in the rules written: $dacl" }
@@ -901,7 +913,7 @@ class TnwksSecurity {
         $folder = [IO.Path]::GetDirectoryName($Path)
         if ($dacl -notmatch '^D:[A-Z]*P') {
             if ($global:FolderAcls -and $global:FolderAcls.ContainsKey($folder)) {
-                $g = [TnwksSecurity]::FileGives($global:FolderAcls[$folder], $owner)
+                $g = [TnwksSecurity]::FileGives($global:FolderAcls[$folder], $owner, [TnwksSecurity]::ReadGroup($Path))
                 $written += $g.Substring(4)
             } else { $written += ("$($global:Inherit[$folder])" -replace ';;;CO\)', ";;;$owner)") }
         }
@@ -944,7 +956,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
                config: dict | None = None, tasks: dict | None = None, acl_file: str | None = None,
                marker_a: bool = False, disabled: str | None = None, acl_edit: str = "", vm_rule: str = "",
                acls: dict | None = None, inherit: dict | None = None, enabled: str = "", queued_polls: int = 0,
-               window: Path = WINDOW, folder_acls: dict | None = None) -> dict:
+               window: Path = WINDOW, folder_acls: dict | None = None, groups: dict | None = None) -> dict:
     root = tmp_path / "root"
     for sub in ("a", "b", "state", "log/a", "log/b"):
         (root / sub).mkdir(parents=True, exist_ok=True)
@@ -1017,6 +1029,7 @@ $global:QueuedPolls = {queued_polls}
 $global:FolderA = {ps(str(root / "a"))}; $global:FolderB = {ps(str(root / "b"))}
 $global:Inherit = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (inherit or {}).items()})}.PSObject.Properties) {{ $global:Inherit[$p.Name] = $p.Value }}
 $global:FolderAcls = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (folder_acls or {}).items()})}.PSObject.Properties) {{ $global:FolderAcls[$p.Name] = $p.Value }}
+$global:Groups = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (groups or {}).items()})}.PSObject.Properties) {{ $global:Groups[$p.Name] = $p.Value }}
 if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false'}) {{
     foreach ($t in @($global:Running.Keys | Where-Object {{ $global:Running[$_] }})) {{
         $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}) }}
@@ -1239,6 +1252,7 @@ INHERIT = {"a": "(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;CO)(A;ID;FR;;;AU)"
            "b": "(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;CO)"}
 MOVED = f"O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})"
 BOOT_STATE = "t window-started\nt window-done\nt window-started\n"
+GUARD_OK = "step 1: the disk file has the inherited rules that its folder gives, and no rule that the way back refuses"
 
 
 @needs_pwsh
@@ -1437,15 +1451,104 @@ def test_the_window_stops_at_step_1_when_the_disk_file_has_not_the_inherited_rul
     assert "The file: ''" in stop and "A;ID;0x1301bf;;;<present>" in stop and A_SID not in stop
     # The rules that the folder gives: a pass, as is a protected file in any folder.
     ok = run_window(tmp_path / "2", FORWARD_TEST, acls={"a/ext4.vhdx": OLD_INHERITS}, inherit=INHERIT)
-    assert "step 1: the disk file has the inherited rules that its folder gives" in ok["log"]
-    assert ok["log"].index("step 1: the disk file has the inherited rules that its folder gives") < next(
+    assert GUARD_OK in ok["log"]
+    assert ok["log"].index(GUARD_OK) < next(
         i for i, line in enumerate(ok["log"]) if line.startswith("group: "))
     protected = run_window(tmp_path / "3", FORWARD_TEST, inherit=INHERIT)
-    assert protected["code"] == 0 and "step 1: the disk file has the inherited rules that its folder gives" in protected["log"]
+    assert protected["code"] == 0 and GUARD_OK in protected["log"]
     # Another inherited rule than the folder gives: a stop.
     other = OLD_INHERITS.replace("(A;ID;FR;;;AU)", "(A;ID;FA;;;AU)")
     out = run_window(tmp_path / "4", FORWARD_TEST, acls={"a/ext4.vhdx": other}, inherit=INHERIT)
     assert out["code"] == 3 and out["markers"] == [], out["log"]
+
+
+DENY_INHERIT = {"a": INHERIT["a"] + "(D;ID;WD;;;AU)", "b": INHERIT["b"]}
+
+
+@needs_pwsh
+@pytest.mark.parametrize(("name", "disk", "inherit", "refused"), [
+    ("an explicit deny rule", OLD_INHERITS + "(D;;WD;;;AU)", INHERIT, "1 deny rule(s)"),
+    ("an inherited deny rule", OLD_INHERITS + "(D;ID;0x40000;;;AU)", DENY_INHERIT, "1 deny rule(s)"),
+    ("a deny rule with protection", OLD_SDDL + "(D;;WD;;;AU)", INHERIT, "1 deny rule(s)"),
+    ("two rules of the capability", OLD_INHERITS.replace("D:AI", "D:AI" + CAP_RULE + CAP_RULE.replace("FA", "0x1f01ff")),
+     INHERIT, "2 rules of the capability of the VM"),
+    ("a rule of a VM in another form", OLD_INHERITS.replace("D:AI", "D:AI" + VM_RULE.replace("FA", "FR")),
+     INHERIT, "1 rule(s) of a VM SID or a capability SID that are not WSL's"),
+    ("a rule of another capability", OLD_INHERITS.replace("D:AI", "D:AI(A;;FA;;;S-1-15-3-1024-1-2-3)"),
+     INHERIT, "1 rule(s) of a VM SID or a capability SID that are not WSL's"),
+])
+def test_the_window_stops_at_step_1_on_a_rule_that_the_way_back_refuses(tmp_path, name, disk, inherit, refused):
+    """The guard of window step 1 stops, with nothing changed, on a rule that the check of
+    the way back refuses: a deny rule, explicit or inherited (the way back writes the
+    explicit ones back, and the folder gives the inherited ones again), more than one
+    rule of the capability of the VM, and an explicit rule of a VM SID or a capability
+    SID that is not in WSL's form. The log names what it refuses, each account masked."""
+    out = run_window(tmp_path, FORWARD_TEST, acls={"a/ext4.vhdx": disk}, inherit=inherit)
+    assert out["code"] == 3, (name, out["log"])
+    assert out["markers"] == [] and out["sec_calls"] == [] and out["admins"] == [], name
+    assert not any(c.startswith(("join ", "disable ", "move ")) for c in out["calls"]), name
+    assert out["disk_a"] and not out["disk_b"], name
+    stop = next(line for line in out["log"] if line.startswith("stop at step 1: the disk file has"))
+    assert refused in stop and "Nothing is changed." in stop and A_SID not in stop, (name, stop)
+    assert not any(line.startswith("stop at step 1: the inherited rules") for line in out["log"]), name
+    assert GUARD_OK not in out["log"], name
+
+
+@needs_pwsh
+def test_the_guard_of_step_1_passes_the_rules_of_wsl_and_names_both_reasons_of_a_stop(tmp_path):
+    """Any number of WSL's rules of a VM and one of its capability pass the guard: way
+    back step 3 writes none of them back. A file that lost its inherited rules and has a
+    deny rule logs both reasons."""
+    wsl = OLD_INHERITS.replace("D:AI", "D:AI" + VM_RULE + VM_RULE.replace("44", "45") + CAP_RULE)
+    ok = run_window(tmp_path / "1", FORWARD_TEST, acls={"a/ext4.vhdx": wsl}, inherit=INHERIT)
+    assert ok["code"] == 0 and GUARD_OK in ok["log"], ok["log"]
+    both = run_window(tmp_path / "2", FORWARD_TEST, acls={"a/ext4.vhdx": f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(D;;WD;;;AU)"},
+                      inherit=INHERIT)
+    assert both["code"] == 3 and both["markers"] == [], both["log"]
+    assert any(line.startswith("stop at step 1: the inherited rules") for line in both["log"])
+    assert any(line.startswith("stop at step 1: the disk file has 1 deny rule(s)") for line in both["log"])
+
+
+@needs_pwsh
+def test_the_check_after_a_write_refuses_a_deny_rule_and_compares_the_inherited_rules(tmp_path):
+    """The checks right after a write: no deny rule, explicit (a saved set that holds one
+    is written back with it) or inherited (the old folder gives it again), so the way
+    back fails its check on each run, as the guard of window step 1 says. Without
+    -Saved (the check of the moved file in window step 4), the inherited rules are
+    compared too."""
+    boot = {"mode": "boot", "state": BOOT_STATE, "disk": ("b",), "marker_a": True, "disabled": "tnwks-moverh-a-start",
+            "acls": {"b/ext4.vhdx": MOVED},
+            "tasks": {"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"}}
+    explicit = run_window(tmp_path / "1", acl_file=OLD_SDDL + "(D;;WD;;;AU)", inherit=INHERIT, **boot)
+    assert explicit["code"] != 0 and "fail: check failed: the file has not its saved owner and rules" in explicit["log"]
+    inherited = run_window(tmp_path / "2", acl_file=f"O:{A_SID}D:AI(A;;FA;;;{A_SID})", inherit=DENY_INHERIT, **boot)
+    assert inherited["code"] != 0 and "fail: check failed: the file has not its saved owner and rules" in inherited["log"]
+    # The same saved set with no deny rule in the folder: a pass.
+    clean = run_window(tmp_path / "3", acl_file=f"O:{A_SID}D:AI(A;;FA;;;{A_SID})", inherit=INHERIT, **boot)
+    assert clean["code"] == 0, clean["log"]
+    # An inherited rule on the moved file, which has protection: not the rules written.
+    gained = "{ param($s) $s + '(A;ID;FR;;;AU)' }"
+    out = run_window(tmp_path / "4", FORWARD_TEST, acl_edit=gained)
+    assert out["code"] != 0 and "fail: check failed: the moved file has another owner or other rules" in out["log"]
+
+
+@needs_pwsh
+def test_what_a_folder_gives_names_the_group_of_the_file_for_creator_group(tmp_path):
+    """A CREATOR GROUP rule of a folder names the group of the file, as Windows' own
+    inheritance function does with the group of the file as the creator's group. A file
+    whose group is not its owner passes the guard of step 1 with the rule of its group,
+    and stops with the rule of its owner."""
+    folder = f"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OIIO;FR;;;CG)(A;;0x100002;;;{A_SID})"
+    group = PERSON_SID
+    own = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;{group})"
+    ok = run_window(tmp_path / "1", FORWARD_TEST, acls={"a/ext4.vhdx": own}, folder_acls={"a": folder},
+                    groups={"a/ext4.vhdx": group})
+    assert ok["code"] == 0 and GUARD_OK in ok["log"], ok["log"]
+    owner = own.replace(f"FR;;;{group})", f"FR;;;{A_SID})")
+    out = run_window(tmp_path / "2", FORWARD_TEST, acls={"a/ext4.vhdx": owner}, folder_acls={"a": folder},
+                     groups={"a/ext4.vhdx": group})
+    assert out["code"] == 3 and out["markers"] == [], out["log"]
+    assert any(line.startswith("stop at step 1: the inherited rules") for line in out["log"])
 
 
 @needs_pwsh
@@ -1507,8 +1610,8 @@ def test_what_a_folder_gives_a_file_follows_the_rule_of_inheritance_on_three_rea
     text = WINDOW.read_text()
     assert "CreatePrivateObjectSecurityEx(parent, creator, out created, IntPtr.Zero, false, 0x1 | 0x8 | 0x10, token, ref map)" in text
     assert "map.Read = 0x120089; map.Write = 0x120116; map.Execute = 0x1200A0; map.All = 0x1F01FF;" in text
-    assert '"O:" + owner + "G:" + owner + "D:"' in text
-    assert "(Get-TnwksSddlParts ([TnwksSecurity]::FileGives($FolderSddl, $Owner))).inherited" in text
+    assert '"O:" + owner + "G:" + group + "D:"' in text
+    assert "Get-TnwksFolderGives $folder $Parts.owner ([TnwksSecurity]::ReadGroup($Path))" in text
 
 
 @needs_pwsh

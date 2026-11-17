@@ -30,8 +30,11 @@
       if (-not (Test-Path -LiteralPath $Log)) { return 'no log' }
       $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
       $lines = @(Get-Content -LiteralPath $Log | Where-Object {
-          $f = $_ -split ' ', 3
-          $f[1] -eq 'boot' -and [DateTime]::Parse($f[0], $null, 'RoundtripKind') -gt $boot } | ForEach-Object { ($_ -split ' ', 3)[2] })
+          # A line that goes on from the line before has no time: it is not read.
+          $f = $_ -split ' ', 3; $when = [DateTime]::MinValue
+          $f.Count -eq 3 -and $f[1] -eq 'boot' -and [DateTime]::TryParse($f[0], [Globalization.CultureInfo]::InvariantCulture,
+              [Globalization.DateTimeStyles]::RoundtripKind, [ref]$when) -and $when.ToUniversalTime() -gt $boot } |
+          ForEach-Object { "$(($_ -split ' ', 3)[2])" })
       $lines -join ' / '
   check_mode: false
   register: wsl_move_rehearsal_boot_now

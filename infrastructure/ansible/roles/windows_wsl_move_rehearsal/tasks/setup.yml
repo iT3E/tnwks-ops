@@ -41,7 +41,8 @@
     quiet: true
 
 # The folder, the state folder and the read of the live parts come first, so
-# the first read, before any VM of the rehearsal, is the baseline.
+# the first read, before any VM of the rehearsal, is the baseline (live.yml
+# copies the script of the read into the folder).
 # Only SYSTEM and the Administrators may change the scripts, the configs, the
 # root file system and the state; Users may read. The folder of each account
 # and its log folder keep their own rules.
@@ -60,11 +61,6 @@
     - "{{ wsl_move_rehearsal_side }}"
     - "{{ wsl_move_rehearsal_elsewhere }}"
     - '{{ wsl_move_rehearsal_dir }}\log'
-
-- name: The read of the live parts
-  ansible.windows.win_copy:
-    src: Get-TnwksMoveLiveState.ps1
-    dest: '{{ wsl_move_rehearsal_dir }}\Get-TnwksMoveLiveState.ps1'
 
 - name: The live parts at the start
   ansible.builtin.include_tasks: live.yml

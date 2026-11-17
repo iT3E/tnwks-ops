@@ -43,7 +43,7 @@
           }
       }
       $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
-      $last = if ($lines.Count) { ($lines[-1] -split ' ', 2)[1].Trim() } else { '' }
+      $last = if ($lines.Count) { "$(($lines[-1] -split ' ', 2)[1])".Trim() } else { '' }
       if ($last -notin @($LastMarkers)) {
           throw "The last marker is '$last', not one of '$(@($LastMarkers) -join "', '")': the phase runs out of order. Nothing is changed."
       }
@@ -64,9 +64,9 @@
       } while (-not $ended -and (Get-Date) -lt $deadline)
       $lines = @(Get-Content -LiteralPath $Log | Select-Object -Skip $logStart)
       $markers = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() } | Select-Object -Skip $stateStart |
-          ForEach-Object { ($_ -split ' ', 2)[1].Trim() })
+          ForEach-Object { "$(($_ -split ' ', 2)[1])".Trim() })
       # Each line is "<time> <mode> <text>": the text only, with no time.
-      $texts = @($lines | ForEach-Object { ($_ -split ' ', 3)[2] })
+      $texts = @($lines | ForEach-Object { "$(($_ -split ' ', 3)[2])" })
       [pscustomobject]@{
           ran = ($info.LastRunTime -ne $before)
           code = [int64]$info.LastTaskResult
