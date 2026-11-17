@@ -92,7 +92,9 @@ kubectl -n flux-system get kustomizations | grep -E 'agents|litellm|model-bridge
 
 **What it means.** The last run of a CronJob in a trust domain failed, and no
 run passed since: the providers job, the sweep, or a daily check
-(`platform-check-isolation`, `platform-check-probe`). It resolves at the next
+(`platform-check-isolation`, `platform-check-probe`, and in `agents-finance`
+`platform-check-firefly-probe`, `platform-check-firefly-dns` and
+`platform-check-mcp-gateway-probe`). It resolves at the next
 good run. The chart rule `KubeJobFailed` fires for the same Job and keeps
 firing while the failed Job is kept, so Alertmanager drops it for these Jobs
 and for the run jobs; it stays in the Alertmanager UI. Read this alert for
@@ -164,6 +166,17 @@ before the create, and fails a run that leaves its own record.
   Follow-up: the gateway fault (a delete that answers success and removes
   no record, logged at debug level only, OpenShell 0.1.8) has no upstream
   report yet.
+- **The gateway probe** (`platform-check-mcp-gateway-probe`,
+  [mcp-gateway.md](mcp-gateway.md#the-probe)). Its lines in Loki
+  (`{namespace="agents-finance", app="platform-checks"}`) name each check.
+  A 401 for the probe key or the key with no tool: the value of the key in
+  `secret-mcp-gateway-probe.sops.yaml` and its hash in the gateway's config
+  differ. Until the owner's values step, the checks with a key print
+  `skipped: the key is pending` and pass; that is not a fault, and the
+  values step ends it. The checks with no key and with an unknown key, and
+  the straight connection to the MCP server, always run. A
+  `connected` for the straight connection: the policy of the MCP server
+  lets in more than the gateway; fix it before the next run.
 
 ### WorkflowProvidersStale
 

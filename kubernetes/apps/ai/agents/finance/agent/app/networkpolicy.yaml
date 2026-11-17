@@ -2,11 +2,12 @@
 # The agent pod. No pod comes in: the gateway of the product listens on
 # loopback, the probes run in the pod, and default-deny (../../namespace.yaml)
 # denies ingress. Out, it reaches the model gateway, the sandbox gateway of
-# this trust domain, the trace collector, the MCP server of the finance app,
-# and two host names, the Telegram Bot API and the web search API (and DNS,
-# through allow-dns). Nothing else: no model vendor, no update or telemetry
-# service, no other trust domain, and not the finance app itself (the MCP
-# server and the proxy of the app stand between, ../../firefly-mcp).
+# this trust domain, the trace collector, the MCP gateway, and two host
+# names, the Telegram Bot API and the web search API (and DNS, through
+# allow-dns). Nothing else: no model vendor, no update or telemetry service,
+# no other trust domain, not the MCP server of the finance app, and not the
+# app itself (the MCP gateway, the MCP server and the proxy of the app stand
+# between, kubernetes/apps/ai/mcp-gateway and ../../firefly-mcp).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -65,12 +66,13 @@ spec:
         - ports:
             - port: "443"
               protocol: TCP
-    # The MCP server of the finance app (../../firefly-mcp/app/mcp.yaml). The
-    # MCP client is in the gateway process, so no sandbox gets this route.
+    # The MCP gateway (kubernetes/apps/ai/mcp-gateway), with the key of
+    # this agent: the tools of the finance app. The MCP client is in the
+    # gateway process of the product, so no sandbox gets this route.
     - toEndpoints:
         - matchLabels:
-            io.kubernetes.pod.namespace: agents-finance
-            app.kubernetes.io/name: firefly-mcp
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

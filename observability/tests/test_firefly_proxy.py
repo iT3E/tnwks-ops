@@ -395,9 +395,8 @@ def test_sandboxed_sessions_get_the_tools():
 
 
 def test_the_pieces_name_the_same_addresses():
+    """The MCP entry of the agent names the MCP gateway (test_mcp_gateway.py)."""
     config = openclaw()
-    assert config["mcp"]["servers"][SERVER]["url"] == \
-        "http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp"
     policy = yaml.safe_load(SANDBOX_POLICY.read_text())
     (rule,) = policy["network_policies"].values()
     (endpoint,) = rule["endpoints"]
@@ -410,7 +409,7 @@ def test_the_pieces_name_the_same_addresses():
     cronjob = next(yaml.safe_load_all(PROBE.read_text()))
     container = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
     env = {e["name"]: e.get("value") for e in container["env"]}
-    assert env["MCP_URL"] == config["mcp"]["servers"][SERVER]["url"]
+    assert "MCP_URL" not in env
     assert env["APP_PROXY"] == f"http://{endpoint['host']}:{endpoint['port']}"
     (mcp,) = [d for d in docs(APP / "mcp.yaml") if d["kind"] == "Deployment"]
     server_env = {e["name"]: e.get("value")

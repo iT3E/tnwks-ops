@@ -11,15 +11,22 @@ A CronJob in each agents-<name> namespace runs one of:
       sandbox of its own name that an earlier run left, and fails when its
       own sandbox is still there at its end.
   platform_checks.py firefly-probe
-      The two walls in front of the finance app hold (finance only:
-      kubernetes/apps/ai/agents/finance/checks). Both clients of the proxy
-      of the app are tried, with the token that the proxy holds: the MCP
-      server, called as the agent calls it, and a sandbox made with the
-      sandbox policy of the agent. An allowed read reaches the app; each
-      delete and each call off the allow list of the proxy is refused. The
-      calls that only a direct client can send (a method override, a form
-      body) go straight to the proxy. The run removes its sandbox at its
-      end, as the probe does.
+      The proxy in front of the finance app holds (finance only:
+      kubernetes/apps/ai/agents/finance/checks), with the token that the
+      proxy holds. Its two ports are tried: the write port, straight, as
+      the MCP server calls it (and with the calls that only a direct client
+      can send: a method override, a form body), and the read port from a
+      sandbox made with the sandbox policy of the agent. An allowed read
+      reaches the app; each delete and each call off the allow list of the
+      proxy is refused. The run removes its sandbox at its end, as the probe
+      does.
+  platform_checks.py mcp-gateway
+      The MCP gateway holds for this trust domain (finance only). No key and
+      a key that is not in its config get a 401. The probe key lists exactly
+      the tools of the domain's rule, its read reaches the app through the
+      MCP server and the proxy, and a tool off the rule is refused at the
+      gateway. The key with no tool lists nothing and is refused. A pod that
+      is not the gateway can not reach the MCP server.
   platform_checks.py dns
       A pod with its own DNS rule, out of the namespace's rule for any name,
       resolves the names of DNS_ALLOWED and none of DNS_REFUSED (finance
@@ -32,6 +39,8 @@ container (/tools/openshell). No secret value is printed.
 
 import json
 import os
+import re
+import secrets
 import shutil
 import socket
 import ssl
@@ -401,77 +410,16 @@ def probe() -> None:
         cleanup()
 
 
-# The probe of the finance app. MCP_URL is the MCP server as the agent calls
-# it, APP_PROXY the proxy of the app as a sandbox calls it, and
-# SANDBOX_POLICY the sandbox policy of the agent. The proxy holds the token
-# (a placeholder until the owner puts the real one, and the checks pass with
-# either). No call here can change data: each write or delete names an id
-# that does not exist ("0"), or sends an empty body that the app refuses.
-MCP_URL = os.environ.get("MCP_URL", "")
-# The read port of the proxy (the sandboxes'), and its write port (the MCP
-# server's).
+# The probe of the finance app. APP_PROXY is the proxy of the app as a
+# sandbox calls it (the read port), APP_PROXY_WRITE as the MCP server calls
+# it (the write port), and SANDBOX_POLICY the sandbox policy of the agent.
+# The proxy holds the token (a placeholder until the owner puts the real one,
+# and the checks pass with either). No call here can change data: each write
+# or delete names an id that does not exist ("0"), or sends an empty body
+# that the app refuses.
 APP_PROXY = os.environ.get("APP_PROXY", "")
 APP_PROXY_WRITE = os.environ.get("APP_PROXY_WRITE", "")
 SANDBOX_POLICY = os.environ.get("SANDBOX_POLICY", "")
-# The MCP server sends this on as the bearer, and the proxy replaces it.
-MCP_BEARER = "none"
-# Tools of the groups that the server must not load (the groups of
-# firefly-mcp/app/mcp.yaml).
-OFF_GROUPS = ("export", "attachment", "recurrence", "recurring", "piggy", "currenc",
-              "object_group", "transaction_link")
-
-
-def mcp(method: str, params: dict) -> dict:
-    """One JSON-RPC request to the MCP server (streamable HTTP, stateless:
-    no session). The answer is JSON or one server-sent event."""
-    request = urllib.request.Request(
-        MCP_URL, method="POST",
-        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
-        headers={"Content-Type": "application/json",
-                 "Accept": "application/json, text/event-stream",
-                 "Authorization": f"Bearer {MCP_BEARER}"})
-    with urllib.request.urlopen(request, timeout=30) as r:
-        raw = r.read().decode()
-    events = [l[5:].strip() for l in raw.splitlines() if l.startswith("data:")]
-    return json.loads(events[-1] if events else raw)
-
-
-def mcp_tool(name: str, arguments: dict) -> str:
-    """The outcome of a tool call, from the text of the server (fireflyiii-mcp
-    1.0.1, formatError): the app's 401 and 404, or the proxy's 403. The app
-    answers no call of the probe with a 403: with no real token it answers
-    401 first, and with the real one an id "0" gets a 404."""
-    try:
-        result = mcp("tools/call", {"name": name, "arguments": arguments})["result"]
-    except (OSError, ValueError, KeyError) as e:
-        return f"failed: {type(e).__name__}"
-    text = " ".join(c.get("text", "") for c in result.get("content", []))
-    if not result.get("isError"):
-        return "reached: ok"
-    if text.startswith("Authentication failed"):
-        return "reached: HTTP 401"
-    if text == "Resource not found.":
-        return "reached: HTTP 404"
-    if text == "API error 403.":
-        return "refused: HTTP 403"
-    return f"other: {text[:120]}"
-
-
-def mcp_checks() -> None:
-    try:
-        names = [t["name"] for t in mcp("tools/list", {})["result"]["tools"]]
-        off = [n for n in names if any(g in n for g in OFF_GROUPS)]
-        got = "none" if names and not off else f"found: {off or 'no tools'}"
-    except (OSError, ValueError, KeyError) as e:
-        got = f"failed: {type(e).__name__}"
-    report("firefly-probe", "MCP server: tools of other groups", "none", got)
-    for target, tool, arguments, expected in (
-            ("MCP server: allowed read (get_about)", "get_about", {}, "reached"),
-            ("MCP server: delete (delete_transaction 0)", "delete_transaction", {"id": "0"}, "refused"),
-            ("MCP server: delete (delete_tag 0)", "delete_tag", {"id": "0"}, "refused"),
-            ("MCP server: rule trigger (trigger_rule 0)", "trigger_rule", {"id": "0"}, "refused"),
-            ("MCP server: rule write (update_rule 0)", "update_rule", {"id": "0"}, "refused")):
-        report("firefly-probe", target, expected, mcp_tool(tool, arguments))
 
 
 # Runs inside the sandbox. Each answer of the proxy names its port in a
@@ -691,7 +639,6 @@ def dns() -> None:
 
 
 def firefly_probe() -> None:
-    mcp_checks()
     direct_checks()
     setup_cli()
     if not remove_leftover():
@@ -704,7 +651,152 @@ def firefly_probe() -> None:
         cleanup()
 
 
+# The gateway probe of a trust domain (finance only:
+# kubernetes/apps/ai/agents/finance/checks/app/mcp-gateway-probe.yaml).
+# MCP_GATEWAY_URL is the route of the domain at the MCP gateway, as its agent
+# calls it; MCP_SERVER the MCP server behind it (host:port), which no pod but
+# the gateway may reach; GATEWAY_CONFIG the config of the gateway, whose tool
+# list the probe key must see. PROBE_KEY may list the tools of the domain
+# and call get_about only; NO_TOOLS_KEY has no tool. Each is a placeholder
+# ("pending") until the owner's values step, and a check that needs it says
+# so and passes. The probe holds no key of an agent.
+MCP_GATEWAY_URL = os.environ.get("MCP_GATEWAY_URL", "")
+MCP_SERVER = os.environ.get("MCP_SERVER", "")
+GATEWAY_CONFIG = os.environ.get("GATEWAY_CONFIG", "")
+PENDING = "pending"
+SKIPPED = "skipped: the key is pending"
+
+
+def mcp_request(key: str | None, method: str, params: dict,
+                extra: dict | None = None) -> tuple[int, object]:
+    """One JSON-RPC request to the gateway (streamable HTTP, stateless: no
+    session), with the key as a bearer or with no key, and other headers of
+    the client if given. The status and the answer (JSON, or the last
+    server-sent event)."""
+    headers = {"Content-Type": "application/json",
+               "Accept": "application/json, text/event-stream", **(extra or {})}
+    if key is not None:
+        headers["Authorization"] = f"Bearer {key}"
+    request = urllib.request.Request(
+        MCP_GATEWAY_URL, method="POST", headers=headers,
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode())
+    try:
+        with urllib.request.urlopen(request, timeout=30) as r:
+            status, raw = r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        status, raw = e.code, e.read().decode(errors="replace")
+    events = [line[5:].strip() for line in raw.splitlines() if line.startswith("data:")]
+    try:
+        return status, json.loads(events[-1] if events else raw)
+    except ValueError:
+        return status, raw[:200]
+
+
+def listed(key: str | None) -> str:
+    """The tools that a key sees: "tools: <n>", or the refusal."""
+    try:
+        status, body = mcp_request(key, "tools/list", {})
+    except OSError as e:
+        return f"failed: {type(e).__name__}"
+    if status == 401:
+        return "refused: HTTP 401"
+    try:
+        return f"tools: {len(body['result']['tools'])}"
+    except (TypeError, KeyError):
+        return f"other: HTTP {status}"
+
+
+def listed_names(key: str) -> list[str] | None:
+    try:
+        status, body = mcp_request(key, "tools/list", {})
+        return sorted(t["name"] for t in body["result"]["tools"]) if status == 200 else None
+    except (OSError, TypeError, KeyError):
+        return None
+
+
+def called(key: str, name: str, arguments: dict, extra: dict | None = None) -> str:
+    """The outcome of a tool call through the gateway. The gateway refuses a
+    tool that its rule does not name for the key with a 400 and the JSON-RPC
+    error "unknown resource" (agentgateway 1.7.0), and sends nothing on. A
+    call that it sends on gets the answer of the app through the MCP server
+    (fireflyiii-mcp 1.0.1, formatError): the app's 401 with the placeholder
+    token, and an answer with the real one."""
+    try:
+        status, body = mcp_request(key, "tools/call", {"name": name, "arguments": arguments}, extra)
+    except OSError as e:
+        return f"failed: {type(e).__name__}"
+    if status == 401:
+        return "refused: HTTP 401"
+    if not isinstance(body, dict):
+        return f"other: HTTP {status}"
+    error = body.get("error") or {}
+    if status == 400 and error.get("message") == "unknown resource":
+        return "refused: gateway"
+    result = body.get("result")
+    if status != 200 or not isinstance(result, dict):
+        return f"other: HTTP {status}"
+    text = " ".join(c.get("text", "") for c in result.get("content", []))
+    if not result.get("isError"):
+        return "reached: ok"
+    if text.startswith("Authentication failed"):
+        return "reached: HTTP 401"
+    if text == "Resource not found.":
+        return "reached: HTTP 404"
+    return f"other: {text[:120]}"
+
+
+def rule_tools() -> list[str]:
+    """The tool list of the rule in the config of the gateway (the one
+    `mcp.tool.name in [...]` list, as mcp-gateway/tools/mcp_tools.py reads
+    it)."""
+    with open(GATEWAY_CONFIG) as f:
+        (names,) = re.findall(r"mcp\.tool\.name in \[(.*?)\]", f.read(), re.DOTALL)
+    return sorted(re.findall(r'"([^"]+)"', names))
+
+
+def mcp_gateway() -> None:
+    check = "mcp-gateway"
+    host, port = MCP_SERVER.rsplit(":", 1)
+    report(check, "MCP server, direct from a pod that is not the gateway", "blocked",
+           tcp(host, int(port)))
+    report(check, "no key: tools/list", "refused: HTTP 401", listed(None))
+    report(check, "a key that is not in the config: tools/list", "refused: HTTP 401",
+           listed(secrets.token_hex(32)))
+    probe_key = os.environ.get("PROBE_KEY", PENDING)
+    if probe_key == PENDING:
+        report(check, "probe key", SKIPPED, SKIPPED)
+    else:
+        want = rule_tools()
+        got = listed_names(probe_key)
+        report(check, f"probe key: lists the {len(want)} tools of the rule", "same",
+               "same" if got == want else
+               f"differs: {'failed' if got is None else sorted(set(got) ^ set(want))[:10]}")
+        for target, tool, arguments, expected in (
+                ("probe key: allowed read (get_about)", "get_about", {}, "reached"),
+                ("probe key: delete (delete_transaction 0), off every rule",
+                 "delete_transaction", {"id": "0"}, "refused: gateway"),
+                ("probe key: rule trigger (trigger_rule 0), off every rule",
+                 "trigger_rule", {"id": "0"}, "refused: gateway"),
+                ("probe key: a write of the rule (create_tag), not the probe's",
+                 "create_tag", {"tag": "probe"}, "refused: gateway")):
+            report(check, target, expected, called(probe_key, tool, arguments))
+        # The client is the one of the key: headers that name another client
+        # give nothing (the gateway also drops them before the MCP server).
+        report(check, "probe key with headers that name the client finance: a write",
+               "refused: gateway",
+               called(probe_key, "create_tag", {"tag": "probe"},
+                      {"X-Client": "finance", "X-Api-Key": "finance", "Cookie": "client=finance",
+                       "X-Forwarded-For": "127.0.0.1"}))
+    no_tools_key = os.environ.get("NO_TOOLS_KEY", PENDING)
+    if no_tools_key == PENDING:
+        report(check, "key with no tool", SKIPPED, SKIPPED)
+    else:
+        report(check, "key with no tool: tools/list", "tools: 0", listed(no_tools_key))
+        report(check, "key with no tool: read (get_about)", "refused: gateway",
+               called(no_tools_key, "get_about", {}))
+
+
 if __name__ == "__main__":
     {"isolation": isolation, "probe": probe, "firefly-probe": firefly_probe,
-     "dns": dns}[sys.argv[1]]()
+     "dns": dns, "mcp-gateway": mcp_gateway}[sys.argv[1]]()
     sys.exit(1 if failures else 0)

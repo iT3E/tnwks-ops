@@ -1,15 +1,19 @@
 ---
-# The MCP server of the finance app (fireflyiii-mcp), for the gateway of the
-# finance agent. It runs in HTTP mode with no OAuth client: it takes the
-# bearer of each request from the client and sends it on to FIREFLY_URL. Its
-# client sends a fixed value that is no secret (the mcp entry of
-# ../../agent/config/openclaw.json); the server only checks that a bearer is
-# there, and the proxy replaces it. So this pod holds no token.
+# The MCP server of the finance app (fireflyiii-mcp), behind the MCP gateway
+# (kubernetes/apps/ai/mcp-gateway), its one client. It runs in HTTP mode with
+# no OAuth client: it takes the bearer of each request from the client and
+# sends it on to FIREFLY_URL. The gateway sends a fixed value that is no
+# secret (the backendAuth of the finance route of its config); the server
+# only checks that a bearer is there, and the proxy replaces it. So this pod
+# holds no token.
 #
 # The groups of tools (MCP_GROUPS): the reads and the writes that the agent
 # needs. Not here: recurring, attachments, currencies, exports, object groups,
-# piggy banks and transaction links. The proxy refuses every delete, the
-# triggers and the rule writes of the groups that are here, and the agent
+# piggy banks and transaction links. The gateway lets the agent call only the
+# kept tools, by name, from a dump of this image
+# (kubernetes/apps/ai/mcp-gateway/tools/firefly.json: a new image needs a new
+# dump, and a test fails until it is there). The proxy refuses every delete,
+# the triggers and the rule writes of the groups that are here, and the agent
 # filters and denies the same tools (openclaw.json).
 apiVersion: apps/v1
 kind: Deployment

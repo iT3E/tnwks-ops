@@ -1,0 +1,137 @@
+---
+# The gateway probe of finance (scripts/platform_checks.py mcp-gateway, in
+# kubernetes/apps/ai/agents/checks/app; docs/apps/mcp-gateway.md, "The
+# probe"). It calls the route of finance at the MCP gateway, as the agent
+# does, with two keys of its own and none of the agent's:
+# - no key, and a random key that is not in the config: a 401 each;
+# - the probe key (client finance-probe): it lists exactly the tools of the
+#   rule of finance (the list in the gateway's config, mounted here), its
+#   read (get_about) reaches the app through the MCP server and the proxy (a
+#   401 of the app with the placeholder token, an answer with the real one),
+#   and a delete, a rule trigger and a write are refused at the gateway, so
+#   nothing reaches the MCP server, also with headers that name the client
+#   finance (the client is the one of the key);
+# - the key with no tool (client no-tools): it lists nothing and its read
+#   is refused;
+# - a straight connection to the MCP server fails: only the gateway may
+#   reach it (../../firefly-mcp/app/networkpolicy.yaml).
+# Until the owner's values step the two keys are placeholders: the checks
+# that need them print "skipped: the key is pending" and pass, and the
+# values step ends that (docs/apps/agent-platform-runbook.md,
+# AgentPlatformCronJobFailed). The checks with no key and with an unknown
+# key, and the straight connection, always run. It changes no
+# data. A failed run alerts as the other checks do
+# (AgentPlatformCronJobFailed, AgentPlatformCheckStale).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-check-mcp-gateway-probe
+  labels: &labels
+    app.kubernetes.io/name: platform-checks
+    app.kubernetes.io/component: mcp-gateway-probe
+spec:
+  schedule: "37 5 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # The worst case, in seconds: the straight connection 5, then ten
+      # MCP requests of 30 each (300). That is 305.
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          restartPolicy: Never
+          serviceAccountName: platform-checks
+          # It calls no API of the cluster.
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: check
+              image: docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+              command: ["python3", "/scripts/platform_checks.py", "mcp-gateway"]
+              env:
+                - name: OWN_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: TRUST_DOMAIN_NAMESPACES
+                  value: agents-finance
+                # The route of finance, as the agent calls it (the mcp entry
+                # of ../../agent/config/openclaw.json).
+                - name: MCP_GATEWAY_URL
+                  value: http://mcp-gateway.ai.svc.cluster.local:3000/finance/mcp
+                # The MCP server behind the route (the target of the route
+                # in the gateway's config).
+                - name: MCP_SERVER
+                  value: firefly-mcp.agents-finance.svc.cluster.local:3000
+                - name: GATEWAY_CONFIG
+                  value: /gateway/config.yaml
+              # PROBE_KEY and NO_TOOLS_KEY.
+              envFrom:
+                - secretRef:
+                    name: mcp-gateway-probe-secret
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: gateway
+                  mountPath: /gateway
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: platform-checks
+            # The config of the gateway, the same file (kustomization.yaml).
+            - name: gateway
+              configMap:
+                name: mcp-gateway-probe-config
+---
+# The gateway probe may call the MCP gateway, and may try the MCP server
+# straight: the policy of the MCP server, not this one, must stop that.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: platform-check-mcp-gateway-probe
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-checks
+      app.kubernetes.io/component: mcp-gateway-probe
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: firefly-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP

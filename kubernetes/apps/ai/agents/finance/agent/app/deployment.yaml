@@ -4,11 +4,11 @@
 # kustomization.yaml until its Secret exists (the owner makes the bot token,
 # R4) and the owner gives the go of the cutover. The tool set is the pilot's,
 # with its own search key, and the notes vault in the state volume
-# (docs/apps/agent-platform.md, "The finance agent"). The finance app is not
-# a tool yet.
+# (docs/apps/agent-platform.md, "The finance agent").
 # Each command it runs goes to a sandbox of this trust domain, through the
 # sandbox gateway; each model call goes to the model gateway, with the key of
-# this trust domain.
+# this trust domain; each call of a tool of the finance app goes to the MCP
+# gateway, with the key of this agent (MCP_GATEWAY_KEY).
 #
 # The image contract is in the README of iT3E/tnwks-agent-image: the user,
 # the paths, the read-only root and the steps before the start.
@@ -221,7 +221,7 @@ spec:
               value: "1"
           envFrom: &secrets
             # OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY, TELEGRAM_BOT_TOKEN,
-            # TELEGRAM_ALLOW_FROM
+            # TELEGRAM_ALLOW_FROM, MCP_GATEWAY_KEY
             # (docs/apps/agent-platform.md).
             - secretRef:
                 name: agent-secret

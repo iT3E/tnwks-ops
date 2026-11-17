@@ -25,9 +25,9 @@
   "mcp": {
     "servers": {
       "firefly": {
-        "url": "http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp",
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/finance/mcp",
         "transport": "streamable-http",
-        "headers": {"Authorization": "Bearer none"},
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
         "toolFilter": {
           "include": [
             "get_*", "search_*", "test_rule", "test_rule_group",

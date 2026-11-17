@@ -1,0 +1,18 @@
+---
+# The MCP port only. No Service names the metrics, the readiness or the
+# admin port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-gateway
+  namespace: ai
+  labels:
+    app.kubernetes.io/name: mcp-gateway
+spec:
+  selector:
+    app.kubernetes.io/name: mcp-gateway
+  ports:
+    - name: mcp
+      port: 3000
+      targetPort: mcp
+      protocol: TCP

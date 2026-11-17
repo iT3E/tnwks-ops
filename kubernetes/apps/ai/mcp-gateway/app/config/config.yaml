@@ -1,0 +1,187 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# The config of the MCP gateway (docs/apps/mcp-gateway.md): agentgateway in
+# standalone mode, this one file, no database and no UI. It reads the file
+# at the start and when it changes; the ConfigMap of this file has a hash in
+# its name, so a change rolls the pod.
+#
+# One route for each trust domain that has a client, at /<domain>/mcp, with
+# its own clients, its own tool rule and its own MCP servers. Deny by
+# default: a request with no key or a key that is not here gets a 401, and a
+# client sees and calls only the tools that a rule names for it.
+#
+# The keys are SHA-256 hashes of keys of 32 random bytes; the values are in
+# the Secrets of their clients (SOPS), never here. A hash of the form
+# sha256:000...0N is a placeholder: no key has it, so its client gets a 401
+# until the owner's values step (docs/apps/mcp-gateway.md, "The keys").
+config:
+  # The admin port (config dump, shutdown, the UI) on loopback only, as is
+  # the default: no other pod and no Service reaches it.
+  adminAddr: localhost:15000
+  # The metrics, for Prometheus (../podmonitor.yaml), and the readiness
+  # probe of the kubelet.
+  statsAddr: 0.0.0.0:15020
+  readinessAddr: 0.0.0.0:15021
+  # The MCP request counter has a label with the tool name that the client
+  # sends, also for a refused name, so a client could make any number of
+  # series. It is not made; the access log has the tool of each request.
+  metrics:
+    remove:
+      - agentgateway_mcp_requests_total
+  # Stateless MCP (each request stands alone, as below): no session to
+  # protect, and the config is read-only, so no key is generated.
+  session:
+    key: disabled
+  logging:
+    format: json
+
+frontendPolicies:
+  # One JSON line for each request: the route, the MCP method, the target,
+  # the tool and the status, and the client of the key. Never the arguments
+  # or the result of a call (the defaults hold neither).
+  accessLog:
+    add:
+      client: apiKey.client
+
+gateways:
+  mcp:
+    port: 3000
+
+routes:
+  # The finance trust domain (agents-finance). Its clients: the finance
+  # agent, and the gateway probe of the domain (two keys: one that may list
+  # the tools of finance and call get_about only, and one with no tool).
+  - name: finance
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /finance/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            metadata: {client: finance}
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+            metadata: {client: finance-probe}
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000002"
+            metadata: {client: no-tools}
+      timeout:
+        requestTimeout: 60s
+      # Only the headers that MCP needs go on to the MCP server, after the
+      # key is checked: each other header that a client sets (a cookie, a
+      # key of another kind, a forwarded address, a trace) is dropped. The
+      # gateway then sets its own Authorization (backendAuth below).
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The tool rule of finance. The list is the kept tools of the MCP
+      # server of the finance app, by exact name, from the dump of its pinned
+      # image (../../tools/firefly.json, written by ../../tools/mcp_tools.py).
+      # A tool that is not named here is not in a list and is refused, for
+      # every client.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "create_account",
+                "create_bill",
+                "create_budget",
+                "create_budget_limit",
+                "create_category",
+                "create_split_transaction",
+                "create_tag",
+                "create_transaction",
+                "get_about",
+                "get_account",
+                "get_account_overview_chart",
+                "get_account_transactions",
+                "get_accounts",
+                "get_available_budget",
+                "get_available_budgets",
+                "get_balance_chart",
+                "get_bill_transactions",
+                "get_bills",
+                "get_budget_chart",
+                "get_budget_limits",
+                "get_budget_transactions",
+                "get_budgets",
+                "get_categories",
+                "get_category_chart",
+                "get_category_transactions",
+                "get_exchange_rate",
+                "get_insight_expenses",
+                "get_insight_expenses_by_asset",
+                "get_insight_expenses_by_bill",
+                "get_insight_expenses_by_budget",
+                "get_insight_expenses_by_expense_account",
+                "get_insight_expenses_by_tag",
+                "get_insight_expenses_no_bill",
+                "get_insight_expenses_no_budget",
+                "get_insight_expenses_no_category",
+                "get_insight_expenses_no_tag",
+                "get_insight_expenses_total",
+                "get_insight_income",
+                "get_insight_income_by_asset",
+                "get_insight_income_by_revenue",
+                "get_insight_income_by_tag",
+                "get_insight_income_no_category",
+                "get_insight_income_no_tag",
+                "get_insight_income_total",
+                "get_insight_transfer_no_category",
+                "get_insight_transfer_no_tag",
+                "get_insight_transfers_by_asset",
+                "get_insight_transfers_by_category",
+                "get_insight_transfers_by_tag",
+                "get_insight_transfers_total",
+                "get_net_worth_summary",
+                "get_rule",
+                "get_rule_group",
+                "get_rule_group_rules",
+                "get_rule_groups",
+                "get_rules",
+                "get_summary",
+                "get_tag_transactions",
+                "get_tags",
+                "get_transaction",
+                "get_transactions",
+                "get_transactions_without_budget",
+                "search_accounts",
+                "search_transactions",
+                "test_rule",
+                "test_rule_group",
+                "update_account",
+                "update_bill",
+                "update_budget",
+                "update_budget_limit",
+                "update_category",
+                "update_tag",
+                "update_transaction"
+              ] && (
+                apiKey.client == "finance" ||
+                (apiKey.client == "finance-probe" &&
+                  (mcp.methodName == "tools/list" || mcp.tool.name == "get_about"))
+              )
+    backends:
+      - mcp:
+          # Each request stands alone; the gateway opens the session with
+          # the server for it.
+          statefulMode: stateless
+          # One target on this route, so the names stay bare (get_about, not
+          # firefly_get_about), as the agent's filter names them.
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The MCP server of the finance app, which holds no token: it
+            # sends this bearer on to the proxy of the app, and the proxy
+            # puts the token of the agent in its place (finance/firefly-mcp).
+            # "none" is no secret.
+            - name: firefly
+              mcp:
+                host: http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp
+              policies:
+                backendAuth:
+                  key: none

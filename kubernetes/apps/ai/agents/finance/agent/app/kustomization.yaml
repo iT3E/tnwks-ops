@@ -6,7 +6,9 @@
 # - ./deployment.yaml (replicas 0): its Secret `agent-secret` does not exist.
 #   The owner makes the values (R4): OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY
 #   (the key `agents-finance` of the model gateway, docs/apps/litellm.md),
-#   TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOW_FROM, as `secret.sops.yaml` here.
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM and MCP_GATEWAY_KEY (the key of
+#   the client `finance` of the MCP gateway, docs/apps/mcp-gateway.md), as
+#   `secret.sops.yaml` here.
 #   With it, ./secret-search.sops.yaml (BRAVE_API_KEY, the search key of
 #   finance, in git with its value).
 # - ./pvc.yaml and ./backup.yaml, together, after the ClusterRepository
@@ -15,8 +17,9 @@
 #   agents-finance in that repository comes first, and goes last.
 # - The restore test (../restore-test/, a template).
 # The tool set is the pilot's (its own search key), the notes vault in the
-# state volume, and the finance app through its MCP server and its proxy
-# (../../firefly-mcp, docs/apps/agent-platform.md, "The finance app").
+# state volume, and the finance app through the MCP gateway, its MCP server
+# and its proxy (kubernetes/apps/ai/mcp-gateway, ../../firefly-mcp,
+# docs/apps/agent-platform.md, "The finance app").
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

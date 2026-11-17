@@ -1,17 +1,27 @@
 ---
 # The checks of the agent platform in agents-finance: the checks of every
-# trust domain (kubernetes/apps/ai/agents/checks/app), and the probe and the
-# DNS check of the finance app (firefly-probe.yaml).
+# trust domain (kubernetes/apps/ai/agents/checks/app), the probe and the DNS
+# check of the finance app (firefly-probe.yaml), and the gateway probe of
+# finance (mcp-gateway-probe.yaml) with its two keys.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../checks/app
   - ./firefly-probe.yaml
+  - ./mcp-gateway-probe.yaml
+  # PROBE_KEY and NO_TOOLS_KEY, the keys of the gateway probe: placeholders
+  # until the owner's values step (docs/apps/mcp-gateway.md, "The keys").
+  - ./secret-mcp-gateway-probe.sops.yaml
 configMapGenerator:
   # The sandbox policy of the agent, the same file (one file, two users).
   - name: firefly-probe-policy
     files:
       - sandbox-policy.yaml=../../agent/config/sandbox-policy.yaml
+  # The config of the MCP gateway, the same file: the gateway probe reads
+  # the tool list of the rule of finance from it.
+  - name: mcp-gateway-probe-config
+    files:
+      - config.yaml=../../../../mcp-gateway/app/config/config.yaml
 patches:
   # The probe of the finance app may delete its own Sandbox record too, and
   # no other.

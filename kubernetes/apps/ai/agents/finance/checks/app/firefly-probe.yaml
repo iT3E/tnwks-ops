@@ -1,11 +1,13 @@
 ---
 # The probe of the finance app (scripts/platform_checks.py firefly-probe, in
-# kubernetes/apps/ai/agents/checks/app). Both clients of the proxy of the
-# app: the MCP server, called as the agent calls it, and a sandbox made with
-# the sandbox policy and the image of the agent's sandboxes. An allowed read
-# reaches the app (a 401 with the placeholder token, an answer with the real
-# one); each delete and each call off the allow list is refused. It holds no
-# token and changes no data. A failed run alerts as the other checks do
+# kubernetes/apps/ai/agents/checks/app). Both ports of the proxy of the app:
+# the write port, called straight as the MCP server calls it, and the read
+# port from a sandbox made with the sandbox policy and the image of the
+# agent's sandboxes. An allowed read reaches the app (a 401 with the
+# placeholder token, an answer with the real one); each delete and each call
+# off the allow list is refused. It holds no token and changes no data. The
+# MCP server is behind the MCP gateway now, and the gateway probe tests that
+# path (mcp-gateway-probe.yaml). A failed run alerts as the other checks do
 # (AgentPlatformCronJobFailed, AgentPlatformCheckStale).
 apiVersion: batch/v1
 kind: CronJob
@@ -22,9 +24,9 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      # The worst case, in seconds: the MCP calls 180 (six, 30 each), the
-      # direct calls 80 (eight, 10 each), then as the sandbox probe less its
-      # pod reads (1350). That is 1610.
+      # The worst case, in seconds: the direct calls 130 (thirteen, 10
+      # each), then as the sandbox probe less its pod reads (1350). That is
+      # 1480.
       activeDeadlineSeconds: 1800
       template:
         metadata:
@@ -118,10 +120,8 @@ spec:
                   value: docker.io/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
                 - name: SANDBOX_POLICY
                   value: /policy/sandbox-policy.yaml
-                - name: MCP_URL
-                  value: http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp
-                # The read port, as the sandboxes use it, and the port of
-                # the MCP server.
+                # The read port, as the sandboxes use it, and the write port,
+                # as the MCP server uses it.
                 - name: APP_PROXY
                   value: http://firefly-proxy.agents-finance.svc.cluster.local:8081
                 - name: APP_PROXY_WRITE
@@ -160,8 +160,8 @@ spec:
               secret:
                 secretName: openshell-client-tls
 ---
-# The probe of the finance app may call the MCP server and the proxy of the
-# app (../../firefly-mcp/app/networkpolicy.yaml lets this pod in, and no other
+# The probe of the finance app may call the proxy of the app on both ports
+# (../../firefly-mcp/app/networkpolicy.yaml lets this pod in, and no other
 # check pod).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -176,17 +176,8 @@ spec:
     - toEndpoints:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-finance
-            app.kubernetes.io/name: firefly-mcp
-            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
-            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
-      toPorts:
-        - ports:
-            - port: "3000"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
-            io.kubernetes.pod.namespace: agents-finance
             app.kubernetes.io/name: firefly-proxy
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

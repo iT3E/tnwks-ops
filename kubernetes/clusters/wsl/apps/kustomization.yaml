@@ -30,6 +30,9 @@ resources:
   # The model bridge of the agent platform, next to the model gateway. This
   # cluster only, for the same reason.
   - ../../../apps/ai/model-bridge/ks.yaml
+  # The MCP gateway of the agent platform, shared by its trust domains.
+  # This cluster only, for the same reason.
+  - ../../../apps/ai/mcp-gateway/ks.yaml
   - ../../../apps/auth
   - ../../../apps/cache
   - ../../../apps/cert-manager

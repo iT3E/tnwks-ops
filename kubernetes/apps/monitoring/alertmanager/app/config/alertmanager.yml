@@ -80,7 +80,7 @@ route:
       matchers:
         - alertname = "KubeJobFailed"
         - namespace =~ "agents-.+"
-        - job_name =~ "platform-check-(isolation|probe|firefly-probe|firefly-dns)-[0-9]+"
+        - job_name =~ "platform-check-(isolation|probe|firefly-probe|firefly-dns|mcp-gateway-probe)-[0-9]+"
     # The providers job, the sweep and the run jobs are in agents-workflows
     # only. The run receiver names a run job run-<the first 20 hex of the
     # SHA-256 of its key> (iT3E/tnwks-workflow-agents, src/run_receiver/app.py,
