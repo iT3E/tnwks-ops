@@ -292,3 +292,42 @@ tests:
         eval_time: 20m
         exp_alerts:
           - exp_labels: {severity: warning, namespace: agents-main}
+
+  - name: a failed pass of the automations sync fires until a pass ends ok
+    interval: 1m
+    input_series:
+      # Passes each hour: ok at 5m, failed at 65m, ok at 125m.
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-finance", app="agent", check="automations-sync", result="ok"}
+        values: _x5 300 _x119 7500 _x60
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-finance", app="agent", check="automations-sync", result="failed"}
+        values: _x65 3900 _x120
+    alert_rule_test:
+      - alertname: AgentAutomationsSyncFailed
+        eval_time: 30m
+        exp_alerts: []
+      - alertname: AgentAutomationsSyncFailed
+        eval_time: 66m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-finance}
+      # Long after the sample left the 5-minute lookback.
+      - alertname: AgentAutomationsSyncFailed
+        eval_time: 120m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-finance}
+      - alertname: AgentAutomationsSyncFailed
+        eval_time: 126m
+        exp_alerts: []
+
+  - name: a failed pass with no later line stops firing after 3 hours
+    interval: 1m
+    input_series:
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-finance", app="agent", check="automations-sync", result="failed"}
+        values: _x5 300 _x300
+    alert_rule_test:
+      - alertname: AgentAutomationsSyncFailed
+        eval_time: 3h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-finance}
+      - alertname: AgentAutomationsSyncFailed
+        eval_time: 3h10m
+        exp_alerts: []

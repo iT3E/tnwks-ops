@@ -181,6 +181,18 @@ def test_the_target_is_the_mcp_server_with_a_bearer_that_is_no_secret():
     assert route("finance")["matches"] == [{"path": {"pathPrefix": "/finance/"}}]
 
 
+
+def test_no_alert_rule_counts_the_requests_of_the_gateway():
+    """The client of the agent opens the optional stream with a GET after
+    each initialize, and the gateway logs its 405 at level error
+    (docs/apps/mcp-gateway.md, "Logs and metrics"). No rule may count it:
+    no rule reads the request series of the gateway."""
+    rules = [p for p in (ROOT / "kubernetes").rglob("*.yaml")
+             if re.search(r"(?m)^kind: PrometheusRule$", p.read_text(errors="replace"))]
+    assert rules
+    for path in rules:
+        assert "agentgateway_" not in path.read_text(), path
+
 def test_the_agent_and_the_probe_call_the_finance_route():
     entry = json.loads(OPENCLAW.read_text())["mcp"]["servers"]["firefly"]
     assert entry["url"] == "http://mcp-gateway.ai.svc.cluster.local:3000/finance/mcp"
