@@ -1,0 +1,32 @@
+---
+# Nothing reaches the scratch copy but the check Job (5432) and the operator,
+# which reads each instance's status on 8000 (CloudNativePG 1.30, docs
+# "Security", "Network Policies"). The namespace has no other policy, so
+# without this one any pod in the cluster could connect. Egress stays open:
+# the recovery reads the archive.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firefly-pg-restore-test
+  namespace: databases
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: firefly-pg-restore-test
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: firefly-restore-check
+      ports:
+        - protocol: TCP
+          port: 5432
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - protocol: TCP
+          port: 8000

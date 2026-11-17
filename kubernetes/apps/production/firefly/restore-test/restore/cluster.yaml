@@ -1,0 +1,62 @@
+---
+# A scratch copy of firefly-pg, recovered from its archive (CloudNativePG
+# 1.30, docs "Recovery", "Recovery from an Object Store with the Barman Cloud
+# Plugin"). It reads the ObjectStore firefly-pg, folder homelab-wsl: the
+# archive of the primary site. It writes nothing there:
+# - no plugins section, so no WAL archiver and no backup of its own, and no
+#   ScheduledBackup points at it;
+# - recovery only reads the base backup and the WAL files.
+# Its Services (firefly-pg-restore-test-rw, -ro, -r) are new names that no app
+# uses, and networkpolicy.yaml lets only the check Job and the operator in.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: firefly-pg-restore-test
+  namespace: databases
+  annotations:
+    kyverno.io/ignore: "true"
+  labels:
+    app.kubernetes.io/name: firefly-pg-restore-test
+    app.kubernetes.io/part-of: cloudnative-pg
+spec:
+  instances: 1
+  # The PVC of firefly-pg is 1Gi; the database is about 36 MB.
+  storage:
+    size: 1Gi
+    storageClass: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  # No PodMonitor: the cnpg alerts (PostgresBackupStale and the others) do
+  # not see a scratch copy.
+  monitoring:
+    enablePodMonitor: false
+  postgresql:
+    parameters:
+      shared_buffers: 32MB
+      max_connections: "20"
+  bootstrap:
+    recovery:
+      source: firefly-pg
+      # After recovery the operator sets the owner's password from this
+      # Secret, the one firefly-pg uses, so the check needs no new
+      # credential. The role and its password are in the backup already.
+      database: firefly
+      owner: firefly
+      secret:
+        name: postgres-firefly
+      # The latest WAL by default. A point in time goes here:
+      # recoveryTarget:
+      #   targetTime: "2026-11-16T12:00:00Z"
+  externalClusters:
+    - name: firefly-pg
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: firefly-pg
+          # Always set: the plugin otherwise uses this Cluster's own name
+          # (kubernetes/components/cnpg-cluster/README.md, "Restore").
+          serverName: homelab-wsl

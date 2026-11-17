@@ -93,8 +93,9 @@ Read-only questions are best answered through the API. When the API seems
 wrong:
 
 ```bash
-POD=$(kubectl get pods -n databases -l 'cnpg.io/cluster=postgres,cnpg.io/instanceRole=primary' -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n databases "$POD" -c postgres -- psql -U postgres -d firefly -c 'select count(*) from transaction_journals'
+POD=$(kubectl get pods -n databases -l 'cnpg.io/cluster=firefly-pg,cnpg.io/instanceRole=primary' -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n databases "$POD" -c postgres -- env PGOPTIONS='-c default_transaction_read_only=on' \
+  psql -U postgres -d firefly -c 'select count(*) from transaction_journals'
 ```
 
 Look the primary up by label each time; it moves on failover.
@@ -106,3 +107,68 @@ recovery (`docs/operations/backups.md`). The secret is in git. Attachments are
 in kopiur. Account IDs are referenced by external mappings, so restore with
 `pg_restore` (IDs and sequences preserved), never by exporting and
 re-importing through the UI or CSV, which renumbers accounts.
+
+### Restore the database
+
+`firefly-pg` archives its WAL all the time and takes a base backup at 01:30
+UTC each day, with 30 days of retention (`kubernetes/components/cnpg-cluster`).
+So it can go back to any second in those 30 days. A recovery always makes a
+new Cluster; it never changes a running one (CloudNativePG 1.30, docs
+"Recovery").
+
+**One record or a few, the usual case** (a wrong write through the API):
+keep the live database, and read the old values from a copy.
+
+1. Note the time just before the wrong write, in UTC.
+2. In `kubernetes/apps/production/firefly/restore-test/restore/cluster.yaml`,
+   set `bootstrap.recovery.recoveryTarget.targetTime` to that time (docs
+   "Recovery", "PITR from an object store" and "Recovery targets"). Wire
+   `restore-test/ks.yaml` (`kubernetes/clusters/wsl/apps/production/kustomization.yaml`)
+   and merge. Flux builds `databases/firefly-pg-restore-test` at that time.
+3. Read the old values from the copy, read-only (`kubectl exec` into
+   `firefly-pg-restore-test-1`, as in "Looking at the data directly"), and
+   write them back through the API, so the IDs stay.
+4. Remove the wiring line and the directory, and merge. Flux deletes the
+   copy, its volume and the Job.
+
+**The whole database** (it is lost, or wrong from a point on): stop the app,
+`finance-sync` and every client that writes, then follow
+`kubernetes/components/cnpg-cluster/README.md`, "Restore": a patch in
+`db/kustomization.yaml` that replaces `bootstrap.initdb` with
+`bootstrap.recovery` (with `recoveryTarget` for a point in time), a new
+`CNPG_SERVER_NAME` generation, then delete the Cluster and its volume and
+merge. Every write after the target is lost. The replica on homelab-wsl-02
+follows the old archive folder, so it must be built again from the new one
+(`docs/wsl/multi-site.md`). This path has not been run for `firefly-pg`.
+
+**The restore test** (`kubernetes/apps/production/firefly/restore-test/`,
+wired on homelab-wsl only, removed after each run):
+
+- A Cluster `firefly-pg-restore-test` in `databases` recovers from the
+  archive folder `homelab-wsl` of the ObjectStore `firefly-pg` to the latest
+  WAL. It has no `plugins` section, so it never archives WAL or takes a
+  backup, and nothing writes to the archive of `firefly-pg`. Its Services
+  have new names that no app uses. A NetworkPolicy lets in only the check
+  Job (5432) and the operator (8000).
+- Then the Job `firefly-restore-check` logs only counts and times: tables,
+  migrations, rows of `transactions`, `transaction_journals` and `accounts`,
+  and the newest `created_at` of a journal. It fails on a copy that is not
+  promoted, has fewer than 59 migrations (the files of Firefly 6.5.9), or has
+  one of the three tables missing or empty. Loki:
+  `{namespace="databases", app="firefly-restore-check"}`.
+- It doesn't read `firefly-pg`: no read path exists without a new
+  credential. To compare, run the same counts on the live database
+  ("Looking at the data directly"). Each live count must be the same or
+  larger (rows written since the copy's last WAL), and the newest journal
+  close to the copy's.
+- How long: a base backup of about 50 MB (the database is about 36 MB) and
+  the WAL of less than a day. The 2026-11-02 drill recovered nine databases
+  in 80 seconds, so expect a few minutes, most of it the start of the pod.
+
+What a passing run proves: the archive of `firefly-pg` on homelab-wsl holds a
+base backup and WAL that the operator recovers into a working database with
+a complete schema and rows in its main tables. What it does not prove: that
+the copy equals the live database row for row, a recovery to a point in time
+(a second run with `targetTime`), the app on the restored data, a recovery
+on homelab-wsl-02, or a recovery after the whole cluster is lost (the
+operator, the backup plugin and the backup credentials must be back first).
