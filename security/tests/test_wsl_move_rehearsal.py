@@ -1467,8 +1467,8 @@ def test_the_way_back_restores_a_saved_set_with_no_inherited_rule_and_notes_what
 FOLDER_VECTORS = [
     (f"O:BAD:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;{PERSON_SID})", A_SID,
      f"(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;{PERSON_SID})"),
-    ("O:BAD:(A;ID;FA;;;BA)(A;OICIIOID;GA;;;BA)(A;ID;FA;;;SY)(A;OICIIOID;GA;;;SY)(A;ID;0x1301bf;;;AU)"
-     "(A;OICIIOID;SDGXGWGR;;;AU)(A;ID;0x1200a9;;;BU)(A;OICIIOID;GXGR;;;BU)", A_SID,
+    (("O:BAD:(A;ID;FA;;;BA)(A;OICIIOID;GA;;;BA)(A;ID;FA;;;SY)(A;OICIIOID;GA;;;SY)(A;ID;0x1301bf;;;AU)"
+      "(A;OICIIOID;SDGXGWGR;;;AU)(A;ID;0x1200a9;;;BU)(A;OICIIOID;GXGR;;;BU)"), A_SID,
      "(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU)"),
     (f"O:BAD:PAI(A;OIIO;0x1301bf;;;CO)(A;OIIO;FR;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;0x100002;;;{A_SID})", A_SID,
      f"(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)(A;ID;FA;;;SY)(A;ID;FA;;;BA)"),

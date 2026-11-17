@@ -745,7 +745,7 @@ def older_run(tmp_path: Path, folder: Path, sddl: str | None = None) -> tuple[bo
             f"[IO.File]::AppendAllLines({ps_str(tmp_path / 'writes.txt')}, [string[]]@($global:SecCalls))\n")
     params = {"Path": str(disk), "Sid": A_SID, "Procedure": str(WINDOW), "Capability": CAPABILITY}
     name = "A's disk file like a file of an older WSL, with the rules of its folder"
-    out, changed = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True,
+    _out, changed = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True,
                               edits=(("$after = Get-TnwksSddlParts", tail + "$after = Get-TnwksSddlParts"),))
     writes = (tmp_path / "writes.txt").read_text().splitlines() if (tmp_path / "writes.txt").exists() else []
     return changed, json.loads(acls.read_text())[str(disk)], writes
