@@ -169,7 +169,7 @@ def test_the_baseline_of_the_live_parts_is_read_before_the_first_account():
     marker = next(t for t in tasks_of("setup.yml") if t.get("name") == "The state file holds no marker")
     assert marker["ansible.builtin.assert"]["that"] == "(wsl_move_rehearsal_setup_markers.output | last | int) == 0"
     # Each read of the rules converts an alias to its SID, as the procedure does.
-    assert "$f[-1] = ConvertTo-Sid $f[-1]" in (ROLE / "tasks/read_window.yml").read_text()
+    assert "$f[-1] = ConvertTo-Sid $f[-1]" in (ROLE / "tasks/read_disk.yml").read_text()
     # No cmdlet of the role takes a plain password.
     for path in ROLE.rglob("*"):
         if path.is_file():
@@ -177,14 +177,23 @@ def test_the_baseline_of_the_live_parts_is_read_before_the_first_account():
 
 
 def test_each_run_of_the_procedure_names_the_last_marker_that_its_phase_expects():
-    expected = {"window.yml": "", "wayback.yml": "window-done", "interrupt.yml": "wayback-done"}
-    for phase, marker in expected.items():
+    # The window runs after setup, or again after a window that went back.
+    expected = {"window.yml": ["", "wayback-done"], "wayback.yml": ["window-done"], "interrupt.yml": ["wayback-done"]}
+    for phase, markers in expected.items():
         runs = [t for t in tasks_of(phase) if t.get("ansible.builtin.include_tasks") == "run_procedure.yml"]
-        assert [t["vars"]["wsl_move_rehearsal_last_marker"] for t in runs] == [marker], phase
+        assert [t["vars"]["wsl_move_rehearsal_last_markers"] for t in runs] == [markers], phase
     run = (ROLE / "tasks/run_procedure.yml").read_text()
-    assert "if ($last -ne $LastMarker) { throw" in run
+    assert "if ($last -notin @($LastMarkers)) {" in run
     restart = (ROLE / "tasks/restart.yml").read_text()
     assert "in ['window-started', 'wayback-done']" in restart
+
+
+def test_the_window_reads_the_state_that_it_starts_from_before_any_task_starts():
+    tasks = tasks_of("window.yml")
+    names = [t.get("name", "") for t in tasks]
+    first_run = next(i for i, t in enumerate(tasks) if t.get("ansible.builtin.include_tasks") in ("run_task.yml", "run_procedure.yml"))
+    assert names.index("Read the state before the window") < first_run
+    assert next(i for i, n in enumerate(names) if n.startswith("The window starts after setup or after a way back")) < first_run
 
 
 def test_the_play_waits_past_the_limit_of_the_window_task_and_the_worst_case_is_under_it():
@@ -362,7 +371,7 @@ DISTRIBUTION_CONF = DEFAULTS["wsl_move_rehearsal_distribution_conf"]
 
 def run_account(tmp_path: Path, step: str, registered: str | None = None, disk_at: str | None = None,
                 distro: str = "tnwks-moverh", pattern: str = "^tnwks-moverh", folder: str | None = None,
-                config: dict | None = None, rootfs: bool = False) -> dict:
+                config: dict | None = None, rootfs: bool = False, fakes: str = "") -> dict:
     """Runs one step of the account script. registered: the folder where the account
     lists the distro (a, b, or None). disk_at: the folder that holds a disk file.
     rootfs: a root file system with the SHA-256 of the config. The distro's files
@@ -406,7 +415,7 @@ def run_account(tmp_path: Path, step: str, registered: str | None = None, disk_a
     if registered:
         reg = f"$global:Reg['{{g1}}'] = @{{ DistributionName = '{distro}'; BasePath = '\\\\?\\{root / registered}'; VhdFileName = 'ext4.vhdx' }}"
     extra = f"-Folder '{folder}'" if folder else ""
-    script = ACCOUNT_FAKES + f"""
+    script = ACCOUNT_FAKES + fakes + f"""
 $env:SystemRoot = '{tmp_path / "win"}'
 $env:TNWKS_CALLS = '{calls}'
 $env:TNWKS_ARGV = '{argv}'
@@ -453,6 +462,43 @@ $out = @((Test-TnwksFile '{tmp_path / "there"}'), (Test-TnwksFile '{tmp_path / "
 """)
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == [True, False, False, True]
+
+
+# The rules of the disk file as the account reads and writes them (Get-Acl, Set-Acl), and
+# its SID (whoami.exe /user).
+STRIP_FAKES = r"""
+function Get-Acl {
+    param([string]$LiteralPath)
+    $o = [pscustomobject]@{ Sddl = $global:Sddl }
+    $o | Add-Member -MemberType ScriptMethod -Name GetOwner -Value { param($t) [pscustomobject]@{ Value = ($this.Sddl -replace '^O:(.+?)D:.*$', '$1') } }
+    $o | Add-Member -MemberType ScriptMethod -Name SetSecurityDescriptorSddlForm -Value { param($s, $p) $this.Sddl = ($this.Sddl -replace 'D:.*$', '') + $s }
+    $o
+}
+function Set-Acl { param([string]$LiteralPath, $AclObject) $global:Sets.Add("acl $(Split-Path -Leaf (Split-Path -Parent $LiteralPath))"); $global:Sddl = $AclObject.Sddl }
+"""
+
+
+@needs_pwsh
+def test_the_strip_step_leaves_only_the_rule_of_the_account_on_its_own_disk_file(tmp_path):
+    """The stated case of the phase wayback: the account, as the owner of its disk file,
+    removes SYSTEM and the Administrators from its rules. It refuses a file that it does
+    not own, and a missing file, with no change."""
+    def run(case: str, owner: str, disk_at: str | None = "b") -> dict:
+        d = tmp_path / case
+        (d / "win/System32").mkdir(parents=True)
+        whoami = d / "win/System32/whoami.exe"
+        whoami.write_text(f"#!/bin/sh\nprintf '\"User Name\",\"SID\"\\n\"host\\\\b\",\"{B_SID}\"\\n'\n")
+        whoami.chmod(0o755)
+        return run_account(d, "strip-rules", disk_at=disk_at, fakes=STRIP_FAKES + (
+            f"$global:Sddl = 'O:{owner}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})'\n"))
+    own = run("own", B_SID)
+    assert own["code"] == 0, own
+    assert own["result"]["owner_self"] is True
+    assert own["result"]["system_or_admins"] == 0 and own["result"]["rules"] == 1
+    assert own["sets"] == ["acl b"]
+    for case, out in (("admins", run("admins", "BA")), ("none", run("none", B_SID, disk_at=None))):
+        assert out["code"] == 2 and out["sets"] == [], case
+    assert run("admins2", "BA")["result"]["refused"] == "the account does not own its disk file"
 
 
 @needs_pwsh
@@ -745,6 +791,11 @@ function Start-ScheduledTask {
         return
     }
     if ($TaskName -like '*-stop') { foreach ($p in @($global:Procs | Where-Object { $_.OwnerSid -eq $sid })) { [void]$global:Procs.Remove($p) } }
+    # $global:VmRule: the import attaches the disk file, and WSL grants its VM access.
+    if ($global:VmRule -and $TaskName -like '*-import') {
+        $disk = Join-Path $(if ($TaskName -like '*-a-*') { $global:FolderA } else { $global:FolderB }) 'ext4.vhdx'
+        if ($global:Acls.ContainsKey($disk)) { $global:Acls[$disk] += $global:VmRule }
+    }
     if ($global:Results.ContainsKey($TaskName)) {
         $r = $global:Results[$TaskName]
         $r | Add-Member -NotePropertyName time -NotePropertyValue ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) -Force
@@ -755,13 +806,55 @@ function Start-ScheduledTask {
 }
 function Get-CimInstance { param([string]$ClassName) $global:Procs.ToArray() }
 function Invoke-CimMethod { param($InputObject, [string]$MethodName) [pscustomobject]@{ Sid = $InputObject.OwnerSid } }
-function New-FakeAcl([string]$Sddl) {
-    $acl = [pscustomobject]@{ Sddl = $Sddl }
-    $acl | Add-Member -MemberType ScriptMethod -Name SetSecurityDescriptorSddlForm -Value { param($s, $parts) $this.Sddl = $s }
-    $acl
+# The rules of a file, as the procedure reads and writes them (TnwksSecurity): a read
+# with backup semantics always passes, and an owner may be set (the privileges of
+# SYSTEM); the rules may be written only by the owner, or when they grant SYSTEM or the
+# Administrators (WRITE_DAC), so a file of an account that removed both needs the take
+# of ownership first. $global:SecCalls holds each write, and $global:Calls one line
+# "acl <folder>/<file> <SDDL as written>" for each whole write (owner, rules, owner).
+# $global:AclEdit: what Windows makes of the rules written to a disk file (the form of a
+# mask, or another rule).
+class TnwksSecurity {
+    static [string] Enable() { return 'SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True' }
+    static [string] Leaf([string]$Path) { return [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($Path)) + '/' + [IO.Path]::GetFileName($Path) }
+    static [string] ReadSddl([string]$Path) {
+        if (-not [IO.File]::Exists($Path)) { throw [IO.FileNotFoundException]::new($Path) }
+        if ($global:Acls.ContainsKey($Path)) { return $global:Acls[$Path] }
+        return 'O:BAD:(A;ID;FA;;;SY)'
+    }
+    static [void] SetOwner([string]$Path, [string]$Owner) {
+        $s = [TnwksSecurity]::ReadSddl($Path)
+        $global:SecCalls.Add("owner $([TnwksSecurity]::Leaf($Path)) $Owner")
+        $s = 'O:' + $Owner + $s.Substring($s.IndexOf('D:'))
+        if ($global:Pending.ContainsKey($Path)) {
+            $global:Calls.Add("acl $([TnwksSecurity]::Leaf($Path)) O:$Owner$($global:Pending[$Path])")
+            $global:Pending.Remove($Path)
+            if ($global:AclEdit -and $Path -like '*ext4.vhdx') { $s = & $global:AclEdit $s }
+        }
+        $global:Acls[$Path] = $s
+    }
+    static [void] SetDacl([string]$Path, [string]$Sddl) {
+        $s = [TnwksSecurity]::ReadSddl($Path)
+        $owner = $s.Substring(2, $s.IndexOf('D:') - 2)
+        if ($owner -notin @('SY', 'S-1-5-18', 'BA', 'S-1-5-32-544') -and $s.Substring($s.IndexOf('D:')) -notmatch ';;;(SY|BA|S-1-5-18|S-1-5-32-544)\)') {
+            $global:SecCalls.Add("refused rules $([TnwksSecurity]::Leaf($Path))")
+            throw [UnauthorizedAccessException]::new('Access is denied.')
+        }
+        $dacl = $Sddl.Substring($Sddl.IndexOf('D:'))
+        if ($dacl -match ';[A-Z]*ID[A-Z]*;') { throw "an inherited rule in the rules written: $dacl" }
+        $global:SecCalls.Add("rules $([TnwksSecurity]::Leaf($Path)) $dacl")
+        $global:Pending[$Path] = $dacl
+        # With no protection, the inherited rules come from the folder of the file.
+        $written = $dacl
+        if ($dacl -notmatch '^D:[A-Z]*P') { $written += $global:Inherit[[IO.Path]::GetDirectoryName($Path)] }
+        $global:Acls[$Path] = "O:$owner$written"
+    }
 }
-function Get-Acl { param([string]$LiteralPath) New-FakeAcl $(if ($global:Acls.ContainsKey($LiteralPath)) { $global:Acls[$LiteralPath] } else { 'O:BAD:(A;ID;FA;;;SY)' }) }
-function Set-Acl { param([string]$LiteralPath, $AclObject) $global:Calls.Add("acl $(Split-Path -Leaf (Split-Path -Parent $LiteralPath))/$(Split-Path -Leaf $LiteralPath) $($AclObject.Sddl)"); $global:Acls[$LiteralPath] = $AclObject.Sddl }
+$global:SecCalls = New-Object System.Collections.Generic.List[string]
+$global:Pending = @{}
+if (-not $global:Inherit) { $global:Inherit = @{} }
+function Get-Acl { throw 'the procedure reads the rules of a file through TnwksSecurity' }
+function Set-Acl { throw 'the procedure writes the rules of a file through TnwksSecurity' }
 function Move-Item {
     param([string]$LiteralPath, [string]$Destination, [switch]$Force)
     if ($LiteralPath -like '*ext4.vhdx') {
@@ -783,7 +876,8 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
                disk: tuple[str, ...] = ("a",), restart: bool = False, saved_version: str = "none",
                results: dict | None = None, codes: dict | None = None, admins: tuple[str, ...] = (),
                config: dict | None = None, tasks: dict | None = None, acl_file: str | None = None,
-               marker_a: bool = False, disabled: str | None = None) -> dict:
+               marker_a: bool = False, disabled: str | None = None, acl_edit: str = "", vm_rule: str = "",
+               acls: dict | None = None, inherit: dict | None = None) -> dict:
     root = tmp_path / "root"
     for sub in ("a", "b", "state", "log/a", "log/b"):
         (root / sub).mkdir(parents=True, exist_ok=True)
@@ -805,6 +899,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
         "state_file": str(root / "state/window.state"), "log_file": str(root / "state/window.log"),
         "acl_file": str(root / "state/disk.sddl"), "version_file": str(root / "state/wsl-version.txt"),
         "service_binary": str(root / "no-such-binary.exe"), "restart": restart, "session_check": False, "task_minutes": 1,
+        "disk_rule": {"owner": DEFAULTS["wsl_move_rehearsal_disk_owner"], "new_mask": DEFAULTS["wsl_move_rehearsal_disk_new_mask"]},
         "present": {"account": "tnwks-moverh-a", "folder": str(root / "a"), "result_dir": str(root / "log/a"),
                     "window_tasks": {k: f"tnwks-moverh-a-{v}" for k, v in names.items()},
                     "disable_tasks": ["tnwks-moverh-a-start"], "start_tasks": ["tnwks-moverh-a-start"]},
@@ -826,7 +921,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
     default_results.update(results or {})
     # None: the task writes no result in this run.
     default_results = {k: v for k, v in default_results.items() if v is not None}
-    acls = {str(root / "a/ext4.vhdx"): OLD_SDDL}
+    acls = {str(root / "a/ext4.vhdx"): OLD_SDDL, **{str(root / k): v for k, v in (acls or {}).items()}}
 
     def ps(value) -> str:
         return "(ConvertFrom-Json '" + json.dumps(value).replace("'", "''") + "')"
@@ -847,6 +942,10 @@ $global:Codes = @{{}}; foreach ($p in {ps(codes or {})}.PSObject.Properties) {{ 
 $global:Results = @{{}}; foreach ($p in {ps(default_results)}.PSObject.Properties) {{ $global:Results[$p.Name] = $p.Value }}
 $global:Acls = @{{}}; foreach ($p in {ps(acls)}.PSObject.Properties) {{ $global:Acls[$p.Name] = $p.Value }}
 foreach ($a in @({", ".join(f"'{a}'" for a in admins) or ""})) {{ $global:Admins.Add($a) }}
+$global:AclEdit = {acl_edit or "$null"}
+$global:VmRule = {ps(vm_rule)}
+$global:FolderA = {ps(str(root / "a"))}; $global:FolderB = {ps(str(root / "b"))}
+$global:Inherit = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (inherit or {}).items()})}.PSObject.Properties) {{ $global:Inherit[$p.Name] = $p.Value }}
 if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false'}) {{
     foreach ($t in @($global:Running.Keys | Where-Object {{ $global:Running[$_] }})) {{
         $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}) }}
@@ -855,7 +954,7 @@ if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false
 $code = $LASTEXITCODE
 $tasks = @{{}}; foreach ($t in @($global:Enabled.Keys)) {{ $tasks[$t] = (Get-ScheduledTask -TaskName $t).State }}
 [Console]::Out.Write((@{{ code = $code; calls = @($global:Calls); admins = @($global:Admins); tasks = $tasks;
-    acls = $global:Acls }} | ConvertTo-Json -Compress -Depth 5))
+    acls = $global:Acls; sec_calls = @($global:SecCalls) }} | ConvertTo-Json -Compress -Depth 5))
 """
     run = pwsh(script)
     assert run.returncode == 0, run.stderr
@@ -880,7 +979,7 @@ def test_the_window_moves_the_file_in_order_and_logs_each_moment_in_administrato
     assert out["code"] == 0, out["log"]
     assert out["tasks"] == {"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"}
     calls = out["calls"]
-    disk_b = f"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;{B_SID})"
+    disk_b = f"O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})"
     marker_a = f"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;{A_SID})"
     assert calls == [
         f"join {A_SID}",
@@ -912,6 +1011,221 @@ def test_the_window_moves_the_file_in_order_and_logs_each_moment_in_administrato
     before = run_window(tmp_path / "2", FORWARD_TEST, tasks={"tnwks-moverh-a-start": "Disabled"})
     assert before["code"] == 0, before["log"]
     assert (Path(before["root"]) / "state/window.state.disabled").read_text() == ""
+
+
+def test_the_new_account_owns_its_moved_disk_file_with_full_control():
+    """WSL grants the VM access to the disk file at each attach, as the account: the
+    account needs the right to change the rules, which an owner has."""
+    assert DEFAULTS["wsl_move_rehearsal_disk_owner"] == "new-account"
+    assert DEFAULTS["wsl_move_rehearsal_disk_new_mask"] == "FA"
+    config = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_window_config"]
+    assert config["disk_rule"] == {"owner": "{{ wsl_move_rehearsal_disk_owner }}",
+                                   "new_mask": "{{ wsl_move_rehearsal_disk_new_mask }}"}
+
+
+@needs_pwsh
+def test_the_rule_of_the_moved_file_comes_from_the_config(tmp_path):
+    """The owner and the mask of the new account are config values. SYSTEM writes them
+    with its privileges: it takes ownership, writes the rules, then sets the owner."""
+    out = run_window(tmp_path, FORWARD_TEST)
+    assert out["code"] == 0, out["log"]
+    assert f"acl b/ext4.vhdx O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})" in out["calls"]
+    disk = [c for c in out["sec_calls"] if " b/ext4.vhdx" in c]
+    assert disk == ["owner b/ext4.vhdx BA", f"rules b/ext4.vhdx D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})",
+                    f"owner b/ext4.vhdx {B_SID}"]
+    log = out["log"]
+    privileges = "privileges: SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True"
+    assert log.count(privileges) == 1 and log.index(privileges) < log.index("step 4 passed")
+    admins = run_window(tmp_path / "2", FORWARD_TEST, config={"disk_rule": {"owner": "administrators", "new_mask": "0x1301bf"}})
+    assert admins["code"] == 0, admins["log"]
+    assert f"acl b/ext4.vhdx O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;{B_SID})" in admins["calls"]
+
+
+@needs_pwsh
+def test_the_stand_in_refuses_the_rules_of_a_file_that_grants_system_nothing_without_the_take(tmp_path):
+    path = tmp_path / "b" / "ext4.vhdx"
+    path.parent.mkdir()
+    path.write_text("disk")
+    run = pwsh(WINDOW_FAKES + f"""
+$global:Calls = New-Object System.Collections.Generic.List[string]
+$global:Acls = @{{ '{path}' = 'O:{B_SID}D:P(A;;FA;;;{B_SID})' }}
+try {{ [TnwksSecurity]::SetDacl('{path}', 'O:BAD:P(A;;FA;;;SY)'); 'written' }} catch {{ 'refused' }}
+[TnwksSecurity]::SetOwner('{path}', 'BA'); [TnwksSecurity]::SetDacl('{path}', 'O:BAD:P(A;;FA;;;SY)'); 'written'
+""")
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.split() == ["refused", "written"]
+
+
+@needs_pwsh
+def test_the_way_back_restores_a_file_whose_owner_removed_system_and_the_administrators(tmp_path):
+    """The stated case: B owns its disk file and removed SYSTEM and the Administrators
+    from its rules. Way back step 3 takes ownership, writes the saved rules, then sets
+    the saved owner."""
+    locked = f"O:{B_SID}D:P(A;;FA;;;{B_SID})"
+    out = run_window(tmp_path, mode="wayback", state="t window-started\nt window-done\n", disk=("b",), acl_file=OLD_SDDL,
+                     marker_a=True, disabled="tnwks-moverh-a-start", acls={"b/ext4.vhdx": locked},
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"})
+    assert out["code"] == 0, out["log"]
+    assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL
+    # The move back first, then at the old path: the take of ownership, the rules, the owner.
+    disk = [c for c in out["sec_calls"] if " a/ext4.vhdx" in c]
+    assert disk == ["owner a/ext4.vhdx BA", "rules a/ext4.vhdx D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;" + A_SID + ")",
+                    f"owner a/ext4.vhdx {A_SID}"]
+    calls = out["calls"]
+    assert calls.index("move b -> a") < calls.index(f"acl a/ext4.vhdx {OLD_SDDL}")
+    assert "way back 3 passed" in out["log"]
+
+
+@needs_pwsh
+def test_only_forward_step_2_clears_the_saved_rules_and_the_way_back_modes_keep_them(tmp_path):
+    """The marker of a started window that the way back mode and the boot run write
+    clears nothing: they need the saved set of the window that they undo."""
+    for i, mode in enumerate(("wayback", "boot")):
+        state = "t window-started\nt window-done\n" if mode == "wayback" else "t window-started\n"
+        out = run_window(tmp_path / str(i), mode=mode, state=state, disk=("b",), acl_file=OLD_SDDL, marker_a=True,
+                         disabled="tnwks-moverh-a-start", acls={"b/ext4.vhdx": MOVED},
+                         tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"})
+        assert out["code"] == 0, out["log"]
+        assert not any("removed the saved rules" in line for line in out["log"]), mode
+        assert (Path(out["root"]) / "state/disk.sddl").read_text() == OLD_SDDL
+        assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL, mode
+
+
+OLD_INHERITS = (f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;AU)")
+INHERIT = {"a": "(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;AU)", "b": "(A;ID;FA;;;SY)(A;ID;FA;;;BA)"}
+MOVED = f"O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})"
+BOOT_STATE = "t window-started\nt window-done\nt window-started\n"
+
+
+@needs_pwsh
+def test_the_way_back_puts_back_a_saved_set_that_inherits_from_the_old_folder(tmp_path):
+    """A file of an older WSL: no protection, and rules that it inherits from its
+    folder. Step 4 saves them and sets the protected rule at the new path; the way back
+    moves the file back first and restores at the old path, where Windows computes the
+    inherited rules from the old folder. The rules written hold no inherited rule."""
+    out = run_window(tmp_path, FORWARD_TEST, acls={"a/ext4.vhdx": OLD_INHERITS}, inherit=INHERIT,
+                     results={"tnwks-moverh-b-import": {"disk": "elsewhere"}})
+    assert out["code"] == 4, out["log"]
+    assert (Path(out["root"]) / "state/disk.sddl").read_text() == OLD_INHERITS
+    assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_INHERITS
+    assert f"rules a/ext4.vhdx D:AI(A;;FA;;;{A_SID})" in out["sec_calls"]
+    calls = out["calls"]
+    assert calls.index("move b -> a") < calls.index(f"acl a/ext4.vhdx O:{A_SID}D:AI(A;;FA;;;{A_SID})")
+    # At the new path, the folder of B would give other inherited rules: not the saved set.
+    assert not any(c.startswith("rules b/ext4.vhdx D:AI") for c in out["sec_calls"])
+
+
+@needs_pwsh
+def test_a_power_loss_between_the_move_back_and_the_restore_leaves_a_step_that_only_restores(tmp_path):
+    """The boot run after a power loss in way back step 3: the file is at the old path
+    with the rules of step 4. Step 3 does not move, and restores the saved set."""
+    out = run_window(tmp_path, mode="boot", state=BOOT_STATE, disk=("a",), acl_file=OLD_INHERITS, marker_a=True,
+                     disabled="tnwks-moverh-a-start", acls={"a/ext4.vhdx": MOVED}, inherit=INHERIT,
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
+    assert out["code"] == 0, out["log"]
+    assert not any(c.startswith("move ") for c in out["calls"])
+    assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_INHERITS
+    assert any(line.startswith("way back 3: restored the saved owner and rules: O:<present>D:AI") for line in out["log"])
+    assert '"old_as_saved":false' in next(line for line in out["log"] if line.startswith("read: "))
+    # The file at the old path with the saved set: nothing.
+    done = run_window(tmp_path / "2", mode="boot", state=BOOT_STATE, disk=("a",), acl_file=OLD_INHERITS, marker_a=True,
+                      disabled="tnwks-moverh-a-start", acls={"a/ext4.vhdx": OLD_INHERITS}, inherit=INHERIT,
+                      tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
+    assert done["code"] == 0, done["log"]
+    assert done["sec_calls"] == [] and "way back 3: the file has its saved owner and rules" in done["log"]
+    assert '"old_as_saved":true' in next(line for line in done["log"] if line.startswith("read: "))
+
+
+@needs_pwsh
+def test_a_window_removes_the_saved_rules_of_an_earlier_window_so_its_way_back_restores_none(tmp_path):
+    """The window stops at step 3 (no shutdown result of A's stop): step 4 saved nothing,
+    and the saved rules of an earlier window are gone, so the way back restores none."""
+    earlier = f"O:BAD:P(A;;FA;;;BA)(A;;FA;;;{A_SID})"
+    no_group = {"mode": "forward", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
+    out = run_window(tmp_path, no_group, acl_file=earlier, results={"tnwks-moverh-a-stop": None})
+    assert out["code"] == 4, out["log"]
+    assert "step 2: removed the saved rules of an earlier window" in out["log"]
+    assert not (Path(out["root"]) / "state/disk.sddl").exists()
+    assert out["sec_calls"] == [] and out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL
+
+
+VM_RULE = "(A;;0x1301bf;;;S-1-5-83-1-11-22-33-44)"
+
+
+@needs_pwsh
+def test_the_checks_of_the_rules_allow_the_rule_of_a_vm_and_a_write_clears_it(tmp_path):
+    """WSL adds a rule of a virtual machine SID at an attach: the checks of the rules
+    allow it. Step 4 and way back step 3 replace every rule, and right after each, the
+    rules must be the ones written: a stale rule of a VM goes."""
+    stale = OLD_SDDL + VM_RULE
+    forward = run_window(tmp_path / "1", FORWARD_TEST, vm_rule=VM_RULE, acls={"a/ext4.vhdx": stale})
+    assert forward["code"] == 0, forward["log"]
+    assert forward["acls"][str(Path(forward["root"]) / "b/ext4.vhdx")].endswith(f"(A;;FA;;;{B_SID}){VM_RULE}")
+    # The import gives another path: the way back writes the saved rules (with the
+    # stale rule that they held when step 4 saved them), not the rule of B's VM.
+    back = run_window(tmp_path / "2", FORWARD_TEST, vm_rule=VM_RULE, acls={"a/ext4.vhdx": stale},
+                      results={"tnwks-moverh-b-import": {"disk": "elsewhere"}})
+    assert back["code"] == 4, back["log"]
+    assert back["calls"].index("move b -> a") < back["calls"].index(f"acl a/ext4.vhdx {stale}")
+    # Then A's import back attaches the file in a new VM.
+    assert back["acls"][str(Path(back["root"]) / "a/ext4.vhdx")] == stale + VM_RULE
+    # Another rule after a write is not a pass.
+    other = "{ param($s) $s + '(A;;FA;;;S-1-5-21-9-9-9-1003)' }"
+    out = run_window(tmp_path / "3", FORWARD_TEST, acl_edit=other)
+    assert out["code"] == 1, out["log"]
+    assert "fail: check failed: the moved file has another owner or other rules" in out["log"]
+    assert "fail: check failed: the file has not its saved owner and rules" in out["log"]
+    # A rule of a VM right after a write: not the rules written.
+    vm_after = "{ param($s) $s + '" + VM_RULE + "' }"
+    out = run_window(tmp_path / "4", FORWARD_TEST, acl_edit=vm_after)
+    assert out["code"] == 1 and "fail: check failed: the moved file has another owner or other rules" in out["log"]
+    # A rule of the VM that replaces a rule of the account is not a pass either.
+    lost = "{ param($s) $s.Replace('(A;;FA;;;" + B_SID + ")', '" + VM_RULE + "') }"
+    out = run_window(tmp_path / "5", FORWARD_TEST, acl_edit=lost)
+    assert out["code"] == 4 and "fail: check failed: the moved file has another owner or other rules" in out["log"]
+
+
+@needs_pwsh
+def test_the_checks_of_the_rules_read_a_mask_by_its_value(tmp_path):
+    # Windows writes 0x1f01ff as FA. (An alias of an account reads as its SID only on
+    # Windows: test_the_rules_compare_an_alias_and_a_sid_as_one_account.)
+    named = "{ param($s) $s.Replace('0x1f01ff', 'FA') }"
+    out = run_window(tmp_path / "1", FORWARD_TEST, acl_edit=named,
+                     config={"disk_rule": {"owner": "administrators", "new_mask": "0x1f01ff"}})
+    assert out["code"] == 0, out["log"]
+    hexed = "{ param($s) $s.Replace(';FA;', ';0x1F01FF;') }"
+    out = run_window(tmp_path / "2", FORWARD_TEST, acl_edit=hexed)
+    assert out["code"] == 0, out["log"]
+    narrower = "{ param($s) $s.Replace('(A;;FA;;;" + B_SID + ")', '(A;;0x1301bf;;;" + B_SID + ")') }"
+    out = run_window(tmp_path / "3", FORWARD_TEST, acl_edit=narrower)
+    assert out["code"] == 4 and "fail: check failed: the moved file has another owner or other rules" in out["log"]
+
+
+@needs_pwsh
+def test_the_log_holds_the_rules_before_the_move_and_after_the_import_with_each_account_masked(tmp_path):
+    out = run_window(tmp_path, FORWARD_TEST, vm_rule=VM_RULE)
+    assert out["code"] == 0, out["log"]
+    log = out["log"]
+    assert "step 4: saved the rules of the disk file; size 10; the rules: O:<present>D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<present>)" in log
+    assert ("step 6: the rules of the disk file after the import: "
+            "O:<new>D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<new>)(A;;0x1301bf;;;S-1-5-83-1-<vm>)") in log
+    # The class of a VM's SID stays (S-1-5-83-1), and no SID of an account or a VM.
+    assert not any(re.search(r"S-1-5-21-|S-1-5-83-\d+-\d", line) for line in log if line.startswith(("step 4", "step 6")))
+    # The import that fails leaves its line too, before the way back.
+    failed = run_window(tmp_path / "2", FORWARD_TEST, results={"tnwks-moverh-b-import": None},
+                        codes={"tnwks-moverh-b-import": 1})
+    assert failed["code"] == 4, failed["log"]
+    assert any(line.startswith("step 6: the rules of the disk file after the import: O:<new>D:P(") for line in failed["log"])
+
+
+@needs_pwsh
+def test_the_procedure_refuses_a_rule_of_the_moved_file_that_it_does_not_know(tmp_path):
+    for i, rule in enumerate(({"owner": "everyone", "new_mask": "0x1301bf"},
+                              {"owner": "administrators", "new_mask": "0x1301bf;;;WD)(A"},
+                              {"owner": "administrators"})):
+        out = run_window(tmp_path / str(i), FORWARD_TEST, config={"disk_rule": rule})
+        assert out["code"] == 3 and out["calls"] == [] and out["markers"] == [] and out["disk_a"], out["log"]
+        assert out["log"][0].startswith("stop: the ") and "Nothing is changed." in out["log"][0]
 
 
 @needs_pwsh
@@ -956,6 +1270,7 @@ def test_a_failed_check_after_the_start_goes_back_from_the_state_it_reads(tmp_pa
     back = calls[calls.index("start tnwks-moverh-b-import") + 1:]
     # The start task of B is still disabled (the window failed before step 8).
     assert back[:2] == ["stop tnwks-moverh-b-start", "start tnwks-moverh-b-stop"]
+    # The move back first, then the saved rules at the old path.
     assert back[2] == "move b -> a" and back[3] == f"acl a/ext4.vhdx {OLD_SDDL}"
     assert back[4:7] == ["start tnwks-moverh-b-unregister", "start tnwks-moverh-a-import", "enable tnwks-moverh-a-start"]
     # The group test: the import back started A's VM while A was in Administrators.

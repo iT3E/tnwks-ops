@@ -3,9 +3,9 @@
 # procedure as its own SYSTEM task, waits for its end, and keeps its exit code
 # and the lines that it logged in this run (wsl_move_rehearsal_procedure).
 # wsl_move_rehearsal_procedure_exit: the exit code that passes (default 0).
-# wsl_move_rehearsal_last_marker: the last marker that the phase expects
-# before the run; with another one (a phase run twice, or out of order), the
-# run does not start.
+# wsl_move_rehearsal_last_markers: the last markers that the phase expects
+# before the run (a list); with another one (a phase run twice, or out of
+# order), the run does not start.
 #
 # The wait: the task of the procedure has a limit of 2 hours
 # (templates/system-task.xml.j2), and a run that the limit ends skips its
@@ -23,14 +23,16 @@
       RequestJson: "{{ wsl_move_rehearsal_request | to_json }}"
       Log: "{{ wsl_move_rehearsal_log_file }}"
       State: "{{ wsl_move_rehearsal_state_file }}"
-      LastMarker: "{{ wsl_move_rehearsal_last_marker }}"
+      LastMarkers: "{{ wsl_move_rehearsal_last_markers }}"
     script: |
-      param([string]$Task, [string]$Request, [string]$RequestJson, [string]$Log, [string]$State, [string]$LastMarker)
+      param([string]$Task, [string]$Request, [string]$RequestJson, [string]$Log, [string]$State, [string[]]$LastMarkers)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $true
       $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
       $last = if ($lines.Count) { ($lines[-1] -split ' ', 2)[1].Trim() } else { '' }
-      if ($last -ne $LastMarker) { throw "The last marker is '$last', not '$LastMarker': the phase runs out of order. Nothing is changed." }
+      if ($last -notin @($LastMarkers)) {
+          throw "The last marker is '$last', not one of '$(@($LastMarkers) -join "', '")': the phase runs out of order. Nothing is changed."
+      }
       [IO.File]::WriteAllText($Request, $RequestJson)
       $logStart = @(Get-Content -LiteralPath $Log).Count
       $stateStart = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() }).Count

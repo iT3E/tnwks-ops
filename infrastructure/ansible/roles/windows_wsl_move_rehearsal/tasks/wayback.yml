@@ -9,6 +9,11 @@
 # which run A's tasks with no group step) and starts the start task of A, and
 # reads the token of each WSL process of A: none has the Administrators group
 # enabled.
+#
+# Before the way back mode, the stated case of a file that grants SYSTEM
+# nothing: B, the owner of its disk file, removes SYSTEM and the
+# Administrators from its rules. The way back restores the saved owner and
+# rules all the same, and the play reads them after it.
 
 - name: The live parts at the start
   ansible.builtin.include_tasks: live.yml
@@ -29,11 +34,43 @@
       vars:
         wsl_move_rehearsal_run: {key: a, step: import, expect: not-run}
 
+    # The stated case: B owns its disk file, so it may remove SYSTEM and the
+    # Administrators from its rules. Way back step 3 must restore the saved
+    # owner and rules all the same, with the privileges of SYSTEM. The task
+    # is registered here too: it came after the setup of a running rehearsal.
+    - name: The task of B that removes SYSTEM and the Administrators from the rules of its disk file
+      tnwks_win_scheduled_task:
+        name: "{{ wsl_move_rehearsal_prefix }}-{{ task.key }}-{{ task.step }}"
+        xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
+        s4u_user: "{{ wsl_move_rehearsal_accounts[task.key].name }}"
+        s4u_description: "{{ wsl_move_rehearsal_accounts[task.key].description }}"
+      vars:
+        task: {key: b, step: strip-rules}
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+
+    - name: B removes SYSTEM and the Administrators from the rules of its disk file
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: strip-rules}
+
+    - name: Only B has a rule on its disk file before the way back
+      vars:
+        strip: "{{ wsl_move_rehearsal_runs['strip-rules'] | last }}"
+      ansible.builtin.assert:
+        that:
+          - strip.result.owner_self
+          - strip.result.system_or_admins == 0
+          - strip.result.rules == 1
+        fail_msg: "B did not remove SYSTEM and the Administrators from the rules of its disk file: {{ strip }}"
+        quiet: true
+
     - name: The window procedure, way back mode
       ansible.builtin.include_tasks: run_procedure.yml
       vars:
         wsl_move_rehearsal_request: {mode: wayback, group_steps: true, stop_after: 0, rehearsal_group_test: true}
-        wsl_move_rehearsal_last_marker: window-done
+        wsl_move_rehearsal_last_markers: [window-done]
 
     - name: A may log on as a batch job again, with no group
       ansible.windows.win_user_right:
@@ -132,12 +169,10 @@
           Prefix: "{{ wsl_move_rehearsal_prefix }}"
           Disk: '{{ wsl_move_rehearsal_accounts.a.folder }}\{{ wsl_move_rehearsal_disk_name }}'
           DiskB: '{{ wsl_move_rehearsal_accounts.b.folder }}\{{ wsl_move_rehearsal_disk_name }}'
-          Saved: "{{ wsl_move_rehearsal_acl_file }}"
         script: |
-          param([string]$Prefix, [string]$Disk, [string]$DiskB, [string]$Saved)
+          param([string]$Prefix, [string]$Disk, [string]$DiskB)
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
-          function Get-Owner([string]$Sddl) { if ($Sddl -match '^O:([^:]+?)(?=[GDS]:)') { $Matches[1] } else { '?' } }
           [pscustomobject]@{
               start_a = "$((Get-ScheduledTask -TaskName "$Prefix-a-start").State)"
               start_b = "$((Get-ScheduledTask -TaskName "$Prefix-b-start").State)"
@@ -145,8 +180,6 @@
               start_b_enabled = [bool](Get-ScheduledTask -TaskName "$Prefix-b-start").Settings.Enabled
               disk_a = [bool](Test-Path -LiteralPath $Disk)
               disk_b = [bool](Test-Path -LiteralPath $DiskB)
-              owner_as_saved = (Test-Path -LiteralPath $Disk) -and
-                  ((Get-Owner (Get-Acl -LiteralPath $Disk).Sddl) -eq (Get-Owner ("$(Get-Content -LiteralPath $Saved -Raw)").Trim()))
           }
       vars:
         ansible_become: true
@@ -154,11 +187,19 @@
         ansible_become_user: SYSTEM
       register: wsl_move_rehearsal_back_read
 
+    # The saved owner and rules, and a rule of a VM at most for each start
+    # since the restore (the start task of A).
+    - name: The rules of A's disk file after the way back
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: a, rule: saved}
+
     - name: A owns the distro again, with its data; B lists none; the logs show each moment
       vars:
         check_a: "{{ wsl_move_rehearsal_runs.check[-2] }}"
         check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
         back: "{{ wsl_move_rehearsal_back_read.output | last }}"
+        disk_a: "{{ wsl_move_rehearsal_disk.output | last }}"
       ansible.builtin.assert:
         that:
           - check_a.result.registered
@@ -166,7 +207,7 @@
           - check_a.result.token == wsl_move_rehearsal_data_token
           - check_a.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
           - not check_b.result.registered
-          - back.disk_a and not back.disk_b and back.owner_as_saved
+          - back.disk_a and not back.disk_b and disk_a.saved and disk_a.rules_ok
           - back.start_a_enabled and not back.start_b_enabled
           - back.start_a == 'Running' and back.start_b == 'Disabled'
           - wsl_move_rehearsal_procedure.result == 'done'
@@ -177,7 +218,7 @@
           - wsl_move_rehearsal_procedure.log | select('match', '^no WSL process of .* before it leaves the group$') | list | length == 1
           - "wsl_move_rehearsal_procedure.log | select('match', '^read: ') | list | length == 1"
           - wsl_move_rehearsal_procedure.log | select('match', '^task .*-a-import ended with 0;') | list | length == 1
-        fail_msg: "After the way back, a read did not pass: {{ check_a }} {{ check_b }} {{ back }} {{ wsl_move_rehearsal_procedure.log }}"
+        fail_msg: "After the way back, a read did not pass: {{ check_a }} {{ check_b }} {{ back }} {{ disk_a }} {{ wsl_move_rehearsal_procedure.log }}"
         quiet: true
 
 - name: The groups at the end

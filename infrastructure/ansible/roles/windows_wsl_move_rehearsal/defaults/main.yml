@@ -52,14 +52,16 @@ wsl_move_rehearsal_accounts:
     folder: '{{ wsl_move_rehearsal_dir }}\b'
     log_dir: '{{ wsl_move_rehearsal_dir }}\log\b'
 
-# The tasks of each account, by step of Invoke-TnwksWslAccountTask.ps1. The
+# The tasks of each account, by step of Invoke-TnwksWslAccountTask.ps1.
+# strip-rules is a stated case of the phase wayback, which registers it too
+# (it came after the setup of a running rehearsal). The
 # three window tasks (stop, unregister, import) have no trigger and stay
 # enabled. The start task holds one wsl.exe client, as the keepalive does: A's
 # is enabled, and B's is registered disabled, as step 3 registers the start
 # tasks of the new account.
 wsl_move_rehearsal_tasks:
   a: [probe, import-rootfs, import, stop, unregister, check, start]
-  b: [probe, import, stop, unregister, check, wslconf, filetest, import-elsewhere, start]
+  b: [probe, import, stop, unregister, check, wslconf, filetest, import-elsewhere, strip-rules, start]
 wsl_move_rehearsal_window_task: '{{ wsl_move_rehearsal_prefix }}-window'
 wsl_move_rehearsal_boot_task: '{{ wsl_move_rehearsal_prefix }}-boot'
 
@@ -78,6 +80,22 @@ wsl_move_rehearsal_state_file: '{{ wsl_move_rehearsal_state_dir }}\window.state'
 wsl_move_rehearsal_log_file: '{{ wsl_move_rehearsal_state_dir }}\window.log'
 wsl_move_rehearsal_acl_file: '{{ wsl_move_rehearsal_state_dir }}\disk.sddl'
 wsl_move_rehearsal_version_file: '{{ wsl_move_rehearsal_state_dir }}\wsl-version.txt'
+
+# The rule of the disk file in the folder of the new account (window step 4):
+# its owner, administrators or new-account (the new account itself), and the
+# access mask of the new account, as SDDL writes it (a hex mask, or FA, FR,
+# FW, FX). SYSTEM and the Administrators have full control, and the rules are
+# protected from inheritance. The window, its checks and the reads of the
+# play take the rule from these two values.
+#
+# WSL grants the VM access to the disk file at each attach (the import in
+# place and every start), as the account that owns the distro: it writes the
+# rules of the file, so the account needs the right to change them, which an
+# owner has. So the account owns its disk file, with full control (FA, the
+# mask 0x1f01ff), as on a file that WSL makes itself. Step 4 sets an owner
+# that is not a group of SYSTEM with SeRestorePrivilege.
+wsl_move_rehearsal_disk_owner: new-account
+wsl_move_rehearsal_disk_new_mask: FA
 wsl_move_rehearsal_request_file: '{{ wsl_move_rehearsal_state_dir }}\request.json'
 wsl_move_rehearsal_baseline_file: '{{ wsl_move_rehearsal_state_dir }}\live-baseline.json'
 # The installed version of WSL is the file version of its service binary, read

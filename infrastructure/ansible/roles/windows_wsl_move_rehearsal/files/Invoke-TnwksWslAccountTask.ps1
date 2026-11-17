@@ -33,6 +33,10 @@ nothing. Exit 1: the step failed.
   wslconf        As root in the distro: /etc/wsl.conf names the default user.
   filetest       In the folder of the account: make, replace and delete a file
                  of its own, then try to remove the marker of the procedure.
+  strip-rules    A stated case of the rehearsal: as the owner of its disk file,
+                 the account removes SYSTEM and the Administrators from its
+                 rules, so that only the account has a rule. Refused, with no
+                 change, when the account does not own the file.
 
 Every name and path must fit the scope of the config: a distro name that does
 not match its pattern, or a path outside its root, stops the step before any
@@ -41,7 +45,7 @@ action.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Config,
-    [Parameter(Mandatory)][ValidateSet('probe', 'import-rootfs', 'import', 'stop', 'unregister', 'check', 'wslconf', 'filetest')][string]$Step,
+    [Parameter(Mandatory)][ValidateSet('probe', 'import-rootfs', 'import', 'stop', 'unregister', 'check', 'wslconf', 'filetest', 'strip-rules')][string]$Step,
     # import: a folder other than the folder of the account (a test that the
     # import refuses a second path). It must still be in the scope.
     [string]$Folder
@@ -313,6 +317,24 @@ switch ($Step) {
         $result.marker_there = [bool](Test-Path -LiteralPath $marker)
         $pass = $result.make -and $result.replace -and $result.delete_own -and -not $result.delete_marker -and $result.marker_there
         Exit-Tnwks ([int](-not $pass)) $result
+    }
+    'strip-rules' {
+        # Only the disk file of the account, in its own folder (the scope).
+        if (-not (Test-TnwksFile $target)) { Exit-Tnwks 2 @{ refused = "no file at $target" } }
+        $user = @(& (Join-Path $system 'whoami.exe') /user /fo csv | ConvertFrom-Csv)[0].SID
+        $acl = Get-Acl -LiteralPath $target
+        $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+        if ($owner -ne $user) { Exit-Tnwks 2 @{ refused = 'the account does not own its disk file'; owner_self = $false } }
+        $acl.SetSecurityDescriptorSddlForm("D:P(A;;FA;;;$user)", 'Access')
+        Set-Acl -LiteralPath $target -AclObject $acl
+        $after = (Get-Acl -LiteralPath $target).Sddl
+        $aces = @([regex]::Matches(($after -replace '^.*?D:[A-Z]*', ''), '\(([^)]*)\)') | ForEach-Object { ($_.Groups[1].Value -split ';')[-1] })
+        Exit-Tnwks 0 @{
+            owner_self = $true
+            # The rules of SYSTEM and the Administrators, as an alias or a SID.
+            system_or_admins = @($aces | Where-Object { $_ -in @('SY', 'BA', 'S-1-5-18', 'S-1-5-32-544') }).Count
+            rules = $aces.Count
+        }
     }
 }
 exit 0

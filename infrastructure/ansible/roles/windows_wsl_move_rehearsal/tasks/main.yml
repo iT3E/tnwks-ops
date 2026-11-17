@@ -30,6 +30,17 @@
     fail_msg: A name or a path of the rehearsal of the move is outside its scope. Nothing is changed.
     quiet: true
 
+# The rule of the moved disk file: the procedure refuses any other value too.
+- name: The rule of the moved disk file has an owner and a mask that the procedure takes
+  ansible.builtin.assert:
+    that:
+      - wsl_move_rehearsal_disk_owner in ['administrators', 'new-account']
+      - wsl_move_rehearsal_disk_new_mask is match('^(0x[0-9a-fA-F]{1,8}|F[ARWX])$')
+    fail_msg: >-
+      The rule of the moved disk file is owner {{ wsl_move_rehearsal_disk_owner }} and mask
+      {{ wsl_move_rehearsal_disk_new_mask }}: the owner is administrators or new-account, and the mask is a hex mask or FA, FR, FW, FX.
+    quiet: true
+
 - name: The phase
   ansible.builtin.include_tasks: "{{ wsl_move_rehearsal_phase }}.yml"
   when: wsl_move_rehearsal_phase != 'none'

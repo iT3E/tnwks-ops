@@ -168,17 +168,20 @@
 # files in this folder only (no delete of a child, no change of rules), and
 # CREATOR OWNER on files lets it replace or delete a file that it made, and no
 # other file. SYSTEM and the Administrators have full control. No inheritance.
+# The folder of A gives its files one more rule, as the drive of an older
+# disk file does: Authenticated Users may read (files only).
 - name: Folders of the disk file, with the rights of step 3
   ansible.windows.win_powershell:
     parameters:
       Path: "{{ wsl_move_rehearsal_accounts[item].folder }}"
       Sid: "{{ wsl_move_rehearsal_sids[item] }}"
+      Extra: "{{ '(A;OIIO;FR;;;AU)' if item == 'a' else '' }}"
     script: &folder_rights |
       [CmdletBinding(SupportsShouldProcess)]
-      param([string]$Path, [string]$Sid)
+      param([string]$Path, [string]$Sid, [string]$Extra)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $false
-      $want = 'O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;0x100002;;;{0})(A;OIIO;0x1301bf;;;CO)' -f $Sid
+      $want = ('O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;0x100002;;;{0})(A;OIIO;0x1301bf;;;CO)' -f $Sid) + $Extra
       if (-not (Test-Path -LiteralPath $Path)) {
           $Ansible.Changed = $true
           if (-not $PSCmdlet.ShouldProcess($Path, 'make the folder')) { return }
@@ -348,10 +351,51 @@
       vars:
         wsl_move_rehearsal_run: {key: a, step: import-rootfs}
 
+    # The disk file of an older WSL: no protection, so it takes the rules of
+    # its folder, and one explicit rule for its account; A stays the owner.
+    # The window saves this set, and the way back must put it back exactly.
+    - name: A's disk file like a file of an older WSL, with the rules of its folder
+      ansible.windows.win_powershell:
+        parameters:
+          Path: '{{ wsl_move_rehearsal_accounts.a.folder }}\{{ wsl_move_rehearsal_disk_name }}'
+          Sid: "{{ wsl_move_rehearsal_sids.a }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path, [string]$Sid)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $acl = Get-Acl -LiteralPath $Path
+          $explicit = @($acl.Access | Where-Object { -not $_.IsInherited })
+          $only = $explicit.Count -eq 1 -and $explicit[0].IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $Sid -and
+              $explicit[0].FileSystemRights -eq [Security.AccessControl.FileSystemRights]::FullControl -and
+              "$($explicit[0].AccessControlType)" -eq 'Allow'
+          if (-not $acl.AreAccessRulesProtected -and $only) { return }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Path, 'take the rules of the folder')) {
+              # No protection: Windows adds the inherited rules of the folder.
+              $acl.SetSecurityDescriptorSddlForm(('D:AI(A;;FA;;;{0})' -f $Sid), 'Access')
+              Set-Acl -LiteralPath $Path -AclObject $acl
+          }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+
     - name: A reads its distro
       ansible.builtin.include_tasks: run_task.yml
       vars:
         wsl_move_rehearsal_run: {key: a, step: check}
+
+    # A read only: the rules that WSL gives the disk file of an account's own
+    # import and its first start. Window step 4 saves them for the way back.
+    - name: The rules of A's disk file after its import
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: a, rule: none}
+
+    - name: The owner and the rules of A's disk file after its import and first start, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
 
     # The distro reads back each file that the import wrote, by its SHA-256,
     # and the user of UID 1000.

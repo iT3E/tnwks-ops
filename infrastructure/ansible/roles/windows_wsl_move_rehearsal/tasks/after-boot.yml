@@ -59,9 +59,17 @@
       vars:
         wsl_move_rehearsal_run: {key: b, step: check}
 
+    # The saved owner and rules, and a rule of a VM at most for each start
+    # since (a stale one after a restart, too).
+    - name: The rules of A's disk file after the boot
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: a, rule: saved}
+
     - name: The boot task ran the way back once, and A owns the distro
       vars:
         boot: "{{ wsl_move_rehearsal_boot_log.output | last }}"
+        disk_a: "{{ wsl_move_rehearsal_disk.output | last }}"
         check_a: "{{ wsl_move_rehearsal_runs.check[-2] }}"
         check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
       ansible.builtin.assert:
@@ -75,7 +83,8 @@
           - check_a.result.disk | lower == (wsl_move_rehearsal_accounts.a.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
           - check_a.result.token == wsl_move_rehearsal_data_token
           - not check_b.result.registered
-        fail_msg: "After the boot, a read did not pass: {{ boot }} {{ check_a }} {{ check_b }}"
+          - disk_a.saved and disk_a.rules_ok
+        fail_msg: "After the boot, a read did not pass: {{ boot }} {{ check_a }} {{ check_b }} {{ disk_a }}"
         quiet: true
 
     - name: Start the boot task by hand, with no marker of a started window
