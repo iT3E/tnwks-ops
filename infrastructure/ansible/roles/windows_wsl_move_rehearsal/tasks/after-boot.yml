@@ -63,6 +63,21 @@
         ansible_become_user: SYSTEM
       register: wsl_move_rehearsal_boot_log
 
+    # The run of the boot task first: after a run that did not end the way
+    # back, the phase stops here, before any task of A or B starts.
+    - name: The boot task ran the way back once
+      vars:
+        boot: "{{ wsl_move_rehearsal_boot_log.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - "boot.results[:1] == ['result: done']"
+          - boot.markers[-3:] == ['window-started', 'boot-run', 'wayback-done']
+          - "boot.runs[0] | select('string') | select('match', '^group: ') | list | length == 0"
+          - boot.runs[0] | select('string') | select('match', '^would restart') | list | length == 1
+          - "boot.runs[0] | select('string') | select('match', '^restart: ') | list | length == 0"
+        fail_msg: "The run of the boot task did not end the way back: {{ boot }}. No task of A or B started in this phase."
+        quiet: true
+
     - name: A reads its distro after the boot
       ansible.builtin.include_tasks: run_task.yml
       vars:
@@ -80,25 +95,19 @@
       vars:
         wsl_move_rehearsal_disk_read: {key: a, rule: saved}
 
-    - name: The boot task ran the way back once, and A owns the distro
+    - name: A owns the distro after the boot, and B lists none
       vars:
-        boot: "{{ wsl_move_rehearsal_boot_log.output | last }}"
         disk_a: "{{ wsl_move_rehearsal_disk.output | last }}"
         check_a: "{{ wsl_move_rehearsal_runs.check[-2] }}"
         check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
       ansible.builtin.assert:
         that:
-          - "boot.results[:1] == ['result: done']"
-          - boot.markers[-3:] == ['window-started', 'boot-run', 'wayback-done']
-          - "boot.runs[0] | select('string') | select('match', '^group: ') | list | length == 0"
-          - boot.runs[0] | select('string') | select('match', '^would restart') | list | length == 1
-          - "boot.runs[0] | select('string') | select('match', '^restart: ') | list | length == 0"
           - check_a.result.registered
           - check_a.result.disk | lower == (wsl_move_rehearsal_accounts.a.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
           - check_a.result.token == wsl_move_rehearsal_data_token
           - not check_b.result.registered
           - disk_a.saved and disk_a.rules_ok
-        fail_msg: "After the boot, a read did not pass: {{ boot }} {{ check_a }} {{ check_b }} {{ disk_a }}"
+        fail_msg: "After the boot, a read did not pass: {{ check_a }} {{ check_b }} {{ disk_a }}"
         quiet: true
 
     - name: Start the boot task by hand, with no marker of a started window

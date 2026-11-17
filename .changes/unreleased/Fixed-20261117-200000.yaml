@@ -1,3 +1,3 @@
 kind: Fixed
-body: "Windows hosts, the rehearsal of the move: the phase after-boot reads the accounts of the rehearsal before its read of A's disk file, which needs their SIDs. A new static test walks each phase, and the check play, in a run and in a check run, and fails when a task reads a fact or a result of the role that no earlier task of that phase sets for sure."
+body: "Windows hosts, the rehearsal of the move: the phase after-boot reads the accounts of the rehearsal before its read of A's disk file, which needs their SIDs. It also checks the run of the boot task right after its read of the log, so a boot run that did not end the way back stops the phase before any task of A or B starts. A new static test walks each phase, and the check play, in a run and in a check run, and fails when a task reads a fact or a result of the role that no earlier task of that phase sets for sure."
 time: 2026-11-17T20:00:00.000000+00:00
