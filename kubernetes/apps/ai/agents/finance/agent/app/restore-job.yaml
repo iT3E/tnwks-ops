@@ -9,12 +9,21 @@
 # zero replicas. It is the wall of the copy, not the owner's checks on the
 # host: it reads the list of each archive first and refuses it, before any
 # file is written, unless each member is a plain file or a directory, with
-# no absolute path, no ".." and no setuid or setgid bit, and each member of
-# the state archive is under ./workspace/. Then it moves the state of now
-# aside to state.before-restore-<time>, puts the copy in place as state/,
-# and unpacks the vault into the empty vault/. Each way out prints one line,
-# `restore result=ok ...` or `restore result=failed reason=<kind>`, which
-# names the kind of a refused member and never a name or a content.
+# no absolute path, no ".." and no setuid or setgid bit, the archive has at
+# most 20000 members and 2 GiB in all (by the sizes in the list), and each
+# member of the state archive is under ./workspace/.
+#
+# Then it unpacks both archives into restore-<time>/ of the volume, and only
+# when both are out does it move the state of now aside to
+# state.before-restore-<time>, put the copy in place as state/ and the vault
+# in place as vault/ (two renames each). A failure before the renames
+# removes restore-<time>/, so the volume is as it was.
+#
+# Each way out prints one line and nothing else, `restore result=ok ...` or
+# `restore result=failed reason=<kind>`: the only names in it are the names
+# that git sets (ARCHIVE) and fixed names of the volume, never the name of a
+# member or a content. The output of tar and sha256sum, which names members,
+# goes to /dev/null.
 #
 # Executable bits stay, for the owner of the file only (umask 077): the
 # scripts of the workspace keep them. They run in a sandbox, where the
@@ -66,19 +75,27 @@ spec:
               set -eu
               umask 077
               DATA=/home/node/data
+              # The limits of each archive, from its list, before any write.
+              MAX_MEMBERS=20000
+              MAX_BYTES=2147483648
               reason=start
-              trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "restore result=failed reason=$reason"; fi' EXIT
+              work=""
+              trap 'rc=$?; if [ "$rc" -ne 0 ]; then if [ -n "$work" ]; then rm -rf "$work"; fi; echo "restore result=failed reason=$reason"; fi' EXIT
               # check <archive> <allowed names> <label>: the list first, no write.
               check() {
                 reason="unreadable archive=$3"
-                tar -tvf "$1" --quoting-style=escape > /tmp/check.types
-                tar -tf "$1" --quoting-style=escape > /tmp/check.names
+                tar -tvf "$1" --quoting-style=escape > /tmp/check.types 2> /dev/null
+                tar -tf "$1" --quoting-style=escape > /tmp/check.names 2> /dev/null
                 reason="empty archive=$3"
                 test -s /tmp/check.names
                 kinds=$(awk '{ k = substr($1, 1, 1); if (k == "l") print "link"; else if (k == "h") print "hard-link"; else if (k == "c" || k == "b") print "device"; else if (k == "p") print "pipe"; else if (k != "-" && k != "d") print "other" }' /tmp/check.types | sort -u | paste -sd, -)
                 if [ -n "$kinds" ]; then reason="member-type archive=$3 kinds=$kinds"; return 1; fi
                 if ! awk '{ if (substr($1, 4, 1) ~ /[sS]/ || substr($1, 7, 1) ~ /[sS]/) n++ } END { exit (n > 0) }' /tmp/check.types; then
                   reason="setid-bit archive=$3"; return 1
+                fi
+                if [ "$(wc -l < /tmp/check.names)" -gt "$MAX_MEMBERS" ]; then reason="too-many-members archive=$3"; return 1; fi
+                if ! awk -v max="$MAX_BYTES" '{ if ($3 !~ /^[0-9]+$/) bad = 1; n += $3 } END { exit (bad || n > max) }' /tmp/check.types; then
+                  reason="too-large archive=$3"; return 1
                 fi
                 if grep -q '^/' /tmp/check.names; then reason="absolute-path archive=$3"; return 1; fi
                 if grep -qE '(^|/)\.\.(/|$)' /tmp/check.names; then reason="dot-dot archive=$3"; return 1; fi
@@ -94,7 +111,7 @@ spec:
               test -f "$A"
               test -f "$A.sha256"
               reason=checksum
-              (cd "$DATA/archives/start" && sha256sum -c --quiet "$(basename "$A").sha256")
+              (cd "$DATA/archives/start" && sha256sum -c --quiet "$(basename "$A").sha256" > /dev/null 2>&1)
               check "$A" '^\./(workspace(/.*)?)?$' state
               reason=no-workspace
               grep -qxE '\./workspace/?' /tmp/check.names
@@ -111,23 +128,33 @@ spec:
                 reason=vault-not-empty
                 if [ -d "$DATA/vault" ] && [ -n "$(ls -A "$DATA/vault")" ]; then exit 1; fi
               fi
+              # Both archives out first, into restore-<time>/; the trap
+              # removes it on a failure.
               reason=unpack
               stamp=$(date -u +%Y%m%dT%H%M%SZ)
-              stage="$DATA/restore-$stamp"
-              mkdir -m 0700 "$stage"
-              tar -xf "$A" -C "$stage" --no-same-owner --no-same-permissions
-              if [ -d "$DATA/state" ]; then mv "$DATA/state" "$DATA/state.before-restore-$stamp"; fi
-              mv "$stage" "$DATA/state"
-              chmod 0700 "$DATA/state"
-              files=$(find "$DATA/state" -type f | wc -l)
-              notes=none
+              work="$DATA/restore-$stamp"
+              mkdir -m 0700 "$work" "$work/state"
+              tar -xf "$A" -C "$work/state" --no-same-owner --no-same-permissions > /dev/null 2>&1
               if [ -n "$V" ]; then
                 reason=vault-unpack
-                mkdir -p -m 0700 "$DATA/vault"
-                tar -xf "$V" -C "$DATA/vault" --no-same-owner --no-same-permissions
-                notes=$(find "$DATA/vault" -type f -name '*.md' | wc -l)
+                mkdir -m 0700 "$work/vault"
+                tar -xf "$V" -C "$work/vault" --no-same-owner --no-same-permissions > /dev/null 2>&1
+              fi
+              files=$(find "$work/state" -type f | wc -l)
+              notes=none
+              if [ -n "$V" ]; then notes=$(find "$work/vault" -type f -name '*.md' | wc -l); fi
+              # Then the renames.
+              reason=rename
+              if [ -d "$DATA/state" ]; then mv "$DATA/state" "$DATA/state.before-restore-$stamp"; fi
+              mv "$work/state" "$DATA/state"
+              chmod 0700 "$DATA/state"
+              if [ -n "$V" ]; then
+                if [ -d "$DATA/vault" ]; then rmdir "$DATA/vault"; fi
+                mv "$work/vault" "$DATA/vault"
                 rm -f "$V"
               fi
+              rmdir "$work"
+              work=""
               echo "restore result=ok archive=$ARCHIVE files=$files vault-notes=$notes kept=state.before-restore-$stamp"
           securityContext:
             allowPrivilegeEscalation: false

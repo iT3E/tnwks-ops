@@ -6,9 +6,9 @@ refuses a placeholder, and the steps of kustomization.yaml never meet in a
 wrong order.
 
 The container tests need Docker. Without it a test is skipped, except in
-CI, where it fails. They run the scripts in a small Debian image with GNU
-tar, as the agent image has; RESTORE_TEST_IMAGE runs them in another one
-(the agent image, for a check by hand).
+CI, where it fails. They run the scripts in the agent image of
+deployment.yaml, by digest, as the pod runs them; RESTORE_TEST_IMAGE runs
+them in another one.
 """
 
 import hashlib
@@ -27,10 +27,7 @@ from test_hand_written_rules import docker, scratch
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "kubernetes/apps/ai/agents/finance/agent/app"
 CONFIG = ROOT / "kubernetes/apps/ai/agents/finance/agent/config/openclaw.json"
-IMAGE = os.environ.get(
-    "RESTORE_TEST_IMAGE",
-    "docker.io/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
-)
+GATEWAY_CONFIG = ROOT / "kubernetes/apps/ai/mcp-gateway/app/config/config.yaml"
 
 
 def doc(name: str) -> dict:
@@ -48,6 +45,9 @@ def listed() -> set[str]:
 
 
 AGENT = pod("deployment.yaml")
+IMAGE = os.environ.get("RESTORE_TEST_IMAGE", AGENT["containers"][0]["image"])
+# The user of the pods (the Job runs as the agent does).
+USER = AGENT["securityContext"]
 
 
 @pytest.mark.parametrize("name", ["state-inbox.yaml", "restore-job.yaml"])
@@ -83,7 +83,8 @@ def test_the_secret_holds_each_value_the_config_names():
     secret = set(doc("secret.sops.yaml")["stringData"])
     search = set(doc("secret-search.sops.yaml")["stringData"])
     assert names <= secret | search
-    assert secret == {"OPENCLAW_GATEWAY_TOKEN", "LITELLM_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOW_FROM"}
+    assert secret == {"OPENCLAW_GATEWAY_TOKEN", "LITELLM_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOW_FROM",
+                      "MCP_GATEWAY_KEY"}
     assert json.loads(CONFIG.read_text())["memory"]["search"]["remote"]["apiKey"]["id"] in secret
 
 
@@ -137,7 +138,7 @@ def write_tar(path, members, gz):
 
 
 def run_restore(tmp, state=GOOD_STATE, vault=GOOD_VAULT, archive=STATE, vault_name=VAULT,
-                checksum=True, vault_dir_file=False):
+                checksum=True, vault_dir_file=False, limits=None):
     data = tmp / "data"
     write_tar(data / "archives" / STATE, state, gz=True)
     digest = hashlib.sha256((data / "archives" / STATE).read_bytes()).hexdigest()
@@ -147,21 +148,27 @@ def run_restore(tmp, state=GOOD_STATE, vault=GOOD_VAULT, archive=STATE, vault_na
     if vault is not None:
         write_tar(data / "archives/seed" / VAULT, vault, gz=False)
     (data / "state").mkdir()
+    (data / "state/old.md").write_text("old")
     if vault_dir_file:
         (data / "vault").mkdir()
         (data / "vault/old.md").write_text("x")
     for path in [data, *data.rglob("*")]:
         path.chmod(0o777 if path.is_dir() else 0o666)
     script = tmp / "restore.sh"
-    script.write_text(pod("restore-job.yaml")["containers"][0]["args"][0])
+    text = pod("restore-job.yaml")["containers"][0]["args"][0]
+    for name, value in (limits or {}).items():
+        line = next(x for x in text.splitlines() if x.startswith(f"{name}="))
+        text = text.replace(line, f"{name}={value}")
+    script.write_text(text)
     script.chmod(0o644)
     result = subprocess.run(
-        [docker(), "run", "--rm", "--network", "none", "-u", f"{os.getuid()}:{os.getgid()}",
+        [docker(), "run", "--rm", "--network", "none", "-u", f"{USER['runAsUser']}:{USER['runAsGroup']}",
          "-e", f"ARCHIVE={archive}", "-e", f"VAULT={vault_name}",
          "-v", f"{data}:/home/node/data", "-v", f"{script}:/s/restore.sh:ro",
          "--entrypoint", "sh", IMAGE, "/s/restore.sh"],
         capture_output=True, text=True, timeout=300, check=False)
-    lines = [line for line in result.stdout.splitlines() if line.startswith("restore result=")]
+    # Each way out prints its one line and nothing else, on either stream.
+    lines = (result.stdout + result.stderr).splitlines()
     return result.returncode, lines, data
 
 
@@ -173,14 +180,16 @@ def tmp():
 def test_the_restore_job_puts_the_copy_and_the_vault_in_place(tmp):
     code, lines, data = run_restore(tmp)
     assert code == 0, lines
-    assert lines and lines[-1].startswith(f"restore result=ok archive={STATE} files=2 vault-notes=2 ")
+    assert len(lines) == 1 and lines[0].startswith(f"restore result=ok archive={STATE} files=2 vault-notes=2 ")
     assert (data / "state/workspace/AGENTS.md").read_text() == "x"
     assert (data / "state").stat().st_mode & 0o777 == 0o700
     script = (data / "state/workspace/scripts/read.py").stat().st_mode
     assert script & 0o777 == 0o700  # the executable bit stays, for the owner only
     assert (data / "vault/notes/b.md").exists()
     assert not (data / "archives/seed" / VAULT).exists()
-    assert len(list(data.glob("state.before-restore-*"))) == 1
+    (kept,) = data.glob("state.before-restore-*")
+    assert (kept / "old.md").read_text() == "old"
+    assert not list(data.glob("restore-*"))
 
 
 REFUSED = {
@@ -203,7 +212,17 @@ REFUSED = {
                    "member-type archive=vault kinds=link"),
     "vault dot-dot": (GOOD_STATE, [*GOOD_VAULT, member("./../x.md")], "dot-dot archive=vault"),
     "vault setuid": (GOOD_STATE, [*GOOD_VAULT, member("./s.md", mode=0o4755)], "setid-bit archive=vault"),
+    "vault outside": (GOOD_STATE, [*GOOD_VAULT, member("notes/c.md")], "outside archive=vault"),
 }
+
+
+def unchanged(data):
+    """The volume as it was: the old state in place, nothing new."""
+    assert (data / "state/old.md").read_text() == "old"
+    assert not (data / "state/workspace").exists()
+    assert not list(data.glob("state.before-restore-*"))
+    assert not list(data.glob("restore-*"))
+    assert not (data / "vault/notes").exists()
 
 
 @pytest.mark.parametrize("case", sorted(REFUSED))
@@ -212,8 +231,7 @@ def test_the_restore_job_refuses_before_it_writes(case, tmp):
     code, lines, data = run_restore(tmp, state=state, vault=GOOD_VAULT if vault is None else vault)
     assert code != 0
     assert lines == [f"restore result=failed reason={reason}"]
-    assert not list(data.glob("state.before-restore-*"))
-    assert not (data / "state/workspace").exists()
+    unchanged(data)
     assert not (data / "vault").exists()
 
 
@@ -229,22 +247,78 @@ def test_each_other_way_out_prints_its_line(kwargs, reason, tmp):
     code, lines, data = run_restore(tmp, **kwargs)
     assert code != 0
     assert lines == [f"restore result=failed reason={reason}"]
-    assert not list(data.glob("state.before-restore-*"))
+    unchanged(data)
+
+
+def test_the_limits_are_the_documented_ones():
+    text = pod("restore-job.yaml")["containers"][0]["args"][0]
+    assert "\nMAX_MEMBERS=20000\n" in text
+    assert "\nMAX_BYTES=2147483648\n" in text
+
+
+@pytest.mark.parametrize(("limits", "state", "vault", "reason"), [
+    # GOOD_STATE has five members and 2 bytes, GOOD_VAULT four and 2 bytes.
+    ({"MAX_MEMBERS": 4}, GOOD_STATE, GOOD_VAULT, "too-many-members archive=state"),
+    ({"MAX_BYTES": 1}, GOOD_STATE, GOOD_VAULT, "too-large archive=state"),
+    ({"MAX_MEMBERS": 5}, GOOD_STATE, [*GOOD_VAULT, member("./c.md"), member("./d.md")],
+     "too-many-members archive=vault"),
+    ({"MAX_BYTES": 2}, GOOD_STATE, [*GOOD_VAULT, member("./c.md", data=b"xyz")], "too-large archive=vault"),
+])
+def test_the_restore_job_refuses_an_archive_over_its_limits(limits, state, vault, reason, tmp):
+    code, lines, data = run_restore(tmp, state=state, vault=vault, limits=limits)
+    assert code != 0
+    assert lines == [f"restore result=failed reason={reason}"]
+    unchanged(data)
+
+
+# A member that tar can not write: a file, then a file under it. The list
+# passes each check; the unpack fails.
+BAD_STATE = [*GOOD_STATE, member("./workspace/a"), member("./workspace/a/secret-name.md")]
+BAD_VAULT = [*GOOD_VAULT, member("./a.md"), member("./a.md/secret-name.md")]
+
+
+@pytest.mark.parametrize(("state", "vault", "reason"), [
+    (BAD_STATE, GOOD_VAULT, "unpack"),
+    (GOOD_STATE, BAD_VAULT, "vault-unpack"),
+])
+def test_a_failed_unpack_leaves_the_volume_as_it_was(state, vault, reason, tmp):
+    code, lines, data = run_restore(tmp, state=state, vault=vault)
+    assert code != 0
+    # One line, with no name of a member: tar's own message goes nowhere.
+    assert lines == [f"restore result=failed reason={reason}"]
+    unchanged(data)
+    assert not (data / "vault").exists()
+    assert (data / "archives/seed" / VAULT).exists()
 
 
 # The values check of the agent pod.
 
-VALUES = ["OPENCLAW_GATEWAY_TOKEN", "LITELLM_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOW_FROM", "BRAVE_API_KEY"]
+VALUES = ["OPENCLAW_GATEWAY_TOKEN", "LITELLM_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOW_FROM",
+          "MCP_GATEWAY_KEY", "BRAVE_API_KEY"]
+VALUE = "a-real-looking-value"
 
 
-def run_values(env):
+def gateway_config(finance_key=VALUE):
+    """The config of the gateway, with the hash of finance_key for the client
+    finance, as the owner's values step leaves it."""
+    text = GATEWAY_CONFIG.read_text()
+    digest = hashlib.sha256(finance_key.encode()).hexdigest()
+    old = re.search(r'keyHash: "(sha256:[0-9a-f]{64})"\n\s+metadata: \{client: finance\}', text).group(1)
+    return text.replace(old, f"sha256:{digest}")
+
+
+def run_values(env, config=None):
     (check,) = [c for c in AGENT["initContainers"] if c["name"] == "values-check"]
-    args = [docker(), "run", "--rm", "--network", "none"]
+    tmp = scratch()
+    (tmp / "config.yaml").write_text(gateway_config() if config is None else config)
+    (tmp / "config.yaml").chmod(0o644)
+    tmp.chmod(0o755)
+    args = [docker(), "run", "--rm", "--network", "none", "-v", f"{tmp}:/gateway:ro"]
     for key, value in env.items():
         args += ["-e", f"{key}={value}"]
     result = subprocess.run([*args, "--entrypoint", "sh", IMAGE, "-c", check["command"][2]],
                             capture_output=True, text=True, timeout=120, check=False)
-    return result.returncode, result.stdout.strip()
+    return result.returncode, (result.stdout + result.stderr).strip()
 
 
 def test_the_values_check_is_the_first_step_and_reads_both_secrets():
@@ -254,18 +328,45 @@ def test_the_values_check_is_the_first_step_and_reads_both_secrets():
     secret = set(doc("secret.sops.yaml")["stringData"]) | set(doc("secret-search.sops.yaml")["stringData"])
     assert set(VALUES) == secret
     assert all(key in first["command"][2] for key in VALUES)
+    (mount,) = first["volumeMounts"]
+    (volume,) = [v for v in AGENT["volumes"] if v["name"] == mount["name"]]
+    assert mount["mountPath"] == "/gateway" and mount["readOnly"] is True
+    generated = yaml.safe_load((APP / "kustomization.yaml").read_text())["configMapGenerator"]
+    (config,) = [g for g in generated if g["name"] == volume["configMap"]["name"]]
+    (source,) = config["files"]
+    name, path = source.split("=")
+    assert name == "config.yaml"
+    assert (APP / path).resolve() == GATEWAY_CONFIG
 
 
 @pytest.mark.parametrize(("value", "reason"), [("pending", "placeholder"), ("", "empty")])
 def test_the_values_check_refuses_a_placeholder(value, reason):
-    env = dict.fromkeys(VALUES, "a-real-looking-value")
+    env = dict.fromkeys(VALUES, VALUE)
     env["TELEGRAM_BOT_TOKEN"] = value
     code, out = run_values(env)
     assert code != 0
     assert out == f"values-check result=failed key=TELEGRAM_BOT_TOKEN reason={reason}"
-    assert "a-real-looking-value" not in out
+    assert VALUE not in out
 
 
 def test_the_values_check_passes_with_every_value():
-    code, out = run_values(dict.fromkeys(VALUES, "a-real-looking-value"))
+    code, out = run_values(dict.fromkeys(VALUES, VALUE))
     assert (code, out) == (0, "values-check result=ok")
+
+
+@pytest.mark.parametrize("config", ["placeholder", "other key", "probe key"])
+def test_the_values_check_refuses_a_key_whose_hash_is_not_the_one_of_finance(config):
+    """The key and its hash in the gateway's config stay in step: the hash of
+    git now (a placeholder), the hash of another key, and the right hash on
+    another client each stop the start."""
+    text = {
+        "placeholder": GATEWAY_CONFIG.read_text(),
+        "other key": gateway_config("another-value"),
+        "probe key": GATEWAY_CONFIG.read_text().replace(
+            "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+            "sha256:" + hashlib.sha256(VALUE.encode()).hexdigest()),
+    }[config]
+    code, out = run_values(dict.fromkeys(VALUES, VALUE), config=text)
+    assert code != 0
+    assert out == "values-check result=failed key=MCP_GATEWAY_KEY reason=hash"
+    assert hashlib.sha256(VALUE.encode()).hexdigest() not in out

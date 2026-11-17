@@ -1383,9 +1383,9 @@ Three facts set the order:
 | --- | --- | --- | --- | --- |
 | 1 | List `pvc.yaml` and `state-inbox.yaml` | The volume `agent-state` and the inbox pod, on the node of the agent. No product code, no secret, no network | `kubectl -n agents-finance get pvc agent-state` is `Bound`; `kubectl get pv <its volume> -o jsonpath='{.spec.nodeAffinity}'` names `homelab-wsl-worker-2`; `kubectl -n agents-finance logs deploy/agent-state-inbox` is `state-inbox result=ready` | Take the inbox out. The volume stays: it has `kustomize.toolkit.fluxcd.io/prune: disabled` |
 | 2 | List `backup.yaml` | The snapshot policy and schedule to the repository `agents-finance`. The first snapshot runs at once, of the empty volume | `kubectl -n agents-finance get snapshots.kopiur.home-operations.com`: one `Succeeded`. No `KopiurSnapshotFailed` | None needed: the policy stays with the volume |
-| 3 | The owner puts the values in `secret.sops.yaml` and in the key list of the model gateway ([Before the cutover](#before-the-cutover)) | The key `agents-finance` at the model gateway. The Secret file is not listed yet, so nothing in `agents-finance` | `kubectl -n ai logs deploy/litellm -c ensure-keys` has `agents-finance: created` (or `updated`) `(models: agents-finance, agents-finance-embeddings)` | Revert. The key stays at the model gateway until it is removed in the admin UI |
+| 3 | The owner puts the values in `secret.sops.yaml`, in the key list of the model gateway and the hash of the finance key in the config of the MCP gateway ([Before the cutover](#before-the-cutover)) | The key `agents-finance` at the model gateway, and the hash of the client `finance` at the MCP gateway. The Secret file is not listed yet, so nothing in `agents-finance` | `kubectl -n ai logs deploy/litellm -c ensure-keys` has `agents-finance: created` (or `updated`) `(models: agents-finance, agents-finance-embeddings)`; `kubectl -n ai get deploy mcp-gateway` is ready after its roll | Revert. The key stays at the model gateway until it is removed in the admin UI |
 | Host | The owner stops the finance bot on the host, makes the copy and the seed of the vault, and puts both archives in the volume ([The copy of the state](#the-copy-of-the-state)) | Nothing in git | The checksum and the counts of the copy | Turn the bot on again on the host |
-| 4 | Out `state-inbox.yaml`; in `restore-job.yaml` (with `ARCHIVE` and `VAULT` set), `secret.sops.yaml`, `secret-search.sops.yaml` and `deployment.yaml` (still `replicas: 0`) | The Job checks each member of the two archives, then puts the copy in place as `state/` and the vault in `vault/`. The two Secrets and the Deployment at zero: no pod | `kubectl -n agents-finance get job agent-restore` is `1/1`; in Loki, `{namespace="agents-finance", app="agent-restore"}` has `restore result=ok archive=start/<name> files=<n> vault-notes=<m>`, with the two counts of the owner. A refused archive is `restore result=failed reason=<kind>` (for example `member-type archive=state kinds=link`): fix the copy on the host and run again as `agent-restore-2`; nothing was written | Revert step 4, then turn the bot on again on the host. The copy stays in `archives/start/` |
+| 4 | Out `state-inbox.yaml`; in `restore-job.yaml` (with `ARCHIVE` and `VAULT` set), `secret.sops.yaml`, `secret-search.sops.yaml` and `deployment.yaml` (still `replicas: 0`) | The Job checks each member of the two archives, then puts the copy in place as `state/` and the vault in `vault/`. The two Secrets and the Deployment at zero: no pod | `kubectl -n agents-finance get job agent-restore` is `1/1`; in Loki, `{namespace="agents-finance", app="agent-restore"}` has `restore result=ok archive=start/<name> files=<n> vault-notes=<m>`, with the two counts of the owner. A refused archive is `restore result=failed reason=<kind>` (for example `member-type archive=state kinds=link` or `too-large archive=vault`), and a failed unpack is `reason=unpack` or `reason=vault-unpack`: fix the copy on the host and run again as `agent-restore-2`; the volume is as it was | Revert step 4, then turn the bot on again on the host. The copy stays in `archives/start/` |
 | 5 | Out `restore-job.yaml`; `replicas: 1` in `deployment.yaml` | The agent pod starts and polls the bot | [The cutover](#the-cutover) | [The way back](#the-way-back) |
 
 After step 5: the restore test of the state (the template
@@ -1407,7 +1407,7 @@ of the backup container and of the heartbeat need a pod or a service in
 
 The values are the owner's (R4), and none of them goes through an agent or a
 session. Each goes in with `sops <file>` in place of `pending` (the file has
-four placeholders now), in a pull request. The Secret is not applied until
+five placeholders now), in a pull request. The Secret is not applied until
 step 4, so a merge of the values starts nothing.
 
 | Key of `agent-secret` | The value |
@@ -1416,6 +1416,7 @@ step 4, so a merge of the values starts nothing.
 | `LITELLM_API_KEY` | A new key: `sk-agents-finance-` and `openssl rand -hex 24`. The same value goes in a new entry of `keys.json` in `kubernetes/apps/ai/litellm/app/secret-keys.sops.yaml`: alias `agents-finance`, models `["agents-finance", "agents-finance-embeddings"]` ([litellm.md](litellm.md#keys-of-the-agent-platform)). The key list has no such entry today |
 | `TELEGRAM_BOT_TOKEN` | The token of the finance bot, the one the host uses now |
 | `TELEGRAM_ALLOW_FROM` | The numeric Telegram user id of the owner, as on the host |
+| `MCP_GATEWAY_KEY` | A new random value: `openssl rand -hex 32`. Its hash goes in the config of the MCP gateway, for the client `finance`, in the same pull request ([mcp-gateway.md](mcp-gateway.md#the-steps-of-the-owner)); the `values-check` step of the pod stops the start with `reason=hash` when the two differ |
 
 Then the token of the finance app for its proxy, if it is not in yet:
 [agent-platform.md](agent-platform.md#the-steps-of-the-owner-for-the-finance-app),
@@ -1424,7 +1425,7 @@ the placeholder):
 
 ```bash
 F=kubernetes/apps/ai/agents/finance/agent/app/secret.sops.yaml
-for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM; do
+for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM MCP_GATEWAY_KEY; do
   printf '%s ' "$k"
   bin/sops -d --extract "[\"stringData\"][\"$k\"]" "$F" \
     | awk '{ v = v $0 } END { print (length(v) > 0 && v != "pending") ? "ok" : "not ok" }'
@@ -1441,7 +1442,8 @@ the finance app and finance data in one session
 
 The owner, on the host, after the finance bot is off (step 1 of
 [The cutover](#the-cutover)), so nothing writes the files during the copy.
-The copy holds the **workspace of the finance agent only**: its instruction
+The copy holds the **workspace of the finance agent only** (the owner's
+decision of 2026-11-17): its instruction
 files (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `TOOLS.md`), its
 memory (`MEMORY.md`, `memory/`), its skills and its scripts. The pod makes
 the rest at its first start.
@@ -1462,15 +1464,8 @@ Left out, each on purpose:
   with the embeddings of finance.
 - `.git` of the workspace, and logs.
 
-**The alternative, not written here:** the copy also holds the database of
-the finance agent, for its chat history. Then the auth profiles must be
-removed from it (`openclaw models auth logout` on a staging state), the
-agent id must map to `main`, the host must be on the release of the pod
-(D67), and the Job must allow `./agents/main/agent/`. The owner decides.
-
-Because the copy holds no database of the product, it needs no release
-match: the host can stay on its release for the copy (D67 was decided for a
-copy with the database; the owner can keep or drop it).
+The copy holds no database of the product, so it needs no release match:
+the host stays on its release for the copy.
 
 The steps, in one shell on the host. `<id>` is the id of the finance agent
 on the host, `V` the folder of the finance vault:
@@ -1498,10 +1493,11 @@ tar -C "$WS" --exclude=./.git -cf - . | tar -C "$STAGE/state/workspace" -xf -
      - read data in a script through the read port above, with `python3`;
      - make each create or update with the `firefly__` tools, never with a
        script;
-     - never delete (the tools and the proxy refuse it);
+     - never delete (the MCP gateway, the tools and the proxy refuse it);
      - read and test rules (`firefly__get_rule*`, `firefly__test_rule*`),
-       and never write one: propose a new or changed rule in the chat, and
-       the owner adds it in the app (a rule can delete a transaction);
+       and never write one (the owner's decision: rule writes stay
+       refused): propose a new or changed rule in the chat, and the owner
+       adds it in the app (a rule can delete a transaction);
      - update a split transaction with `firefly__update_transaction` and the
        `transaction_journal_id` of each split (an update that leaves out a
        split deletes it).
@@ -1545,10 +1541,13 @@ tar -C "$STAGE" -cf - "$vault" \
 
 The restore Job of step 4 checks each member of both archives before it
 writes a file: only plain files and directories, no link, no device, no
-absolute path, no `..`, no setuid or setgid bit, and in the copy of the
-state, nothing outside `./workspace/`. So a link or a stray file that the
-checks on the host missed stops the Job, with the kind of the member in its
-line.
+absolute path, no `..`, no setuid or setgid bit, at most 20000 members and
+2 GiB in all for each archive, and in the copy of the state, nothing outside
+`./workspace/`. So a link or a stray file that the checks on the host
+missed stops the Job, with the kind of the member in its line and never its
+name. Then it unpacks both archives into `restore-<time>/` and puts them in
+place only when both are out; a failed unpack removes that directory, so
+the volume is as it was.
 
 7. Give the names of the two archives (not their content) to the pull
    request of step 4, as the values of `ARCHIVE` (`start/<name>`) and
@@ -1594,15 +1593,19 @@ of the vault work. The lead reads; the owner makes the turns.
 **Steps.**
 
 1. **One tool call.** The owner asks for the summary of this month. The
-   session calls `firefly__get_summary`, and the proxy logs the call:
+   session calls `firefly__get_summary`. The MCP gateway logs the call
+   with its client: `kubectl -n ai logs deploy/mcp-gateway | grep '"client":"finance"'`
+   shows `"gen_ai.tool.name":"get_summary"` and `"http.status":200`. The
+   proxy logs it too:
    `kubectl -n agents-finance logs deploy/firefly-proxy | grep 'firefly-proxy port=8080'`
    shows `refused=0` and `status=200`.
 2. **A read of the vault.** The owner asks for a fact that only a note of
    the vault holds. The answer names it.
 3. **The scheduled checks** of `agents-finance`, on their next runs:
    `platform-check-isolation` (04:17), `platform-check-probe` (04:47),
-   `platform-check-firefly-probe` (05:17) and `platform-check-firefly-dns`
-   (05:27) pass: `kubectl -n agents-finance get jobs`.
+   `platform-check-firefly-probe` (05:17), `platform-check-firefly-dns`
+   (05:27) and `platform-check-mcp-gateway-probe` (05:37, with no
+   `skipped` line) pass: `kubectl -n agents-finance get jobs`.
 4. **The backups.** The first nightly snapshot with the state is
    `Succeeded`, and the daily archive of the backup container is in the log
    (`daily-backup result=ok`) with `instruction-check result=first`.
@@ -1662,12 +1665,12 @@ finance until their retention ends.
 
 | # | Step | Who | Blocks |
 | --- | --- | --- | --- |
-| 1 | Decide what the copy holds: the workspace only (recommended), or also the chat history (then the database must be cleaned of the auth profiles and the agent id mapped; not written here). And keep or drop D67 for the workspace copy | Owner | The copy |
+| 1 | The MCP gateway merged and ready ([mcp-gateway.md](mcp-gateway.md)) | Lead writes, owner merges | Step 3 |
 | 2 | Merges 1 and 2 (volume, inbox, backup policy) and their checks | Lead | Step 4 |
-| 3 | The values of `agent-secret` and the entry of `keys.json`, and the token of the finance app | Owner (R4) | Step 4 |
+| 3 | The values of `agent-secret` (with `MCP_GATEWAY_KEY` and its hash at the MCP gateway) and the entry of `keys.json`, and the token of the finance app | Owner (R4) | Step 4 |
 | 4 | The model path of finance records (D65), and the risk of web search, writes and finance data in one session | Owner (gate) | Step 5 |
 | 5 | The go of the cutover, for a time with no other change | Owner (gate) | The host steps |
-| 6 | The host: the finance bot off, the copy, the vault | Owner (host) | Step 4 |
+| 6 | The host: the finance bot off, the copy of the workspace, the vault | Owner (host) | Step 4 |
 | 7 | The pull requests of steps 4 and 5 (the name of the archive from the owner), and their checks | Lead writes, owner merges | The exit check |
 | 8 | The first message, the tool call and the vault read | Owner | The exit check |
 | 9 | The checks, the backups, the restore test, the heartbeat entry | Lead (the restore test with the owner's go) | The exit check |

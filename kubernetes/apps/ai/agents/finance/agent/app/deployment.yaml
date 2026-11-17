@@ -7,7 +7,7 @@
 # (docs/apps/agent-platform-runbook.md, "The cutover of the finance agent").
 # The tool set is the pilot's, with its own search key, the notes vault in
 # the state volume (docs/apps/agent-platform.md, "The finance agent"), and the
-# finance app through its MCP server (the firefly entry of openclaw.json).
+# finance app through the MCP gateway (the firefly entry of openclaw.json).
 # Each command it runs goes to a sandbox of this trust domain, through the
 # sandbox gateway; each model call goes to the model gateway, with the key of
 # this trust domain; each call of a tool of the finance app goes to the MCP
@@ -75,10 +75,13 @@ spec:
           type: RuntimeDefault
       initContainers:
         # The values check: the pod does not start while a value of its
-        # Secrets is empty or still the placeholder `pending` of git. It
-        # prints `values-check result=ok` or `values-check result=failed
-        # key=<name> reason=empty|placeholder`, the name of the key only,
-        # never a value, and fails the start. The pod then stays in
+        # Secrets is empty or still the placeholder `pending` of git, or while
+        # the SHA-256 of MCP_GATEWAY_KEY is not the hash of the client finance
+        # in the config of the MCP gateway (the same file, mounted here), so
+        # the value and the hash stay in step. It prints `values-check
+        # result=ok` or `values-check result=failed key=<name>
+        # reason=empty|placeholder|hash`, the name of the key only, never a
+        # value or a hash, and fails the start. The pod then stays in
         # Init:CrashLoopBackOff, not ready, and AgentPlatformWorkloadNotReady
         # fires after 10 minutes.
         - name: values-check
@@ -89,17 +92,24 @@ spec:
             - -c
             - |
               set -eu
-              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM BRAVE_API_KEY; do
+              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM MCP_GATEWAY_KEY BRAVE_API_KEY; do
                 v=$(printenv "$k" || true)
                 if [ -z "$v" ]; then echo "values-check result=failed key=$k reason=empty"; exit 1; fi
                 if [ "$v" = pending ]; then echo "values-check result=failed key=$k reason=placeholder"; exit 1; fi
               done
+              have=$(printf %s "$MCP_GATEWAY_KEY" | sha256sum | cut -d " " -f 1)
+              want=$(awk '/keyHash:/ { k = $NF; gsub(/"/, "", k) } /metadata: \{client: finance\}/ { print k }' /gateway/config.yaml)
+              if [ "$want" != "sha256:$have" ]; then echo "values-check result=failed key=MCP_GATEWAY_KEY reason=hash"; exit 1; fi
               echo "values-check result=ok"
           envFrom:
             - secretRef:
                 name: agent-secret
             - secretRef:
                 name: agent-search-secret
+          volumeMounts:
+            - name: mcp-gateway-config
+              mountPath: /gateway
+              readOnly: true
           securityContext: &containerSecurity
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -443,6 +453,11 @@ spec:
         - name: scripts
           configMap:
             name: agent-scripts
+        # The config of the MCP gateway, for the hash of the client finance
+        # (kustomization.yaml): hashes and tool rules, no secret.
+        - name: mcp-gateway-config
+          configMap:
+            name: agent-mcp-gateway-config
         - name: tmp
           emptyDir:
             sizeLimit: 2Gi

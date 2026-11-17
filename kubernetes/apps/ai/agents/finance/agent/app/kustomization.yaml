@@ -12,11 +12,13 @@
 # 2. ./backup.yaml: the policy and schedule; the first snapshot runs at once,
 #    of the empty volume. It needs the ClusterRepository agents-finance
 #    (Ready) and its grant of agents-finance; the grant goes last.
-# 3. The values of ./secret.sops.yaml (Secret agent-secret: four
+# 3. The values of ./secret.sops.yaml (Secret agent-secret: five
 #    placeholders now), by the owner (R4): OPENCLAW_GATEWAY_TOKEN,
 #    LITELLM_API_KEY (the key agents-finance of the model gateway, with the
-#    same value in its keys.json, docs/apps/litellm.md), TELEGRAM_BOT_TOKEN
-#    and TELEGRAM_ALLOW_FROM. Not listed yet.
+#    same value in its keys.json, docs/apps/litellm.md), TELEGRAM_BOT_TOKEN,
+#    TELEGRAM_ALLOW_FROM and MCP_GATEWAY_KEY (the key of the client finance
+#    of the MCP gateway, with its hash in the gateway's config,
+#    docs/apps/mcp-gateway.md). Not listed yet.
 # 4. After the owner put the copy of the state and the vault in the volume:
 #    out ./state-inbox.yaml; in ./restore-job.yaml (ARCHIVE and VAULT set),
 #    ./secret.sops.yaml, ./secret-search.sops.yaml (BRAVE_API_KEY, the search
@@ -33,3 +35,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./networkpolicy.yaml
+# The config of the MCP gateway, the same file, for the values check of the
+# agent pod: it holds hashes and tool rules, no secret.
+configMapGenerator:
+  - name: agent-mcp-gateway-config
+    files:
+      - config.yaml=../../../../mcp-gateway/app/config/config.yaml
