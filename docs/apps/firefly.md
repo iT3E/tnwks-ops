@@ -120,16 +120,23 @@ new Cluster; it never changes a running one (CloudNativePG 1.30, docs
 keep the live database, and read the old values from a copy.
 
 1. Note the time just before the wrong write, in UTC.
-2. In `kubernetes/apps/production/firefly/restore-test/restore/cluster.yaml`,
-   set `bootstrap.recovery.recoveryTarget.targetTime` to that time (docs
-   "Recovery", "PITR from an object store" and "Recovery targets"). Wire
-   `restore-test/ks.yaml` (`kubernetes/clusters/wsl/apps/production/kustomization.yaml`)
-   and merge. Flux builds `databases/firefly-pg-restore-test` at that time.
+2. Bring back `kubernetes/apps/production/firefly/restore-test/` from git
+   history: the cleanup deletes it after each test. Take the last version,
+   from the parent of the commit that removed it
+   (`C=$(git log -1 --format=%H --diff-filter=D -- kubernetes/apps/production/firefly/restore-test/ks.yaml)`,
+   then `git checkout "$C^" -- kubernetes/apps/production/firefly/restore-test`),
+   and uncomment its wiring line in
+   `kubernetes/clusters/wsl/apps/production/kustomization.yaml` (the cleanup
+   keeps it as a comment). In `restore/cluster.yaml`, set
+   `bootstrap.recovery.recoveryTarget.targetTime` to that time (docs
+   "Recovery", "PITR from an object store" and "Recovery targets"), give the
+   check Job a new name, and merge. Flux builds
+   `databases/firefly-pg-restore-test` at that time.
 3. Read the old values from the copy, read-only (`kubectl exec` into
    `firefly-pg-restore-test-1`, as in "Looking at the data directly"), and
    write them back through the API, so the IDs stay.
-4. Remove the wiring line and the directory, and merge. Flux deletes the
-   copy, its volume and the Job.
+4. Comment out the wiring line again, remove the directory, and merge.
+   Flux deletes the copy, its volume and the Job.
 
 **The whole database** (it is lost, or wrong from a point on): stop the app,
 `finance-sync` and every client that writes, then follow

@@ -28,6 +28,9 @@ spec:
     - name: firefly-db
   # Ready only when the Cluster is Ready. kstatus alone calls a Cluster with
   # no status yet Current (kubernetes/components/cnpg-cluster/README.md).
+  # The backup plugin restarts the instance once after the bootstrap, and
+  # that can come after Ready: the check Job waits for a stable server
+  # (check/job.yaml).
   wait: true
   healthCheckExprs:
     - apiVersion: postgresql.cnpg.io/v1
