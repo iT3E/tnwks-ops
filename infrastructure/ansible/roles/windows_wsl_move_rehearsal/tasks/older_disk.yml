@@ -105,9 +105,20 @@
           $wslRules = @([regex]::Matches($sddl, '\(A;;(FA|0x1[fF]01[fF]{2});;;(' + $wslSids + ')\)') | ForEach-Object { $_.Value }) -join ''
           # No protection: Windows gives the inherited rules of the folder in
           # this write. The owner stays. The take of ownership first, then the
-          # owner and the rules in one write, as the procedure writes.
+          # owner and the rules in one write, as the procedure writes. A write
+          # of the rules that fails puts the owner back (SeRestorePrivilege
+          # allows any owner): the file keeps its owner and its old rules, and
+          # the next run finds it as before.
           [TnwksSecurity]::SetOwner($Path, 'BA')
-          [TnwksSecurity]::SetRules($Path, "O:$($parts.owner)D:AI(A;;FA;;;$Sid)$wslRules")
+          try {
+              [TnwksSecurity]::SetRules($Path, "O:$($parts.owner)D:AI(A;;FA;;;$Sid)$wslRules")
+          } catch {
+              $failed = $_.Exception.Message
+              try { [TnwksSecurity]::SetOwner($Path, $parts.owner) } catch {
+                  throw "The write of the rules of A's disk file failed ($failed), and its owner did not go back: $($_.Exception.Message)"
+              }
+              throw "The write of the rules of A's disk file failed ($failed). Its owner is back, with its old rules."
+          }
           $after = Get-TnwksSddlParts (Get-TnwksSddl $Path)
           Assert-Tnwks (-not $after.protected -and $after.inherited -eq $gives) (
               "A's disk file has not the inherited rules that its folder gives: '$($after.inherited)', not '$gives'")

@@ -11,7 +11,8 @@
 #            nothing changed. Then each copy must have the role's SHA-256.
 #   assert   Change nothing. A copy that differs stops the phase: a phase in
 #            the middle of a window never swaps the procedure under the
-#            window that started with it.
+#            window that started with it. (The read of the live parts only
+#            reads, and live.yml copies it before each read, at any marker.)
 #   print    Change nothing, and stop on nothing: print each copy that
 #            differs. The removal runs with whatever copies are there.
 # The phases: setup, window and interrupt refresh; wayback, restart and
@@ -128,6 +129,8 @@
   check_mode: false
   register: wsl_move_rehearsal_host_hashes
 
+# In a check run, live.yml copied nothing: the read of the live parts may
+# still differ, and the run of a phase copies it before its first read.
 - name: Each copy on the host that differs from the role's
   vars:
     have: "{{ wsl_move_rehearsal_host_hashes.output | last | default({}, true) }}"
@@ -135,7 +138,10 @@
     wsl_move_rehearsal_files_differ: >-
       {%- set out = [] -%}
       {%- for path, sha in wsl_move_rehearsal_file_hashes.items() -%}
-      {%- if (have[path] | default('none')) != sha -%}{%- set _ = out.append(path | win_basename) -%}{%- endif -%}
+      {%- if (have[path] | default('none')) != sha
+          and not (ansible_check_mode and path | win_basename == 'Get-TnwksMoveLiveState.ps1') -%}
+      {%- set _ = out.append(path | win_basename) -%}
+      {%- endif -%}
       {%- endfor -%}
       {{ out }}
 
@@ -149,8 +155,9 @@
       - wsl_move_rehearsal_files_differ | length == 0
     fail_msg: >-
       The copies {{ wsl_move_rehearsal_files_differ | join(', ') }} on the host are not the role's (SHA-256).
-      {{ 'A window started with them, and this phase does not swap them: end that window with the phase that
-      it needs, then run the phase window or setup again.' if wsl_move_rehearsal_host_files == 'assert' else '' }}
+      {{ 'A window started with them, and this phase does not swap them: end that window with the release that
+      started it (the phase that the window needs), then run the phase window or setup again.'
+      if wsl_move_rehearsal_host_files == 'assert' else '' }}
       Nothing more is changed.
     quiet: true
   when: >-

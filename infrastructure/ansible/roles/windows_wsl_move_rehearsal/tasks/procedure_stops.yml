@@ -18,11 +18,6 @@
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $true
       $cfg = $TestConfig | ConvertFrom-Json
-      if (Test-Path -LiteralPath $Test) { Remove-Item -LiteralPath $Test -Recurse -Force }
-      New-Item -ItemType Directory -Path $cfg.present.folder, $cfg.new.folder | Out-Null
-      # Not $testConfig: names are not case sensitive, so it would change $TestConfig.
-      $configFile = Join-Path $Test 'window.json'
-      [IO.File]::WriteAllText($configFile, $TestConfig)
       $oldDisk = Join-Path $cfg.present.folder $DiskName
       $newDisk = Join-Path $cfg.new.folder $DiskName
       function Get-Listing {
@@ -42,7 +37,10 @@
           [IO.File]::WriteAllText($request, (@{ mode = $Mode; group_steps = $false; stop_after = 0; rehearsal_group_test = $false } | ConvertTo-Json))
           $argv = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $Script, '-Config', $configFile)
           if ($Mode -eq 'boot') { $argv += @('-Mode', 'boot') } else { $argv += @('-Request', $request) }
-          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" @argv | Out-Null
+          # Windows PowerShell 5.1 makes a line on stderr of a program an error,
+          # which stops the script under Stop: the run keeps it as text.
+          $out = & { $ErrorActionPreference = 'Continue'
+              & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" @argv 2>&1 | ForEach-Object { "$_" } }
           $code = $LASTEXITCODE
           $stateAfter = "$(Get-Content -LiteralPath $cfg.state_file -Raw)"
           [pscustomobject]@{
@@ -52,11 +50,17 @@
               new_markers = @($stateAfter.Substring([Math]::Min($state.Length, $stateAfter.Length)).Trim() -split "`r?`n" |
                   Where-Object { $_ } | ForEach-Object { ($_ -split ' ', 2)[1] }) -join ','
               last_log = "$(@(Get-Content -LiteralPath $cfg.log_file) | Select-Object -Last 2 | Select-Object -First 1)"
+              output = (@($out) | Select-Object -Last 5) -join ' / '
           }
       }
       $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($cfg.service_binary).FileVersion
       # The test folder goes at the end, also when a case fails.
       try {
+          if (Test-Path -LiteralPath $Test) { Remove-Item -LiteralPath $Test -Recurse -Force }
+          New-Item -ItemType Directory -Path $cfg.present.folder, $cfg.new.folder | Out-Null
+          # Not $testConfig: names are not case sensitive, so it would change $TestConfig.
+          $configFile = Join-Path $Test 'window.json'
+          [IO.File]::WriteAllText($configFile, $TestConfig)
           @(
               Invoke-Case 'another version' 'forward' '0.0.0.0' '' $true $false
               Invoke-Case 'neither path' 'boot' $installed 'window-started' $false $false

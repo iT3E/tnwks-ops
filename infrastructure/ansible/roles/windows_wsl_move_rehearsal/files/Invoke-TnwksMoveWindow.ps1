@@ -99,7 +99,7 @@ function Get-LastMarker {
     if (-not (Test-Path -LiteralPath $cfg.state_file)) { return '' }
     $lines = @(Get-Content -LiteralPath $cfg.state_file | Where-Object { $_.Trim() })
     if ($lines.Count -eq 0) { return '' }
-    ($lines[-1] -split ' ', 2)[1].Trim()
+    "$(($lines[-1] -split ' ', 2)[1])".Trim()
 }
 
 function Assert-Tnwks([bool]$Condition, [string]$Message) {
@@ -280,7 +280,7 @@ public static class TnwksSecurity {
     static extern bool CreatePrivateObjectSecurityEx(IntPtr parent, IntPtr creator, out IntPtr created, IntPtr objectType, bool isContainer, int flags, IntPtr token, ref GenericMapping mapping);
     [DllImport("advapi32.dll", SetLastError = true)]
     static extern bool DestroyPrivateObjectSecurity(ref IntPtr sd);
-    const int OWNER = 0x1, DACL = 0x4, PROTECTED_DACL = unchecked((int)0x80000000), UNPROTECTED_DACL = 0x20000000;
+    const int OWNER = 0x1, GROUP = 0x2, DACL = 0x4, PROTECTED_DACL = unchecked((int)0x80000000), UNPROTECTED_DACL = 0x20000000;
     const int READ_CONTROL = 0x20000, WRITE_DAC = 0x40000, WRITE_OWNER = 0x80000;
 
     static bool EnableOne(string name) {
@@ -317,20 +317,35 @@ public static class TnwksSecurity {
             } finally { LocalFree(sd); }
         }
     }
+    // The group of a file (G:, as SDDL without the prefix), or '' with none.
+    public static string ReadGroup(string path) {
+        using (SafeFileHandle h = Open(path, READ_CONTROL)) {
+            IntPtr owner, group, dacl, sacl, sd, text; int length;
+            int r = GetSecurityInfo(h, 1, GROUP, out owner, out group, out dacl, out sacl, out sd);
+            if (r != 0) throw new Win32Exception(r, "read the group of " + path);
+            try {
+                if (group == IntPtr.Zero) return "";
+                if (!ConvertSecurityDescriptorToStringSecurityDescriptor(sd, 1, GROUP, out text, out length))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                try { string g = Marshal.PtrToStringUni(text); return g.StartsWith("G:") ? g.Substring(2) : ""; } finally { LocalFree(text); }
+            } finally { LocalFree(sd); }
+        }
+    }
     // The rules that a folder gives a new file in it, by Windows' own
     // inheritance function: the folder's security descriptor as the parent,
-    // the owner of the file as the creator, with an empty DACL (so the result
-    // holds the inherited rules only), the generic mapping of files, and an
-    // object that is not a container. SEF_DACL_AUTO_INHERIT (0x1),
-    // SEF_AVOID_PRIVILEGE_CHECK (0x8), SEF_AVOID_OWNER_CHECK (0x10). The
-    // DACL of the result, as SDDL.
-    public static string FileGives(string folderSddl, string owner) {
+    // the owner and the group of the file as the creator, with an empty DACL
+    // (so the result holds the inherited rules only; CREATOR OWNER and
+    // CREATOR GROUP rules of the folder name them), the generic mapping of
+    // files, and an object that is not a container. SEF_DACL_AUTO_INHERIT
+    // (0x1), SEF_AVOID_PRIVILEGE_CHECK (0x8), SEF_AVOID_OWNER_CHECK (0x10).
+    // The DACL of the result, as SDDL.
+    public static string FileGives(string folderSddl, string owner, string group) {
         IntPtr parent, creator, created, text, token; int size, length;
         if (!ConvertStringSecurityDescriptorToSecurityDescriptor(folderSddl, 1, out parent, out size))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "the rules of the folder " + folderSddl);
         try {
-            if (!ConvertStringSecurityDescriptorToSecurityDescriptor("O:" + owner + "G:" + owner + "D:", 1, out creator, out size))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "the owner " + owner);
+            if (!ConvertStringSecurityDescriptorToSecurityDescriptor("O:" + owner + "G:" + group + "D:", 1, out creator, out size))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "the owner " + owner + " and the group " + group);
             try {
                 // TOKEN_QUERY: the token of this process, which the function
                 // reads for no default here (the creator has an owner, a group
@@ -480,18 +495,20 @@ function Get-TnwksSddlParts([string]$Sddl) {
         inherited = (@($inherited | Sort-Object) -join ' '); vm = $vm; capability = $capability; deny = $deny }
 }
 
-# What a folder gives a file in it, owned by $Owner: the inherited part of
-# the DACL that Windows' own inheritance function computes from the folder's
-# rules (TnwksSecurity.FileGives), in the form of Get-TnwksSddlParts.
-function Get-TnwksFolderGives([string]$FolderSddl, [string]$Owner) {
-    (Get-TnwksSddlParts ([TnwksSecurity]::FileGives($FolderSddl, $Owner))).inherited
+# What a folder gives a file in it, owned by $Owner, of the group $Group (the
+# owner when none is given): the inherited part of the DACL that Windows' own
+# inheritance function computes from the folder's rules
+# (TnwksSecurity.FileGives), in the form of Get-TnwksSddlParts.
+function Get-TnwksFolderGives([string]$FolderSddl, [string]$Owner, [string]$Group = '') {
+    (Get-TnwksSddlParts ([TnwksSecurity]::FileGives($FolderSddl, $Owner, $(if ($Group) { $Group } else { $Owner })))).inherited
 }
 
-# The inherited rules that the folder of a file gives it: none for a file with
-# protection.
+# The inherited rules that the folder of a file gives it, with its owner and
+# its group: none for a file with protection.
 function Get-TnwksFileGives([string]$Path, [pscustomobject]$Parts) {
     if ($Parts.protected) { return '' }
-    Get-TnwksFolderGives (Get-TnwksSddl (Split-Path -Parent $Path)) $Parts.owner
+    $folder = Get-TnwksSddl (Split-Path -Parent $Path)
+    Get-TnwksFolderGives $folder $Parts.owner ([TnwksSecurity]::ReadGroup($Path))
 }
 
 # The owner, the protection and the explicit rules as in the SDDL expected,
@@ -650,15 +667,29 @@ function Invoke-TnwksForward {
     # folder gives (none with protection). Way back step 3 puts back the
     # explicit rules of the saved set, and Windows gives the inherited ones
     # from the folder, so a file that lost them would not come back as saved.
+    # Nor has it a rule that the check of the way back refuses: a deny rule
+    # (explicit or inherited), more than one rule of the capability of the VM,
+    # or an explicit rule of a VM SID or a capability SID that is not WSL's
+    # (Get-TnwksSddlParts): the way back would fail its check on every run.
     if (Test-Path -LiteralPath $oldPath) {
-        $diskParts = Get-TnwksSddlParts (Get-TnwksSddl $oldPath)
+        $diskSddl = Get-TnwksSddl $oldPath
+        $diskParts = Get-TnwksSddlParts $diskSddl
         $gives = Get-TnwksFileGives $oldPath $diskParts
+        $refused = @()
+        if ($diskParts.deny -gt 0) { $refused += "$($diskParts.deny) deny rule(s)" }
+        if ($diskParts.capability -gt 1) { $refused += "$($diskParts.capability) rules of the capability of the VM" }
+        $odd = @("$($diskParts.aces)" -split ' ' | Where-Object { $_ -match ';(S-1-5-83-|S-1-15-3-)[0-9-]+$' })
+        if ($odd.Count) { $refused += "$($odd.Count) rule(s) of a VM SID or a capability SID that are not WSL's" }
         if ($diskParts.inherited -ne $gives) {
             Write-Log ("stop at step 1: the inherited rules of the disk file are not those that its folder gives. Nothing is changed. The file: '{0}'; the folder gives: '{1}'" -f
                 (ConvertTo-TnwksMaskedText $diskParts.inherited), (ConvertTo-TnwksMaskedText $gives))
-            return 'stopped'
         }
-        Write-Log 'step 1: the disk file has the inherited rules that its folder gives'
+        if ($refused.Count) {
+            Write-Log ("stop at step 1: the disk file has {0}, which the check of the way back refuses. Nothing is changed. The rules: '{1}'" -f
+                ($refused -join ', '), (ConvertTo-TnwksMaskedText $diskSddl))
+        }
+        if ($refused.Count -or $diskParts.inherited -ne $gives) { return 'stopped' }
+        Write-Log 'step 1: the disk file has the inherited rules that its folder gives, and no rule that the way back refuses'
     }
     if ($req.rehearsal_group_test) {
         # The rehearsal only: the present account is in Administrators, as

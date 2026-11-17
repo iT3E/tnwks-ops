@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -107,26 +108,42 @@ def checks_of(file: str, names: tuple[str, ...] = ()) -> list[dict]:
 # --- The scripts, in PowerShell -----------------------------------------------------------
 
 # What win_powershell keeps of the output (its option depth, 2 by default): the list of
-# output objects at that depth, each object one level below, and so on. Below level 0, a
-# value that is not a string or a value type becomes its text: a list is joined by spaces,
-# an object reads "@{name=value; ...}". Written from the module's documentation of depth
-# and checked against its output.
+# output objects at that depth, each object one level below, and so on, as the module's
+# Convert-OutputObject (ansible.windows 3.9.2) reads each value:
+#   - an enum, at level 0 or above, becomes {Type, String, Value}; below, its number;
+#   - a date becomes its text in the round-trip form ('o');
+#   - a string, a switch (its flag) and any other value type stay as they are;
+#   - below level 0, anything else becomes its text: a list is joined by spaces, an
+#     object reads "@{name=value; ...}";
+#   - a list (IList) becomes a list, a dictionary a dictionary (its note properties,
+#     then its keys), and anything else, also an enumerable that is not a list, the
+#     dictionary of its properties.
+# Written from the module's behaviour, and checked against its function.
 DEPTH_MODEL = r"""
 function ConvertTo-TnwksModuleOutput($Value, [int]$Depth) {
     if ($null -eq $Value) { return , $null }
-    if ($Value -is [string] -or $Value.GetType().IsValueType) { return , $Value }
-    if ($Depth -lt 0) { return , [string]$Value }
-    if ($Value -is [Collections.IDictionary]) {
-        $h = [ordered]@{}
-        foreach ($k in $Value.Keys) { $h["$k"] = ConvertTo-TnwksModuleOutput $Value[$k] ($Depth - 1) }
-        return , $h
+    if ($Value -is [Enum] -and $Depth -ge 0) {
+        return , @{ Type = $Value.GetType().FullName; String = $Value.ToString(); Value = [int]$Value }
     }
-    if ($Value -is [Collections.IEnumerable]) {
+    if ($Value -is [DateTime] -or $Value -is [DateTimeOffset]) { return , $Value.ToString('o') }
+    if ($Value -is [string]) { return , $Value }
+    if ($Value -is [switch]) { return , $Value.IsPresent }
+    if ($Value.GetType().IsValueType) { return , $Value }
+    if ($Depth -lt 0) { return , [string]$Value }
+    if ($Value -is [Collections.IList]) {
         $l = [Collections.Generic.List[object]]::new()
         foreach ($i in $Value) { $l.Add((ConvertTo-TnwksModuleOutput $i ($Depth - 1))) }
         return , $l
     }
-    $h = [ordered]@{}
+    $h = @{}
+    if ($Value -is [Collections.IDictionary]) {
+        foreach ($p in $Value.PSObject.Properties) {
+            if ($p.MemberType -in @('AliasProperty', 'ScriptProperty', 'NoteProperty')) {
+                $h[$p.Name] = ConvertTo-TnwksModuleOutput $p.Value ($Depth - 1) }
+        }
+        foreach ($k in $Value.Keys) { $h["$k"] = ConvertTo-TnwksModuleOutput $Value[$k] ($Depth - 1) }
+        return , $h
+    }
     foreach ($p in $Value.PSObject.Properties) { $h[$p.Name] = ConvertTo-TnwksModuleOutput $p.Value ($Depth - 1) }
     return , $h
 }
@@ -171,8 +188,28 @@ foreach ($item in $out) {{ $list.Add((ConvertTo-TnwksModuleOutput $item {depth -
         assert run.returncode != 0, run.stdout
         return run.stderr
     assert run.returncode == 0, run.stderr + run.stdout
+    # An error record does not fail win_powershell (error_action continue), but it is a
+    # fault of the script all the same.
+    assert run.stderr.strip() == "", run.stderr
     result = json.loads(run.stdout)
     return (result["out"], result["changed"]) if changed else result["out"]
+
+
+@needs_pwsh
+def test_the_model_gives_an_enum_as_a_dictionary_and_a_date_as_text():
+    # A script that gives the state of a task or a time as it is: the play reads
+    # neither as the text that it compares.
+    run = pwsh(DEPTH_MODEL + TASK_STATE + r"""
+$set = [Collections.Generic.HashSet[string]]::new(); [void]$set.Add('a')
+$item = [pscustomobject]@{ state = [TnwksTaskState]'Running'; text = "$([TnwksTaskState]'Running')"
+    time = [datetime]::new(2026, 1, 2, 3, 4, 5, [DateTimeKind]::Utc); set = $set; deep = [pscustomobject]@{ state = [TnwksTaskState]'Ready' } }
+[Console]::Out.Write((ConvertTo-Json -InputObject (ConvertTo-TnwksModuleOutput $item 1) -Depth 9 -Compress))
+""")
+    out = json.loads(run.stdout)
+    assert out["state"] == {"Type": "TnwksTaskState", "String": "Running", "Value": 4} and out["text"] == "Running"
+    # An enumerable that is not a list gives its properties, not its items.
+    assert out["time"] == "2026-01-02T03:04:05.0000000Z" and out["set"]["Count"] == 1 and "a" not in out["set"]
+    assert out["deep"] == {"state": 3}
 
 
 def registered(output: list) -> dict:
@@ -232,8 +269,13 @@ def failed_by_assert(result: dict, name: str) -> bool:
 # Task Scheduler: each start is a new run, with the exit code of $global:Code. With
 # $global:QueuedPolls, a run first reads Queued with the result 0x41301 (the task is
 # running) for that many reads, with its new run time already, as a task that never ran
-# can; $global:PendingNow is the count left.
-TASKS = r"""
+# can; $global:PendingNow is the count left. As on Windows, the state of a task is an
+# enum and a time is a date: a script that gives one as it is gets {Type, String, Value}
+# or a text from win_powershell.
+TASK_STATE = r"""
+enum TnwksTaskState { Unknown = 0; Disabled = 1; Queued = 2; Ready = 3; Running = 4 }
+"""
+TASKS = TASK_STATE + r"""
 $global:Last = [datetime]'2026-01-01'
 $global:Code = 0
 $global:Started = @()
@@ -256,7 +298,7 @@ function Start-ScheduledTask {
 function Get-ScheduledTask {
     param([string]$TaskName)
     $s = if ($global:PendingNow -gt 0) { 'Queued' } elseif ($global:TaskStates -and $global:TaskStates[$TaskName]) { $global:TaskStates[$TaskName] } else { 'Ready' }
-    [pscustomobject]@{ TaskName = $TaskName; State = $s; Settings = [pscustomobject]@{ Enabled = ($s -ne 'Disabled') }; Triggers = $null }
+    [pscustomobject]@{ TaskName = $TaskName; State = [TnwksTaskState]$s; Settings = [pscustomobject]@{ Enabled = ($s -ne 'Disabled') }; Triggers = $null }
 }
 function Start-Sleep { }
 """
@@ -313,6 +355,8 @@ def stops_shim(tmp_path: Path) -> Path:
 $global:Sids = @{{ 'tnwks-moverh-a' = '{A_SID}'; 'tnwks-moverh-b' = '{B_SID}' }}
 $global:Results = @{{}}; $global:Codes = @{{}}; $global:Acls = @{{}}
 $a = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'argv.txt'))
+# As powershell.exe may: a line on stderr, which the task keeps as text.
+[Console]::Error.WriteLine('a line on stderr')
 Add-Content -LiteralPath (Join-Path $PSScriptRoot 'calls.txt') -Value ($a -join ' ')
 $i = [array]::IndexOf($a, '-File')
 $named = @{{}}
@@ -361,6 +405,7 @@ def test_the_stops_run_the_procedure_on_an_empty_state_file_and_the_check_passes
         "Script": str(WINDOW), "Test": str(root / "test"), "DiskName": "ext4.vhdx", "TestConfig": json.dumps(config),
     }, stand_ins=f"$env:SystemRoot = {ps_str(system_root)}\n", edits=(PSHOME_EDIT, SLASH_EDIT))
     by_case = {o["case"]: o for o in output}
+    assert all("a line on stderr" in o["output"] for o in output), output
     assert set(by_case) == {"another version", "neither path", "both paths", "no started window"}
     assert " stop at step 1: WSL " in by_case["another version"]["last_log"]
     assert by_case["another version"]["last_log"].endswith(" is not the saved 0.0.0.0. Nothing is changed.")
@@ -409,6 +454,15 @@ def test_no_script_of_the_role_reads_a_file_through_a_string_cast():
         assert "[string](Get-Content" not in path.read_text(), path.name
 
 
+class TaggedLoader(yaml.SafeLoader):
+    """The safe loader, with each local tag (!vault, !unsafe) read as its plain value."""
+
+
+TaggedLoader.add_multi_constructor("!", lambda loader, suffix, node: (
+    loader.construct_scalar(node) if isinstance(node, yaml.ScalarNode) else
+    loader.construct_sequence(node) if isinstance(node, yaml.SequenceNode) else loader.construct_mapping(node)))
+
+
 def test_each_condition_of_the_ansible_tree_is_a_text():
     # A condition with ": " in it loads as a mapping, and the task fails on the host.
     def conditions(node):
@@ -428,10 +482,8 @@ def test_each_condition_of_the_ansible_tree_is_a_text():
 
     bad = []
     for path in sorted(p for d in ("roles", "playbooks") for p in (ANSIBLE / d).rglob("*.yml")):
-        try:
-            doc = yaml.safe_load(path.read_text())
-        except yaml.YAMLError:
-            continue
+        # A tag (!vault, !unsafe) reads as its plain value; any other error fails.
+        doc = yaml.load(path.read_text(), Loader=TaggedLoader)
         bad += [f"{path.relative_to(ANSIBLE)}: {c!r}" for c in conditions(doc) if not isinstance(c, (str, bool))]
     assert bad == []
 
@@ -509,6 +561,69 @@ def test_a_task_that_can_not_start_is_not_run_also_after_an_earlier_good_run(tmp
         assert not passed(result), (name, passed(result))
     for name, result in zip(("new run", "started", "exit 1 with a result"), results[3:]):
         assert failed_by_assert(result, "failed_when of Run the task"), (name, result)
+
+
+ACCOUNT_TASK = ROLE / "files/Invoke-TnwksWslAccountTask.ps1"
+
+
+def run_account_task(tmp_path: Path, step: str) -> tuple[int, dict | None]:
+    """A run of the account task script for one step, with a config in a scope under
+    tmp_path and a System32 folder with no program in it: the exit code and the result."""
+    tag = uuid.uuid4().hex[:6]
+    base = tmp_path / f"account-{tag}"
+    for d in ("root/a", "log", "sys/System32"):
+        (base / d).mkdir(parents=True)
+    (base / "root/a/ext4.vhdx").write_text("disk")
+    config = base / "config.json"
+    config.write_text(json.dumps({
+        "log_dir": str(base / "log"), "distro": "tnwks-moverh-test", "name_pattern": "^tnwks-moverh-",
+        "refused_names": ["tnwks"], "root": str(base / "root"), "folder": str(base / "root/a"), "disk_name": "ext4.vhdx"}))
+    run = pwsh(f"""$env:SystemRoot = {ps_str(base / 'sys')}
+& {ps_str(ACCOUNT_TASK)} -Config {ps_str(config)} -Step {step}
+"exit=$LASTEXITCODE"
+""")
+    code = int(run.stdout.strip().splitlines()[-1].removeprefix("exit="))
+    result = base / "log" / f"{step}.json"
+    return code, (json.loads(result.read_text()) if result.exists() else None)
+
+
+@needs_pwsh
+def test_an_error_that_a_step_does_not_handle_writes_a_failed_result_with_its_text(tmp_path):
+    """No whoami.exe in System32: the first call of the step throws. The step ends with
+    exit 1 and a result of this run, with the text of the error in failed, the key of each
+    other failed step. A refusal (a disk file outside the scope) keeps exit 2."""
+    for step in ("probe", "strip-rules"):
+        code, result = run_account_task(tmp_path, step)
+        assert code == 1, (step, code)
+        assert result is not None and result["step"] == step, (step, result)
+        assert "whoami.exe" in result["failed"] and result["failed"].startswith("the step stopped at line "), result
+    account = ACCOUNT_TASK.read_text()
+    assert account.count("trap {") == 1
+    assert "if ($cfg) { Exit-Tnwks 1 @{ failed = " in account
+
+
+def test_the_strip_step_writes_only_the_rules_and_no_provider_cmdlet_writes_rules():
+    """The account runs as a standard user, with no privilege. Set-Acl keeps the audit
+    section in its second try when the file has protected rules, and that write needs a
+    privilege; .NET writes only the sections that changed. So the step reads and writes
+    with [IO.File] and a new object that has the rules section only."""
+    account = ACCOUNT_TASK.read_text()
+    code = "\n".join(line for line in account.splitlines() if not line.lstrip().startswith("#"))
+    for cmdlet in ("Set-Acl", "Get-Acl", "icacls"):
+        assert cmdlet not in code, cmdlet
+    write = re.search(r"function Set-TnwksFileRules\(\[string\]\$Path, \[string\]\$Sddl\) \{\n(.*?)\n\}", code, re.DOTALL)[1]
+    assert [line.strip() for line in write.splitlines()] == [
+        "$rules = New-Object Security.AccessControl.FileSecurity",
+        "$rules.SetSecurityDescriptorSddlForm($Sddl, 'Access')",
+        "[IO.File]::SetAccessControl($Path, $rules)"]
+    read = re.search(r"function Get-TnwksFileSecurity\(\[string\]\$Path, \[string\]\$Sections\) \{\n(.*?)\n\}", code, re.DOTALL)[1]
+    assert read.strip() == "[IO.File]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]$Sections)"
+    strip = code[code.index("'strip-rules' {"):]
+    assert "(Get-TnwksFileSecurity $target 'Owner')" in strip and "(Get-TnwksFileSecurity $target 'Access')" in strip
+    assert 'Set-TnwksFileRules $target "D:P(A;;FA;;;$user)"' in strip
+    # The step reads and writes the security of the file through these two only.
+    for call in ("AccessControl", "New-Object Security"):
+        assert call not in strip, call
 
 
 STRIP_CASE = ("The task of B that removes SYSTEM and the Administrators from the rules of its disk file",
@@ -891,6 +1006,28 @@ def test_the_older_form_of_a_s_disk_file_is_set_once_and_then_changes_nothing(tm
 
 
 @needs_pwsh
+def test_a_write_of_the_older_form_that_fails_puts_the_owner_back(tmp_path):
+    """The take of ownership comes before the write of the rules. A write that fails puts
+    A back as the owner, so the file keeps its owner and its old rules, and the task fails
+    with a message that says so."""
+    folder = tmp_path / "a"
+    folder.mkdir()
+    disk = folder / "ext4.vhdx"
+    disk.write_text("disk")
+    log = tmp_path / "sec.log"
+    newer = f"O:{A_SID}D:P(A;;FA;;;{A_SID})(A;;FA;;;BA)"
+    stand_ins = WINDOW_FAKES + (
+        f"$global:Inherit = @{{ {ps_str(folder)} = {ps_str(FOLDER_A)} }}\n"
+        f"$global:Acls = @{{ {ps_str(disk)} = {ps_str(newer)} }}\n"
+        f"$global:FailRules = $true; $global:SecLog = {ps_str(log)}\n")
+    params = {"Path": str(disk), "Sid": A_SID, "Procedure": str(WINDOW), "Capability": CAPABILITY}
+    err = run_script(tmp_path, "older_disk.yml", "A's disk file like a file of an older WSL, with the rules of its folder",
+                     params, stand_ins=stand_ins, fails=True)
+    assert "failed (a write that fails). Its owner is back, with its old rules." in err, err
+    assert log.read_text().splitlines() == ["owner a/ext4.vhdx BA", f"owner a/ext4.vhdx {A_SID}"]
+
+
+@needs_pwsh
 def test_no_script_of_the_role_has_two_variables_that_differ_only_by_case(tmp_path):
     """PowerShell names ignore case: a local $sid is the parameter $Sid. Per function (or
     the script itself), each variable has one spelling, in each embedded script of the
@@ -1055,7 +1192,7 @@ $global:Triggers = @{ 'tnwks-moverh-a-stop' = @(); 'tnwks-moverh-b-import' = $nu
 function Get-ScheduledTask {
     param([string]$TaskName)
     $t = if ($global:Triggers.ContainsKey($TaskName)) { $global:Triggers[$TaskName] } elseif ($global:WithTrigger -eq $TaskName) { @([pscustomobject]@{ Enabled = $true }) } else { $null }
-    [pscustomobject]@{ State = 'Ready'; Settings = [pscustomobject]@{ Enabled = $true }; Triggers = $t }
+    [pscustomobject]@{ State = [TnwksTaskState]'Ready'; Settings = [pscustomobject]@{ Enabled = $true }; Triggers = $t }
 }
 """ + f"[IO.File]::WriteAllText({ps_str(tmp_path / 'import.json')}, '{{}}')\n")
     assert out[-1]["window_tasks_enabled_no_trigger"] is True
@@ -1066,7 +1203,7 @@ function Get-ScheduledTask {
 function Get-ScheduledTask {
     param([string]$TaskName)
     $t = if ($TaskName -eq 'tnwks-moverh-a-import') { @([pscustomobject]@{ Enabled = $true }) } else { $null }
-    [pscustomobject]@{ State = 'Ready'; Settings = [pscustomobject]@{ Enabled = $true }; Triggers = $t }
+    [pscustomobject]@{ State = [TnwksTaskState]'Ready'; Settings = [pscustomobject]@{ Enabled = $true }; Triggers = $t }
 }
 """)
     assert with_trigger[-1]["window_tasks_enabled_no_trigger"] is False
@@ -1219,6 +1356,27 @@ def test_the_wayback_checks_pass_on_the_reads_after_a_way_back(tmp_path):
     assert failed_by_assert(not_stripped, names[0])
 
 
+@needs_both
+def test_a_log_text_over_two_lines_fails_a_check_and_breaks_no_template(tmp_path):
+    request = {"mode": "wayback", "group_steps": True, "stop_after": 0, "rehearsal_group_test": True}
+    run = run_window(tmp_path / "w", request, state="t window-started\nt window-done\n", disk=("b",), acl_file=OLD_SDDL,
+                     marker_a=True, disabled="tnwks-moverh-a-start",
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"})
+    root = Path(run["root"])
+    log = root / "state/window.log"
+    log.write_text(log.read_text() + "2026-01-01T00:00:00.0000000Z wayback fail: one\r\ntwo\r\n")
+    procedure = procedure_output(tmp_path, run, "", "t window-started\nt window-done\n", request, "window-done")
+    assert "" in procedure[-1]["log"] and None not in procedure[-1]["log"]
+    facts = {"wsl_move_rehearsal_procedure_run": registered(procedure), "wsl_move_rehearsal_request": request,
+             "wsl_move_rehearsal_runs": {"check": [{"result": {"registered": False}}, {"result": {"registered": False}}]},
+             "wsl_move_rehearsal_back_read": registered([{}]), "wsl_move_rehearsal_disk": registered([{}])}
+    # A log of the play with a null entry, as a log read before the guard gave.
+    null_log = {**facts, "wsl_move_rehearsal_procedure_run": registered([{**procedure[-1], "log": [*procedure[-1]["log"], None]}])}
+    for result in run_plays(tmp_path, [{"vars": v, "tasks": checks_of("run_procedure.yml") + checks_of(
+            "wayback.yml", ("A owns the distro again",))} for v in (facts, null_log)]):
+        assert failed_by_assert(result, "A owns the distro again"), result
+
+
 # --- Interrupt: a log of one line before the run ------------------------------------------
 
 @needs_both
@@ -1260,8 +1418,9 @@ def boot_log(tmp_path: Path) -> tuple[Path, Path, str]:
     assert run["code"] == 0, run["log"]
     root = Path(run["root"])
     log = tmp_path / "window.log"
-    log.write_text("2026-01-01T00:00:00.0000000Z boot start, request: {}\r\n2026-01-01T00:00:01.0000000Z boot result: done\r\n"
-                   + (root / "state/window.log").read_text())
+    # A text that went over two lines: its second line has no time.
+    log.write_text("2026-01-01T00:00:00.0000000Z boot start, request: {}\r\n2026-01-01T00:00:01.0000000Z boot fail: one\r\n"
+                   "two boot lines\r\n2026-01-01T00:00:02.0000000Z boot result: failed\r\n" + (root / "state/window.log").read_text())
     state = tmp_path / "window.state"
     state.write_text((root / "state/window.state").read_text())
     return log, state, "$global:Boot = (Get-Date).AddHours(-1)\n"
@@ -1514,6 +1673,17 @@ def test_each_phase_takes_the_copies_of_the_role_as_its_state_allows():
         assert "Invoke-TnwksMoveWindow.ps1\n" not in text and "to_nice_json" not in text, file
     host = (ROLE / "tasks/host_files.yml").read_text()
     assert "loop: \"{{ wsl_move_rehearsal_scripts }}\"" in host
+    # The read of the live parts is one of the scripts, with its SHA-256. It only reads:
+    # live.yml copies it before each read, at any marker, and setup has no copy of it.
+    names = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_scripts"]
+    assert sorted(names) == sorted(p.name for p in (ROLE / "files").glob("*.ps1")), names
+    assert "Get-TnwksMoveLiveState.ps1" not in (ROLE / "tasks/setup.yml").read_text()
+    live = [t.get("name") for t in tasks_in("live.yml")]
+    copy = next(t for t in tasks_in("live.yml") if "ansible.windows.win_copy" in t)
+    assert copy["ansible.windows.win_copy"]["src"] == "Get-TnwksMoveLiveState.ps1"
+    assert copy["when"] == "wsl_move_rehearsal_live_dir.stat.exists"
+    assert live.index("The folder of the rehearsal is on the host") < live.index(copy["name"]) < live.index("Read the live parts")
+    assert "ansible_check_mode and path | win_basename == 'Get-TnwksMoveLiveState.ps1'" in host
     assert "Content: \"{{ item.value | to_nice_json | b64encode }}\"" in host
     hashes = (ROLE / "vars/main.yml").read_text()
     assert "lookup('ansible.builtin.file', name, rstrip=false) | hash('sha256')" in hashes
@@ -1552,6 +1722,7 @@ def test_the_copies_change_only_with_no_started_window_and_a_copy_that_differs_s
     assert failed_by_assert(result, "Each copy on the host is the role's")
     msg = next(r["msg"] for r in result["results"] if r["name"] == "Each copy on the host is the role's")
     assert "Invoke-TnwksMoveWindow.ps1, window.json" in msg and "A window started with them" in msg
+    assert "end that window with the release that started it" in msg
 
 
 @needs_pwsh
