@@ -377,7 +377,8 @@ def test_every_placeholder_of_the_sandbox_code_is_filled(provider_checks, monkey
     for name in ("APP_URL", "APP_IP", "APP_PORT", "_PATH"):
         assert name not in cluster.code, name
     assert '"http://10.0.0.9:8080"' in cluster.code
-    assert "http://firefly.production.svc.cluster.local:8080" in cluster.code
+    app = next(line for line in cluster.code.splitlines() if line.startswith("APP = "))
+    assert app == 'APP = "http://firefly.production.svc.cluster.local:8080"'
     assert "/api/v1/accounts/../../../oauth/clients" in cluster.code
 
 
