@@ -2,7 +2,11 @@
 # Runs one task of an account as SYSTEM, waits for its end, and keeps what it
 # gave in wsl_move_rehearsal_runs[<step>]. wsl_move_rehearsal_run: key (a or
 # b), step, and expect: pass (exit 0, the default), refused (exit 2), or
-# not-run (the task could not start).
+# not-run (the task could not start). A task that could not start gives no
+# result of this run, and one of: Windows refused the start, a last result
+# that is not 0 (0x41303 for a task that never ran), or no new run in the
+# wait (ran false), as for a task that ran before: its last result stays the
+# one of its earlier run, also 0.
 - name: "Run the task {{ wsl_move_rehearsal_run.key }}-{{ wsl_move_rehearsal_run.step }}"
   ansible.windows.win_powershell:
     parameters:
@@ -30,7 +34,8 @@
       or ((wsl_move_rehearsal_run.expect | default('pass')) == 'refused'
         and (wsl_move_rehearsal_run_out.output | last).code == 2)
       or ((wsl_move_rehearsal_run.expect | default('pass')) == 'not-run'
-        and ((wsl_move_rehearsal_run_out.output | last).code != 0 or (wsl_move_rehearsal_run_out.output | last).refused | length > 0)
+        and ((wsl_move_rehearsal_run_out.output | last).code != 0 or (wsl_move_rehearsal_run_out.output | last).refused | length > 0
+             or not (wsl_move_rehearsal_run_out.output | last).ran)
         and (wsl_move_rehearsal_run_out.output | last).result is none))
 
 - name: "Keep the result of {{ wsl_move_rehearsal_run.key }}-{{ wsl_move_rehearsal_run.step }}"

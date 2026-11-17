@@ -14,9 +14,13 @@ metadata:
   labels:
     app.kubernetes.io/name: agent
   annotations:
-    # Start the pod again when agent-config, agent-scripts, agent-secret or
-    # agent-search-secret changes.
-    reloader.stakater.com/auto: "true"
+    # Start the pod again when a Secret it uses changes: agent-secret,
+    # agent-search-secret or openshell-client-tls (a renewal). Not for a
+    # ConfigMap: a change of the config or of a script gives the ConfigMap a
+    # new name (app/kustomization.yaml), so Flux changes the pod template
+    # and that is the one rollout. Reloader on the ConfigMaps too would make
+    # a second one.
+    secret.reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
   revisionHistoryLimit: 2
@@ -168,7 +172,29 @@ spec:
           image: *image
           imagePullPolicy: IfNotPresent
           command: ["install-official-plugins"]
-          env: *env
+          # The env of the gateway, and OPENCLAW_DEBUG: on a failure the CLI
+          # of the product then prints the reason and the stack
+          # (`[openclaw] Reason: ...`), not only "The CLI command failed".
+          # The flag changes nothing else in this release (it is read only
+          # by the failure output of the CLI), and the step has no secret
+          # to print.
+          env:
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            - name: OPENCLAW_DEBUG
+              value: "1"
           securityContext: *containerSecurity
           resources:
             requests:

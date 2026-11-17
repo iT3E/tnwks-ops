@@ -47,7 +47,8 @@
 # At the start it waits for the gateway on loopback, at most WAIT seconds.
 # Then it does the sync, and again each EVERY seconds, so a change made in a
 # chat goes back to git within EVERY seconds. A change of the list starts
-# the pod again (Reloader), so it is in at once. The CLI output can hold the
+# the pod again (the ConfigMap gets a new name, so the pod template
+# changes), so it is in at once. The CLI output can hold the
 # chat id and the message, so it goes nowhere. The lines:
 # - one for each job: "automations-sync key=<key> result=ok
 #   state=on|off|stopped", "... result=removed" or "... result=failed";

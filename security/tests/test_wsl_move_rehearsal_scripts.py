@@ -521,6 +521,42 @@ def test_the_checks_of_the_reads_pass_on_the_results_that_the_runner_gives(tmp_p
     assert failed_by_assert(no_result, "failed_when of Run the task")
 
 
+@needs_both
+def test_a_task_that_can_not_start_is_not_run_also_after_an_earlier_good_run(tmp_path):
+    """expect: not-run holds for each form of a task that did not start, with no result of
+    this run: one that never ran (0x41303), one that Windows refuses at the start, and one
+    that ran well before and shows no new run (its last result stays 0). A new run with
+    exit 0 and a result is not a pass."""
+    def no_start(name: str, start: str, code: int, result: dict | None) -> list:
+        log_dir = tmp_path / f"log-{name}"
+        log_dir.mkdir()
+        if result is not None:
+            # A result file of an earlier run: older than the start of the runner.
+            (log_dir / "import.json").write_text(json.dumps({**result, "step": "import", "time": 1000}))
+        return run_script(tmp_path, "run_task.yml", "Run the task", {
+            "Runner": str(RUNNER), "Task": "tnwks-moverh-a-import", "Result": str(log_dir / "import.json"), "Minutes": "0",
+        }, stand_ins=TASKS + f"$global:Code = {code}\nfunction Start-ScheduledTask {{ param([string]$TaskName) {start} }}\n")
+    never = no_start("never", "", 0x41303, None)
+    refused = no_start("refused", "throw 'The user account does not have permission to run this task.'", 0x41303, None)
+    earlier = no_start("earlier", "", 0, {"disk": "old"})
+    assert never[-1]["ran"] is False and never[-1]["code"] == 0x41303 and never[-1]["result"] is None
+    assert refused[-1]["refused"] and refused[-1]["result"] is None
+    assert earlier[-1]["ran"] is False and earlier[-1]["code"] == 0 and not earlier[-1]["refused"]
+    assert earlier[-1]["result"] is None
+    new_run = runner_output(tmp_path, "a", "import", {"disk": "new"})
+    assert new_run[-1]["ran"] is True and new_run[-1]["code"] == 0 and new_run[-1]["result"] is not None
+    # A new run with exit 0 and no result of its own: it started, so not a pass either.
+    started = runner_output(tmp_path, "a", "import", None)
+    assert started[-1]["ran"] is True and started[-1]["code"] == 0 and started[-1]["result"] is None
+    expect = {"key": "a", "step": "import", "expect": "not-run"}
+    results = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_run": expect, "wsl_move_rehearsal_run_out": registered(out)},
+                                    "tasks": checks_of("run_task.yml")} for out in (never, refused, earlier, new_run, started)])
+    for name, result in zip(("never", "refused", "earlier"), results[:3]):
+        assert not passed(result), (name, passed(result))
+    for name, result in zip(("new run", "started"), results[3:]):
+        assert failed_by_assert(result, "failed_when of Run the task"), (name, result)
+
+
 def test_the_check_step_writes_the_repeated_keys_as_a_count_and_one_text():
     # The asserts on the count: test_the_role_reads_back_each_file_that_it_writes_in_the_distro.
     account = (ROLE / "files/Invoke-TnwksWslAccountTask.ps1").read_text()
