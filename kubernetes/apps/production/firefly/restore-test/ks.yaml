@@ -1,0 +1,66 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# A restore test of Firefly's database (docs/apps/firefly.md, "Restore the
+# database"). A scratch Cluster, firefly-pg-restore-test, recovers from the
+# archive of firefly-pg to the latest WAL; then a Job reads it and logs only
+# counts and times. homelab-wsl only (kubernetes/clusters/wsl/apps/
+# production/kustomization.yaml). firefly-pg, its archive and its backups stay
+# as they are: the scratch Cluster has no plugins section, so it never
+# archives WAL or takes a backup. Remove this directory and its line in that
+# kustomization when the result is read: Flux then deletes the Cluster, its
+# volume, its Services, the NetworkPolicy and the Job.
+#
+# Two steps, in this order: the Cluster recovers and gets Ready, then the
+# check Job reads it. dependsOn holds the check until the Cluster is Ready.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: firefly-restore-test
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/production/firefly/restore-test/restore
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The ObjectStore firefly-pg and the credentials it reads.
+    - name: firefly-db
+  # Ready only when the Cluster is Ready. kstatus alone calls a Cluster with
+  # no status yet Current (kubernetes/components/cnpg-cluster/README.md).
+  # The backup plugin restarts the instance once after the bootstrap, and
+  # that can come after Ready: the check Job waits for a stable server
+  # (check/job.yaml).
+  wait: true
+  healthCheckExprs:
+    - apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')
+  interval: 30m
+  retryInterval: 5m
+  # The 2026-11-02 drill recovered nine databases in 80 seconds. This archive
+  # holds one base backup of about 50 MB a day and a few WAL files since.
+  timeout: 30m
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The check of the scratch copy: one Job that logs only counts and times. No
+# ${VAR} substitution here: the script of the Job uses shell variables.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: firefly-restore-check
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  path: ./kubernetes/apps/production/firefly/restore-test/check
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: firefly-restore-test
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
