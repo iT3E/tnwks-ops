@@ -61,6 +61,18 @@
       "internalChecksFilter": "strict"
     },
     {
+      // The MCP server of the finance app (kubernetes/apps/ai/agents/finance/
+      // firefly-mcp) can create and update data in the app, through its
+      // proxy. A release has to be 7 days old before its PR opens, so a
+      // pulled or compromised release is usually gone first. A person
+      // reviews each update (renovate/autoMerge.json5).
+      "description": "fireflyiii-mcp: 7 days after release",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/daften/fireflyiii-mcp"],
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict"
+    },
+    {
       "description": "Coral: queue NumPy majors until its Windows runtime supports them",
       "matchFileNames": ["infrastructure/ansible/roles/windows_coral_detector/**"],
       "matchPackageNames": ["numpy"],

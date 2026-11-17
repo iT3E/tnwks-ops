@@ -4,7 +4,10 @@ The household ledger: accounts, transactions, budgets and categories, at
 `https://firefly.internal.tnwks.us` (LAN and admin VPN only,
 `nginx-internal`, no public hostname). It is API-first: almost nothing is
 entered through the UI. A bank-sync job writes transactions in through the
-API, and the finance agent reads it through the API for reports.
+API, and the finance agent reads and writes it through the API, never with a
+delete: in the cluster through its MCP server and a proxy that holds its
+token and lets through an allow list of calls
+([agent-platform.md](agent-platform.md#the-finance-app)).
 
 Manifests: `kubernetes/apps/production/firefly/`. WSL-only (wired from
 `kubernetes/clusters/wsl/apps/production/kustomization.yaml`), image

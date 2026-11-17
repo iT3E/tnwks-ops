@@ -1,0 +1,366 @@
+"""The two walls in front of the finance app hold for the pinned MCP server.
+
+The finance agent reaches the finance app (Firefly III) through the MCP
+server fireflyiii-mcp 1.0.1 and the proxy of the app, which holds the token
+(kubernetes/apps/ai/agents/finance/firefly-mcp, docs/apps/agent-platform.md,
+"The finance app"). Two walls stop a delete and the other calls that the
+agent must not make:
+
+- the proxy lets through only the calls of its allow list
+  (proxy/default.conf.template), so the app never sees a call off the list,
+  whatever the server or a sandbox sends;
+- the agent sees only the tools of its filter, and its deny list removes
+  each delete, bulk, trigger, export, attachment and rule-write tool
+  (agent/config/openclaw.json), so the model can not call one.
+
+The tables below are from the release: TOOLS is the tool list of the image
+for each group (tools/list of ghcr.io/daften/fireflyiii-mcp:1.0.1, one group
+at a time), and CALLS the API calls of the source of each kept group (each
+client.get, post, put and delete in src/tools/<group>.ts at the tag v1.0.1).
+A new release of the server needs new tables.
+"""
+
+import json
+import re
+import urllib.parse
+from pathlib import Path
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+APP = ROOT / "kubernetes/apps/ai/agents/finance/firefly-mcp/app"
+TEMPLATE = APP / "proxy/default.conf.template"
+MCP = APP / "mcp.yaml"
+OPENCLAW = ROOT / "kubernetes/apps/ai/agents/finance/agent/config/openclaw.json"
+SANDBOX_POLICY = ROOT / "kubernetes/apps/ai/agents/finance/agent/config/sandbox-policy.yaml"
+PROBE = ROOT / "kubernetes/apps/ai/agents/finance/checks/app/firefly-probe.yaml"
+SERVER = "firefly"
+
+TOOLS = {
+    "accounts": [
+        "get_accounts", "get_account", "create_account", "update_account",
+        "delete_account", "get_account_transactions", "search_accounts",
+    ],
+    "transactions": [
+        "get_transactions", "get_transaction", "create_transaction",
+        "update_transaction", "delete_transaction", "search_transactions",
+        "create_split_transaction", "bulk_update_transactions",
+    ],
+    "budgets": [
+        "get_budgets", "get_budget_limits", "create_budget", "update_budget",
+        "delete_budget", "create_budget_limit", "update_budget_limit",
+        "delete_budget_limit", "get_available_budgets", "get_available_budget",
+        "get_budget_transactions", "get_transactions_without_budget",
+    ],
+    "categories": [
+        "get_categories", "get_category_transactions", "create_category",
+        "update_category", "delete_category",
+    ],
+    "bills": [
+        "get_bills", "create_bill", "update_bill", "delete_bill",
+        "get_bill_transactions",
+    ],
+    "piggy-banks": [
+        "get_piggy_banks", "create_piggy_bank", "update_piggy_bank",
+        "delete_piggy_bank", "get_piggy_bank_events",
+    ],
+    "reports": [
+        "get_tags", "get_tag_transactions", "get_summary", "get_insight_expenses",
+        "get_insight_income", "create_tag", "update_tag", "delete_tag",
+        "get_insight_expenses_no_bill", "get_insight_expenses_no_budget",
+        "get_insight_expenses_no_category", "get_insight_expenses_no_tag",
+        "get_insight_income_no_category", "get_insight_income_no_tag",
+        "get_insight_transfer_no_category", "get_insight_transfer_no_tag", "get_about",
+        "get_net_worth_summary", "get_account_overview_chart", "get_balance_chart",
+        "get_budget_chart", "get_category_chart", "get_exchange_rate",
+        "get_insight_expenses_by_bill", "get_insight_expenses_by_budget",
+        "get_insight_expenses_by_tag", "get_insight_expenses_by_asset",
+        "get_insight_expenses_by_expense_account", "get_insight_expenses_total",
+        "get_insight_income_by_revenue", "get_insight_income_by_tag",
+        "get_insight_income_by_asset", "get_insight_income_total",
+        "get_insight_transfers_by_category", "get_insight_transfers_by_tag",
+        "get_insight_transfers_by_asset", "get_insight_transfers_total",
+    ],
+    "rules": [
+        "get_rule_groups", "get_rule_group", "create_rule_group", "update_rule_group",
+        "delete_rule_group", "get_rules", "get_rule", "create_rule", "update_rule",
+        "delete_rule", "get_rule_group_rules", "trigger_rule_group", "trigger_rule",
+        "test_rule_group", "test_rule",
+    ],
+    "recurring": [
+        "get_recurring", "get_recurrence", "create_recurring", "update_recurring",
+        "delete_recurring", "get_recurrence_transactions", "trigger_recurrence",
+    ],
+    "attachments": [
+        "get_attachments", "get_attachment", "create_attachment", "update_attachment",
+        "delete_attachment", "upload_attachment", "download_attachment",
+    ],
+    "currencies": [
+        "get_currencies", "get_currency", "create_currency", "update_currency",
+        "delete_currency", "enable_currency", "disable_currency",
+        "set_primary_currency",
+    ],
+    "exports": [
+        "export_transactions", "export_accounts", "export_bills", "export_budgets",
+        "export_categories", "export_tags", "export_recurring", "export_rules",
+        "export_piggy_banks",
+    ],
+    "object-groups": [
+        "get_object_groups", "get_object_group", "update_object_group",
+        "delete_object_group", "get_object_group_bills", "get_object_group_piggy_banks",
+    ],
+    "transaction-links": [
+        "get_link_types", "get_transaction_links", "get_transaction_link",
+        "create_transaction_link", "update_transaction_link", "delete_transaction_link",
+    ],
+}
+
+# The API calls of the kept groups, as "<method> <path>" under /api/v1, each
+# id as {id} and each tag as {tag}.
+CALLS = {
+    "accounts": [
+        "GET /accounts", "GET /accounts/{id}", "POST /accounts", "PUT /accounts/{id}",
+        "DELETE /accounts/{id}", "GET /accounts/{id}/transactions", "GET /search/accounts",
+    ],
+    "transactions": [
+        "GET /transactions", "GET /transactions/{id}", "POST /transactions",
+        "PUT /transactions/{id}", "DELETE /transactions/{id}", "GET /search/transactions",
+    ],
+    "categories": [
+        "GET /categories", "GET /categories/{id}/transactions", "POST /categories",
+        "PUT /categories/{id}", "DELETE /categories/{id}",
+    ],
+    "budgets": [
+        "GET /budgets", "GET /budgets/{id}/limits", "POST /budgets", "PUT /budgets/{id}",
+        "DELETE /budgets/{id}", "POST /budgets/{id}/limits", "PUT /budgets/{id}/limits/{id}",
+        "DELETE /budgets/{id}/limits/{id}", "GET /available-budgets",
+        "GET /available-budgets/{id}", "GET /budgets/{id}/transactions",
+        "GET /budgets/transactions-without-budget",
+    ],
+    "bills": [
+        "GET /bills", "POST /bills", "PUT /bills/{id}", "DELETE /bills/{id}",
+        "GET /bills/{id}/transactions",
+    ],
+    "reports": [
+        "GET /tags", "GET /tags/{tag}/transactions", "POST /tags", "PUT /tags/{tag}",
+        "DELETE /tags/{tag}", "GET /summary/basic", "GET /about",
+        "GET /exchange-rates/by-currencies/EUR/USD",
+        "GET /chart/account/overview", "GET /chart/balance/balance",
+        "GET /chart/budget/overview", "GET /chart/category/overview",
+        "GET /insight/expense/asset", "GET /insight/expense/bill", "GET /insight/expense/budget",
+        "GET /insight/expense/category", "GET /insight/expense/expense",
+        "GET /insight/expense/no-bill", "GET /insight/expense/no-budget",
+        "GET /insight/expense/no-category", "GET /insight/expense/no-tag",
+        "GET /insight/expense/tag", "GET /insight/expense/total",
+        "GET /insight/income/asset", "GET /insight/income/category",
+        "GET /insight/income/no-category", "GET /insight/income/no-tag",
+        "GET /insight/income/revenue", "GET /insight/income/tag", "GET /insight/income/total",
+        "GET /insight/transfer/asset", "GET /insight/transfer/category",
+        "GET /insight/transfer/no-category", "GET /insight/transfer/no-tag",
+        "GET /insight/transfer/tag", "GET /insight/transfer/total",
+    ],
+    "rules": [
+        "GET /rule-groups", "GET /rule-groups/{id}", "POST /rule-groups", "PUT /rule-groups/{id}",
+        "DELETE /rule-groups/{id}", "GET /rules", "GET /rules/{id}", "POST /rules",
+        "PUT /rules/{id}", "DELETE /rules/{id}", "POST /rule-groups/{id}/trigger",
+        "POST /rules/{id}/trigger", "GET /rule-groups/{id}/test", "GET /rule-groups/{id}/rules",
+        "GET /rules/{id}/test",
+    ],
+}
+
+# The writes that the agent may make: create and update, never delete. No
+# rule write: a rule can delete a transaction when a later write triggers it.
+WRITE_TOOLS = {
+    "create_account", "update_account",
+    "create_transaction", "create_split_transaction", "update_transaction",
+    "create_category", "update_category",
+    "create_budget", "update_budget", "create_budget_limit", "update_budget_limit",
+    "create_bill", "update_bill",
+    "create_tag", "update_tag",
+}
+
+# Calls that the proxy must refuse, beyond the deletes of CALLS: the paths of
+# secrets, settings and bulk changes of the app (Firefly III 6.5), and paths
+# that leave the allow list after the proxy's own normalization.
+REFUSED = [
+    "GET /api/v1/preferences", "PUT /api/v1/preferences/x", "GET /api/v1/webhooks",
+    "POST /api/v1/webhooks", "GET /api/v1/cron/x", "GET /api/v1/configuration",
+    "PUT /api/v1/configuration/x", "GET /api/v1/users", "GET /api/v1/about/user",
+    "GET /oauth/personal-access-tokens", "POST /oauth/clients", "GET /",
+    "POST /api/v1/data/bulk/transactions", "DELETE /api/v1/data/destroy",
+    "POST /api/v1/recurrences/1/trigger", "GET /api/v1/data/export/transactions",
+    "GET /api/v1/attachments/1/download", "POST /api/v1/attachments/1/upload",
+    "PATCH /api/v1/transactions/1", "HEAD /api/v1/about", "OPTIONS /api/v1/about",
+    "GET /api/v1/accounts/../preferences", "GET /api/v1/accounts/%2e%2e/preferences",
+    "GET /api/v1/accounts/1/..%2F..%2Fpreferences", "GET //api/v1/about",
+    "GET /api/v1/about;x", "GET /api/v1/tags/a%2Fb/transactions",
+    "GET /api/v1/accounts/1%00", "GET /api/v1/accounts/1%5c..%5cpreferences",
+]
+
+
+def nginx_maps(text: str) -> dict[str, tuple[str, list[tuple[re.Pattern, str]]]]:
+    """The map blocks of the template: {variable: (default, [(regex, value)])}."""
+    maps = {}
+    for m in re.finditer(r'^map\s+(?:"[^"]*"|\S+)\s+\$(\w+)\s*\{(.*?)^\}', text, re.MULTILINE | re.DOTALL):
+        default, entries = "", []
+        for line in m.group(2).splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("default "):
+                default = line.split()[1].rstrip(";")
+                continue
+            key, value = re.fullmatch(r'"(.*)"\s+(\S+);', line).groups()
+            if key.startswith("~*"):
+                entries.append((re.compile(key[2:], re.IGNORECASE), value))
+            elif key.startswith("~"):
+                entries.append((re.compile(key[1:]), value))
+            else:
+                entries.append((re.compile(re.escape(key) + "$"), value))
+        maps[m.group(1)] = (default, entries)
+    return maps
+
+
+MAPS = nginx_maps(TEMPLATE.read_text())
+
+
+def lookup(name: str, value: str) -> str:
+    default, entries = MAPS[name]
+    return next((v for rx, v in entries if rx.search(value)), default)
+
+
+def proxy_allows(call: str) -> bool:
+    """The proxy's decision for "<method> <raw path>", as nginx makes it:
+    the raw path checked first, then the method and the decoded path on the
+    allow list."""
+    method, raw = call.split(" ", 1)
+    path = raw.split("?", 1)[0]
+    uri = re.sub(r"/+", "/", urllib.parse.unquote(path))
+    ok_raw = lookup("firefly_raw_ok", raw)
+    allowed = lookup("firefly_allowed", f"{method} {uri}")
+    return lookup("firefly_refused", ok_raw + allowed) == "0"
+
+
+def concrete(call: str) -> str:
+    method, path = call.split(" ", 1)
+    return f"{method} /api/v1" + path.replace("{id}", "12").replace("{tag}", "groceries")
+
+
+def kept_write(call: str) -> bool:
+    """A call that the agent may make: no delete, no trigger, no rule write."""
+    method, path = call.split(" ", 1)
+    if method == "DELETE" or path.endswith("/trigger"):
+        return False
+    return not (method in ("POST", "PUT") and path.startswith(("/rules", "/rule-groups")))
+
+
+@pytest.mark.parametrize("call", [c for calls in CALLS.values() for c in calls])
+def test_proxy_lets_through_exactly_the_kept_calls(call):
+    assert proxy_allows(concrete(call)) == kept_write(call), call
+
+
+@pytest.mark.parametrize("call", REFUSED)
+def test_proxy_refuses_other_calls(call):
+    assert not proxy_allows(call), call
+
+
+def test_proxy_reads_the_query_string_nowhere():
+    assert proxy_allows("GET /api/v1/search/transactions?query=a%2Fb..c")
+    assert proxy_allows("PUT /api/v1/tags/my%20tag")
+
+
+def mcp_groups() -> list[str]:
+    for doc in yaml.safe_load_all(MCP.read_text()):
+        if doc and doc["kind"] == "Deployment":
+            env = {e["name"]: e.get("value") for e in doc["spec"]["template"]["spec"]["containers"][0]["env"]}
+            assert "FIREFLY_TOKEN" not in env, "the MCP server holds no token"
+            return env["MCP_GROUPS"].split(",")
+    raise AssertionError("no Deployment in mcp.yaml")
+
+
+def mcp_filter_matches(pattern: str, value: str) -> bool:
+    """OpenClaw 2026.11.3, src/agents/mcp-tool-filter.ts: exact text plus "*"."""
+    return re.fullmatch(".*".join(map(re.escape, pattern.split("*"))), value) is not None
+
+
+def openclaw() -> dict:
+    return json.loads(OPENCLAW.read_text())
+
+
+def agent_sees(tools: list[str], *, include: bool = True, deny: bool = True) -> list[str]:
+    """The tools of the server that the agent can call: the MCP tool filter of
+    the server entry, then the deny list of tools.deny on the name
+    "<server>__<tool>" (src/agents/glob-pattern.ts: "*" is any text)."""
+    config = openclaw()
+    tool_filter = config["mcp"]["servers"][SERVER].get("toolFilter", {})
+    denied = config["tools"]["deny"]
+    seen = []
+    for tool in tools:
+        if include and tool_filter.get("include") and not any(
+                mcp_filter_matches(p, tool) for p in tool_filter["include"]):
+            continue
+        if include and any(mcp_filter_matches(p, tool) for p in tool_filter.get("exclude", [])):
+            continue
+        if deny and any(mcp_filter_matches(p, f"{SERVER}__{tool}") for p in denied):
+            continue
+        seen.append(tool)
+    return seen
+
+
+def read(tool: str) -> bool:
+    return tool.startswith(("get_", "search_", "test_rule"))
+
+
+def forbidden(tool: str) -> bool:
+    return (tool.startswith(("delete_", "bulk_", "trigger_", "create_rule", "update_rule"))
+            or "export" in tool or "attachment" in tool)
+
+
+def test_the_server_loads_only_the_kept_groups():
+    assert sorted(mcp_groups()) == sorted(CALLS)
+
+
+def test_the_agent_sees_reads_and_the_kept_writes_only():
+    exposed = [t for g in mcp_groups() for t in TOOLS[g]]
+    seen = agent_sees(exposed)
+    assert {t for t in seen if not read(t)} == WRITE_TOOLS
+    assert not [t for t in seen if forbidden(t)]
+
+
+def test_the_filter_alone_lets_through_no_other_write():
+    """Even with every group of the server loaded."""
+    every = [t for tools in TOOLS.values() for t in tools]
+    seen = agent_sees(every, deny=False)
+    assert {t for t in seen if not read(t)} == WRITE_TOOLS
+
+
+def test_the_deny_list_alone_hides_every_forbidden_tool():
+    """Even with every group loaded and no filter: the attachment and export
+    reads too."""
+    every = [t for tools in TOOLS.values() for t in tools]
+    assert not [t for t in agent_sees(every, include=False) if forbidden(t)]
+
+
+def test_sandboxed_sessions_get_the_tools():
+    assert f"{SERVER}__*" in openclaw()["tools"]["sandbox"]["tools"]["alsoAllow"]
+
+
+def test_the_pieces_name_the_same_addresses():
+    config = openclaw()
+    assert config["mcp"]["servers"][SERVER]["url"] == \
+        "http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp"
+    policy = yaml.safe_load(SANDBOX_POLICY.read_text())
+    (rule,) = policy["network_policies"].values()
+    (endpoint,) = rule["endpoints"]
+    assert (endpoint["host"], endpoint["port"]) == ("firefly-proxy.agents-finance.svc.cluster.local", 8080)
+    assert {r["allow"]["method"] for r in endpoint["rules"]} == {"GET", "POST", "PUT"}
+    assert config["plugins"]["entries"]["openshell"]["config"]["policy"] == \
+        "/home/node/config/sandbox-policy.yaml"
+    (cronjob, _) = yaml.safe_load_all(PROBE.read_text())
+    container = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env["MCP_URL"] == config["mcp"]["servers"][SERVER]["url"]
+    assert env["APP_PROXY"] == f"http://{endpoint['host']}:{endpoint['port']}"
+    # The probe's sandbox runs the image of the agent's sandboxes.
+    assert env["PROBE_IMAGE"] == config["plugins"]["entries"]["openshell"]["config"]["from"]

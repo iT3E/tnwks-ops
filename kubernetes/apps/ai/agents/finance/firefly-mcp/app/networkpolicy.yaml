@@ -1,0 +1,78 @@
+---
+# The proxy of the finance app. In: the MCP server, and the supervisors of the
+# sandboxes of this trust domain. A sandbox has two pods: the workload pod has
+# no egress at all, and its supervisor opens each connection that the sandbox
+# policy approves, from its own pod. So the supervisor is the client here, and
+# only for a sandbox whose policy names the proxy (the agent's, and the
+# probe's). Out: the app, and DNS (the namespace's allow-dns).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: firefly-proxy
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: firefly-proxy
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: firefly-mcp
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            openshell.ai/boundary-role: supervisor
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: production
+            app.kubernetes.io/name: firefly
+            app.kubernetes.io/instance: firefly
+            app.kubernetes.io/component: firefly
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+---
+# The MCP server of the finance app. In: the agent pod (its gateway is the MCP
+# client) and the checks of this namespace (the probe calls the server, as the
+# agent does). Out: the proxy only, and DNS (the namespace's allow-dns).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: firefly-mcp
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: firefly-mcp
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: agent
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: platform-checks
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: firefly-proxy
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

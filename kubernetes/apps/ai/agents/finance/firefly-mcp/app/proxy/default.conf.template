@@ -1,0 +1,101 @@
+# The proxy of the finance app for the finance agent (docs/apps/agent-platform.md,
+# "The finance app"). It is the one place that holds the token of the agent at
+# the app: it sets the Authorization header of every request it lets through,
+# and replaces the one of the client. Its clients, the MCP server and the
+# sandboxes of the agent, hold no token.
+#
+# It lets through only the calls of an allow list: GET, POST and PUT on the API
+# paths that the kept tools of the MCP server call (fireflyiii-mcp 1.0.1, the
+# groups of ../mcp.yaml). Every other call gets a 403 with the header
+# X-Firefly-Proxy: refused, and never reaches the app: each DELETE, each other
+# method, each other path (the preferences, webhooks, cron, configuration,
+# users and tokens, the bulk update, the rule and recurrence triggers, the
+# exports, the attachments), and the writes of rules and rule groups (a rule
+# can delete a transaction). observability/tests/test_firefly_proxy.py checks
+# the list against the calls of the server.
+#
+# The entrypoint of the image renders this file at start, with the env vars of
+# the container that NGINX_ENVSUBST_FILTER names (the token and the address
+# of the app), into an emptyDir in memory. Each other $name is nginx's own.
+
+# A raw path with a dot segment, an encoded dot, slash or backslash, a double
+# slash or a path parameter is refused before any match: nginx matches the
+# path that it normalizes, and the app reads the raw one. The query string is
+# not checked here.
+map $request_uri $firefly_raw_ok {
+    default 1;
+    "~*^[^?]*(\.\.|%2e|%2f|%5c|%00|//|;|\x5c)" 0;
+}
+
+# The allow list: "<method> <path>", each path under /api/v1 as the server
+# calls it. Ids are numbers; a tag is its name or its id.
+map "$request_method $uri" $firefly_allowed {
+    default 0;
+    # Reads.
+    "~^GET /api/v1/about$" 1;
+    "~^GET /api/v1/accounts(/[0-9]+(/transactions)?)?$" 1;
+    "~^GET /api/v1/search/(accounts|transactions)$" 1;
+    "~^GET /api/v1/transactions(/[0-9]+)?$" 1;
+    "~^GET /api/v1/categories(/[0-9]+/transactions)?$" 1;
+    "~^GET /api/v1/budgets(/transactions-without-budget|/[0-9]+/(limits|transactions))?$" 1;
+    "~^GET /api/v1/available-budgets(/[0-9]+)?$" 1;
+    "~^GET /api/v1/bills(/[0-9]+/transactions)?$" 1;
+    "~^GET /api/v1/tags(/[^/]+/transactions)?$" 1;
+    "~^GET /api/v1/summary/basic$" 1;
+    "~^GET /api/v1/insight/expense/(asset|bill|budget|category|expense|no-bill|no-budget|no-category|no-tag|tag|total)$" 1;
+    "~^GET /api/v1/insight/income/(asset|category|no-category|no-tag|revenue|tag|total)$" 1;
+    "~^GET /api/v1/insight/transfer/(asset|category|no-category|no-tag|tag|total)$" 1;
+    "~^GET /api/v1/chart/(account/overview|balance/balance|budget/overview|category/overview)$" 1;
+    "~^GET /api/v1/exchange-rates/by-currencies/[A-Za-z]{3}/[A-Za-z]{3}$" 1;
+    "~^GET /api/v1/rule-groups(/[0-9]+(/rules|/test)?)?$" 1;
+    "~^GET /api/v1/rules(/[0-9]+(/test)?)?$" 1;
+    # Creates.
+    "~^POST /api/v1/(accounts|transactions|categories|budgets|bills|tags)$" 1;
+    "~^POST /api/v1/budgets/[0-9]+/limits$" 1;
+    # Updates.
+    "~^PUT /api/v1/(accounts|transactions|categories|budgets|bills)/[0-9]+$" 1;
+    "~^PUT /api/v1/budgets/[0-9]+/limits/[0-9]+$" 1;
+    "~^PUT /api/v1/tags/[^/]+$" 1;
+}
+
+map "$firefly_raw_ok$firefly_allowed" $firefly_refused {
+    default 1;
+    "11" 0;
+}
+
+# One line for each request: the method, the path with no query string, the
+# status, and refused=1 for a refusal. No header and no body.
+log_format firefly_proxy 'firefly-proxy method=$request_method path=$uri status=$status refused=$firefly_refused';
+
+server {
+    listen 8080;
+    server_tokens off;
+    client_max_body_size 1m;
+    access_log /dev/stdout firefly_proxy;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        if ($firefly_refused) {
+            add_header X-Firefly-Proxy refused always;
+            return 403;
+        }
+        proxy_pass http://${FIREFLY_UPSTREAM};
+        # The token of the agent, in place of any header of the client.
+        proxy_set_header Authorization "Bearer ${FIREFLY_TOKEN}";
+        # Headers that the app could trust from a client: dropped.
+        proxy_set_header Cookie "";
+        proxy_set_header X-Forwarded-For "";
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Port "";
+        proxy_set_header X-Forwarded-Proto "";
+        proxy_set_header X-Real-IP "";
+        proxy_hide_header Set-Cookie;
+        proxy_redirect off;
+        proxy_read_timeout 60s;
+    }
+}

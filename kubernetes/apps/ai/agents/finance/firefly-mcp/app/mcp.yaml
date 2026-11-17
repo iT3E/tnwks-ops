@@ -1,0 +1,100 @@
+---
+# The MCP server of the finance app (fireflyiii-mcp), for the gateway of the
+# finance agent. It runs in HTTP mode with no OAuth client: it takes the
+# bearer of each request from the client and sends it on to FIREFLY_URL. Its
+# client sends a fixed value that is no secret (the mcp entry of
+# ../../agent/config/openclaw.json); the server only checks that a bearer is
+# there, and the proxy replaces it. So this pod holds no token.
+#
+# The groups of tools (MCP_GROUPS): the reads and the writes that the agent
+# needs. Not here: recurring, attachments, currencies, exports, object groups,
+# piggy banks and transaction links. The proxy refuses every delete, the
+# triggers and the rule writes of the groups that are here, and the agent
+# filters and denies the same tools (openclaw.json).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firefly-mcp
+  labels:
+    app.kubernetes.io/name: firefly-mcp
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: firefly-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: firefly-mcp
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The user "node" of the image.
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          # Renovate waits 7 days after a release, and a person reviews each
+          # update (.github/renovate.json5, .github/renovate/autoMerge.json5).
+          image: ghcr.io/daften/fireflyiii-mcp:1.0.1@sha256:3e20ab3b0e575094be039148266c746b46aa493e700f2296c602994d7ee79017
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/index.js", "--transport", "http", "--host", "0.0.0.0", "--port", "3000"]
+          env:
+            - name: FIREFLY_URL
+              value: http://firefly-proxy.agents-finance.svc.cluster.local:8080
+            - name: MCP_GROUPS
+              value: accounts,transactions,categories,budgets,bills,reports,rules
+          ports:
+            - name: mcp
+              containerPort: 3000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: mcp
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: mcp
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefly-mcp
+  labels:
+    app.kubernetes.io/name: firefly-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: firefly-mcp
+  ports:
+    - name: mcp
+      port: 3000
+      targetPort: mcp
+      protocol: TCP

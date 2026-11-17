@@ -14,9 +14,9 @@
 #   state volume never runs without its backup policy. The grant of
 #   agents-finance in that repository comes first, and goes last.
 # - The restore test (../restore-test/, a template).
-# The tool set is the pilot's (its own search key) and the notes vault in the
-# state volume (docs/apps/agent-platform.md, "The finance agent"). The finance
-# app is not a tool yet.
+# The tool set is the pilot's (its own search key), the notes vault in the
+# state volume, and the finance app through its MCP server and its proxy
+# (../../firefly-mcp, docs/apps/agent-platform.md, "The finance app").
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

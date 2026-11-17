@@ -10,6 +10,14 @@ A CronJob in each agents-<name> namespace runs one of:
       supervisor) run, and each is printed with its node. The run removes a
       sandbox of its own name that an earlier run left, and fails when its
       own sandbox is still there at its end.
+  platform_checks.py firefly-probe
+      The two walls in front of the finance app hold (finance only:
+      kubernetes/apps/ai/agents/finance/checks). Both clients of the proxy
+      of the app are tried, with the token that the proxy holds: the MCP
+      server, called as the agent calls it, and a sandbox made with the
+      sandbox policy of the agent. An allowed read reaches the app; each
+      delete and each call off the allow list of the proxy is refused. The
+      run removes its sandbox at its end, as the probe does.
 
 Each probe prints one JSON line. The exit code is 1 when a probe fails, so
 the Job fails. Standard library only; the OpenShell CLI comes from the init
@@ -67,7 +75,8 @@ def tcp(host: str, port: int, timeout: float = 5) -> str:
 
 
 def cli(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
-    return subprocess.run([CLI, *args], capture_output=True, text=True, timeout=timeout)
+    return subprocess.run([CLI, *args], capture_output=True, text=True, timeout=timeout,
+                          check=False)
 
 
 def tail(result: subprocess.CompletedProcess) -> str:
@@ -338,14 +347,26 @@ def run_probe() -> None:
     if created.returncode != 0:
         report("probe", "sandbox create", "ok", f"failed: {tail(created)}")
         return
-    result = None
-    deadline = time.monotonic() + 300
     # The direct probes use addresses: the sandbox resolves no names, so a
     # name would test DNS only. The check pod resolves them.
     code = (PROBE.replace("KUBE_DNS_IP", socket.gethostbyname(KUBE_DNS))
             .replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
             .replace("MODEL_GATEWAY", MODEL_GATEWAY)
             .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN))))
+    results = exec_probe("probe", code)
+    if results is None:
+        return
+    for target, got in results.items():
+        report("probe", target, "blocked", got)
+    # Before cleanup() deletes the sandbox.
+    report_pods()
+
+
+def exec_probe(check: str, code: str) -> dict | None:
+    """Run the code in the probe's sandbox until it prints its PROBE line
+    (the sandbox can take a while to answer after its create)."""
+    result = None
+    deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         result = cli("sandbox", "exec", "--name", SANDBOX, "--no-tty", "--",
                      "python3", "-c", code, timeout=120)
@@ -355,12 +376,9 @@ def run_probe() -> None:
     line = next((l for l in (result.stdout if result else "").splitlines()
                  if l.startswith("PROBE ")), None)
     if line is None:
-        report("probe", "sandbox exec", "ok", f"failed: {tail(result)}")
-        return
-    for target, got in json.loads(line[len("PROBE "):]).items():
-        report("probe", target, "blocked", got)
-    # Before cleanup() deletes the sandbox.
-    report_pods()
+        report(check, "sandbox exec", "ok", f"failed: {tail(result)}")
+        return None
+    return json.loads(line[len("PROBE "):])
 
 
 def probe() -> None:
@@ -377,6 +395,169 @@ def probe() -> None:
         cleanup()
 
 
+# The probe of the finance app. MCP_URL is the MCP server as the agent calls
+# it, APP_PROXY the proxy of the app as a sandbox calls it, and
+# SANDBOX_POLICY the sandbox policy of the agent. The proxy holds the token
+# (a placeholder until the owner puts the real one, and the checks pass with
+# either). No call here can change data: each write or delete names an id
+# that does not exist ("0"), or sends an empty body that the app refuses.
+MCP_URL = os.environ.get("MCP_URL", "")
+APP_PROXY = os.environ.get("APP_PROXY", "")
+SANDBOX_POLICY = os.environ.get("SANDBOX_POLICY", "")
+# The MCP server sends this on as the bearer, and the proxy replaces it.
+MCP_BEARER = "none"
+# Tools of the groups that the server must not load (the groups of
+# firefly-mcp/app/mcp.yaml).
+OFF_GROUPS = ("export", "attachment", "recurrence", "recurring", "piggy", "currenc",
+              "object_group", "transaction_link")
+
+
+def mcp(method: str, params: dict) -> dict:
+    """One JSON-RPC request to the MCP server (streamable HTTP, stateless:
+    no session). The answer is JSON or one server-sent event."""
+    request = urllib.request.Request(
+        MCP_URL, method="POST",
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
+        headers={"Content-Type": "application/json",
+                 "Accept": "application/json, text/event-stream",
+                 "Authorization": f"Bearer {MCP_BEARER}"})
+    with urllib.request.urlopen(request, timeout=30) as r:
+        raw = r.read().decode()
+    events = [l[5:].strip() for l in raw.splitlines() if l.startswith("data:")]
+    return json.loads(events[-1] if events else raw)
+
+
+def mcp_tool(name: str, arguments: dict) -> str:
+    """The outcome of a tool call, from the text of the server (fireflyiii-mcp
+    1.0.1, formatError): the app's 401 and 404, or the proxy's 403. The app
+    answers no call of the probe with a 403: with no real token it answers
+    401 first, and with the real one an id "0" gets a 404."""
+    try:
+        result = mcp("tools/call", {"name": name, "arguments": arguments})["result"]
+    except (OSError, ValueError, KeyError) as e:
+        return f"failed: {type(e).__name__}"
+    text = " ".join(c.get("text", "") for c in result.get("content", []))
+    if not result.get("isError"):
+        return "reached: ok"
+    if text.startswith("Authentication failed"):
+        return "reached: HTTP 401"
+    if text == "Resource not found.":
+        return "reached: HTTP 404"
+    if text == "API error 403.":
+        return "refused: HTTP 403"
+    return f"other: {text[:120]}"
+
+
+def mcp_checks() -> None:
+    try:
+        names = [t["name"] for t in mcp("tools/list", {})["result"]["tools"]]
+        off = [n for n in names if any(g in n for g in OFF_GROUPS)]
+        got = "none" if names and not off else f"found: {off or 'no tools'}"
+    except (OSError, ValueError, KeyError) as e:
+        got = f"failed: {type(e).__name__}"
+    report("firefly-probe", "MCP server: tools of other groups", "none", got)
+    for target, tool, arguments, expected in (
+            ("MCP server: allowed read (get_about)", "get_about", {}, "reached"),
+            ("MCP server: delete (delete_transaction 0)", "delete_transaction", {"id": "0"}, "refused"),
+            ("MCP server: delete (delete_tag 0)", "delete_tag", {"id": "0"}, "refused"),
+            ("MCP server: rule trigger (trigger_rule 0)", "trigger_rule", {"id": "0"}, "refused"),
+            ("MCP server: rule write (update_rule 0)", "update_rule", {"id": "0"}, "refused")):
+        report("firefly-probe", target, expected, mcp_tool(tool, arguments))
+
+
+# Runs inside the sandbox. The proxy marks its refusal with a header; the
+# sandbox policy answers 403 with the JSON error "policy_denied" (OpenShell
+# 0.1.8, l7/rest.rs). Any other answer came from the app.
+FIREFLY_PROBE = r'''
+import json, socket, urllib.error, urllib.request
+APP = "APP_PROXY"
+def http(method, path):
+    request = urllib.request.Request(APP + path, method=method,
+        data=b"{}" if method in ("POST", "PUT") else None,
+        headers={"Accept": "application/json", "Content-Type": "application/json"})
+    try:
+        r = urllib.request.urlopen(request, timeout=10); r.read(); return "reached: HTTP %s" % r.status
+    except urllib.error.HTTPError as e:
+        if e.headers.get("X-Firefly-Proxy") == "refused":
+            return "refused: proxy"
+        try:
+            error = json.loads(e.read(4000) or b"{}").get("error")
+        except Exception:
+            error = None
+        if e.code == 403 and error == "policy_denied":
+            return "refused: sandbox policy"
+        return "reached: HTTP %s" % e.code
+    except Exception as e:
+        return "blocked: " + type(e).__name__
+def tcp(host, port):
+    try:
+        socket.create_connection((host, port), timeout=4).close(); return "connected"
+    except Exception as e:
+        return "blocked: " + type(e).__name__
+out = {"allowed read (GET /api/v1/about)": http("GET", "/api/v1/about")}
+for method, path in CALLS:
+    out["%s %s" % (method, path)] = http(method, path)
+out["proxy address, direct"] = tcp("PROXY_IP", PROXY_PORT)
+print("PROBE " + json.dumps(out))
+'''
+# Calls that must not reach the app from a sandbox: each delete, and calls
+# off the allow list of the proxy (firefly-mcp/app/proxy/default.conf.template).
+REFUSED_CALLS = [
+    ("DELETE", "/api/v1/transactions/0"),
+    ("DELETE", "/api/v1/tags/0"),
+    ("GET", "/api/v1/preferences"),
+    ("GET", "/api/v1/webhooks"),
+    ("GET", "/api/v1/cron/probe-not-a-token"),
+    ("GET", "/api/v1/configuration"),
+    ("GET", "/api/v1/users"),
+    ("GET", "/oauth/personal-access-tokens"),
+    ("POST", "/api/v1/data/bulk/transactions"),
+    ("POST", "/api/v1/rules/0/trigger"),
+    ("POST", "/api/v1/rule-groups/0/trigger"),
+    ("POST", "/api/v1/recurrences/0/trigger"),
+    ("POST", "/api/v1/rules"),
+    ("PUT", "/api/v1/rules/0"),
+    ("GET", "/api/v1/data/export/transactions"),
+    ("GET", "/api/v1/attachments/0/download"),
+    ("POST", "/api/v1/attachments/0/upload"),
+    ("GET", "/api/v1/accounts/../preferences"),
+    ("GET", "/api/v1/accounts/%2e%2e/preferences"),
+]
+
+
+def run_firefly_probe() -> None:
+    created = cli("sandbox", "create", "--name", SANDBOX, "--from", PROBE_IMAGE,
+                  "--policy", SANDBOX_POLICY, "--detach", "--no-tty", "--",
+                  "sleep", "3600", timeout=300)
+    if created.returncode != 0:
+        report("firefly-probe", "sandbox create", "ok", f"failed: {tail(created)}")
+        return
+    host, port = APP_PROXY.split("://", 1)[1].split("/", 1)[0].rsplit(":", 1)
+    code = (FIREFLY_PROBE.replace("APP_PROXY", APP_PROXY)
+            .replace("PROXY_IP", socket.gethostbyname(host)).replace("PROXY_PORT", port)
+            .replace("CALLS", json.dumps(REFUSED_CALLS)))
+    results = exec_probe("firefly-probe", code)
+    if results is None:
+        return
+    for target, got in results.items():
+        expected = ("reached" if target.startswith("allowed") else
+                    "blocked" if target.endswith("direct") else "refused")
+        report("firefly-probe", f"sandbox: {target}", expected, got)
+
+
+def firefly_probe() -> None:
+    mcp_checks()
+    setup_cli()
+    if not remove_leftover():
+        return
+    try:
+        run_firefly_probe()
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        report("firefly-probe", "probe run", "ok", f"failed: {type(e).__name__}: {e}")
+    finally:
+        cleanup()
+
+
 if __name__ == "__main__":
-    {"isolation": isolation, "probe": probe}[sys.argv[1]]()
+    {"isolation": isolation, "probe": probe, "firefly-probe": firefly_probe}[sys.argv[1]]()
     sys.exit(1 if failures else 0)

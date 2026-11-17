@@ -586,8 +586,8 @@ The finance agent runs as the pilot does, in `agents-finance`
 (`kubernetes/apps/ai/agents/finance/`), with its own key at the model
 gateway, its own sandbox gateway and its own backup repository. It is in git
 and not applied yet: the Deployment, the volume and the backup policy wait
-for the values of the owner (R4) and for the cutover. The finance app is not
-a tool yet: its design is open. The tools that differ from the pilot:
+for the values of the owner (R4) and for the cutover. The tools that differ
+from the pilot:
 
 - **Web search,** as the pilot's ([The pilot agent](#the-pilot-agent)): the
   Brave plugin, the official plugins step, `tools.web.search` and the rule
@@ -614,6 +614,8 @@ a tool yet: its design is open. The tools that differ from the pilot:
     seed, a change on a device does not reach the agent, and the agent
     changes nothing on a device. To bring the agent a newer vault, seed it
     again (below).
+- **The finance app,** read and write, never delete, through its MCP
+  server and its proxy ([The finance app](#the-finance-app)).
 
 ### The steps of the owner
 
@@ -639,6 +641,188 @@ listed with the Deployment.
    deleted on a device goes here too:
    `kubectl -n agents-finance exec deploy/agent -c agent -- find /home/node/data/vault -mindepth 1 -delete`,
    then the three commands again.
+
+## The finance app
+
+The finance agent reads and writes the finance app (Firefly III,
+[firefly.md](firefly.md)) through two pods of its own in `agents-finance`
+(`kubernetes/apps/ai/agents/finance/firefly-mcp/`), and its sandboxes reach
+the app through one of them. The agent may create and update data. It may
+never delete.
+
+```text
+agent pod (gateway, MCP client) --> firefly-mcp :3000 --+
+                                                        +--> firefly-proxy :8080 --> the app (production/firefly :8080)
+sandbox --> its supervisor (by the sandbox policy) -----+    (the token, the allow list)
+```
+
+- **`firefly-proxy`** (`app/proxy.yaml`): nginx, and the only holder of the
+  token of the agent at the app. The token is the env var `FIREFLY_TOKEN`
+  of its one container, from the Secret `firefly-proxy-secret`; the image
+  renders it into the config in an emptyDir in memory at the start. The
+  proxy sets `Authorization` on each request that it lets through, in place
+  of the client's header, and drops the client's cookie and forwarding
+  headers. It lets through only the calls of its allow list
+  (`app/proxy/default.conf.template`): `GET`, `POST` and `PUT` on the API
+  paths that the kept tools of the MCP server call, taken from the source
+  of the server at v1.0.1. Every other call gets a 403 with the header
+  `X-Firefly-Proxy: refused` and never reaches the app: each `DELETE`, each
+  other method, the preferences, webhooks, cron, configuration, users and
+  tokens, the bulk update, the rule and recurrence triggers, the exports
+  and the attachments, and the writes of rules. A raw path with a dot
+  segment, an encoded dot, slash or backslash, a double slash or a `;` is
+  refused before the match, since nginx matches the path it normalizes and
+  the app reads the raw one. One log line for each request:
+  `firefly-proxy method=<m> path=<path> status=<n> refused=0|1`, with no
+  query string, header or body.
+- **`firefly-mcp`** (`app/mcp.yaml`): the MCP server
+  [fireflyiii-mcp](https://github.com/daften/fireflyiii-mcp) 1.0.1, in HTTP
+  mode with no OAuth client. In that mode it takes the bearer of each
+  request from its client and sends it on to `FIREFLY_URL`, which is the
+  proxy; it checks only that a bearer is there. The agent sends the fixed
+  value `none` (`headers` of the `mcp.servers.firefly` entry of
+  `agent/config/openclaw.json`). It is no secret, and nothing checks it:
+  the proxy replaces it. So the server never holds the token. It loads the
+  tool groups `accounts`, `transactions`, `categories`, `budgets`, `bills`,
+  `reports` (with the tags, the summary and the insights) and `rules`; not
+  recurring, attachments, currencies, exports, object groups, piggy banks
+  or transaction links.
+- **The sandboxes** of the agent reach the proxy with no credential: the
+  sandbox policy of the agent (`agent/config/sandbox-policy.yaml`, the
+  `policy` of the `openshell` entry) has one network rule, to
+  `firefly-proxy.agents-finance.svc.cluster.local:8080`, for `python3`
+  only, `GET`, `POST` and `PUT` under `/api/v1`. There is no provider and
+  no providers job: nothing of the provider store of the sandbox gateway is
+  used, and the gateway holds no credential of the app. A script in a
+  sandbox needs only the base URL. The workload pod of a sandbox has no
+  egress; its supervisor opens each connection that the policy approves,
+  from its own pod, so the supervisor is the client that the proxy lets in.
+  OpenShell applies a policy when it makes a sandbox: a sandbox made before
+  this policy keeps its old one until it is made again.
+
+**Network policy.** `firefly-proxy`: in from `firefly-mcp` and from the
+supervisors of the sandboxes of `agents-finance` (label
+`openshell.ai/boundary-role: supervisor`), out to the app's pods on port
+8080 and DNS. `firefly-mcp`: in from the agent pod and the check pods, out
+to the proxy only and DNS. The agent pod gets one rule to `firefly-mcp`.
+Both pods meet the `restricted` level, run as non-root with a read-only
+root file system, and mount no service account token.
+
+**What the agent may write.** Create and update of accounts, transactions
+(split ones too), categories, budgets and their limits, bills and tags.
+Never a delete, a trigger, a bulk update, an export, an attachment or a
+setting. Three walls, each on its own:
+
+1. The proxy, at the HTTP level, whatever the server or a sandbox sends.
+2. The agent: `toolFilter.include` of the MCP entry lets through the reads
+   (`get_*`, `search_*`, `test_rule`, `test_rule_group`) and the fifteen
+   writes by name; `tools.deny` removes each `firefly__delete_*`,
+   `firefly__bulk_*`, `firefly__trigger_*`, export, attachment and rule
+   write tool. `tools.sandbox.tools.alsoAllow` has `firefly__*`, so a
+   sandboxed session has the tools.
+3. The sandbox policy, for a script: no `DELETE` leaves the sandbox.
+
+Two limits of the walls:
+
+- **No rule writes,** though the agent's instructions name them. A rule of
+  the app can have the action `delete_transaction` and fire when a
+  transaction is stored or updated, so a rule write is a delete by another
+  path. The agent can read and test rules. Whether it may write them is the
+  owner's choice (below).
+- **`bulk_update_transactions`** of the server sends one `PUT
+  /transactions/{id}` for each transaction, the same call as
+  `update_transaction`. The proxy can not tell them apart; only the deny of
+  the agent stops the bulk tool. What it can do is what many single updates
+  can do.
+
+`observability/tests/test_firefly_proxy.py` checks the allow list against
+each API call of the kept groups of the server at v1.0.1 (each delete,
+trigger and rule write refused, each other call let through), against the
+calls of secrets and settings, and checks the filter and the deny against
+the tool names of v1.0.1. With the product's own client (`openclaw mcp
+probe`, agent image 0.4.1) against the server, the agent keeps 73 of its 89
+tools, and the writes among them are the fifteen above.
+
+**The risk the owner should know.** One session of the agent has three
+things: web search, so text from outside; write access to the app; and the
+finance data. A page that the agent reads can steer it to a wrong create or
+update, or to put finance data into a search query, which goes to the search
+vendor. The controls: no delete (the three walls above), the allow list of
+the proxy, no egress of the agent but the listed ones and none of a sandbox
+but the proxy, and the backup of the app's database. What is left: a wrong
+create or update can happen, and data can leave in a search query.
+
+**A wrong write, and what brings data back.** The app's database is a
+CloudNativePG cluster with continuous WAL archiving and a base backup each
+night at 01:00, kept 30 days, so it can come back to any point in time,
+minutes old ([backups.md](../operations/backups.md)). For one wrong write,
+fix the data in the app by hand, or make a test restore (a second Cluster
+from the backup at a time before the write, as in "Restoring" of
+backups.md), read the old values there, and set them again in the app. A
+recovery of the whole database to that time also takes back every later
+write, of the owner and of the finance sync.
+
+**The supply chain.** The server is a young project of one author, so it
+runs with as little as it can: no token, no service account token, egress
+to the proxy only, and the writes of the allow list only. The image is
+pinned by digest. Renovate opens an update 7 days after its release at the
+earliest (`.github/renovate.json5`), and a person reviews each one
+(`impact/high`, `.github/renovate/autoMerge.json5`). What is left: a bad
+release can make any call of the allow list with the token, so create or
+change data, and read all the data the reads give; it can not delete,
+reach another path, or send data anywhere but the proxy. The proxy is the
+official unprivileged nginx image, pinned by digest.
+
+**The probe.** `platform-check-firefly-probe` (`finance/checks/app/`, 05:17)
+tests both clients of the proxy with the token it holds, so it works before
+the real token and after it. Through the MCP server, as the agent calls it:
+the server loads no tool of the other groups, `get_about` reaches the app
+(a 401 with the placeholder), and `delete_transaction`, `delete_tag`,
+`trigger_rule` and `update_rule` on id `0` get the proxy's 403. From a
+sandbox made with the sandbox policy and the image of the agent's
+sandboxes: `GET /api/v1/about` reaches the app, and each delete and each
+call of the list above is refused, by the proxy or by the sandbox policy;
+the proxy's address with no proxy in between is blocked. No call of the
+probe can change data: each write or delete names an id that does not
+exist or sends an empty body.
+
+**After the cutover,** the lead proves one tool call in a sandboxed session
+with one real turn: the session lists the `firefly__` tools, one call (for
+example `firefly__get_summary`) answers, and the proxy logs the call with
+`refused=0` and a status of 200.
+
+### The steps of the owner for the finance app
+
+1. **The token.** Make a personal access token in the app for the agent
+   (Profile, OAuth, Personal access tokens). A token of the app has all the
+   rights of its user; the proxy is what limits it. Put it in place of
+   `pending` in `firefly-mcp/app/secret-firefly-proxy.sops.yaml` with
+   `sops`, and commit. With the placeholder the app answers each call with
+   a 401, and nothing else changes. After Flux applies it, Reloader starts
+   the proxy again. The check prints only `ok` or `not ok`:
+
+   ```bash
+   kubectl -n agents-finance exec deploy/firefly-proxy -- \
+     sh -c 'wget -q -O /dev/null http://127.0.0.1:8080/api/v1/about 2>/dev/null' \
+     && echo ok || echo "not ok"
+   ```
+
+2. **The scripts of the workspace.** Only the owner edits the copied
+   workspace. In each script that calls the app, set the base URL to
+   `http://firefly-proxy.agents-finance.svc.cluster.local:8080` (the paths
+   stay `/api/v1/...`) and drop the read of the token file: the proxy sets
+   the token, and the sandbox has none. The scripts must run with
+   `python3`; the sandbox policy lets no other program reach the proxy.
+   When the scripts no longer use the token of the host, revoke it in the
+   app.
+3. **Open: which writes the agent needs.** The owner said "it needs to
+   write as well i believe" on 2026-11-17. The instructions of the agent
+   name creates and changes of accounts, categories of transactions, rules,
+   budgets and bills, and data fixes; its documented calls and its five
+   scripts make reads only. The recommendation: keep the fifteen writes,
+   and no rule writes for now; let the agent propose a rule in the chat and
+   the owner add it. If rule writes are wanted, the proxy and the deny list
+   change together, and a rule that deletes becomes possible.
 
 ## The run receiver
 
@@ -936,7 +1120,8 @@ Not in Loki, on purpose:
 
 Two CronJobs in each trust domain test the boundaries every day
 (`checks/app/`, shared by the trust domains; each `<name>/checks/ks.yaml`
-applies it to its namespace). A failed check fails its Job, and the Job
+applies it to its namespace), and `agents-finance` has a third, the probe of
+the finance app (`finance/checks/app/`, [The finance app](#the-finance-app)). A failed check fails its Job, and the Job
 pod's log goes to Loki. `AgentPlatformCronJobFailed` and
 `AgentPlatformCheckStale` alert on them ([Alerts](#alerts)).
 
@@ -944,19 +1129,22 @@ pod's log goes to Loki. `AgentPlatformCronJobFailed` and
 | --- | --- | --- |
 | `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
 | `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox. Before the create it removes a sandbox of its own name that an earlier run left (a `leftover sandbox` line), and at its end it fails when its Sandbox record is still there (a `sandbox removed` line), after it removes it |
+| `platform-check-firefly-probe` | 05:17 | `agents-finance` only. Through the MCP server of the finance app and from a sandbox with the agent's sandbox policy, an allowed read reaches the app, and each delete and each call off the allow list of the proxy is refused. It removes its sandbox `firefly-probe` as the probe does |
 
 - The check pods may try every trust domain's gateway on port 8080, so the
   isolation check tests each gateway's own policy, not the check pod's.
 - The OpenShell CLI is a release binary, fetched by an init container at a
   pinned version and checked against its SHA-256. Move `CLI_VERSION` and
-  `CLI_SHA256` (`checks/app/cronjobs.yaml`, both CronJobs) with the chart
+  `CLI_SHA256` (`checks/app/cronjobs.yaml`, both CronJobs, and
+  `finance/checks/app/firefly-probe.yaml`) with the chart
   version of the sandbox gateways; Renovate doesn't track them.
 - The probe finds the pods of its sandbox through the `Sandbox` record
   (label `openshell.ai/sandbox-name`), whose `openshell.ai/sandbox-id` the
   two pods carry in lower case as `openshell.ai/boundary-pair`. A Role lets
   it get and list `Sandbox` records and pods in its own namespace, and
   delete its own record `default--platform-probe` (the name that OpenShell
-  0.1.8 gives the sandbox `platform-probe`), and nothing more. It deletes
+  0.1.8 gives the sandbox `platform-probe`), and in `agents-finance` also
+  `default--firefly-probe`, and nothing more. It deletes
   that record only when it has the labels of OpenShell for this probe.
 - Nothing places the two pods of a sandbox: the scheduler picks each node
   on its own, so they can share a node. The probe logs `nodes` and

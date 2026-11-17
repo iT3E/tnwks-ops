@@ -1,0 +1,35 @@
+---
+# The sandbox policy of the finance agent (the policy of the openshell entry
+# of openclaw.json; the sandbox gateway uses it at the create of each
+# sandbox). The probe of the finance app uses this same file
+# (../../checks/app/firefly-probe.yaml).
+#
+# The default file rules of OpenShell, and one network rule: the proxy of the
+# finance app (../../firefly-mcp/app/proxy.yaml), over plain HTTP in the
+# cluster, for Python only. The sandbox holds no credential for it: the proxy
+# sets the token, and it lets through only the calls of its allow list. This
+# rule is a second wall in front of it: GET, POST and PUT under /api/v1 only,
+# so no DELETE leaves the sandbox. Nothing else leaves the sandbox.
+version: 1
+filesystem_policy:
+  include_workdir: true
+  read_only: [/bin, /usr, /lib, /proc, /dev/urandom, /etc, /var/log]
+  read_write: [/tmp, /dev/null]
+landlock:
+  compatibility: best_effort
+network_policies:
+  finance_app:
+    name: finance_app
+    endpoints:
+      - host: firefly-proxy.agents-finance.svc.cluster.local
+        port: 8080
+        protocol: rest
+        tls: ""
+        enforcement: enforce
+        rules:
+          - allow: {method: GET, path: "/api/v1/**"}
+          - allow: {method: POST, path: "/api/v1/**"}
+          - allow: {method: PUT, path: "/api/v1/**"}
+    binaries:
+      - {path: /usr/local/bin/python3.13}
+      - {path: /usr/local/bin/python3}
