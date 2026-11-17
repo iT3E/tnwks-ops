@@ -1624,6 +1624,11 @@ tar -C "$WS" --exclude=./.git --exclude='*.bak' --exclude='*.orig' --exclude='*~
    - **The instruction files** (`AGENTS.md`, `TOOLS.md`, a skill). Each line
      that names the address of the app or the token file changes to:
      - read data in a script through the read port above, with `python3`;
+     - keep each script in a file of the workspace and run it as one
+       command alone, `python3 <file>.py`: no `cd <dir> &&` before it, no
+       `;` after it, no `sh -c`, and no pipe into `python3`. The exec tool
+       refuses those forms ("complex interpreter invocation detected"; see
+       "How a script runs" in [agent-platform.md](agent-platform.md));
      - make each create or update with the `firefly__` tools, never with a
        script;
      - never delete (the MCP gateway, the tools and the proxy refuse it);
