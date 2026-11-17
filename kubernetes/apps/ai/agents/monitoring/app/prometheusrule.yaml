@@ -1,7 +1,8 @@
 ---
 # The alerts of the agent platform (docs/apps/agent-platform.md, "Alerts").
 # Most read kube-state-metrics. WorkflowAppDrift, AgentInstructionFileChanged,
-# AgentInstructionCheckStale, AgentMemoryIndexFailed and ModelBridgeRateLimited
+# AgentInstructionCheckStale, AgentMemoryIndexFailed, AgentAutomationsSyncFailed
+# and ModelBridgeRateLimited
 # read the time of the newest line of a kind, a gauge that Vector serves: the
 # aggregator for the result lines (kubernetes/apps/monitoring/vector/aggregator),
 # the platform log agent for instruction-file and the model bridge
@@ -295,6 +296,33 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentmemoryindexfailed"
             summary: "The memory index step of the agent pod in {{ $labels.namespace }} failed at its last start."
             description: "kubectl -n {{ $labels.namespace }} logs deploy/agent -c memory-index shows memory-index result=failed; memory search stays as it was until a start that ends ok. Check the model gateway and the model server of the host, then start the pod again."
+
+        - alert: AgentAutomationsSyncFailed
+          # The newest `automations-sync result=` line of a trust domain is
+          # result=failed: the automations-sync container of the agent pod
+          # (pilot/agent/config/scripts/automations-sync.sh) could not make
+          # the scheduled jobs of the product equal to automations.json (a
+          # list that does not parse, a failed add or remove, no gateway).
+          # A pass ends with one such line at the start of the pod and then
+          # each hour, so the ok line of a later pass clears it. The window
+          # is 3 hours, two passes and room: a pod that stops logging (no
+          # pod) stops firing then. The aggregator serves each sample with
+          # the time of its line, so max_over_time bridges the hour between
+          # two lines.
+          expr: |
+            max by (namespace) (
+              label_replace(
+                max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+", check="automations-sync", result="failed"}[3h]))
+                >= max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+", check="automations-sync"}[3h])),
+                "namespace", "$1", "pod_namespace", "(.+)")
+            )
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentautomationssyncfailed"
+            summary: "The scheduled jobs of the agent in {{ $labels.namespace }} are not as in git."
+            description: "kubectl -n {{ $labels.namespace }} logs deploy/agent -c automations-sync shows the reason= of the last pass and the key of each failed job. The jobs stay as they were until a pass that ends ok."
 
         - alert: AgentBackupMoverConfigMapDenied
           # The admission policy agents-backup-mover-configmaps

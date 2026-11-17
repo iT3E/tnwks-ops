@@ -482,6 +482,46 @@ request raises `LIMIT_SECONDS` in
 `kubernetes/apps/ai/agents/pilot/agent/config/scripts/memory-index.sh`, and
 the change of the script starts the pod again.
 
+### AgentAutomationsSyncFailed
+
+**What it means.** The newest `automations-sync result=` line of an agent
+pod says `failed`: the `automations-sync` container could not make the
+scheduled jobs of the product equal to `automations.json` of the config
+([agent-platform.md](agent-platform.md), "Scheduled jobs"). A pass runs at
+the start of the pod and then each hour, and the ok line of a later pass
+clears the alert. The jobs stay as they were: a list that does not parse
+changes nothing. With no line for 3 hours (no pod), it stops firing.
+
+**First checks.**
+
+```sh
+kubectl -n agents-finance logs deploy/agent -c automations-sync --tail=20
+kubectl -n agents-finance get pods -l app.kubernetes.io/name=agent
+```
+
+The `reason=` of the last pass:
+
+- `bad-list`: `automations.json` does not parse, has no `jobs` list, or an
+  entry has a bad or missing field (`key`, `cron`, `message`, `enabled`)
+  or a key twice. Nothing changed.
+- `job`: an add, a turn on or off, or a remove failed; the line of each
+  such job names its key.
+- `list`: the gateway did not answer the list of jobs.
+- `connect`: the gateway did not answer for 10 minutes after the start.
+- `no-zone` or `no-chat`: the container has no `TZ` or no
+  `TELEGRAM_ALLOW_FROM`.
+
+The script prints nothing of the output of the product's CLI (it can hold
+the chat id and the message).
+
+**Seen so far.** Not fired yet.
+
+**Fix.** `bad-list`, `no-zone`, `no-chat`: a pull request fixes the list or
+the env, and the change starts the pod again. `job`, `list`, `connect`:
+check the agent container (`kubectl -n agents-finance logs deploy/agent -c
+agent --tail=50` shows the gateway, not chat content in its first lines);
+the next pass runs within the hour.
+
 ### AgentBackupMoverConfigMapDenied
 
 **What it means.** The admission policy `agents-backup-mover-configmaps`

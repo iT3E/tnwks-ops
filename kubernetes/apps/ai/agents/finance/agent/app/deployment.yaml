@@ -496,9 +496,8 @@ spec:
             - name: tmp
               mountPath: /tmp
               subPath: tmp
-            - name: user-config
-              mountPath: /home/node/.config
-              readOnly: true
+          # No user-config (the client certificate of the sandbox gateway):
+          # the CLI needs no file there.
       volumes:
         - name: state
           persistentVolumeClaim:

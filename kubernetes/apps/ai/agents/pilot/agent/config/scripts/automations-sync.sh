@@ -13,6 +13,24 @@
 # - each job of the product with a key "flux:..." that is not in the list:
 #   removed. A job with another key, or with none (made in a chat), stays.
 #
+# The list: {"jobs": [{"key", "cron", "message", "enabled"}, ...]}. A list
+# that is not there (no file) declares nothing, and the script changes
+# nothing. A list that the script can't read or parse, or with one bad
+# entry, changes nothing either: the pass stops with a failed line, so a
+# broken file never removes a job. {"jobs": []} is a list with no job, and
+# removes each "flux:" job.
+#
+# On and off ("enabled" of an entry). Git decides, in one way:
+# - "enabled": false: the job is off. The sync turns it off at each pass.
+# - "enabled": true: the sync turns the job on when it is made, and when the
+#   value in git changes from false to true. Between two such changes, a job
+#   that is off (the owner turned it off in a chat, or the scheduler did
+#   after errors) stays off: its line says state=stopped. To turn it on
+#   again: by hand (`openclaw automations enable`), or false and then true
+#   in git.
+# The value of git of the last pass is in the description of the job
+# ("git enabled=true|false"), so the sync sees a change.
+#
 # Each job of the list: an agent turn of the agent "main" in a new session
 # ("isolated"), at the time of the cron expression in the zone TZ of this
 # container, and its answer goes to the owner's chat (the one id of
@@ -20,19 +38,18 @@
 # it names a file of the workspace, and the owner writes the task in that
 # file.
 #
-# An add keeps a job that is off (by the owner, or by the scheduler after
-# errors) off, so this script never turns a job on. It reports it:
-# "enabled=false" in the line of that job.
-#
 # At the start it waits for the gateway on loopback, at most WAIT seconds.
 # Then it does the sync, and again each EVERY seconds, so a change made in a
 # chat goes back to git within EVERY seconds. A change of the list starts
 # the pod again (Reloader), so it is in at once. The CLI output can hold the
-# chat id and the message, so it goes nowhere. One line for each job:
-# "automations-sync key=<key> result=ok|failed|removed [enabled=false]", and
-# "automations-sync result=failed reason=connect|list|no-zone|no-chat" when it can
-# do nothing. With no list it logs "automations-sync result=none" and does
-# nothing.
+# chat id and the message, so it goes nowhere. The lines:
+# - one for each job: "automations-sync key=<key> result=ok
+#   state=on|off|stopped", "... result=removed" or "... result=failed";
+# - one for each pass: "automations-sync result=ok jobs=<n>", or
+#   "automations-sync result=failed reason=<reason>" (bad-list, list, job,
+#   connect, no-zone, no-chat). The alert AgentAutomationsSyncFailed reads
+#   this line (docs/apps/agent-platform.md, "Alerts");
+# - "automations-sync result=none" when there is no list.
 set -u
 
 LIST=/home/node/config/automations.json
@@ -47,7 +64,7 @@ idle() {
   while true; do sleep 3600; done
 }
 
-if [ ! -s "$LIST" ]; then
+if [ ! -e "$LIST" ]; then
   echo "automations-sync result=none"
   idle
 fi
@@ -60,82 +77,129 @@ if [ -z "${TELEGRAM_ALLOW_FROM:-}" ]; then
   idle
 fi
 
-# The jobs of the list, one per line: key, cron and message, each base64,
-# so a space or a quote in the message is safe in the shell.
+# The jobs of the list, one per line: key, cron, message (base64, so a space
+# or a quote is safe in the shell) and enabled. It exits 1, and prints
+# nothing, when the file can't be read or parsed, has no "jobs" list, or has
+# one bad entry or a key twice.
 declared() {
   node -e '
     const b = (s) => Buffer.from(String(s), "utf8").toString("base64");
-    const l = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-    for (const j of l.jobs || []) {
-      if (!/^[a-z0-9-]+$/.test(j.key || "") || !j.cron || !j.message) {
-        console.log("bad " + b(j.key || "?"));
-        continue;
-      }
-      console.log(["job", b(j.key), b(j.cron), b(j.message)].join(" "));
-    }' "$LIST"
+    let l;
+    try { l = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch (e) { process.exit(1); }
+    if (!l || !Array.isArray(l.jobs)) process.exit(1);
+    const out = [], seen = new Set();
+    for (const j of l.jobs) {
+      if (!j || typeof j !== "object" || !/^[a-z0-9-]+$/.test(j.key || "") || seen.has(j.key)
+          || typeof j.cron !== "string" || !j.cron.trim() || typeof j.message !== "string"
+          || !j.message.trim() || typeof j.enabled !== "boolean") process.exit(1);
+      seen.add(j.key);
+      out.push([j.key, b(j.cron), b(j.message), String(j.enabled)].join(" "));
+    }
+    if (out.length) console.log(out.join("\n"));' "$LIST"
 }
 
-# The jobs of the product with the prefix: "<key without prefix> <id>
-# <enabled>", one per line, from the JSON of the list on stdin.
+# The jobs of the product with the prefix, one per line: "<key without
+# prefix> <id> <enabled> <git value of the last pass, or none>", from the
+# JSON of the list on stdin.
 existing() {
   node -e '
     const o = JSON.parse(require("fs").readFileSync(0, "utf8"));
     const p = process.argv[1];
     for (const j of o.jobs || []) {
       const k = j.declarationKey || "";
-      if (k.startsWith(p)) console.log(k.slice(p.length) + " " + j.id + " " + j.enabled);
+      if (!k.startsWith(p)) continue;
+      const m = /^git enabled=(true|false)$/.exec(j.description || "");
+      console.log([k.slice(p.length), j.id, j.enabled === true, m ? m[1] : "none"].join(" "));
     }' "$PREFIX"
 }
 
 dec() { printf %s "$1" | base64 -d; }
 
 sync() {
-  if ! out=$(oc automations list --all --json 2>/dev/null); then
+  if ! list=$(declared); then
+    echo "automations-sync result=failed reason=bad-list"
+    return
+  fi
+  if ! out=$(oc automations list --all --json 2>/dev/null) || ! have=$(printf '%s\n' "$out" | existing); then
     echo "automations-sync result=failed reason=list"
     return
   fi
-  have=$(printf '%s\n' "$out" | existing)
   keys=" "
-  # Each line: a word and base64 fields, so the word split is safe.
-  for line in $(declared | tr ' ' ','); do
-    kind=${line%%,*}
+  jobs=0
+  failed=0
+  # Each line: a key and base64 fields, so the word split is safe.
+  for line in $(printf '%s\n' "$list" | tr ' ' ','); do
+    key=${line%%,*}
     rest=${line#*,}
-    if [ "$kind" = bad ]; then
-      echo "automations-sync key=$(dec "$rest") result=failed reason=bad-entry"
+    cron=$(dec "${rest%%,*}")
+    rest=${rest#*,}
+    message=$(dec "${rest%%,*}")
+    enabled=${rest#*,}
+    keys="$keys$key "
+    jobs=$((jobs + 1))
+    # "<id> <enabled> <git value>" of the job, or nothing for a new one.
+    old=$(printf '%s\n' "$have" | awk -v k="$key" '$1 == k { print $2, $3, $4 }')
+    set -- --agent main --declaration-key "$PREFIX$key" --name "$key" \
+      --description "git enabled=$enabled" --cron "$cron" --tz "$TZ" --session isolated \
+      --message "$message" --announce --channel telegram --to "$TELEGRAM_ALLOW_FROM" --json
+    if [ -z "$old" ] && [ "$enabled" = false ]; then set -- "$@" --disabled; fi
+    if ! made=$(oc automations add "$@" 2>/dev/null) \
+      || ! now=$(printf '%s\n' "$made" | node -e '
+          const j = JSON.parse(require("fs").readFileSync(0, "utf8")).job;
+          console.log(j.id + " " + (j.enabled === true));' 2>/dev/null); then
+      echo "automations-sync key=$key result=failed"
+      failed=$((failed + 1))
       continue
     fi
-    key=$(dec "${rest%%,*}")
-    rest=${rest#*,}
-    cron=$(dec "${rest%%,*}")
-    message=$(dec "${rest#*,}")
-    keys="$keys$key "
-    if oc automations add --agent main --declaration-key "$PREFIX$key" --name "$key" \
-      --cron "$cron" --tz "$TZ" --session isolated --message "$message" \
-      --announce --channel telegram --to "$TELEGRAM_ALLOW_FROM" --json > /dev/null 2>&1; then
-      enabled=$(printf '%s\n' "$have" | awk -v k="$key" '$1 == k { print $3 }')
-      if [ "$enabled" = false ]; then
-        echo "automations-sync key=$key result=ok enabled=false"
-      else
-        echo "automations-sync key=$key result=ok"
+    id=${now%% *}
+    on=${now#* }
+    was=${old##* }
+    state=on
+    if [ "$enabled" = false ]; then
+      state=off
+      if [ "$on" = true ] && ! oc automations disable "$id" > /dev/null 2>&1; then state=failed; fi
+    elif [ "$on" = false ]; then
+      if [ -n "$old" ] && [ "$was" = true ]; then
+        state=stopped
+      elif ! oc automations enable "$id" > /dev/null 2>&1; then
+        state=failed
       fi
-    else
+    fi
+    # An add keeps the description of a job that is there, so the git value
+    # of this pass goes in with an edit (a display field: it does not stop a
+    # run).
+    if [ "$state" != failed ] && [ "$was" != "$enabled" ] \
+      && ! oc automations edit "$id" --description "git enabled=$enabled" > /dev/null 2>&1; then
+      state=failed
+    fi
+    if [ "$state" = failed ]; then
       echo "automations-sync key=$key result=failed"
+      failed=$((failed + 1))
+    else
+      echo "automations-sync key=$key result=ok state=$state"
     fi
   done
   # A key is [a-z0-9-] and an id is a UUID, so the word split is safe.
-  printf '%s\n' "$have" | while read -r key id _; do
-    [ -n "$key" ] || continue
+  for line in $(printf '%s\n' "$have" | awk 'NF { print $1 "," $2 }'); do
+    key=${line%%,*}
+    id=${line#*,}
     case "$keys" in
       *" $key "*) ;;
       *)
         if oc automations rm "$id" --json > /dev/null 2>&1; then
           echo "automations-sync key=$key result=removed"
         else
-          echo "automations-sync key=$key result=failed reason=remove"
+          echo "automations-sync key=$key result=failed"
+          failed=$((failed + 1))
         fi
         ;;
     esac
   done
+  if [ "$failed" -gt 0 ]; then
+    echo "automations-sync result=failed reason=job jobs=$jobs failed=$failed"
+  else
+    echo "automations-sync result=ok jobs=$jobs"
+  fi
 }
 
 deadline=$(($(date +%s) + WAIT))
