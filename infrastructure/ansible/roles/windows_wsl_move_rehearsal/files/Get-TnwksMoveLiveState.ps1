@@ -10,7 +10,7 @@ nothing.
 param([Parameter(Mandatory)][string]$PresentUser)
 $ErrorActionPreference = 'Stop'
 $vm = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'vmmem*' } | ForEach-Object {
-    [pscustomobject]@{ id = [int]$_.ProcessId; name = $_.Name; created = $_.CreationDate.ToUniversalTime().ToString('o') } })
+    [pscustomobject]@{ id = [int]$_.ProcessId; name = $_.Name; created = $(if ($_.CreationDate) { $_.CreationDate.ToUniversalTime().ToString('o') } else { '' }) } })
 $proxy = (& { $ErrorActionPreference = 'Continue'; netsh.exe interface portproxy show all 2>&1 | ForEach-Object { "$_".Trim() } } |
     Where-Object { $_ -match '^\d' } | Sort-Object) -join ' | '
 $nat = @(Get-NetNat -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Name) $($_.InternalIPInterfaceAddressPrefix)" } | Sort-Object) -join ' | '

@@ -651,7 +651,22 @@ Each script that runs in a distro goes to `wsl.exe` as base64 in one fixed
 command, and the distro decodes and runs it. Windows PowerShell 5.1 does not
 escape a double quote inside an argument to a native program, so shell text
 passed as an argument breaks at its first quote. The check step reads each
-value by its key, not by its line.
+value by its key, not by its line, and a key that comes twice reads as no
+value.
+
+The file of the script is safe as it is. sh decodes the script to a new
+file from `mktemp`, which makes it with mode 0600 whatever the umask, in
+`/tmp`, and the script removes the file first (`rm -f "$0"`). What is left
+for the real window:
+
+- **The size.** A command line holds at most 32767 characters. A file that a
+  script writes is base64 inside the script, and the script is base64 again,
+  so the command is about 1.8 times the size of the file: a file of about
+  18 KB is the limit. The script refuses a longer command with no change. A
+  larger file needs another way, for example a copy through the Windows file
+  system.
+- **The first line, if the script moves to stdin.** On the stdin of `sh`,
+  `$0` is `/bin/sh`, and `rm -f "$0"` must go.
 
 The limit of the phase run names `localhost` too: the first play of
 `windows-host.yml` runs on the controller and downloads the pinned root file

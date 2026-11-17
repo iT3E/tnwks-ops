@@ -60,6 +60,7 @@
       ansible.builtin.assert:
         that:
           - check.result.registered
+          - check.result.repeated_count == 0
           - check.result.disk | lower == (wsl_move_rehearsal_accounts.b.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
           - check.result.token == wsl_move_rehearsal_data_token
           - check.result.uid == (wsl_move_rehearsal_registration_values.DefaultUid | string)

@@ -8,59 +8,76 @@
   ansible.windows.win_powershell:
     parameters:
       Script: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksMoveWindow.ps1'
-      Config: '{{ wsl_move_rehearsal_dir }}\window.json'
-      Test: '{{ wsl_move_rehearsal_dir }}\test'
+      Test: "{{ test_dir }}"
       DiskName: "{{ wsl_move_rehearsal_disk_name }}"
+      # The config of the window with the paths of the test: written here, so
+      # no JSON goes through ConvertTo-Json of Windows PowerShell 5.1.
+      TestConfig: "{{ wsl_move_rehearsal_window_config | combine(test_config, recursive=true) | to_json }}"
     script: |
-      param([string]$Script, [string]$Config, [string]$Test, [string]$DiskName)
+      param([string]$Script, [string]$Test, [string]$DiskName, [string]$TestConfig)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $true
-      $cfg = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
+      $cfg = $TestConfig | ConvertFrom-Json
       if (Test-Path -LiteralPath $Test) { Remove-Item -LiteralPath $Test -Recurse -Force }
-      New-Item -ItemType Directory -Path "$Test\a", "$Test\b" | Out-Null
-      $cfg.present.folder = "$Test\a"
-      $cfg.new.folder = "$Test\b"
-      $cfg.state_file = "$Test\window.state"
-      $cfg.log_file = "$Test\window.log"
-      $cfg.acl_file = "$Test\disk.sddl"
-      $cfg.version_file = "$Test\wsl-version.txt"
-      $cfg.restart = $false
-      $testConfig = "$Test\window.json"
-      [IO.File]::WriteAllText($testConfig, ($cfg | ConvertTo-Json -Depth 5))
-      function Get-Listing { @(Get-ChildItem -LiteralPath "$Test\a", "$Test\b" -Force | ForEach-Object { "$($_.FullName) $($_.Length)" }) -join ' | ' }
+      New-Item -ItemType Directory -Path $cfg.present.folder, $cfg.new.folder | Out-Null
+      # Not $testConfig: names are not case sensitive, so it would change $TestConfig.
+      $configFile = Join-Path $Test 'window.json'
+      [IO.File]::WriteAllText($configFile, $TestConfig)
+      $oldDisk = Join-Path $cfg.present.folder $DiskName
+      $newDisk = Join-Path $cfg.new.folder $DiskName
+      function Get-Listing {
+          @(Get-ChildItem -LiteralPath $cfg.present.folder, $cfg.new.folder -Force | ForEach-Object { "$($_.FullName) $($_.Length)" }) -join ' | '
+      }
       function Invoke-Case([string]$Name, [string]$Mode, [string]$Version, [string]$LastMarker, [bool]$OldFile, [bool]$NewFile) {
           [IO.File]::WriteAllText($cfg.version_file, $Version)
           [IO.File]::WriteAllText($cfg.state_file, $(if ($LastMarker) { "2026-01-01T00:00:00Z $LastMarker`r`n" } else { '' }))
-          foreach ($p in @("$Test\a\$DiskName", "$Test\b\$DiskName")) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }
-          if ($OldFile) { [IO.File]::WriteAllText("$Test\a\$DiskName", 'old') }
-          if ($NewFile) { [IO.File]::WriteAllText("$Test\b\$DiskName", 'new') }
-          $state = Get-Content -LiteralPath $cfg.state_file -Raw
+          foreach ($p in @($oldDisk, $newDisk)) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }
+          if ($OldFile) { [IO.File]::WriteAllText($oldDisk, 'old') }
+          if ($NewFile) { [IO.File]::WriteAllText($newDisk, 'new') }
+          # Get-Content -Raw of an empty file gives nothing, and a [string] cast
+          # of nothing is $null: "$()" makes it ''.
+          $state = "$(Get-Content -LiteralPath $cfg.state_file -Raw)"
           $before = Get-Listing
-          $request = "$Test\request.json"
+          $request = Join-Path $Test 'request.json'
           [IO.File]::WriteAllText($request, (@{ mode = $Mode; group_steps = $false; stop_after = 0; rehearsal_group_test = $false } | ConvertTo-Json))
-          $argv = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $Script, '-Config', $testConfig)
+          $argv = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $Script, '-Config', $configFile)
           if ($Mode -eq 'boot') { $argv += @('-Mode', 'boot') } else { $argv += @('-Request', $request) }
           & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" @argv | Out-Null
           $code = $LASTEXITCODE
-          $stateAfter = Get-Content -LiteralPath $cfg.state_file -Raw
+          $stateAfter = "$(Get-Content -LiteralPath $cfg.state_file -Raw)"
           [pscustomobject]@{
               case = $Name
               exit = $code
               files_unchanged = ((Get-Listing) -eq $before)
-              new_markers = ($stateAfter.Substring($state.Length).Trim() -split "`r?`n" | Where-Object { $_ } |
-                  ForEach-Object { ($_ -split ' ', 2)[1] }) -join ','
-              last_log = @(Get-Content -LiteralPath $cfg.log_file)[-2]
+              new_markers = @($stateAfter.Substring([Math]::Min($state.Length, $stateAfter.Length)).Trim() -split "`r?`n" |
+                  Where-Object { $_ } | ForEach-Object { ($_ -split ' ', 2)[1] }) -join ','
+              last_log = "$(@(Get-Content -LiteralPath $cfg.log_file) | Select-Object -Last 2 | Select-Object -First 1)"
           }
       }
       $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($cfg.service_binary).FileVersion
-      @(
-          Invoke-Case 'another version' 'forward' '0.0.0.0' '' $true $false
-          Invoke-Case 'neither path' 'boot' $installed 'window-started' $false $false
-          Invoke-Case 'both paths' 'boot' $installed 'window-started' $true $true
-          Invoke-Case 'no started window' 'boot' $installed 'wayback-done' $true $false
-      )
-      Remove-Item -LiteralPath $Test -Recurse -Force
+      # The test folder goes at the end, also when a case fails.
+      try {
+          @(
+              Invoke-Case 'another version' 'forward' '0.0.0.0' '' $true $false
+              Invoke-Case 'neither path' 'boot' $installed 'window-started' $false $false
+              Invoke-Case 'both paths' 'boot' $installed 'window-started' $true $true
+              Invoke-Case 'no started window' 'boot' $installed 'wayback-done' $true $false
+          )
+      } finally {
+          Remove-Item -LiteralPath $Test -Recurse -Force -ErrorAction SilentlyContinue
+      }
+  # Each backslash of a path is outside the braces: in a template, a backslash
+  # inside a Jinja string stays doubled.
   vars:
+    test_dir: '{{ wsl_move_rehearsal_dir }}\test'
+    test_config:
+      state_file: '{{ wsl_move_rehearsal_dir }}\test\window.state'
+      log_file: '{{ wsl_move_rehearsal_dir }}\test\window.log'
+      acl_file: '{{ wsl_move_rehearsal_dir }}\test\disk.sddl'
+      version_file: '{{ wsl_move_rehearsal_dir }}\test\wsl-version.txt'
+      restart: false
+      present: {folder: '{{ wsl_move_rehearsal_dir }}\test\a'}
+      new: {folder: '{{ wsl_move_rehearsal_dir }}\test\b'}
     ansible_become: true
     ansible_become_method: ansible.builtin.runas
     ansible_become_user: SYSTEM

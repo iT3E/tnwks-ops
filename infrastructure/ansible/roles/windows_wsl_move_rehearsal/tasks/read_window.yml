@@ -50,7 +50,9 @@
           other_files_b = $other
           # Enabled is the flag of a task: its State reads Running while an
           # instance runs, also when the task is disabled.
-          window_tasks_enabled_no_trigger = (@($window | Where-Object { -not $_.Settings.Enabled -or @($_.Triggers).Count -gt 0 }).Count -eq 0)
+          # @($null) counts 1: only the triggers that are there count.
+          window_tasks_enabled_no_trigger = (@($window | Where-Object {
+              -not $_.Settings.Enabled -or @($_.Triggers | Where-Object { $_ }).Count -gt 0 }).Count -eq 0)
           start_a = "$((Get-ScheduledTask -TaskName "$Prefix-a-start").State)"
           start_b = "$((Get-ScheduledTask -TaskName "$Prefix-b-start").State)"
           start_a_enabled = [bool](Get-ScheduledTask -TaskName "$Prefix-a-start").Settings.Enabled
