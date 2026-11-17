@@ -1,3 +1,0 @@
-kind: Fixed
-body: "Windows hosts, the rehearsal of the move: the phase wayback can leave out its stated case (B removes SYSTEM and the Administrators from the rules of its disk file) for one run, with -e wsl_move_rehearsal_wayback_strip_case=false; by default the case runs. The tests of the check that a task can not start also hold a run that exits 1 and writes a result, and the docs row of the phase says that the inherited rules come from the folder."
-time: 2026-11-17T18:30:00.000000+00:00
