@@ -165,7 +165,8 @@
   when: wsl_move_rehearsal_sids | length == 2
 
 # The folder of a disk file, with the rights of step 3: the account may make
-# files in this folder only (no delete of a child, no change of rules), and
+# files in this folder only (no delete of a child, no change of rules; A also
+# reads the folder and its rules, wsl_move_rehearsal_folder_rights), and
 # CREATOR OWNER on files lets it replace or delete a file that it made, and no
 # other file. SYSTEM and the Administrators have full control. No inheritance.
 # The folder of A gives its files one more rule, as the drive of an older
@@ -175,13 +176,14 @@
     parameters:
       Path: "{{ wsl_move_rehearsal_accounts[item].folder }}"
       Sid: "{{ wsl_move_rehearsal_sids[item] }}"
+      Right: "{{ wsl_move_rehearsal_folder_rights[item] }}"
       Extra: "{{ wsl_move_rehearsal_older_folder_rule if item == 'a' else '' }}"
     script: &folder_rights |
       [CmdletBinding(SupportsShouldProcess)]
-      param([string]$Path, [string]$Sid, [string]$Extra)
+      param([string]$Path, [string]$Sid, [string]$Right, [string]$Extra)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $false
-      $want = ('O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;0x100002;;;{0})(A;OIIO;0x1301bf;;;CO)' -f $Sid) + $Extra
+      $want = ('O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;{1};;;{0})(A;OIIO;0x1301bf;;;CO)' -f $Sid, $Right) + $Extra
       if (-not (Test-Path -LiteralPath $Path)) {
           $Ansible.Changed = $true
           if (-not $PSCmdlet.ShouldProcess($Path, 'make the folder')) { return }
@@ -231,27 +233,10 @@
       }
   when: wsl_move_rehearsal_sids | length == 2
 
-- name: Scripts of the rehearsal
-  ansible.windows.win_copy:
-    src: "{{ item }}"
-    dest: '{{ wsl_move_rehearsal_dir }}\{{ item }}'
-  loop:
-    - Invoke-TnwksWslAccountTask.ps1
-    - Invoke-TnwksMoveWindow.ps1
-    - Invoke-TnwksStartTask.ps1
-
 - name: The root file system
   ansible.windows.win_copy:
     src: "{{ wsl_move_rehearsal_cache }}/{{ wsl_move_rehearsal_rootfs.url | basename }}"
     dest: '{{ wsl_move_rehearsal_dir }}\{{ wsl_move_rehearsal_rootfs.url | basename }}'
-
-- name: The configs of the scripts
-  ansible.windows.win_copy:
-    dest: '{{ wsl_move_rehearsal_dir }}\{{ item.key }}.json'
-    content: "{{ item.value | to_nice_json }}"
-  loop: "{{ wsl_move_rehearsal_configs | dict2items }}"
-  loop_control:
-    label: "{{ item.key }}"
 
 # The state file is made only when it is absent: no apply writes a marker or
 # changes it. The installed version of WSL is saved once: the procedure stops
@@ -281,32 +266,12 @@
       }
       $installed
 
-# An administrator registers an S4U task for a different account only with
-# its password, and the account has none that anything keeps: the module sets
-# a new random password at each registration (s4u_user), as SYSTEM. The start
-# task of B keeps the state that the window gives it (keep_task_enabled_state).
-- name: Tasks of the accounts
-  tnwks_win_scheduled_task:
-    name: "{{ wsl_move_rehearsal_prefix }}-{{ task.key }}-{{ task.step }}"
-    xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
-    s4u_user: "{{ wsl_move_rehearsal_accounts[task.key].name }}"
-    s4u_description: "{{ wsl_move_rehearsal_accounts[task.key].description }}"
-    keep_task_enabled_state: "{{ task.step == 'start' }}"
+# The scripts, the configs and the tasks, with the SHA-256 of each copy
+# (host_files.yml): the same task file that each later phase runs.
+- name: The scripts, the configs and the tasks of the rehearsal
+  ansible.builtin.include_tasks: host_files.yml
   vars:
-    ansible_become: true
-    ansible_become_method: ansible.builtin.runas
-    ansible_become_user: SYSTEM
-  loop: "{{ wsl_move_rehearsal_task_list }}"
-  loop_control:
-    loop_var: task
-    label: "{{ task.key }}-{{ task.step }}"
-  when: wsl_move_rehearsal_sids | length == 2
-
-- name: The window procedure and the boot task of the way back, tasks of SYSTEM
-  tnwks_win_scheduled_task:
-    name: "{{ wsl_move_rehearsal_window_task if item == 'window' else wsl_move_rehearsal_boot_task }}"
-    xml: "{{ lookup('ansible.builtin.template', 'system-task.xml.j2') }}"
-  loop: [window, boot]
+    wsl_move_rehearsal_host_files: refresh
 
 - name: The rest runs the tasks, so a check run stops here
   when: not ansible_check_mode
@@ -354,6 +319,28 @@
     # A's disk file and its folder like those of an older WSL (older_disk.yml).
     - name: A's disk file like a file of an older WSL
       ansible.builtin.include_tasks: older_disk.yml
+
+    # Right after the shaping, before A's read starts its distro: the next
+    # reads (after A's read)
+    # show whether WSL's grant at the start keeps the inherited rules.
+    - name: The rules of A's disk file right after the rules of an older WSL
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: a, rule: none}
+
+    - name: The owner and the rules of A's disk file right after the rules of an older WSL, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    # The shaping must have given the file the inherited rules of its folder.
+    - name: A's disk file has the inherited rules that its folder gives, right after the rules of an older WSL
+      vars:
+        disk_a: "{{ wsl_move_rehearsal_disk.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - disk_a.inherits_ok
+        fail_msg: "A's disk file has not the inherited rules that its folder gives after the rules of an older WSL: {{ disk_a }}"
+        quiet: true
 
     - name: A reads its distro
       ansible.builtin.include_tasks: run_task.yml

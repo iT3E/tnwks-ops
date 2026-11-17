@@ -23,6 +23,13 @@
 - name: Read the accounts of the rehearsal
   ansible.builtin.include_tasks: read_accounts.yml
 
+# The removal runs with the copies on the host, whatever they are: it prints
+# each one that differs from the role's, and stops on none.
+- name: The copies of the scripts, the configs and the tasks on the host (print)
+  ansible.builtin.include_tasks: host_files.yml
+  vars:
+    wsl_move_rehearsal_host_files: print
+
 - name: The accounts may log on as a batch job, so that their tasks run
   ansible.windows.win_user_right:
     name: SeBatchLogonRight

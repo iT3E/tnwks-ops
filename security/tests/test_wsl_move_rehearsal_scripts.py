@@ -146,7 +146,7 @@ def run_script(tmp_path: Path, file: str, name: str, params: dict, stand_ins: st
     changed: give the output and the value of $Ansible.Changed, as a pair.
     """
     module = find_task(file, name)["ansible.windows.win_powershell"]
-    script = module["script"]
+    script = module["script"].replace("{{ wsl_move_rehearsal_procedure_lib }}", VARS["wsl_move_rehearsal_procedure_lib"])
     for old, new in edits:
         assert script.count(old) == 1, old
         script = script.replace(old, new)
@@ -297,6 +297,7 @@ def check_result(disk: str, **over) -> dict:
     return out
 
 
+VARS = yaml.safe_load((ROLE / "vars/main.yml").read_text())
 DIR = r"C:\ProgramData\tnwks-moverh"
 
 
@@ -490,7 +491,8 @@ $global:OnStart = {
 """
 
 
-def procedure_output(tmp_path: Path, run: dict, log_before: str, state_before: str, request: dict, last_markers: list) -> list:
+def procedure_output(tmp_path: Path, run: dict, log_before: str, state_before: str, request: dict, last_markers: list,
+                     hashes: list | None = None) -> list:
     """The output of run_procedure.yml for a run of the procedure (run_window) that starts
     from the log and the state file given."""
     root = Path(run["root"])
@@ -507,6 +509,7 @@ def procedure_output(tmp_path: Path, run: dict, log_before: str, state_before: s
     return run_script(tmp_path, "run_procedure.yml", "The window procedure", {
         "Task": "tnwks-moverh-window", "Request": str(files / "request.json"), "RequestJson": json.dumps(request),
         "Log": str(files / "window.log"), "State": str(files / "window.state"), "LastMarkers": last_markers,
+        "Hashes": hashes if hashes is not None else [f"{sha256(WINDOW.read_text())} {WINDOW}"],
     }, stand_ins=PROCEDURE_STAND_INS + f"""
 $global:LogPath = {ps_str(files / 'window.log')}; $global:StatePath = {ps_str(files / 'window.state')}
 $global:RunLog = {ps_str(files / 'run.log')}; $global:RunState = {ps_str(files / 'run.state')}
@@ -522,51 +525,72 @@ function Get-LocalUser { param([string]$Name) [pscustomobject]@{ PasswordLastSet
 
 # The rules of the moved file as Windows writes them: B the owner, full control (FA).
 MOVED_SDDL = f"O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})"
-VM_ACE = "(A;;0x1301bf;;;S-1-5-83-1-1111-2222-3333-4444)"
+VM_ACE = "(A;;FA;;;S-1-5-83-1-1111-2222-3333-4444)"
+CAPABILITY = DEFAULTS["wsl_move_rehearsal_vm_capability_sid"]
+CAP_ACE = f"(A;;FA;;;{CAPABILITY})"
 
 
 def disk_read(tmp_path: Path, rule: str, sddls: list[str], saved: str | None = None, wait: int = 0,
-              owner: str = "new-account", mask: str = "FA", exists: bool = True) -> list:
-    """The read of read_disk.yml, with Get-Acl giving each SDDL of sddls in turn (the last
-    one stays)."""
+              owner: str = "new-account", mask: str = "FA", exists: bool = True, inherit: str = "") -> list:
+    """The read of read_disk.yml with the functions of the procedure (from the role's
+    copy), with the read of the file giving each SDDL of sddls in turn, one more for each
+    wait (the last one stays), and a folder that gives the rules of inherit."""
     tag = uuid.uuid4().hex[:6]
-    disk = tmp_path / f"disk-{tag}.vhdx"
+    folder = tmp_path / f"folder-{tag}"
+    folder.mkdir()
+    disk = folder / "ext4.vhdx"
     if exists:
         disk.write_text("disk")
     saved_file = tmp_path / f"saved-{tag}.sddl"
     if saved is not None:
         saved_file.write_text(saved + "\r\n")
-    stand_ins = ("$global:Reads = @(" + ", ".join(ps_str(x) for x in sddls) + ")\n$global:Read = 0\n"
-                 "function Get-Acl { param([string]$LiteralPath) $i = [Math]::Min($global:Read, $global:Reads.Count - 1)\n"
-                 "    $global:Read++; [pscustomobject]@{ Sddl = $global:Reads[$i] } }\n"
-                 "function Start-Sleep { }\n")
+    stand_ins = WINDOW_FAKES + (
+        "$global:ReadSeq = @{ " + ps_str(disk) + " = @(" + ", ".join(ps_str(x) for x in sddls) + ") }\n$global:ReadAt = 0\n"
+        "$global:Inherit = @{ " + ps_str(folder) + " = " + ps_str(inherit) + " }\n"
+        "function Start-Sleep { $global:ReadAt++ }\n")
     return run_script(tmp_path, "read_disk.yml", "Read the rules of the disk file", {
         "Path": str(disk), "Rule": rule, "Saved": str(saved_file), "Owner": owner, "Mask": mask,
-        "SidA": A_SID, "SidB": B_SID, "Wait": wait}, stand_ins=stand_ins)
+        "SidA": A_SID, "SidB": B_SID, "Wait": wait, "Procedure": str(WINDOW), "Capability": CAPABILITY}, stand_ins=stand_ins)
+
+
+NO_FILE = {"exists": False, "saved": False, "rules_ok": False, "vm": 0, "capability": 0, "deny": 0, "inherits_ok": False,
+           "gives": "", "inherited_note": "", "owner": "", "sddl": ""}
 
 
 @needs_pwsh
-def test_the_read_of_the_disk_file_allows_the_rules_of_a_vm_only_and_masks_each_account(tmp_path):
-    moved = disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE])[-1]
-    assert moved["rules_ok"] is True and moved["vm"] == 1, moved
+def test_the_read_of_the_disk_file_allows_the_rules_of_wsl_only_and_masks_each_account(tmp_path):
+    moved = disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE + CAP_ACE])[-1]
+    assert moved["rules_ok"] is True and moved["vm"] == 1 and moved["capability"] == 1, moved
+    assert moved["inherits_ok"] is True and moved["gives"] == "" and moved["deny"] == 0
     assert moved["owner"] == "<b>"
-    assert moved["sddl"] == "O:<b>D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<b>)(A;;0x1301bf;;;S-1-5-83-1-<vm>)"
+    assert moved["sddl"] == f"O:<b>D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<b>)(A;;FA;;;S-1-5-83-1-<vm>){CAP_ACE}"
     # A mask by its value: 0x1f01ff is FA.
     assert disk_read(tmp_path, "moved", [MOVED_SDDL.replace(";FA;;;" + B_SID, ";0x1F01FF;;;" + B_SID)])[-1]["rules_ok"] is True
-    # Any other rule, another owner, a narrower mask, no protection, or the rule of the
-    # account replaced by a rule of a VM: not a pass.
+    # Any other rule, another owner, a narrower mask, no protection, the rule of the
+    # account replaced by a rule of a VM, two rules of the capability, a deny rule, or
+    # a rule of WSL in another form: not a pass.
+    other_cap = "S-1-15-3-1024-1-2-3-4-5-6-7-8"
     for sddl in (MOVED_SDDL + "(A;;FA;;;S-1-5-21-9-9-9-1003)", MOVED_SDDL.replace(f"O:{B_SID}", "O:BA"),
                  MOVED_SDDL.replace(f"(A;;FA;;;{B_SID})", f"(A;;0x1301bf;;;{B_SID})"), MOVED_SDDL.replace("D:P", "D:"),
-                 MOVED_SDDL.replace(f"(A;;FA;;;{B_SID})", VM_ACE)):
+                 MOVED_SDDL.replace(f"(A;;FA;;;{B_SID})", VM_ACE), MOVED_SDDL + CAP_ACE + CAP_ACE,
+                 MOVED_SDDL + f"(A;;FA;;;{other_cap})", MOVED_SDDL + f"(D;;FA;;;{A_SID})",
+                 MOVED_SDDL + VM_ACE.replace("(A;;FA;", "(D;;FA;"), MOVED_SDDL + VM_ACE.replace(";FA;", ";0x1301bf;"),
+                 MOVED_SDDL + VM_ACE.replace("(A;;", "(A;OICI;"), MOVED_SDDL + "(A;;FA;;;S-1-5-83-1-1111-2222-3333-4444-5555)",
+                 MOVED_SDDL + "(A;;FA;;;S-1-5-83-1-1111-2222-3333)", MOVED_SDDL + "(A;;FA;;;S-1-5-83-0-1111-2222-3333-4444)"):
         out = disk_read(tmp_path, "moved", [sddl])[-1]
         assert out["rules_ok"] is False, sddl
+    deny = disk_read(tmp_path, "moved", [MOVED_SDDL + f"(D;;FA;;;{A_SID})"])[-1]
+    assert deny["deny"] == 1 and deny["vm"] == 0
+    # The VM SID has four numbers after S-1-5-83-1: one with five or three is not WSL's.
+    for sid in ("S-1-5-83-1-1111-2222-3333-4444-5555", "S-1-5-83-1-1111-2222-3333"):
+        out = disk_read(tmp_path, "moved", [MOVED_SDDL + f"(A;;FA;;;{sid})"])[-1]
+        assert out["vm"] == 0 and out["rules_ok"] is False and sid in out["sddl"], out
     # The owner and the mask come from the config.
     admins = f"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;{B_SID})"
     assert disk_read(tmp_path, "moved", [admins], owner="administrators", mask="0x1301bf")[-1]["rules_ok"] is True
     assert disk_read(tmp_path, "moved", [admins])[-1]["rules_ok"] is False
     # No file, or a read only: not a pass.
-    assert disk_read(tmp_path, "moved", [""], exists=False)[-1] == {
-        "exists": False, "saved": False, "rules_ok": False, "vm": 0, "owner": "", "sddl": ""}
+    assert disk_read(tmp_path, "moved", [""], exists=False)[-1] == NO_FILE
     assert disk_read(tmp_path, "none", [MOVED_SDDL])[-1]["rules_ok"] is False
 
 
@@ -575,32 +599,59 @@ def test_the_read_of_the_saved_rules_compares_with_the_file_that_the_way_back_wr
     saved = f"O:{A_SID}D:P(A;;FA;;;BA)(A;;FA;;;{A_SID})"
     out = disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)[-1]
     assert out["saved"] is True and out["rules_ok"] is True and out["vm"] == 1
-    assert out["sddl"] == "O:<a>D:P(A;;FA;;;BA)(A;;FA;;;<a>)(A;;0x1301bf;;;S-1-5-83-1-<vm>)"
-    # A stale rule of a VM in the saved text compares as no rule.
-    assert disk_read(tmp_path, "saved", [saved], saved=saved + VM_ACE)[-1]["rules_ok"] is True
+    assert out["sddl"] == "O:<a>D:P(A;;FA;;;BA)(A;;FA;;;<a>)(A;;FA;;;S-1-5-83-1-<vm>)"
+    # A stale rule of WSL in the saved text compares as no rule.
+    assert disk_read(tmp_path, "saved", [saved], saved=saved + VM_ACE + CAP_ACE)[-1]["rules_ok"] is True
     assert disk_read(tmp_path, "saved", [saved.replace(f"O:{A_SID}", "O:BA")], saved=saved)[-1]["rules_ok"] is False
-    assert disk_read(tmp_path, "saved", [saved])[-1] | {"sddl": ""} == {
-        "exists": True, "saved": False, "rules_ok": False, "vm": 0, "owner": "<a>", "sddl": ""}
+    assert disk_read(tmp_path, "saved", [saved])[-1] | {"sddl": ""} == NO_FILE | {
+        "exists": True, "inherits_ok": True, "owner": "<a>"}
+
+
+FOLDER_A = "(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;CO)(A;ID;FR;;;AU)"
 
 
 @needs_pwsh
-def test_the_read_of_the_saved_rules_compares_each_inherited_rule(tmp_path):
+def test_the_read_of_the_saved_rules_compares_the_explicit_rules_and_reads_the_inherited_ones_apart(tmp_path):
     # A file of an older WSL: no protection, the rules of its folder (ID), one explicit rule.
     saved = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)"
-    assert disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)[-1]["rules_ok"] is True
-    # The CREATOR OWNER rule of the folder names the owner: another account is not a pass.
-    for sddl in (saved.replace("(A;ID;FR;;;AU)", ""), saved.replace("(A;ID;FR;;;AU)", "(A;;FR;;;AU)"),
-                 saved.replace("D:AI", "D:PAI"), saved.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")):
-        assert disk_read(tmp_path, "saved", [sddl], saved=saved)[-1]["rules_ok"] is False, sddl
+    out = disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved, inherit=FOLDER_A)[-1]
+    assert out["rules_ok"] is True and out["inherits_ok"] is True and out["inherited_note"] == "", out
+    assert out["gives"] == "A;ID;0x120089;;;AU A;ID;0x1301bf;;;<a> A;ID;0x1f01ff;;;BA A;ID;0x1f01ff;;;SY"
+    # An explicit rule in the place of an inherited one, protection, another owner or
+    # another explicit rule: not a pass.
+    for sddl in (saved.replace("(A;ID;FR;;;AU)", "(A;;FR;;;AU)"), saved.replace("D:AI", "D:PAI"),
+                 saved.replace(f"O:{A_SID}", "O:BA"), saved.replace(f"(A;;FA;;;{A_SID})", f"(A;;0x1301bf;;;{A_SID})")):
+        out = disk_read(tmp_path, "saved", [sddl], saved=saved, inherit=FOLDER_A)[-1]
+        assert out["rules_ok"] is False, sddl
+    # Inherited rules other than the folder gives (one gone, or the rule of CREATOR
+    # OWNER for another account): the saved owner, protection and explicit rules
+    # pass, and inherits_ok is false, with the note of the difference.
+    for sddl in (saved.replace("(A;ID;FR;;;AU)", ""), saved.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")):
+        out = disk_read(tmp_path, "saved", [sddl], saved=saved, inherit=FOLDER_A)[-1]
+        assert out["rules_ok"] is True and out["inherits_ok"] is False and out["inherited_note"], sddl
+    # A saved set with the flag AI and no inherited rule, as the restore at the old path
+    # leaves it: the folder gives its rules, and the difference from the saved set is a
+    # note, not a failed check.
+    bare = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})"
+    out = disk_read(tmp_path, "saved", [saved], saved=bare, inherit=FOLDER_A)[-1]
+    assert out["rules_ok"] is True and out["inherits_ok"] is True, out
+    assert out["inherited_note"] == ("the inherited rules differ from the saved set: saved '', now "
+                                     "'A;ID;0x120089;;;AU A;ID;0x1301bf;;;<a> A;ID;0x1f01ff;;;BA A;ID;0x1f01ff;;;SY'")
+    # A file with no inherited rule in a folder that gives some (the form of a file
+    # that moved in from a folder that gives none), against a saved set with the same
+    # owner and explicit rules: rules_ok, and inherits_ok is false.
+    out = disk_read(tmp_path, "saved", [bare], saved=saved, inherit=FOLDER_A)[-1]
+    assert out["rules_ok"] is True and out["inherits_ok"] is False, out
+    assert disk_read(tmp_path, "none", [bare], inherit=FOLDER_A)[-1]["inherits_ok"] is False
 
 
 @needs_pwsh
-def test_the_read_after_a_clean_stop_waits_for_the_rule_of_the_vm_to_go(tmp_path):
-    gone = disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE, MOVED_SDDL + VM_ACE, MOVED_SDDL], wait=60)[-1]
-    assert gone["vm"] == 0 and gone["rules_ok"] is True
+def test_the_read_after_a_clean_stop_waits_for_the_rules_of_wsl_to_go(tmp_path):
+    gone = disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE + CAP_ACE, MOVED_SDDL + CAP_ACE, MOVED_SDDL], wait=60)[-1]
+    assert gone["vm"] == 0 and gone["capability"] == 0 and gone["rules_ok"] is True
     # With no wait, the first read; a rule that stays ends the wait at its limit.
     assert disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE, MOVED_SDDL])[-1]["vm"] == 1
-    assert disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE], wait=1)[-1]["vm"] == 1
+    assert disk_read(tmp_path, "moved", [MOVED_SDDL + CAP_ACE], wait=1)[-1]["capability"] == 1
 
 
 BEFORE_STAND_INS = TASKS + r"""
@@ -657,6 +708,15 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     as_saved = disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)
     other = disk_read(tmp_path, "saved", [saved.replace(f"O:{A_SID}", "O:BA")], saved=saved)
     no_saved = disk_read(tmp_path, "saved", [saved])
+    # A's file in the form with no inherited rule (D:AI, one explicit rule), against a
+    # saved set of an older WSL: the saved owner and explicit rules pass, whatever the
+    # inherited rules; another explicit rule or another owner does not.
+    older = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)"
+    bare = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})"
+    bare_ok = disk_read(tmp_path, "saved", [bare], saved=older, inherit=FOLDER_A)
+    assert bare_ok[-1]["rules_ok"] is True and bare_ok[-1]["inherits_ok"] is False, bare_ok
+    bare_rule = disk_read(tmp_path, "saved", [bare + "(A;;FR;;;AU)"], saved=older, inherit=FOLDER_A)
+    bare_owner = disk_read(tmp_path, "saved", [bare.replace(f"O:{A_SID}", "O:BA")], saved=older, inherit=FOLDER_A)
     names = ("The window starts after setup", "After a way back, A's disk file had its saved rules",
              "A owns the distro at its path")
 
@@ -669,7 +729,12 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     plays = [play(first, no_saved), play(second, as_saved), play(second, other), play(second, no_saved),
              play(first, no_saved, (check_a, runner_output(tmp_path, "b", "check", check_result(f"{DIR}\\b\\ext4.vhdx")))),
              play(first, no_saved, (no_start, check_b)),
-             *[play(w, no_saved) for w in wrong.values()]]
+             *[play(w, no_saved) for w in wrong.values()],
+             play(second, bare_ok), play(second, bare_rule), play(second, bare_owner)]
+    # After the rules of an older WSL, the file must have the inherited rules of its folder.
+    shaped = "A's disk file has the inherited rules that its folder gives, right after the rules of an older WSL"
+    plays += [{"vars": {"wsl_move_rehearsal_disk": registered([read[-1]])}, "tasks": checks_of("window.yml", (shaped,))}
+              for read in (as_saved, bare_ok)]
     results = run_plays(tmp_path, plays)
     assert not passed(results[0]), passed(results[0])
     assert not passed(results[1]), passed(results[1])
@@ -680,80 +745,66 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     # B lists no distro; A's distro starts with the rules of an older WSL.
     for result in results[4:6]:
         assert failed_by_assert(result, names[2]) and not failed_by_assert(result, names[1])
-    for name, result in zip(wrong, results[6:], strict=True):
+    for name, result in zip(wrong, results[6:6 + len(wrong)], strict=True):
         assert failed_by_assert(result, names[0]), name
+    bare_results = results[6 + len(wrong):9 + len(wrong)]
+    assert not passed(bare_results[0]), passed(bare_results[0])
+    for result in bare_results[1:]:
+        assert failed_by_assert(result, names[1]) and not failed_by_assert(result, names[0])
+    assert not passed(results[-2]), passed(results[-2])
+    assert failed_by_assert(results[-1], shaped)
 
 
 # The rules of a file as .NET gives them (FileSecurity), kept in a JSON file between runs:
 # the protection and the explicit rules, each a SID, a right, a type and its inheritance.
 # A SID that is not one (not S-1-...) throws, as Windows does.
-OLDER_STAND_INS = r"""
-function Read-Rules { Get-Content -LiteralPath $global:RulesFile -Raw | ConvertFrom-Json }
-function New-Rule([string]$Sid, [string]$Rights, [string]$Type) {
-    $rule = [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = $Sid }
-        FileSystemRights = [Security.AccessControl.FileSystemRights]$Rights; AccessControlType = $Type; InheritanceFlags = 'None' }
-    $rule | Add-Member -MemberType ScriptMethod -Name Key -Value { '{0}|{1}|{2}' -f $this.IdentityReference.Value, [int]$this.FileSystemRights, $this.AccessControlType }
-    $rule
-}
-function New-Object {
-    param([string]$TypeName, [object[]]$ArgumentList)
-    if ($TypeName -eq 'Security.Principal.SecurityIdentifier') {
-        if ("$($ArgumentList[0])" -notmatch '^S-1-[0-9-]+$') { throw 'Exception calling ".ctor" with "1" argument(s): "Value was invalid."' }
-        return [pscustomobject]@{ Value = "$($ArgumentList[0])" }
-    }
-    if ($TypeName -eq 'Security.AccessControl.FileSystemAccessRule') {
-        return New-Rule $ArgumentList[0].Value $ArgumentList[1] $ArgumentList[2]
-    }
-    Microsoft.PowerShell.Utility\New-Object -TypeName $TypeName -ArgumentList $ArgumentList
-}
-function Get-Item {
-    param([string]$LiteralPath)
-    $item = [pscustomobject]@{ FullName = $LiteralPath }
-    $item | Add-Member -MemberType ScriptMethod -Name GetAccessControl -Value {
-        param($Sections)
-        $read = Read-Rules
-        $acl = [pscustomobject]@{ AreAccessRulesProtected = [bool]$read.protected
-            Rules = [Collections.ArrayList]@($read.rules | ForEach-Object { New-Rule $_.sid $_.rights $_.type }) }
-        $acl | Add-Member -MemberType ScriptMethod -Name GetAccessRules -Value { param($e, $i, $t) @($this.Rules) }
-        $acl | Add-Member -MemberType ScriptMethod -Name SetAccessRuleProtection -Value { param($p, $keep) $this.AreAccessRulesProtected = $p }
-        $acl | Add-Member -MemberType ScriptMethod -Name RemoveAccessRuleSpecific -Value {
-            param($r) $hit = @($this.Rules | Where-Object { $_.Key() -eq $r.Key() })[0]; if ($hit) { $this.Rules.Remove($hit) } }
-        $acl | Add-Member -MemberType ScriptMethod -Name AddAccessRule -Value { param($r) [void]$this.Rules.Add($r) }
-        $acl
-    }
-    $item | Add-Member -MemberType ScriptMethod -Name SetAccessControl -Value {
-        param($acl)
-        $old = Read-Rules
-        [pscustomobject]@{ protected = $acl.AreAccessRulesProtected; writes = [int]$old.writes + 1
-            rules = @($acl.Rules | ForEach-Object { @{ sid = $_.IdentityReference.Value; rights = "$($_.FileSystemRights)"; type = "$($_.AccessControlType)" } })
-        } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $global:RulesFile
-    }
-    $item
-}
-"""
+def older_run(tmp_path: Path, folder: Path, sddl: str | None = None) -> tuple[bool, str, list]:
+    """The script that gives A's disk file the rules of an older WSL, with the functions
+    of the procedure: gives whether it changed, the rules after it, and each write."""
+    disk = folder / "ext4.vhdx"
+    disk.write_text("disk")
+    acls = tmp_path / "acls.json"
+    if sddl is not None:
+        acls.write_text(json.dumps({str(disk): sddl}))
+    stand_ins = WINDOW_FAKES + (
+        f"$global:Inherit = @{{ {ps_str(folder)} = {ps_str(FOLDER_A)} }}\n"
+        f"$global:Acls = @{{}}; foreach ($p in (Get-Content -LiteralPath {ps_str(acls)} -Raw | ConvertFrom-Json).PSObject.Properties) {{\n"
+        "    $global:Acls[$p.Name] = $p.Value }\n")
+    tail = (f"\n[IO.File]::WriteAllText({ps_str(acls)}, (@{{ {ps_str(disk)} = $global:Acls[{ps_str(disk)}] }} | ConvertTo-Json))\n"
+            f"[IO.File]::AppendAllLines({ps_str(tmp_path / 'writes.txt')}, [string[]]@($global:SecCalls))\n")
+    params = {"Path": str(disk), "Sid": A_SID, "Procedure": str(WINDOW), "Capability": CAPABILITY}
+    name = "A's disk file like a file of an older WSL, with the rules of its folder"
+    _out, changed = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True,
+                              edits=(("$after = Get-TnwksSddlParts", tail + "$after = Get-TnwksSddlParts"),))
+    writes = (tmp_path / "writes.txt").read_text().splitlines() if (tmp_path / "writes.txt").exists() else []
+    return changed, json.loads(acls.read_text())[str(disk)], writes
 
 
 @needs_pwsh
 def test_the_older_form_of_a_s_disk_file_is_set_once_and_then_changes_nothing(tmp_path):
     """The script of older_disk.yml on the file that a newer WSL makes (A the owner, full
-    control for A and the Administrators, protected), with a rule of A's VM: the first
-    run gives no protection and one explicit rule for A, and keeps the VM rule; a second
-    run reports no change and writes nothing."""
-    rules = tmp_path / "rules.json"
-    vm = "S-1-5-83-1-1111-2222-3333-4444"
-    rules.write_text(json.dumps({"protected": True, "writes": 0, "rules": [
-        {"sid": A_SID, "rights": "FullControl", "type": "Allow"},
-        {"sid": "S-1-5-32-544", "rights": "FullControl", "type": "Allow"},
-        {"sid": vm, "rights": "ReadAndExecute, Write, Synchronize", "type": "Allow"}]}))
-    stand_ins = OLDER_STAND_INS + f"$global:RulesFile = {ps_str(rules)}\n"
-    params = {"Path": str(tmp_path / "ext4.vhdx"), "Sid": A_SID}
-    name = "A's disk file like a file of an older WSL"
-    _, first = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True)
-    after = json.loads(rules.read_text())
-    assert first is True and after["writes"] == 1 and after["protected"] is False
-    assert sorted(r["sid"] for r in after["rules"]) == sorted([A_SID, vm])
-    _, second = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True)
-    assert second is False and json.loads(rules.read_text())["writes"] == 1
+    control for A and the Administrators, protected), with the rules of WSL while A's VM
+    runs: the first run takes the ownership for the Administrators, then writes the owner
+    and the rules in one call, with no protection, so the file takes the rules that its
+    folder gives; the rules of WSL stay. A second run reports no change and writes
+    nothing."""
+    folder = tmp_path / "a"
+    folder.mkdir()
+    newer = f"O:{A_SID}D:P(A;;FA;;;{A_SID})(A;;FA;;;BA){VM_ACE}{CAP_ACE}"
+    changed, after, writes = older_run(tmp_path, folder, newer)
+    assert changed is True
+    assert writes == ["owner a/ext4.vhdx BA", f"rules a/ext4.vhdx O:{A_SID}D:AI(A;;FA;;;{A_SID}){VM_ACE}{CAP_ACE}"]
+    assert after == (f"O:{A_SID}D:AI(A;;FA;;;{A_SID}){VM_ACE}{CAP_ACE}"
+                     + FOLDER_A.replace(";;;CO)", f";;;{A_SID})"))
+    (tmp_path / "writes.txt").unlink()
+    changed, again, writes = older_run(tmp_path, folder)
+    assert changed is False and again == after and writes == []
+    # A file with the explicit rule and no protection, but not the inherited rules that
+    # its folder gives (a write that set the rules before the owner): not already so.
+    (tmp_path / "writes.txt").unlink(missing_ok=True)
+    wrong = after.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")
+    changed, fixed, writes = older_run(tmp_path, folder, wrong)
+    assert changed is True and fixed == after and len(writes) == 2
 
 
 @needs_pwsh
@@ -824,7 +875,8 @@ def test_setup_and_the_window_give_a_s_disk_file_the_rules_of_an_older_wsl_from_
     # One text of the rule of the folder, in setup and in the task file.
     older = yaml.safe_load((ROLE / "tasks/older_disk.yml").read_text())
     folder = next(t for t in older if t["name"].startswith("The folder of A"))
-    assert folder["ansible.windows.win_powershell"]["parameters"]["Rule"] == "{{ wsl_move_rehearsal_older_folder_rule }}"
+    assert folder["ansible.windows.win_powershell"]["parameters"]["Rules"] == [
+        "{{ wsl_move_rehearsal_older_folder_rule }}", "(A;;{{ wsl_move_rehearsal_folder_rights.a }};;;{{ wsl_move_rehearsal_sids.a }})"]
     setup_folder = find_task("setup.yml", "Folders of the disk file")["ansible.windows.win_powershell"]["parameters"]
     assert "wsl_move_rehearsal_older_folder_rule" in setup_folder["Extra"]
     # Each change of the task file runs as SYSTEM, after its assert of the state.
@@ -1287,8 +1339,10 @@ def test_the_play_gives_each_script_as_written_and_no_path_with_a_doubled_backsl
     [result] = run_plays(tmp_path, [{"vars": PARAMETER_VARS, "tasks": tasks,
                                      "keep": [f"tnwks_{k}{i}" for i in range(len(tasks)) for k in "ps"]}])
     assert not passed(result), passed(result)
-    # The play templates each script too: a script goes to the host as written.
-    changed = [names[i] for i in range(len(tasks)) if result["facts"][f"tnwks_s{i}"] != scripts[i]]
+    # The play templates each script too: a script goes to the host as written, with the
+    # functions of the procedure in the place of its one variable.
+    lib = ("{{ wsl_move_rehearsal_procedure_lib }}", VARS["wsl_move_rehearsal_procedure_lib"])
+    changed = [names[i] for i in range(len(tasks)) if result["facts"][f"tnwks_s{i}"] != scripts[i].replace(*lib)]
     assert changed == []
 
     def texts(value):
@@ -1342,3 +1396,94 @@ function Get-LocalGroupMember { param([string]$SID) @() }
               for r in reads.values()]
     for result in run_plays(tmp_path, plays):
         assert not passed(result), passed(result)
+
+
+# --- The copies of the scripts and the configs on the host ---------------------------------
+
+def includes_of(file: str) -> list[tuple[str, str]]:
+    """Each include of host_files.yml in a task file, with its mode, and the names of the
+    tasks in order."""
+    return [(t["name"], t["vars"]["wsl_move_rehearsal_host_files"]) for t in tasks_in(file)
+            if t.get("ansible.builtin.include_tasks") == "host_files.yml"]
+
+
+def test_each_phase_takes_the_copies_of_the_role_as_its_state_allows():
+    """Setup, window and interrupt refresh the copies (each starts with no started
+    window); wayback, restart and after-boot only compare them, as a window started with
+    the copies that are there; the removal prints them. Each comes before the first
+    script of the phase that reads with them."""
+    modes = {"setup.yml": "refresh", "window.yml": "refresh", "interrupt.yml": "refresh", "wayback.yml": "assert",
+             "restart.yml": "assert", "after-boot.yml": "assert", "remove-before-restart.yml": "print"}
+    for file, mode in modes.items():
+        assert [m for _, m in includes_of(file)] == [mode], file
+    assert includes_of("remove.yml") == []
+    window = [t.get("name", "") for t in tasks_in("window.yml")]
+    at = window.index(includes_of("window.yml")[0][0])
+    first_read = next(i for i, t in enumerate(tasks_in("window.yml")) if t.get("ansible.builtin.include_tasks") == "read_disk.yml")
+    assert at < first_read < window.index("Read when the password of B was last set")
+    setup = [t.get("name", "") for t in tasks_in("setup.yml")]
+    assert setup.index(includes_of("setup.yml")[0][0]) < setup.index("A imports the distro into its folder")
+    restart = [t.get("name", "") for t in tasks_in("restart.yml")]
+    assert restart.index(includes_of("restart.yml")[0][0]) < restart.index("Restart the host")
+    # One task file writes the scripts, the configs and the tasks; setup has no copy of its own.
+    for file in modes:
+        text = (ROLE / "tasks" / file).read_text()
+        assert "Invoke-TnwksMoveWindow.ps1\n" not in text and "to_nice_json" not in text, file
+    host = (ROLE / "tasks/host_files.yml").read_text()
+    assert "loop: \"{{ wsl_move_rehearsal_scripts }}\"" in host
+    assert "Content: \"{{ item.value | to_nice_json | b64encode }}\"" in host
+    hashes = (ROLE / "vars/main.yml").read_text()
+    assert "lookup('ansible.builtin.file', name, rstrip=false) | hash('sha256')" in hashes
+    assert "value | to_nice_json | hash('sha256')" in hashes
+
+
+@needs_both
+def test_the_copies_change_only_with_no_started_window_and_a_copy_that_differs_stops_the_phase(tmp_path):
+    role_hashes = {r"C:\r\Invoke-TnwksMoveWindow.ps1": "a" * 64, r"C:\r\window.json": "b" * 64}
+    states = {"": True, "wayback-done": True, "window-started": False, "window-done": False, "boot-run": False}
+    plays = []
+    for marker in states:
+        state = tmp_path / f"state-{marker or 'none'}"
+        state.write_text(f"t {marker}\r\n" if marker else "")
+        read = run_script(tmp_path, "host_files.yml", "Read the last marker before the copies", {"State": str(state)})
+        for mode in ("refresh", "assert"):
+            plays.append({"vars": {"wsl_move_rehearsal_files_marker": registered(read), "wsl_move_rehearsal_host_files": mode,
+                                   "wsl_move_rehearsal_file_hashes": role_hashes,
+                                   "wsl_move_rehearsal_host_hashes": registered([role_hashes])},
+                          "tasks": checks_of("host_files.yml")})
+    results = run_plays(tmp_path, plays)
+    for i, (marker, ok) in enumerate(states.items()):
+        refresh, compare = results[2 * i], results[2 * i + 1]
+        if ok:
+            assert not passed(refresh), (marker, passed(refresh))
+        else:
+            assert failed_by_assert(refresh, "A refresh of the copies only when no window is started"), marker
+        assert not passed(compare), (marker, passed(compare))
+    # A copy that differs, or none: the phase stops and names it.
+    differ = {r"C:\r\Invoke-TnwksMoveWindow.ps1": "c" * 64, r"C:\r\window.json": "none"}
+    result = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_files_marker": registered(["window-done"]),
+                                            "wsl_move_rehearsal_host_files": "assert",
+                                            "wsl_move_rehearsal_file_hashes": role_hashes,
+                                            "wsl_move_rehearsal_host_hashes": registered([differ])},
+                                   "tasks": checks_of("host_files.yml")}])[0]
+    assert failed_by_assert(result, "Each copy on the host is the role's")
+    msg = next(r["msg"] for r in result["results"] if r["name"] == "Each copy on the host is the role's")
+    assert "Invoke-TnwksMoveWindow.ps1, window.json" in msg and "A window started with them" in msg
+
+
+@needs_pwsh
+def test_a_run_of_the_procedure_starts_only_with_the_copies_of_the_role(tmp_path):
+    """run_procedure.yml compares the SHA-256 of each copy on the host before it writes
+    the request or starts the task: another copy, or none, stops it with nothing changed."""
+    files = tmp_path / "proc"
+    files.mkdir()
+    (files / "window.state").write_text("")
+    (files / "window.log").write_text("")
+    params = {"Task": "tnwks-moverh-window", "Request": str(files / "request.json"), "RequestJson": "{}",
+              "Log": str(files / "window.log"), "State": str(files / "window.state"), "LastMarkers": [""]}
+    stand_ins = PROCEDURE_STAND_INS + "function Start-ScheduledTask { throw 'started' }\n"
+    for hashes, word in (([f"{'0' * 64} {WINDOW}"], "is not the role's"), ([f"{sha256(WINDOW.read_text())} {files / 'none.ps1'}"], "none")):
+        err = run_script(tmp_path, "run_procedure.yml", "The window procedure", params | {"Hashes": hashes},
+                         stand_ins=stand_ins, fails=True)
+        assert word in err and "Nothing is changed" in err and "started" not in err, err
+        assert not (files / "request.json").exists()

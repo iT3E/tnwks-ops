@@ -43,6 +43,13 @@
 - name: The groups before the restart
   ansible.builtin.include_tasks: groups.yml
 
+# The boot task runs the copy of the procedure on the host: it must be the
+# role's, as the window that it ends started with it.
+- name: The copies of the scripts, the configs and the tasks on the host (assert)
+  ansible.builtin.include_tasks: host_files.yml
+  vars:
+    wsl_move_rehearsal_host_files: assert
+
 - name: The restart, and the wait for the boot task
   when: not ansible_check_mode
   block:

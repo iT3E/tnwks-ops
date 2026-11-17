@@ -10,6 +10,13 @@
 - name: The groups at the start
   ansible.builtin.include_tasks: groups.yml
 
+# The reads run with the copies that the boot run used: a copy that differs
+# from the role's stops the phase.
+- name: The copies of the scripts, the configs and the tasks on the host (assert)
+  ansible.builtin.include_tasks: host_files.yml
+  vars:
+    wsl_move_rehearsal_host_files: assert
+
 - name: The reads after the boot
   when: not ansible_check_mode
   block:

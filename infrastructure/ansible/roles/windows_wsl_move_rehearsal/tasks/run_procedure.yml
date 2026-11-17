@@ -5,7 +5,10 @@
 # wsl_move_rehearsal_procedure_exit: the exit code that passes (default 0).
 # wsl_move_rehearsal_last_markers: the last markers that the phase expects
 # before the run (a list); with another one (a phase run twice, or out of
-# order), the run does not start.
+# order), the run does not start. Nor does it start when a copy of a script
+# or a config on the host has not the SHA-256 of the role's
+# (wsl_move_rehearsal_file_hashes): the run is the procedure of this
+# release, or none.
 #
 # The wait: the task of the procedure has a limit of 2 hours
 # (templates/system-task.xml.j2), and a run that the limit ends skips its
@@ -24,10 +27,21 @@
       Log: "{{ wsl_move_rehearsal_log_file }}"
       State: "{{ wsl_move_rehearsal_state_file }}"
       LastMarkers: "{{ wsl_move_rehearsal_last_markers }}"
+      Hashes: >-
+        {{ wsl_move_rehearsal_file_hashes.values() | zip(wsl_move_rehearsal_file_hashes.keys()) | map('join', ' ') | list }}
     script: |
-      param([string]$Task, [string]$Request, [string]$RequestJson, [string]$Log, [string]$State, [string[]]$LastMarkers)
+      param([string]$Task, [string]$Request, [string]$RequestJson, [string]$Log, [string]$State, [string[]]$LastMarkers,
+          [string[]]$Hashes)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $true
+      # Each "<sha256> <path>": the copy on the host must be the role's.
+      foreach ($line in @($Hashes | Where-Object { $_ })) {
+          $sha, $path = $line -split ' ', 2
+          $have = if (Test-Path -LiteralPath $path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash } else { 'none' }
+          if ($have -ne $sha) {
+              throw "The copy '$path' on the host is not the role's (SHA-256 $have, not $sha). Nothing is changed."
+          }
+      }
       $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
       $last = if ($lines.Count) { ($lines[-1] -split ' ', 2)[1].Trim() } else { '' }
       if ($last -notin @($LastMarkers)) {

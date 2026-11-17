@@ -237,7 +237,9 @@ function Set-TnwksGroup([string]$Sid, [string]$Account, [bool]$In) {
 # SDDL with no protection come from the folder of the file, so Windows
 # computes them in that write (a CREATOR OWNER rule names the owner of the
 # SDDL), and a check compares them after. A move is
-# a rename, with the right to delete a child on the folder, which SYSTEM has.
+# a rename by these privileges (way back step 3 says why). What a folder
+# gives a file comes from Windows' own inheritance function
+# (CreatePrivateObjectSecurityEx), as at a write.
 $TnwksSecuritySource = @'
 using System;
 using System.ComponentModel;
@@ -272,6 +274,12 @@ public static class TnwksSecurity {
     static extern bool GetSecurityDescriptorDacl(IntPtr sd, out bool present, out IntPtr dacl, out bool defaulted);
     [DllImport("advapi32.dll", SetLastError = true)]
     static extern bool GetSecurityDescriptorControl(IntPtr sd, out short control, out int revision);
+    [StructLayout(LayoutKind.Sequential)]
+    struct GenericMapping { public int Read; public int Write; public int Execute; public int All; }
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool CreatePrivateObjectSecurityEx(IntPtr parent, IntPtr creator, out IntPtr created, IntPtr objectType, bool isContainer, int flags, IntPtr token, ref GenericMapping mapping);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool DestroyPrivateObjectSecurity(ref IntPtr sd);
     const int OWNER = 0x1, DACL = 0x4, PROTECTED_DACL = unchecked((int)0x80000000), UNPROTECTED_DACL = 0x20000000;
     const int READ_CONTROL = 0x20000, WRITE_DAC = 0x40000, WRITE_OWNER = 0x80000;
 
@@ -308,6 +316,39 @@ public static class TnwksSecurity {
                 try { return Marshal.PtrToStringUni(text); } finally { LocalFree(text); }
             } finally { LocalFree(sd); }
         }
+    }
+    // The rules that a folder gives a new file in it, by Windows' own
+    // inheritance function: the folder's security descriptor as the parent,
+    // the owner of the file as the creator, with an empty DACL (so the result
+    // holds the inherited rules only), the generic mapping of files, and an
+    // object that is not a container. SEF_DACL_AUTO_INHERIT (0x1),
+    // SEF_AVOID_PRIVILEGE_CHECK (0x8), SEF_AVOID_OWNER_CHECK (0x10). The
+    // DACL of the result, as SDDL.
+    public static string FileGives(string folderSddl, string owner) {
+        IntPtr parent, creator, created, text, token; int size, length;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptor(folderSddl, 1, out parent, out size))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "the rules of the folder " + folderSddl);
+        try {
+            if (!ConvertStringSecurityDescriptorToSecurityDescriptor("O:" + owner + "G:" + owner + "D:", 1, out creator, out size))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "the owner " + owner);
+            try {
+                // TOKEN_QUERY: the token of this process, which the function
+                // reads for no default here (the creator has an owner, a group
+                // and a DACL).
+                if (!OpenProcessToken(GetCurrentProcess(), 0x8, out token)) throw new Win32Exception(Marshal.GetLastWin32Error(), "the token");
+                try {
+                    GenericMapping map = new GenericMapping();
+                    map.Read = 0x120089; map.Write = 0x120116; map.Execute = 0x1200A0; map.All = 0x1F01FF;
+                    if (!CreatePrivateObjectSecurityEx(parent, creator, out created, IntPtr.Zero, false, 0x1 | 0x8 | 0x10, token, ref map))
+                        throw new Win32Exception(Marshal.GetLastWin32Error(), "what the folder gives");
+                    try {
+                        if (!ConvertSecurityDescriptorToStringSecurityDescriptor(created, 1, DACL, out text, out length))
+                            throw new Win32Exception(Marshal.GetLastWin32Error());
+                        try { return Marshal.PtrToStringUni(text); } finally { LocalFree(text); }
+                    } finally { DestroyPrivateObjectSecurity(ref created); }
+                } finally { CloseHandle(token); }
+            } finally { LocalFree(creator); }
+        } finally { LocalFree(parent); }
     }
     public static void SetOwner(string path, string owner) {
         IntPtr sid;
@@ -366,8 +407,12 @@ function Set-TnwksSddl([string]$Path, [string]$Sddl) {
     if ($Sddl -notmatch '^O:([^:]+?)(?=[GD]:)') { throw "no owner in the rules $Sddl" }
     $owner = $Matches[1]
     $dacl = if ($Sddl -match '(D:[^:]*)$') { $Matches[1] } else { throw "no rules in $Sddl" }
-    # The explicit rules only: Windows gives the inherited ones.
+    # The explicit rules only: Windows gives the inherited ones. No rule of a
+    # VM or of its capability either: WSL adds those at each start, and right
+    # after a write the file has none.
     $explicit = $dacl -replace '\([^;()]*;[A-Z]*ID[A-Z]*;[^)]*\)', ''
+    $wslSids = 'S-1-5-83-1-[0-9]+-[0-9]+-[0-9]+-[0-9]+' + $(if ($TnwksVmCapabilitySid) { '|' + [regex]::Escape($TnwksVmCapabilitySid) } else { '' })
+    $explicit = $explicit -replace ('\(A;;(FA|0x1[fF]01[fF]{2});;;(' + $wslSids + ')\)'), ''
     [TnwksSecurity]::SetOwner($Path, 'BA')
     [TnwksSecurity]::SetRules($Path, "O:$owner$explicit")
 }
@@ -403,45 +448,94 @@ function ConvertTo-TnwksSddlMask([string]$Rights) {
 }
 
 # WSL grants the VM of each start access to the disk file, as an explicit rule
-# of a virtual machine SID (S-1-5-83-...). A check compares every other
-# explicit rule and each inherited rule (as its folder gives it), and allows
-# the rules of a VM only: their count is "vm".
+# of a virtual machine SID, S-1-5-83-1- and four numbers (MS-DTYP, well-known
+# SIDs: NT VIRTUAL MACHINE\Remote Virtual Machine; any other S-1-5-83 SID is
+# not WSL's), and while the VM runs the file may
+# also have an explicit rule for the capability SID that Windows derives from
+# the capability name vmWorkerProcess (DeriveCapabilitySidsFromName: SHA-256
+# of the name in upper case, as UTF-16). The config holds that one SID
+# (vm_capability_sid); any other capability SID is a rule like any other. A
+# clean stop removes both. Each counts as WSL's only as an allow rule with
+# full control and no flag; in any other form it is a rule like any other.
+# A check compares every other explicit rule and each inherited rule (as its
+# folder gives it), allows these two kinds only (their counts are "vm" and
+# "capability"), and allows no deny rule (their count is "deny").
 function Get-TnwksSddlParts([string]$Sddl) {
     $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { ConvertTo-TnwksSddlSid $Matches[1] } else { '' }
     $dacl = if ($Sddl -match 'D:([A-Z]*)((\([^)]*\))*)') { $Matches } else { @{ 1 = ''; 2 = '' } }
-    $aces = @(); $inherited = @(); $vm = 0
+    $aces = @(); $inherited = @(); $vm = 0; $capability = 0; $deny = 0
     foreach ($ace in @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value })) {
         $f = $ace -split ';'
         if ($f.Count -lt 6) { continue }
         $f[2] = ConvertTo-TnwksSddlMask $f[2]
         $f[-1] = ConvertTo-TnwksSddlSid $f[-1]
+        if ($f[0] -ne 'A') { $deny++ }
+        $wsl = $f[0] -eq 'A' -and $f[1] -eq '' -and $f[2] -eq '0x1f01ff'
         if ($f[1] -match 'ID') { $inherited += ($f -join ';') }
-        elseif ($f[-1] -match '^S-1-5-83-') { $vm++ }
+        elseif ($wsl -and $f[-1] -match '^S-1-5-83-1-[0-9]+-[0-9]+-[0-9]+-[0-9]+$') { $vm++ }
+        elseif ($wsl -and $TnwksVmCapabilitySid -and $f[-1] -eq $TnwksVmCapabilitySid) { $capability++ }
         else { $aces += ($f -join ';') }
     }
     [pscustomobject]@{ owner = $owner; protected = ($dacl[1] -match 'P'); aces = (@($aces | Sort-Object) -join ' ')
-        inherited = (@($inherited | Sort-Object) -join ' '); vm = $vm }
+        inherited = (@($inherited | Sort-Object) -join ' '); vm = $vm; capability = $capability; deny = $deny }
 }
 
-# -Exact: right after a write, which replaces every rule, also no rule of a VM
-# but those of the SDDL written (a stale rule of an earlier VM goes).
-function Test-TnwksSddl([string]$Path, [string]$Expected, [switch]$Exact) {
+# What a folder gives a file in it, owned by $Owner: the inherited part of
+# the DACL that Windows' own inheritance function computes from the folder's
+# rules (TnwksSecurity.FileGives), in the form of Get-TnwksSddlParts.
+function Get-TnwksFolderGives([string]$FolderSddl, [string]$Owner) {
+    (Get-TnwksSddlParts ([TnwksSecurity]::FileGives($FolderSddl, $Owner))).inherited
+}
+
+# The inherited rules that the folder of a file gives it: none for a file with
+# protection.
+function Get-TnwksFileGives([string]$Path, [pscustomobject]$Parts) {
+    if ($Parts.protected) { return '' }
+    Get-TnwksFolderGives (Get-TnwksSddl (Split-Path -Parent $Path)) $Parts.owner
+}
+
+# The owner, the protection and the explicit rules as in the SDDL expected,
+# and no deny rule. The inherited rules as in that SDDL; with -Saved (against
+# a saved set: way back step 3, its restore-only condition, the state read
+# and the play's reads) they are not compared: the way back writes the
+# explicit rules of the saved set only, Windows gives the inherited ones from
+# the folder, and a difference from the saved ones is a note. Whether the
+# inherited rules are those that the folder gives is a fact of its own, for
+# the guard of window step 1. The rules of WSL: any number of a VM, and at
+# most one of its capability; -Exact (right after a write, which replaces
+# every rule): none.
+function Test-TnwksSddl([string]$Path, [string]$Expected, [switch]$Exact, [switch]$Saved) {
     $want = Get-TnwksSddlParts $Expected
     $have = Get-TnwksSddlParts (Get-TnwksSddl $Path)
+    $wsl = if ($Exact) { $have.vm -eq 0 -and $have.capability -eq 0 } else { $have.capability -le 1 }
     $want.owner -eq $have.owner -and $want.protected -eq $have.protected -and $want.aces -eq $have.aces -and
-        $want.inherited -eq $have.inherited -and (-not $Exact -or $want.vm -eq $have.vm)
+        ($Saved -or $have.inherited -eq $want.inherited) -and $wsl -and $have.deny -eq 0
+}
+
+# A note in the log when the inherited rules of a file differ from those of a
+# saved set: not a failed check, as the folder gives them.
+function Write-TnwksInheritedNote([string]$Path, [string]$Saved, [string]$Step) {
+    $want = (Get-TnwksSddlParts $Saved).inherited
+    $have = (Get-TnwksSddlParts (Get-TnwksSddl $Path)).inherited
+    if ($want -ne $have) {
+        Write-Log ("{0}: note: the inherited rules differ from the saved set, as the folder gives them: saved '{1}', now '{2}'" -f
+            $Step, (ConvertTo-TnwksMaskedText $want), (ConvertTo-TnwksMaskedText $have))
+    }
 }
 
 # The owner and the rules of a file for the log, with the SID of each account
-# masked: <present>, <new>, S-1-5-83-<class>-<vm> for a virtual machine, <sid>
+# masked: <present>, <new>, S-1-5-83-1-<vm> for a virtual machine, <sid>
 # for any other.
+function ConvertTo-TnwksMaskedText([string]$Text) {
+    $sids = @{ (Get-TnwksSid $present.account) = '<present>'; (Get-TnwksSid $new.account) = '<new>' }
+    foreach ($sid in $sids.Keys) { $Text = $Text -replace ([regex]::Escape($sid) + '(?![0-9-])'), $sids[$sid] }
+    $Text -replace 'S-1-5-83-1(-[0-9]+){4}(?![0-9-])', 'S-1-5-83-1-<vm>' -replace 'S-1-5-21(-[0-9]+)+', '<sid>'
+}
+
 function Get-TnwksMaskedSddl([string]$Path) {
     try {
         if (-not (Test-Path -LiteralPath $Path)) { return 'no file' }
-        $text = Get-TnwksSddl $Path
-        $sids = @{ (Get-TnwksSid $present.account) = '<present>'; (Get-TnwksSid $new.account) = '<new>' }
-        foreach ($sid in $sids.Keys) { $text = $text -replace ([regex]::Escape($sid) + '(?![0-9-])'), $sids[$sid] }
-        $text -replace 'S-1-5-83-([0-9]+)(-[0-9]+)+', 'S-1-5-83-$1-<vm>' -replace 'S-1-5-21(-[0-9]+)+', '<sid>'
+        ConvertTo-TnwksMaskedText (Get-TnwksSddl $Path)
     } catch { "not read: $($_.Exception.Message)" }
 }
 
@@ -508,12 +602,13 @@ function Request-TnwksRestart([string]$Why) {
 $present = $cfg.present
 $new = $cfg.new
 $oldPath = Join-Path $present.folder $cfg.disk_name
+$TnwksVmCapabilitySid = "$($cfg.vm_capability_sid)"
 $newPath = Join-Path $new.folder $cfg.disk_name
 
 function Test-TnwksOldAsSaved {
     try {
         if (-not ((Test-Path -LiteralPath $oldPath) -and (Test-Path -LiteralPath $cfg.acl_file))) { return $false }
-        Test-TnwksSddl $oldPath ("$(Get-Content -LiteralPath $cfg.acl_file -Raw)").Trim()
+        Test-TnwksSddl $oldPath ("$(Get-Content -LiteralPath $cfg.acl_file -Raw)").Trim() -Saved
     } catch { "not read: $($_.Exception.Message)" }
 }
 
@@ -550,6 +645,20 @@ function Invoke-TnwksForward {
     if ($last -in @('window-started', 'boot-run')) {
         Write-Log "stop: the last marker is '$last': a window started and did not end. Nothing is changed."
         return 'stopped'
+    }
+    # (1) Before any change: the disk file has the inherited rules that its
+    # folder gives (none with protection). Way back step 3 puts back the
+    # explicit rules of the saved set, and Windows gives the inherited ones
+    # from the folder, so a file that lost them would not come back as saved.
+    if (Test-Path -LiteralPath $oldPath) {
+        $diskParts = Get-TnwksSddlParts (Get-TnwksSddl $oldPath)
+        $gives = Get-TnwksFileGives $oldPath $diskParts
+        if ($diskParts.inherited -ne $gives) {
+            Write-Log ("stop at step 1: the inherited rules of the disk file are not those that its folder gives. Nothing is changed. The file: '{0}'; the folder gives: '{1}'" -f
+                (ConvertTo-TnwksMaskedText $diskParts.inherited), (ConvertTo-TnwksMaskedText $gives))
+            return 'stopped'
+        }
+        Write-Log 'step 1: the disk file has the inherited rules that its folder gives'
     }
     if ($req.rehearsal_group_test) {
         # The rehearsal only: the present account is in Administrators, as
@@ -681,15 +790,20 @@ function Invoke-TnwksWayBack {
     }
     # With no saved rules, step 4 did not start in this window: nothing to
     # restore.
+    # The restore writes the saved owner, protection and explicit rules; the
+    # check compares those exactly. The inherited rules are not part of "as
+    # saved": Windows gives them from the old folder, and a difference from
+    # the saved inherited rules is a note.
     if ($saved -like 'O:*' -and (Test-Path -LiteralPath $oldPath)) {
-        if (Test-TnwksSddl $oldPath $saved) {
+        if (Test-TnwksSddl $oldPath $saved -Saved) {
             Write-Log 'way back 3: the file has its saved owner and rules'
         } else {
             Assert-Tnwks ((Get-TnwksWslProcess $pSid).Count -eq 0 -and (Get-TnwksWslProcess $nSid).Count -eq 0) 'a WSL process runs before the restore of the rules'
             Set-TnwksSddl $oldPath $saved
-            Assert-Tnwks (Test-TnwksSddl $oldPath $saved -Exact) 'the file has not its saved owner and rules'
+            Assert-Tnwks (Test-TnwksSddl $oldPath $saved -Exact -Saved) 'the file has not its saved owner and rules'
             Write-Log "way back 3: restored the saved owner and rules: $(Get-TnwksMaskedSddl $oldPath)"
         }
+        Write-TnwksInheritedNote $oldPath $saved 'way back 3'
     }
     Write-Log 'way back 3 passed'
     # (4) For step 6: the unregister of the new account. No distro is a pass.

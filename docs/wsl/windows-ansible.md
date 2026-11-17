@@ -667,6 +667,10 @@ for the real window:
   system.
 - **The first line, if the script moves to stdin.** On the stdin of `sh`,
   `$0` is `/bin/sh`, and `rm -f "$0"` must go.
+- **The copies on the host.** Before each run of the procedure, compare the
+  SHA-256 of each script and config on the host with the release's, and do
+  not start on a difference. Change the copies only when no window is
+  started, never under a started window (as the rehearsal does, below).
 
 The limit of the phase run names `localhost` too: the first play of
 `windows-host.yml` runs on the controller and downloads the pinned root file
@@ -682,7 +686,7 @@ for nothing and moves no file. The registrations go through
 | --- | --- |
 | The accounts `tnwks-moverh-a` and `tnwks-moverh-b` | Local accounts, members of Users only, with a random password that nothing keeps. They may log on as a batch job (S4U needs it), and not at the keyboard, by Remote Desktop or from the network. No tile |
 | `C:\ProgramData\tnwks-moverh` | The scripts, their configs, the pinned Alpine root file system, the state of the procedure (`state\`). Only SYSTEM and the Administrators may change them |
-| `...\a`, `...\b` | The folders of the disk file. Each account may make files there, in that folder only, and an entry for CREATOR OWNER on files lets it replace or delete a file that it made. No inheritance |
+| `...\a`, `...\b` | The folders of the disk file. Each account may make files there, in that folder only, and an entry for CREATOR OWNER on files lets it replace or delete a file that it made. A also reads the folder and its rules (`0x1200ab`, read and execute with add file), as a present account does on the folder of its own disk file; B has add file only (`0x100002`), as its moved file is protected (`wsl_move_rehearsal_folder_rights`). No inheritance |
 | The marker file `tnwks-move.marker` | In the folder of B (setup) and of A (the window). SYSTEM and the Administrators full, the account read only. It keeps the folder through an unregister |
 | `...\log\a`, `...\log\b` | The result of each task of the account, one JSON file for each step |
 | The tasks `tnwks-moverh-<a\|b>-<step>` | As the account, S4U, no elevation, no trigger. `stop`, `unregister` and `import` are the window tasks, always enabled. `start` holds the distro, as the keepalive does: A's is enabled, B's is registered disabled |
@@ -705,6 +709,28 @@ back (the last marker `wayback-done`), as a second real window would.
 The procedure itself does not go forward after a started window with no end.
 The tests in `security/tests/test_wsl_move_rehearsal.py` hold this.
 
+**The copies on the host.** The scripts, their configs and the tasks are
+written by one task file, `tasks/host_files.yml`, which setup and each later
+phase run before their first script on the host. It reads the last marker
+first. Setup, `window` and `interrupt` refresh: each copies the scripts and
+writes the configs that differ, and registers each task whose definition
+differs, only when no window is started (the last marker is empty or
+`wayback-done`); otherwise it stops with nothing changed. `wayback`,
+`restart` and `after-boot` change nothing and stop when a copy differs from
+the role's, as the window that they end started with the copies that are
+there. `remove-before-restart` prints each copy that differs and goes on;
+`remove` runs no script. Then the play reads the SHA-256 of each copy on the
+host and compares it with the role's: the bytes of each script, and the text
+of each config as the play writes it (`wsl_move_rehearsal_file_hashes`).
+Each run of the procedure (`tasks/run_procedure.yml`) compares them again
+before it writes the run request, and does not start on a difference. A
+registration of a task of an account sets a new random password on that
+account (the module's `s4u_user`), as setup does; the window reads the time
+of B's last password after the refresh, so its check of no new password for
+B stays its own. A task that a release adds to an account (as `strip-rules`
+of B) is registered by the refresh too; the phase `wayback` still registers
+`strip-rules` itself.
+
 **The live parts.** At the start and the end of each phase, the play reads
 the port proxy, the NAT networks, the VM processes, and the registrations
 of the distros of the account of the host's person (from its loaded hive,
@@ -720,7 +746,7 @@ lead's read of the nodes (Ready, and the same address) covers the live VM.
 | Phase | What it does, and what it shows |
 | --- | --- |
 | `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon), and the check reads back each file by its SHA-256. A second setup over A's distro at its path imports nothing and writes the files again. A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
-| `window` | First a read of the state that the window starts from, before any task starts: the last marker, A's disk file at its path and none at B's path or in the side folder, no list of disabled tasks, A's batch right, A's start task enabled and B's disabled; and after a way back the file had the rules that step 4 saved. Only after these checks do A's disk file and folder get the rules of an older WSL, as in setup; then A reads its distro and B lists none. The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file (B the owner, as below), both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. With B's start task started, the file has the rule of step 4 and a rule of B's VM; after B's stop task (a clean stop), no rule of a VM. Then B imports, unregisters and imports again into the same folder, and the file keeps its rule |
+| `window` | First a read of the state that the window starts from, before any task starts: the last marker, A's disk file at its path and none at B's path or in the side folder, no list of disabled tasks, A's batch right, A's start task enabled and B's disabled; and after a way back the file had the owner, the protection and the explicit rules that step 4 saved (the play prints whether its inherited rules are those that its folder gives, and does not stop on it). Only after these checks do A's disk file and folder get the rules of an older WSL, as in setup; then A reads its distro and B lists none. The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file (B the owner, as below), both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. With B's start task started, the file has the rule of step 4 and a rule of B's VM; after B's stop task (a clean stop), no rule of a VM. Then B imports, unregisters and imports again into the same folder, and the file keeps its rule |
 | `wayback` | First, B removes SYSTEM and the Administrators from the rules of its disk file, and A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro, the file has the saved owner and rules (each explicit and inherited rule), and B lists none |
 | `interrupt` | The window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
 | `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task |
@@ -737,18 +763,26 @@ of the procedure is a stated one: a join only in a run of the group test
 **The rule of the moved disk file.** At each attach of the disk (the import
 in place and every start), WSL grants the new VM access to the file as the
 account that owns the distro: it adds a rule for the virtual machine SID
-(`S-1-5-83-...`) to the rules of the file, so the account needs the right
-to change them, which an owner has. A clean stop of the VM removes the rule
-again. So window step 4 makes the new account the owner of the moved file,
+(`S-1-5-83-1-` and four numbers, the form of MS-DTYP's well-known SIDs)
+to the rules of the file, so the account needs the right to change them,
+which an owner has. While the VM runs, the file may also hold a rule for
+the capability SID that Windows derives from the capability name
+`vmWorkerProcess` (the SHA-256 of the name in upper case, as UTF-16, as
+eight numbers): `wsl_move_rehearsal_vm_capability_sid`. A clean stop of
+the VM removes both rules again. So window step 4 makes the new account the owner of the moved file,
 with full control for SYSTEM, the Administrators and the account, and no
 inheritance; SYSTEM sets that owner with SeRestorePrivilege, as the way back
 does for the saved owner. The role holds the rule as two values,
 `wsl_move_rehearsal_disk_owner` and `wsl_move_rehearsal_disk_new_mask`, and
 the procedure, its checks and the reads of the play take it from them. Each
 check of the rules of a disk file compares the owner, the protection, every
-explicit rule and each inherited rule, and allows the explicit rules of a
-virtual machine SID only. Right after the procedure writes rules, they must
-be the ones written. The procedure logs the rules before the move and after
+explicit rule and the inherited rules, and allows only the explicit rules
+of WSL: any number of a virtual machine SID, and at most one of that
+capability SID, each as an allow rule with full control and no flag. Any
+other capability SID, a rule of WSL in another form, and any deny rule are
+not a pass. Right after the procedure writes rules, they must be the ones
+written, with no rule of WSL; a write of the rules leaves out the rules of
+WSL that a saved set holds. The procedure logs the rules before the move and after
 the import, and the play prints them after setup, before and after the
 window, while B's VM runs and after its stop, each account SID masked.
 
@@ -773,15 +807,47 @@ write of the rules before the owner would name the Administrators). A group
 (`G:`) in a saved set is not written. Way back
 step 3 moves the file back first, then restores the saved owner and rules
 at the old path, where the folder gives the inherited rules that were
-saved; a file at the old path with other rules (a power loss between the
-two) is restored only, and one with the saved rules is left as it is. Step
+saved. The check after it compares the saved owner, protection and
+explicit rules exactly. The inherited rules are not part of "as saved":
+Windows gives them from the old folder at the write, and a difference from
+the saved inherited rules is a note in the log, not a failed check. A file
+at the old path with other rules (a power loss between the two) is restored
+only, and one that passes the same compare is left as it is (the state
+read's `old_as_saved` and the play's read, its `rules_ok`, use it too).
+Whether the inherited rules of a file are those that its folder gives is a
+fact of its own: the play's read gives it as `inherits_ok`, and the guard
+of window step 1 acts on it.
+
+What a folder gives a file comes from Windows' own inheritance function,
+`CreatePrivateObjectSecurityEx`: the folder's rules as the parent, the
+owner of the file as the creator with an empty DACL, the generic mapping of
+files, and an object that is not a container. So each rule of the folder
+that reaches a file (OI, with or without IO and NP; CI alone does not)
+comes with the flag ID, CREATOR OWNER names the owner of the file, and each
+generic right becomes the rights of a file. The unit tests hold that rule
+in a stand-in, on three forms of a folder; the hand test runs the function
+of Windows on the same forms against a real write. Another way, a probe
+file in the folder, is a write, and the file gets the owner of the writer.
+Before any change, window step 1 reads the disk file: a file with no
+protection must have the inherited rules that its folder gives. A file
+that has others stops the window with nothing changed (exit 3), and the
+log holds both sets, each account masked; the boot run never reads it. Step
 2 removes the saved rules of an earlier window before the marker of a
 started window, so a way back restores only rules that step 4 of its own
 window saved. In setup, and again at the start of each window, A's disk file
 is made like one of an older WSL: no protection, the rules of its folder
 (which gives files a read rule for Authenticated Users), and one explicit
 rule for A (`tasks/older_disk.yml`, which changes nothing when the file and
-the folder are so already, and runs only after setup or a way back). A
+the folder are so already, the inherited rules that the folder gives
+included, and runs only after setup or a way back). It reads and writes the
+file with the functions of the procedure, from its copy on the host: the
+take of ownership for the Administrators, then the owner and the rules in
+one write. The play prints A's rules right after it (before A's read
+starts the distro) and asserts that the file has the inherited rules of its
+folder then; it prints them again after A's read, and the log of window
+step 4 holds them after A's stop, with no assert on the inherited rules:
+if A's start took them away again, the guard of window step 1 stops the
+window with nothing changed, and the log shows both sets. A
 stays the owner with full control, so its start and the rule that WSL adds
 for its VM need nothing more; A's read after it starts the distro. In the
 window, the read against the saved rules of the last way back, the read of

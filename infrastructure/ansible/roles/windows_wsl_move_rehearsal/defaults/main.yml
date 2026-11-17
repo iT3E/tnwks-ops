@@ -96,6 +96,22 @@ wsl_move_rehearsal_version_file: '{{ wsl_move_rehearsal_state_dir }}\wsl-version
 # that is not a group of SYSTEM with SeRestorePrivilege.
 wsl_move_rehearsal_disk_owner: new-account
 wsl_move_rehearsal_disk_new_mask: FA
+# While a VM runs, its disk file may also have an explicit rule, full control,
+# for this capability SID: the one that Windows derives from the capability
+# name vmWorkerProcess (DeriveCapabilitySidsFromName: SHA-256 of the name in
+# upper case, as UTF-16, as eight numbers). A clean stop removes it, as it
+# removes the rule of the VM. The checks allow this one SID, and no other
+# capability SID.
+wsl_move_rehearsal_vm_capability_sid: S-1-15-3-1024-2268835264-3721307629-241982045-173645152-1490879176-104643441-2915960892-1612460704
+# The right of each account on the folder of its disk file (step 3): make
+# files in this folder (FILE_ADD_FILE) with SYNCHRONIZE, 0x100002. A also
+# reads the folder and its rules (read and execute, 0x1200a9), as a present
+# account does on the folder of its own disk file: the rules that WSL writes
+# on a file with no protection, as the account, take the inherited rules
+# from the folder. B's moved file is protected (step 4), so B needs no read.
+wsl_move_rehearsal_folder_rights:
+  a: '0x1200ab'
+  b: '0x100002'
 wsl_move_rehearsal_request_file: '{{ wsl_move_rehearsal_state_dir }}\request.json'
 wsl_move_rehearsal_baseline_file: '{{ wsl_move_rehearsal_state_dir }}\live-baseline.json'
 # The installed version of WSL is the file version of its service binary, read

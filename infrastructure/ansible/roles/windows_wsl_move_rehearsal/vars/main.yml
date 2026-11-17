@@ -15,6 +15,50 @@ wsl_move_rehearsal_task_list: >-
 # with the rules of the folder, and older_disk.yml adds it when it is absent.
 wsl_move_rehearsal_older_folder_rule: (A;OIIO;FR;;;AU)
 
+# The scripts of the rehearsal on the host, and the SHA-256 that each copy
+# on the host must have (host_files.yml, run_procedure.yml), by its path: the
+# bytes of each script of the role, and the text of each config as
+# host_files.yml writes it (to_nice_json).
+wsl_move_rehearsal_scripts:
+  - Invoke-TnwksWslAccountTask.ps1
+  - Invoke-TnwksMoveWindow.ps1
+  - Invoke-TnwksStartTask.ps1
+wsl_move_rehearsal_file_hashes: >-
+  {%- set out = {} -%}
+  {%- for name in wsl_move_rehearsal_scripts -%}
+  {%- set _ = out.update({wsl_move_rehearsal_dir ~ '\\' ~ name:
+      lookup('ansible.builtin.file', name, rstrip=false) | hash('sha256')}) -%}
+  {%- endfor -%}
+  {%- for key, value in wsl_move_rehearsal_configs.items() -%}
+  {%- set _ = out.update({wsl_move_rehearsal_dir ~ '\\' ~ key ~ '.json': value | to_nice_json | hash('sha256')}) -%}
+  {%- endfor -%}
+  {{ out }}
+
+# The functions of the procedure that the reads and the shaping of the play
+# use, from its copy on the host (host_files.yml makes that copy the role's
+# before any of them runs): the read and the write of the rules with the
+# privileges of SYSTEM, what a folder gives a file (Windows' own inheritance
+# function), and the compare. A script puts it in after its param line and
+# gives $Procedure (the path of that copy) and $Capability (the SID of
+# wsl_move_rehearsal_vm_capability_sid).
+wsl_move_rehearsal_procedure_lib: |
+  function Write-Log([string]$Text) { }
+  $TnwksVmCapabilitySid = $Capability
+  $procedureAst = [Management.Automation.Language.Parser]::ParseFile($Procedure, [ref]$null, [ref]$null)
+  foreach ($fd in $procedureAst.FindAll({ $args[0] -is [Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+      if ($fd.Name -in @('Assert-Tnwks', 'Initialize-TnwksSecurity', 'Get-TnwksSddl', 'ConvertTo-TnwksSddlSid', 'ConvertTo-TnwksSddlMask',
+              'Get-TnwksSddlParts', 'Get-TnwksFolderGives', 'Get-TnwksFileGives', 'Test-TnwksSddl')) {
+          . ([scriptblock]::Create($fd.Extent.Text))
+      }
+  }
+  foreach ($st in $procedureAst.EndBlock.Statements) {
+      if ($st -is [Management.Automation.Language.AssignmentStatementAst] -and
+          $st.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+          $st.Left.VariablePath.UserPath -in @('TnwksSecuritySource', 'TnwksRightNames')) {
+          . ([scriptblock]::Create($st.Extent.Text))
+      }
+  }
+
 # One config for each account (Invoke-TnwksWslAccountTask.ps1), and one for
 # the procedure (Invoke-TnwksMoveWindow.ps1).
 wsl_move_rehearsal_account_config_common:
@@ -56,6 +100,7 @@ wsl_move_rehearsal_window_config:
   disk_rule:
     owner: "{{ wsl_move_rehearsal_disk_owner }}"
     new_mask: "{{ wsl_move_rehearsal_disk_new_mask }}"
+  vm_capability_sid: "{{ wsl_move_rehearsal_vm_capability_sid }}"
   service_binary: "{{ wsl_move_rehearsal_service_binary }}"
   restart: "{{ wsl_move_rehearsal_restart | bool }}"
   # The check for a session of the owner (site 1 only) is not built here.

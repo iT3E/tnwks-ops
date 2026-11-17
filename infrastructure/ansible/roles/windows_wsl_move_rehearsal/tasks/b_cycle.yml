@@ -76,6 +76,6 @@
       - check.result.mem_total_kib | int > 0
       - check.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
       - wsl_move_rehearsal_side_moves | select | list | length == 2
-      - disk.rules_ok and disk.vm == 0
+      - disk.rules_ok and disk.vm == 0 and disk.capability == 0
     fail_msg: "The cycle of B did not pass: {{ unregister }} {{ reimport }} {{ check }} {{ disk }}"
     quiet: true
