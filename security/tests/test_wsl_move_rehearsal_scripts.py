@@ -229,21 +229,33 @@ def failed_by_assert(result: dict, name: str) -> bool:
 
 # --- Stand-ins for Windows ----------------------------------------------------------------
 
-# Task Scheduler: each start is a new run, with the exit code of $global:Code.
+# Task Scheduler: each start is a new run, with the exit code of $global:Code. With
+# $global:QueuedPolls, a run first reads Queued with the result 0x41301 (the task is
+# running) for that many reads, with its new run time already, as a task that never ran
+# can; $global:PendingNow is the count left.
 TASKS = r"""
 $global:Last = [datetime]'2026-01-01'
 $global:Code = 0
 $global:Started = @()
-function Get-ScheduledTaskInfo { param([string]$TaskName) [pscustomobject]@{ LastRunTime = $global:Last; LastTaskResult = $global:Code } }
+$global:PendingNow = 0
+function Get-ScheduledTaskInfo {
+    param([string]$TaskName)
+    if ($global:PendingNow -gt 0) {
+        $global:PendingNow--
+        return [pscustomobject]@{ LastRunTime = $global:Last; LastTaskResult = 0x41301 }
+    }
+    [pscustomobject]@{ LastRunTime = $global:Last; LastTaskResult = $global:Code }
+}
 function Start-ScheduledTask {
     param([string]$TaskName)
     $global:Started += $TaskName
     $global:Last = $global:Last.AddMinutes(1)
+    $global:PendingNow = [int]$global:QueuedPolls
     if ($global:OnStart) { & $global:OnStart $TaskName }
 }
 function Get-ScheduledTask {
     param([string]$TaskName)
-    $s = if ($global:TaskStates -and $global:TaskStates[$TaskName]) { $global:TaskStates[$TaskName] } else { 'Ready' }
+    $s = if ($global:PendingNow -gt 0) { 'Queued' } elseif ($global:TaskStates -and $global:TaskStates[$TaskName]) { $global:TaskStates[$TaskName] } else { 'Ready' }
     [pscustomobject]@{ TaskName = $TaskName; State = $s; Settings = [pscustomobject]@{ Enabled = ($s -ne 'Disabled') }; Triggers = $null }
 }
 function Start-Sleep { }
@@ -1161,6 +1173,37 @@ def test_the_after_boot_checks_read_each_run_as_a_list_of_lines(tmp_path):
                                           {"vars": flat, "tasks": checks_of("after-boot.yml")}])
     assert not passed(ok), passed(ok)
     assert failed_by_assert(two_levels, "The run by hand did nothing")
+
+
+@needs_pwsh
+def test_each_wait_for_a_task_waits_through_queued_and_0x41301(tmp_path):
+    """A task that never ran can read a new run time while it is Queued, or Ready with the
+    result 0x41301: the runner, the run of the procedure and the wait for the boot task
+    wait for the real end (the procedure's own wait: test_wsl_move_rehearsal.py)."""
+    queued = "$global:QueuedPolls = 2\n"
+    log_dir = tmp_path / "log"
+    log_dir.mkdir()
+    (log_dir / "check.json").write_text(json.dumps({"step": "check", "time": 4102444800}))
+    runner = run_script(tmp_path, "run_task.yml", "Run the task", {
+        "Runner": str(RUNNER), "Task": "tnwks-moverh-a-check", "Result": str(log_dir / "check.json"), "Minutes": "20",
+    }, stand_ins=TASKS + queued)
+    assert runner[-1]["code"] == 0 and runner[-1]["ran"] and runner[-1]["result"], runner
+    files = tmp_path / "proc"
+    files.mkdir()
+    for name, text in (("window.log", ""), ("window.state", ""), ("run.log", "2026-01-01T00:00:00.0000000Z forward result: done\r\n"),
+                       ("run.state", "2026-01-01T00:00:00Z window-started\r\n2026-01-01T00:00:01Z window-done\r\n")):
+        (files / name).write_text(text)
+    procedure = run_script(tmp_path, "run_procedure.yml", "The window procedure", {
+        "Task": "tnwks-moverh-window", "Request": str(files / "request.json"), "RequestJson": "{}",
+        "Log": str(files / "window.log"), "State": str(files / "window.state"), "LastMarkers": [""],
+    }, stand_ins=PROCEDURE_STAND_INS + queued + f"""
+$global:LogPath = {ps_str(files / 'window.log')}; $global:StatePath = {ps_str(files / 'window.state')}
+$global:RunLog = {ps_str(files / 'run.log')}; $global:RunState = {ps_str(files / 'run.state')}
+""")
+    assert procedure[-1]["code"] == 0 and procedure[-1]["ran"] and procedure[-1]["result"] == "done", procedure
+    boot = run_script(tmp_path, "restart.yml", "Wait for the end", {"Task": "tnwks-moverh-boot"},
+                      stand_ins=TASKS + BOOT_STAND_INS + "$global:Boot = [datetime]'2025-12-31'\n$global:PendingNow = 2\n")
+    assert boot == [{"done": True, "code": 0}]
 
 
 @needs_both

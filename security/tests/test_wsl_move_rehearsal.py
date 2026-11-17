@@ -763,12 +763,23 @@ function Remove-LocalGroupMember { param([string]$SID, $Member) $global:Calls.Ad
 # also when it is disabled; Disabled only with no instance. Settings.Enabled is the flag.
 $global:Enabled = @{}
 $global:Running = @{}
+# $global:QueuedPolls: after a start, each task of an account reads Queued with the
+# result 0x41301 (the task is running) for that many reads of its run, though its last
+# run time is already new, as a task that never ran can.
+$global:Pending = @{}
 function Get-ScheduledTask {
     param([string]$TaskName)
-    $state = if ($global:Running[$TaskName]) { 'Running' } elseif ($global:Enabled[$TaskName] -eq $false) { 'Disabled' } else { 'Ready' }
+    $state = if ($global:Running[$TaskName]) { 'Running' } elseif ([int]$global:Pending[$TaskName] -gt 0) { 'Queued' } elseif ($global:Enabled[$TaskName] -eq $false) { 'Disabled' } else { 'Ready' }
     [pscustomobject]@{ State = $state; Settings = [pscustomobject]@{ Enabled = ($global:Enabled[$TaskName] -ne $false) } }
 }
-function Get-ScheduledTaskInfo { param([string]$TaskName) [pscustomobject]@{ LastRunTime = [int]$global:Runs[$TaskName]; LastTaskResult = [int]$global:Codes[$TaskName] } }
+function Get-ScheduledTaskInfo {
+    param([string]$TaskName)
+    if ([int]$global:Pending[$TaskName] -gt 0) {
+        $global:Pending[$TaskName] = [int]$global:Pending[$TaskName] - 1
+        return [pscustomobject]@{ LastRunTime = [int]$global:Runs[$TaskName]; LastTaskResult = 0x41301 }
+    }
+    [pscustomobject]@{ LastRunTime = [int]$global:Runs[$TaskName]; LastTaskResult = [int]$global:Codes[$TaskName] }
+}
 function Disable-ScheduledTask { param([string]$TaskName) $global:Calls.Add("disable $TaskName"); $global:Enabled[$TaskName] = $false }
 function Enable-ScheduledTask { param([string]$TaskName) $global:Calls.Add("enable $TaskName"); $global:Enabled[$TaskName] = $true }
 function Get-TaskSid([string]$TaskName) { if ($TaskName -like '*-a-*') { $global:Sids['tnwks-moverh-a'] } else { $global:Sids['tnwks-moverh-b'] } }
@@ -790,6 +801,7 @@ function Start-ScheduledTask {
         $global:Procs.Add([pscustomobject]@{ Name = 'wsl.exe'; OwnerSid = $sid; Task = $TaskName })
         return
     }
+    if ($global:QueuedPolls) { $global:Pending[$TaskName] = [int]$global:QueuedPolls }
     if ($TaskName -like '*-stop') { foreach ($p in @($global:Procs | Where-Object { $_.OwnerSid -eq $sid })) { [void]$global:Procs.Remove($p) } }
     # $global:VmRule: the import attaches the disk file, and WSL grants its VM access.
     if ($global:VmRule -and $TaskName -like '*-import') {
@@ -818,6 +830,7 @@ function Invoke-CimMethod { param($InputObject, [string]$MethodName) [pscustomob
 class TnwksSecurity {
     static [string] Enable() {
         if ($global:EnableText) { return $global:EnableText }
+        $global:PrivilegesOn = $true
         return 'SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True'
     }
     static [string] Leaf([string]$Path) { return [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($Path)) + '/' + [IO.Path]::GetFileName($Path) }
@@ -856,9 +869,16 @@ $global:SecCalls = New-Object System.Collections.Generic.List[string]
 if (-not $global:Inherit) { $global:Inherit = @{} }
 function Get-Acl { throw 'the procedure reads the rules of a file through TnwksSecurity' }
 function Set-Acl { throw 'the procedure writes the rules of a file through TnwksSecurity' }
+# A rename of a disk file that grants SYSTEM and the Administrators nothing is refused,
+# unless the run turned the privileges on (TnwksSecurity::Enable) before it.
 function Move-Item {
     param([string]$LiteralPath, [string]$Destination, [switch]$Force)
     if ($LiteralPath -like '*ext4.vhdx') {
+        $rules = if ($global:Acls.ContainsKey($LiteralPath)) { $global:Acls[$LiteralPath] } else { 'O:BAD:(A;ID;FA;;;SY)' }
+        if (-not $global:PrivilegesOn -and $rules.Substring($rules.IndexOf('D:')) -notmatch ';;;(SY|BA|S-1-5-18|S-1-5-32-544)\)') {
+            $global:Calls.Add("refused move $(Split-Path -Leaf (Split-Path -Parent $LiteralPath))")
+            throw [UnauthorizedAccessException]::new('Access to the path is denied.')
+        }
         $global:Calls.Add("move $(Split-Path -Leaf (Split-Path -Parent $LiteralPath)) -> $(Split-Path -Leaf (Split-Path -Parent $Destination))")
         if ($global:Acls.ContainsKey($LiteralPath)) { $global:Acls[$Destination] = $global:Acls[$LiteralPath]; $global:Acls.Remove($LiteralPath) }
     }
@@ -878,7 +898,8 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
                results: dict | None = None, codes: dict | None = None, admins: tuple[str, ...] = (),
                config: dict | None = None, tasks: dict | None = None, acl_file: str | None = None,
                marker_a: bool = False, disabled: str | None = None, acl_edit: str = "", vm_rule: str = "",
-               acls: dict | None = None, inherit: dict | None = None, enabled: str = "") -> dict:
+               acls: dict | None = None, inherit: dict | None = None, enabled: str = "", queued_polls: int = 0,
+               window: Path = WINDOW) -> dict:
     root = tmp_path / "root"
     for sub in ("a", "b", "state", "log/a", "log/b"):
         (root / sub).mkdir(parents=True, exist_ok=True)
@@ -946,13 +967,14 @@ foreach ($a in @({", ".join(f"'{a}'" for a in admins) or ""})) {{ $global:Admins
 $global:AclEdit = {acl_edit or "$null"}
 $global:VmRule = {ps(vm_rule)}
 $global:EnableText = {ps(enabled)}
+$global:QueuedPolls = {queued_polls}
 $global:FolderA = {ps(str(root / "a"))}; $global:FolderB = {ps(str(root / "b"))}
 $global:Inherit = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (inherit or {}).items()})}.PSObject.Properties) {{ $global:Inherit[$p.Name] = $p.Value }}
 if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false'}) {{
     foreach ($t in @($global:Running.Keys | Where-Object {{ $global:Running[$_] }})) {{
         $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}) }}
 }}
-& '{WINDOW}' {args}
+& '{window}' {args}
 $code = $LASTEXITCODE
 $tasks = @{{}}; foreach ($t in @($global:Enabled.Keys)) {{ $tasks[$t] = (Get-ScheduledTask -TaskName $t).State }}
 [Console]::Out.Write((@{{ code = $code; calls = @($global:Calls); admins = @($global:Admins); tasks = $tasks;
@@ -1076,6 +1098,78 @@ def test_the_way_back_restores_a_file_whose_owner_removed_system_and_the_adminis
     assert "way back 3 passed" in out["log"]
 
 
+LOCKED_B = f"O:{B_SID}D:P(A;;FA;;;{B_SID})"
+# The way back from window-done, with B's own disk file locked to B (strip-rules).
+WAYBACK_LOCKED = {"state": "t window-started\nt window-done\n", "disk": ("b",), "acl_file": OLD_SDDL, "marker_a": True,
+                  "disabled": "tnwks-moverh-a-start", "acls": {"b/ext4.vhdx": LOCKED_B},
+                  "tasks": {"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"}}
+PRIVILEGES = "privileges: SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True"
+
+
+@needs_pwsh
+def test_the_stand_in_refuses_the_rename_of_a_file_that_grants_system_nothing_until_the_privileges_are_on(tmp_path):
+    for folder in ("a", "b"):
+        (tmp_path / folder).mkdir()
+    path, to = tmp_path / "b" / "ext4.vhdx", tmp_path / "a" / "ext4.vhdx"
+    path.write_text("disk")
+    run = pwsh(WINDOW_FAKES + f"""
+$global:Calls = New-Object System.Collections.Generic.List[string]
+$global:Acls = @{{ '{path}' = '{LOCKED_B}' }}
+try {{ Move-Item -LiteralPath '{path}' -Destination '{to}'; 'moved' }} catch {{ 'refused' }}
+[void][TnwksSecurity]::Enable()
+Move-Item -LiteralPath '{path}' -Destination '{to}'; 'moved'
+""")
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.split() == ["refused", "moved"]
+
+
+@needs_pwsh
+def test_each_mode_turns_the_privileges_on_at_its_start_before_the_state_read(tmp_path):
+    """The move of the disk file works by the privileges, not by the right on the folders,
+    so every run turns them on first, also a way back that reads no rules before its move."""
+    runs = {
+        "forward": run_window(tmp_path / "f", FORWARD_TEST),
+        "wayback": run_window(tmp_path / "w", mode="wayback", **WAYBACK_LOCKED),
+        "boot": run_window(tmp_path / "b", mode="boot", **{**WAYBACK_LOCKED, "state": "t window-started\n",
+                                                           "tasks": {"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"}}),
+        "boot, no action": run_window(tmp_path / "n", mode="boot", state="t wayback-done\n"),
+    }
+    for mode, out in runs.items():
+        log = out["log"]
+        assert out["code"] == 0, (mode, log)
+        assert log.count(PRIVILEGES) == 1, (mode, log)
+        assert log[0].startswith("start, request") and log[1] == PRIVILEGES, (mode, log)
+
+
+@needs_pwsh
+def test_a_way_back_from_window_done_moves_a_file_that_grants_system_nothing_by_the_privileges(tmp_path):
+    out = run_window(tmp_path / "1", mode="wayback", **WAYBACK_LOCKED)
+    assert out["code"] == 0, out["log"]
+    assert "move b -> a" in out["calls"] and not out["disk_b"]
+    assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL
+    # The same run with no call at its start: its first read of the rules comes after the
+    # move, so the move is refused, as on a host.
+    script = WINDOW.read_text()
+    first = "    Initialize-TnwksSecurity\n    switch ($Mode) {"
+    assert script.count(first) == 1
+    plain = tmp_path / "Invoke-TnwksMoveWindow.ps1"
+    plain.write_text(script.replace(first, "    switch ($Mode) {"))
+    out = run_window(tmp_path / "2", mode="wayback", window=plain, **WAYBACK_LOCKED)
+    assert out["code"] == 1, out["log"]
+    assert "refused move b" in out["calls"] and out["disk_b"] and not out["disk_a"]
+    assert "fail: Access to the path is denied." in out["log"] and PRIVILEGES not in out["log"]
+
+
+@needs_pwsh
+def test_the_procedure_waits_for_the_end_of_a_task_that_reads_queued_with_a_new_run_time(tmp_path):
+    """A task that never ran can read a new last run time while it is Queued, or Ready with
+    the result 0x41301 (the task is running): the run has not ended."""
+    out = run_window(tmp_path, FORWARD_TEST, queued_polls=2)
+    assert out["code"] == 0, out["log"]
+    assert out["log"][-1] == "result: done"
+    assert not [line for line in out["log"] if "ended with 267009" in line]
+
+
 @needs_pwsh
 def test_only_forward_step_2_clears_the_saved_rules_and_the_way_back_modes_keep_them(tmp_path):
     """The marker of a started window that the way back mode and the boot run write
@@ -1140,7 +1234,9 @@ def test_a_file_whose_creator_owner_rule_names_another_account_is_restored(tmp_p
 @needs_pwsh
 def test_a_privilege_that_is_not_on_stops_before_any_write_of_the_rules(tmp_path):
     out = run_window(tmp_path, FORWARD_TEST, enabled="SeBackupPrivilege True, SeRestorePrivilege False, SeTakeOwnershipPrivilege True")
-    assert out["code"] in (1, 4), out["log"]
+    # The run stops at its start: no marker, no state read, no step.
+    assert out["code"] == 1, out["log"]
+    assert out["markers"] == [] and not [line for line in out["log"] if line.startswith(("read:", "step "))]
     assert "privileges: SeBackupPrivilege True, SeRestorePrivilege False, SeTakeOwnershipPrivilege True" in out["log"]
     assert any("a privilege of SYSTEM is not on" in line for line in out["log"])
     assert out["sec_calls"] == []

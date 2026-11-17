@@ -753,9 +753,19 @@ the import, and the play prints them after setup, before and after the
 window, while B's VM runs and after its stop, each account SID masked.
 
 As the owner, the account may also remove SYSTEM and the Administrators from
-the rules of its file. So the procedure reads and writes rules with the
-privileges of SYSTEM (backup, restore, take ownership), and stops when one
-of them is not on: it takes ownership for the Administrators, then writes
+the rules of its file. So each run of the procedure, in every mode, first
+turns on the privileges of SYSTEM (backup, restore, take ownership), before
+it reads the state, and stops when one of them is not on, with no marker
+and nothing changed. The move of the file works by these privileges, not
+by the right of SYSTEM on the folders: the page of `MoveFileEx` names
+delete on the file or delete child on the folder, but the rename also opens
+the file, and on a file that grants SYSTEM nothing that open is refused
+unless the privileges are on. The read of the rules asks for `READ_CONTROL`
+only, and either the backup or the restore privilege grants it: the restore
+privilege grants `FILE_GENERIC_WRITE`, which holds `STANDARD_RIGHTS_WRITE`,
+that is `READ_CONTROL` (Microsoft's pages Privilege Constants, File
+Security and Access Rights, and Standard Access Rights). A write of the
+rules takes ownership for the Administrators, then writes
 the owner, the explicit rules and the protection in one write by name.
 Windows gives the inherited rules from the folder in that write, so a
 CREATOR OWNER rule of the folder names the owner that the write sets (a
@@ -780,6 +790,14 @@ nothing. In the phase `wayback`,
 before the way back mode, B removes SYSTEM and the Administrators from the
 rules of its own file (its task `strip-rules`), and the way back must still
 put back the saved set.
+
+**The end of a task run.** Each wait for a task (the runner of the tasks of
+an account, the run of the procedure, the procedure's own runs of the
+tasks of an account, and the wait for the boot task) takes a run as ended
+only when the task is not `Running` or `Queued`, its last run time is new,
+and its last result is not `0x41301` (the task is running). A task that
+never ran, as the window task and the tasks of the accounts at the first
+window, can read a new run time before its run ends.
 
 **The batch right of A.** The registration of a task of A checks its new
 password with a batch logon, so A keeps its own batch right from the setup

@@ -88,7 +88,10 @@
               # that fails is a read with no run yet.
               try {
                   $info = Get-ScheduledTaskInfo -TaskName $Task
-                  $done = $info.LastRunTime -gt $boot -and "$((Get-ScheduledTask -TaskName $Task).State)" -ne 'Running'
+                  # Not Running or Queued, and not 0x41301 (the task is
+                  # running): a new run time alone can come before the end.
+                  $done = $info.LastRunTime -gt $boot -and "$((Get-ScheduledTask -TaskName $Task).State)" -notin @('Running', 'Queued') -and
+                      [int64]$info.LastTaskResult -ne 0x41301
               } catch { $done = $false }
               if (-not $done) { Start-Sleep -Seconds 10 }
           } while (-not $done -and (Get-Date) -lt $deadline)

@@ -19,6 +19,13 @@ Each line of the log and each marker is flushed to disk before the next step
 starts. The restart at the end is behind the switch "restart" of the config:
 with it off, the script logs "would restart" and does not restart.
 
+Each run, in every mode, first turns on the privileges of SYSTEM
+(SeBackupPrivilege, SeRestorePrivilege, SeTakeOwnershipPrivilege) and stops
+if one is not on, before it reads the state. The move of the disk file and
+each read and write of its rules work by these privileges, not by the rules
+of the file or the right of SYSTEM on its folders: the account that owns
+the file may remove SYSTEM and the Administrators from its rules.
+
 The script acts as an account only through the tasks of that account
 (Invoke-TnwksWslAccountTask.ps1), because WSL refuses SYSTEM. It reads no
 registration of an account: each task reads its own.
@@ -143,12 +150,17 @@ function Wait-TnwksNoWsl([string]$Sid, [string]$Account) {
 function Invoke-TnwksAccountTask([string]$Task, [string]$ResultFile) {
     $start = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $before = (Get-ScheduledTaskInfo -TaskName $Task).LastRunTime
-    Start-ScheduledTask -TaskName $Task
+    Start-ScheduledTask -TaskName $Task | Out-Null
     $deadline = (Get-Date).AddMinutes([int]$cfg.task_minutes)
+    # A run has ended when the task is not Running or Queued, its last run
+    # time is new, and its result is not 0x41301 (the task is running): a
+    # task that never ran can read a new time before its run ends.
     do {
         Start-Sleep -Seconds 2
         $info = Get-ScheduledTaskInfo -TaskName $Task
-    } while (((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -or $info.LastRunTime -eq $before) -and (Get-Date) -lt $deadline)
+        $ended = "$((Get-ScheduledTask -TaskName $Task).State)" -notin @('Running', 'Queued') -and
+            $info.LastRunTime -ne $before -and [int64]$info.LastTaskResult -ne 0x41301
+    } while (-not $ended -and (Get-Date) -lt $deadline)
     $result = $null
     if (Test-Path -LiteralPath $ResultFile) {
         $read = Get-Content -LiteralPath $ResultFile -Raw | ConvertFrom-Json
@@ -211,8 +223,13 @@ function Set-TnwksGroup([string]$Sid, [string]$Account, [bool]$In) {
 # --- Rights of a file, by SDDL. The account that owns its disk file may
 # change its rules, also remove SYSTEM and the Administrators, so SYSTEM
 # reads and writes them with its privileges, not with the rules of the file:
-# each handle opens with backup semantics, with SeBackupPrivilege (a read),
-# SeTakeOwnershipPrivilege and SeRestorePrivilege (a write) enabled. A write
+# each handle opens with backup semantics (CreateFile: with the flag, the
+# privileges override the checks of the file), with SeBackupPrivilege,
+# SeRestorePrivilege and SeTakeOwnershipPrivilege enabled. The read asks
+# for READ_CONTROL only, and either privilege grants it: SeBackupPrivilege
+# directly, SeRestorePrivilege through FILE_GENERIC_WRITE, which holds
+# STANDARD_RIGHTS_WRITE, that is READ_CONTROL (Microsoft: Privilege
+# Constants; File Security and Access Rights; Standard Access Rights). A write
 # takes ownership for the Administrators first (the owner's group may then
 # write the rules), then sets the owner of the SDDL and its rules in one
 # write by name (SeRestorePrivilege allows any owner), with the explicit
@@ -325,7 +342,9 @@ public static class TnwksSecurity {
 '@
 
 # Once per run: the type, then each privilege on. A privilege that is not on
-# stops here, before any read or write of the rules.
+# stops here. Each run calls it at its start, in every mode, before the
+# state read and before any move (see the end of the script); the read and
+# the write of the rules call it too, at no cost.
 function Initialize-TnwksSecurity {
     if (-not ('TnwksSecurity' -as [type])) { Add-Type -TypeDefinition $TnwksSecuritySource }
     if (-not $script:TnwksPrivileges) {
@@ -564,7 +583,8 @@ function Invoke-TnwksForward {
     Invoke-TnwksStopTask $present
     Wait-TnwksNoWsl $pSid $present.account
     Write-Log 'step 3 passed'
-    # (4) The markers, then the move, the owner and the rules.
+    # (4) The markers, then the move, the owner and the rules. The move is a
+    # rename by the privileges that the run turned on at its start.
     Add-TnwksFolderMarker $present.folder $pSid
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $new.folder $cfg.marker_name)) "no marker file in $($new.folder)"
     Assert-Tnwks ((Test-Path -LiteralPath $oldPath) -and -not (Test-Path -LiteralPath $newPath)) 'the disk file is not at the old path only'
@@ -634,8 +654,13 @@ function Invoke-TnwksWayBack {
     Invoke-TnwksStopTask $new
     Wait-TnwksNoWsl $nSid $new.account
     Write-Log 'way back 2 passed'
-    # (3) For step 4. First the move back: a rename keeps the rules, and SYSTEM
-    # moves the file by its right on the folders. Then, at the old path, the
+    # (3) For step 4. First the move back: a rename keeps the rules. SYSTEM
+    # moves the file by the privileges that the run turned on at its start,
+    # not by its right on the folders: the file may grant SYSTEM nothing.
+    # MoveFileEx names delete on the file or delete child on the folder, but
+    # the rename also opens the file, and on such a file that open is refused
+    # unless the privileges are on (Microsoft: MoveFileEx; Privilege
+    # Constants). Then, at the old path, the
     # saved owner and rules: their inherited rules come from the old folder,
     # so they can be put back there only. A run that a power loss ends between
     # the two finds the file at the old path with other rules, and restores
@@ -723,6 +748,10 @@ if ($scope) {
 Write-Log "start, request: $($req | ConvertTo-Json -Compress)"
 $outcome = 'failed'
 try {
+    # The privileges first, in every mode: the state read, the move and the
+    # rules of the disk file come after. A privilege that is not on fails
+    # the run here, with no marker and nothing changed.
+    Initialize-TnwksSecurity
     switch ($Mode) {
         'forward' {
             try {

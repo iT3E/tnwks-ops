@@ -37,12 +37,17 @@
       $logStart = @(Get-Content -LiteralPath $Log).Count
       $stateStart = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() }).Count
       $before = (Get-ScheduledTaskInfo -TaskName $Task).LastRunTime
-      Start-ScheduledTask -TaskName $Task
+      Start-ScheduledTask -TaskName $Task | Out-Null
       $deadline = (Get-Date).AddMinutes(125)
+      # The run has ended when the task is not Running or Queued, its last
+      # run time is new, and its result is not 0x41301 (the task is running):
+      # a task that never ran can read a new time before its run ends.
       do {
           Start-Sleep -Seconds 5
           $info = Get-ScheduledTaskInfo -TaskName $Task
-      } while (((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -or $info.LastRunTime -eq $before) -and (Get-Date) -lt $deadline)
+          $ended = "$((Get-ScheduledTask -TaskName $Task).State)" -notin @('Running', 'Queued') -and
+              $info.LastRunTime -ne $before -and [int64]$info.LastTaskResult -ne 0x41301
+      } while (-not $ended -and (Get-Date) -lt $deadline)
       $lines = @(Get-Content -LiteralPath $Log | Select-Object -Skip $logStart)
       $markers = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() } | Select-Object -Skip $stateStart |
           ForEach-Object { ($_ -split ' ', 2)[1].Trim() })
