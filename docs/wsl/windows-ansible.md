@@ -606,7 +606,10 @@ now) removes each part, in this order:
    step 1. The play waits up to 2 minutes for the profile to unload. When
    it stays loaded, the removal stops there, and the message says what
    stays: run the removal again once the profile unloads, at the latest
-   after the next restart of the host.
+   after the next restart of the host. Each run of an S4U task adds a
+   reference to the profile of its account that the system does not
+   release, so a profile that such a task loaded stays loaded until the
+   next restart of the host.
 
 The same check play then reads the exit check, with the SID of the
 account read before the removal (`-e wsl_rehearsal_removed_sid=<SID>`): no
