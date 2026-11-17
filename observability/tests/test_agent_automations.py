@@ -515,13 +515,20 @@ def test_a_missing_list_declares_nothing_and_changes_nothing(lab):
 def test_an_empty_list_on_purpose_removes_each_job_of_git(lab):
     start = len(lab.log())
     lab.write_list(json.dumps({"jobs": []}))
+    removed = [f"automations-sync key={key} result=removed" for key in ("weekday-check", "weekly-review")]
     try:
-        # The pass that first reads the empty list removes the two jobs;
-        # the next one finds nothing to do.
+        # The first pass that reads the empty list removes the two jobs. It
+        # can be the pass after the one that runs now, when that one read
+        # the list before the change: so wait for the remove lines first.
+        deadline = time.monotonic() + 120
+        while not all(line in lab.log()[start:] for line in removed):
+            assert time.monotonic() < deadline, lab.log()
+            time.sleep(1)
+        # A pass that starts after them finds nothing to do.
         assert lab.next_pass() == ["automations-sync result=ok jobs=0"]
         since = lab.log()[start:]
-        for key in ("weekday-check", "weekly-review"):
-            assert since.count(f"automations-sync key={key} result=removed") == 1
+        for line in removed:
+            assert since.count(line) == 1
         jobs = lab.jobs()
         assert not [k for k in jobs if k.startswith("flux:")]
         assert "made-in-a-chat" in jobs
