@@ -684,8 +684,8 @@ pod makes the jobs of the product equal to that list.
   never turns it on, and its line says `state=stopped note=no-git-value`
   once. A turn-on writes `true` first and then enables the job; when the
   enable fails, the sync writes `false` again so the next pass tries again,
-  and the job never comes on by mistake. Both jobs of the host are `false` in git
-  until the owner writes their task files; a pull request turns each on.
+  and the job never comes on by mistake. Both jobs of the host were `false` in git
+  until the owner wrote their task files; they are `true` since 2026-11-17.
 - **The lines,** in Loki: one for each job,
   `automations-sync key=<key> result=ok state=on|off|stopped`, `result=removed`
   or `result=failed`, and one for each pass,

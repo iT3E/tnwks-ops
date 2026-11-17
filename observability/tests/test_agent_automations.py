@@ -72,9 +72,9 @@ def test_each_job_of_the_list_is_neutral_and_names_its_task_file():
         assert job["message"] == message(job["key"])
 
 
-def test_the_two_jobs_of_the_host_are_in_the_list_and_off_until_the_task_files_are_written():
+def test_the_two_jobs_of_the_host_are_in_the_list_and_on_since_the_task_files_are_written():
     jobs = {j["key"]: (j["cron"], j["enabled"]) for j in json.loads(LIST.read_text())["jobs"]}
-    assert jobs == {"weekday-check": ("0 9 * * 1-5", False), "weekly-review": ("0 18 * * 0", False)}
+    assert jobs == {"weekday-check": ("0 9 * * 1-5", True), "weekly-review": ("0 18 * * 0", True)}
 
 
 def test_the_config_maps_hold_the_list_and_the_script():
