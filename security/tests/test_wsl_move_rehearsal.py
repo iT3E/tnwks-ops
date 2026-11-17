@@ -346,9 +346,9 @@ for a in "$@"; do printf '%s\037' "$a"; done >> "$TNWKS_ARGV"; printf '\036' >> 
 c=""; last=""
 for a in "$@"; do [ "$last" = "-c" ] && c=$a; last=$a; done
 [ -n "$c" ] || exit 0
-b64=$(printf '%s' "$c" | sed -n 's#^echo \([A-Za-z0-9+/=]*\) | base64 -d > /tmp/tnwks-move-[a-z]*\.sh \&\& exec /bin/sh -e /tmp/tnwks-move-[a-z]*\.sh$#\1#p')
+b64=$(printf '%s' "$c" | sed -n 's#^f=\$(mktemp) \&\& echo \([A-Za-z0-9+/=]*\) | base64 -d > \$f \&\& exec /bin/sh -e \$f$#\1#p')
 [ -n "$b64" ] || { echo "not the command of Invoke-WslScript"; exit 99; }
-f="$TNWKS_FS/tmp/tnwks-move-step.sh"
+f=$(mktemp "$TNWKS_FS/tmp/tmp.XXXXXX")
 printf '%s' "$b64" | base64 -d | sed "s#/etc/#$TNWKS_FS/etc/#g; s#/usr/share/#$TNWKS_FS/usr/share/#g; s#/proc/#$TNWKS_FS/proc/#g" > "$f"
 PATH="$TNWKS_SHIMS:$PATH" exec /bin/sh -e "$f"
 """
@@ -559,24 +559,76 @@ def test_the_model_of_windows_powershell_5_1_breaks_shell_text_with_quotes():
     assert windows_argv(ps51_command_line(["-c", old_wslconf]))[1] == "printf [user]\\ndefault"
 
 
+# Each line of the Windows roles and plays that passes a -c flag (alone, or in a
+# group such as -lc), in any form: in a command, or in an array that a call splats.
+# Each was read: the shell text is fixed, with no quote or backslash in it.
+REVIEWED_C_FLAGS = {
+    # Not WSL: stat on the controller.
+    ("Invoke-TnwksHostCheck.ps1", """[int](& stat -L -c '%h' "/proc/$PID/fd/$($Stream.SafeFileHandle.DangerousGetHandle())")"""),
+    ("Watch-TnwksWsl.ps1", '$state = & wsl.exe -d $Distro -u root -e /bin/sh -c "runuser -u it3e -- env $probe" 2>&1 | Out-String'),
+    ("Watch-TnwksWsl.ps1", '& wsl.exe -d $Distro -u root -e /bin/sh -c "runuser -u it3e -- env $cmd" 2>&1 | Out-Null'),
+    ("Watch-TnwksWsl.ps1", "& wsl.exe -d $Distro -u root -e /bin/sh -c 'docker restart homelab-wsl-worker-2' 2>&1 | Out-Null"),
+    ("Invoke-TnwksWslAccountTask.ps1", "$arguments = @('-d', $distro) + $user + @('-e', '/bin/sh', '-c', $command)"),
+}
+C_FLAG = re.compile(r"""(?:^|[\s,(@])['"]?-[a-z]*c['"]?(?=[\s,)]|$)""")
+
+
 def test_no_shell_text_goes_to_wsl_exe_outside_the_safe_command():
     text = ACCOUNT.read_text()
-    # Only Invoke-WslScript passes -c, with base64 in a command that has no quote,
-    # no backslash and no dollar sign of its own.
+    # Only Invoke-WslScript passes -c, with base64 in a command that has no quote
+    # and no backslash of its own.
     assert text.count("'-c'") == 1
     func = re.search(r"function Invoke-WslScript\(.*?\n\}", text, re.DOTALL)[0]
-    command = re.search(r"'-c', (\"[^\"]*\")\)", func)[1]
-    assert command == '"echo $b64 | base64 -d > $file && exec /bin/sh -e $file"'
-    assert not re.search(r"['\"\\]", command[1:-1].replace("$b64", "").replace("$file", ""))
+    command = re.search(r"\$command = '([^']*)' -f \$b64", func)[1]
+    assert command == "f=$(mktemp) && echo {0} | base64 -d > $f && exec /bin/sh -e $f"
+    assert not re.search(r"['\"\\]", command)
     # Each other call of wsl.exe passes names, paths and flags only.
     for call in re.findall(r"Invoke-Wsl @\((.*?)\)", text):
         assert "/bin/sh" not in call and '"' not in call, call
-    # The live roles pass no shell text with a quote or a backslash to wsl.exe.
-    for path in ANSIBLE.glob("roles/*/files/*.ps1"):
+    # Every -c flag in the Windows roles and plays is one that was read.
+    found = set()
+    paths = [*ANSIBLE.glob("roles/windows_*/files/*"), *ANSIBLE.glob("roles/windows_*/tasks/*.yml"),
+             *ANSIBLE.glob("roles/windows_*/templates/*"), *ANSIBLE.glob("playbooks/windows-*.yml")]
+    for path in paths:
+        if not path.is_file() or path.suffix not in (".ps1", ".yml", ".j2", ".sh", ".xml", ".py"):
+            continue
         for line in path.read_text().splitlines():
-            m = re.search(r"wsl\.exe.*-c (.*)$", line)
-            if m:
-                assert not re.search(r"\\|\"[^\"]*\"[^\"]*\"", m[1]), (path.name, line)
+            if C_FLAG.search(line):
+                found.add((path.name, line.strip()))
+    assert found == REVIEWED_C_FLAGS
+    # The parts that Watch-TnwksWsl puts into its shell text are fixed, with no quote.
+    watch = (ANSIBLE / "roles/windows_wsl_maintenance/files/Watch-TnwksWsl.ps1").read_text()
+    for name in ("probe", "cmd"):
+        value = re.search(rf"^\s*\${name} = '([^']*)'$", watch, re.MULTILINE)[1]
+        assert not re.search(r"[\"\\$]", value), value
+
+
+def test_the_flag_search_finds_a_splatted_flag():
+    for line in ("$a = @('-e', '/bin/sh', '-c', $x)", '& wsl.exe -e bash -lc "x"', "wsl.exe -- sh -c x",
+                 '$args = @("-c", $x)'):
+        assert C_FLAG.search(line), line
+    for line in ("-Config $c", "--cpus 2", "$a = @('-d', $distro)", "Get-Content -Raw"):
+        assert not C_FLAG.search(line), line
+
+
+@needs_pwsh
+def test_a_key_that_comes_twice_reads_as_no_value(tmp_path):
+    func = re.search(r"function ConvertFrom-WslValues\(.*?\n\}", ACCOUNT.read_text(), re.DOTALL)[0]
+    run = pwsh(func + """
+$out = ConvertFrom-WslValues "uid=1000`ntoken=a`nmem_total_kib=1`nmem_total_kib=2014784`nicon_sha256=ab`n"
+[Console]::Out.Write((@{ values = $out.values; repeated = @($out.repeated) } | ConvertTo-Json -Compress))
+""")
+    assert run.returncode == 0, run.stderr
+    out = json.loads(run.stdout)
+    assert out["repeated"] == ["mem_total_kib"] and out["values"]["mem_total_kib"] is None
+    assert out["values"]["uid"] == "1000" and out["values"]["token"] == "a" and out["values"]["icon_sha256"] == "ab"
+
+
+@needs_pwsh
+def test_a_script_too_long_for_one_command_line_does_not_run(tmp_path):
+    out = run_account(tmp_path, "wslconf", config={"wsl_conf": "x" * 20000})
+    assert out["code"] == 1 and "too long for one command line" in out["result"]["output"]
+    assert out["wsl"] == []
 
 
 @needs_pwsh
@@ -586,6 +638,7 @@ def test_the_account_steps_write_and_read_the_distro_through_windows_powershell_
     rootfs = run_account(tmp_path / "1", "import-rootfs", rootfs=True)
     assert rootfs["code"] == 0, rootfs
     assert rootfs["result"]["prepare_exit"] == 0 and rootfs["result"]["imported"] is True
+    assert rootfs["result"]["existed"] is False
     fs = rootfs["fs"]
     assert (fs / "etc/tnwks-move-token").read_text() == "token\n"
     assert (fs / "etc/wsl-distribution.conf").read_text() == DISTRIBUTION_CONF
@@ -601,6 +654,7 @@ def test_the_account_steps_write_and_read_the_distro_through_windows_powershell_
     (fs / "etc/tnwks-move-token").write_text("token")
     again = run_account(tmp_path / "1", "import-rootfs", registered="b")
     assert again["code"] == 0 and again["result"]["existed"] is True and again["result"]["prepare_exit"] == 0
+    assert again["result"]["imported"] is False
     assert not any(c.startswith("wsl --import ") for c in again["wsl"])
     assert (fs / "etc/wsl-distribution.conf").read_text() == DISTRIBUTION_CONF
     assert (fs / "etc/tnwks-move-token").read_text() == "token\n"
@@ -615,6 +669,7 @@ def test_the_account_steps_write_and_read_the_distro_through_windows_powershell_
     check = run_account(tmp_path / "1", "check", registered="b")
     result = check["result"]
     assert result["read_exit"] == 0 and result["token"] == "token" and result["user_uid"] == "1000"
+    assert result["repeated_keys"] == []
     assert result["uid"].isdigit() and result["mem_total_kib"] == 2014784
     assert result["distribution_conf_sha256"] == hashlib.sha256(DISTRIBUTION_CONF.encode()).hexdigest()
     assert result["wsl_conf_sha256"] == hashlib.sha256(b"[user]\ndefault = moverh\n").hexdigest()

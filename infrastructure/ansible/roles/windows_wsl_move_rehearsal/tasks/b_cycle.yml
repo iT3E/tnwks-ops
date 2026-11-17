@@ -56,6 +56,7 @@
       - reimport.result.imported | default(false)
       - check.result.registered
       - check.result.read_exit == 0
+      - check.result.repeated_keys | length == 0
       - check.result.token == wsl_move_rehearsal_data_token
       - check.result.uid == (wsl_move_rehearsal_registration_values.DefaultUid | string)
       - check.result.wsl_conf_sha256 == wsl_move_rehearsal_wsl_conf | hash('sha256')

@@ -92,16 +92,21 @@ function Invoke-Wsl([string[]]$Arguments) {
 # its own: Windows PowerShell 5.1 does not escape a double quote inside an
 # argument to a native program, so wsl.exe would split the text at each
 # quote, and sh would then drop each backslash. The script goes as base64
-# (letters, digits, +, / and =) in one fixed command with no quote, backslash
-# or dollar sign. sh decodes it to a file in the distro and runs that file
-# with -e; the file removes itself first.
+# (letters, digits, +, / and =) in one fixed command with no quote and no
+# backslash. sh decodes it to a new private file (mktemp, mode 0600) and runs
+# that file with -e; the file removes itself first. A command line holds at
+# most 32767 characters, and base64 of a script that writes a file as base64
+# is about 1.8 times the size of the file: a longer command does not run.
 function Invoke-WslScript([string]$Script, [switch]$Root) {
     $text = 'rm -f "$0"' + "`n" + ($Script -replace "`r`n", "`n")
     if (-not $text.EndsWith("`n")) { $text += "`n" }
     $b64 = [Convert]::ToBase64String((New-Object Text.UTF8Encoding $false).GetBytes($text))
-    $file = if ($Root) { '/tmp/tnwks-move-root.sh' } else { '/tmp/tnwks-move-user.sh' }
+    $command = 'f=$(mktemp) && echo {0} | base64 -d > $f && exec /bin/sh -e $f' -f $b64
     $user = if ($Root) { @('-u', 'root') } else { @() }
-    Invoke-Wsl (@('-d', $distro) + $user + @('-e', '/bin/sh', '-c', "echo $b64 | base64 -d > $file && exec /bin/sh -e $file"))
+    $arguments = @('-d', $distro) + $user + @('-e', '/bin/sh', '-c', $command)
+    $length = (Join-Path $system 'wsl.exe').Length + (($arguments | ForEach-Object { $_.Length + 3 }) | Measure-Object -Sum).Sum
+    if ($length -gt 32000) { return @{ exit = 1; output = "the script is too long for one command line ($length characters)" } }
+    Invoke-Wsl $arguments
 }
 
 # The shell line that writes a file in the distro with exactly this text, and
@@ -113,13 +118,23 @@ function Get-WslWriteLine([string]$Path, [string]$Text) {
 }
 
 # The values of a read in the distro, one key=value line each, by key: a line
-# that a value runs into does not move the others.
+# that a value runs into does not move the others. A key that comes twice (a
+# value with a newline in it that names a key) reads as no value, and is
+# listed in repeated.
 function ConvertFrom-WslValues([string]$Output) {
     $values = @{}
+    $repeated = @()
     foreach ($line in @($Output -split "`r?`n")) {
-        if ($line -match '^([a-z_0-9]+)=(.*)$') { $values[$Matches[1]] = $Matches[2].Trim() }
+        if ($line -notmatch '^([a-z_0-9]+)=(.*)$') { continue }
+        $key = $Matches[1]
+        if ($values.ContainsKey($key)) {
+            if ($repeated -notcontains $key) { $repeated += $key }
+            $values[$key] = $null
+        } else {
+            $values[$key] = $Matches[2].Trim()
+        }
     }
-    $values
+    [pscustomobject]@{ values = $values; repeated = $repeated }
 }
 
 # The registration of the distro in the registry of this account, or $null.
@@ -207,7 +222,7 @@ switch ($Step) {
         ) -join "`n"
         $in = Invoke-WslScript $script -Root
         $stop = Invoke-Wsl @('--terminate', $distro)
-        Exit-Tnwks ([int]($in.exit -ne 0)) @{ imported = $true; existed = $existed; prepare_exit = $in.exit; prepare = $in.output; terminate_exit = $stop.exit }
+        Exit-Tnwks ([int]($in.exit -ne 0)) @{ imported = (-not $existed); existed = $existed; prepare_exit = $in.exit; prepare = $in.output; terminate_exit = $stop.exit }
     }
     'import' {
         $reg = Get-TnwksRegistration $distro
@@ -270,7 +285,9 @@ switch ($Step) {
                 'printf ''icon_sha256=%s\n'' "$(sha256sum 2>/dev/null < /usr/share/tnwks-move/icon.ico | cut -d '' '' -f 1)"'
             ) -join "`n")
             $data.read_exit = $read.exit
-            $values = ConvertFrom-WslValues $read.output
+            $parsed = ConvertFrom-WslValues $read.output
+            $values = $parsed.values
+            $data.repeated_keys = @($parsed.repeated)
             foreach ($key in @('uid', 'user_uid', 'token', 'distribution_conf_sha256', 'wsl_conf_sha256', 'icon_sha256')) { $data[$key] = $values[$key] }
             $data.mem_total_kib = if ($values.mem_total_kib -match '^[0-9]+$') { [int64]$values.mem_total_kib } else { $null }
         }
