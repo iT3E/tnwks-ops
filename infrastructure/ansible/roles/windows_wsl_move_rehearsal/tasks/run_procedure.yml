@@ -1,0 +1,62 @@
+---
+# Writes the run request (wsl_move_rehearsal_request), starts the window
+# procedure as its own SYSTEM task, waits for its end, and keeps its exit code
+# and the lines that it logged in this run (wsl_move_rehearsal_procedure).
+# wsl_move_rehearsal_procedure_exit: the exit code that passes (default 0).
+- name: "The window procedure, mode {{ wsl_move_rehearsal_request.mode }}"
+  ansible.windows.win_powershell:
+    parameters:
+      Task: "{{ wsl_move_rehearsal_window_task }}"
+      Request: "{{ wsl_move_rehearsal_request_file }}"
+      RequestJson: "{{ wsl_move_rehearsal_request | to_json }}"
+      Log: "{{ wsl_move_rehearsal_log_file }}"
+      State: "{{ wsl_move_rehearsal_state_file }}"
+    script: |
+      param([string]$Task, [string]$Request, [string]$RequestJson, [string]$Log, [string]$State)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $true
+      [IO.File]::WriteAllText($Request, $RequestJson)
+      $logStart = @(Get-Content -LiteralPath $Log).Count
+      $stateStart = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() }).Count
+      $before = (Get-ScheduledTaskInfo -TaskName $Task).LastRunTime
+      Start-ScheduledTask -TaskName $Task
+      $deadline = (Get-Date).AddMinutes(110)
+      do {
+          Start-Sleep -Seconds 5
+          $info = Get-ScheduledTaskInfo -TaskName $Task
+      } while (((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -or $info.LastRunTime -eq $before) -and (Get-Date) -lt $deadline)
+      $lines = @(Get-Content -LiteralPath $Log | Select-Object -Skip $logStart)
+      $markers = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() } | Select-Object -Skip $stateStart |
+          ForEach-Object { ($_ -split ' ', 2)[1].Trim() })
+      # Each line is "<time> <mode> <text>": the text only, with no time.
+      $texts = @($lines | ForEach-Object { ($_ -split ' ', 3)[2] })
+      [pscustomobject]@{
+          ran = ($info.LastRunTime -ne $before)
+          code = [int64]$info.LastTaskResult
+          markers = $markers
+          groups = @($texts | Where-Object { $_ -match '^group: \S+ (joined|left) Administrators$' } | ForEach-Object { $Matches[1] })
+          group_lines = @($lines | Where-Object { $_ -match ' group: ' })
+          would_restart = @($texts | Where-Object { $_ -like 'would restart*' }).Count
+          result = @($texts | Where-Object { $_ -like 'result: *' } | ForEach-Object { $_.Substring(8) }) -join ','
+          log = $texts
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_procedure_run
+
+- name: The run of the procedure
+  ansible.builtin.set_fact:
+    wsl_move_rehearsal_procedure: "{{ wsl_move_rehearsal_procedure_run.output | last }}"
+
+- name: "The procedure ended as it should (mode {{ wsl_move_rehearsal_request.mode }})"
+  ansible.builtin.assert:
+    that:
+      - wsl_move_rehearsal_procedure.ran
+      - wsl_move_rehearsal_procedure.code == (wsl_move_rehearsal_procedure_exit | default(0) | int)
+    fail_msg: >-
+      The procedure exited {{ wsl_move_rehearsal_procedure.code }} with the result
+      '{{ wsl_move_rehearsal_procedure.result }}'. Its log of this run:
+      {{ wsl_move_rehearsal_procedure.log | join(' / ') }}. The rehearsal stops: run its removal.
+    quiet: true

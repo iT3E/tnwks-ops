@@ -1,0 +1,53 @@
+---
+# The reads of the folders, the files and the tasks after a window, as
+# SYSTEM: wsl_move_rehearsal_window_read.
+- name: Read the folders, the files and the tasks
+  ansible.windows.win_powershell:
+    parameters:
+      FolderA: "{{ wsl_move_rehearsal_accounts.a.folder }}"
+      FolderB: "{{ wsl_move_rehearsal_accounts.b.folder }}"
+      LogB: "{{ wsl_move_rehearsal_accounts.b.log_dir }}"
+      SidB: "{{ wsl_move_rehearsal_sids.b }}"
+      NameB: "{{ wsl_move_rehearsal_accounts.b.name }}"
+      DiskName: "{{ wsl_move_rehearsal_disk_name }}"
+      MarkerName: "{{ wsl_move_rehearsal_marker_name }}"
+      Prefix: "{{ wsl_move_rehearsal_prefix }}"
+    script: |
+      param([string]$FolderA, [string]$FolderB, [string]$LogB, [string]$SidB, [string]$NameB,
+          [string]$DiskName, [string]$MarkerName, [string]$Prefix)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      function Get-Parts([string]$Sddl) {
+          $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { $Matches[1] } else { '' }
+          $dacl = if ($Sddl -match 'D:([A-Z]*)((\([^)]*\))*)') { $Matches } else { @{ 1 = ''; 2 = '' } }
+          $aces = @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value } |
+              Where-Object { ($_ -split ';')[1] -notmatch 'ID' } | Sort-Object) -join ' '
+          "$owner|$($dacl[1] -match 'P')|$aces"
+      }
+      $disk = Join-Path $FolderB $DiskName
+      $want = 'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;{0})' -f $SidB
+      $import = Get-Content -LiteralPath (Join-Path $LogB 'import.json') -Raw | ConvertFrom-Json
+      # The files that the import in place wrote next to the disk file (the
+      # icon of the shortcut), with their owner.
+      $other = @(Get-ChildItem -LiteralPath $FolderB -File -Force | Where-Object { $_.Name -notin @($DiskName, $MarkerName) } |
+          ForEach-Object { "$($_.Name) owner $((Get-Acl -LiteralPath $_.FullName).Owner)" })
+      $window = @()
+      foreach ($k in 'a', 'b') { foreach ($s in 'stop', 'unregister', 'import') { $window += Get-ScheduledTask -TaskName "$Prefix-$k-$s" } }
+      [pscustomobject]@{
+          disk_rules_ok = (Test-Path -LiteralPath $disk) -and ((Get-Parts (Get-Acl -LiteralPath $disk).Sddl) -eq (Get-Parts $want))
+          disk_at_a = [bool](Test-Path -LiteralPath (Join-Path $FolderA $DiskName))
+          marker_a = [bool](Test-Path -LiteralPath (Join-Path $FolderA $MarkerName))
+          marker_b = [bool](Test-Path -LiteralPath (Join-Path $FolderB $MarkerName))
+          import_b = $import
+          icon_owner_b = @($other | Where-Object { $_ -match '\.ico owner ' })
+          other_files_b = $other
+          window_tasks_enabled_no_trigger = (@($window | Where-Object { $_.State -eq 'Disabled' -or @($_.Triggers).Count -gt 0 }).Count -eq 0)
+          start_a = "$((Get-ScheduledTask -TaskName "$Prefix-a-start").State)"
+          start_b = "$((Get-ScheduledTask -TaskName "$Prefix-b-start").State)"
+          password_b = (Get-LocalUser -Name $NameB).PasswordLastSet.ToUniversalTime().ToString('o')
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_window_read

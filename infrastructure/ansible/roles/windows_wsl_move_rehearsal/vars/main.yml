@@ -1,0 +1,78 @@
+---
+# Derived from the defaults: the list of tasks of the accounts, and the
+# configs that the play writes for the scripts.
+wsl_move_rehearsal_task_list: >-
+  {%- set out = [] -%}
+  {%- for key in ['a', 'b'] -%}
+  {%- for step in wsl_move_rehearsal_tasks[key] -%}
+  {%- set _ = out.append({'key': key, 'step': step}) -%}
+  {%- endfor -%}
+  {%- endfor -%}
+  {{ out }}
+
+# One config for each account (Invoke-TnwksWslAccountTask.ps1), and one for
+# the procedure (Invoke-TnwksMoveWindow.ps1).
+wsl_move_rehearsal_account_config_common:
+  name_pattern: "^{{ wsl_move_rehearsal_prefix }}"
+  refused_names: "{{ wsl_move_rehearsal_refused_names }}"
+  root: "{{ wsl_move_rehearsal_dir }}"
+  distro: "{{ wsl_move_rehearsal_distro }}"
+  disk_name: "{{ wsl_move_rehearsal_disk_name }}"
+  marker_name: "{{ wsl_move_rehearsal_marker_name }}"
+  rootfs: '{{ wsl_move_rehearsal_dir }}\{{ wsl_move_rehearsal_rootfs.url | basename }}'
+  rootfs_sha256: "{{ wsl_move_rehearsal_rootfs.sha256 | upper }}"
+  linux_user: "{{ wsl_move_rehearsal_linux_user }}"
+  data_token: "{{ wsl_move_rehearsal_data_token }}"
+  icon_base64: "{{ wsl_move_rehearsal_icon_base64 }}"
+  registration_values: "{{ wsl_move_rehearsal_registration_values }}"
+
+wsl_move_rehearsal_window_tasks:
+  a:
+    stop: "{{ wsl_move_rehearsal_prefix }}-a-stop"
+    unregister: "{{ wsl_move_rehearsal_prefix }}-a-unregister"
+    import: "{{ wsl_move_rehearsal_prefix }}-a-import"
+  b:
+    stop: "{{ wsl_move_rehearsal_prefix }}-b-stop"
+    unregister: "{{ wsl_move_rehearsal_prefix }}-b-unregister"
+    import: "{{ wsl_move_rehearsal_prefix }}-b-import"
+
+wsl_move_rehearsal_window_config:
+  root: "{{ wsl_move_rehearsal_dir }}"
+  account_pattern: "^{{ wsl_move_rehearsal_prefix }}-"
+  disk_name: "{{ wsl_move_rehearsal_disk_name }}"
+  marker_name: "{{ wsl_move_rehearsal_marker_name }}"
+  state_file: "{{ wsl_move_rehearsal_state_file }}"
+  log_file: "{{ wsl_move_rehearsal_log_file }}"
+  acl_file: "{{ wsl_move_rehearsal_acl_file }}"
+  version_file: "{{ wsl_move_rehearsal_version_file }}"
+  service_binary: "{{ wsl_move_rehearsal_service_binary }}"
+  restart: "{{ wsl_move_rehearsal_restart | bool }}"
+  # The check for a session of the owner (site 1 only) is not built here.
+  session_check: false
+  task_minutes: 15
+  present:
+    account: "{{ wsl_move_rehearsal_accounts.a.name }}"
+    folder: "{{ wsl_move_rehearsal_accounts.a.folder }}"
+    result_dir: "{{ wsl_move_rehearsal_accounts.a.log_dir }}"
+    window_tasks: "{{ wsl_move_rehearsal_window_tasks.a }}"
+    disable_tasks: ["{{ wsl_move_rehearsal_prefix }}-a-start"]
+    start_tasks: ["{{ wsl_move_rehearsal_prefix }}-a-start"]
+  new:
+    account: "{{ wsl_move_rehearsal_accounts.b.name }}"
+    folder: "{{ wsl_move_rehearsal_accounts.b.folder }}"
+    result_dir: "{{ wsl_move_rehearsal_accounts.b.log_dir }}"
+    window_tasks: "{{ wsl_move_rehearsal_window_tasks.b }}"
+    start_tasks: ["{{ wsl_move_rehearsal_prefix }}-b-start"]
+  # The boot task: no temporary account goes into Administrators across a
+  # restart, so the group steps are off at boot.
+  boot:
+    group_steps: false
+
+wsl_move_rehearsal_configs:
+  config-a: >-
+    {{ wsl_move_rehearsal_account_config_common | combine({'folder': wsl_move_rehearsal_accounts.a.folder,
+       'log_dir': wsl_move_rehearsal_accounts.a.log_dir}) }}
+  config-b: >-
+    {{ wsl_move_rehearsal_account_config_common | combine({'folder': wsl_move_rehearsal_accounts.b.folder,
+       'log_dir': wsl_move_rehearsal_accounts.b.log_dir}) }}
+  window: "{{ wsl_move_rehearsal_window_config }}"

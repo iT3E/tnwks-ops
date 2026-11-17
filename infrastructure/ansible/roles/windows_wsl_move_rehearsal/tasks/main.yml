@@ -1,0 +1,35 @@
+---
+# Run controller.yml on localhost first (the playbook does). The lead starts
+# each phase by hand (defaults/main.yml): -e wsl_move_rehearsal_phase=<phase>.
+
+- name: The phase is one of the rehearsal
+  ansible.builtin.assert:
+    that: wsl_move_rehearsal_phase in wsl_move_rehearsal_phases
+    fail_msg: "wsl_move_rehearsal_phase is {{ wsl_move_rehearsal_phase }}: one of {{ wsl_move_rehearsal_phases | join(', ') }}."
+    quiet: true
+
+# By design, the rehearsal can not name the live distro, its folder or the
+# profile of the account of the host's person: every name has the prefix of
+# the rehearsal, and every path is under its own folder. The scripts check the
+# same before any action.
+- name: The names and paths are the rehearsal's own
+  ansible.builtin.assert:
+    that:
+      - wsl_move_rehearsal_distro is match('^' ~ wsl_move_rehearsal_prefix)
+      - wsl_move_rehearsal_distro | lower not in (wsl_move_rehearsal_refused_names | map('lower') | list)
+      - wsl_move_rehearsal_dir | lower is match('^c:\\\\programdata\\\\' ~ wsl_move_rehearsal_prefix ~ '$')
+      - wsl_move_rehearsal_accounts.a.name is match('^' ~ wsl_move_rehearsal_prefix ~ '-')
+      - wsl_move_rehearsal_accounts.b.name is match('^' ~ wsl_move_rehearsal_prefix ~ '-')
+      - wsl_move_rehearsal_accounts.a.name != (windows_desktop_user | default(''))
+      - wsl_move_rehearsal_accounts.b.name != (windows_desktop_user | default(''))
+      - (vhdx_compact_vhdx | default('')) | lower is not search(wsl_move_rehearsal_prefix)
+      - >-
+        (wsl_move_rehearsal_accounts.values() | map(attribute='folder') | list
+        + [wsl_move_rehearsal_elsewhere, wsl_move_rehearsal_side, wsl_move_rehearsal_state_dir])
+        | reject('match', '^' ~ (wsl_move_rehearsal_dir | regex_escape) ~ '\\\\') | list | length == 0
+    fail_msg: A name or a path of the rehearsal of the move is outside its scope. Nothing is changed.
+    quiet: true
+
+- name: The phase
+  ansible.builtin.include_tasks: "{{ wsl_move_rehearsal_phase }}.yml"
+  when: wsl_move_rehearsal_phase != 'none'

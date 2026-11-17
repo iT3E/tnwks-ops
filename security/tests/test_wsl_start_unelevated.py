@@ -74,12 +74,15 @@ def starts_distro_process(text: str, role: Path) -> bool:
     return any(re.search(r"wsl\.exe\b[^\n]*-d\b|wsl\.exe @", script.read_text()) for script in scripts_of(text, role))
 
 
+REHEARSALS = {"windows_wsl_rehearsal", "windows_wsl_move_rehearsal"}
+
+
 def templates() -> list[Path]:
     """The scheduled tasks of the Windows roles (a WinSW service file is not one). The
-    tasks of the temporary account of the rehearsal have their own tests
-    (test_wsl_rehearsal.py)."""
+    tasks of the temporary accounts of the two rehearsals have their own tests
+    (test_wsl_rehearsal.py and test_wsl_move_rehearsal.py)."""
     return sorted(path for path in ROLES.glob("windows_*/templates/*.xml.j2")
-                  if "<Task " in path.read_text() and path.parts[-3] != "windows_wsl_rehearsal")
+                  if "<Task " in path.read_text() and path.parts[-3] not in REHEARSALS)
 
 
 # The elevated tasks of the desktop user that may still run wsl.exe with the switch on:

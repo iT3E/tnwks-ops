@@ -273,7 +273,9 @@ def test_the_rehearsal_runs_on_the_site_2_host_only():
     hosts = next(p for p in play if p["hosts"] == "windows_hosts")
     role = next(r for r in hosts["roles"] if r["role"] == "windows_wsl_rehearsal")
     assert role["when"] == "wsl_rehearsal | bool"
-    assert hosts["roles"][-1] is role, "after every other role, so a failed step stops no other role"
+    # After every other role, so a failed step stops no other role. Only the rehearsal
+    # of the move comes after it (test_wsl_move_rehearsal.py).
+    assert hosts["roles"][-2] is role and hosts["roles"][-1]["role"] == "windows_wsl_move_rehearsal"
 
 
 def test_the_apply_runs_no_task_in_a_check_run_and_writes_only_in_its_folder_and_profile():
@@ -1142,7 +1144,7 @@ def test_a_task_that_fails_to_log_on_is_named_with_the_cause():
 
 def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unchanged():
     module = TASK_MODULE.read_text()
-    assert "$task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force" in module
+    assert "$task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $xml -Force" in module
     assert "s4u_user = @{ type = 'str' }" in module
     assert "required_by = @{ s4u_user = @(, 's4u_description') }" in module
     named = [task for task in present() + absent()
@@ -1156,7 +1158,9 @@ def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unc
     assert all(task["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_rehearsal_account }}" for task in named)
     # The role passes the Description that the module checks before a reset.
     assert all(task["tnwks_win_scheduled_task"]["s4u_description"] == "{{ wsl_rehearsal_account_description }}" for task in named)
-    others = [path for path in (ANSIBLE / "roles").glob("*/tasks/*.yml") if path.parent.parent.name != "windows_wsl_rehearsal"]
+    # The rehearsal of the move registers the tasks of its own two accounts (test_wsl_move_rehearsal.py).
+    others = [path for path in (ANSIBLE / "roles").glob("*/tasks/*.yml")
+              if path.parent.parent.name not in ("windows_wsl_rehearsal", "windows_wsl_move_rehearsal")]
     assert others and not any("s4u_user" in path.read_text() for path in others)
 
 
@@ -1205,7 +1209,8 @@ def test_only_the_tasks_that_act_on_a_task_of_the_account_run_as_system():
                 assert task in becoming.get(path.relative_to(ANSIBLE).as_posix(), []), (path, task.get("name"))
     rehearsal = "roles/windows_wsl_rehearsal/tasks/main.yml"
     check = "playbooks/windows-rehearsal-check.yml"
-    assert sorted(becoming) == [check, rehearsal]
+    # The rehearsal of the move has its own list (test_wsl_move_rehearsal.py).
+    assert sorted(path for path in becoming if "windows_wsl_move_rehearsal" not in path) == [check, rehearsal]
     assert sorted(task["name"] for task in becoming[rehearsal]) == sorted([
         "Tasks of the temporary account",
         "The import of the distro",

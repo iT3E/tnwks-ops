@@ -41,6 +41,13 @@ $spec = @{
         s4u_user = @{ type = 'str' }
         # The Description that the account of s4u_user must have. Required with it.
         s4u_description = @{ type = 'str' }
+        # true: the enabled state is the task's own, not the template's. The
+        # comparison leaves out Settings/Enabled, and a registration of a task
+        # that exists keeps its current state. A new task takes the state of the
+        # xml. For a task that another step disables and enables (the start
+        # tasks of the move window, Design Doc 0004, section 9). Off: the
+        # template's state counts, as before.
+        keep_task_enabled_state = @{ type = 'bool'; default = $false }
     }
     required_if = @(, @('state', 'present', @(, 'xml')))
     required_by = @{ s4u_user = @(, 's4u_description') }
@@ -66,7 +73,7 @@ function ConvertTo-Sid([string]$account) {
 # Canonical form: no registration metadata (date, author, URI, version),
 # accounts as SIDs, indented. Two definitions that Task Scheduler treats the
 # same compare equal.
-function Get-CanonicalXml([string]$text) {
+function Get-CanonicalXml([string]$text, [switch]$NoEnabled) {
     # The declaration's encoding (UTF-16 in exports) means nothing for an
     # in-memory string and makes LoadXml fail on some inputs.
     $text = $text -replace '^\s*<\?xml[^>]*\?>', ''
@@ -89,6 +96,9 @@ function Get-CanonicalXml([string]$text) {
     foreach ($n in @($doc.SelectNodes('//t:Principal/t:RunLevel', $ns))) {
         if ($n.InnerText.Trim() -eq 'LeastPrivilege') { [void]$n.ParentNode.RemoveChild($n) }
     }
+    if ($NoEnabled) {
+        foreach ($n in @($doc.SelectNodes('/t:Task/t:Settings/t:Enabled', $ns))) { [void]$n.ParentNode.RemoveChild($n) }
+    }
     $settings = New-Object Xml.XmlWriterSettings
     $settings.Indent = $true
     $settings.OmitXmlDeclaration = $true
@@ -97,6 +107,28 @@ function Get-CanonicalXml([string]$text) {
     $doc.Save($w)
     $w.Close()
     return $sb.ToString() + "`n"
+}
+
+# The task XML with Settings/Enabled set to a state.
+function Set-TnwksEnabled([string]$text, [bool]$Enabled) {
+    $text = $text -replace '^\s*<\?xml[^>]*\?>', ''
+    $doc = New-Object Xml.XmlDocument
+    $doc.PreserveWhitespace = $true
+    $doc.LoadXml($text)
+    $ns = New-Object Xml.XmlNamespaceManager($doc.NameTable)
+    $ns.AddNamespace('t', 'http://schemas.microsoft.com/windows/2004/02/mit/task')
+    $settings = $doc.SelectSingleNode('/t:Task/t:Settings', $ns)
+    if (-not $settings) {
+        $settings = $doc.CreateElement('Settings', 'http://schemas.microsoft.com/windows/2004/02/mit/task')
+        [void]$doc.DocumentElement.AppendChild($settings)
+    }
+    $node = $settings.SelectSingleNode('t:Enabled', $ns)
+    if (-not $node) {
+        $node = $doc.CreateElement('Enabled', 'http://schemas.microsoft.com/windows/2004/02/mit/task')
+        [void]$settings.AppendChild($node)
+    }
+    $node.InnerText = if ($Enabled) { 'true' } else { 'false' }
+    $doc.OuterXml
 }
 
 # Each exception of the chain, outer first: its type, its HResult and its
@@ -214,7 +246,13 @@ if ($module.Params.state -eq 'absent') {
     $module.ExitJson()
 }
 
-$after = Get-CanonicalXml $module.Params.xml
+$keep = $module.Params.keep_task_enabled_state
+$xml = $module.Params.xml
+if ($keep -and $task) {
+    $xml = Set-TnwksEnabled $xml ([bool]$task.Settings.Enabled)
+    $before = Get-CanonicalXml (Export-ScheduledTask -TaskPath $path -TaskName $name) -NoEnabled
+}
+$after = Get-CanonicalXml $xml -NoEnabled:($keep -and [bool]$task)
 $module.Diff.before = $before
 $module.Diff.after = $after
 
@@ -226,7 +264,7 @@ if ($before -ne $after) {
         if ($user) {
             # The text only: the error record could carry the password.
             try {
-                Register-TnwksS4uTask -Service (New-Object -ComObject Schedule.Service) -Path $path -Name $name -Xml $module.Params.xml `
+                Register-TnwksS4uTask -Service (New-Object -ComObject Schedule.Service) -Path $path -Name $name -Xml $xml `
                     -User $user -Description $module.Params.s4u_description
             } catch {
                 $module.FailJson("$call failed: $($_.Exception.Message)")
@@ -234,7 +272,7 @@ if ($before -ne $after) {
             $task = Get-ScheduledTask -TaskPath $path -TaskName $name
         } else {
             try {
-                $task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $module.Params.xml -Force
+                $task = Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $xml -Force
             } catch {
                 $module.FailJson("$call failed: $(Format-TnwksError $_.Exception)", $_)
             }

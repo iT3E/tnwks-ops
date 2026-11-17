@@ -1,0 +1,135 @@
+---
+# Phase remove, after the second restart: everything of the rehearsal goes.
+# It runs no task of an account, so no profile loads again. The groups first,
+# whatever the state. Then the read of the boot task at this boot (it must
+# have done nothing), the tasks, the profiles (a loaded profile stops the
+# removal: restart first), the rights, the values of the sign-in screen, the
+# accounts and the folder. Then the exit check: the check play, with the SIDs
+# that this phase prints.
+
+- name: The groups, first
+  ansible.builtin.include_tasks: groups_out.yml
+
+- name: The live parts at the start
+  ansible.builtin.include_tasks: live.yml
+
+- name: Read the accounts of the rehearsal
+  ansible.builtin.include_tasks: read_accounts.yml
+
+- name: The SIDs for the exit check (-e wsl_move_rehearsal_removed_sids=...)
+  ansible.builtin.debug:
+    msg: "{{ wsl_move_rehearsal_sids.values() | join(',') }}"
+
+- name: Read the run of the boot task at this boot
+  ansible.windows.win_powershell:
+    parameters:
+      Log: "{{ wsl_move_rehearsal_log_file }}"
+    script: |
+      param([string]$Log)
+      $Ansible.Changed = $false
+      if (-not (Test-Path -LiteralPath $Log)) { return 'no log' }
+      $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
+      $lines = @(Get-Content -LiteralPath $Log | Where-Object {
+          $f = $_ -split ' ', 3
+          $f[1] -eq 'boot' -and [DateTime]::Parse($f[0], $null, 'RoundtripKind') -gt $boot } | ForEach-Object { ($_ -split ' ', 3)[2] })
+      $lines -join ' / '
+  check_mode: false
+  register: wsl_move_rehearsal_boot_now
+
+- name: No task of the rehearsal
+  tnwks_win_scheduled_task:
+    name: "{{ item }}"
+    state: absent
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  loop: >-
+    {{ wsl_move_rehearsal_task_list | map(attribute='key') | zip(wsl_move_rehearsal_task_list | map(attribute='step'))
+       | map('join', '-') | map('regex_replace', '^', wsl_move_rehearsal_prefix ~ '-') | list
+       + [wsl_move_rehearsal_window_task, wsl_move_rehearsal_boot_task] }}
+
+# Their .wslconfig, their hives and the registrations of the distro go with
+# them. No wait: a profile that an S4U task loaded stays loaded until a
+# restart.
+- name: No profile of the accounts
+  ansible.windows.win_powershell:
+    parameters:
+      Sids: "{{ wsl_move_rehearsal_sids.values() | list }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string[]]$Sids)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $profiles = @(foreach ($sid in $Sids) { Get-CimInstance Win32_UserProfile -Filter "SID = '$sid'" })
+      $loaded = @($profiles | Where-Object { $_.Loaded })
+      if ($loaded.Count -and -not $WhatIfPreference) {
+          throw ("$($loaded.Count) profile(s) of the rehearsal are loaded. The removal stops here: the profiles, the rights, the " +
+              'values of the sign-in screen, the accounts and the folder stay. Restart the host (with the owner''s go), then run ' +
+              'the phase remove again; it runs no task of an account, so it loads no profile.')
+      }
+      foreach ($p in $profiles) {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($p.LocalPath, 'remove the profile')) { Remove-CimInstance -InputObject $p }
+      }
+
+# Each right goes before the account, so no SID with no account stays in the
+# local policy.
+- name: The accounts may no longer log on as a batch job
+  ansible.windows.win_user_right:
+    name: SeBatchLogonRight
+    users: "{{ wsl_move_rehearsal_sids.values() | list }}"
+    action: remove
+  when: wsl_move_rehearsal_sids | length > 0
+
+- name: The deny rights of the accounts go
+  ansible.windows.win_user_right:
+    name: "{{ item }}"
+    users: "{{ wsl_move_rehearsal_sids.values() | list }}"
+    action: remove
+  loop: "{{ wsl_move_rehearsal_deny_rights }}"
+  when: wsl_move_rehearsal_sids | length > 0
+
+- name: No value for the accounts on the sign-in screen
+  ansible.windows.win_regedit:
+    path: '{{ wsl_move_rehearsal_userlist_key }}'
+    name: "{{ item.value.name }}"
+    state: absent
+  loop: "{{ wsl_move_rehearsal_accounts | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: No temporary account
+  ansible.windows.win_powershell:
+    parameters:
+      Names: "{{ wsl_move_rehearsal_accounts.values() | map(attribute='name') | list }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string[]]$Names)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      foreach ($name in $Names) {
+          if (-not (Get-LocalUser -Name $name -ErrorAction SilentlyContinue)) { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($name, 'remove the local account')) { Remove-LocalUser -Name $name }
+      }
+
+# The last read of the live parts needs the baseline in the state folder.
+- name: The live parts at the end
+  ansible.builtin.include_tasks: live.yml
+
+# The scripts, the root file system, the disk files, the state, the logs.
+- name: No folder of the rehearsal
+  ansible.windows.win_file:
+    path: "{{ wsl_move_rehearsal_dir }}"
+    state: absent
+
+- name: At this boot, the boot task found nothing to do
+  ansible.builtin.assert:
+    that: >-
+      ansible_check_mode or (wsl_move_rehearsal_boot_now.output | last | default(''))
+      is search("no action: the last marker is '(wayback-done|)'")
+    fail_msg: >-
+      The run of the boot task at this boot: {{ wsl_move_rehearsal_boot_now.output | last | default('none') }}.
+      The removal is done; this check of the second restart did not pass.
+    quiet: true

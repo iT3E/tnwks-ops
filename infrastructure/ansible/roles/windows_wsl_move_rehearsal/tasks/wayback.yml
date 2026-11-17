@@ -1,0 +1,104 @@
+---
+# Phase wayback: the way back mode, end to end, after the demotion. First the
+# import back task of A can not start: A has no batch right of its own and is
+# not in Administrators, as the real present account after window step 7.
+# Then the procedure, mode wayback: way back step 1 puts A into
+# Administrators (logged), the same import back task runs, and the end of the
+# run takes A out (logged). Then the play gives A its own batch right again,
+# for the interruption test and the removal, which run A's tasks with no
+# group step.
+
+- name: The live parts at the start
+  ansible.builtin.include_tasks: live.yml
+
+- name: The groups at the start
+  ansible.builtin.include_tasks: groups.yml
+
+- name: Read the accounts of the rehearsal
+  ansible.builtin.include_tasks: read_accounts.yml
+
+- name: The way back, and the reads after it
+  when: not ansible_check_mode
+  block:
+    # The task can not log on: no new run and no result. If it ran all the
+    # same, it finds no disk file in the folder of A, and changes nothing.
+    - name: The import back task of A can not start before the way back
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: a, step: import, expect: not-run}
+
+    - name: The window procedure, way back mode
+      ansible.builtin.include_tasks: run_procedure.yml
+      vars:
+        wsl_move_rehearsal_request: {mode: wayback, group_steps: true, stop_after: 0, rehearsal_group_test: true}
+
+    - name: A may log on as a batch job again, with no group
+      ansible.windows.win_user_right:
+        name: SeBatchLogonRight
+        users: ["{{ wsl_move_rehearsal_sids.a }}"]
+        action: add
+
+    - name: A reads its distro after the way back
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: a, step: check}
+
+    - name: B lists no distro after the way back
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: check}
+
+    - name: Read the tasks and the file after the way back
+      ansible.windows.win_powershell:
+        parameters:
+          Prefix: "{{ wsl_move_rehearsal_prefix }}"
+          Disk: '{{ wsl_move_rehearsal_accounts.a.folder }}\{{ wsl_move_rehearsal_disk_name }}'
+          DiskB: '{{ wsl_move_rehearsal_accounts.b.folder }}\{{ wsl_move_rehearsal_disk_name }}'
+          Saved: "{{ wsl_move_rehearsal_acl_file }}"
+        script: |
+          param([string]$Prefix, [string]$Disk, [string]$DiskB, [string]$Saved)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          function Get-Owner([string]$Sddl) { if ($Sddl -match '^O:([^:]+?)(?=[GDS]:)') { $Matches[1] } else { '?' } }
+          [pscustomobject]@{
+              start_a = "$((Get-ScheduledTask -TaskName "$Prefix-a-start").State)"
+              start_b = "$((Get-ScheduledTask -TaskName "$Prefix-b-start").State)"
+              disk_a = [bool](Test-Path -LiteralPath $Disk)
+              disk_b = [bool](Test-Path -LiteralPath $DiskB)
+              owner_as_saved = (Test-Path -LiteralPath $Disk) -and
+                  ((Get-Owner (Get-Acl -LiteralPath $Disk).Sddl) -eq (Get-Owner (Get-Content -LiteralPath $Saved -Raw).Trim()))
+          }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_back_read
+
+    - name: A owns the distro again, with its data; B lists none; the logs show each moment
+      vars:
+        check_a: "{{ wsl_move_rehearsal_runs.check[-2] }}"
+        check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
+        back: "{{ wsl_move_rehearsal_back_read.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - check_a.result.registered
+          - check_a.result.disk | lower == (wsl_move_rehearsal_accounts.a.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
+          - check_a.result.token == wsl_move_rehearsal_data_token
+          - check_a.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
+          - not check_b.result.registered
+          - back.disk_a and not back.disk_b and back.owner_as_saved
+          - back.start_a == 'Running' and back.start_b == 'Disabled'
+          - wsl_move_rehearsal_procedure.result == 'done'
+          - wsl_move_rehearsal_procedure.markers == ['window-started', 'wayback-done']
+          - wsl_move_rehearsal_procedure.groups == ['joined', 'left']
+          - wsl_move_rehearsal_procedure.would_restart == 1
+          - "wsl_move_rehearsal_procedure.log | select('match', '^read: ') | list | length == 1"
+          - wsl_move_rehearsal_procedure.log | select('match', '^task .*-a-import ended with 0;') | list | length == 1
+        fail_msg: "After the way back, a read did not pass: {{ check_a }} {{ check_b }} {{ back }} {{ wsl_move_rehearsal_procedure.log }}"
+        quiet: true
+
+- name: The groups at the end
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The live parts at the end
+  ansible.builtin.include_tasks: live.yml

@@ -33,6 +33,12 @@ wsl_start_unelevated_done: false
 # approves the pull request that turns it on.
 wsl_rehearsal: false
 
+# The rehearsal of the move of a distro to another account (role
+# windows_wsl_move_rehearsal, Design Doc 0004, section 9, step 0). Per host,
+# site 2 only. On, a run does nothing but its guards until the lead gives a
+# phase (-e wsl_move_rehearsal_phase=<phase>).
+wsl_move_rehearsal: false
+
 # Folders under C:\ProgramData that no role owns. The play gives each the
 # rules for SYSTEM and the Administrators only (tnwks_win_dir_acl, no writer,
 # readers: none): Users get no rule, and each item takes the owner

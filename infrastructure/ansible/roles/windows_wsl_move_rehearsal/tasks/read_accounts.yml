@@ -1,0 +1,23 @@
+---
+# The SID of each account of the rehearsal that exists (a read, also in a
+# check run): wsl_move_rehearsal_sids, by key a and b.
+- name: Read the accounts of the rehearsal
+  ansible.windows.win_powershell:
+    parameters:
+      Names: "{{ wsl_move_rehearsal_accounts | dict2items | map(attribute='value.name') | list }}"
+      Keys: "{{ wsl_move_rehearsal_accounts | dict2items | map(attribute='key') | list }}"
+    script: |
+      param([string[]]$Names, [string[]]$Keys)
+      $Ansible.Changed = $false
+      $out = @{}
+      for ($i = 0; $i -lt $Names.Count; $i++) {
+          $user = Get-LocalUser -Name $Names[$i] -ErrorAction SilentlyContinue
+          if ($user) { $out[$Keys[$i]] = $user.SID.Value }
+      }
+      $out
+  check_mode: false
+  register: wsl_move_rehearsal_accounts_read
+
+- name: The SIDs of the accounts
+  ansible.builtin.set_fact:
+    wsl_move_rehearsal_sids: "{{ wsl_move_rehearsal_accounts_read.output | last | default({}, true) }}"

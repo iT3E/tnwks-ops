@@ -1,0 +1,68 @@
+---
+# Phase restart: a restart of the host, only with the owner's go and time
+# (R4), given on the command line: -e wsl_move_rehearsal_restart_go=true.
+# The rehearsal runs it twice: after the phase interrupt (the boot task runs
+# the way back once), and after the phase remove-before-restart (the boot task
+# finds no started window and does nothing; the profiles unload). A check run
+# reads only.
+
+- name: The owner gave the go for this restart
+  ansible.builtin.assert:
+    that: ansible_check_mode or (wsl_move_rehearsal_restart_go | bool)
+    fail_msg: >-
+      A restart of the host needs the owner's go and time (R4). With it, run the phase again with
+      -e wsl_move_rehearsal_restart_go=true. Nothing is changed.
+    quiet: true
+
+- name: The live parts before the restart
+  ansible.builtin.include_tasks: live.yml
+
+- name: The groups before the restart
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The restart, and the wait for the boot task
+  when: not ansible_check_mode
+  block:
+    - name: Restart the host
+      ansible.windows.win_reboot:
+        reboot_timeout: 1800
+        msg: tnwks-ops, the rehearsal of the move (owner's go)
+
+    # The baseline keeps its port proxy, NAT networks and registrations. Its
+    # VM processes are those of the boot before (live.yml).
+    - name: Mark the baseline as one of the boot before
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ wsl_move_rehearsal_baseline_file }}"
+        script: |
+          param([string]$Path)
+          $ErrorActionPreference = 'Stop'
+          $base = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+          $Ansible.Changed = -not $base.restarted
+          $base | Add-Member -NotePropertyName restarted -NotePropertyValue $true -Force
+          [IO.File]::WriteAllText($Path, ($base | ConvertTo-Json -Depth 5))
+
+    - name: Wait for the end of the run of the boot task
+      ansible.windows.win_powershell:
+        parameters:
+          Task: "{{ wsl_move_rehearsal_boot_task }}"
+        script: |
+          param([string]$Task)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+          $deadline = (Get-Date).AddMinutes(60)
+          do {
+              $info = Get-ScheduledTaskInfo -TaskName $Task
+              $done = $info.LastRunTime -gt $boot -and (Get-ScheduledTask -TaskName $Task).State -ne 'Running'
+              if (-not $done) { Start-Sleep -Seconds 10 }
+          } while (-not $done -and (Get-Date) -lt $deadline)
+          [pscustomobject]@{ done = $done; code = [int64]$info.LastTaskResult }
+      register: wsl_move_rehearsal_boot_wait
+      failed_when: not (wsl_move_rehearsal_boot_wait.output | last).done
+
+- name: The groups after the restart
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The live parts after the restart
+  ansible.builtin.include_tasks: live.yml

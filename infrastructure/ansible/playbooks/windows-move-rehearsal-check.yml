@@ -1,0 +1,45 @@
+---
+# The checks of the rehearsal of the move (role windows_wsl_move_rehearsal,
+# Design Doc 0004, section 9, step 0). Run it by hand between the phases, on
+# the host where the rehearsal is on:
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02
+#
+# It reads only: it starts no task, waits for nothing and writes no file.
+#
+#   groups    each account of the rehearsal is in Users only
+#   moments   each line of the log of the procedure where an account joins or
+#             leaves Administrators: a join passes only in a run of the
+#             rehearsal's group test (the phases window and wayback), and
+#             each join has its leave in the same run
+#   live      the port proxy, the NAT networks and the registrations of the
+#             account of the host's person are as at the baseline; before the
+#             first restart, the VM processes of the baseline still run
+#
+# After the phase remove, the exit check, with the SIDs that it printed:
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02 \
+#     -e wsl_move_rehearsal_removed_sids=<SID>,<SID>
+#
+#   accounts  no local account of the rehearsal
+#   rights    no holder of the batch right or of the three deny rights is an
+#             account of the rehearsal or one of its SIDs
+#   tiles     no value for the accounts under Winlogon\SpecialAccounts\UserList
+#   tasks     no task of the rehearsal
+#   profiles  no profile of the accounts, and no folder <users folder>\<prefix>*
+#   folder    no folder of the rehearsal
+
+- name: The checks of the rehearsal of the move
+  hosts: windows_hosts
+  gather_facts: false
+  become: false
+  check_mode: true
+  tasks:
+    - name: Only where the rehearsal of the move is on
+      ansible.builtin.meta: end_host
+      when: not (wsl_move_rehearsal | default(false) | bool)
+
+    - name: The checks
+      ansible.builtin.include_role:
+        name: windows_wsl_move_rehearsal
+        tasks_from: check.yml

@@ -1,0 +1,44 @@
+---
+# Phase interrupt: the window stops after its step 5, as a restart in the
+# middle of the window would leave it: the disk file in the folder of B, no
+# account lists the distro, and the last marker is that of a started window.
+# The group steps are off, so no temporary account is in Administrators
+# across the restart. The next phase is restart: the boot task runs the way
+# back once.
+
+- name: The live parts at the start
+  ansible.builtin.include_tasks: live.yml
+
+- name: The groups at the start
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The interrupted window, and the reads after it
+  when: not ansible_check_mode
+  block:
+    - name: The window procedure, forward to its step 5 only
+      ansible.builtin.include_tasks: run_procedure.yml
+      vars:
+        wsl_move_rehearsal_request: {mode: forward, group_steps: false, stop_after: 5, rehearsal_group_test: false}
+
+    - name: A lists no distro after step 5
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: a, step: check}
+
+    - name: The window stopped after step 5, with the marker of a started window last
+      vars:
+        check_a: "{{ wsl_move_rehearsal_runs.check | last }}"
+      ansible.builtin.assert:
+        that:
+          - wsl_move_rehearsal_procedure.result == 'stopped-after'
+          - wsl_move_rehearsal_procedure.markers == ['window-started']
+          - wsl_move_rehearsal_procedure.groups == []
+          - not check_a.result.registered
+        fail_msg: "The interrupted window did not read as it should: {{ check_a }} {{ wsl_move_rehearsal_procedure.log }}"
+        quiet: true
+
+- name: The groups at the end
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The live parts at the end
+  ansible.builtin.include_tasks: live.yml

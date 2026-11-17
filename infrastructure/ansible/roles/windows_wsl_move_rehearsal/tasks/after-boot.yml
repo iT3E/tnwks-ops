@@ -1,0 +1,119 @@
+---
+# Phase after-boot, after the first restart: the boot task ran the way back
+# once (its log, mode boot, and the markers boot-run then wayback-done), A
+# owns the distro again and B lists none. Then the boot task is started by
+# hand: with the marker of a done way back last, it does nothing.
+
+- name: The live parts at the start
+  ansible.builtin.include_tasks: live.yml
+
+- name: The groups at the start
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The reads after the boot
+  when: not ansible_check_mode
+  block:
+    - name: Read the log of the boot runs and the markers
+      ansible.windows.win_powershell:
+        parameters:
+          Log: "{{ wsl_move_rehearsal_log_file }}"
+          State: "{{ wsl_move_rehearsal_state_file }}"
+        script: &read_boot |
+          param([string]$Log, [string]$State)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $boot = @(Get-Content -LiteralPath $Log | Where-Object { ($_ -split ' ', 3)[1] -eq 'boot' } | ForEach-Object { ($_ -split ' ', 3)[2] })
+          # The runs of the boot task: each starts with "start, request".
+          $runs = @()
+          foreach ($line in $boot) {
+              if ($line -like 'start, request:*') { $runs += , @() }
+              if ($runs.Count) { $runs[-1] += $line }
+          }
+          [pscustomobject]@{
+              runs = @($runs | ForEach-Object { , @($_) })
+              results = @($runs | ForEach-Object { @($_ | Where-Object { $_ -like 'result: *' }) -join ',' })
+              markers = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() } | ForEach-Object { ($_ -split ' ', 2)[1].Trim() })
+          }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_boot_log
+
+    - name: A reads its distro after the boot
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: a, step: check}
+
+    - name: B lists no distro after the boot
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: check}
+
+    - name: The boot task ran the way back once, and A owns the distro
+      vars:
+        boot: "{{ wsl_move_rehearsal_boot_log.output | last }}"
+        check_a: "{{ wsl_move_rehearsal_runs.check[-2] }}"
+        check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
+      ansible.builtin.assert:
+        that:
+          - boot.results[:1] == ['result: done']
+          - boot.markers[-3:] == ['window-started', 'boot-run', 'wayback-done']
+          - "boot.runs[0] | select('match', '^group: ') | list | length == 0"
+          - boot.runs[0] | select('match', '^would restart') | list | length == 1
+          - "boot.runs[0] | select('match', '^restart: ') | list | length == 0"
+          - check_a.result.registered
+          - check_a.result.disk | lower == (wsl_move_rehearsal_accounts.a.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
+          - check_a.result.token == wsl_move_rehearsal_data_token
+          - not check_b.result.registered
+        fail_msg: "After the boot, a read did not pass: {{ boot }} {{ check_a }} {{ check_b }}"
+        quiet: true
+
+    - name: Start the boot task by hand, with no marker of a started window
+      ansible.windows.win_powershell:
+        parameters:
+          Runner: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksStartTask.ps1'
+          Task: "{{ wsl_move_rehearsal_boot_task }}"
+        script: |
+          param([string]$Runner, [string]$Task)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $true
+          & $Runner -Task $Task -Minutes 5
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_boot_hand
+
+    - name: Read the log of the boot runs again
+      ansible.windows.win_powershell:
+        parameters:
+          Log: "{{ wsl_move_rehearsal_log_file }}"
+          State: "{{ wsl_move_rehearsal_state_file }}"
+        script: *read_boot
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_boot_log2
+
+    - name: The run by hand did nothing, and wrote no marker
+      vars:
+        before: "{{ wsl_move_rehearsal_boot_log.output | last }}"
+        after: "{{ wsl_move_rehearsal_boot_log2.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - (wsl_move_rehearsal_boot_hand.output | last).ran
+          - (wsl_move_rehearsal_boot_hand.output | last).code == 0
+          - after.markers == before.markers
+          - after.runs | length == before.runs | length + 1
+          - >-
+            after.runs[-1] | select('match', "^no action: the last marker is 'wayback-done'") | list | length == 1
+        fail_msg: "The boot task by hand: {{ wsl_move_rehearsal_boot_hand.output | last }} {{ after.runs[-1] }}"
+        quiet: true
+
+- name: The groups at the end
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The live parts at the end
+  ansible.builtin.include_tasks: live.yml
