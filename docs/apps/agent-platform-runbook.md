@@ -3,7 +3,7 @@
 What to do when an alert of the agent platform fires, when an agent does
 not answer on its channel, a sandbox does not start, web search does not
 work or memory search finds nothing, how to restore the
-state of an agent, how to stop the workflow agent fast, how to move a trust
+state of an agent, how the finance agent moves from the host, how to stop the workflow agent fast, how to move a trust
 domain to Bedrock by hand, and what to do at a limit of the Claude plan. The
 parts and their config are in [`agent-platform.md`](agent-platform.md); this
 page is the operator's side. Each alert of the platform links to its own
@@ -1351,6 +1351,330 @@ state. None of these steps is tested on the cluster.
    above. The update comes back as a new Renovate pull request; hold it
    until the cause is known.
 6. **Remove the old state.** As step 8 above.
+
+## The cutover of the finance agent
+
+The finance agent moves from the host to `agents-finance`. Five merges and
+four steps of the owner on the host, each with a check and a stop point. The
+files are in `kubernetes/apps/ai/agents/finance/agent/app/`, and each merge
+adds or removes lines in its `kustomization.yaml` (its comment has the same
+order). The rules of this page hold: each merge is a pull request with the
+go of the owner, and nothing is changed on the cluster by hand.
+
+Three facts set the order:
+
+- **One bot polls from one place.** Telegram gives the updates of a bot to
+  one poller. Two gateways with the same token fight (`409 Conflict`), and
+  each loses messages. So the host stops the finance bot before the pod
+  starts. A message sent between the two waits at Telegram, up to 24 hours,
+  and the pod gets it when it starts.
+- **The volume binds on the node of its first pod** (local-path waits for
+  the first consumer). The agent runs on `homelab-wsl-worker-2`. A backup
+  mover that came first would make the volume on any worker. So the inbox
+  (`state-inbox.yaml`, with the node of the agent) comes before the policy.
+- **The copy holds the finance agent only, with no credential** (R6). A
+  backup archive of the product holds each agent of the host and its
+  credentials, so the owner makes the copy by hand, from the files of the
+  finance agent.
+
+### The order of the merges
+
+| Step | The change | What the merge applies | The check | The way back |
+| --- | --- | --- | --- | --- |
+| 1 | List `pvc.yaml` and `state-inbox.yaml` | The volume `agent-state` and the inbox pod, on the node of the agent. No product code, no secret, no network | `kubectl -n agents-finance get pvc agent-state` is `Bound`; `kubectl get pv <its volume> -o jsonpath='{.spec.nodeAffinity}'` names `homelab-wsl-worker-2`; `kubectl -n agents-finance logs deploy/agent-state-inbox` is `state-inbox result=ready` | Take the inbox out. The volume stays: it has `kustomize.toolkit.fluxcd.io/prune: disabled` |
+| 2 | List `backup.yaml` | The snapshot policy and schedule to the repository `agents-finance`. The first snapshot runs at once, of the empty volume | `kubectl -n agents-finance get snapshots.kopiur.home-operations.com`: one `Succeeded`. No `KopiurSnapshotFailed` | None needed: the policy stays with the volume |
+| 3 | The owner puts the values in `secret.sops.yaml`, in the key list of the model gateway and the hash of the finance key in the config of the MCP gateway ([Before the cutover](#before-the-cutover)) | The key `agents-finance` at the model gateway, and the hash of the client `finance` at the MCP gateway. The Secret file is not listed yet, so nothing in `agents-finance` | `kubectl -n ai logs deploy/litellm -c ensure-keys` has `agents-finance: created` (or `updated`) `(models: agents-finance, agents-finance-embeddings)`; `kubectl -n ai get deploy mcp-gateway` is ready after its roll | Revert. The key stays at the model gateway until it is removed in the admin UI |
+| Host | The owner stops the finance bot on the host, makes the copy and the seed of the vault, and puts both archives in the volume ([The copy of the state](#the-copy-of-the-state)) | Nothing in git | The checksum and the counts of the copy | Turn the bot on again on the host |
+| 4 | Out `state-inbox.yaml`; in `restore-job.yaml` (with `ARCHIVE` and `VAULT` set), `secret.sops.yaml`, `secret-search.sops.yaml` and `deployment.yaml` (still `replicas: 0`) | The Job checks each member of the two archives, then puts the copy in place as `state/` and the vault in `vault/`. The two Secrets and the Deployment at zero: no pod | `kubectl -n agents-finance get job agent-restore` is `1/1`; in Loki, `{namespace="agents-finance", app="agent-restore"}` has `restore result=ok archive=start/<name> files=<n> vault-notes=<m>`, with the two counts of the owner. A refused archive is `restore result=failed reason=<kind>` (for example `member-type archive=state kinds=link` or `too-large archive=vault`), and a failed unpack is `reason=unpack` or `reason=vault-unpack`: fix the copy on the host and run again as `agent-restore-2`; the volume is as it was | Revert step 4, then turn the bot on again on the host. The copy stays in `archives/start/` |
+| 5 | Out `restore-job.yaml`; `replicas: 1` in `deployment.yaml` | The agent pod starts and polls the bot | [The cutover](#the-cutover) | [The way back](#the-way-back) |
+
+After step 5: the restore test of the state (the template
+`finance/agent/restore-test/`, with the first nightly snapshot that holds
+the state), and `openclaw-agents-finance` in `SERVICES` of
+`agents/monitoring/app/heartbeat-check.yaml` after its first heartbeat in
+Tempo, so the check never fails on a heartbeat that has not come yet.
+
+Between the steps no alert fires: the Deployment at zero has no pod that is
+not ready (with replicas 1 and a value that is still `pending`, the
+`values-check` step stops the start with `values-check result=failed
+key=<name> reason=placeholder`, and AgentPlatformWorkloadNotReady fires
+after 10 minutes), the inbox is ready when it runs, the restore Job ends with exit 0
+(a failed Job is `KubeJobFailed`, and that is a real fault), and the alerts
+of the backup container and of the heartbeat need a pod or a service in
+`SERVICES` first.
+
+### Before the cutover
+
+The values are the owner's (R4), and none of them goes through an agent or a
+session. Each goes in with `sops <file>` in place of `pending` (the file has
+five placeholders now), in a pull request. The Secret is not applied until
+step 4, so a merge of the values starts nothing.
+
+| Key of `agent-secret` | The value |
+| --- | --- |
+| `OPENCLAW_GATEWAY_TOKEN` | A new random value: `openssl rand -hex 32` |
+| `LITELLM_API_KEY` | A new key: `sk-agents-finance-` and `openssl rand -hex 24`. The same value goes in a new entry of `keys.json` in `kubernetes/apps/ai/litellm/app/secret-keys.sops.yaml`: alias `agents-finance`, models `["agents-finance", "agents-finance-embeddings"]` ([litellm.md](litellm.md#keys-of-the-agent-platform)). The key list has no such entry today |
+| `TELEGRAM_BOT_TOKEN` | The token of the finance bot, the one the host uses now |
+| `TELEGRAM_ALLOW_FROM` | The numeric Telegram user id of the owner, as on the host |
+| `MCP_GATEWAY_KEY` | A new random value: `openssl rand -hex 32`. Its hash goes in the config of the MCP gateway, for the client `finance`, in the same pull request ([mcp-gateway.md](mcp-gateway.md#the-steps-of-the-owner)); the `values-check` step of the pod stops the start with `reason=hash` when the two differ |
+
+Then the token of the finance app for its proxy, if it is not in yet:
+[agent-platform.md](agent-platform.md#the-steps-of-the-owner-for-the-finance-app),
+step 1. The check of each value prints only `ok` or `not ok` (`not ok` for
+the placeholder):
+
+```bash
+F=kubernetes/apps/ai/agents/finance/agent/app/secret.sops.yaml
+for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM MCP_GATEWAY_KEY; do
+  printf '%s ' "$k"
+  bin/sops -d --extract "[\"stringData\"][\"$k\"]" "$F" \
+    | awk '{ v = v $0 } END { print (length(v) > 0 && v != "pending") ? "ok" : "not ok" }'
+done
+```
+
+Before step 5 the owner also decides the open points that the plan lists
+for this step: the model path of finance records (the raw terms page and
+the settings of the plan, D65), and the risk of web search, write access to
+the finance app and finance data in one session
+([agent-platform.md](agent-platform.md#the-finance-app)).
+
+### The copy of the state
+
+The owner, on the host, after the finance bot is off (step 1 of
+[The cutover](#the-cutover)), so nothing writes the files during the copy.
+The copy holds the **workspace of the finance agent only** (the owner's
+decision of 2026-11-17): its instruction
+files (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `TOOLS.md`), its
+memory (`MEMORY.md`, `memory/`), its skills and its scripts. The pod makes
+the rest at its first start.
+
+Left out, each on purpose:
+
+- The other agents of the host: their directories under `agents/`, their
+  workspaces, their sessions and memory.
+- Each credential: `credentials/`, `.env`, `secrets.json`, the shared
+  database `state/openclaw.sqlite` (it holds the shared auth profiles), and
+  the token file of the finance app that the scripts read today.
+- The database of the finance agent, `agents/<id>/agent/openclaw-agent.sqlite`.
+  It holds the chat history, and also the auth profiles of that agent, so a
+  credential of the host. The chat history stays on the host. What the agent
+  must keep is in its memory files.
+- `openclaw.json`: the config of the pod is in git.
+- The memory index: the `memory-index` step of the pod builds it again,
+  with the embeddings of finance.
+- `.git` of the workspace, and logs.
+
+The copy holds no database of the product, so it needs no release match:
+the host stays on its release for the copy.
+
+The steps, in one shell on the host. `<id>` is the id of the finance agent
+on the host, `V` the folder of the finance vault:
+
+```bash
+# 1. The workspace of the finance agent.
+openclaw agents list --json      # the "workspace" of the agent <id>
+WS=<that path>
+STAGE=$(mktemp -d)
+mkdir -m 0700 "$STAGE/state" "$STAGE/state/workspace"
+tar -C "$WS" --exclude=./.git -cf - . | tar -C "$STAGE/state/workspace" -xf -
+```
+
+2. **Change the files in the copy, not on the host.** The first check of
+   the instruction files on the pod lists the files as they come in
+   (`instruction-check result=first`), so a change made here never fires
+   `AgentInstructionFileChanged`.
+   - **The scripts.** Each script that calls the finance app: the base URL
+     becomes `http://firefly-proxy.agents-finance.svc.cluster.local:8081`,
+     the read port of the proxy (the paths stay `/api/v1/...`). Take out
+     the read of the token file and the `Authorization` header: the proxy
+     sets the token. A script only reads; the read port refuses each write.
+   - **The instruction files** (`AGENTS.md`, `TOOLS.md`, a skill). Each line
+     that names the address of the app or the token file changes to:
+     - read data in a script through the read port above, with `python3`;
+     - make each create or update with the `firefly__` tools, never with a
+       script;
+     - never delete (the MCP gateway, the tools and the proxy refuse it);
+     - read and test rules (`firefly__get_rule*`, `firefly__test_rule*`),
+       and never write one (the owner's decision: rule writes stay
+       refused): propose a new or changed rule in the chat, and the owner
+       adds it in the app (a rule can delete a transaction);
+     - update a split transaction with `firefly__update_transaction` and the
+       `transaction_journal_id` of each split (an update that leaves out a
+       split deletes it).
+   - Then no file names the old address or the token file. Each command
+     prints nothing:
+
+     ```bash
+     grep -rIl '<the old address of the app>' "$STAGE/state"
+     grep -rIl '<the name of the token file>' "$STAGE/state"
+     ```
+
+```bash
+# 3. No secret, no link out of the copy.
+betterleaks dir --redact --no-banner "$STAGE/state"   # no finding
+find "$STAGE/state" -type l                           # prints nothing
+find "$STAGE/state" \( -name '.env' -o -name '*.sqlite*' -o -iname '*token*' -o -iname '*credential*' \)   # prints nothing
+
+# 4. The archive, in the form of a start archive (the restore Job reads it).
+release=$(openclaw --version | grep -oE '[0-9]{4}\.[0-9]+\.[0-9]+' | head -n 1)
+name=openclaw-state-$release-$(date -u +%Y%m%dT%H%M%SZ).tar.gz
+tar -czf "$STAGE/$name" -C "$STAGE/state" .
+(cd "$STAGE" && sha256sum "$name" > "$name.sha256")
+find "$STAGE/state/workspace" -type f | wc -l       # the count of the copy: write it down
+
+# 5. Into the volume, through the inbox (step 1 of the merges).
+tar -C "$STAGE" -cf - "$name" "$name.sha256" \
+  | kubectl -n agents-finance exec -i deploy/agent-state-inbox -- tar -C /home/node/data/archives/start -xf -
+kubectl -n agents-finance exec deploy/agent-state-inbox -- \
+  sh -c "cd /home/node/data/archives/start && sha256sum -c $name.sha256"   # <name>: OK
+
+# 6. The seed of the vault. The notes can hold a secret (a password or a
+#    key written in a note): read each finding, and take the note out or
+#    change it in the vault folder first. The agent reads each note.
+betterleaks dir --redact --no-banner "$V"
+vault=vault-$(date -u +%Y%m%dT%H%M%SZ).tar
+tar -C "$V" --exclude=.obsidian --exclude=.trash --exclude=.git -cf "$STAGE/$vault" .
+tar -tf "$STAGE/$vault" | grep -c '\.md$'       # the count of notes: write it down
+tar -C "$STAGE" -cf - "$vault" \
+  | kubectl -n agents-finance exec -i deploy/agent-state-inbox -- tar -C /home/node/data/archives/seed -xf -
+```
+
+The restore Job of step 4 checks each member of both archives before it
+writes a file: only plain files and directories, no link, no device, no
+absolute path, no `..`, no setuid or setgid bit, at most 20000 members and
+2 GiB in all for each archive, and in the copy of the state, nothing outside
+`./workspace/`. So a link or a stray file that the checks on the host
+missed stops the Job, with the kind of the member in its line and never its
+name. Then it unpacks both archives into `restore-<time>/` and puts them in
+place only when both are out; a failed unpack removes that directory, so
+the volume is as it was.
+
+7. Give the names of the two archives (not their content) to the pull
+   request of step 4, as the values of `ARCHIVE` (`start/<name>`) and
+   `VAULT` (`<vault>`) in `restore-job.yaml`.
+8. After the exit check, remove `$STAGE` on the host. It is a copy of the
+   workspace, and the host keeps the original.
+
+### The cutover
+
+Each step has a stop point: at a failed check, stop and take
+[The way back](#the-way-back) from that step.
+
+1. **The host stops the finance agent.** The owner, on the host: turn off
+   the Telegram account of the finance bot in the config of the host
+   gateway (`channels.telegram.accounts.<account>.enabled` to `false`), turn
+   off the scheduled jobs of the finance agent (`openclaw cron list`), and
+   start the host gateway again. The other agents of the host stop for that
+   restart. Check: `openclaw channels status --probe` shows the finance
+   account not running, and a message to the finance bot gets no answer.
+   From here the finance agent is off until step 4.
+2. **The copy** ([The copy of the state](#the-copy-of-the-state)). Check:
+   the checksum is `OK`, and the two counts are written down.
+3. **Merge step 4.** Checks: as in the table. Stop point: the restore Job
+   fails. It refuses before it writes, so the volume is as it was.
+4. **Merge step 5.** Checks, read only:
+   - `kubectl -n agents-finance get pods -l app.kubernetes.io/name=agent`:
+     `3/3` and `Running`, no restart.
+   - In Loki, `{namespace="agents-finance", app="agent"}`:
+     `archive-state result=ok`, `official-plugins id=brave ... result=installed`,
+     `memory-index result=ok`, and `sandbox-start` with no `result=failed`.
+   - No `409 Conflict` of Telegram: the host does not poll any more.
+5. **The first message.** The owner writes to the finance bot: a question
+   that the memory answers (for example: what do you know about how we
+   work). The answer comes from the pod, and it knows the memory of the
+   host.
+
+### The exit check
+
+The exit check of phase 5, as the plan asks: the restore test passes, the
+check between domains passes, and one chat turn, one tool call and a read
+of the vault work. The lead reads; the owner makes the turns.
+
+**Steps.**
+
+1. **One tool call.** The owner asks for the summary of this month. The
+   session calls `firefly__get_summary`. The MCP gateway logs the call
+   with its client: `kubectl -n ai logs deploy/mcp-gateway | grep '"client":"finance"'`
+   shows `"gen_ai.tool.name":"get_summary"` and `"http.status":200`. The
+   proxy logs it too:
+   `kubectl -n agents-finance logs deploy/firefly-proxy | grep 'firefly-proxy port=8080'`
+   shows `refused=0` and `status=200`.
+2. **A read of the vault.** The owner asks for a fact that only a note of
+   the vault holds. The answer names it.
+3. **The scheduled checks** of `agents-finance`, on their next runs:
+   `platform-check-isolation` (04:17), `platform-check-probe` (04:47),
+   `platform-check-firefly-probe` (05:17), `platform-check-firefly-dns`
+   (05:27) and `platform-check-mcp-gateway-probe` (05:37, with no
+   `skipped` line) pass: `kubectl -n agents-finance get jobs`.
+4. **The backups.** The first nightly snapshot with the state is
+   `Succeeded`, and the daily archive of the backup container is in the log
+   (`daily-backup result=ok`) with `instruction-check result=first`.
+5. **The restore test**, with that snapshot (the template
+   `finance/agent/restore-test/`, owner's go): the check Job, at the path of
+   the agent pod, passes (`restore-check result=ok`), and its
+   `vault-notes` equals the count of the seed.
+6. **The heartbeat.** The first heartbeat of `openclaw-agents-finance` is
+   in Tempo; then the pull request that adds it to `SERVICES`.
+
+**Pass.** Each step above passed, and no alert of `agents-finance` fired
+from step 1 of the merges to here, but the ones named in a step.
+
+**Record in the evidence:** the pull request and the head of each step, the
+names of the archive, the Job, the snapshot and the restore test, the log
+lines above, and the two counts.
+
+**Cleanup.**
+
+- The cleanup pull request of the restore test.
+- On the host, after the way back is closed (the owner decides when; the
+  daily archives of the pod go back 7 days): take the finance agent out of
+  the host config, delete the token of the finance bot and the token file
+  of the app from the host, and revoke that old token of the app in the app
+  (the proxy has its own). Then the host holds no credential of finance.
+
+### The way back
+
+The way back takes out only what must go: the agent and the inbox. The
+volume, its backup policy, its snapshots and the copy in `archives/start/`
+stay; they hold no credential of the host. Flux never prunes the volume
+(`kustomize.toolkit.fluxcd.io/prune: disabled` on `pvc.yaml`). To remove it
+for real, one pull request takes the annotation out, and the next one takes
+the file and `backup.yaml` out: Flux then deletes the claim, and the reclaim
+policy wipes the volume on the node. The snapshots stay in the repository of
+finance until their retention ends.
+
+- **Before step 5:** a pull request takes out the files of step 4 (the
+  restore Job, the two Secrets, the Deployment) and the inbox, if it is
+  still in. Then turn the finance bot on again on the host. Nothing of the
+  host changed.
+- **After step 5:** a pull request sets `replicas: 0`; the pod stops and
+  stops the polling. Then turn the bot on again on the host, with the state
+  of the day of the cutover. The memory written on the platform since then
+  is not on the host. To keep it, copy the workspace out before the pull
+  request, read only:
+
+  ```bash
+  kubectl -n agents-finance exec deploy/agent -c backup -- \
+    tar -C /home/node/data/state/workspace -cf - . > finance-workspace-back.tar
+  ```
+
+  and merge by hand the files the owner wants (the scripts there use the
+  read port, so keep the scripts of the host).
+
+### Who does what, in order
+
+| # | Step | Who | Blocks |
+| --- | --- | --- | --- |
+| 1 | The MCP gateway merged and ready ([mcp-gateway.md](mcp-gateway.md)) | Lead writes, owner merges | Step 3 |
+| 2 | Merges 1 and 2 (volume, inbox, backup policy) and their checks | Lead | Step 4 |
+| 3 | The values of `agent-secret` (with `MCP_GATEWAY_KEY` and its hash at the MCP gateway) and the entry of `keys.json`, and the token of the finance app | Owner (R4) | Step 4 |
+| 4 | The model path of finance records (D65), and the risk of web search, writes and finance data in one session | Owner (gate) | Step 5 |
+| 5 | The go of the cutover, for a time with no other change | Owner (gate) | The host steps |
+| 6 | The host: the finance bot off, the copy of the workspace, the vault | Owner (host) | Step 4 |
+| 7 | The pull requests of steps 4 and 5 (the name of the archive from the owner), and their checks | Lead writes, owner merges | The exit check |
+| 8 | The first message, the tool call and the vault read | Owner | The exit check |
+| 9 | The checks, the backups, the restore test, the heartbeat entry | Lead (the restore test with the owner's go) | The exit check |
+| 10 | The host cleanup, after the way back closes | Owner (host) | None |
 
 ## Stop the workflow agent fast
 

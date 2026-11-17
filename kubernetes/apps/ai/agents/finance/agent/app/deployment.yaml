@@ -1,10 +1,13 @@
 ---
 # The finance agent (docs/apps/agent-platform.md): the product (OpenClaw) in
 # the agent image, as the pilot runs it. A scaffold: replicas 0, and not in
-# kustomization.yaml until its Secret exists (the owner makes the bot token,
-# R4) and the owner gives the go of the cutover. The tool set is the pilot's,
-# with its own search key, and the notes vault in the state volume
-# (docs/apps/agent-platform.md, "The finance agent").
+# kustomization.yaml until step 4 of the cutover, after the owner put the
+# values of its Secret (R4) and the copy of the state in place; replicas 1 is
+# step 5, after the host stopped the finance bot
+# (docs/apps/agent-platform-runbook.md, "The cutover of the finance agent").
+# The tool set is the pilot's, with its own search key, the notes vault in
+# the state volume (docs/apps/agent-platform.md, "The finance agent"), and the
+# finance app through the MCP gateway (the firefly entry of openclaw.json).
 # Each command it runs goes to a sandbox of this trust domain, through the
 # sandbox gateway; each model call goes to the model gateway, with the key of
 # this trust domain; each call of a tool of the finance app goes to the MCP
@@ -71,6 +74,53 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
+        # The values check: the pod does not start while a value of its
+        # Secrets is empty or still the placeholder `pending` of git, or while
+        # the SHA-256 of MCP_GATEWAY_KEY is not the hash of the client finance
+        # in the config of the MCP gateway (the same file, mounted here), so
+        # the value and the hash stay in step. It prints `values-check
+        # result=ok` or `values-check result=failed key=<name>
+        # reason=empty|placeholder|hash`, the name of the key only, never a
+        # value or a hash, and fails the start. The pod then stays in
+        # Init:CrashLoopBackOff, not ready, and AgentPlatformWorkloadNotReady
+        # fires after 10 minutes.
+        - name: values-check
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM MCP_GATEWAY_KEY BRAVE_API_KEY; do
+                v=$(printenv "$k" || true)
+                if [ -z "$v" ]; then echo "values-check result=failed key=$k reason=empty"; exit 1; fi
+                if [ "$v" = pending ]; then echo "values-check result=failed key=$k reason=placeholder"; exit 1; fi
+              done
+              have=$(printf %s "$MCP_GATEWAY_KEY" | sha256sum | cut -d " " -f 1)
+              want=$(awk '/keyHash:/ { k = $NF; gsub(/"/, "", k) } /metadata: \{client: finance\}/ { print k }' /gateway/config.yaml)
+              if [ "$want" != "sha256:$have" ]; then echo "values-check result=failed key=MCP_GATEWAY_KEY reason=hash"; exit 1; fi
+              echo "values-check result=ok"
+          envFrom:
+            - secretRef:
+                name: agent-secret
+            - secretRef:
+                name: agent-search-secret
+          volumeMounts:
+            - name: mcp-gateway-config
+              mountPath: /gateway
+              readOnly: true
+          securityContext: &containerSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources: &small
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
         # The two directories of the state volume and /tmp, as uid 1000 with
         # mode 0700, and the client certificate of the sandbox gateway in the
         # directory of the CLI: the gateway address with each ":" and "/" as
@@ -78,7 +128,7 @@ spec:
         # on this cluster the kubelet can't reach the local-path directory,
         # so it would make a subPath directory as root (talos/wsl/README.md).
         - name: prepare
-          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          image: *image
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -91,17 +141,8 @@ spec:
               cp /openshell-tls/ca.crt /openshell-tls/tls.crt /openshell-tls/tls.key \
                 /home/node/.config/openshell/gateways/https___openshell.agents-finance.svc.cluster.local_8080/mtls/
               chmod 0600 /home/node/.config/openshell/gateways/https___openshell.agents-finance.svc.cluster.local_8080/mtls/*
-          securityContext: &containerSecurity
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          resources: &small
-            requests:
-              cpu: 10m
-              memory: 64Mi
-            limits:
-              memory: 256Mi
+          securityContext: *containerSecurity
+          resources: *small
           volumeMounts:
             - name: state
               mountPath: /home/node/data
@@ -412,6 +453,11 @@ spec:
         - name: scripts
           configMap:
             name: agent-scripts
+        # The config of the MCP gateway, for the hash of the client finance
+        # (kustomization.yaml): hashes and tool rules, no secret.
+        - name: mcp-gateway-config
+          configMap:
+            name: agent-mcp-gateway-config
         - name: tmp
           emptyDir:
             sizeLimit: 2Gi

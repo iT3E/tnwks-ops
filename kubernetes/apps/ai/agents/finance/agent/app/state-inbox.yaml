@@ -1,0 +1,88 @@
+---
+# Not applied yet: step 1 of the cutover lists it in kustomization.yaml with
+# pvc.yaml, and step 4 takes it out again (docs/apps/agent-platform-runbook.md,
+# "The cutover of the finance agent").
+#
+# The inbox of the state volume, while the agent is at zero replicas. It
+# does two things:
+# - it is the first pod of the volume, so local-path makes the volume on the
+#   node of the agent (the claim waits for its first pod, and a backup mover
+#   that came first would make it on any worker);
+# - the owner puts the copy of the state and the seed of the vault into the
+#   volume through it, with `kubectl exec` and tar, as two archives in
+#   archives/start/ and archives/seed/. The restore Job checks each member
+#   and unpacks them (restore-job.yaml); nothing is unpacked here.
+# It runs no product code, holds no secret and no service account token, and
+# has no network: no policy of the namespace selects its label, so the
+# default deny holds. It makes the directories as uid 1000 with mode 0700,
+# prints one line, and then waits.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-state-inbox
+  labels:
+    app.kubernetes.io/name: agent-state-inbox
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-state-inbox
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-state-inbox
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 5
+      # The node of deployment.yaml.
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: inbox
+          # The image of deployment.yaml: the same user, and tar.
+          image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /home/node/data/state /home/node/data/archives/start /home/node/data/archives/seed
+              chmod 0700 /home/node/data/state /home/node/data/archives /home/node/data/archives/start /home/node/data/archives/seed
+              echo "state-inbox result=ready"
+              trap 'exit 0' TERM INT
+              while :; do sleep 3600 & wait $!; done
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: agent-state
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi

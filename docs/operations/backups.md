@@ -317,10 +317,13 @@ grant:
    `agents-finance`. Then `kubectl get clusterrepository agents-finance`
    shows `Ready`. (The certificate needs no check of its own: with the
    placeholder, the refresh of step 3 fails.)
-5. **The policy, with the volume.** List `pvc.yaml` and `backup.yaml` in
-   `kubernetes/apps/ai/agents/finance/agent/app/kustomization.yaml`
-   together, at the cutover of the finance agent. The first snapshot runs at
-   once (`runOnCreate`): `kubectl -n agents-finance get snapshots`.
+5. **The policy, after the volume.** At the cutover of the finance agent,
+   list `pvc.yaml` with the inbox pod first, so the volume is made on the
+   node of the agent, then `backup.yaml` in the next pull request
+   (`kubernetes/apps/ai/agents/finance/agent/app/kustomization.yaml`; steps 1
+   and 2 of [The cutover of the finance agent](../apps/agent-platform-runbook.md#the-cutover-of-the-finance-agent)).
+   The first snapshot runs at once (`runOnCreate`):
+   `kubectl -n agents-finance get snapshots`.
 
 The way back is the same steps in the reverse order: the policy first (its
 delete needs the grant, see

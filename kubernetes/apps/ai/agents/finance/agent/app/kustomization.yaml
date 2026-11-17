@@ -2,20 +2,31 @@
 # The finance agent. Only the network policy is applied for now: it selects
 # the agent pod, and no such pod exists.
 #
-# Not listed yet, each on purpose:
-# - ./deployment.yaml (replicas 0): its Secret `agent-secret` does not exist.
-#   The owner makes the values (R4): OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY
-#   (the key `agents-finance` of the model gateway, docs/apps/litellm.md),
-#   TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM and MCP_GATEWAY_KEY (the key of
-#   the client `finance` of the MCP gateway, docs/apps/mcp-gateway.md), as
-#   `secret.sops.yaml` here.
-#   With it, ./secret-search.sops.yaml (BRAVE_API_KEY, the search key of
-#   finance, in git with its value).
-# - ./pvc.yaml and ./backup.yaml, together, after the ClusterRepository
-#   agents-finance is Ready (kopiur-system/agents-finance-repository): the
-#   state volume never runs without its backup policy. The grant of
-#   agents-finance in that repository comes first, and goes last.
-# - The restore test (../restore-test/, a template).
+# The other files join in the steps of the cutover, one pull request each,
+# in this order (docs/apps/agent-platform-runbook.md, "The cutover of the
+# finance agent"). Each step is checked before the next one.
+# 1. ./pvc.yaml and ./state-inbox.yaml: the inbox is the first pod of the
+#    volume, so the volume is made on the node of the agent. The volume is
+#    never pruned (its annotation): the way back takes out the agent and
+#    the inbox, never pvc.yaml.
+# 2. ./backup.yaml: the policy and schedule; the first snapshot runs at once,
+#    of the empty volume. It needs the ClusterRepository agents-finance
+#    (Ready) and its grant of agents-finance; the grant goes last.
+# 3. The values of ./secret.sops.yaml (Secret agent-secret: five
+#    placeholders now), by the owner (R4): OPENCLAW_GATEWAY_TOKEN,
+#    LITELLM_API_KEY (the key agents-finance of the model gateway, with the
+#    same value in its keys.json, docs/apps/litellm.md), TELEGRAM_BOT_TOKEN,
+#    TELEGRAM_ALLOW_FROM and MCP_GATEWAY_KEY (the key of the client finance
+#    of the MCP gateway, with its hash in the gateway's config,
+#    docs/apps/mcp-gateway.md). Not listed yet.
+# 4. After the owner put the copy of the state and the vault in the volume:
+#    out ./state-inbox.yaml; in ./restore-job.yaml (ARCHIVE and VAULT set),
+#    ./secret.sops.yaml, ./secret-search.sops.yaml (BRAVE_API_KEY, the search
+#    key of finance, with its value) and ./deployment.yaml at replicas 0.
+# 5. The cutover, after the host stopped the finance bot: out
+#    ./restore-job.yaml, and replicas 1 in ./deployment.yaml.
+# The restore test (../restore-test/, a template) follows the first nightly
+# snapshot with the state in it.
 # The tool set is the pilot's (its own search key), the notes vault in the
 # state volume, and the finance app through the MCP gateway, its MCP server
 # and its proxy (kubernetes/apps/ai/mcp-gateway, ../../firefly-mcp,
@@ -24,3 +35,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./networkpolicy.yaml
+# The config of the MCP gateway, the same file, for the values check of the
+# agent pod: it holds hashes and tool rules, no secret.
+configMapGenerator:
+  - name: agent-mcp-gateway-config
+    files:
+      - config.yaml=../../../../mcp-gateway/app/config/config.yaml
