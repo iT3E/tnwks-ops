@@ -46,8 +46,10 @@ def listed() -> set[str]:
 
 AGENT = pod("deployment.yaml")
 IMAGE = os.environ.get("RESTORE_TEST_IMAGE", AGENT["containers"][0]["image"])
-# The user of the pods (the Job runs as the agent does).
-USER = AGENT["securityContext"]
+# A user that is not root, as the pod's is, and that the test can read
+# after: the test's own, or the pod's when the test runs as root.
+RUN_AS = (f"{os.getuid()}:{os.getgid()}" if os.getuid() else
+          f"{AGENT['securityContext']['runAsUser']}:{AGENT['securityContext']['runAsGroup']}")
 
 
 @pytest.mark.parametrize("name", ["state-inbox.yaml", "restore-job.yaml"])
@@ -162,7 +164,7 @@ def run_restore(tmp, state=GOOD_STATE, vault=GOOD_VAULT, archive=STATE, vault_na
     script.write_text(text)
     script.chmod(0o644)
     result = subprocess.run(
-        [docker(), "run", "--rm", "--quiet", "--network", "none", "-u", f"{USER['runAsUser']}:{USER['runAsGroup']}",
+        [docker(), "run", "--rm", "--quiet", "--network", "none", "-u", RUN_AS,
          "-e", f"ARCHIVE={archive}", "-e", f"VAULT={vault_name}",
          "-v", f"{data}:/home/node/data", "-v", f"{script}:/s/restore.sh:ro",
          "--entrypoint", "sh", IMAGE, "/s/restore.sh"],
