@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.190.1 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the phase wayback takes a switch for its group steps (wsl_move_rehearsal_wayback_group_steps, on by default). With it off, the way back runs as a standard A, as the boot run does, and the phase also ends a started window that did not end. Before any change, the phase reads that no run of the window task or of the boot task goes on, and stops with nothing changed when one does. Before A imports back as a standard account, the play removes an icon of the shortcut in A's folder that A does not own, because WSL writes that icon as the importing account and a standard account can not replace an icon that the Administrators own. The phase interrupt reads that icon first and stops when A does not own it.
+
 ## v2.190.0 - 2026-11-17
 
 ### Changed
