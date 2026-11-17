@@ -1,6 +1,7 @@
 ---
 # Phase remove-before-restart: the distro and the tasks go, while the
-# accounts may still run a task. The groups first, whatever the state. Then
+# accounts may still run a task. First no run of the procedure, then the
+# groups, whatever the state. Then
 # each account stops its distro, the disk files go (only the named paths
 # under the folder of the rehearsal), and each account unregisters with no
 # file at its path. The boot task stays for the second restart, unless the
@@ -8,7 +9,12 @@
 # loaded until the restart (each run of an S4U task adds a reference that is
 # not released), so the accounts and their profiles go in the phase remove.
 
-- name: The groups, first
+# No run of the procedure goes on during the removal: a run of the group test
+# could put A back into Administrators after the groups go.
+- name: No run of the procedure, first
+  ansible.builtin.include_tasks: stop_procedure.yml
+
+- name: The groups, then
   ansible.builtin.include_tasks: groups_out.yml
 
 - name: The live parts at the start

@@ -5,8 +5,49 @@
 # the procedure on an unknown state or another version (with a test config,
 # no WSL), and a disabled task that does not run.
 
+# The folder, the state folder and the read of the live parts come first, so
+# the first read, before any VM of the rehearsal, is the baseline.
+# Only SYSTEM and the Administrators may change the scripts, the configs, the
+# root file system and the state; Users may read. The folder of each account
+# and its log folder keep their own rules.
+- name: Folder of the rehearsal
+  tnwks_win_dir_acl:
+    path: "{{ wsl_move_rehearsal_dir }}"
+    items: reset
+    keep: "{{ wsl_move_rehearsal_accounts.values() | map(attribute='folder') | list + wsl_move_rehearsal_accounts.values() | map(attribute='log_dir') | list }}"
+
+- name: Folders of the procedure
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - "{{ wsl_move_rehearsal_state_dir }}"
+    - "{{ wsl_move_rehearsal_side }}"
+    - "{{ wsl_move_rehearsal_elsewhere }}"
+    - '{{ wsl_move_rehearsal_dir }}\log'
+
+- name: The read of the live parts
+  ansible.windows.win_copy:
+    src: Get-TnwksMoveLiveState.ps1
+    dest: '{{ wsl_move_rehearsal_dir }}\Get-TnwksMoveLiveState.ps1'
+
 - name: The live parts at the start
   ansible.builtin.include_tasks: live.yml
+
+# Before the first account task: the baseline is there, and it read the
+# registrations (a read with the hive not loaded says "not read", and two such
+# reads compare equal with no proof).
+- name: The baseline of the live parts is kept, and it read the registrations
+  ansible.builtin.assert:
+    that:
+      - wsl_move_rehearsal_baseline.output | default([]) | last | default(none, true) is not none
+      - (wsl_move_rehearsal_baseline.output | last).registrations is not match('not read')
+      - (wsl_move_rehearsal_live.output | last).registrations is not match('not read')
+    fail_msg: >-
+      The baseline of the live parts is missing, or it did not read the registrations of the live distro (the hive of
+      the account of the host's person is not loaded). The rehearsal stops before its first account.
+    quiet: true
+  when: not ansible_check_mode
 
 # Local accounts with no admin group, members of Users. Each password is
 # random, made here, and kept nowhere: each registration of a task sets a new
@@ -27,7 +68,8 @@
           if ($PSCmdlet.ShouldProcess($Name, 'make the local account')) {
               $bytes = New-Object byte[] 48
               [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-              $secret = ConvertTo-SecureString ([Convert]::ToBase64String($bytes) + 'aA1!') -AsPlainText -Force
+              # No cmdlet takes the plain value: module logging would record it.
+              $secret = [Net.NetworkCredential]::new('', [Convert]::ToBase64String($bytes) + 'aA1!').SecurePassword
               $user = New-LocalUser -Name $Name -Password $secret -PasswordNeverExpires -AccountNeverExpires `
                   -UserMayNotChangePassword -Description $Description
               $secret.Dispose()
@@ -77,25 +119,6 @@
   loop: "{{ wsl_move_rehearsal_accounts | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
-
-# Only SYSTEM and the Administrators may change the scripts, the configs, the
-# root file system and the state; Users may read. The folder of each account
-# and its log folder keep their own rules.
-- name: Folder of the rehearsal
-  tnwks_win_dir_acl:
-    path: "{{ wsl_move_rehearsal_dir }}"
-    items: reset
-    keep: "{{ wsl_move_rehearsal_accounts.values() | map(attribute='folder') | list + wsl_move_rehearsal_accounts.values() | map(attribute='log_dir') | list }}"
-
-- name: Folders of the procedure
-  ansible.windows.win_file:
-    path: "{{ item }}"
-    state: directory
-  loop:
-    - "{{ wsl_move_rehearsal_state_dir }}"
-    - "{{ wsl_move_rehearsal_side }}"
-    - "{{ wsl_move_rehearsal_elsewhere }}"
-    - '{{ wsl_move_rehearsal_dir }}\log'
 
 - name: Log folders of the accounts
   tnwks_win_dir_acl:
@@ -178,7 +201,6 @@
     - Invoke-TnwksWslAccountTask.ps1
     - Invoke-TnwksMoveWindow.ps1
     - Invoke-TnwksStartTask.ps1
-    - Get-TnwksMoveLiveState.ps1
 
 - name: The root file system
   ansible.windows.win_copy:

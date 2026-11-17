@@ -39,6 +39,7 @@ wsl_move_rehearsal_window_tasks:
 wsl_move_rehearsal_window_config:
   root: "{{ wsl_move_rehearsal_dir }}"
   account_pattern: "^{{ wsl_move_rehearsal_prefix }}-"
+  task_pattern: "^{{ wsl_move_rehearsal_prefix }}-"
   disk_name: "{{ wsl_move_rehearsal_disk_name }}"
   marker_name: "{{ wsl_move_rehearsal_marker_name }}"
   state_file: "{{ wsl_move_rehearsal_state_file }}"
@@ -49,7 +50,7 @@ wsl_move_rehearsal_window_config:
   restart: "{{ wsl_move_rehearsal_restart | bool }}"
   # The check for a session of the owner (site 1 only) is not built here.
   session_check: false
-  task_minutes: 15
+  task_minutes: 10
   present:
     account: "{{ wsl_move_rehearsal_accounts.a.name }}"
     folder: "{{ wsl_move_rehearsal_accounts.a.folder }}"

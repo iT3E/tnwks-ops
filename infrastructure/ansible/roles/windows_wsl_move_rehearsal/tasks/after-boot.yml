@@ -22,7 +22,13 @@
           param([string]$Log, [string]$State)
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
-          $boot = @(Get-Content -LiteralPath $Log | Where-Object { ($_ -split ' ', 3)[1] -eq 'boot' } | ForEach-Object { ($_ -split ' ', 3)[2] })
+          # The runs of the boot task at this boot: an earlier boot of the host
+          # may have run it too.
+          $since = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
+          $boot = @(Get-Content -LiteralPath $Log | Where-Object {
+              $f = $_ -split ' ', 3
+              $f[1] -eq 'boot' -and [DateTime]::Parse($f[0], $null, 'RoundtripKind').ToUniversalTime() -gt $since } |
+              ForEach-Object { ($_ -split ' ', 3)[2] })
           # The runs of the boot task: each starts with "start, request".
           $runs = @()
           foreach ($line in $boot) {

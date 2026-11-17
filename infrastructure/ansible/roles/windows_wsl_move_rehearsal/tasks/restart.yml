@@ -14,6 +14,29 @@
       -e wsl_move_rehearsal_restart_go=true. Nothing is changed.
     quiet: true
 
+# The first restart follows the phase interrupt (a started window), the
+# second the phase remove-before-restart (a done way back).
+- name: Read the last marker before the restart
+  ansible.windows.win_powershell:
+    parameters:
+      State: "{{ wsl_move_rehearsal_state_file }}"
+    script: |
+      param([string]$State)
+      $Ansible.Changed = $false
+      if (-not (Test-Path -LiteralPath $State)) { return '' }
+      $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
+      if ($lines.Count) { ($lines[-1] -split ' ', 2)[1].Trim() } else { '' }
+  check_mode: false
+  register: wsl_move_rehearsal_restart_marker
+
+- name: The restart follows the phase interrupt or remove-before-restart
+  ansible.builtin.assert:
+    that: (wsl_move_rehearsal_restart_marker.output | last | default('')) in ['window-started', 'wayback-done']
+    fail_msg: >-
+      The last marker is '{{ wsl_move_rehearsal_restart_marker.output | last | default('') }}': the restart runs after the
+      phase interrupt or remove-before-restart only. Nothing is changed.
+    quiet: true
+
 - name: The live parts before the restart
   ansible.builtin.include_tasks: live.yml
 

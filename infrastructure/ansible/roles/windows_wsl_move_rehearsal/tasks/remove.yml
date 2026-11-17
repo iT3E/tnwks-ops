@@ -2,8 +2,8 @@
 # Phase remove, after the second restart: everything of the rehearsal goes.
 # It runs no task of an account, so no profile loads again. The groups first,
 # whatever the state. Then the read of the boot task at this boot (it must
-# have done nothing), the tasks, the profiles (a loaded profile stops the
-# removal: restart first), the rights, the values of the sign-in screen, the
+# have done nothing), the profiles (a loaded profile stops the removal before
+# the tasks go: restart first), the tasks, the rights, the values of the sign-in screen, the
 # accounts and the folder. Then the exit check: the check play, with the SIDs
 # that this phase prints.
 
@@ -36,22 +36,10 @@
   check_mode: false
   register: wsl_move_rehearsal_boot_now
 
-- name: No task of the rehearsal
-  tnwks_win_scheduled_task:
-    name: "{{ item }}"
-    state: absent
-  vars:
-    ansible_become: true
-    ansible_become_method: ansible.builtin.runas
-    ansible_become_user: SYSTEM
-  loop: >-
-    {{ wsl_move_rehearsal_task_list | map(attribute='key') | zip(wsl_move_rehearsal_task_list | map(attribute='step'))
-       | map('join', '-') | map('regex_replace', '^', wsl_move_rehearsal_prefix ~ '-') | list
-       + [wsl_move_rehearsal_window_task, wsl_move_rehearsal_boot_task] }}
-
-# Their .wslconfig, their hives and the registrations of the distro go with
-# them. No wait: a profile that an S4U task loaded stays loaded until a
-# restart.
+# Before the tasks go: a loaded profile stops the removal here, with the
+# tasks still there. Their .wslconfig, their hives and the registrations of
+# the distro go with them. No wait: a profile that an S4U task loaded stays
+# loaded until a restart.
 - name: No profile of the accounts
   ansible.windows.win_powershell:
     parameters:
@@ -64,7 +52,7 @@
       $profiles = @(foreach ($sid in $Sids) { Get-CimInstance Win32_UserProfile -Filter "SID = '$sid'" })
       $loaded = @($profiles | Where-Object { $_.Loaded })
       if ($loaded.Count -and -not $WhatIfPreference) {
-          throw ("$($loaded.Count) profile(s) of the rehearsal are loaded. The removal stops here: the profiles, the rights, the " +
+          throw ("$($loaded.Count) profile(s) of the rehearsal are loaded. The removal stops here: the tasks, the profiles, the rights, the " +
               'values of the sign-in screen, the accounts and the folder stay. Restart the host (with the owner''s go), then run ' +
               'the phase remove again; it runs no task of an account, so it loads no profile.')
       }
@@ -72,6 +60,19 @@
           $Ansible.Changed = $true
           if ($PSCmdlet.ShouldProcess($p.LocalPath, 'remove the profile')) { Remove-CimInstance -InputObject $p }
       }
+
+- name: No task of the rehearsal
+  tnwks_win_scheduled_task:
+    name: "{{ item }}"
+    state: absent
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  loop: >-
+    {{ wsl_move_rehearsal_task_list | map(attribute='key') | zip(wsl_move_rehearsal_task_list | map(attribute='step'))
+       | map('join', '-') | map('regex_replace', '^', wsl_move_rehearsal_prefix ~ '-') | list
+       + [wsl_move_rehearsal_window_task, wsl_move_rehearsal_boot_task] }}
 
 # Each right goes before the account, so no SID with no account stays in the
 # local policy.

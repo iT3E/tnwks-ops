@@ -61,10 +61,31 @@ function Write-Log([string]$Text) {
     Write-TnwksLine $cfg.log_file ('{0} {1} {2}' -f [DateTime]::UtcNow.ToString('o'), $Mode, $Text)
 }
 
+# The markers that this run wrote: only a run that wrote the marker of a
+# started window (or of a boot run) goes back or restarts after a failure.
+$script:WroteMarkers = @()
+
 function Add-Marker([string]$Name) {
     Write-TnwksLine $cfg.state_file ('{0} {1}' -f [DateTime]::UtcNow.ToString('o'), $Name)
+    $script:WroteMarkers += $Name
     Write-Log "marker $Name"
 }
+
+# A whole file, flushed to disk, then renamed over the old one.
+function Write-TnwksFile([string]$Path, [string]$Text) {
+    $temp = "$Path.new"
+    $bytes = (New-Object Text.UTF8Encoding $false).GetBytes($Text)
+    $stream = New-Object IO.FileStream($temp, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try {
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    } finally { $stream.Dispose() }
+    Move-Item -LiteralPath $temp -Destination $Path -Force
+}
+
+# The tasks that step 2 disabled (they were enabled before the window): way
+# back step 6 enables these only.
+$DisabledFile = "$($cfg.state_file).disabled"
 
 function Get-LastMarker {
     if (-not (Test-Path -LiteralPath $cfg.state_file)) { return '' }
@@ -85,9 +106,20 @@ function Get-TnwksWslVersion {
 
 function Get-TnwksSid([string]$Account) { (Get-LocalUser -Name $Account).SID.Value }
 
-function Test-TnwksAdmin([string]$Sid) {
-    @(Get-LocalGroupMember -SID $AdministratorsSid | ForEach-Object { $_.SID.Value }) -contains $Sid
+# The members of Administrators, as SIDs. Get-LocalGroupMember fails on a
+# member that names no account; the WinNT provider then reads the same list by
+# objectSid, as the group reads of the role do.
+function Get-TnwksAdminSids {
+    try { @(Get-LocalGroupMember -SID $AdministratorsSid -ErrorAction Stop | ForEach-Object { $_.SID.Value }) }
+    catch {
+        $name = (Get-LocalGroup -SID $AdministratorsSid).Name
+        @(([ADSI]"WinNT://./$name,group").Invoke('Members') | ForEach-Object {
+            $raw = [byte[]]$_.GetType().InvokeMember('objectSid', 'GetProperty', $null, $_, $null)
+            (New-Object Security.Principal.SecurityIdentifier $raw, 0).Value })
+    }
 }
+
+function Test-TnwksAdmin([string]$Sid) { @(Get-TnwksAdminSids) -contains $Sid }
 
 # The WSL processes of one account, by the SID of their owner.
 function Get-TnwksWslProcess([string]$Sid) {
@@ -258,8 +290,23 @@ function Test-TnwksScope {
     foreach ($account in @($cfg.present.account, $cfg.new.account)) {
         if ($account -notmatch $cfg.account_pattern) { return "the account $account is outside the scope ($($cfg.account_pattern))" }
     }
+    # Each task that the script starts, stops, disables or enables.
+    if (-not $cfg.task_pattern) { return 'the config has no task_pattern' }
+    $tasks = @($cfg.present.window_tasks.PSObject.Properties | ForEach-Object { $_.Value }) +
+        @($cfg.new.window_tasks.PSObject.Properties | ForEach-Object { $_.Value }) +
+        @($cfg.present.disable_tasks) + @($cfg.present.start_tasks) + @($cfg.new.start_tasks)
+    foreach ($task in $tasks) {
+        if ("$task" -notmatch $cfg.task_pattern) { return "the task $task is outside the scope ($($cfg.task_pattern))" }
+    }
+    # The check for a session of the owner (site 1) is not in this script.
+    if ($cfg.session_check) { return 'the session check is on, and this script does not have it' }
     ''
 }
+
+# Whether a session of the owner is on, so that the way back must not restart
+# (site 1). The script has no such check: Test-TnwksScope refuses a config
+# with session_check on, so this reads no session.
+function Test-TnwksOwnerSession { $false }
 
 function Request-TnwksRestart([string]$Why) {
     if ($cfg.restart) {
@@ -300,6 +347,13 @@ function Read-TnwksState {
 function Invoke-TnwksForward {
     $pSid = Get-TnwksSid $present.account
     $nSid = Get-TnwksSid $new.account
+    # A window that started and did not end goes back first (mode wayback, or
+    # the boot task), never forward again.
+    $last = Get-LastMarker
+    if ($last -in @('window-started', 'boot-run')) {
+        Write-Log "stop: the last marker is '$last': a window started and did not end. Nothing is changed."
+        return 'stopped'
+    }
     if ($req.rehearsal_group_test) {
         # The rehearsal only: the present account is in Administrators, as
         # the real present account is. Window step 7 takes it out.
@@ -314,6 +368,9 @@ function Invoke-TnwksForward {
     }
     Write-Log "step 1: WSL $version, as saved. The session check is $(if ($cfg.session_check) { 'on' } else { 'off' })."
     # (2) The marker of a started window, then the tasks of the present account.
+    # The tasks that this step disables, saved first, for way back step 6.
+    $enabled = @($present.disable_tasks | Where-Object { Test-TnwksTaskEnabled $_ })
+    Write-TnwksFile $DisabledFile ($enabled -join "`r`n")
     Add-Marker 'window-started'
     foreach ($t in @($present.disable_tasks)) { Disable-TnwksTask $t }
     Write-Log 'step 2 passed'
@@ -329,9 +386,7 @@ function Invoke-TnwksForward {
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $new.folder $cfg.marker_name)) "no marker file in $($new.folder)"
     Assert-Tnwks ((Test-Path -LiteralPath $oldPath) -and -not (Test-Path -LiteralPath $newPath)) 'the disk file is not at the old path only'
     $rules = Get-TnwksSddl $oldPath
-    $temp = "$($cfg.acl_file).new"
-    [IO.File]::WriteAllText($temp, $rules)
-    Move-Item -LiteralPath $temp -Destination $cfg.acl_file -Force
+    Write-TnwksFile $cfg.acl_file $rules
     $size = (Get-Item -LiteralPath $oldPath).Length
     Write-Log "step 4: saved the rules of the disk file; size $size"
     Move-Item -LiteralPath $oldPath -Destination $newPath
@@ -396,14 +451,16 @@ function Invoke-TnwksWayBack {
     if (Test-Path -LiteralPath $newPath) {
         Assert-Tnwks ((Get-TnwksWslProcess $pSid).Count -eq 0 -and (Get-TnwksWslProcess $nSid).Count -eq 0) 'a WSL process runs before the move back'
         Assert-Tnwks (Test-Path -LiteralPath (Join-Path $present.folder $cfg.marker_name)) 'the old folder or its marker is gone: no move back'
+        # Window step 4 saved the rules before the move: with no saved rules,
+        # no move back.
+        Assert-Tnwks (Test-Path -LiteralPath $cfg.acl_file) 'no saved rules of the disk file: no move back'
+        $saved = (Get-Content -LiteralPath $cfg.acl_file -Raw).Trim()
+        Assert-Tnwks ($saved -like 'O:*') 'the saved rules of the disk file are empty: no move back'
         $size = (Get-Item -LiteralPath $newPath).Length
         Move-Item -LiteralPath $newPath -Destination $oldPath
-        if (Test-Path -LiteralPath $cfg.acl_file) {
-            Enable-TnwksRestorePrivilege
-            $saved = (Get-Content -LiteralPath $cfg.acl_file -Raw).Trim()
-            Set-TnwksSddl $oldPath $saved
-            Assert-Tnwks (Test-TnwksSddl $oldPath $saved) 'the file has not its saved owner and rules'
-        }
+        Enable-TnwksRestorePrivilege
+        Set-TnwksSddl $oldPath $saved
+        Assert-Tnwks (Test-TnwksSddl $oldPath $saved) 'the file has not its saved owner and rules'
         Assert-Tnwks (-not (Test-Path -LiteralPath $newPath)) 'the new path is not empty'
         Assert-Tnwks ((Get-Item -LiteralPath $oldPath).Length -eq $size) 'the file moved back with another size'
     }
@@ -420,14 +477,31 @@ function Invoke-TnwksWayBack {
     $import = Invoke-TnwksAccountTask $present.window_tasks.import (Join-Path $present.result_dir 'import.json')
     Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $oldPath, [StringComparison]::OrdinalIgnoreCase)) "the import back of $($present.account) did not pass"
     Write-Log 'way back 5 passed'
-    # (6) For step 2.
-    foreach ($t in @($present.disable_tasks)) { Enable-TnwksTask $t }
+    # (6) For step 2: only the tasks that step 2 disabled.
+    $enable = if (Test-Path -LiteralPath $DisabledFile) { @(Get-Content -LiteralPath $DisabledFile | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } else { @() }
+    foreach ($t in @($present.disable_tasks)) {
+        if ($enable -contains $t) { Enable-TnwksTask $t } else { Write-Log "task $t stays as it is: step 2 did not disable it" }
+    }
     Write-Log 'way back 6 passed'
     Add-Marker 'wayback-done'
-    if ($cfg.restart) {
+    # The end of the way back (the design): a restart. With no restart allowed
+    # (a session of the owner on site 1, or the switch restart off), no
+    # restart, and the start tasks of the present account start.
+    $session = Test-TnwksOwnerSession
+    if ($cfg.restart -and -not $session) {
         Request-TnwksRestart 'the end of the way back'
+        return 'done'
+    }
+    if ($session) { Write-Log 'no restart: a session of the owner is on; the start tasks start' }
+    else { Write-Log 'would restart (the end of the way back); the switch restart is off' }
+    if ($req.rehearsal_group_test) {
+        # The rehearsal only: A leaves Administrators before any task of A
+        # starts, so no process of A holds a token from its time in the group.
+        # A has no batch right of its own here: the play starts its start task
+        # after the run.
+        Set-TnwksGroup $pSid $present.account $false
+        Write-Log "the start tasks of $($present.account) are left to the play (the group test)"
     } else {
-        Write-Log 'would restart (the end of the way back); the switch restart is off'
         Start-TnwksStartTasks @($present.start_tasks) $pSid $present.account
     }
     'done'
@@ -449,7 +523,7 @@ try {
                 # A failed check, or any error, after the marker of a started
                 # window: the way back, from the state that it reads.
                 Write-Log "fail: $($_.Exception.Message)"
-                if ((Get-LastMarker) -eq 'window-started') {
+                if ($script:WroteMarkers -contains 'window-started' -and (Get-LastMarker) -eq 'window-started') {
                     Write-Log 'the way back starts'
                     $outcome = Invoke-TnwksWayBack
                     if ($outcome -eq 'done') { $outcome = 'went-back' }
@@ -501,7 +575,7 @@ Write-Log "result: $outcome"
 if ($outcome -eq 'failed' -and $Mode -ne 'boot') {
     # A failed way back: the restart ends a VM that did not stop, and the boot
     # task makes one more run. The boot task itself never restarts after a fail.
-    if ((Get-LastMarker) -eq 'window-started' -or (Get-LastMarker) -eq 'boot-run') { Request-TnwksRestart 'a failed check' }
+    if ($script:WroteMarkers.Count -gt 0 -and (Get-LastMarker) -in @('window-started', 'boot-run')) { Request-TnwksRestart 'a failed check' }
 }
 switch ($outcome) {
     { $_ -in @('done', 'no-action', 'stopped-after') } { exit 0 }

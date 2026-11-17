@@ -31,6 +31,13 @@
                   $f = $line -split ' ', 3
                   if ($f.Count -lt 3) { continue }
                   $text = $f[2]
+                  # A leave of the removal is shown. A leave of Administrators there
+                  # means an account was in it outside a stated step: a problem too.
+                  if ($f[1] -eq 'removal') {
+                      $shown += "$($f[0]) removal $text"
+                      if ($text -match '^group: \S+ left Administrators$') { $problems += "the removal took an account out of Administrators: $line" }
+                      continue
+                  }
                   if ($text -like 'start, request: *') {
                       if ($inside) { $problems += "a run ended in Administrators: $($f[0])" }
                       $req = $text.Substring(16) | ConvertFrom-Json; $mode = $f[1]; $inside = $false
@@ -53,7 +60,6 @@
                       if ($inside) { $problems += "a run ended in Administrators: $line" }
                       $inside = $false; $req = $null
                   }
-                  if ($f[1] -eq 'removal') { $shown += "$($f[0]) $text" }
               }
               if ($inside) { $problems += 'the last run has a join and no leave' }
               [pscustomobject]@{ problems = $problems; shown = $shown }

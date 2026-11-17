@@ -101,6 +101,20 @@ function Get-TnwksRegistration([string]$Distro) {
     $null
 }
 
+# Whether a file is at a path, read so that it fails closed: only "not found"
+# reads as no file. Test-Path reads $false also when the account may not read
+# the attributes, and WSL deletes the file at the path of a registration.
+function Test-TnwksFile([string]$Path) {
+    try {
+        [void][IO.File]::GetAttributes($Path)
+        return $true
+    } catch {
+        $e = $_.Exception
+        while ($e -is [Management.Automation.MethodInvocationException] -and $e.InnerException) { $e = $e.InnerException }
+        return -not ($e -is [IO.FileNotFoundException] -or $e -is [IO.DirectoryNotFoundException])
+    }
+}
+
 function Exit-Tnwks([int]$Code, [hashtable]$Data) {
     Write-Result $Data
     exit $Code
@@ -155,7 +169,7 @@ switch ($Step) {
             if ([string]::Equals($reg.disk, $target, [StringComparison]::OrdinalIgnoreCase)) { Exit-Tnwks 0 @{ existed = $true; disk = $reg.disk } }
             Exit-Tnwks 2 @{ refused = "the account lists $distro at $($reg.disk), not at $target"; disk = $reg.disk }
         }
-        if (-not (Test-Path -LiteralPath $target)) { Exit-Tnwks 1 @{ failed = "no disk file at $target" } }
+        if (-not (Test-TnwksFile $target)) { Exit-Tnwks 1 @{ failed = "no disk file at $target" } }
         # No first-run program of WSL for this account.
         if (-not (Test-Path -LiteralPath $lxssKey)) { New-Item -Path $lxssKey -Force | Out-Null }
         Set-ItemProperty -LiteralPath $lxssKey -Name OOBEComplete -Value 1 -Type DWord
@@ -182,7 +196,9 @@ switch ($Step) {
         if ($scope) { Exit-Tnwks 2 @{ refused = $scope } }
         # WSL deletes the disk file at the path of the registration: never
         # while a file is there.
-        if (Test-Path -LiteralPath $reg.disk) { Exit-Tnwks 2 @{ refused = "a file is at $($reg.disk), the path of the registration"; registered = $true } }
+        if (Test-TnwksFile $reg.disk) {
+            Exit-Tnwks 2 @{ refused = "a file is at $($reg.disk), the path of the registration, or the account can not read it"; registered = $true }
+        }
         $run = Invoke-Wsl @('--unregister', $distro)
         $after = Get-TnwksRegistration $distro
         Exit-Tnwks ([int]($run.exit -ne 0 -or [bool]$after)) @{ unregister_exit = $run.exit; output = $run.output; registered = [bool]$after }

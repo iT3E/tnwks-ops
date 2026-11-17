@@ -669,14 +669,21 @@ and that the disk of the live distro is not under the folder. Each script
 checks it again before any action: the account script refuses a distro name
 outside its pattern and the names of `wsl_move_rehearsal_refused_names` (the
 live distro), whatever the pattern, and a path outside the folder; the
-procedure refuses an account outside its pattern and a path outside the
-folder. The tests in `security/tests/test_wsl_move_rehearsal.py` hold this.
+procedure refuses an account or a task outside its pattern, a path outside
+the folder, and a config with the session check on. Each phase that runs the
+procedure first reads the last marker in the state file, and does not start
+on another one than its order gives (a phase run twice, or out of order).
+The procedure itself does not go forward after a started window with no end.
+The tests in `security/tests/test_wsl_move_rehearsal.py` hold this.
 
 **The live parts.** At the start and the end of each phase, the play reads
 the port proxy, the NAT networks, the VM processes, and the registrations
 of the distros of the account of the host's person (from its loaded hive,
 as a count and a SHA-256, so the output names no path). The first read is
-the baseline, in the state folder. A later read that differs stops the
+the baseline, in the state folder: the setup makes the folder and copies
+the read before it, and stops before its first account unless the baseline
+is there and it read the registrations (with the hive not loaded, the read
+says "not read"). A later read that differs stops the
 phase: run the removal. A VM process does not show its account, so the
 check of the VM processes holds until the first restart only. After it, the
 lead's read of the nodes (Ready, and the same address) covers the live VM.
@@ -685,7 +692,7 @@ lead's read of the nodes (Ready, and the same address) covers the live VM.
 | --- | --- |
 | `setup` | The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon). A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
 | `window` | The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file, both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. Then B imports, unregisters and imports again into the same folder |
-| `wayback` | First, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, and the end of the run takes A out, both moments logged. A owns the distro with the saved owner and rules of the file, B lists none, A's start runs. Then the play gives A its batch right again, for the next phases |
+| `wayback` | First, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, and A leaves before any task of A starts, both moments logged. The play then gives A its batch right again, for the next phases, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro with the saved owner and rules of the file, B lists none |
 | `interrupt` | The window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
 | `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task |
 | `after-boot` | The boot task ran the way back once: its marker first, no group step, no restart. A owns the distro, B lists none. Started again by hand, the boot task does nothing and writes no marker |
@@ -712,14 +719,24 @@ with the switch on. The restarts of the rehearsal come from the play. The
 boot run has the group steps off, so no temporary account is in
 Administrators across a restart; the group step of the way back is shown in
 the phase `wayback`, in a normal run, not at boot. The check for a session
-of the owner (site 1) is not built. The import writes `DefaultUid` and the
-default distribution, and only these are read back. The design speaks of
+of the owner (site 1) is not built: the procedure refuses a config with it
+on. After a way back with no restart, it starts the start tasks of the
+present account (the third case of the design, a session of the owner, ends
+the same way); in the group test, A leaves Administrators first and the play
+starts them. Way back step 6 enables only the tasks that step 2 disabled (a
+list in the state folder). The import writes `DefaultUid` and the default
+distribution, and only these are read back: window step 6 and way back
+step 5 check the path of the registration, not its values. A power loss in
+the phase `window` or `wayback` leaves A in Administrators across the
+restart until the group check of the next phase or the removal, which logs
+the leave; the check play counts that leave as a problem. The design speaks of
 the installed version of WSL: the scripts read it as the file version of
 `C:\Program Files\WSL\wslservice.exe`, as SYSTEM, in the same way at each
 place where a version is compared.
 
-**The removal.** Each removal phase first takes A and B out of every local
-group but Users, whatever the state, and logs each leave.
+**The removal.** `remove-before-restart` first ends a run of the window
+task or the boot task. Each removal phase then takes A and B out of every
+local group but Users, whatever the state, and logs each leave.
 `remove-before-restart` then has each account stop its distro, removes the
 disk files (only the named paths under the folder), has each account
 unregister with no file at its path, and removes the tasks. It keeps the
@@ -727,8 +744,9 @@ boot task for the second restart, unless the last marker is that of a
 started window. The profiles stay loaded until a restart (each run of an S4U
 task adds a reference to the profile that the system does not release).
 After the second restart, `remove` runs no task of an account. It reads the
-run of the boot task at that boot, removes the tasks, the profiles (a loaded
-profile stops it, and the message says what stays), the rights, the values
+run of the boot task at that boot, removes the profiles (a loaded profile
+stops it before the tasks go, and the message says what stays), the tasks,
+the rights, the values
 of the sign-in screen, the accounts and the folder. It prints the SIDs of
 the accounts for the exit check:
 

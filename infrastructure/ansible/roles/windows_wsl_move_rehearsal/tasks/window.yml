@@ -32,6 +32,7 @@
       ansible.builtin.include_tasks: run_procedure.yml
       vars:
         wsl_move_rehearsal_request: {mode: forward, group_steps: true, stop_after: 0, rehearsal_group_test: true}
+        wsl_move_rehearsal_last_marker: ''
 
     # A leaves Administrators at window step 7. The real present account then
     # has no batch right at all; A loses its own as well.

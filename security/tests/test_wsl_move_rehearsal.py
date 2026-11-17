@@ -145,6 +145,54 @@ def test_each_task_that_acts_on_a_scheduled_task_runs_as_system():
     assert acting and set(acting) <= set(becoming)
 
 
+def test_the_baseline_of_the_live_parts_is_read_before_the_first_account():
+    names = [t["name"] for t in yaml.safe_load((ROLE / "tasks/setup.yml").read_text())]
+    order = ["Folder of the rehearsal", "Folders of the procedure", "The read of the live parts", "The live parts at the start",
+             "The baseline of the live parts is kept, and it read the registrations", "The accounts of the rehearsal"]
+    assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
+    gate = next(t for t in tasks_of("setup.yml") if t.get("name") == order[4])
+    assert "(wsl_move_rehearsal_baseline.output | last).registrations is not match('not read')" in gate["ansible.builtin.assert"]["that"]
+    # No cmdlet of the role takes a plain password.
+    for path in ROLE.rglob("*"):
+        if path.is_file():
+            assert "-AsPlainText" not in path.read_text(), path.name
+
+
+def test_each_run_of_the_procedure_names_the_last_marker_that_its_phase_expects():
+    expected = {"window.yml": "", "wayback.yml": "window-done", "interrupt.yml": "wayback-done"}
+    for phase, marker in expected.items():
+        runs = [t for t in tasks_of(phase) if t.get("ansible.builtin.include_tasks") == "run_procedure.yml"]
+        assert [t["vars"]["wsl_move_rehearsal_last_marker"] for t in runs] == [marker], phase
+    run = (ROLE / "tasks/run_procedure.yml").read_text()
+    assert "if ($last -ne $LastMarker) { throw" in run
+    restart = (ROLE / "tasks/restart.yml").read_text()
+    assert "in ['window-started', 'wayback-done']" in restart
+
+
+def test_the_play_waits_past_the_limit_of_the_window_task_and_the_worst_case_is_under_it():
+    limit = re.search(r"<ExecutionTimeLimit>PT(\d+)H</ExecutionTimeLimit>", (ROLE / "templates/system-task.xml.j2").read_text())
+    limit_minutes = int(limit[1]) * 60
+    wait = int(re.search(r"\$deadline = \(Get-Date\)\.AddMinutes\((\d+)\)", (ROLE / "tasks/run_procedure.yml").read_text())[1])
+    assert wait > limit_minutes
+    minutes = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_window_config"]["task_minutes"]
+    # Four tasks of an account in the window, three in the way back, four waits for
+    # no WSL process (2 minutes each) and the start tasks (3 minutes).
+    worst = 7 * minutes + 4 * 2 + 3
+    assert worst <= limit_minutes - 30
+
+
+def test_after_the_way_back_of_the_group_test_the_play_starts_a_and_reads_its_tokens():
+    names = [t.get("name") for t in tasks_of("wayback.yml")]
+    order = ["The window procedure, way back mode", "A may log on as a batch job again, with no group",
+             "The start task of A, started by the play", "The tokens of the WSL processes of A",
+             "No WSL process of A holds a token from its time in Administrators"]
+    assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
+    tokens = (ROLE / "tasks/tokens.yml").read_text()
+    assert "(attributes & 0x4) != 0" in tokens and "-contains 'S-1-5-32-544'" in tokens
+    boot = (ROLE / "tasks/after-boot.yml").read_text()
+    assert "LastBootUpTime" in boot
+
+
 def test_a_check_run_starts_no_task_and_waits_for_nothing():
     """Each step that runs a task, the procedure, a move or a restart is in a block for a
     real run only. The registrations go through the module, which changes nothing in a
@@ -211,9 +259,16 @@ def test_each_line_of_the_log_and_each_marker_is_flushed_before_the_next_step():
 
 
 def test_the_removal_takes_the_accounts_out_of_every_group_first():
-    for phase in ("remove-before-restart.yml", "remove.yml"):
-        first = yaml.safe_load((ROLE / f"tasks/{phase}").read_text())[0]
-        assert first["ansible.builtin.include_tasks"] == "groups_out.yml", phase
+    # remove-before-restart first ends a run of the procedure, which could put A
+    # back into Administrators.
+    before = yaml.safe_load((ROLE / "tasks/remove-before-restart.yml").read_text())
+    assert [t["ansible.builtin.include_tasks"] for t in before[:2]] == ["stop_procedure.yml", "groups_out.yml"]
+    assert yaml.safe_load((ROLE / "tasks/remove.yml").read_text())[0]["ansible.builtin.include_tasks"] == "groups_out.yml"
+    stop = (ROLE / "tasks/stop_procedure.yml").read_text()
+    assert "{{ wsl_move_rehearsal_window_task }}" in stop and "Stop-ScheduledTask -TaskName $t" in stop
+    # remove: the gate of the loaded profiles comes before the tasks go.
+    names = [t["name"] for t in yaml.safe_load((ROLE / "tasks/remove.yml").read_text())]
+    assert names.index("No profile of the accounts") < names.index("No task of the rehearsal")
     out = (ROLE / "tasks/groups_out.yml").read_text()
     assert "if ($g.SID.Value -eq 'S-1-5-32-545') { continue }" in out
     remove = (ROLE / "tasks/remove.yml").read_text()
@@ -303,6 +358,23 @@ def test_the_unregister_refuses_while_a_file_is_at_the_path_of_its_registration(
     out = run_account(tmp_path, "unregister", registered="b", disk_at="b")
     assert out["code"] == 2 and "a file is at" in out["result"]["refused"]
     assert out["wsl"] == [] and out["disk_b"]
+
+
+@needs_pwsh
+def test_the_read_of_a_file_at_the_path_fails_closed(tmp_path):
+    """Only "not found" reads as no file: any other error (here a path that the
+    read refuses) reads as a file there, so the unregister refuses."""
+    text = ACCOUNT.read_text()
+    func = re.search(r"function Test-TnwksFile\(.*?\n\}", text, re.DOTALL)[0]
+    assert "if (Test-TnwksFile $reg.disk) {" in text and "Test-Path -LiteralPath $reg.disk" not in text
+    (tmp_path / "there").write_text("x")
+    run = pwsh(func + f"""
+$out = @((Test-TnwksFile '{tmp_path / "there"}'), (Test-TnwksFile '{tmp_path / "none"}'),
+         (Test-TnwksFile '{tmp_path / "no-dir/none"}'), (Test-TnwksFile "bad`0path"))
+[Console]::Out.Write((ConvertTo-Json -Compress $out))
+""")
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == [True, False, False, True]
 
 
 @needs_pwsh
@@ -415,7 +487,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
                disk: tuple[str, ...] = ("a",), restart: bool = False, saved_version: str = "none",
                results: dict | None = None, codes: dict | None = None, admins: tuple[str, ...] = (),
                config: dict | None = None, tasks: dict | None = None, acl_file: str | None = None,
-               marker_a: bool = False) -> dict:
+               marker_a: bool = False, disabled: str | None = None) -> dict:
     root = tmp_path / "root"
     for sub in ("a", "b", "state", "log/a", "log/b"):
         (root / sub).mkdir(parents=True, exist_ok=True)
@@ -429,9 +501,11 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
     (root / "state/wsl-version.txt").write_text(saved_version)
     if acl_file is not None:
         (root / "state/disk.sddl").write_text(acl_file)
+    if disabled is not None:
+        (root / "state/window.state.disabled").write_text(disabled)
     names = {"stop": "stop", "unregister": "unregister", "import": "import"}
     cfg = {
-        "root": str(root), "account_pattern": "^tnwks-moverh-", "disk_name": "ext4.vhdx", "marker_name": "tnwks-move.marker",
+        "root": str(root), "account_pattern": "^tnwks-moverh-", "task_pattern": "^tnwks-moverh-", "disk_name": "ext4.vhdx", "marker_name": "tnwks-move.marker",
         "state_file": str(root / "state/window.state"), "log_file": str(root / "state/window.log"),
         "acl_file": str(root / "state/disk.sddl"), "version_file": str(root / "state/wsl-version.txt"),
         "service_binary": str(root / "no-such-binary.exe"), "restart": restart, "session_check": False, "task_minutes": 1,
@@ -532,8 +606,14 @@ def test_the_window_moves_the_file_in_order_and_logs_each_moment_in_administrato
     # The restart is behind the switch: off, the run logs it and does not restart.
     assert "restart" not in calls
     assert sum(line.startswith("would restart (the end of the window)") for line in log) == 1
-    # The rules of the file before the move are saved, for the way back.
+    # The rules of the file before the move are saved, for the way back, and the
+    # tasks that step 2 disabled, for way back step 6.
     assert (Path(out["root"]) / "state/disk.sddl").read_text() == OLD_SDDL
+    assert (Path(out["root"]) / "state/window.state.disabled").read_text() == "tnwks-moverh-a-start"
+    # A task that was disabled before the window is not on that list.
+    before = run_window(tmp_path / "2", FORWARD_TEST, tasks={"tnwks-moverh-a-start": "Disabled"})
+    assert before["code"] == 0, before["log"]
+    assert (Path(before["root"]) / "state/window.state.disabled").read_text() == ""
 
 
 @needs_pwsh
@@ -579,10 +659,12 @@ def test_a_failed_check_after_the_start_goes_back_from_the_state_it_reads(tmp_pa
     # The start task of B is still disabled (the window failed before step 8).
     assert back[:2] == ["stop tnwks-moverh-b-start", "start tnwks-moverh-b-stop"]
     assert back[2] == "move b -> a" and back[3] == f"acl a/ext4.vhdx {OLD_SDDL}"
-    assert back[4:8] == ["start tnwks-moverh-b-unregister", "start tnwks-moverh-a-import", "enable tnwks-moverh-a-start",
-                         "start tnwks-moverh-a-start"]
-    # A was in Administrators from before step 1 to the end of the run, both moments logged.
-    assert back[-1] == f"leave {A_SID}" and out["admins"] == []
+    assert back[4:7] == ["start tnwks-moverh-b-unregister", "start tnwks-moverh-a-import", "enable tnwks-moverh-a-start"]
+    # The group test: A leaves Administrators before any task of A starts, and the
+    # play starts its start task after the run.
+    assert back[7:] == [f"leave {A_SID}"] and out["admins"] == []
+    assert "start tnwks-moverh-a-start" not in calls
+    assert "the start tasks of tnwks-moverh-a are left to the play (the group test)" in out["log"]
     assert [line for line in out["log"] if line.startswith("group: ")] == [
         "group: tnwks-moverh-a joined Administrators", "group: tnwks-moverh-a left Administrators"]
     assert any(line.startswith("read: ") for line in out["log"])
@@ -592,10 +674,12 @@ def test_a_failed_check_after_the_start_goes_back_from_the_state_it_reads(tmp_pa
 def test_the_way_back_mode_puts_a_into_administrators_at_its_step_1_and_out_at_the_end(tmp_path):
     out = run_window(tmp_path, {"mode": "wayback", "group_steps": True, "stop_after": 0, "rehearsal_group_test": True},
                      state="t window-started\nt window-done\n", disk=("b",), acl_file=OLD_SDDL, marker_a=True,
-                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"})
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"},
+                     disabled="tnwks-moverh-a-start")
     assert out["code"] == 0, out["log"]
     calls = out["calls"]
     assert calls[0] == f"join {A_SID}" and calls[-1] == f"leave {A_SID}"
+    assert calls[-2] == "enable tnwks-moverh-a-start" and "start tnwks-moverh-a-start" not in calls
     assert calls.index("start tnwks-moverh-a-import") < calls.index(f"leave {A_SID}")
     assert out["markers"][-2:] == ["window-started", "wayback-done"]
     assert out["disk_a"] and not out["disk_b"]
@@ -629,8 +713,11 @@ def test_the_boot_task_writes_its_marker_first_and_stops_on_an_unknown_state(tmp
 @needs_pwsh
 def test_the_boot_task_goes_back_once_with_no_group_step_and_never_restarts_itself(tmp_path):
     out = run_window(tmp_path / "1", mode="boot", state="t window-started\n", disk=("b",), acl_file=OLD_SDDL, marker_a=True,
-                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"})
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"},
+                     disabled="tnwks-moverh-a-start")
     assert out["code"] == 0, out["log"]
+    calls = out["calls"]
+    assert calls.index("enable tnwks-moverh-a-start") < calls.index("start tnwks-moverh-a-start")
     # B's start task was running when the way back disabled it; A's runs again.
     assert out["tasks"] == {"tnwks-moverh-a-start": "Running", "tnwks-moverh-b-start": "Disabled"}
     assert out["markers"] == ["window-started", "boot-run", "wayback-done"]
@@ -644,7 +731,7 @@ def test_the_boot_task_goes_back_once_with_no_group_step_and_never_restarts_itse
     failed = run_window(tmp_path / "3", mode="boot", state="t window-started\n", disk=("b",), restart=True,
                         marker_a=True, codes={"tnwks-moverh-b-stop": 1})
     # With no marker in the old folder, nothing moves back.
-    lost = run_window(tmp_path / "4", mode="boot", state="t window-started\n", disk=("b",))
+    lost = run_window(tmp_path / "4", mode="boot", state="t window-started\n", disk=("b",), acl_file=OLD_SDDL)
     assert lost["code"] == 1 and lost["disk_b"] and not lost["disk_a"]
     assert "fail: check failed: the old folder or its marker is gone: no move back" in lost["log"]
     assert failed["code"] == 1 and "restart" not in failed["calls"]
@@ -661,6 +748,73 @@ def test_the_procedure_refuses_an_account_or_a_path_outside_its_scope(tmp_path):
     assert person["markers"] == []
 
 
+@needs_pwsh
+def test_the_procedure_refuses_a_task_outside_its_scope_and_the_session_check(tmp_path):
+    task = run_window(tmp_path / "1", FORWARD_TEST, config={"task_pattern": "^tnwks-other-"})
+    none = run_window(tmp_path / "2", FORWARD_TEST, config={"task_pattern": ""})
+    session = run_window(tmp_path / "3", FORWARD_TEST, config={"session_check": True})
+    for out in (task, none, session):
+        assert out["code"] == 3 and out["calls"] == [] and out["markers"] == [] and out["disk_a"], out["log"]
+    assert "is outside the scope (^tnwks-other-)" in task["log"][0]
+    assert none["log"][0] == "stop: the config has no task_pattern. Nothing is changed."
+    assert session["log"][0] == "stop: the session check is on, and this script does not have it. Nothing is changed."
+
+
+@needs_pwsh
+def test_a_forward_run_after_a_started_window_with_no_end_stops_and_does_not_go_back(tmp_path):
+    for i, last in enumerate(("window-started", "boot-run")):
+        state = "t window-started\n" + ("t boot-run\n" if last == "boot-run" else "")
+        out = run_window(tmp_path / str(i), FORWARD_TEST, state=state, disk=("b",), acl_file=OLD_SDDL, marker_a=True,
+                         restart=True)
+        assert out["code"] == 3, out["log"]
+        assert out["calls"] == [] and out["admins"] == []
+        assert out["markers"] == state.replace("t ", "").split()
+        assert f"stop: the last marker is '{last}': a window started and did not end. Nothing is changed." in out["log"]
+        assert not out["disk_a"] and out["disk_b"]
+
+
+@needs_pwsh
+def test_the_way_back_moves_nothing_back_with_no_saved_rules(tmp_path):
+    out = run_window(tmp_path, mode="wayback", state="t window-started\nt window-done\n", disk=("b",), marker_a=True,
+                     disabled="tnwks-moverh-a-start")
+    assert out["code"] == 1, out["log"]
+    assert out["disk_b"] and not out["disk_a"]
+    assert not any(c.startswith("move ") for c in out["calls"])
+    assert "fail: check failed: no saved rules of the disk file: no move back" in out["log"]
+
+
+@needs_pwsh
+def test_way_back_step_6_enables_only_the_tasks_that_step_2_disabled(tmp_path):
+    out = run_window(tmp_path, mode="wayback", state="t window-started\nt window-done\n", disk=("b",), acl_file=OLD_SDDL,
+                     marker_a=True, tasks={"tnwks-moverh-a-start": "Disabled"}, disabled="")
+    assert out["log"] and "enable tnwks-moverh-a-start" not in out["calls"]
+    assert "task tnwks-moverh-a-start stays as it is: step 2 did not disable it" in out["log"]
+
+
+def test_a_file_at_the_path_stops_each_unregister_of_the_procedure():
+    """WSL deletes the disk file at the path of a registration: the procedure checks
+    that no file is there right before each unregister, apart from the checks of the
+    move before it."""
+    text = WINDOW.read_text()
+    forward = re.search(r"# \(5\) The unregister of the present account.*?\n(.*?)\n(.*?)\n(.*?)\n", text, re.DOTALL)
+    assert forward[1].strip() == ("Assert-Tnwks (-not (Test-Path -LiteralPath $oldPath)) "
+                                  "'a file is at the path of the registration of the present account'")
+    assert "Invoke-TnwksAccountTask $present.window_tasks.unregister" in forward[3]
+    back = re.search(r"# \(4\) For step 6: the unregister of the new account.*?\n(.*?)\n(.*?)\n(.*?)\n", text, re.DOTALL)
+    assert back[1].strip() == ("Assert-Tnwks (-not (Test-Path -LiteralPath $newPath)) "
+                               "'a file is at the path of the registration of the new account'")
+    assert "Invoke-TnwksAccountTask $new.window_tasks.unregister" in back[3]
+
+
+def test_the_procedure_flushes_the_saved_rules_and_reads_the_group_with_a_fallback():
+    text = WINDOW.read_text()
+    assert "Write-TnwksFile $cfg.acl_file $rules" in text and "$stream.Flush($true)" in text
+    assert "Write-TnwksFile $DisabledFile" in text
+    admins = re.search(r"function Get-TnwksAdminSids \{.*?\n\}", text, re.DOTALL)[0]
+    assert "Get-LocalGroupMember -SID $AdministratorsSid -ErrorAction Stop" in admins
+    assert "InvokeMember('objectSid'" in admins
+
+
 # --- The check of the moments in Administrators -------------------------------------------
 
 def group_log_logic() -> str:
@@ -670,11 +824,11 @@ def group_log_logic() -> str:
     return script[script.index("# --- BEGIN logic"):script.index("# --- END logic")]
 
 
-def run_group_log(lines: list[str]) -> list[str]:
+def run_group_log(lines: list[str], part: str = "problems") -> list[str]:
     encoded = base64.b64encode("\n".join(lines).encode()).decode()
     run = pwsh(group_log_logic() + f"""
 $lines = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}')) -split "`n"
-[Console]::Out.Write((ConvertTo-Json -Compress @((Test-TnwksGroupLog $lines).problems)))
+[Console]::Out.Write((ConvertTo-Json -Compress @((Test-TnwksGroupLog $lines).{part})))
 """)
     assert run.returncode == 0, run.stderr
     return json.loads(run.stdout) or []
@@ -699,6 +853,11 @@ def test_the_check_play_fails_on_a_moment_in_administrators_outside_the_stated_s
     }
     for name, lines in cases.items():
         assert run_group_log(good + lines), name
+    # Each leave of the removal is shown; one of another group is no problem.
+    removal = ["t removal group: tnwks-moverh-a left Administrators", "t removal group: tnwks-moverh-b left Remote Desktop Users"]
+    assert run_group_log(good + removal, "shown")[-2:] == [
+        "t removal group: tnwks-moverh-a left Administrators", "t removal group: tnwks-moverh-b left Remote Desktop Users"]
+    assert run_group_log(good + removal[1:]) == []
 
 
 # --- keep_task_enabled_state in the module ----------------------------------------------
