@@ -1562,8 +1562,11 @@ by hand, and the steps at a limit of the Claude plan.
 - **The heartbeat check** reads one span of each agent's heartbeat trace:
   `openclaw.run` with `openclaw.trigger=heartbeat` and
   `openclaw.outcome=completed`, for each service in its env `SERVICES`
-  (`openclaw-agents-pilot` now). Add a service when a trust domain gets its
-  agent; a domain with no agent is not in the list, so it never alerts.
+  (comma separated: `openclaw-agents-pilot,openclaw-agents-finance` now).
+  Add a service after the first heartbeat of a new agent is in Tempo; a
+  domain with no agent is not in the list, so it never alerts. Each service
+  gets its own tries and its own log line, and one missing service fails
+  the run.
   `KubeJobFailed` also fires for a failed run of the check.
 - **Not alerted yet.** The age of the agent image against the upstream
   releases (a check of the agent image's repository), an `engine_error` of
