@@ -80,9 +80,14 @@ def main():
     with open(a.log, encoding="utf-8", errors="replace") as f:
         totals, events, timings = parse(f)
     hosts = [h for h in a.hosts.split(",") if h]
-    # A host without a recap line never ran: count it as failed.
-    for h in hosts:
-        totals.setdefault(h, dict(dict.fromkeys(COUNTS, 0), failed=1))
+    # A host without a recap line never ran. ansible-playbook stops before the
+    # next playbook when a play ends with a failure, so a failure of a Windows
+    # host in windows-host.yml leaves its distro in wsl-distro.yml without a
+    # run. The summary says so, and the metrics count it as failed: it was not
+    # checked.
+    missing = [h for h in hosts if h not in totals]
+    for h in missing:
+        totals[h] = dict(dict.fromkeys(COUNTS, 0), failed=1)
 
     rows = [h for h in hosts] + sorted(h for h in totals if h not in hosts)
     out = [f"#### Ansible {a.mode}: `{a.site}` (exit {a.rc})", "",
@@ -90,7 +95,13 @@ def main():
            "| --- | --: | --: | --: | --: | --: |"]
     for h in rows:
         t = totals[h]
+        if h in missing:
+            out.append(f"| `{h}` | did not run | | | | |")
+            continue
         out.append(f"| `{h}` | {t['ok']} | {t['changed']} | {t['failed']} | {t['unreachable']} | {t['skipped']} |")
+    if missing:
+        line = "**Did not run:** " + ", ".join(f"`{h}`" for h in missing) + ". ansible-playbook stopped before its play"
+        out += ["", line + (f", and the run fails (exit {a.rc})." if a.rc else ".")]
     for status in ("failed", "changed"):
         hits = [(h, n) for h, s, n in events if s == status]
         if hits:
