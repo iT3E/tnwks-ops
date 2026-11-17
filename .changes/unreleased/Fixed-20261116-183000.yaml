@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Windows: the write check of windows-rehearsal-check.yml reads the one answer line of the write test, so a warning that wsl.exe writes to stderr before or after it no longer fails a refusal. Two answers still fail.'
-time: 2026-11-16T18:30:00.000000000Z

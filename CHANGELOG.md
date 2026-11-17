@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.186.0 - 2026-11-17
+
+### Added
+
+* Backups: the ClusterRepository agents-finance (prefix kopiur-finance/), which grants the finance trust domain. No policy uses it yet.
+
+### Fixed
+
+* Windows: the write check of windows-rehearsal-check.yml reads the one answer line of the write test, so a warning that wsl.exe writes to stderr before or after it no longer fails a refusal. Two answers still fail.
+
 ## v2.185.2 - 2026-11-17
 
 ### Fixed
