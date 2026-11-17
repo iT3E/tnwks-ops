@@ -2032,7 +2032,10 @@ FLOW_OWN_RESULT = {"failed_when", "changed_when", "until"}
 FLOW_TEMPLATE = re.compile(r"\{\{.*?\}\}|\{%.*?%\}", re.DOTALL)
 # Modules that give their output in check mode too (a read).
 FLOW_CHECK_MODE_READS = ("ansible.windows.win_stat",)
-# Reads that the walk can not prove, each with the reason that it holds.
+# Reads that the walk can not prove, each with the reason that it holds. An entry also
+# hides the loss of the task that sets the name: these two would not show here if
+# setup lost its include of live.yml. That fails closed at run time (the first item of
+# the assert finds no baseline), not in this test.
 FLOW_KNOWN = {
     # The first item of the assert fails when live.yml did not read (no baseline): an
     # assert reads its items in order, so the later items read only after it passed.
@@ -2175,7 +2178,8 @@ def test_each_phase_sets_each_fact_before_a_task_reads_it(entry, check_mode):
 
     What this test can not see: a name built at run time (a lookup of hostvars, a key in a
     var); a read that a default or "is defined" guards (it counts as safe, though the
-    default may hide a fault); a condition on a result of the host (a set under it does not
+    default may hide a fault: icon.yml reads wsl_move_rehearsal_sids.a with a default of
+    '', and fails closed at run time, as its script refuses an empty SID); a condition on a result of the host (a set under it does not
     count after its block: strict, so a fault there shows, and a read that holds for a
     reason the walk can not prove is listed in FLOW_KNOWN with that reason); a task that
     fails or a rescue that ends a block early; and the vars of the inventory and of -e,
