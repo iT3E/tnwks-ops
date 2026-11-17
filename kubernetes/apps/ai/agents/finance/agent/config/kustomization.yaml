@@ -13,6 +13,9 @@ configMapGenerator:
   - name: agent-config
     files:
       - openclaw.json=./openclaw.json
+      # The sandbox policy (the policy of the openshell entry of
+      # openclaw.json): one network rule, to the proxy of the finance app.
+      - sandbox-policy.yaml=./sandbox-policy.yaml
   - name: agent-scripts
     files:
       - archive-state.sh=../../../pilot/agent/config/scripts/archive-state.sh

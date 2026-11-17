@@ -16,9 +16,31 @@
   "session": {"dmScope": "per-channel-peer"},
   "tools": {
     "elevated": {"enabled": false},
-    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
-    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search"]}},
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish",
+      "firefly__delete_*", "firefly__bulk_*", "firefly__trigger_*", "firefly__*export*", "firefly__*attachment*",
+      "firefly__create_rule*", "firefly__update_rule*"],
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search", "firefly__*"]}},
     "web": {"search": {"enabled": true, "provider": "brave"}}
+  },
+  "mcp": {
+    "servers": {
+      "firefly": {
+        "url": "http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer none"},
+        "toolFilter": {
+          "include": [
+            "get_*", "search_*", "test_rule", "test_rule_group",
+            "create_account", "update_account",
+            "create_transaction", "create_split_transaction", "update_transaction",
+            "create_category", "update_category",
+            "create_budget", "update_budget", "create_budget_limit", "update_budget_limit",
+            "create_bill", "update_bill",
+            "create_tag", "update_tag"
+          ]
+        }
+      }
+    }
   },
   "memory": {
     "search": {
@@ -100,6 +122,7 @@
           "mode": "mirror",
           "from": "docker.io/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
           "gatewayEndpoint": "https://openshell.agents-finance.svc.cluster.local:8080",
+          "policy": "/home/node/config/sandbox-policy.yaml",
           "autoProviders": false,
           "timeoutSeconds": 300
         }

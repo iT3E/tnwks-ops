@@ -11,3 +11,6 @@ resources:
   # The finance agent: a scaffold, its network policy and config only
   # (agent/app/kustomization.yaml).
   - ./agent/ks.yaml
+  # The finance app as a tool of the agent: the proxy that holds the token of
+  # the agent at the app, and the MCP server of the app.
+  - ./firefly-mcp/ks.yaml

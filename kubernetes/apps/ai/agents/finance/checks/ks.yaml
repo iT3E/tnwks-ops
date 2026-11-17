@@ -1,8 +1,9 @@
 ---
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
-# The checks of the agent platform in agents-finance: the isolation check
-# and the sandbox probe, as CronJobs. The app is shared by every trust domain
-# (kubernetes/apps/ai/agents/checks/app).
+# The checks of the agent platform in agents-finance, as CronJobs: the
+# isolation check and the sandbox probe of every trust domain
+# (kubernetes/apps/ai/agents/checks/app), and the probe of the finance app
+# (app/firefly-probe.yaml).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -10,7 +11,7 @@ metadata:
   namespace: flux-system
 spec:
   targetNamespace: agents-finance
-  path: ./kubernetes/apps/ai/agents/checks/app
+  path: ./kubernetes/apps/ai/agents/finance/checks/app
   prune: true
   sourceRef:
     kind: GitRepository

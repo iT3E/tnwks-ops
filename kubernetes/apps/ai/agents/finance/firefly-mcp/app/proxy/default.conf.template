@@ -1,0 +1,142 @@
+# The proxy of the finance app for the finance agent (docs/apps/agent-platform.md,
+# "The finance app"). It is the one place that holds the token of the agent at
+# the app: it sets the Authorization header of every request it lets through,
+# and replaces the one of the client. Its clients, the MCP server and the
+# sandboxes of the agent, hold no token.
+#
+# Two ports. On 8080, for the MCP server, it lets through the calls of an
+# allow list: GET, POST and PUT on the API
+# paths that the kept tools of the MCP server call (fireflyiii-mcp 1.0.1, the
+# groups of ../mcp.yaml). On 8081, for the sandboxes, only the GET calls of
+# the same list. The network policy lets each client reach its own port
+# only (../networkpolicy.yaml). Every other call gets a 403 with the header
+# X-Firefly-Proxy: refused, and never reaches the app: each DELETE, each other
+# method, each other path (the preferences, webhooks, cron, configuration,
+# users and tokens, the bulk update, the rule and recurrence triggers, the
+# exports, the attachments), and the writes of rules and rule groups (a rule
+# can delete a transaction). A method override is refused or dropped, and a
+# write must have a JSON body (the maps below). observability/tests/test_firefly_proxy.py checks
+# the list against the calls of the server.
+#
+# The entrypoint of the image renders this file at start, with the env vars of
+# the container that NGINX_ENVSUBST_FILTER names (the token and the address
+# of the app), into an emptyDir in memory. Each other $name is nginx's own.
+
+# A raw path with a dot segment, an encoded dot, slash or backslash, a double
+# slash or a path parameter is refused before any match: nginx matches the
+# path that it normalizes, and the app reads the raw one. The query string is
+# not checked here.
+map $request_uri $firefly_raw_ok {
+    default 1;
+    "~*^[^?]*(\.\.|%2e|%2f|%5c|%00|//|;|\x5c)" 0;
+}
+
+# The allow list: "<method> <path>", each path under /api/v1 as the server
+# calls it. Ids are numbers; a tag is its name or its id.
+map "$request_method $uri" $firefly_allowed {
+    default 0;
+    # Reads.
+    "~^GET /api/v1/about$" 1;
+    "~^GET /api/v1/accounts(/[0-9]+(/transactions)?)?$" 1;
+    "~^GET /api/v1/search/(accounts|transactions)$" 1;
+    "~^GET /api/v1/transactions(/[0-9]+)?$" 1;
+    "~^GET /api/v1/categories(/[0-9]+/transactions)?$" 1;
+    "~^GET /api/v1/budgets(/transactions-without-budget|/[0-9]+/(limits|transactions))?$" 1;
+    "~^GET /api/v1/available-budgets(/[0-9]+)?$" 1;
+    "~^GET /api/v1/bills(/[0-9]+/transactions)?$" 1;
+    "~^GET /api/v1/tags(/[^/]+/transactions)?$" 1;
+    "~^GET /api/v1/summary/basic$" 1;
+    "~^GET /api/v1/insight/expense/(asset|bill|budget|category|expense|no-bill|no-budget|no-category|no-tag|tag|total)$" 1;
+    "~^GET /api/v1/insight/income/(asset|category|no-category|no-tag|revenue|tag|total)$" 1;
+    "~^GET /api/v1/insight/transfer/(asset|category|no-category|no-tag|tag|total)$" 1;
+    "~^GET /api/v1/chart/(account/overview|balance/balance|budget/overview|category/overview)$" 1;
+    "~^GET /api/v1/exchange-rates/by-currencies/[A-Za-z]{3}/[A-Za-z]{3}$" 1;
+    "~^GET /api/v1/rule-groups(/[0-9]+(/rules|/test)?)?$" 1;
+    "~^GET /api/v1/rules(/[0-9]+(/test)?)?$" 1;
+    # Creates.
+    "~^POST /api/v1/(accounts|transactions|categories|budgets|bills|tags)$" 1;
+    "~^POST /api/v1/budgets/[0-9]+/limits$" 1;
+    # Updates.
+    "~^PUT /api/v1/(accounts|transactions|categories|budgets|bills)/[0-9]+$" 1;
+    "~^PUT /api/v1/budgets/[0-9]+/limits/[0-9]+$" 1;
+    "~^PUT /api/v1/tags/[^/]+$" 1;
+}
+
+# A method override. The framework of the app (Laravel 12 on Symfony 7.4)
+# routes a POST as the method of the header X-HTTP-Method-Override, or of a
+# "_method" argument in the query, a form body or a JSON body. The proxy
+# drops the header and its variants (below), refuses a write with a query
+# string (the server sends none on a kept write), and lets through a write
+# only with a JSON body, so no form body. A JSON
+# body with "_method" still reaches the app: at 6.5.9 the app has only GET
+# and POST routes on the paths where the list allows a POST, so such a POST
+# gets a 405 or a read (docs/apps/agent-platform.md, "The finance app").
+map "$request_method$is_args" $firefly_args_ok {
+    default 1;
+    "POST?" 0;
+    "PUT?" 0;
+}
+
+map "$request_method $content_type" $firefly_type_ok {
+    default 0;
+    "~^GET " 1;
+    "~*^(POST|PUT) application/json\s*(;.*)?$" 1;
+}
+
+# The port: 8080 takes each method of the list, 8081 reads only.
+map "$server_port $request_method" $firefly_port_ok {
+    default 0;
+    "~^8080 " 1;
+    "8081 GET" 1;
+}
+
+map "$firefly_raw_ok$firefly_allowed$firefly_args_ok$firefly_type_ok$firefly_port_ok" $firefly_refused {
+    default 1;
+    "11111" 0;
+}
+
+# One line for each request: the port, the method, the path with no query
+# string, the
+# status, and refused=1 for a refusal. No header and no body.
+log_format firefly_proxy 'firefly-proxy port=$server_port method=$request_method path=$uri status=$status refused=$firefly_refused';
+
+server {
+    listen 8080;
+    listen 8081;
+    server_tokens off;
+    client_max_body_size 1m;
+    access_log /dev/stdout firefly_proxy;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        # Each answer of this location names the port, so a client can tell
+        # an answer of the proxy from one of a proxy in front of it.
+        add_header X-Firefly-Proxy-Port $server_port always;
+        if ($firefly_refused) {
+            add_header X-Firefly-Proxy refused always;
+            add_header X-Firefly-Proxy-Port $server_port always;
+            return 403;
+        }
+        proxy_pass http://${FIREFLY_UPSTREAM};
+        # The token of the agent, in place of any header of the client.
+        proxy_set_header Authorization "Bearer ${FIREFLY_TOKEN}";
+        # Headers that the app could trust from a client: dropped.
+        proxy_set_header Cookie "";
+        proxy_set_header X-Forwarded-For "";
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Port "";
+        proxy_set_header X-Forwarded-Proto "";
+        proxy_set_header X-Real-IP "";
+        proxy_set_header X-HTTP-Method-Override "";
+        proxy_set_header X-HTTP-Method "";
+        proxy_set_header X-Method-Override "";
+        proxy_hide_header Set-Cookie;
+        proxy_redirect off;
+        proxy_read_timeout 60s;
+    }
+}
