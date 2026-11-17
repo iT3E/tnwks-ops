@@ -37,10 +37,11 @@ resources:
   # scripts run on this host and talk to it over the internal ingress.
   # Internal-only exposure (nginx-internal), no public hostname.
   - ../../../../apps/production/firefly/ks.yaml
-  # A restore test of Firefly's database into a scratch Cluster
-  # (firefly/restore-test/ks.yaml), on this site only. Remove it with its
-  # directory when the result is read.
-  - ../../../../apps/production/firefly/restore-test/ks.yaml
+  # A restore test of Firefly's database into a scratch Cluster, on this
+  # site only. Its directory is removed after each run; to run it again,
+  # bring the directory back from git history and uncomment this line
+  # (docs/apps/firefly.md, "Restore the database").
+  # - ../../../../apps/production/firefly/restore-test/ks.yaml
   # finance-sync: the daily Simplifi sync and weekly Amazon enrichment that
   # feed Firefly (moved off the host crontab 2026-11). WSL-only and must stay
   # a singleton: the Simplifi refresh token rotates on every run, so a second
