@@ -10,6 +10,11 @@ wsl_move_rehearsal_task_list: >-
   {%- endfor -%}
   {{ out }}
 
+# The rule that the folder of A gives its files, as the drive of an older
+# disk file does: Authenticated Users may read (files only). Setup sets it
+# with the rules of the folder, and older_disk.yml adds it when it is absent.
+wsl_move_rehearsal_older_folder_rule: (A;OIIO;FR;;;AU)
+
 # One config for each account (Invoke-TnwksWslAccountTask.ps1), and one for
 # the procedure (Invoke-TnwksMoveWindow.ps1).
 wsl_move_rehearsal_account_config_common:

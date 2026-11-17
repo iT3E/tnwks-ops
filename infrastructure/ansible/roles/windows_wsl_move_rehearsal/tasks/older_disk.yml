@@ -1,0 +1,101 @@
+---
+# A's disk file like a file of an older WSL: the file is not protected, so it
+# takes the inherited rules of its folder, and it has one explicit rule, full
+# control for A; A stays the owner. The folder of A gives its files one more
+# rule, as the drive of an older disk file does: Authenticated Users may read
+# (files only). The window saves this set, and the way back must put it back
+# exactly.
+#
+# Setup runs it after the import of A, and the phase window runs it again
+# before its read of the state, for a file that a newer WSL made protected.
+# It changes nothing when the folder and the file are already so. A rule of a
+# VM on the file stays as it is. It runs only after setup or after a way back:
+# at any other state, the disk file is not A's alone.
+
+- name: Read the last marker before the rules of A's disk file
+  ansible.windows.win_powershell:
+    parameters:
+      State: "{{ wsl_move_rehearsal_state_file }}"
+    script: |
+      param([string]$State)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
+      if ($lines.Count) { "$(($lines[-1] -split ' ', 2)[1])".Trim() } else { '' }
+  register: wsl_move_rehearsal_older_marker
+
+- name: The rules of A's disk file change only after setup or after a way back
+  vars:
+    last: "{{ wsl_move_rehearsal_older_marker.output | last | default('') }}"
+  ansible.builtin.assert:
+    that:
+      - last in ['', 'wayback-done']
+    fail_msg: "The last marker is '{{ last }}': the rules of A's disk file are not changed. Nothing is changed."
+    quiet: true
+
+- name: The folder of A gives its files the read of an older drive
+  ansible.windows.win_powershell:
+    parameters:
+      Path: "{{ wsl_move_rehearsal_accounts.a.folder }}"
+      Rule: "{{ wsl_move_rehearsal_older_folder_rule }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Path, [string]$Rule)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $folder = Get-Item -LiteralPath $Path
+      $acl = $folder.GetAccessControl('Access')
+      $want = New-Object Security.AccessControl.DirectorySecurity
+      $want.SetSecurityDescriptorSddlForm("D:$Rule", 'Access')
+      $add = @($want.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))[0]
+      $have = @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]) | Where-Object {
+          $_.IdentityReference -eq $add.IdentityReference -and $_.FileSystemRights -eq $add.FileSystemRights -and
+          $_.InheritanceFlags -eq $add.InheritanceFlags -and $_.PropagationFlags -eq $add.PropagationFlags -and
+          $_.AccessControlType -eq $add.AccessControlType })
+      if ($have.Count) { return }
+      $Ansible.Changed = $true
+      if ($PSCmdlet.ShouldProcess($Path, 'add the read of an older drive')) {
+          # The rules only: the owner and the protection of the folder stay.
+          $acl.AddAccessRule($add)
+          $folder.SetAccessControl($acl)
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+
+- name: A's disk file like a file of an older WSL, with the rules of its folder
+  ansible.windows.win_powershell:
+    parameters:
+      Path: '{{ wsl_move_rehearsal_accounts.a.folder }}\{{ wsl_move_rehearsal_disk_name }}'
+      Sid: "{{ wsl_move_rehearsal_sids.a }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Path, [string]$Sid)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $file = Get-Item -LiteralPath $Path
+      $acl = $file.GetAccessControl('Access')
+      $sid = [Security.Principal.SecurityIdentifier]
+      $explicit = @($acl.GetAccessRules($true, $false, $sid))
+      # A rule of a VM is WSL's: it stays, and it counts as no rule.
+      $vm = @($explicit | Where-Object { $_.IdentityReference.Value -like 'S-1-5-83-*' })
+      $own = @($explicit | Where-Object { $_.IdentityReference.Value -notlike 'S-1-5-83-*' })
+      $only = $own.Count -eq 1 -and $own[0].IdentityReference.Value -eq $Sid -and
+          $own[0].FileSystemRights -eq [Security.AccessControl.FileSystemRights]::FullControl -and
+          "$($own[0].AccessControlType)" -eq 'Allow' -and "$($own[0].InheritanceFlags)" -eq 'None'
+      if (-not $acl.AreAccessRulesProtected -and $only) { return }
+      $Ansible.Changed = $true
+      if ($PSCmdlet.ShouldProcess($Path, 'take the rules of the folder')) {
+          # No protection: Windows adds the inherited rules of the folder. The
+          # rules only: A stays the owner.
+          $acl.SetAccessRuleProtection($false, $false)
+          foreach ($rule in $own) { [void]$acl.RemoveAccessRuleSpecific($rule) }
+          $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
+              (New-Object Security.Principal.SecurityIdentifier $Sid), 'FullControl', 'Allow')))
+          $file.SetAccessControl($acl)
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM

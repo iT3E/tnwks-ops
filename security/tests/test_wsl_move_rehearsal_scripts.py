@@ -645,21 +645,78 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     names = ("The window starts after setup", "A owns the distro at its path")
 
     def play(before, disk, checks=(check_a, check_b)):
-        return {"vars": {"wsl_move_rehearsal_before": registered(before), "wsl_move_rehearsal_disk": registered(disk),
+        return {"vars": {"wsl_move_rehearsal_before": registered(before), "wsl_move_rehearsal_disk_last": disk[-1],
                          "wsl_move_rehearsal_runs": {"check": [c[-1] for c in checks]}},
                 "tasks": checks_of("window.yml", names)}
 
+    no_start = runner_output(tmp_path, "a", "check", check_result(f"{DIR}\\a\\ext4.vhdx", read_exit=1))
     plays = [play(first, no_saved), play(second, as_saved), play(second, other), play(second, no_saved),
              play(first, no_saved, (check_a, runner_output(tmp_path, "b", "check", check_result(f"{DIR}\\b\\ext4.vhdx")))),
+             play(first, no_saved, (no_start, check_b)),
              *[play(w, no_saved) for w in wrong.values()]]
     results = run_plays(tmp_path, plays)
     assert not passed(results[0]), passed(results[0])
     assert not passed(results[1]), passed(results[1])
-    # After a way back, the file has its saved rules; B lists no distro.
-    for result in results[2:5]:
+    # After a way back, the file had its saved rules; B lists no distro; A's distro
+    # starts with the rules of an older WSL.
+    for result in results[2:6]:
         assert failed_by_assert(result, names[1]) and not failed_by_assert(result, names[0])
-    for name, result in zip(wrong, results[5:], strict=True):
+    for name, result in zip(wrong, results[6:], strict=True):
         assert failed_by_assert(result, names[0]), name
+
+
+def test_setup_and_the_window_give_a_s_disk_file_the_rules_of_an_older_wsl_from_one_task_file():
+    def names(file):
+        return [t.get("name", "") for t in tasks_in(file)]
+
+    def includes(file):
+        return [t.get("name", "") for t in tasks_in(file) if t.get("ansible.builtin.include_tasks") == "older_disk.yml"]
+
+    assert includes("setup.yml") == ["A's disk file like a file of an older WSL"]
+    assert includes("window.yml") == ["A's disk file like a file of an older WSL"]
+    setup = names("setup.yml")
+    assert (setup.index("A imports the distro into its folder") < setup.index("A's disk file like a file of an older WSL")
+            < setup.index("A reads its distro"))
+    # In the window: the read against the saved rules first, then the rules of an
+    # older WSL, then the read of the state, A's read and its assert.
+    window = names("window.yml")
+    order = ["The rules of A's disk file as the last way back left them", "Keep the read of A's disk file before its rules change",
+             "A's disk file like a file of an older WSL", "Read the state before the window",
+             "The window starts after setup or after a way back", "A reads its distro before the window",
+             "A owns the distro at its path"]
+    at = [next(i for i, n in enumerate(window) if n.startswith(o)) for o in order]
+    assert at == sorted(at), at
+    # One text of the rule of the folder, in setup and in the task file.
+    older = yaml.safe_load((ROLE / "tasks/older_disk.yml").read_text())
+    folder = next(t for t in older if t["name"].startswith("The folder of A"))
+    assert folder["ansible.windows.win_powershell"]["parameters"]["Rule"] == "{{ wsl_move_rehearsal_older_folder_rule }}"
+    setup_folder = find_task("setup.yml", "Folders of the disk file")["ansible.windows.win_powershell"]["parameters"]
+    assert "wsl_move_rehearsal_older_folder_rule" in setup_folder["Extra"]
+    # Each change of the task file runs as SYSTEM, after its assert of the state.
+    tasks = [t["name"] for t in older]
+    assert tasks.index("The rules of A's disk file change only after setup or after a way back") < tasks.index(folder["name"])
+    for task in older[2:]:
+        assert task["vars"]["ansible_become_user"] == "SYSTEM", task["name"]
+
+
+@needs_both
+def test_the_rules_of_an_older_wsl_change_only_after_setup_or_after_a_way_back(tmp_path):
+    states = {"setup": "", "way back": "t window-started\r\nt wayback-done\r\n",
+              "started": "t window-started\r\n", "done": "t window-started\r\nt window-done\r\n",
+              "boot": "t window-started\r\nt window-done\r\nt wayback-started\r\n"}
+    plays = []
+    for name, text in states.items():
+        state = tmp_path / f"{name.replace(' ', '-')}.state"
+        state.write_text(text)
+        read = run_script(tmp_path, "older_disk.yml", "Read the last marker", {"State": str(state)})
+        plays.append({"vars": {"wsl_move_rehearsal_older_marker": registered(read)},
+                      "tasks": checks_of("older_disk.yml")})
+    results = run_plays(tmp_path, plays)
+    for name, result in zip(states, results, strict=True):
+        if name in ("setup", "way back"):
+            assert not passed(result), (name, passed(result))
+        else:
+            assert failed_by_assert(result, "The rules of A's disk file change only"), name
 
 
 @needs_both

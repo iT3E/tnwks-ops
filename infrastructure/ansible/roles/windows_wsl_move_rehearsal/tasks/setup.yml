@@ -175,7 +175,7 @@
     parameters:
       Path: "{{ wsl_move_rehearsal_accounts[item].folder }}"
       Sid: "{{ wsl_move_rehearsal_sids[item] }}"
-      Extra: "{{ '(A;OIIO;FR;;;AU)' if item == 'a' else '' }}"
+      Extra: "{{ wsl_move_rehearsal_older_folder_rule if item == 'a' else '' }}"
     script: &folder_rights |
       [CmdletBinding(SupportsShouldProcess)]
       param([string]$Path, [string]$Sid, [string]$Extra)
@@ -351,43 +351,18 @@
       vars:
         wsl_move_rehearsal_run: {key: a, step: import-rootfs}
 
-    # The disk file of an older WSL: no protection, so it takes the rules of
-    # its folder, and one explicit rule for its account; A stays the owner.
-    # The window saves this set, and the way back must put it back exactly.
-    - name: A's disk file like a file of an older WSL, with the rules of its folder
-      ansible.windows.win_powershell:
-        parameters:
-          Path: '{{ wsl_move_rehearsal_accounts.a.folder }}\{{ wsl_move_rehearsal_disk_name }}'
-          Sid: "{{ wsl_move_rehearsal_sids.a }}"
-        script: |
-          [CmdletBinding(SupportsShouldProcess)]
-          param([string]$Path, [string]$Sid)
-          $ErrorActionPreference = 'Stop'
-          $Ansible.Changed = $false
-          $acl = Get-Acl -LiteralPath $Path
-          $explicit = @($acl.Access | Where-Object { -not $_.IsInherited })
-          $only = $explicit.Count -eq 1 -and $explicit[0].IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $Sid -and
-              $explicit[0].FileSystemRights -eq [Security.AccessControl.FileSystemRights]::FullControl -and
-              "$($explicit[0].AccessControlType)" -eq 'Allow'
-          if (-not $acl.AreAccessRulesProtected -and $only) { return }
-          $Ansible.Changed = $true
-          if ($PSCmdlet.ShouldProcess($Path, 'take the rules of the folder')) {
-              # No protection: Windows adds the inherited rules of the folder.
-              $acl.SetSecurityDescriptorSddlForm(('D:AI(A;;FA;;;{0})' -f $Sid), 'Access')
-              Set-Acl -LiteralPath $Path -AclObject $acl
-          }
-      vars:
-        ansible_become: true
-        ansible_become_method: ansible.builtin.runas
-        ansible_become_user: SYSTEM
+    # A's disk file and its folder like those of an older WSL (older_disk.yml).
+    - name: A's disk file like a file of an older WSL
+      ansible.builtin.include_tasks: older_disk.yml
 
     - name: A reads its distro
       ansible.builtin.include_tasks: run_task.yml
       vars:
         wsl_move_rehearsal_run: {key: a, step: check}
 
-    # A read only: the rules that WSL gives the disk file of an account's own
-    # import and its first start. Window step 4 saves them for the way back.
+    # A read only: the rules of A's disk file after its import, the rules of
+    # an older WSL and its first start. Window step 4 saves them for the way
+    # back.
     - name: The rules of A's disk file after its import
       ansible.builtin.include_tasks: read_disk.yml
       vars:
