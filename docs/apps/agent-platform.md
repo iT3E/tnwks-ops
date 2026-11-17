@@ -659,13 +659,20 @@ pod makes the jobs of the product equal to that list.
     `openclaw automations enable <id>` by hand.
 
   The value of git of the last pass is in the description of the job
-  (`git enabled=true|false`). Both jobs of the host are `false` in git
+  (`git enabled=true|false`). A chat can edit that field, so a job that is
+  off and has no value the sync can read is a stop of the owner: the sync
+  never turns it on, and its line says `state=stopped note=no-git-value`
+  once. A turn-on writes `true` first and then enables the job; when the
+  enable fails, the sync writes `false` again so the next pass tries again,
+  and the job never comes on by mistake. Both jobs of the host are `false` in git
   until the owner writes their task files; a pull request turns each on.
 - **The lines,** in Loki: one for each job,
   `automations-sync key=<key> result=ok state=on|off|stopped`, `result=removed`
   or `result=failed`, and one for each pass,
   `automations-sync result=ok jobs=<n>` or
-  `automations-sync result=failed reason=<reason>`. The pass line fires
+  `automations-sync result=failed reason=<reason>`. With no `TZ` or no chat
+  id, the sync changes nothing and prints the failed line again each hour,
+  so the alert holds until the pod starts with them. The pass line fires
   `AgentAutomationsSyncFailed` ([Alerts](#alerts)).
 - **Each job:** an agent turn of the agent `main` in a new session
   (`isolated`), at the time of its cron expression in the zone of the

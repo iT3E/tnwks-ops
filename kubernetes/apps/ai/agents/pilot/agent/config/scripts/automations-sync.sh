@@ -29,7 +29,13 @@
 #   again: by hand (`openclaw automations enable`), or false and then true
 #   in git.
 # The value of git of the last pass is in the description of the job
-# ("git enabled=true|false"), so the sync sees a change.
+# ("git enabled=true|false"), so the sync sees a change. A chat can edit
+# that field, so the sync never turns on a job that is there, is off, and
+# has no value it can read: it holds as a stop of the owner, and its line
+# says "state=stopped note=no-git-value" once (the sync then writes the
+# value). To turn on a job, the sync first writes "true" and then enables
+# it; when the enable fails, it writes "false" again, so the next pass tries
+# again. When that write fails too, the job stays off (stopped), never on.
 #
 # Each job of the list: an agent turn of the agent "main" in a new session
 # ("isolated"), at the time of the cron expression in the zone TZ of this
@@ -47,8 +53,10 @@
 #   state=on|off|stopped", "... result=removed" or "... result=failed";
 # - one for each pass: "automations-sync result=ok jobs=<n>", or
 #   "automations-sync result=failed reason=<reason>" (bad-list, list, job,
-#   connect, no-zone, no-chat). The alert AgentAutomationsSyncFailed reads
-#   this line (docs/apps/agent-platform.md, "Alerts");
+#   connect, no-zone, no-chat). A missing zone or chat changes nothing, and
+#   its line comes again each EVERY seconds until the pod starts with it.
+#   The alert AgentAutomationsSyncFailed reads this line
+#   (docs/apps/agent-platform.md, "Alerts");
 # - "automations-sync result=none" when there is no list.
 set -u
 
@@ -64,17 +72,24 @@ idle() {
   while true; do sleep 3600; done
 }
 
+# The same, with the failed line again at each pass, so the alert holds
+# until the fault is fixed.
+fail_each_pass() {
+  while true; do
+    echo "automations-sync result=failed reason=$1"
+    sleep "$EVERY"
+  done
+}
+
 if [ ! -e "$LIST" ]; then
   echo "automations-sync result=none"
   idle
 fi
 if [ -z "${TZ:-}" ]; then
-  echo "automations-sync result=failed reason=no-zone"
-  idle
+  fail_each_pass no-zone
 fi
 if [ -z "${TELEGRAM_ALLOW_FROM:-}" ]; then
-  echo "automations-sync result=failed reason=no-chat"
-  idle
+  fail_each_pass no-chat
 fi
 
 # The jobs of the list, one per line: key, cron, message (base64, so a space
@@ -155,19 +170,32 @@ sync() {
     on=${now#* }
     was=${old##* }
     state=on
+    note=
     if [ "$enabled" = false ]; then
       state=off
       if [ "$on" = true ] && ! oc automations disable "$id" > /dev/null 2>&1; then state=failed; fi
     elif [ "$on" = false ]; then
       if [ -n "$old" ] && [ "$was" = true ]; then
         state=stopped
-      elif ! oc automations enable "$id" > /dev/null 2>&1; then
+      elif [ -n "$old" ] && [ "$was" = none ]; then
+        # No value to read (a chat edited the description): a stop of the
+        # owner. The edit below writes the value, so this line comes once.
+        state=stopped
+        note=" note=no-git-value"
+      elif ! oc automations edit "$id" --description "git enabled=true" > /dev/null 2>&1; then
         state=failed
+      elif ! oc automations enable "$id" > /dev/null 2>&1; then
+        # Back to false, so the next pass tries again. If this fails too,
+        # the job stays off: a stop, never a job on by mistake.
+        oc automations edit "$id" --description "git enabled=false" > /dev/null 2>&1
+        state=failed
+      else
+        was=true
       fi
     fi
     # An add keeps the description of a job that is there, so the git value
     # of this pass goes in with an edit (a display field: it does not stop a
-    # run).
+    # run). A turn-on wrote it already, before the enable.
     if [ "$state" != failed ] && [ "$was" != "$enabled" ] \
       && ! oc automations edit "$id" --description "git enabled=$enabled" > /dev/null 2>&1; then
       state=failed
@@ -176,7 +204,7 @@ sync() {
       echo "automations-sync key=$key result=failed"
       failed=$((failed + 1))
     else
-      echo "automations-sync key=$key result=ok state=$state"
+      echo "automations-sync key=$key result=ok state=$state$note"
     fi
   done
   # A key is [a-z0-9-] and an id is a UUID, so the word split is safe.

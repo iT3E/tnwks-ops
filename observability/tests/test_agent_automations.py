@@ -409,6 +409,49 @@ def test_git_decides_on_and_off_in_one_way(lab):
     assert lab.jobs()["flux:weekday-check"]["enabled"]
 
 
+def test_a_job_with_no_git_value_it_can_read_is_a_stop_of_the_owner(lab):
+    """A chat can edit the description that holds the git value. A job that
+    is off and has no value the sync can read stays off: one line says so,
+    and the sync writes the value."""
+    job = lab.jobs()["flux:weekday-check"]
+    assert job["enabled"]
+    start = len(lab.log())
+    lab.cli("automations", "disable", job["id"])
+    lab.cli("automations", "edit", job["id"], "--description", "a note of a chat")
+    try:
+        # The first pass after the change says so once and writes the
+        # value; the passes after it say stopped.
+        lines = lab.next_pass()
+        since = lab.log()[start:]
+        assert since.count("automations-sync key=weekday-check result=ok state=stopped note=no-git-value") == 1
+        assert "automations-sync key=weekday-check result=ok state=stopped" in lines
+        again = lab.jobs()["flux:weekday-check"]
+        assert not again["enabled"]
+        assert again["description"] == "git enabled=true"
+    finally:
+        lab.cli("automations", "enable", job["id"])
+
+
+@pytest.mark.parametrize("missing", ["TZ", "TELEGRAM_ALLOW_FROM"])
+def test_a_missing_zone_or_chat_fails_at_each_pass_and_changes_nothing(lab, missing):
+    """The failed line comes again at each pass, so the alert holds until
+    the fix (the lab runs a pass each EVERY seconds)."""
+    before = {k: (j["id"], j["enabled"]) for k, j in lab.jobs().items()}
+    sync = container("automations-sync")
+    env = {"TZ": ZONE, "OPENCLAW_GATEWAY_TOKEN": TOKEN, "TELEGRAM_ALLOW_FROM": CHAT}
+    del env[missing]
+    result = run([lab.tool, "run", "--rm", "--name", lab.names["nolist"],
+                  "--network", f"container:{lab.names['gateway']}", "--read-only", "--cap-drop", "ALL",
+                  *[f"-e{k}={v}" for k, v in env.items()],
+                  "-v", f"{lab.work}/config:/home/node/config:ro", "-v", f"{lab.work}/scripts:/scripts:ro",
+                  "--entrypoint", "timeout", IMAGE, str(2 * EVERY + 2), *sync["command"]], check=False)
+    reason = {"TZ": "no-zone", "TELEGRAM_ALLOW_FROM": "no-chat"}[missing]
+    lines = result.stdout.splitlines()
+    assert len(lines) >= 2, result
+    assert set(lines) == {f"automations-sync result=failed reason={reason}"}
+    assert {k: (j["id"], j["enabled"]) for k, j in lab.jobs().items()} == before
+
+
 def test_a_scheduled_turn_gets_the_tools_of_a_chat_turn_and_the_same_finance_tools(lab):
     """One run of a declared job, then one chat turn of the agent. The fake
     model records the tools each is offered, and the finance tools that a
@@ -487,7 +530,7 @@ def test_an_empty_list_on_purpose_removes_each_job_of_git(lab):
 
 def test_the_log_holds_keys_and_results_only(lab):
     pattern = re.compile(
-        r"automations-sync (key=[a-z0-9-]+ result=(ok state=(on|off|stopped)|failed|removed)"
+        r"automations-sync (key=[a-z0-9-]+ result=(ok state=(on|off|stopped( note=no-git-value)?)|failed|removed)"
         r"|result=(ok jobs=\d+|none|failed reason=[a-z-]+( jobs=\d+ failed=\d+)?))")
     lines = lab.log()
     assert lines

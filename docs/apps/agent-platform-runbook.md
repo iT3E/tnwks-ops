@@ -509,7 +509,8 @@ The `reason=` of the last pass:
 - `list`: the gateway did not answer the list of jobs.
 - `connect`: the gateway did not answer for 10 minutes after the start.
 - `no-zone` or `no-chat`: the container has no `TZ` or no
-  `TELEGRAM_ALLOW_FROM`.
+  `TELEGRAM_ALLOW_FROM`. Nothing changed; the line comes again each hour,
+  so the alert stays on until the fix.
 
 The script prints nothing of the output of the product's CLI (it can hold
 the chat id and the message).
