@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.185.1 - 2026-11-17
+
+### Fixed
+
+* Windows: a later run of the rehearsal removal runs no task of the temporary account when nothing of it is left to stop (no start task running, no process of the account, no distro in the list in its hive), so it does not load the profile again. When the profile stays loaded, the removal stops with a message that says what stays and to run it again once the profile unloads, at the latest after the next restart of the host.
+
 ## v2.185.0 - 2026-11-17
 
 ### Added
