@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.185.0 - 2026-11-17
+
+### Added
+
+* Agent platform: web search (with a key of its own) and the notes vault (seeded into its state volume, read through its memory search, counted by the restore test) for the finance agent, in git and not applied yet. The steps of the owner are in docs/apps/agent-platform.md, "The finance agent".
+
 ## v2.184.0 - 2026-11-17
 
 ### Added

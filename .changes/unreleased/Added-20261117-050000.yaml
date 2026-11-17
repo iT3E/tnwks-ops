@@ -1,3 +1,0 @@
-kind: Added
-body: 'Agent platform: web search (with a key of its own) and the notes vault (seeded into its state volume, read through its memory search, counted by the restore test) for the finance agent, in git and not applied yet. The steps of the owner are in docs/apps/agent-platform.md, "The finance agent".'
-time: 2026-11-17T05:00:00.000000+00:00
