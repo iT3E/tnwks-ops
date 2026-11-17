@@ -113,7 +113,7 @@
       $Ansible.Changed = $false
       if (-not (Test-Path -LiteralPath $State)) { return '' }
       $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
-      if ($lines.Count) { ($lines[-1] -split ' ', 2)[1].Trim() } else { '' }
+      if ($lines.Count) { "$(($lines[-1] -split ' ', 2)[1])".Trim() } else { '' }
   check_mode: false
   register: wsl_move_rehearsal_last_marker
 

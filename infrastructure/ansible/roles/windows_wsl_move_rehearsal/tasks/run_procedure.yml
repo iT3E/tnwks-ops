@@ -29,7 +29,7 @@
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $true
       $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
-      $last = if ($lines.Count) { ($lines[-1] -split ' ', 2)[1].Trim() } else { '' }
+      $last = if ($lines.Count) { "$(($lines[-1] -split ' ', 2)[1])".Trim() } else { '' }
       if ($last -ne $LastMarker) { throw "The last marker is '$last', not '$LastMarker': the phase runs out of order. Nothing is changed." }
       [IO.File]::WriteAllText($Request, $RequestJson)
       $logStart = @(Get-Content -LiteralPath $Log).Count
@@ -43,9 +43,9 @@
       } while (((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -or $info.LastRunTime -eq $before) -and (Get-Date) -lt $deadline)
       $lines = @(Get-Content -LiteralPath $Log | Select-Object -Skip $logStart)
       $markers = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() } | Select-Object -Skip $stateStart |
-          ForEach-Object { ($_ -split ' ', 2)[1].Trim() })
+          ForEach-Object { "$(($_ -split ' ', 2)[1])".Trim() })
       # Each line is "<time> <mode> <text>": the text only, with no time.
-      $texts = @($lines | ForEach-Object { ($_ -split ' ', 3)[2] })
+      $texts = @($lines | ForEach-Object { "$(($_ -split ' ', 3)[2])" })
       [pscustomobject]@{
           ran = ($info.LastRunTime -ne $before)
           code = [int64]$info.LastTaskResult

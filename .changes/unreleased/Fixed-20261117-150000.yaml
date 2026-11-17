@@ -1,0 +1,3 @@
+kind: Fixed
+body: "Windows hosts, the rehearsal of the move: the stops of the procedure keep a line on stderr of their powershell.exe as text and make their test folder inside the try; each read of a log or state line takes a line with no time or no text as empty, so a text over two lines breaks no read and no check; and the model of the output of win_powershell in the tests gives an enum, a date and an enumerable that is not a list as the module does, and a script that writes an error record fails its test."
+time: 2026-11-17T15:00:00.000000+00:00

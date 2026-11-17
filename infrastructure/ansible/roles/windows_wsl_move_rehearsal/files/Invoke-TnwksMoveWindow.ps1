@@ -92,7 +92,7 @@ function Get-LastMarker {
     if (-not (Test-Path -LiteralPath $cfg.state_file)) { return '' }
     $lines = @(Get-Content -LiteralPath $cfg.state_file | Where-Object { $_.Trim() })
     if ($lines.Count -eq 0) { return '' }
-    ($lines[-1] -split ' ', 2)[1].Trim()
+    "$(($lines[-1] -split ' ', 2)[1])".Trim()
 }
 
 function Assert-Tnwks([bool]$Condition, [string]$Message) {
