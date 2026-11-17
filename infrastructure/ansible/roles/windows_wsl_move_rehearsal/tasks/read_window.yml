@@ -41,9 +41,13 @@
           import_b = $import
           icon_owner_b = @($other | Where-Object { $_ -match '\.ico owner ' })
           other_files_b = $other
-          window_tasks_enabled_no_trigger = (@($window | Where-Object { $_.State -eq 'Disabled' -or @($_.Triggers).Count -gt 0 }).Count -eq 0)
+          # Enabled is the flag of a task: its State reads Running while an
+          # instance runs, also when the task is disabled.
+          window_tasks_enabled_no_trigger = (@($window | Where-Object { -not $_.Settings.Enabled -or @($_.Triggers).Count -gt 0 }).Count -eq 0)
           start_a = "$((Get-ScheduledTask -TaskName "$Prefix-a-start").State)"
           start_b = "$((Get-ScheduledTask -TaskName "$Prefix-b-start").State)"
+          start_a_enabled = [bool](Get-ScheduledTask -TaskName "$Prefix-a-start").Settings.Enabled
+          start_b_enabled = [bool](Get-ScheduledTask -TaskName "$Prefix-b-start").Settings.Enabled
           password_b = (Get-LocalUser -Name $NameB).PasswordLastSet.ToUniversalTime().ToString('o')
       }
   vars:

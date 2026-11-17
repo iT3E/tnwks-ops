@@ -126,15 +126,21 @@ function Invoke-TnwksAccountTask([string]$Task, [string]$ResultFile) {
     [pscustomobject]@{ code = $code; result = $result }
 }
 
+# Whether a task is enabled: its flag, Settings.Enabled. Not its State: a task
+# with a running instance reads Running, also when it is disabled (TASK_STATE
+# reads Disabled only with no instance), and the start task of the present
+# account runs when step 2 disables it.
+function Test-TnwksTaskEnabled([string]$Task) { [bool](Get-ScheduledTask -TaskName $Task).Settings.Enabled }
+
 function Disable-TnwksTask([string]$Task) {
-    if ((Get-ScheduledTask -TaskName $Task).State -ne 'Disabled') { Disable-ScheduledTask -TaskName $Task | Out-Null }
-    Assert-Tnwks ((Get-ScheduledTask -TaskName $Task).State -eq 'Disabled') "$Task does not read disabled"
+    if (Test-TnwksTaskEnabled $Task) { Disable-ScheduledTask -TaskName $Task | Out-Null }
+    Assert-Tnwks (-not (Test-TnwksTaskEnabled $Task)) "$Task does not read disabled"
     Write-Log "task $Task disabled"
 }
 
 function Enable-TnwksTask([string]$Task) {
-    if ((Get-ScheduledTask -TaskName $Task).State -eq 'Disabled') { Enable-ScheduledTask -TaskName $Task | Out-Null }
-    Assert-Tnwks ((Get-ScheduledTask -TaskName $Task).State -ne 'Disabled') "$Task does not read enabled"
+    if (-not (Test-TnwksTaskEnabled $Task)) { Enable-ScheduledTask -TaskName $Task | Out-Null }
+    Assert-Tnwks (Test-TnwksTaskEnabled $Task) "$Task does not read enabled"
     Write-Log "task $Task enabled"
 }
 
@@ -173,11 +179,21 @@ function Set-TnwksSddl([string]$Path, [string]$Sddl) {
 # The parts that a check compares: the owner, whether the rules are protected
 # from inheritance, and the explicit rules (an inherited rule comes from the
 # folder).
+# An account in SDDL: Windows writes some SIDs as an alias (BA, SY, CO, and LA
+# or LG for the local Administrator and Guest). Both forms read as the SID.
+function ConvertTo-TnwksSddlSid([string]$Account) {
+    if ($Account -match '^S-1-') { return $Account }
+    try { (New-Object Security.Principal.SecurityIdentifier $Account).Value } catch { $Account }
+}
+
 function Get-TnwksSddlParts([string]$Sddl) {
-    $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { $Matches[1] } else { '' }
+    $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { ConvertTo-TnwksSddlSid $Matches[1] } else { '' }
     $dacl = if ($Sddl -match 'D:([A-Z]*)((\([^)]*\))*)') { $Matches } else { @{ 1 = ''; 2 = '' } }
     $aces = @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value } |
-        Where-Object { ($_ -split ';')[1] -notmatch 'ID' } | Sort-Object)
+        Where-Object { ($_ -split ';')[1] -notmatch 'ID' } | ForEach-Object {
+            $f = $_ -split ';'
+            $f[-1] = ConvertTo-TnwksSddlSid $f[-1]
+            $f -join ';' } | Sort-Object)
     [pscustomobject]@{ owner = $owner; protected = ($dacl[1] -match 'P'); aces = ($aces -join ' ') }
 }
 
@@ -263,7 +279,10 @@ function Read-TnwksState {
     $pSid = Get-TnwksSid $present.account
     $nSid = Get-TnwksSid $new.account
     $tasks = @{}
-    foreach ($t in @($present.disable_tasks) + @($new.start_tasks)) { $tasks[$t] = "$((Get-ScheduledTask -TaskName $t).State)" }
+    foreach ($t in @($present.disable_tasks) + @($new.start_tasks)) {
+        $task = Get-ScheduledTask -TaskName $t
+        $tasks[$t] = '{0}, enabled {1}' -f $task.State, [bool]$task.Settings.Enabled
+    }
     $state = [pscustomobject]@{
         old = [bool](Test-Path -LiteralPath $oldPath)
         new = [bool](Test-Path -LiteralPath $newPath)

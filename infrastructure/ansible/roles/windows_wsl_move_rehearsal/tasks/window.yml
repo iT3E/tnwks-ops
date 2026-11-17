@@ -72,6 +72,7 @@
           - windowed.marker_a and windowed.marker_b
           - windowed.icon_owner_b | length > 0
           - windowed.window_tasks_enabled_no_trigger
+          - windowed.start_b_enabled and not windowed.start_a_enabled
           - windowed.start_b == 'Ready' and windowed.start_a == 'Disabled'
           - windowed.password_b == (wsl_move_rehearsal_b_password.output | last)
           - wsl_move_rehearsal_procedure.result == 'done'

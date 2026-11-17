@@ -63,6 +63,8 @@
           [pscustomobject]@{
               start_a = "$((Get-ScheduledTask -TaskName "$Prefix-a-start").State)"
               start_b = "$((Get-ScheduledTask -TaskName "$Prefix-b-start").State)"
+              start_a_enabled = [bool](Get-ScheduledTask -TaskName "$Prefix-a-start").Settings.Enabled
+              start_b_enabled = [bool](Get-ScheduledTask -TaskName "$Prefix-b-start").Settings.Enabled
               disk_a = [bool](Test-Path -LiteralPath $Disk)
               disk_b = [bool](Test-Path -LiteralPath $DiskB)
               owner_as_saved = (Test-Path -LiteralPath $Disk) -and
@@ -87,6 +89,7 @@
           - check_a.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
           - not check_b.result.registered
           - back.disk_a and not back.disk_b and back.owner_as_saved
+          - back.start_a_enabled and not back.start_b_enabled
           - back.start_a == 'Running' and back.start_b == 'Disabled'
           - wsl_move_rehearsal_procedure.result == 'done'
           - wsl_move_rehearsal_procedure.markers == ['window-started', 'wayback-done']

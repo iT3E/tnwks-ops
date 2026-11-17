@@ -183,6 +183,23 @@ def test_a_restart_needs_the_owners_go_and_only_the_phase_restart_has_one():
     assert re.search(r"if \(\$cfg\.restart\) \{\s*Write-Log \"restart: \$Why\"\s*Restart-Computer -Force", text)
 
 
+def test_the_procedure_reads_the_enabled_flag_of_a_task_not_its_state():
+    """A disabled task with a running instance reads Running (TASK_STATE_DISABLED only
+    with no instance), so a disable or enable is checked on Settings.Enabled."""
+    text = WINDOW.read_text()
+    assert "function Test-TnwksTaskEnabled([string]$Task) { [bool](Get-ScheduledTask -TaskName $Task).Settings.Enabled }" in text
+    for name in ("Disable-TnwksTask", "Enable-TnwksTask"):
+        body = re.search(rf"function {name}\(.*?\n\}}", text, re.DOTALL)[0]
+        assert "Test-TnwksTaskEnabled" in body and ".State" not in body, name
+
+
+def test_the_rules_compare_an_alias_and_a_sid_as_one_account():
+    text = WINDOW.read_text()
+    parts = re.search(r"function Get-TnwksSddlParts\(.*?\n\}", text, re.DOTALL)[0]
+    assert "ConvertTo-TnwksSddlSid $Matches[1]" in parts and "$f[-1] = ConvertTo-TnwksSddlSid $f[-1]" in parts
+    assert "(New-Object Security.Principal.SecurityIdentifier $Account).Value" in text
+
+
 def test_each_line_of_the_log_and_each_marker_is_flushed_before_the_next_step():
     text = WINDOW.read_text()
     assert "$stream.Flush($true)" in text
@@ -329,16 +346,24 @@ function Get-LocalUser { param([string]$Name) [pscustomobject]@{ SID = [pscustom
 function Get-LocalGroupMember { param([string]$SID) @($global:Admins | ForEach-Object { [pscustomobject]@{ SID = [pscustomobject]@{ Value = $_ } } }) }
 function Add-LocalGroupMember { param([string]$SID, $Member) $global:Calls.Add("join $Member"); $global:Admins.Add($Member) }
 function Remove-LocalGroupMember { param([string]$SID, $Member) $global:Calls.Add("leave $Member"); [void]$global:Admins.Remove($Member) }
-function Get-ScheduledTask { param([string]$TaskName) [pscustomobject]@{ State = $global:TaskState[$TaskName] } }
+# As Task Scheduler reads it (TASK_STATE): a task with a running instance is Running,
+# also when it is disabled; Disabled only with no instance. Settings.Enabled is the flag.
+$global:Enabled = @{}
+$global:Running = @{}
+function Get-ScheduledTask {
+    param([string]$TaskName)
+    $state = if ($global:Running[$TaskName]) { 'Running' } elseif ($global:Enabled[$TaskName] -eq $false) { 'Disabled' } else { 'Ready' }
+    [pscustomobject]@{ State = $state; Settings = [pscustomobject]@{ Enabled = ($global:Enabled[$TaskName] -ne $false) } }
+}
 function Get-ScheduledTaskInfo { param([string]$TaskName) [pscustomobject]@{ LastRunTime = [int]$global:Runs[$TaskName]; LastTaskResult = [int]$global:Codes[$TaskName] } }
-function Disable-ScheduledTask { param([string]$TaskName) $global:Calls.Add("disable $TaskName"); $global:TaskState[$TaskName] = 'Disabled' }
-function Enable-ScheduledTask { param([string]$TaskName) $global:Calls.Add("enable $TaskName"); $global:TaskState[$TaskName] = 'Ready' }
+function Disable-ScheduledTask { param([string]$TaskName) $global:Calls.Add("disable $TaskName"); $global:Enabled[$TaskName] = $false }
+function Enable-ScheduledTask { param([string]$TaskName) $global:Calls.Add("enable $TaskName"); $global:Enabled[$TaskName] = $true }
 function Get-TaskSid([string]$TaskName) { if ($TaskName -like '*-a-*') { $global:Sids['tnwks-moverh-a'] } else { $global:Sids['tnwks-moverh-b'] } }
 function Stop-ScheduledTask {
     param([string]$TaskName)
     $global:Calls.Add("stop $TaskName")
     if ($TaskName -like '*-start') {
-        if ($global:TaskState[$TaskName] -eq 'Running') { $global:TaskState[$TaskName] = 'Ready' }
+        $global:Running[$TaskName] = $false
         foreach ($p in @($global:Procs | Where-Object { $_.Task -eq $TaskName })) { [void]$global:Procs.Remove($p) }
     }
 }
@@ -348,7 +373,7 @@ function Start-ScheduledTask {
     $global:Runs[$TaskName] = 1 + [int]$global:Runs[$TaskName]
     $sid = Get-TaskSid $TaskName
     if ($TaskName -like '*-start') {
-        $global:TaskState[$TaskName] = 'Running'
+        $global:Running[$TaskName] = $true
         $global:Procs.Add([pscustomobject]@{ Name = 'wsl.exe'; OwnerSid = $sid; Task = $TaskName })
         return
     }
@@ -444,18 +469,20 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
 $global:Sids = @{{ 'tnwks-moverh-a' = '{A_SID}'; 'tnwks-moverh-b' = '{B_SID}' }}
 $global:LogA = '{root / "log/a"}'
 $global:LogB = '{root / "log/b"}'
-$global:TaskState = @{{}}; foreach ($p in {ps(state_of)}.PSObject.Properties) {{ $global:TaskState[$p.Name] = $p.Value }}
+foreach ($p in {ps(state_of)}.PSObject.Properties) {{
+    $global:Enabled[$p.Name] = ($p.Value -ne 'Disabled'); $global:Running[$p.Name] = ($p.Value -eq 'Running') }}
 $global:Codes = @{{}}; foreach ($p in {ps(codes or {})}.PSObject.Properties) {{ $global:Codes[$p.Name] = $p.Value }}
 $global:Results = @{{}}; foreach ($p in {ps(default_results)}.PSObject.Properties) {{ $global:Results[$p.Name] = $p.Value }}
 $global:Acls = @{{}}; foreach ($p in {ps(acls)}.PSObject.Properties) {{ $global:Acls[$p.Name] = $p.Value }}
 foreach ($a in @({", ".join(f"'{a}'" for a in admins) or ""})) {{ $global:Admins.Add($a) }}
 if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false'}) {{
-    foreach ($t in @($global:TaskState.Keys | Where-Object {{ $global:TaskState[$_] -eq 'Running' }})) {{
+    foreach ($t in @($global:Running.Keys | Where-Object {{ $global:Running[$_] }})) {{
         $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}) }}
 }}
 & '{WINDOW}' {args}
 $code = $LASTEXITCODE
-[Console]::Out.Write((@{{ code = $code; calls = @($global:Calls); admins = @($global:Admins); tasks = $global:TaskState;
+$tasks = @{{}}; foreach ($t in @($global:Enabled.Keys)) {{ $tasks[$t] = (Get-ScheduledTask -TaskName $t).State }}
+[Console]::Out.Write((@{{ code = $code; calls = @($global:Calls); admins = @($global:Admins); tasks = $tasks;
     acls = $global:Acls }} | ConvertTo-Json -Compress -Depth 5))
 """
     run = pwsh(script)
@@ -475,8 +502,11 @@ FORWARD_TEST = {"mode": "forward", "group_steps": True, "stop_after": 0, "rehear
 
 @needs_pwsh
 def test_the_window_moves_the_file_in_order_and_logs_each_moment_in_administrators(tmp_path):
+    # The start task of A runs, as the keepalive does: step 2 disables it while its
+    # instance runs, and Task Scheduler then still reads it as Running.
     out = run_window(tmp_path, FORWARD_TEST, tasks={"tnwks-moverh-a-start": "Running"})
     assert out["code"] == 0, out["log"]
+    assert out["tasks"] == {"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"}
     calls = out["calls"]
     disk_b = f"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;{B_SID})"
     marker_a = f"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;{A_SID})"
@@ -562,7 +592,7 @@ def test_a_failed_check_after_the_start_goes_back_from_the_state_it_reads(tmp_pa
 def test_the_way_back_mode_puts_a_into_administrators_at_its_step_1_and_out_at_the_end(tmp_path):
     out = run_window(tmp_path, {"mode": "wayback", "group_steps": True, "stop_after": 0, "rehearsal_group_test": True},
                      state="t window-started\nt window-done\n", disk=("b",), acl_file=OLD_SDDL, marker_a=True,
-                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"})
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"})
     assert out["code"] == 0, out["log"]
     calls = out["calls"]
     assert calls[0] == f"join {A_SID}" and calls[-1] == f"leave {A_SID}"
@@ -599,8 +629,10 @@ def test_the_boot_task_writes_its_marker_first_and_stops_on_an_unknown_state(tmp
 @needs_pwsh
 def test_the_boot_task_goes_back_once_with_no_group_step_and_never_restarts_itself(tmp_path):
     out = run_window(tmp_path / "1", mode="boot", state="t window-started\n", disk=("b",), acl_file=OLD_SDDL, marker_a=True,
-                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"})
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"})
     assert out["code"] == 0, out["log"]
+    # B's start task was running when the way back disabled it; A's runs again.
+    assert out["tasks"] == {"tnwks-moverh-a-start": "Running", "tnwks-moverh-b-start": "Disabled"}
     assert out["markers"] == ["window-started", "boot-run", "wayback-done"]
     assert out["disk_a"] and not out["disk_b"]
     assert not any(c.startswith(("join", "leave")) for c in out["calls"]) and "restart" not in out["calls"]
