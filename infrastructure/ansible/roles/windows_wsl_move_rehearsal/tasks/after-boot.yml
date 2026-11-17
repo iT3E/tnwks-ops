@@ -10,6 +10,11 @@
 - name: The groups at the start
   ansible.builtin.include_tasks: groups.yml
 
+# The SIDs of the accounts (wsl_move_rehearsal_sids), for the read of A's
+# disk file after the boot. Only a refresh of the copies reads them too.
+- name: Read the accounts of the rehearsal
+  ansible.builtin.include_tasks: read_accounts.yml
+
 # The reads run with the copies that the boot run used: a copy that differs
 # from the role's stops the phase.
 - name: The copies of the scripts, the configs and the tasks on the host (assert)

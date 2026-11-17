@@ -2019,3 +2019,191 @@ def test_the_module_takes_the_state_of_an_existing_task_only_with_the_option():
     assert "$xml = Set-TnwksEnabled $xml ([bool]$task.Settings.Enabled)" in flow
     assert "$after = Get-CanonicalXml $xml -NoEnabled:($keep -and [bool]$task)" in flow
     assert module.count("-Xml $xml") == 2 and "-Xml $module.Params.xml" not in module
+
+
+# --- Each fact of a phase is set before a task reads it -----------------------------------
+
+# A name of the role in a template, or in a field that Ansible reads as an expression.
+FLOW_NAME = re.compile(r"(?<![\w.'\"])wsl_move_rehearsal_[a-z0-9_]+")
+FLOW_EXPRESSIONS = {"when", "that", "failed_when", "changed_when", "until"}
+FLOW_OWN_RESULT = {"failed_when", "changed_when", "until"}
+FLOW_TEMPLATE = re.compile(r"\{\{.*?\}\}|\{%.*?%\}", re.DOTALL)
+# Modules that give their output in check mode too (a read).
+FLOW_CHECK_MODE_READS = ("ansible.windows.win_stat",)
+# Reads that the walk can not prove, each with the reason that it holds.
+FLOW_KNOWN = {
+    # The first item of the assert fails when live.yml did not read (no baseline): an
+    # assert reads its items in order, so the later items read only after it passed.
+    ("setup.yml", "The baseline of the live parts is kept, and it read the registrations", "wsl_move_rehearsal_baseline"),
+    ("setup.yml", "The baseline of the live parts is kept, and it read the registrations", "wsl_move_rehearsal_live"),
+}
+
+
+def flow_strings(value, key=None):
+    if isinstance(value, dict):
+        for k, v in value.items():
+            yield from flow_strings(v, k)
+    elif isinstance(value, list):
+        for v in value:
+            yield from flow_strings(v, key)
+    elif isinstance(value, str):
+        yield key, value
+
+
+def flow_reads(task: dict) -> list[tuple[str, str, str]]:
+    """(field, name, text) for each name of the role that a task reads with no default
+    and no "is defined" right after it."""
+    out = []
+    body = {k: v for k, v in task.items() if k not in ("block", "rescue", "always", "register", "name")}
+    for key, text in flow_strings(body):
+        parts = [text] if key in FLOW_EXPRESSIONS and "{{" not in text else FLOW_TEMPLATE.findall(text)
+        for part in parts:
+            for m in FLOW_NAME.finditer(part):
+                rest = part[m.end():]
+                if re.match(r"(\.\w+|\[[^\]]*\])*\s*\|\s*default\b", rest) or re.match(r"(\.\w+|\[[^\]]*\])*\s+is\s+(not\s+)?defined", rest):
+                    continue
+                out.append((key, m.group(0), part.strip()[:160]))
+    return out
+
+
+def flow_conditions(task: dict) -> list[str]:
+    w = task.get("when")
+    if w is None:
+        return []
+    return [c for c in (w if isinstance(w, list) else [w]) if isinstance(c, str)]
+
+
+def flow_evaluate(cond: str, env: dict) -> bool | None:
+    """True, False, or None (not known), for the forms of condition that the role uses
+    on a value that the walk knows: check mode, and a literal var of an include."""
+    c = cond.strip()
+    if c in ("not ansible_check_mode", "ansible_check_mode"):
+        return (not env["ansible_check_mode"]) if c.startswith("not") else env["ansible_check_mode"]
+    m = re.fullmatch(r"(\w+)\s*(==|!=)\s*'([^']*)'", c)
+    if m and m[1] in env:
+        return (env[m[1]] == m[3]) == (m[2] == "==")
+    m = re.fullmatch(r"(\w+)\s+(not\s+in|in)\s+\[(.*)\]", c)
+    if m and m[1] in env:
+        return (env[m[1]] in re.findall(r"'([^']*)'", m[3])) == (m[2] == "in")
+    return None
+
+
+def flow_given(conds: list[str]) -> set[str]:
+    """NAME | default(...) | length > 0: inside, NAME is given."""
+    out = set()
+    for c in conds:
+        m = re.fullmatch(r"(wsl_move_rehearsal_\w+)\s*\|\s*default\([^)]*\)\s*\|\s*length\s*>\s*0", c.strip())
+        if m:
+            out.add(m[1])
+    return out
+
+
+def flow_run(tasks: list, file: str, have: set, local: set, env: dict, trail: list, out: list, load) -> set:
+    """Walks the tasks of a file in order, into each include. A name read must be a
+    default or a var of the role, a var of the task or of an include on the way, or a
+    fact or result that an earlier task set for sure. A set counts for the rest of its
+    own block; after the block only when each of its conditions is known to hold (a
+    condition on a result of the host is not). Returns what the tasks set for sure."""
+    have = set(have)
+    sets = set()
+    for task in tasks:
+        conds = flow_conditions(task)
+        values = [flow_evaluate(c, env) for c in conds]
+        if False in values:
+            continue
+        task_vars = task.get("vars") or {}
+        loop = {task.get("loop_control", {}).get("loop_var", "item")} if "loop" in task else set()
+        here = local | set(task_vars) | loop | flow_given(conds)
+        for key, name, text in flow_reads(task):
+            if name in here or name in have or (key in FLOW_OWN_RESULT and name == task.get("register")):
+                continue
+            if (file, task.get("name", ""), name) in FLOW_KNOWN:
+                continue
+            out.append(f"{' > '.join([*trail, file])}: '{task.get('name', '?')}' reads {name}: {text}")
+        literal = {k: v for k, v in task_vars.items() if isinstance(v, (str, bool))}
+        inner = set()
+        if "block" in task:
+            inner = flow_run(task["block"], file, have, here, {**env, **literal}, trail, out, load)
+            for part in ("rescue", "always"):
+                flow_run(task.get(part) or [], file, have, here, {**env, **literal}, trail, out, load)
+        include = task.get("ansible.builtin.include_tasks")
+        if include and "{{" not in include:
+            inner = flow_run(load(include), include, have, here, {**env, **literal}, [*trail, file], out, load)
+        own = set()
+        gives_output = not env["ansible_check_mode"] or task.get("check_mode") is False or any(m in task for m in FLOW_CHECK_MODE_READS)
+        if "register" in task and gives_output:
+            own.add(task["register"])
+        facts = task.get("ansible.builtin.set_fact")
+        if isinstance(facts, dict):
+            own |= {k for k in facts if k != "cacheable"}
+        if all(v is True for v in values):
+            have |= inner | own
+            sets |= inner | own
+    return sets
+
+
+def flow_load(file: str) -> list:
+    return yaml.safe_load((ROLE / "tasks" / file).read_text()) or []
+
+
+def flow_problems(entry: str, check_mode: bool, load=flow_load) -> list[str]:
+    known = set(DEFAULTS) | set(yaml.safe_load((ROLE / "vars/main.yml").read_text()) or {})
+    out: list[str] = []
+    env = {"ansible_check_mode": check_mode, "wsl_move_rehearsal_phase": entry.removesuffix(".yml")}
+    flow_run(load(entry), entry, known, set(), env, [], out, load)
+    return out
+
+
+# The phases that the rehearsal runs after its window first, then the others; check.yml is
+# the check play (playbooks/windows-move-rehearsal-check.yml), in check mode, and the
+# exit check after the removal. Each phase runs in a play of its own, and no fact of a
+# set_fact or a register outlives its play (the fact cache keeps gathered facts only).
+FLOW_ENTRIES = ["after-boot.yml", "remove-before-restart.yml", "restart.yml", "remove.yml",
+                "setup.yml", "window.yml", "interrupt.yml", "wayback.yml"]
+
+
+@pytest.mark.parametrize(("entry", "check_mode"), [(e, m) for e in FLOW_ENTRIES for m in (False, True)] + [("check.yml", True)],
+                         ids=lambda v: {False: "run", True: "check-run"}.get(v, v) if isinstance(v, bool) else v)
+def test_each_phase_sets_each_fact_before_a_task_reads_it(entry, check_mode):
+    """For each phase, and the check play, in a real run and in a check run: each fact or
+    result of the role that a task reads (wsl_move_rehearsal_sids, _runs, the baseline,
+    the results of live.yml, groups.yml, read_accounts.yml, host_files.yml, and each fact
+    that read_disk.yml and older_disk.yml need) is set by an earlier task of that phase, on
+    every way to the read.
+
+    What this test can not see: a name built at run time (a lookup of hostvars, a key in a
+    var); a read that a default or "is defined" guards (it counts as safe, though the
+    default may hide a fault); a condition on a result of the host (a set under it does not
+    count after its block: strict, so a fault there shows, and a read that holds for a
+    reason the walk can not prove is listed in FLOW_KNOWN with that reason); a task that
+    fails or a rescue that ends a block early; and the vars of the inventory and of -e,
+    other than the defaults of the role."""
+    phases = set(DEFAULTS["wsl_move_rehearsal_phases"]) - {"none"}
+    assert {e.removesuffix(".yml") for e in FLOW_ENTRIES} == phases
+    problems = flow_problems(entry, check_mode)
+    assert problems == [], "\n".join(problems)
+
+
+def test_the_walk_of_the_facts_finds_a_read_before_its_set():
+    """The walk fails on the fault that it is for: after-boot without its read of the
+    accounts reads wsl_move_rehearsal_sids in read_disk.yml; and a register read before
+    its task, or under a condition that the walk can not prove, after its block."""
+    def without_accounts(file):
+        tasks = flow_load(file)
+        if file == "after-boot.yml":
+            tasks = [t for t in tasks if t.get("ansible.builtin.include_tasks") != "read_accounts.yml"]
+        return tasks
+    problems = flow_problems("after-boot.yml", False, without_accounts)
+    assert problems and all("read_disk.yml" in p and "wsl_move_rehearsal_sids" in p for p in problems), problems
+    synthetic = {
+        "early.yml": [{"name": "uses", "ansible.builtin.debug": {"msg": "{{ wsl_move_rehearsal_x.output }}"}},
+                      {"name": "sets", "ansible.builtin.command": "true", "register": "wsl_move_rehearsal_x"}],
+        "maybe.yml": [{"name": "maybe", "when": "wsl_move_rehearsal_y.stat.exists", "block": [
+                          {"name": "sets", "ansible.builtin.command": "true", "register": "wsl_move_rehearsal_x"},
+                          {"name": "inside", "ansible.builtin.debug": {"msg": "{{ wsl_move_rehearsal_x.output }}"}}]},
+                      {"name": "after", "ansible.builtin.debug": {"msg": "{{ wsl_move_rehearsal_x.output }}"}}],
+    }
+    early = flow_problems("early.yml", False, synthetic.__getitem__)
+    assert len(early) == 1 and "'uses' reads wsl_move_rehearsal_x" in early[0]
+    maybe = [p for p in flow_problems("maybe.yml", False, synthetic.__getitem__) if "wsl_move_rehearsal_x" in p]
+    assert len(maybe) == 1 and "'after' reads" in maybe[0]
