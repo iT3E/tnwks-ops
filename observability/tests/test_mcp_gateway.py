@@ -8,7 +8,8 @@ let the agent pod reach the gateway, the gateway reach the MCP server, and
 no other pod reach the MCP server.
 
 The container test runs the pinned gateway with the config of the repo (the
-placeholder hashes swapped for hashes of test keys), the pinned MCP server,
+hash of each client swapped for the hash of a test key, placeholder or
+not), the pinned MCP server,
 and a fake app that records each request. The gateway probe of the platform
 checks (scripts/platform_checks.py mcp-gateway) runs against it, and the
 finance key is tried as the agent uses it. It needs Docker: without it the
@@ -126,21 +127,28 @@ def test_the_rule_list_is_written_by_the_script(tmp_path):
 # Keys, clients and rules
 
 
+def key_hashes(text: str) -> dict[str, str]:
+    """The hash of each client of the finance route, by its metadata.client."""
+    (finance,) = [r for r in yaml.safe_load(text)["routes"] if r["name"] == "finance"]
+    return {k["metadata"]["client"]: k["keyHash"] for k in finance["policies"]["apiKey"]["keys"]}
+
+
 def test_each_key_is_a_hash_and_each_placeholder_matches_no_value():
+    """Before the owner's values step a key is a placeholder, after it the
+    hash of a real key: either passes. No value is in the file, and no hash
+    is the hash of a placeholder value."""
     seen = set()
     for r in config()["routes"]:
         keys = r["policies"]["apiKey"]["keys"]
         for k in keys:
             assert set(k) == {"keyHash", "metadata"}, "no key value in the config"
-            assert HASH.match(k["keyHash"]), k["keyHash"]
-            assert k["keyHash"] not in seen
+            assert PLACEHOLDER.match(k["keyHash"]) or HASH.match(k["keyHash"]), k["keyHash"]
+            assert k["keyHash"] not in seen, "each client has a hash of its own"
             seen.add(k["keyHash"])
             for value in ("", "pending", "none", "SET-ME", "changeme"):
                 assert k["keyHash"] != "sha256:" + hashlib.sha256(value.encode()).hexdigest()
         clients = [k["metadata"]["client"] for k in keys]
         assert len(clients) == len(set(clients))
-    # Until the owner's values step, every key is a placeholder.
-    assert all(PLACEHOLDER.match(h) for h in seen)
 
 
 def test_each_route_denies_by_default():
@@ -414,10 +422,11 @@ def lab():
     (work / "recorder.py").write_text(RECORDER)
     keys = {client: f"test-{client}-{uuid.uuid4().hex}" for client in ("finance", "finance-probe", "no-tools")}
     text = CONFIG.read_text()
-    for i, client in enumerate(("finance", "finance-probe", "no-tools")):
-        placeholder = f"sha256:{'0' * 63}{i}"
-        assert text.count(placeholder) == 1
-        text = text.replace(placeholder, "sha256:" + hashlib.sha256(keys[client].encode()).hexdigest())
+    # The hash of each client, a placeholder or a real one, becomes the hash
+    # of its test key.
+    for client, old in key_hashes(text).items():
+        assert text.count(old) == 1
+        text = text.replace(old, "sha256:" + hashlib.sha256(keys[client].encode()).hexdigest())
     (work / "config.yaml").write_text(text)
     for path in work.iterdir():
         if path.is_file():

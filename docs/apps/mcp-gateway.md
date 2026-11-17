@@ -124,7 +124,10 @@ Each key is 32 random bytes, as 64 hex characters. The config holds its
 hash, `sha256:<hex>`; a hash of such a key tells nothing about it, so the
 hash can be in a public repo. A hash of the form `sha256:000...0N` is a
 placeholder: no key has it, so its client gets a 401 until the owner's
-values step.
+values step. The tests take either for each client: they find the hash of a
+client by its `metadata.client`, require a placeholder or 64 hex characters
+and a hash of its own for each client, and put the hash of a test key in
+its place for the container tests.
 
 | Client | Value (SOPS) | Hash |
 | --- | --- | --- |
