@@ -1,0 +1,26 @@
+---
+# The checks of the agent platform in agents-finance: the checks of every
+# trust domain (kubernetes/apps/ai/agents/checks/app), and the provider probe
+# of the finance app (provider-probe.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../checks/app
+  - ./provider-probe.yaml
+configMapGenerator:
+  # The profile in git that the providers job imports (one file, two users).
+  - name: provider-probe-profiles
+    files:
+      - finance-firefly.yaml=../../agent/config/providers/finance-firefly.yaml
+patches:
+  # The provider probe may delete its own Sandbox record too, and no other.
+  - target:
+      kind: Role
+      name: platform-checks
+    patch: |-
+      - op: test
+        path: /rules/2/resourceNames
+        value: ["default--platform-probe"]
+      - op: add
+        path: /rules/2/resourceNames/-
+        value: default--provider-probe

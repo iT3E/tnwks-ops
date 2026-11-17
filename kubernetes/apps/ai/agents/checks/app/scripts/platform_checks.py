@@ -10,6 +10,17 @@ A CronJob in each agents-<name> namespace runs one of:
       supervisor) run, and each is printed with its node. The run removes a
       sandbox of its own name that an earlier run left, and fails when its
       own sandbox is still there at its end.
+  platform_checks.py provider-probe
+      The rule of a provider profile holds, before the provider has a real
+      credential (finance only: kubernetes/apps/ai/agents/finance/checks).
+      The run imports a copy of the profile (<id>-probe), makes a provider
+      of it with a dummy credential, and starts a sandbox with that
+      provider. From the sandbox, an allowed read reaches the app, and each
+      other call is refused: a write, a read outside the rule, a read that
+      changes data, two paths
+      that leave the rule with "..", the address of the Service in place of
+      its name, and the Service without the proxy. The run removes the
+      sandbox, the provider and the copy at its end.
 
 Each probe prints one JSON line. The exit code is 1 when a probe fails, so
 the Job fails. Standard library only; the OpenShell CLI comes from the init
@@ -66,8 +77,9 @@ def tcp(host: str, port: int, timeout: float = 5) -> str:
         return f"blocked: {type(e).__name__}"
 
 
-def cli(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
-    return subprocess.run([CLI, *args], capture_output=True, text=True, timeout=timeout)
+def cli(*args: str, timeout: int = 120, env: dict | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run([CLI, *args], capture_output=True, text=True, timeout=timeout, check=False,
+                          env=None if env is None else {**os.environ, **env})
 
 
 def tail(result: subprocess.CompletedProcess) -> str:
@@ -338,14 +350,26 @@ def run_probe() -> None:
     if created.returncode != 0:
         report("probe", "sandbox create", "ok", f"failed: {tail(created)}")
         return
-    result = None
-    deadline = time.monotonic() + 300
     # The direct probes use addresses: the sandbox resolves no names, so a
     # name would test DNS only. The check pod resolves them.
     code = (PROBE.replace("KUBE_DNS_IP", socket.gethostbyname(KUBE_DNS))
             .replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
             .replace("MODEL_GATEWAY", MODEL_GATEWAY)
             .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN))))
+    results = exec_probe("probe", code)
+    if results is None:
+        return
+    for target, got in results.items():
+        report("probe", target, "blocked", got)
+    # Before cleanup() deletes the sandbox.
+    report_pods()
+
+
+def exec_probe(check: str, code: str) -> dict | None:
+    """Run the code in the probe's sandbox until it prints its PROBE line
+    (the sandbox can take a while to answer after its create)."""
+    result = None
+    deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         result = cli("sandbox", "exec", "--name", SANDBOX, "--no-tty", "--",
                      "python3", "-c", code, timeout=120)
@@ -355,12 +379,9 @@ def run_probe() -> None:
     line = next((l for l in (result.stdout if result else "").splitlines()
                  if l.startswith("PROBE ")), None)
     if line is None:
-        report("probe", "sandbox exec", "ok", f"failed: {tail(result)}")
-        return
-    for target, got in json.loads(line[len("PROBE "):]).items():
-        report("probe", target, "blocked", got)
-    # Before cleanup() deletes the sandbox.
-    report_pods()
+        report(check, "sandbox exec", "ok", f"failed: {tail(result)}")
+        return None
+    return json.loads(line[len("PROBE "):])
 
 
 def probe() -> None:
@@ -377,6 +398,146 @@ def probe() -> None:
         cleanup()
 
 
+# The provider probe. The profile file is the one in git that the providers
+# job imports (PROVIDER_PROFILE); the run imports a copy with the id
+# <id>-probe and makes the provider PROBE_PROVIDER of it, with the value
+# DUMMY in the env var of its credential, so no real credential is used, and
+# the providers job of the domain is not touched. APP_URL is the address of
+# the app as the agent uses it (http://<Service name>:<port>).
+PROFILE_FILE = os.environ.get("PROVIDER_PROFILE", "")
+PROBE_PROVIDER = os.environ.get("PROBE_PROVIDER", "provider-probe")
+APP_URL = os.environ.get("APP_URL", "")
+DUMMY = "probe-not-a-credential"
+
+# Runs inside the sandbox. A proxy refusal is an answer with a JSON "error"
+# of the proxy (policy_denied, ssrf_denied, ...) or a closed connection; any
+# other answer came from the app. With the dummy credential, the app answers
+# an allowed read with 401.
+PROVIDER_PROBE = r'''
+import json, socket, urllib.error, urllib.request
+APP = "APP_URL"
+def http(path, method="GET", base=APP):
+    request = urllib.request.Request(base + path, method=method,
+        data=b"{}" if method != "GET" else None,
+        headers={"Accept": "application/json", "Content-Type": "application/json"})
+    try:
+        r = urllib.request.urlopen(request, timeout=10); return "reached: HTTP %s" % r.status
+    except urllib.error.HTTPError as e:
+        try:
+            error = json.loads(e.read(4000) or b"{}").get("error")
+        except Exception:
+            error = None
+        if isinstance(error, str):
+            return "blocked: HTTP %s %s" % (e.code, error)
+        return "reached: HTTP %s" % e.code
+    except Exception as e:
+        return "blocked: " + type(e).__name__
+def tcp(host, port):
+    try:
+        socket.create_connection((host, port), timeout=4).close(); return "connected"
+    except Exception as e:
+        return "blocked: " + type(e).__name__
+out = {
+    "allowed read (GET ALLOWED_PATH)": http("ALLOWED_PATH"),
+    "write (POST WRITE_PATH)": http("WRITE_PATH", "POST"),
+    "read outside the rule (GET OUTSIDE_PATH)": http("OUTSIDE_PATH"),
+    "read that changes data (GET CRON_PATH)": http("CRON_PATH"),
+    "path out of the rule with .. (GET TRAVERSAL_PATH)": http("TRAVERSAL_PATH"),
+    "path out of the rule with %2e%2e (GET ENCODED_PATH)": http("ENCODED_PATH"),
+    "Service address in place of its name, through the proxy": http("ALLOWED_PATH", base="APP_IP_URL"),
+    "Service address, direct": tcp("APP_IP", APP_PORT),
+}
+print("PROBE " + json.dumps(out))
+'''
+# The paths of the provider probe: an allowed read, and calls that the rule
+# of the profile must refuse.
+ALLOWED_PATH = os.environ.get("PROBE_ALLOWED_PATH", "/api/v1/about")
+WRITE_PATH = os.environ.get("PROBE_WRITE_PATH", "/api/v1/transactions")
+OUTSIDE_PATH = os.environ.get("PROBE_OUTSIDE_PATH", "/api/v1/preferences")
+CRON_PATH = os.environ.get("PROBE_CRON_PATH", f"/api/v1/cron/{DUMMY}")
+TRAVERSAL_PATH = os.environ.get("PROBE_TRAVERSAL_PATH", "/api/v1/accounts/../../../oauth/clients")
+ENCODED_PATH = os.environ.get("PROBE_ENCODED_PATH", "/api/v1/accounts/%2e%2e/preferences")
+
+
+def probe_profile() -> tuple[str, str, str]:
+    """The copy of the profile (id <id>-probe), the id of the copy, and the
+    env var of its credential."""
+    with open(PROFILE_FILE) as f:
+        text = f.read()
+    ids = [l.split(":", 1)[1].strip() for l in text.splitlines() if l.startswith("id:")]
+    env = [l.split("[", 1)[1].split("]", 1)[0].strip() for l in text.splitlines()
+           if l.strip().startswith("env_vars:")]
+    if len(ids) != 1 or len(env) != 1 or "," in env[0]:
+        raise ValueError(f"{PROFILE_FILE}: one id and one env var expected")
+    copy_id = f"{ids[0]}-probe"
+    lines = [f"id: {copy_id}" if l.startswith("id:") else l for l in text.splitlines()]
+    return "\n".join(lines) + "\n", copy_id, env[0]
+
+
+def remove_provider_probe(copy_id: str) -> None:
+    """The provider and the copy of the profile, if a run left them. A
+    missing one is not an error."""
+    cli("provider", "delete", PROBE_PROVIDER, timeout=60)
+    cli("profile", "delete", copy_id, timeout=60)
+
+
+def run_provider_probe(copy_id: str, text: str, env_var: str) -> None:
+    path = os.path.join(os.environ["HOME"], "provider-probe-profile.yaml")
+    with open(path, "w") as f:
+        f.write(text)
+    step = cli("profile", "import", "-f", path)
+    if step.returncode != 0:
+        report("provider-probe", "profile import", "ok", f"failed: {tail(step)}")
+        return
+    step = cli("provider", "create", "--name", PROBE_PROVIDER, "--type", copy_id,
+               "--credential", env_var, env={env_var: DUMMY})
+    if step.returncode != 0:
+        report("provider-probe", "provider create", "ok", f"failed: {tail(step)}")
+        return
+    created = cli("sandbox", "create", "--name", SANDBOX, "--from", PROBE_IMAGE,
+                  "--provider", PROBE_PROVIDER, "--detach", "--no-tty", "--",
+                  "sleep", "3600", timeout=300)
+    if created.returncode != 0:
+        report("provider-probe", "sandbox create", "ok", f"failed: {tail(created)}")
+        return
+    host_port = APP_URL.split("://", 1)[1].split("/", 1)[0]
+    host, port = host_port.rsplit(":", 1)
+    ip = socket.gethostbyname(host)
+    code = (PROVIDER_PROBE.replace("APP_IP_URL", f"http://{ip}:{port}")
+            .replace("APP_URL", APP_URL).replace("APP_IP", ip).replace("APP_PORT", port)
+            .replace("ALLOWED_PATH", ALLOWED_PATH).replace("WRITE_PATH", WRITE_PATH)
+            .replace("OUTSIDE_PATH", OUTSIDE_PATH).replace("CRON_PATH", CRON_PATH).replace("TRAVERSAL_PATH", TRAVERSAL_PATH)
+            .replace("ENCODED_PATH", ENCODED_PATH))
+    results = exec_probe("provider-probe", code)
+    if results is None:
+        return
+    for target, got in results.items():
+        report("provider-probe", target,
+               "reached" if target.startswith("allowed read") else "blocked", got)
+
+
+def provider_probe() -> None:
+    try:
+        text, copy_id, env_var = probe_profile()
+    except (OSError, ValueError) as e:
+        report("provider-probe", "profile file", "ok", f"failed: {type(e).__name__}: {e}")
+        return
+    setup_cli()
+    if not remove_leftover():
+        return
+    remove_provider_probe(copy_id)
+    try:
+        run_provider_probe(copy_id, text, env_var)
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        report("provider-probe", "probe run", "ok", f"failed: {type(e).__name__}: {e}")
+    finally:
+        cleanup()
+        remove_provider_probe(copy_id)
+        left = cli("provider", "get", PROBE_PROVIDER, timeout=60)
+        report("provider-probe", "dummy provider removed", "gone",
+               "gone" if left.returncode != 0 else "left")
+
+
 if __name__ == "__main__":
-    {"isolation": isolation, "probe": probe}[sys.argv[1]]()
+    {"isolation": isolation, "probe": probe, "provider-probe": provider_probe}[sys.argv[1]]()
     sys.exit(1 if failures else 0)

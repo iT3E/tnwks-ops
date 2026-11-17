@@ -47,6 +47,8 @@ CASES = [
     ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "workflow-sweep-29900000"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "platform-check-probe-29900000"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-main", "job_name": "platform-check-isolation-29900000"}, "null"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "platform-check-provider-probe-29900000"}, "null"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "agent-providers-29900000"}, "null"),
     # A backup mover of a trust domain, a Job made by hand, a new CronJob.
     ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "agent-state-20260101103000"}, "telegram"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "providers-now"}, "telegram"),
@@ -61,6 +63,10 @@ CASES = [
     ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "my-run-0123456789abcdef0123"}, "telegram"),
     # The CronJobs of agents-workflows in another trust domain.
     ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "workflow-providers-29900000"}, "telegram"),
+    # The providers job of finance: its own namespace, and its CronJob only.
+    ({"alertname": "KubeJobFailed", "namespace": "agents-pilot", "job_name": "agent-providers-29900000"}, "telegram"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "agent-providers-now"}, "telegram"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "agent-providers-29900000-x"}, "telegram"),
     # The same names outside a trust domain, and the household apps.
     ({"alertname": "KubeJobFailed", "namespace": "default", "job_name": "run-0123456789abcdef0123"}, "telegram"),
     ({"alertname": "KubeJobFailed", "namespace": "production", "job_name": "finance-sync-29900000"}, "telegram"),

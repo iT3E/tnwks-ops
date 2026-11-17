@@ -89,7 +89,8 @@ certificate, so clients on the WSL host need no DNS changes.
 
 The finance agent on the agent platform is the exception: a sandbox of the
 agent calls the Service, `http://firefly.production.svc.cluster.local:8080`,
-reads under `/api/v1/` only, with a token of its own that the proxy of the
+reads of a list of paths under `/api/v1/` only (not the preferences, the
+webhooks or the cron call), with a token of its own that the proxy of the
 sandbox adds (`docs/apps/agent-platform.md`, "The finance agent").
 
 ## Looking at the data directly

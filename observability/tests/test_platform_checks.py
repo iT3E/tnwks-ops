@@ -270,3 +270,139 @@ def test_the_role_deletes_only_the_probes_record():
         "apiGroups": ["agents.x-k8s.io"], "resources": ["sandboxes"],
         "resourceNames": ["default--platform-probe"], "verbs": ["delete"],
     }]
+
+
+# The provider probe (finance/checks/app/provider-probe.yaml): the rule of the
+# profile of the finance app, tested with a dummy credential.
+PROFILE = ROOT / "kubernetes/apps/ai/agents/finance/agent/config/providers/finance-firefly.yaml"
+PROVIDER_PATH = PATH.replace("platform-probe", "provider-probe")
+PROVIDER_OURS = {"openshell.ai/managed-by": "openshell", "openshell.ai/sandbox-name": "provider-probe"}
+GOOD = {
+    "allowed read (GET /api/v1/about)": "reached: HTTP 401",
+    "write (POST /api/v1/transactions)": "blocked: HTTP 403 policy_denied",
+    "read outside the rule (GET /api/v1/preferences)": "blocked: HTTP 403 policy_denied",
+    "Service address, direct": "blocked: PermissionError",
+}
+
+
+class ProviderCluster:
+    """A fake CLI and API server for the provider probe."""
+
+    def __init__(self, results):
+        self.results = results
+        self.record = None
+        self.providers = set()
+        self.profiles = {}
+        self.calls = []
+
+    def cli(self, *args, timeout=120, env=None):
+        self.calls.append((args, env))
+        if args[:2] == ("profile", "import"):
+            with open(args[3]) as f:
+                text = f.read()
+            self.profiles[text.split("\nid: ", 1)[1].split("\n", 1)[0]] = text
+        elif args[:2] == ("profile", "delete"):
+            self.profiles.pop(args[2], None)
+        elif args[:2] == ("provider", "create"):
+            self.providers.add(args[3])
+        elif args[:2] == ("provider", "delete"):
+            self.providers.discard(args[2])
+        elif args[:2] == ("provider", "get"):
+            return done(0 if args[2] in self.providers else 1)
+        elif args[:2] == ("sandbox", "create"):
+            self.record = {"metadata": {"uid": "new", "labels": dict(PROVIDER_OURS)}}
+        elif args[:2] == ("sandbox", "delete"):
+            self.record = None
+        elif args[:2] == ("sandbox", "exec"):
+            self.code = args[-1]
+            return done(0, "PROBE " + json.dumps(self.results))
+        return done()
+
+    def kube(self, method, path, body=None):
+        assert path == PROVIDER_PATH, path
+        if self.record is None:
+            raise urllib.error.HTTPError(path, 404, "Not Found", None, None)
+        self.record = None
+        return {}
+
+
+@pytest.fixture
+def provider_checks(monkeypatch, tmp_path):
+    monkeypatch.setenv("OWN_NAMESPACE", "agents-finance")
+    monkeypatch.setenv("TRUST_DOMAIN_NAMESPACES", "agents-main agents-finance")
+    monkeypatch.setenv("PROBE_SANDBOX", "provider-probe")
+    monkeypatch.setenv("PROVIDER_PROFILE", str(PROFILE))
+    monkeypatch.setenv("APP_URL", "http://firefly.production.svc.cluster.local:8080")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    spec = importlib.util.spec_from_file_location("platform_checks", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "setup_cli", lambda: None)
+    monkeypatch.setattr(module, "time", Clock())
+    monkeypatch.setattr(module.socket, "gethostbyname", lambda name: "10.0.0.9")
+    return module
+
+
+def run_provider(module, monkeypatch, capsys, cluster):
+    monkeypatch.setattr(module, "cli", cluster.cli)
+    monkeypatch.setattr(module, "kube", cluster.kube)
+    module.provider_probe()
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    return {line["target"]: line for line in lines if "target" in line}
+
+
+def test_the_provider_probe_uses_a_copy_and_a_dummy_credential(provider_checks, monkeypatch, capsys):
+    cluster = ProviderCluster(GOOD)
+    lines = run_provider(provider_checks, monkeypatch, capsys, cluster)
+    assert provider_checks.failures == 0, lines
+    imported = [a for a, _ in cluster.calls if a[:2] == ("profile", "import")]
+    assert len(imported) == 1
+    created = [(a, env) for a, env in cluster.calls if a[:2] == ("provider", "create")]
+    assert created == [(("provider", "create", "--name", "provider-probe", "--type",
+                         "finance-firefly-probe", "--credential", "FIREFLY_TOKEN"),
+                        {"FIREFLY_TOKEN": "probe-not-a-credential"})]
+    sandbox = next(a for a, _ in cluster.calls if a[:2] == ("sandbox", "create"))
+    assert sandbox[sandbox.index("--provider") + 1] == "provider-probe"
+    # The real profile and provider are never named.
+    named = {a[2] for a, _ in cluster.calls if a[:2] in {("profile", "delete"), ("provider", "delete")}}
+    assert named == {"finance-firefly-probe", "provider-probe"}
+    # All gone at the end.
+    assert not cluster.providers and not cluster.profiles and cluster.record is None
+    assert lines["dummy provider removed"]["ok"]
+
+
+def test_every_placeholder_of_the_sandbox_code_is_filled(provider_checks, monkeypatch, capsys):
+    cluster = ProviderCluster(GOOD)
+    run_provider(provider_checks, monkeypatch, capsys, cluster)
+    for name in ("APP_URL", "APP_IP", "APP_PORT", "_PATH"):
+        assert name not in cluster.code, name
+    assert '"http://10.0.0.9:8080"' in cluster.code
+    assert "http://firefly.production.svc.cluster.local:8080" in cluster.code
+    assert "/api/v1/accounts/../../../oauth/clients" in cluster.code
+
+
+@pytest.mark.parametrize("target, got", [
+    ("write (POST /api/v1/transactions)", "reached: HTTP 401"),
+    ("read outside the rule (GET /api/v1/preferences)", "reached: HTTP 200"),
+    ("Service address, direct", "connected"),
+    ("allowed read (GET /api/v1/about)", "blocked: HTTP 403 policy_denied"),
+])
+def test_a_call_on_the_wrong_side_of_the_rule_fails_the_run(provider_checks, monkeypatch, capsys, target, got):
+    cluster = ProviderCluster({**GOOD, target: got})
+    lines = run_provider(provider_checks, monkeypatch, capsys, cluster)
+    assert not lines[target]["ok"]
+    assert provider_checks.failures == 1
+    assert not cluster.providers and not cluster.profiles
+
+
+def test_the_profile_keeps_the_agent_to_reads_of_money_data():
+    import yaml
+
+    profile = yaml.safe_load(PROFILE.read_text())
+    rules = [r["allow"] for e in profile["endpoints"] for r in e["rules"]]
+    assert {r["method"] for r in rules} == {"GET"}
+    paths = {r["path"] for r in rules}
+    for path in paths:
+        assert path.startswith("/api/v1/") and path != "/api/v1/**", path
+        assert not path.split("/")[3] in {"preferences", "webhooks", "cron", "configuration",
+                                          "users", "user-groups", "data", "attachments"}, path

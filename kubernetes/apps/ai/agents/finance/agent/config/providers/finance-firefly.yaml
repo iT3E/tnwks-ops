@@ -5,7 +5,7 @@
 # of the finance agent in the Authorization header of a read of the API of
 # the app at its in-cluster Service, and of no other call. The token of the
 # app has the rights of its user, so this profile is what keeps the agent to
-# reads. No annotations key here: the providers job adds it (sha256 of this
+# reads (the provider probe of ../../../checks/app tests it each day). No annotations key here: the providers job adds it (sha256 of this
 # file).
 id: finance-firefly
 display_name: Finance app of the finance agent
@@ -28,8 +28,38 @@ endpoints:
     protocol: rest
     tls: ""
     enforcement: enforce
+    # Reads of the money data only, not all of /api/v1/: some reads there
+    # give a secret (the user's command line token in /preferences, the
+    # signing secret of each webhook in /webhooks), and one GET changes the
+    # data (/cron/<token>, the daily jobs of the app). The list is a
+    # proposal for the owner: the smallest set for questions about money.
+    # A whole-segment ** needs one segment, so each name is listed twice.
     rules:
-      - allow: { method: GET, path: "/api/v1/**" }
+      - allow: { method: GET, path: "/api/v1/about" }
+      - allow: { method: GET, path: "/api/v1/accounts" }
+      - allow: { method: GET, path: "/api/v1/accounts/**" }
+      - allow: { method: GET, path: "/api/v1/transactions" }
+      - allow: { method: GET, path: "/api/v1/transactions/**" }
+      - allow: { method: GET, path: "/api/v1/budgets" }
+      - allow: { method: GET, path: "/api/v1/budgets/**" }
+      - allow: { method: GET, path: "/api/v1/available-budgets" }
+      - allow: { method: GET, path: "/api/v1/available-budgets/**" }
+      - allow: { method: GET, path: "/api/v1/categories" }
+      - allow: { method: GET, path: "/api/v1/categories/**" }
+      - allow: { method: GET, path: "/api/v1/bills" }
+      - allow: { method: GET, path: "/api/v1/bills/**" }
+      - allow: { method: GET, path: "/api/v1/subscriptions" }
+      - allow: { method: GET, path: "/api/v1/subscriptions/**" }
+      - allow: { method: GET, path: "/api/v1/tags" }
+      - allow: { method: GET, path: "/api/v1/tags/**" }
+      - allow: { method: GET, path: "/api/v1/piggy-banks" }
+      - allow: { method: GET, path: "/api/v1/piggy-banks/**" }
+      - allow: { method: GET, path: "/api/v1/currencies" }
+      - allow: { method: GET, path: "/api/v1/currencies/**" }
+      - allow: { method: GET, path: "/api/v1/search/**" }
+      - allow: { method: GET, path: "/api/v1/summary/**" }
+      - allow: { method: GET, path: "/api/v1/insight/**" }
+      - allow: { method: GET, path: "/api/v1/chart/**" }
 binaries:
   - /usr/local/bin/python3.13
   - /usr/local/bin/python3

@@ -8,9 +8,10 @@
 #   (the key `agents-finance` of the model gateway, docs/apps/litellm.md),
 #   TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOW_FROM, as `secret.sops.yaml` here.
 #   With it, ./secret-search.sops.yaml (BRAVE_API_KEY, the search key of
-#   finance), once the owner put the key in it.
+#   finance, in git with its value).
 # - ./providers.yaml and ./secret-firefly.sops.yaml (FIREFLY_TOKEN), together,
-#   once the owner put the token of the finance app in the file. Before the
+#   once the provider probe passed (../../checks/app/provider-probe.yaml) and
+#   then the owner put the token of the finance app in the file. Before the
 #   Deployment: a sandbox of the agent needs the provider firefly.
 # - ./pvc.yaml and ./backup.yaml, together, after the ClusterRepository
 #   agents-finance is Ready (kopiur-system/agents-finance-repository): the

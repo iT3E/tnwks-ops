@@ -589,8 +589,8 @@ and not applied yet: the Deployment, the volume, the backup policy, the
 providers job and their Secrets wait for the values of the owner (R4) and
 for the cutover. The tools that differ from the pilot:
 
-- **The finance app (Firefly III), reads only.** The finance agent only:
-  no other trust domain gets a token of the app.
+- **The finance app (Firefly III), reads of money data only.** The finance
+  agent only: no other trust domain gets a token of the app.
   - A sandbox makes the call, not the agent container: code that the model
     writes runs in a sandbox (Python, `/usr/local/bin/python3`), and the
     proxy of the sandbox's supervisor sends it on. The address is the
@@ -601,13 +601,91 @@ for the cutover. The tools that differ from the pilot:
   - The token is the credential of the provider `firefly` in the store of
     the sandbox gateway of finance (profile `finance-firefly`,
     `agent/config/providers/finance-firefly.yaml`). A sandbox holds a
-    placeholder in `FIREFLY_TOKEN`; the proxy puts the token in the
-    `Authorization` header of a `GET` under `/api/v1/` at that Service on
-    port 8080, and of no other call. That rule is the only way out to the
-    app: the sandbox gateway makes the egress policy of each supervisor
-    from it, and the agent pod has no rule to the app. A token of the app
-    has every right of its user, so the rule is what keeps the agent to
-    reads.
+    placeholder in `FIREFLY_TOKEN`. The proxy puts the token in the
+    `Authorization` header of a `GET` at that Service on port 8080, on the
+    paths of the profile, and of no other call. The paths: about, accounts,
+    transactions, budgets, available budgets, categories, bills,
+    subscriptions, tags, piggy banks, currencies, search, summary, insight
+    and charts.
+  - **Not all of `/api/v1/`.** At the release in the cluster (6.5.9,
+    `routes/api.php` and the code of the app), a read can give a secret:
+    `/api/v1/preferences` gives the command line token of the user, and
+    `/api/v1/webhooks` the signing secret of each webhook. One `GET`
+    changes data: `/api/v1/cron/<command line token>` runs the daily jobs
+    of the app. The list of the profile is a proposal: the owner decides it
+    (a question of the owner below).
+  - **The proxy of the supervisor is the one control between a sandbox and
+    the app.** The workload of a sandbox has no way out but that proxy (the
+    sandbox probe tests it each day). At the network layer, there is no
+    second control: the policy `openshell-sandbox-supervisors`, which the
+    gateway chart makes, lets a supervisor connect to any address, and the
+    namespace `production` has no network policy. A token of the app has
+    every right of its user. So the rule of the profile is what keeps the
+    agent to reads.
+  - **The provider probe tests that rule each day,** before the token
+    exists and after (CronJob `platform-check-provider-probe`,
+    `finance/checks/app/provider-probe.yaml`, at 05:17). It never uses the
+    token: it imports a copy of the profile of git (`finance-firefly-probe`),
+    makes a provider of it with a dummy credential, and starts a sandbox
+    with that provider and the sandbox image of the agent. From the
+    sandbox:
+
+    | Call | Expected |
+    | --- | --- |
+    | `GET /api/v1/about` | `reached: HTTP 401` (the app refuses the dummy) |
+    | `POST /api/v1/transactions` | `blocked`, a refusal of the proxy |
+    | `GET /api/v1/preferences`, a read outside the paths | `blocked` |
+    | `GET /api/v1/cron/<dummy>` | `blocked` |
+    | `GET /api/v1/accounts/../../../oauth/clients` | `blocked` |
+    | `GET /api/v1/accounts/%2e%2e/preferences` | `blocked` |
+    | The same read at the address of the Service, not its name | `blocked` |
+    | A connection to the Service, not through the proxy | `blocked` |
+
+    The proxy of OpenShell 0.1.8 resolves `.` and `..` (also encoded)
+    before it applies the rule, and refuses a path that leaves the root
+    (`crates/openshell-supervisor-network/src/l7/path.rs`). At its end the
+    run removes the sandbox, the provider and the copy. Each result is one
+    JSON line, and a failed one fails the Job (`AgentPlatformCronJobFailed`;
+    `AgentPlatformCheckStale` when it has not passed for 26 hours). To read
+    a run:
+
+    ```bash
+    kubectl -n agents-finance create job --from=cronjob/platform-check-provider-probe provider-probe-now
+    kubectl -n agents-finance wait --for=condition=complete --timeout=30m job/provider-probe-now
+    kubectl -n agents-finance logs job/provider-probe-now | grep -c '"ok": true'    # 11
+    kubectl -n agents-finance logs job/provider-probe-now | grep '"ok": false'      # no line
+    ```
+
+  - **The client certificate of the gateway is in the trust boundary of the
+    token.** The token can not be read back from the store: the gateway
+    answers a read of a provider with each value replaced by `REDACTED`,
+    and the export of a credential takes an operator certificate (`OU=operator`) and the
+    operator setting of the gateway, which this gateway does not have
+    (OpenShell 0.1.8, `crates/openshell-server/README.md`, "Operator
+    credential export"). But the client certificate (Secret
+    `openshell-client-tls`), which the agent container and the providers
+    job mount, has the rights of an admin of the gateway: it can update a
+    profile. An update of `finance-firefly` can add a method or a host, and
+    the proxy then puts the token on those calls too. So the agent
+    container is in the trust boundary of the token, not only a sandbox.
+    The providers job puts the profile of git back at its next run (15
+    minutes) when the stored copy has another source hash; the provider
+    probe tests the profile of git, not the stored one.
+  - **A second control is an option of the owner, not built.** Neither
+    form stops a write to the app through an allowed caller: only the rule
+    of the proxy does that.
+    - An egress policy on the supervisors of `agents-finance` (a
+      CiliumNetworkPolicy beside the policy of the chart): a supervisor
+      reaches only the addresses that the profiles of this domain name
+      (the app, the gateway, DNS). A profile changed by a holder of the
+      client certificate can then send the token to no other host. Cost:
+      each new endpoint of a profile needs a rule here too, and a missing
+      rule stops the calls of the sandboxes. Recommended first.
+    - A network policy in `production` that lets only the known callers
+      reach the app: the ingress, the jobs of the app (the daily jobs, the
+      bank sync) and the supervisors of `agents-finance`. Cost: every
+      caller of the app must be on the list, a missing one breaks it, and
+      the namespace holds other apps.
   - The providers job (CronJob `agent-providers`, `agent/app/providers.yaml`,
     every 15 minutes) imports or updates the profile and puts the token from
     the Secret `agent-firefly-secret` (key `FIREFLY_TOKEN`) into the
@@ -647,22 +725,13 @@ for the cutover. The tools that differ from the pilot:
 ### The steps of the owner
 
 None of these values goes through an agent or a session: the owner makes
-each one and puts it straight into its encrypted file. The two files went
-into git with the placeholder `pending`, encrypted to the age recipients of
-`.sops.yaml` only, so the first command adds the KMS recipient.
+each one and puts it straight into its encrypted file. The search key is
+done (in git with its value). The token file went into git with the
+placeholder `pending`, encrypted to the age recipients of `.sops.yaml`
+only, so the first command adds the KMS recipient.
 
-1. **The search key.** Make a second key at the search vendor, for finance
-   only. Then:
-
-   ```bash
-   F=kubernetes/apps/ai/agents/finance/agent/app/secret-search.sops.yaml
-   bin/sops updatekeys -y "$F"
-   bin/sops "$F"     # replace pending with the key, save
-   bin/sops -d --extract '["stringData"]["BRAVE_API_KEY"]' "$F" | tr -d '\n' \
-     | awk '{ v = v $0 } END { print (v != "pending" && length(v) >= 20) ? "ok" : "not ok" }'
-   ```
-
-2. **The token of the finance app.** In the app: Options, Profile, OAuth,
+1. **The token of the finance app, only after the provider probe passed**
+   (above: no line with `"ok": false`). In the app: Options, Profile, OAuth,
    "Personal access tokens", a new token named for the finance agent. The
    app shows it once. Then:
 
@@ -676,7 +745,7 @@ into git with the placeholder `pending`, encrypted to the age recipients of
 
    After the cutover, revoke the token that the finance agent on the host
    used, in the same page of the app: no token is shared by two places.
-3. **The seed of the vault,** in the state copy of the cutover: after the
+2. **The seed of the vault,** in the state copy of the cutover: after the
    state of the finance agent is on its volume and the pod runs, and before
    the first chat. From the host, with the vault folder in `V`:
 
@@ -696,6 +765,15 @@ into git with the placeholder `pending`, encrypted to the age recipients of
    deleted on a device goes here too:
    `kubectl -n agents-finance exec deploy/agent -c agent -- find /home/node/data/vault -mindepth 1 -delete`,
    then the three commands again.
+
+The questions of the owner:
+
+- **The paths of the finance app.** The list above is the smallest set for
+  questions about money. Add a path only when a skill of the agent needs
+  it, and never `preferences`, `webhooks`, `cron`, `configuration`,
+  `users` or `data` (the export of all data).
+- **A second control** (above): the egress policy on the supervisors of
+  `agents-finance` is recommended, before the token goes in.
 
 ## The run receiver
 
@@ -1001,6 +1079,7 @@ pod's log goes to Loki. `AgentPlatformCronJobFailed` and
 | --- | --- | --- |
 | `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
 | `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox. Before the create it removes a sandbox of its own name that an earlier run left (a `leftover sandbox` line), and at its end it fails when its Sandbox record is still there (a `sandbox removed` line), after it removes it |
+| `platform-check-provider-probe` | 05:17 | `agents-finance` only (`finance/checks/app/`): the rule of the profile of the finance app, with a dummy credential ([The finance agent](#the-finance-agent)) |
 
 - The check pods may try every trust domain's gateway on port 8080, so the
   isolation check tests each gateway's own policy, not the check pod's.
@@ -1050,7 +1129,7 @@ by hand, and the steps at a limit of the Claude plan.
 | `WorkflowAppDrift` | An `app-drift result=drift` line in the last 20 minutes: the App or its installation has more permissions than the list in git | none | The `detail=` of the line names each one. Set the App back, or change the list by a pull request |
 | `AgentHeartbeatMissing` | The daily `agent-heartbeat-check` (06:33 UTC) found no completed heartbeat run of an agent in Tempo in the last 26 hours, or could not ask Tempo. It asks 3 times, 60 seconds apart, and a failed pod gets one more try, so one short break of Tempo does not fire. It resolves at the next good run | none | Its log in Loki (`{namespace="monitoring", app="agent-heartbeat-check"}`): `result=missing` names the service, `result=error` is Tempo. Then the agent pod and its traces |
 | `AgentHeartbeatCheckStale` | The heartbeat check itself was not scheduled in 26 hours, or its CronJob is gone | 15m | `kubectl -n monitoring get cronjob agent-heartbeat-check` |
-| `AgentPlatformCheckStale` | A daily check (`platform-check-isolation` or `platform-check-probe`) of a trust domain has not passed in 26 hours, or never passed once a run was due | 15m | The CronJob (suspended?) and its Jobs |
+| `AgentPlatformCheckStale` | A daily check (`platform-check-isolation`, `platform-check-probe`, or `platform-check-provider-probe` in finance) of a trust domain has not passed in 26 hours, or never passed once a run was due | 15m | The CronJob (suspended?) and its Jobs |
 | `AgentRunSandboxTooOld` | A run sandbox (`default--run-*`) in `agents-workflows` is older than 80 minutes: the run job and the sweep both failed to delete it | 10m | The CronJob `workflow-sweep`, then delete the sandbox through the gateway |
 | `AgentWorkflowRunFailed` | A run job failed, for 2 hours from its start | none | The annotation `workflow-agents/result` of the Job, and the run log in Loki. A 502 from the model gateway can be the limit of the Claude plan |
 | `AgentDailyArchiveFailed` | The `backup` container of an agent pod started again in the last 2 hours after an exit with an error: the daily archive failed. A restart of the node (reason `Unknown`) does not count | none | `kubectl -n <namespace> logs <pod> -c backup --previous` |
@@ -1070,7 +1149,8 @@ by hand, and the steps at a limit of the Claude plan.
   failed Job, and keeps firing while the Job is kept: a run job for 7 days,
   a failed CronJob run until three newer runs fail. Alertmanager drops it
   for the run jobs and the Jobs of the CronJobs `platform-check-isolation`,
-  `platform-check-probe`, `workflow-providers` and `workflow-sweep`, which
+  `platform-check-probe`, `platform-check-provider-probe`,
+  `workflow-providers`, `workflow-sweep` and `agent-providers` (finance), which
   the alerts above cover (the route in
   `kubernetes/apps/monitoring/alertmanager/app/config/alertmanager.yml`, and
   its cases in `observability/tests/test_alertmanager_routes.py`). It still

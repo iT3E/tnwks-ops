@@ -80,7 +80,14 @@ route:
       matchers:
         - alertname = "KubeJobFailed"
         - namespace =~ "agents-.+"
-        - job_name =~ "platform-check-(isolation|probe)-[0-9]+"
+        - job_name =~ "platform-check-(isolation|probe|provider-probe)-[0-9]+"
+    # The providers job of the finance agent (CronJob agent-providers), in
+    # agents-finance only.
+    - receiver: "null"
+      matchers:
+        - alertname = "KubeJobFailed"
+        - namespace = "agents-finance"
+        - job_name =~ "agent-providers-[0-9]+"
     # The providers job, the sweep and the run jobs are in agents-workflows
     # only. The run receiver names a run job run-<the first 20 hex of the
     # SHA-256 of its key> (iT3E/tnwks-workflow-agents, src/run_receiver/app.py,
