@@ -572,10 +572,11 @@ def test_the_read_of_the_saved_rules_compares_with_the_file_that_the_way_back_wr
 @needs_pwsh
 def test_the_read_of_the_saved_rules_compares_each_inherited_rule(tmp_path):
     # A file of an older WSL: no protection, the rules of its folder (ID), one explicit rule.
-    saved = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;AU)"
+    saved = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)"
     assert disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)[-1]["rules_ok"] is True
+    # The CREATOR OWNER rule of the folder names the owner: another account is not a pass.
     for sddl in (saved.replace("(A;ID;FR;;;AU)", ""), saved.replace("(A;ID;FR;;;AU)", "(A;;FR;;;AU)"),
-                 saved.replace("D:AI", "D:PAI")):
+                 saved.replace("D:AI", "D:PAI"), saved.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")):
         assert disk_read(tmp_path, "saved", [sddl], saved=saved)[-1]["rules_ok"] is False, sddl
 
 

@@ -811,11 +811,15 @@ function Invoke-CimMethod { param($InputObject, [string]$MethodName) [pscustomob
 # SYSTEM); the rules may be written only by the owner, or when they grant SYSTEM or the
 # Administrators (WRITE_DAC), so a file of an account that removed both needs the take
 # of ownership first. $global:SecCalls holds each write, and $global:Calls one line
-# "acl <folder>/<file> <SDDL as written>" for each whole write (owner, rules, owner).
+# "acl <folder>/<file> <SDDL as written>" for each whole write (the take of ownership,
+# then the owner and the rules in one write).
 # $global:AclEdit: what Windows makes of the rules written to a disk file (the form of a
 # mask, or another rule).
 class TnwksSecurity {
-    static [string] Enable() { return 'SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True' }
+    static [string] Enable() {
+        if ($global:EnableText) { return $global:EnableText }
+        return 'SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True'
+    }
     static [string] Leaf([string]$Path) { return [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($Path)) + '/' + [IO.Path]::GetFileName($Path) }
     static [string] ReadSddl([string]$Path) {
         if (-not [IO.File]::Exists($Path)) { throw [IO.FileNotFoundException]::new($Path) }
@@ -825,33 +829,30 @@ class TnwksSecurity {
     static [void] SetOwner([string]$Path, [string]$Owner) {
         $s = [TnwksSecurity]::ReadSddl($Path)
         $global:SecCalls.Add("owner $([TnwksSecurity]::Leaf($Path)) $Owner")
-        $s = 'O:' + $Owner + $s.Substring($s.IndexOf('D:'))
-        if ($global:Pending.ContainsKey($Path)) {
-            $global:Calls.Add("acl $([TnwksSecurity]::Leaf($Path)) O:$Owner$($global:Pending[$Path])")
-            $global:Pending.Remove($Path)
-            if ($global:AclEdit -and $Path -like '*ext4.vhdx') { $s = & $global:AclEdit $s }
-        }
-        $global:Acls[$Path] = $s
+        $global:Acls[$Path] = 'O:' + $Owner + $s.Substring($s.IndexOf('D:'))
     }
-    static [void] SetDacl([string]$Path, [string]$Sddl) {
+    static [void] SetRules([string]$Path, [string]$Sddl) {
         $s = [TnwksSecurity]::ReadSddl($Path)
-        $owner = $s.Substring(2, $s.IndexOf('D:') - 2)
-        if ($owner -notin @('SY', 'S-1-5-18', 'BA', 'S-1-5-32-544') -and $s.Substring($s.IndexOf('D:')) -notmatch ';;;(SY|BA|S-1-5-18|S-1-5-32-544)\)') {
+        $now = $s.Substring(2, $s.IndexOf('D:') - 2)
+        if ($now -notin @('SY', 'S-1-5-18', 'BA', 'S-1-5-32-544') -and $s.Substring($s.IndexOf('D:')) -notmatch ';;;(SY|BA|S-1-5-18|S-1-5-32-544)\)') {
             $global:SecCalls.Add("refused rules $([TnwksSecurity]::Leaf($Path))")
             throw [UnauthorizedAccessException]::new('Access is denied.')
         }
+        $owner = $Sddl.Substring(2, $Sddl.IndexOf('D:') - 2)
         $dacl = $Sddl.Substring($Sddl.IndexOf('D:'))
         if ($dacl -match ';[A-Z]*ID[A-Z]*;') { throw "an inherited rule in the rules written: $dacl" }
-        $global:SecCalls.Add("rules $([TnwksSecurity]::Leaf($Path)) $dacl")
-        $global:Pending[$Path] = $dacl
-        # With no protection, the inherited rules come from the folder of the file.
+        $global:SecCalls.Add("rules $([TnwksSecurity]::Leaf($Path)) O:$owner$dacl")
+        $global:Calls.Add("acl $([TnwksSecurity]::Leaf($Path)) O:$owner$dacl")
+        # With no protection, the inherited rules come from the folder of the file,
+        # and a CREATOR OWNER rule (CO) of the folder names the owner of this write.
         $written = $dacl
-        if ($dacl -notmatch '^D:[A-Z]*P') { $written += $global:Inherit[[IO.Path]::GetDirectoryName($Path)] }
-        $global:Acls[$Path] = "O:$owner$written"
+        if ($dacl -notmatch '^D:[A-Z]*P') { $written += ("$($global:Inherit[[IO.Path]::GetDirectoryName($Path)])" -replace ';;;CO\)', ";;;$owner)") }
+        $s = "O:$owner$written"
+        if ($global:AclEdit -and $Path -like '*ext4.vhdx') { $s = & $global:AclEdit $s }
+        $global:Acls[$Path] = $s
     }
 }
 $global:SecCalls = New-Object System.Collections.Generic.List[string]
-$global:Pending = @{}
 if (-not $global:Inherit) { $global:Inherit = @{} }
 function Get-Acl { throw 'the procedure reads the rules of a file through TnwksSecurity' }
 function Set-Acl { throw 'the procedure writes the rules of a file through TnwksSecurity' }
@@ -877,7 +878,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
                results: dict | None = None, codes: dict | None = None, admins: tuple[str, ...] = (),
                config: dict | None = None, tasks: dict | None = None, acl_file: str | None = None,
                marker_a: bool = False, disabled: str | None = None, acl_edit: str = "", vm_rule: str = "",
-               acls: dict | None = None, inherit: dict | None = None) -> dict:
+               acls: dict | None = None, inherit: dict | None = None, enabled: str = "") -> dict:
     root = tmp_path / "root"
     for sub in ("a", "b", "state", "log/a", "log/b"):
         (root / sub).mkdir(parents=True, exist_ok=True)
@@ -944,6 +945,7 @@ $global:Acls = @{{}}; foreach ($p in {ps(acls)}.PSObject.Properties) {{ $global:
 foreach ($a in @({", ".join(f"'{a}'" for a in admins) or ""})) {{ $global:Admins.Add($a) }}
 $global:AclEdit = {acl_edit or "$null"}
 $global:VmRule = {ps(vm_rule)}
+$global:EnableText = {ps(enabled)}
 $global:FolderA = {ps(str(root / "a"))}; $global:FolderB = {ps(str(root / "b"))}
 $global:Inherit = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (inherit or {}).items()})}.PSObject.Properties) {{ $global:Inherit[$p.Name] = $p.Value }}
 if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false'}) {{
@@ -1026,13 +1028,12 @@ def test_the_new_account_owns_its_moved_disk_file_with_full_control():
 @needs_pwsh
 def test_the_rule_of_the_moved_file_comes_from_the_config(tmp_path):
     """The owner and the mask of the new account are config values. SYSTEM writes them
-    with its privileges: it takes ownership, writes the rules, then sets the owner."""
+    with its privileges: it takes ownership, then writes the owner and the rules in one write."""
     out = run_window(tmp_path, FORWARD_TEST)
     assert out["code"] == 0, out["log"]
     assert f"acl b/ext4.vhdx O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})" in out["calls"]
     disk = [c for c in out["sec_calls"] if " b/ext4.vhdx" in c]
-    assert disk == ["owner b/ext4.vhdx BA", f"rules b/ext4.vhdx D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})",
-                    f"owner b/ext4.vhdx {B_SID}"]
+    assert disk == ["owner b/ext4.vhdx BA", f"rules b/ext4.vhdx O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})"]
     log = out["log"]
     privileges = "privileges: SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True"
     assert log.count(privileges) == 1 and log.index(privileges) < log.index("step 4 passed")
@@ -1049,8 +1050,8 @@ def test_the_stand_in_refuses_the_rules_of_a_file_that_grants_system_nothing_wit
     run = pwsh(WINDOW_FAKES + f"""
 $global:Calls = New-Object System.Collections.Generic.List[string]
 $global:Acls = @{{ '{path}' = 'O:{B_SID}D:P(A;;FA;;;{B_SID})' }}
-try {{ [TnwksSecurity]::SetDacl('{path}', 'O:BAD:P(A;;FA;;;SY)'); 'written' }} catch {{ 'refused' }}
-[TnwksSecurity]::SetOwner('{path}', 'BA'); [TnwksSecurity]::SetDacl('{path}', 'O:BAD:P(A;;FA;;;SY)'); 'written'
+try {{ [TnwksSecurity]::SetRules('{path}', 'O:BAD:P(A;;FA;;;SY)'); 'written' }} catch {{ 'refused' }}
+[TnwksSecurity]::SetOwner('{path}', 'BA'); [TnwksSecurity]::SetRules('{path}', 'O:BAD:P(A;;FA;;;SY)'); 'written'
 """)
     assert run.returncode == 0, run.stderr
     assert run.stdout.split() == ["refused", "written"]
@@ -1059,18 +1060,17 @@ try {{ [TnwksSecurity]::SetDacl('{path}', 'O:BAD:P(A;;FA;;;SY)'); 'written' }} c
 @needs_pwsh
 def test_the_way_back_restores_a_file_whose_owner_removed_system_and_the_administrators(tmp_path):
     """The stated case: B owns its disk file and removed SYSTEM and the Administrators
-    from its rules. Way back step 3 takes ownership, writes the saved rules, then sets
-    the saved owner."""
+    from its rules. Way back step 3 takes ownership, then writes the saved owner and rules
+    in one write."""
     locked = f"O:{B_SID}D:P(A;;FA;;;{B_SID})"
     out = run_window(tmp_path, mode="wayback", state="t window-started\nt window-done\n", disk=("b",), acl_file=OLD_SDDL,
                      marker_a=True, disabled="tnwks-moverh-a-start", acls={"b/ext4.vhdx": locked},
                      tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"})
     assert out["code"] == 0, out["log"]
     assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL
-    # The move back first, then at the old path: the take of ownership, the rules, the owner.
+    # The move back first, then at the old path: the take of ownership, then the owner and the rules.
     disk = [c for c in out["sec_calls"] if " a/ext4.vhdx" in c]
-    assert disk == ["owner a/ext4.vhdx BA", "rules a/ext4.vhdx D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;" + A_SID + ")",
-                    f"owner a/ext4.vhdx {A_SID}"]
+    assert disk == ["owner a/ext4.vhdx BA", f"rules a/ext4.vhdx {OLD_SDDL}"]
     calls = out["calls"]
     assert calls.index("move b -> a") < calls.index(f"acl a/ext4.vhdx {OLD_SDDL}")
     assert "way back 3 passed" in out["log"]
@@ -1091,8 +1091,11 @@ def test_only_forward_step_2_clears_the_saved_rules_and_the_way_back_modes_keep_
         assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL, mode
 
 
-OLD_INHERITS = (f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;AU)")
-INHERIT = {"a": "(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;AU)", "b": "(A;ID;FA;;;SY)(A;ID;FA;;;BA)"}
+# The rules that the folders of setup give a file: SYSTEM and the Administrators full,
+# CREATOR OWNER (the owner of the file), and in A's folder the read of an older drive.
+OLD_INHERITS = (f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)")
+INHERIT = {"a": "(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;CO)(A;ID;FR;;;AU)",
+           "b": "(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;CO)"}
 MOVED = f"O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})"
 BOOT_STATE = "t window-started\nt window-done\nt window-started\n"
 
@@ -1108,11 +1111,52 @@ def test_the_way_back_puts_back_a_saved_set_that_inherits_from_the_old_folder(tm
     assert out["code"] == 4, out["log"]
     assert (Path(out["root"]) / "state/disk.sddl").read_text() == OLD_INHERITS
     assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_INHERITS
-    assert f"rules a/ext4.vhdx D:AI(A;;FA;;;{A_SID})" in out["sec_calls"]
+    # The take, then the owner and the rules in one write: the inherited CREATOR
+    # OWNER rule names A, not the Administrators.
+    disk = [c for c in out["sec_calls"] if " a/ext4.vhdx" in c]
+    assert disk == ["owner a/ext4.vhdx BA", f"rules a/ext4.vhdx O:{A_SID}D:AI(A;;FA;;;{A_SID})"]
     calls = out["calls"]
     assert calls.index("move b -> a") < calls.index(f"acl a/ext4.vhdx O:{A_SID}D:AI(A;;FA;;;{A_SID})")
     # At the new path, the folder of B would give other inherited rules: not the saved set.
-    assert not any(c.startswith("rules b/ext4.vhdx D:AI") for c in out["sec_calls"])
+    assert not any(c.startswith(f"rules b/ext4.vhdx O:{A_SID}") for c in out["sec_calls"])
+
+
+@needs_pwsh
+def test_a_file_whose_creator_owner_rule_names_another_account_is_restored(tmp_path):
+    """The inherited rules count in the check: a file at the old path with the saved
+    explicit rules, but a CREATOR OWNER rule that names the Administrators (as a write
+    that set the rules before the owner leaves it), is not the saved set. Step 3
+    restores it, and the rule then names A."""
+    wrong = OLD_INHERITS.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")
+    out = run_window(tmp_path, mode="boot", state=BOOT_STATE, disk=("a",), acl_file=OLD_INHERITS, marker_a=True,
+                     disabled="tnwks-moverh-a-start", acls={"a/ext4.vhdx": wrong}, inherit=INHERIT,
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
+    assert out["code"] == 0, out["log"]
+    assert '"old_as_saved":false' in next(line for line in out["log"] if line.startswith("read: "))
+    assert out["sec_calls"] == ["owner a/ext4.vhdx BA", f"rules a/ext4.vhdx O:{A_SID}D:AI(A;;FA;;;{A_SID})"]
+    assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_INHERITS
+
+
+@needs_pwsh
+def test_a_privilege_that_is_not_on_stops_before_any_write_of_the_rules(tmp_path):
+    out = run_window(tmp_path, FORWARD_TEST, enabled="SeBackupPrivilege True, SeRestorePrivilege False, SeTakeOwnershipPrivilege True")
+    assert out["code"] in (1, 4), out["log"]
+    assert "privileges: SeBackupPrivilege True, SeRestorePrivilege False, SeTakeOwnershipPrivilege True" in out["log"]
+    assert any("a privilege of SYSTEM is not on" in line for line in out["log"])
+    assert out["sec_calls"] == []
+
+
+@needs_pwsh
+def test_a_saved_set_with_a_group_part_is_restored_without_it(tmp_path):
+    """Windows gives some files a group (G:). The write takes the owner and the rules of
+    the SDDL, and no group; the check compares the owner and the rules."""
+    with_group = OLD_SDDL.replace("D:P", "G:SYD:P")
+    out = run_window(tmp_path, mode="wayback", state="t window-started\nt window-done\n", disk=("b",), acl_file=with_group,
+                     marker_a=True, disabled="tnwks-moverh-a-start", acls={"b/ext4.vhdx": MOVED},
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"})
+    assert out["code"] == 0, out["log"]
+    assert [c for c in out["sec_calls"] if " a/ext4.vhdx" in c] == ["owner a/ext4.vhdx BA", f"rules a/ext4.vhdx {OLD_SDDL}"]
+    assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL
 
 
 @needs_pwsh

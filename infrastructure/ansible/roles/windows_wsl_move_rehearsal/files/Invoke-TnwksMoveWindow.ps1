@@ -213,11 +213,13 @@ function Set-TnwksGroup([string]$Sid, [string]$Account, [bool]$In) {
 # reads and writes them with its privileges, not with the rules of the file:
 # each handle opens with backup semantics, with SeBackupPrivilege (a read),
 # SeTakeOwnershipPrivilege and SeRestorePrivilege (a write) enabled. A write
-# takes ownership for the Administrators first, then writes the rules (the
-# owner's group may), then sets the owner of the SDDL (SeRestorePrivilege
-# allows any owner). It writes the explicit rules and the protection of the
-# SDDL; the inherited rules of an SDDL with no protection come from the folder
-# of the file, so Windows computes them, and a check compares them after. A move is
+# takes ownership for the Administrators first (the owner's group may then
+# write the rules), then sets the owner of the SDDL and its rules in one
+# write by name (SeRestorePrivilege allows any owner), with the explicit
+# rules and the protection of the SDDL; the inherited rules of an
+# SDDL with no protection come from the folder of the file, so Windows
+# computes them in that write (a CREATOR OWNER rule names the owner of the
+# SDDL), and a check compares them after. A move is
 # a rename, with the right to delete a child on the folder, which SYSTEM has.
 $TnwksSecuritySource = @'
 using System;
@@ -247,6 +249,8 @@ public static class TnwksSecurity {
     static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor(string text, int revision, out IntPtr sd, out int size);
     [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     static extern bool ConvertStringSidToSid(string text, out IntPtr sid);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool GetSecurityDescriptorOwner(IntPtr sd, out IntPtr owner, out bool defaulted);
     [DllImport("advapi32.dll", SetLastError = true)]
     static extern bool GetSecurityDescriptorDacl(IntPtr sd, out bool present, out IntPtr dacl, out bool defaulted);
     [DllImport("advapi32.dll", SetLastError = true)]
@@ -298,28 +302,37 @@ public static class TnwksSecurity {
             }
         } finally { LocalFree(sid); }
     }
-    public static void SetDacl(string path, string sddl) {
-        IntPtr sd, dacl; int size; bool present, defaulted; short control; int revision;
+    // The owner and the rules of an SDDL in one write by name. With no
+    // protection, Windows computes the inherited rules from the folder in
+    // this write, so a CREATOR OWNER rule of the folder names the owner of
+    // the SDDL. WRITE_DAC comes from the take of ownership by the
+    // Administrators, WRITE_OWNER from SeTakeOwnershipPrivilege, and any
+    // owner is allowed with SeRestorePrivilege.
+    public static void SetRules(string path, string sddl) {
+        IntPtr sd, owner, dacl; int size; bool present, defaulted, ownerDefaulted; short control; int revision;
         if (!ConvertStringSecurityDescriptorToSecurityDescriptor(sddl, 1, out sd, out size)) throw new Win32Exception(Marshal.GetLastWin32Error(), "the rules " + sddl);
         try {
+            if (!GetSecurityDescriptorOwner(sd, out owner, out ownerDefaulted) || owner == IntPtr.Zero) throw new InvalidOperationException("no owner in " + sddl);
             if (!GetSecurityDescriptorDacl(sd, out present, out dacl, out defaulted) || !present) throw new InvalidOperationException("no rules in " + sddl);
             if (!GetSecurityDescriptorControl(sd, out control, out revision)) throw new Win32Exception(Marshal.GetLastWin32Error());
-            // SE_DACL_PROTECTED: the rules take no rule from the folder. With
-            // no protection, Windows computes the inherited rules from the folder
-            // (a write by name does; the caller owns the file by then).
-            int info = DACL | (((control & 0x1000) != 0) ? PROTECTED_DACL : UNPROTECTED_DACL);
-            int r = SetNamedSecurityInfo(path, 1, info, IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero);
-            if (r != 0) throw new Win32Exception(r, "set the rules of " + path);
+            // SE_DACL_PROTECTED: the rules take no rule from the folder.
+            int info = OWNER | DACL | (((control & 0x1000) != 0) ? PROTECTED_DACL : UNPROTECTED_DACL);
+            int r = SetNamedSecurityInfo(path, 1, info, owner, IntPtr.Zero, dacl, IntPtr.Zero);
+            if (r != 0) throw new Win32Exception(r, "set the owner and the rules of " + path);
         } finally { LocalFree(sd); }
     }
 }
 '@
 
+# Once per run: the type, then each privilege on. A privilege that is not on
+# stops here, before any read or write of the rules.
 function Initialize-TnwksSecurity {
     if (-not ('TnwksSecurity' -as [type])) { Add-Type -TypeDefinition $TnwksSecuritySource }
     if (-not $script:TnwksPrivileges) {
-        $script:TnwksPrivileges = [TnwksSecurity]::Enable()
-        Write-Log "privileges: $script:TnwksPrivileges"
+        $enabled = [TnwksSecurity]::Enable()
+        Write-Log "privileges: $enabled"
+        Assert-Tnwks ($enabled -eq 'SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True') "a privilege of SYSTEM is not on: $enabled"
+        $script:TnwksPrivileges = $enabled
     }
 }
 
@@ -330,13 +343,14 @@ function Get-TnwksSddl([string]$Path) {
 
 function Set-TnwksSddl([string]$Path, [string]$Sddl) {
     Initialize-TnwksSecurity
-    if ($Sddl -notmatch '^O:([^:]+?)D:') { throw "no owner in the rules $Sddl" }
+    # The owner, then a group (G:, which is not written), then the rules.
+    if ($Sddl -notmatch '^O:([^:]+?)(?=[GD]:)') { throw "no owner in the rules $Sddl" }
     $owner = $Matches[1]
+    $dacl = if ($Sddl -match '(D:[^:]*)$') { $Matches[1] } else { throw "no rules in $Sddl" }
     # The explicit rules only: Windows gives the inherited ones.
-    $explicit = $Sddl -replace '\([^;()]*;[A-Z]*ID[A-Z]*;[^)]*\)', ''
+    $explicit = $dacl -replace '\([^;()]*;[A-Z]*ID[A-Z]*;[^)]*\)', ''
     [TnwksSecurity]::SetOwner($Path, 'BA')
-    [TnwksSecurity]::SetDacl($Path, $explicit)
-    [TnwksSecurity]::SetOwner($Path, $owner)
+    [TnwksSecurity]::SetRules($Path, "O:$owner$explicit")
 }
 
 # The parts that a check compares: the owner, whether the rules are protected

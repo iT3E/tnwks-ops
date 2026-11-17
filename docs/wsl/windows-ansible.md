@@ -754,9 +754,13 @@ window, while B's VM runs and after its stop, each account SID masked.
 
 As the owner, the account may also remove SYSTEM and the Administrators from
 the rules of its file. So the procedure reads and writes rules with the
-privileges of SYSTEM (backup, restore, take ownership): it takes ownership
-for the Administrators, writes the explicit rules and the protection, then
-sets the owner. Windows gives the inherited rules from the folder. Way back
+privileges of SYSTEM (backup, restore, take ownership), and stops when one
+of them is not on: it takes ownership for the Administrators, then writes
+the owner, the explicit rules and the protection in one write by name.
+Windows gives the inherited rules from the folder in that write, so a
+CREATOR OWNER rule of the folder names the owner that the write sets (a
+write of the rules before the owner would name the Administrators). A group
+(`G:`) in a saved set is not written. Way back
 step 3 moves the file back first, then restores the saved owner and rules
 at the old path, where the folder gives the inherited rules that were
 saved; a file at the old path with other rules (a power loss between the
@@ -805,7 +809,15 @@ restart until the group check of the next phase or the removal, which logs
 the leave; the check play counts that leave as a problem. The design speaks of
 the installed version of WSL: the scripts read it as the file version of
 `C:\Program Files\WSL\wslservice.exe`, as SYSTEM, in the same way at each
-place where a version is compared.
+place where a version is compared. That the write of the owner and the
+rules in one call names the new owner in a CREATOR OWNER rule is the
+documented behaviour of Windows, not shown on a host by the unit tests. A
+rule for OWNER RIGHTS that the account writes on its file would take the
+right to write the rules from the Administrators after the take of
+ownership: the write then fails and the way back stops, with the file at
+the old path, the Administrators as its owner and its rules as they were. Not shown on a host either: that WSL writes the
+rule of its VM as an explicit rule, keeps the protection of the file, and
+removes the rule at a clean shutdown; the phases print what they read.
 
 **The removal.** `remove-before-restart` first ends a run of the window
 task or the boot task. Each removal phase then takes A and B out of every
