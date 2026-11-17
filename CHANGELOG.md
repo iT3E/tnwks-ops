@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.189.3 - 2026-11-17
+
+### Fixed
+
+* Rehearsal of the move: the new account owns its moved disk file, from two role values; the procedure reads and writes file rules with the privileges of SYSTEM and restores the saved rules after the move back; the checks allow the rules of a VM only; the window phase runs again after a way back; new stated cases for an older disk file, at setup and at the start of each window, and a file that grants SYSTEM nothing
+
 ## v2.189.2 - 2026-11-17
 
 ### Fixed
