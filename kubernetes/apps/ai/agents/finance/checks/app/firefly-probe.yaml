@@ -120,7 +120,11 @@ spec:
                   value: /policy/sandbox-policy.yaml
                 - name: MCP_URL
                   value: http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp
+                # The read port, as the sandboxes use it, and the port of
+                # the MCP server.
                 - name: APP_PROXY
+                  value: http://firefly-proxy.agents-finance.svc.cluster.local:8081
+                - name: APP_PROXY_WRITE
                   value: http://firefly-proxy.agents-finance.svc.cluster.local:8080
               securityContext: *containerSecurity
               resources: *resources
@@ -187,6 +191,8 @@ spec:
       toPorts:
         - ports:
             - port: "8080"
+              protocol: TCP
+            - port: "8081"
               protocol: TCP
 ---
 # The DNS check of the pods of the finance app (scripts/platform_checks.py

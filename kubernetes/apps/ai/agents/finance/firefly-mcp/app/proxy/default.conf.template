@@ -4,9 +4,12 @@
 # and replaces the one of the client. Its clients, the MCP server and the
 # sandboxes of the agent, hold no token.
 #
-# It lets through only the calls of an allow list: GET, POST and PUT on the API
+# Two ports. On 8080, for the MCP server, it lets through the calls of an
+# allow list: GET, POST and PUT on the API
 # paths that the kept tools of the MCP server call (fireflyiii-mcp 1.0.1, the
-# groups of ../mcp.yaml). Every other call gets a 403 with the header
+# groups of ../mcp.yaml). On 8081, for the sandboxes, only the GET calls of
+# the same list. The network policy lets each client reach its own port
+# only (../networkpolicy.yaml). Every other call gets a 403 with the header
 # X-Firefly-Proxy: refused, and never reaches the app: each DELETE, each other
 # method, each other path (the preferences, webhooks, cron, configuration,
 # users and tokens, the bulk update, the rule and recurrence triggers, the
@@ -62,14 +65,16 @@ map "$request_method $uri" $firefly_allowed {
 # A method override. The framework of the app (Laravel 12 on Symfony 7.4)
 # routes a POST as the method of the header X-HTTP-Method-Override, or of a
 # "_method" argument in the query, a form body or a JSON body. The proxy
-# drops the header and its variants (below), refuses a query with "_method",
-# and lets through a write only with a JSON body, so no form body. A JSON
+# drops the header and its variants (below), refuses a write with a query
+# string (the server sends none on a kept write), and lets through a write
+# only with a JSON body, so no form body. A JSON
 # body with "_method" still reaches the app: at 6.5.9 the app has only GET
 # and POST routes on the paths where the list allows a POST, so such a POST
 # gets a 405 or a read (docs/apps/agent-platform.md, "The finance app").
-map $args $firefly_args_ok {
+map "$request_method$is_args" $firefly_args_ok {
     default 1;
-    "~*(^|&)(_|%5f)method(=|&|\[|%5b|$)" 0;
+    "POST?" 0;
+    "PUT?" 0;
 }
 
 map "$request_method $content_type" $firefly_type_ok {
@@ -78,17 +83,26 @@ map "$request_method $content_type" $firefly_type_ok {
     "~*^(POST|PUT) application/json\s*(;.*)?$" 1;
 }
 
-map "$firefly_raw_ok$firefly_allowed$firefly_args_ok$firefly_type_ok" $firefly_refused {
-    default 1;
-    "1111" 0;
+# The port: 8080 takes each method of the list, 8081 reads only.
+map "$server_port $request_method" $firefly_port_ok {
+    default 0;
+    "~^8080 " 1;
+    "8081 GET" 1;
 }
 
-# One line for each request: the method, the path with no query string, the
+map "$firefly_raw_ok$firefly_allowed$firefly_args_ok$firefly_type_ok$firefly_port_ok" $firefly_refused {
+    default 1;
+    "11111" 0;
+}
+
+# One line for each request: the port, the method, the path with no query
+# string, the
 # status, and refused=1 for a refusal. No header and no body.
-log_format firefly_proxy 'firefly-proxy method=$request_method path=$uri status=$status refused=$firefly_refused';
+log_format firefly_proxy 'firefly-proxy port=$server_port method=$request_method path=$uri status=$status refused=$firefly_refused';
 
 server {
     listen 8080;
+    listen 8081;
     server_tokens off;
     client_max_body_size 1m;
     access_log /dev/stdout firefly_proxy;
@@ -100,8 +114,12 @@ server {
     }
 
     location / {
+        # Each answer of this location names the port, so a client can tell
+        # an answer of the proxy from one of a proxy in front of it.
+        add_header X-Firefly-Proxy-Port $server_port always;
         if ($firefly_refused) {
             add_header X-Firefly-Proxy refused always;
+            add_header X-Firefly-Proxy-Port $server_port always;
             return 403;
         }
         proxy_pass http://${FIREFLY_UPSTREAM};

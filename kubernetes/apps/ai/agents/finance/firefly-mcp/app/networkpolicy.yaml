@@ -1,10 +1,12 @@
 ---
-# The proxy of the finance app. In: the MCP server, the supervisors of the
-# sandboxes of this trust domain, and the probe of the app. A sandbox has two
-# pods: the workload pod has no egress at all, and its supervisor opens each
-# connection that the sandbox policy approves, from its own pod. So the
-# supervisor is the client here, and only for a sandbox whose policy names
-# the proxy (the agent's, and the probe's). The probe
+# The proxy of the finance app. Two ports (proxy/default.conf.template): 8080
+# lets through the reads and the writes of the allow list, 8081 the reads
+# only. In: the MCP server, on 8080 only; the supervisors of the sandboxes of
+# this trust domain, on 8081 only; and the probe of the app, on both. A
+# sandbox has two pods: the workload pod has no egress at all, and its
+# supervisor opens each connection that the sandbox policy approves, from its
+# own pod. So the supervisor is the client here, and only for a sandbox whose
+# policy names the proxy (the agent's, and the probe's). The probe
 # (../../checks/app/firefly-probe.yaml) sends the calls that the proxy must
 # refuse straight to it. Out: the app, and DNS for the name of the app only.
 apiVersion: cilium.io/v2
@@ -22,10 +24,20 @@ spec:
             app.kubernetes.io/name: firefly-mcp
             # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEndpoints:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-finance
             openshell.ai/boundary-role: supervisor
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+    - fromEndpoints:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-finance
             app.kubernetes.io/name: platform-checks
@@ -34,6 +46,8 @@ spec:
       toPorts:
         - ports:
             - port: "8080"
+              protocol: TCP
+            - port: "8081"
               protocol: TCP
   egress:
     - toEndpoints:

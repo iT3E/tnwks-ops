@@ -5,8 +5,10 @@
 # (../../checks/app/firefly-probe.yaml).
 #
 # The default file rules of OpenShell, and one network rule: the proxy of the
-# finance app (../../firefly-mcp/app/proxy.yaml), over plain HTTP in the
-# cluster, for Python only. The sandbox holds no credential for it: the proxy
+# finance app (../../firefly-mcp/app/proxy.yaml), on its read port 8081, over
+# plain HTTP in the cluster, for Python only. The proxy lets through reads
+# only on that port, and the network policy lets a sandbox reach no other
+# port of it. The sandbox holds no credential for it: the proxy
 # sets the token, and it lets through only the calls of its allow list. This
 # rule is a second wall in front of it: GET under /api/v1 only. The scripts of
 # the agent only read; its writes go through the MCP server, whose update of
@@ -26,7 +28,7 @@ network_policies:
     name: finance_app
     endpoints:
       - host: firefly-proxy.agents-finance.svc.cluster.local
-        port: 8080
+        port: 8081
         protocol: rest
         tls: ""
         enforcement: enforce

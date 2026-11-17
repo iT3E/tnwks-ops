@@ -653,9 +653,9 @@ the app through one of them. The agent may create and update data. It may
 never delete.
 
 ```text
-agent pod (gateway, MCP client) --> firefly-mcp :3000 --+
-                                                        +--> firefly-proxy :8080 --> the app (production/firefly :8080)
-sandbox --> its supervisor (by the sandbox policy) -----+    (the token, the allow list)
+agent pod (gateway, MCP client) --> firefly-mcp :3000 --> firefly-proxy :8080 (reads, writes) --+
+                                                                                                 +--> the app (production/firefly :8080)
+sandbox --> its supervisor (by the sandbox policy) ----> firefly-proxy :8081 (reads only) -------+
 ```
 
 - **`firefly-proxy`** (`app/proxy.yaml`): nginx, and the only holder of the
@@ -664,10 +664,12 @@ sandbox --> its supervisor (by the sandbox policy) -----+    (the token, the all
   renders it into the config in an emptyDir in memory at the start. The
   proxy sets `Authorization` on each request that it lets through, in place
   of the client's header, and drops the client's cookie and forwarding
-  headers. It lets through only the calls of its allow list
-  (`app/proxy/default.conf.template`): `GET`, `POST` and `PUT` on the API
-  paths that the kept tools of the MCP server call, taken from the source
-  of the server at v1.0.1. Every other call gets a 403 with the header
+  headers. It has two ports, one for each client
+  (`app/proxy/default.conf.template`). On 8080, for the MCP server, it lets
+  through only the calls of its allow list: `GET`, `POST` and `PUT` on the
+  API paths that the kept tools of the MCP server call, taken from the
+  source of the server at v1.0.1. On 8081, for the sandboxes, only the
+  `GET` calls of the same list. Every other call gets a 403 with the header
   `X-Firefly-Proxy: refused` and never reaches the app: each `DELETE`, each
   other method, the preferences, webhooks, cron, configuration, users and
   tokens, the bulk update, the rule and recurrence triggers, the exports
@@ -679,11 +681,13 @@ sandbox --> its supervisor (by the sandbox policy) -----+    (the token, the all
   `Request::getMethod`) routes a POST as the method of the header
   `X-HTTP-Method-Override`, or of a `_method` argument in the query, a form
   body or a JSON body. The proxy drops that header and its variants
-  `X-HTTP-Method` and `X-Method-Override`, refuses a query with `_method`,
-  and lets through a write only with the content type `application/json`,
-  so no form body. One log line for each request:
-  `firefly-proxy method=<m> path=<path> status=<n> refused=0|1`, with no
-  query string, header or body.
+  `X-HTTP-Method` and `X-Method-Override`, refuses a write with any query
+  string (no kept write of the server sends one; PHP decodes the names of
+  the arguments, so `_%6dethod` is `_method` too), and lets through a
+  write only with the content type `application/json`, so no form body.
+  Each answer carries the header `X-Firefly-Proxy-Port`. One log line for
+  each request: `firefly-proxy port=<n> method=<m> path=<path> status=<n>
+  refused=0|1`, with no query string, header or body.
 - **`firefly-mcp`** (`app/mcp.yaml`): the MCP server
   [fireflyiii-mcp](https://github.com/daften/fireflyiii-mcp) 1.0.1, in HTTP
   mode with no OAuth client. In that mode it takes the bearer of each
@@ -698,10 +702,13 @@ sandbox --> its supervisor (by the sandbox policy) -----+    (the token, the all
   or transaction links.
 - **The sandboxes** of the agent reach the proxy with no credential: the
   sandbox policy of the agent (`agent/config/sandbox-policy.yaml`, the
-  `policy` of the `openshell` entry) has one network rule, to
-  `firefly-proxy.agents-finance.svc.cluster.local:8080`, for `python3`
+  `policy` of the `openshell` entry) has one network rule, to the read port
+  `firefly-proxy.agents-finance.svc.cluster.local:8081`, for `python3`
   only, `GET` under `/api/v1`: the scripts of the agent only read, and its
-  writes go through the MCP server. There is no provider and
+  writes go through the MCP server. The read port is the wall: a sandbox
+  policy can be changed (the client certificate of the agent container can
+  make a sandbox with another policy), and the network policy still lets a
+  supervisor reach no port of the proxy but 8081. There is no provider and
   no providers job: nothing of the provider store of the sandbox gateway is
   used, and the gateway holds no credential of the app. A script in a
   sandbox needs only the base URL. The workload pod of a sandbox has no
@@ -710,12 +717,32 @@ sandbox --> its supervisor (by the sandbox policy) -----+    (the token, the all
   OpenShell applies a policy when it makes a sandbox: a sandbox made before
   this policy keeps its old one until it is made again.
 
-**Network policy.** `firefly-proxy`: in from `firefly-mcp`, from the
-supervisors of the sandboxes of `agents-finance` (label
-`openshell.ai/boundary-role: supervisor`) and from the probe of the app,
-out to the app's pods on port 8080. `firefly-mcp`: in from the agent pod
-and the probe, out to the proxy only. The agent pod gets one rule to
-`firefly-mcp`.
+**Network policy.** `firefly-proxy`, by the labels of the client and the
+port: in from `firefly-mcp` on 8080 only, from the supervisors of the
+sandboxes of `agents-finance` (label `openshell.ai/boundary-role:
+supervisor`) on 8081 only, and from the probe of the app on both; out to
+the app's pods on port 8080. `firefly-mcp`: in from the agent pod and the
+probe, out to the proxy only. The agent pod gets one rule to `firefly-mcp`.
+
+**Who can carry the labels of a client of 8080.** The rule for 8080 trusts
+the labels of the MCP pod (`app.kubernetes.io/name: firefly-mcp`) and of the
+probe (`app.kubernetes.io/name: platform-checks` with
+`app.kubernetes.io/component: firefly-probe`). A sandbox can not carry them:
+at OpenShell 0.1.8 the Kubernetes driver puts a label of the caller on the
+pod only when the gateway's `allowed_pod_labels` names its key, the default
+is empty, and the create is refused otherwise
+(`crates/openshell-driver-kubernetes/src/config.rs`, `allowed_pod_labels`;
+`driver.rs`, `validate_pod_metadata`); an update of a sandbox changes no pod
+label (`proto/openshell.proto`, `UpdateSandboxRequest`). The finance gateway
+sets no `allowed_pod_labels`, and a test keeps it so
+(`observability/tests/test_firefly_proxy.py`). What is left: a pod with
+those labels in `agents-finance` can be made by Flux (from git), by a
+cluster admin, by the service account of the sandbox gateway (its Role
+`openshell-sandbox` can create pods there; the gateway's code sets only its
+own labels) and by the agent sandbox controller (from the Sandbox records,
+whose pod labels the gateway sets). The probe's Role reads pods only. A new
+release of OpenShell can change this: check `allowed_pod_labels` and the
+label code of the driver when the gateway moves to a new release.
 
 **DNS.** DNS is a way out too, so each of the two pods resolves one name:
 the proxy the app's Service, the MCP server the proxy's Service. Cilium
@@ -735,14 +762,15 @@ root file system, and mount no service account token.
 Never a delete, a trigger, a bulk update, an export, an attachment or a
 setting. Three walls, each on its own:
 
-1. The proxy, at the HTTP level, whatever the server or a sandbox sends.
+1. The proxy, at the HTTP level, whatever the server or a sandbox sends: a
+   sandbox reaches only its read port, which refuses each write.
 2. The agent: `toolFilter.include` of the MCP entry lets through the reads
    (`get_*`, `search_*`, `test_rule`, `test_rule_group`) and the fifteen
    writes by name; `tools.deny` removes each `firefly__delete_*`,
    `firefly__bulk_*`, `firefly__trigger_*`, export, attachment and rule
    write tool. `tools.sandbox.tools.alsoAllow` has `firefly__*`, so a
    sandboxed session has the tools.
-3. The sandbox policy, for a script: reads only.
+3. The sandbox policy, for a script: reads only, in front of the read port.
 
 The limits of the walls:
 
@@ -763,8 +791,8 @@ The limits of the walls:
   the stored transaction, so it can not refuse such a `PUT` without
   reading and comparing bodies. The `update_transaction` tool of the
   server reads the group first and sends every split with its id, so the
-  agent's tool does not do it; a script could, and so the sandbox policy
-  lets through reads only. What is left: a bad release of the server, and
+  agent's tool does not do it; a script could, and so a sandbox reaches
+  only the read port. What is left: a bad release of the server, and
   the restore below.
 - **A `_method` in a JSON body** still reaches the app, and the framework
   applies it to a POST. At 6.5.9 the app has only `GET` and `POST` routes
@@ -787,7 +815,7 @@ finance data. A page that the agent reads can steer it to a wrong create or
 update, or to put finance data into a search query, which goes to the search
 vendor. The controls: no delete (the three walls above), the allow list of
 the proxy, no egress of the agent but the listed ones and none of a sandbox
-but the proxy, DNS for one name in the pods of the app, and the backup of
+but the read port of the proxy, DNS for one name in the pods of the app, and the backup of
 the app's database. What is left: a wrong
 create or update can happen, and data can leave in a search query.
 
@@ -819,13 +847,19 @@ the real token and after it. Through the MCP server, as the agent calls it:
 the server loads no tool of the other groups, `get_about` reaches the app
 (a 401 with the placeholder), and `delete_transaction`, `delete_tag`,
 `trigger_rule` and `update_rule` on id `0` get the proxy's 403. From a
-sandbox made with the sandbox policy and the image of the agent's
-sandboxes: `GET /api/v1/about` reaches the app, and each delete and each
-call of the list above and each write is refused, by the proxy or by the
-sandbox policy; the proxy's address with no proxy in between is blocked.
-Straight to the proxy, the calls that neither client sends: the override
-header is dropped (the app routes a POST, not a PUT, so no 405), and a
-`_method` in the query, a form body, a `DELETE`, a `PATCH` and a path trick
+sandbox made with the image of the agent's sandboxes and the agent's
+sandbox policy, widened for the probe: each method on the read port, so
+that the proxy and not the policy must refuse a write, and a rule for 8080.
+`GET /api/v1/about` reaches the app on the read port; each write and each
+delete there is refused by the proxy; each other call of the list above
+is refused, by the proxy or by the policy; 8080 through the supervisor is
+blocked by the network policy; and the proxy's address with no proxy in
+between is blocked. That the agent's own policy lets through `GET` only is
+a test in git. Straight to the proxy, the calls that neither client sends:
+on 8080 the override header is dropped (the app routes a POST, not a PUT,
+so no 405), and a `_method` in the query (also with encoded letters), any
+query on a write, a form body, a `DELETE`, a `PATCH` and a path trick are
+refused; on 8081 an allowed read reaches the app and a `POST` and a `PUT`
 are refused. No call of the probe can change data: each write or delete
 names an id that does not exist or sends an empty body.
 `platform-check-firefly-dns` (05:27) is set up as the two pods are (the
@@ -858,11 +892,11 @@ example `firefly__get_summary`) answers, and the proxy logs the call with
 
 2. **The scripts of the workspace.** Only the owner edits the copied
    workspace. In each script that calls the app, set the base URL to
-   `http://firefly-proxy.agents-finance.svc.cluster.local:8080` (the paths
-   stay `/api/v1/...`) and drop the read of the token file: the proxy sets
-   the token, and the sandbox has none. The scripts must run with
-   `python3` and only read; the sandbox policy lets no other program and
-   no write reach the proxy.
+   `http://firefly-proxy.agents-finance.svc.cluster.local:8081`, the read
+   port (the paths stay `/api/v1/...`), and drop the read of the token
+   file: the proxy sets the token, and the sandbox has none. The scripts
+   must run with `python3` and only read; the sandbox policy lets no other
+   program reach the proxy, and the read port lets no write through.
    When the scripts no longer use the token of the host, revoke it in the
    app.
 3. **Open: which writes the agent needs.** The owner said "it needs to
@@ -874,8 +908,9 @@ example `firefly__get_summary`) answers, and the proxy logs the call with
    the owner add it. If rule writes are wanted, the proxy and the deny list
    change together, and a rule that deletes becomes possible.
 4. **Open: writes from a sandbox.** Off for now, as the scripts only read.
-   On, a script could remove the splits of a transaction by mistake (an
-   update that lists fewer splits). The recommendation: keep them off, and
+   On, the sandbox policy, the read port and the network policy change
+   together, and a script could remove the splits of a transaction by
+   mistake (an update that lists fewer splits). The recommendation: keep them off, and
    let the agent write through its tools only.
 5. **Open: the split removal of an update.** The controls are the tool of
    the server (it sends every split), the deny of the bulk tool, and the
@@ -1189,7 +1224,7 @@ pod's log goes to Loki. `AgentPlatformCronJobFailed` and
 | --- | --- | --- |
 | `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
 | `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox. Before the create it removes a sandbox of its own name that an earlier run left (a `leftover sandbox` line), and at its end it fails when its Sandbox record is still there (a `sandbox removed` line), after it removes it |
-| `platform-check-firefly-probe` | 05:17 | `agents-finance` only. Through the MCP server of the finance app and from a sandbox with the agent's sandbox policy, an allowed read reaches the app, and each delete and each call off the allow list of the proxy is refused. It removes its sandbox `firefly-probe` as the probe does |
+| `platform-check-firefly-probe` | 05:17 | `agents-finance` only. Through the MCP server of the finance app and from a sandbox with the agent's sandbox policy (widened to each method on the read port), an allowed read reaches the app, and each delete and each call off the allow list of the proxy is refused; a sandbox can write nothing through the read port and can not reach the write port. It removes its sandbox `firefly-probe` as the probe does |
 | `platform-check-firefly-dns` | 05:27 | `agents-finance` only. A pod set up as the pods of the finance app (out of the namespace's DNS rule, its own rule for one name, `ndots` 1) resolves that name and no other |
 
 - The check pods may try every trust domain's gateway on port 8080, so the

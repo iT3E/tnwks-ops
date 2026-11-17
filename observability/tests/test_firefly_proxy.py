@@ -230,11 +230,12 @@ def lookup(name: str, value: str) -> str:
     return next((v for rx, v in entries if rx.search(value)), default)
 
 
-def proxy_allows(call: str, content_type: str | None = None) -> bool:
+def proxy_allows(call: str, content_type: str | None = None, port: int = 8080) -> bool:
     """The proxy's decision for "<method> <raw path>", as nginx makes it:
-    the raw path, the method and the decoded path on the allow list, the
-    query (no method override) and the content type (JSON for a write, the
-    MCP server's own). A GET has no content type."""
+    the raw path, the method and the decoded path on the allow list, no
+    query on a write (no method override), the content type (JSON for a
+    write, the MCP server's own) and the port (8081 reads only). A GET has
+    no content type."""
     method, raw = call.split(" ", 1)
     path, _, args = raw.partition("?")
     if content_type is None:
@@ -242,8 +243,10 @@ def proxy_allows(call: str, content_type: str | None = None) -> bool:
     uri = re.sub(r"/+", "/", urllib.parse.unquote(path))
     flags = (lookup("firefly_raw_ok", raw)
              + lookup("firefly_allowed", f"{method} {uri}")
-             + lookup("firefly_args_ok", args)
-             + lookup("firefly_type_ok", f"{method} {content_type}"))
+             # $is_args: "?" when the query is not empty.
+             + lookup("firefly_args_ok", method + ("?" if args else ""))
+             + lookup("firefly_type_ok", f"{method} {content_type}")
+             + lookup("firefly_port_ok", f"{port} {method}"))
     return lookup("firefly_refused", flags) == "0"
 
 
@@ -270,21 +273,30 @@ def test_proxy_refuses_other_calls(call):
     assert not proxy_allows(call), call
 
 
-def test_proxy_lets_through_dots_and_slashes_in_the_query():
+def test_proxy_lets_through_dots_and_slashes_in_the_query_of_a_read():
     assert proxy_allows("GET /api/v1/search/transactions?query=a%2Fb..c")
     assert proxy_allows("PUT /api/v1/tags/my%20tag")
 
 
+@pytest.mark.parametrize("call", [c for calls in CALLS.values() for c in calls])
+def test_the_read_port_lets_through_the_reads_only(call):
+    expected = kept_write(call) and call.startswith("GET ")
+    assert proxy_allows(concrete(call), port=8081) == expected, call
+
+
 # The framework of the app (Laravel 12.55 on Symfony http-foundation 7.4)
 # routes a POST as the method that a "_method" argument names, in the query
-# or the body (Request::getMethod).
+# or the body (Request::getMethod), and PHP decodes the name. No kept write
+# of the server sends a query, so a write with any query is refused.
 @pytest.mark.parametrize("call", [
     "POST /api/v1/tags?_method=DELETE", "POST /api/v1/tags?_METHOD=DELETE",
     "POST /api/v1/tags?%5Fmethod=DELETE", "POST /api/v1/tags?a=1&_method=PUT",
     "POST /api/v1/tags?_method[]=DELETE", "POST /api/v1/tags?_method",
-    "GET /api/v1/tags?_method=DELETE", "PUT /api/v1/tags/1?_method=DELETE",
+    "POST /api/v1/tags?_%6dethod=DELETE", "POST /api/v1/tags?%5F%6Dethod=DELETE",
+    "POST /api/v1/tags?x=1", "PUT /api/v1/tags/1?_method=DELETE",
+    "PUT /api/v1/tags/1?x=1",
 ])
-def test_proxy_refuses_a_method_override_in_the_query(call):
+def test_proxy_refuses_a_query_on_a_write(call):
     assert not proxy_allows(call), call
 
 
@@ -389,7 +401,8 @@ def test_the_pieces_name_the_same_addresses():
     policy = yaml.safe_load(SANDBOX_POLICY.read_text())
     (rule,) = policy["network_policies"].values()
     (endpoint,) = rule["endpoints"]
-    assert (endpoint["host"], endpoint["port"]) == ("firefly-proxy.agents-finance.svc.cluster.local", 8080)
+    # The read port.
+    assert (endpoint["host"], endpoint["port"]) == ("firefly-proxy.agents-finance.svc.cluster.local", 8081)
     # Reads only: the scripts of the agent only read.
     assert {r["allow"]["method"] for r in endpoint["rules"]} == {"GET"}
     assert config["plugins"]["entries"]["openshell"]["config"]["policy"] == \
@@ -399,6 +412,10 @@ def test_the_pieces_name_the_same_addresses():
     env = {e["name"]: e.get("value") for e in container["env"]}
     assert env["MCP_URL"] == config["mcp"]["servers"][SERVER]["url"]
     assert env["APP_PROXY"] == f"http://{endpoint['host']}:{endpoint['port']}"
+    (mcp,) = [d for d in docs(APP / "mcp.yaml") if d["kind"] == "Deployment"]
+    server_env = {e["name"]: e.get("value")
+                  for e in mcp["spec"]["template"]["spec"]["containers"][0]["env"]}
+    assert env["APP_PROXY_WRITE"] == server_env["FIREFLY_URL"]
     # The probe's sandbox runs the image of the agent's sandboxes.
     assert env["PROBE_IMAGE"] == config["plugins"]["entries"]["openshell"]["config"]["from"]
 
@@ -440,3 +457,53 @@ def test_the_app_pods_resolve_one_name_each():
                       else doc["spec"]["jobTemplate"]["spec"]["template"]["metadata"]["labels"])
             assert labels["agents.home.arpa/dns"] == "own-rule", doc["metadata"]["name"]
             assert {"name": "ndots", "value": "1"} in spec["dnsConfig"]["options"]
+
+
+def test_each_client_reaches_its_own_port():
+    (proxy,) = [d for d in docs(POLICY) if d["metadata"]["name"] == "firefly-proxy"]
+    ports = {}
+    for rule in proxy["spec"]["ingress"]:
+        (peer,) = rule["fromEndpoints"]
+        labels = peer["matchLabels"]
+        who = labels.get("app.kubernetes.io/component") or labels.get("app.kubernetes.io/name") \
+            or labels.get("openshell.ai/boundary-role")
+        ports[who] = sorted(p["port"] for tp in rule["toPorts"] for p in tp["ports"])
+    assert ports == {"firefly-mcp": ["8080"], "supervisor": ["8081"],
+                     "firefly-probe": ["8080", "8081"]}
+
+
+def test_the_probe_policy_adds_the_write_port_rule(monkeypatch, tmp_path):
+    """The probe's sandbox gets the agent's policy with each method on the read
+    port, and one rule for the write port, which the network policy must stop
+    at the supervisor."""
+    import importlib.util
+    monkeypatch.setenv("OWN_NAMESPACE", "agents-finance")
+    monkeypatch.setenv("TRUST_DOMAIN_NAMESPACES", "agents-finance")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SANDBOX_POLICY", str(SANDBOX_POLICY))
+    monkeypatch.setenv("APP_PROXY_WRITE", "http://firefly-proxy.agents-finance.svc.cluster.local:8080")
+    script = ROOT / "kubernetes/apps/ai/agents/checks/app/scripts/platform_checks.py"
+    spec = importlib.util.spec_from_file_location("platform_checks_firefly", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    policy = yaml.safe_load(Path(module.probe_policy()).read_text())
+    agent = yaml.safe_load(SANDBOX_POLICY.read_text())
+    assert {k: v for k, v in policy.items() if k != "network_policies"} == \
+        {k: v for k, v in agent.items() if k != "network_policies"}
+    probe_app, agent_app = policy["network_policies"]["finance_app"], agent["network_policies"]["finance_app"]
+    # Each method on the read port, so the proxy must refuse the writes.
+    assert agent_app["endpoints"][0]["rules"] == [{"allow": {"method": "GET", "path": "/api/v1/**"}}]
+    assert probe_app["endpoints"][0]["rules"] == [{"allow": {"method": "*", "path": "/api/v1/**"}}]
+    probe_app["endpoints"][0]["rules"] = agent_app["endpoints"][0]["rules"]
+    assert probe_app == agent_app
+    (endpoint,) = policy["network_policies"]["write_port_probe"]["endpoints"]
+    assert (endpoint["host"], endpoint["port"]) == ("firefly-proxy.agents-finance.svc.cluster.local", 8080)
+
+
+def test_no_sandbox_can_carry_the_labels_of_a_client_of_the_write_port():
+    """A sandbox's pod gets a caller's label only when the gateway's
+    allowed_pod_labels names it (OpenShell 0.1.8, driver.rs
+    validate_pod_metadata; the default is empty). The finance gateway sets
+    none, so no sandbox can carry the labels of the MCP pod or the probe."""
+    release = ROOT / "kubernetes/apps/ai/agents/finance/sandbox-gateway/app/helmrelease.yaml"
+    assert "allowed_pod_labels" not in release.read_text()

@@ -408,7 +408,10 @@ def probe() -> None:
 # either). No call here can change data: each write or delete names an id
 # that does not exist ("0"), or sends an empty body that the app refuses.
 MCP_URL = os.environ.get("MCP_URL", "")
+# The read port of the proxy (the sandboxes'), and its write port (the MCP
+# server's).
 APP_PROXY = os.environ.get("APP_PROXY", "")
+APP_PROXY_WRITE = os.environ.get("APP_PROXY_WRITE", "")
 SANDBOX_POLICY = os.environ.get("SANDBOX_POLICY", "")
 # The MCP server sends this on as the bearer, and the proxy replaces it.
 MCP_BEARER = "none"
@@ -471,28 +474,35 @@ def mcp_checks() -> None:
         report("firefly-probe", target, expected, mcp_tool(tool, arguments))
 
 
-# Runs inside the sandbox. The proxy marks its refusal with a header; the
-# sandbox policy answers 403 with the JSON error "policy_denied" (OpenShell
-# 0.1.8, l7/rest.rs). Any other answer came from the app.
+# Runs inside the sandbox. Each answer of the proxy names its port in a
+# header, and a refusal of the proxy carries a second header; the sandbox
+# policy answers 403 with the JSON error "policy_denied" (OpenShell 0.1.8,
+# l7/rest.rs). An answer with neither did not come through the proxy.
 FIREFLY_PROBE = r'''
 import json, socket, urllib.error, urllib.request
 APP = "APP_PROXY"
-def http(method, path):
-    request = urllib.request.Request(APP + path, method=method,
+WRITE_PORT = "APP_WRITE"
+def http(method, path, base=APP):
+    request = urllib.request.Request(base + path, method=method,
         data=b"{}" if method in ("POST", "PUT") else None,
         headers={"Accept": "application/json", "Content-Type": "application/json"})
     try:
-        r = urllib.request.urlopen(request, timeout=10); r.read(); return "reached: HTTP %s" % r.status
+        r = urllib.request.urlopen(request, timeout=10); r.read()
+        if r.headers.get("X-Firefly-Proxy-Port"):
+            return "reached: HTTP %s" % r.status
+        return "blocked: HTTP %s, not from the proxy" % r.status
     except urllib.error.HTTPError as e:
         if e.headers.get("X-Firefly-Proxy") == "refused":
             return "refused: proxy"
+        if e.headers.get("X-Firefly-Proxy-Port"):
+            return "reached: HTTP %s" % e.code
         try:
             error = json.loads(e.read(4000) or b"{}").get("error")
         except Exception:
             error = None
         if e.code == 403 and error == "policy_denied":
             return "refused: sandbox policy"
-        return "reached: HTTP %s" % e.code
+        return "blocked: HTTP %s %s" % (e.code, error or "")
     except Exception as e:
         return "blocked: " + type(e).__name__
 def tcp(host, port):
@@ -503,15 +513,20 @@ def tcp(host, port):
 out = {"allowed read (GET /api/v1/about)": http("GET", "/api/v1/about")}
 for method, path in CALLS:
     out["%s %s" % (method, path)] = http(method, path)
+# The probe's policy names the write port too; the network policy must stop
+# the supervisor there.
+out["write port of the proxy, through the supervisor"] = http("GET", "/api/v1/about", WRITE_PORT)
 out["proxy address, direct"] = tcp("PROXY_IP", PROXY_PORT)
 print("PROBE " + json.dumps(out))
 '''
-# Calls that must not reach the app from a sandbox: each write (the sandbox
-# policy lets through reads only), each delete, and calls off the allow list
-# of the proxy (firefly-mcp/app/proxy/default.conf.template).
+# Calls that must not reach the app from a sandbox: each write and each
+# delete (the read port of the proxy lets through reads only), and calls off
+# the allow list of the proxy (firefly-mcp/app/proxy/default.conf.template).
 REFUSED_CALLS = [
     ("POST", "/api/v1/tags"),
     ("PUT", "/api/v1/tags/0"),
+    ("PUT", "/api/v1/transactions/0"),
+    ("PATCH", "/api/v1/transactions/0"),
     ("DELETE", "/api/v1/transactions/0"),
     ("DELETE", "/api/v1/tags/0"),
     ("GET", "/api/v1/preferences"),
@@ -534,32 +549,81 @@ REFUSED_CALLS = [
 ]
 
 
+# The sandbox policy of the agent lets through GET only. The probe's sandbox
+# gets that policy with each method on the read port, so that the proxy, not
+# the policy, must refuse each write there, as it must when a policy is
+# widened. It also gets a rule for the write port of the proxy, which the
+# network policy must stop at the supervisor. The policy of the agent ends
+# with its network_policies.
+AGENT_RULE = '''- allow: {method: GET, path: "/api/v1/**"}'''
+PROBE_RULE = '''- allow: {method: "*", path: "/api/v1/**"}'''
+WRITE_PORT_RULE = """  write_port_probe:
+    name: write_port_probe
+    endpoints:
+      - host: {host}
+        port: {port}
+        protocol: rest
+        tls: ""
+        enforcement: enforce
+        rules:
+          - allow: {{method: GET, path: "/api/v1/**"}}
+    binaries:
+      - {{path: /usr/local/bin/python3.13}}
+      - {{path: /usr/local/bin/python3}}
+"""
+
+
+def probe_policy() -> str:
+    """The sandbox policy of the agent, with each method on the read port and
+    a rule for the write port."""
+    with open(SANDBOX_POLICY) as f:
+        text = f.read()
+    if text.count(AGENT_RULE) != 1:
+        raise ValueError("the rule of the read port is not in the sandbox policy")
+    text = text.replace(AGENT_RULE, PROBE_RULE)
+    host, port = APP_PROXY_WRITE.split("://", 1)[1].split("/", 1)[0].rsplit(":", 1)
+    os.makedirs(os.environ["HOME"], exist_ok=True)
+    path = os.path.join(os.environ["HOME"], "firefly-probe-policy.yaml")
+    with open(path, "w") as f:
+        f.write(text.rstrip("\n") + "\n" + WRITE_PORT_RULE.format(host=host, port=port))
+    return path
+
+
 def run_firefly_probe() -> None:
+    try:
+        policy = probe_policy()
+    except (OSError, ValueError) as e:
+        report("firefly-probe", "sandbox policy of the probe", "ok", f"failed: {e}")
+        return
     created = cli("sandbox", "create", "--name", SANDBOX, "--from", PROBE_IMAGE,
-                  "--policy", SANDBOX_POLICY, "--detach", "--no-tty", "--",
+                  "--policy", policy, "--detach", "--no-tty", "--",
                   "sleep", "3600", timeout=300)
     if created.returncode != 0:
         report("firefly-probe", "sandbox create", "ok", f"failed: {tail(created)}")
         return
+    writes = {f"{m} {p}" for m, p in REFUSED_CALLS if m != "GET"}
     host, port = APP_PROXY.split("://", 1)[1].split("/", 1)[0].rsplit(":", 1)
-    code = (FIREFLY_PROBE.replace("APP_PROXY", APP_PROXY)
+    code = (FIREFLY_PROBE.replace("APP_PROXY", APP_PROXY).replace("APP_WRITE", APP_PROXY_WRITE)
             .replace("PROXY_IP", socket.gethostbyname(host)).replace("PROXY_PORT", port)
             .replace("CALLS", json.dumps(REFUSED_CALLS)))
     results = exec_probe("firefly-probe", code)
     if results is None:
         return
     for target, got in results.items():
+        # A write must meet the proxy; a read off the list may meet the
+        # policy first (a path outside /api/v1, a path trick).
         expected = ("reached" if target.startswith("allowed") else
-                    "blocked" if target.endswith("direct") else "refused")
+                    "blocked" if target.endswith(("direct", "supervisor")) else
+                    "refused: proxy" if target in writes else "refused")
         report("firefly-probe", f"sandbox: {target}", expected, got)
 
 
-def direct(method: str, path: str, body: bytes | None = None,
+def direct(base: str, method: str, path: str, body: bytes | None = None,
            headers: dict | None = None) -> str:
     """A call straight to the proxy. The proxy marks its refusal with a
     header. A 405 is the app's answer to a method that a path has no route
     for: here, a method override that reached the app."""
-    request = urllib.request.Request(APP_PROXY + path, method=method, data=body,
+    request = urllib.request.Request(base + path, method=method, data=body,
                                      headers={"Accept": "application/json", **(headers or {})})
     try:
         with urllib.request.urlopen(request, timeout=10) as r:
@@ -579,25 +643,35 @@ JSON = {"Content-Type": "application/json"}
 
 def direct_checks() -> None:
     """The calls that neither the MCP server nor a sandbox (reads only) can
-    send. No call can change data: the app refuses an empty body, and ids
-    are "0"."""
+    send, on the write port, and the writes on the read port. No call can
+    change data: the app refuses an empty body, and ids are "0"."""
+    write, read = APP_PROXY_WRITE, APP_PROXY
     for target, expected, args in (
-            ("allowed read (GET /api/v1/about)", "reached", ("GET", "/api/v1/about")),
+            ("allowed read (GET /api/v1/about)", "reached", (write, "GET", "/api/v1/about")),
             # The proxy drops the header, so the app routes a POST, and
             # refuses its empty body; a PUT on /api/v1/tags has no route.
             ("X-HTTP-Method-Override: PUT on POST /api/v1/tags", "reached",
-             ("POST", "/api/v1/tags", b"{}", {**JSON, "X-HTTP-Method-Override": "PUT"})),
+             (write, "POST", "/api/v1/tags", b"{}", {**JSON, "X-HTTP-Method-Override": "PUT"})),
             ("_method in the query (POST /api/v1/tags?_method=PUT)", "refused",
-             ("POST", "/api/v1/tags?_method=PUT", b"{}", JSON)),
+             (write, "POST", "/api/v1/tags?_method=PUT", b"{}", JSON)),
+            ("_method with encoded letters (POST /api/v1/tags?%5F%6Dethod=PUT)", "refused",
+             (write, "POST", "/api/v1/tags?%5F%6Dethod=PUT", b"{}", JSON)),
+            ("any query on a write (PUT /api/v1/tags/0?x=1)", "refused",
+             (write, "PUT", "/api/v1/tags/0?x=1", b"{}", JSON)),
             ("form body (POST /api/v1/tags, _method=PUT)", "refused",
-             ("POST", "/api/v1/tags", b"_method=PUT",
+             (write, "POST", "/api/v1/tags", b"_method=PUT",
               {"Content-Type": "application/x-www-form-urlencoded"})),
-            ("DELETE /api/v1/tags/0", "refused", ("DELETE", "/api/v1/tags/0")),
+            ("DELETE /api/v1/tags/0", "refused", (write, "DELETE", "/api/v1/tags/0")),
             ("PATCH /api/v1/transactions/0", "refused",
-             ("PATCH", "/api/v1/transactions/0", b"{}", JSON)),
-            ("GET /api/v1/preferences", "refused", ("GET", "/api/v1/preferences")),
+             (write, "PATCH", "/api/v1/transactions/0", b"{}", JSON)),
+            ("GET /api/v1/preferences", "refused", (write, "GET", "/api/v1/preferences")),
             ("GET /api/v1/accounts/%2e%2e/preferences", "refused",
-             ("GET", "/api/v1/accounts/%2e%2e/preferences"))):
+             (write, "GET", "/api/v1/accounts/%2e%2e/preferences")),
+            ("read port: allowed read (GET /api/v1/about)", "reached", (read, "GET", "/api/v1/about")),
+            ("read port: write (POST /api/v1/tags)", "refused",
+             (read, "POST", "/api/v1/tags", b"{}", JSON)),
+            ("read port: write (PUT /api/v1/transactions/0)", "refused",
+             (read, "PUT", "/api/v1/transactions/0", b"{}", JSON))):
         report("firefly-probe", f"proxy, direct: {target}", expected, direct(*args))
 
 

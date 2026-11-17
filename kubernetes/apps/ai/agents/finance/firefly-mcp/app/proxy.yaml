@@ -60,8 +60,13 @@ spec:
                   name: firefly-proxy-secret
                   key: FIREFLY_TOKEN
           ports:
+            # Reads and the writes of the list, for the MCP server.
             - name: http
               containerPort: 8080
+              protocol: TCP
+            # Reads only, for the sandboxes.
+            - name: read
+              containerPort: 8081
               protocol: TCP
           readinessProbe:
             httpGet:
@@ -124,4 +129,8 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+      protocol: TCP
+    - name: read
+      port: 8081
+      targetPort: read
       protocol: TCP
