@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.189.2 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the script in the distro goes to a new private file from mktemp, a command line too long for Windows does not run, a key that the check reads twice reads as no value (a count and one text in the result), the result of import-rootfs says whether it imported, and a test finds each -c flag of the Windows roles in any form. The stops of the procedure read an empty state file, take their config from the play, and remove their test folder also when a case fails; the way back reads the VM processes of the baseline in the form that the play keeps; the read of the boot runs keeps each run as a list; a check of after-boot is a text again; no path to a script has a doubled backslash; and new tests run the scripts of the role and feed the play's checks with what they give. The docs state what is left of the limits of this way for the real window.
+
 ## v2.189.1 - 2026-11-17
 
 ### Fixed
