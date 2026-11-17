@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.189.6 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the check that a task can not start also passes when the task shows no new run and no result of this run, as for a task that ran well in an earlier window and keeps the last result 0 of that run. Before, it held only for a task that never ran or one that Windows refused at the start.
+
 ## v2.189.5 - 2026-11-17
 
 ### Fixed

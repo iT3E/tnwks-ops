@@ -1,3 +1,0 @@
-kind: Fixed
-body: "Windows hosts, the rehearsal of the move: the check that a task can not start also passes when the task shows no new run and no result of this run, as for a task that ran well in an earlier window and keeps the last result 0 of that run. Before, it held only for a task that never ran or one that Windows refused at the start."
-time: 2026-11-17T17:00:00.000000+00:00
