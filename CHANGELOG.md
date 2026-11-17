@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.189.7 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the phase wayback can leave out its stated case (B removes SYSTEM and the Administrators from the rules of its disk file) for one run, with -e wsl_move_rehearsal_wayback_strip_case=false; by default the case runs. The tests of the check that a task can not start also hold a run that exits 1 and writes a result, and the docs row of the phase says that the inherited rules come from the folder.
+
 ## v2.189.6 - 2026-11-17
 
 ### Fixed
