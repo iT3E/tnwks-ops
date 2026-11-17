@@ -705,7 +705,10 @@ the folder, and a config with the session check on. Each phase that runs the
 procedure first reads the last marker in the state file, and does not start
 on another one than its order gives (a phase run twice, or out of order).
 The phase `window` runs after the setup, or again after a window that went
-back (the last marker `wayback-done`), as a second real window would.
+back (the last marker `wayback-done`), as a second real window would. The
+phase `wayback` runs after a done window, and also ends a started window that
+did not end (the last marker `window-started` or `boot-run`, as after a boot
+run that failed), as the way back mode of the procedure does.
 The procedure itself does not go forward after a started window with no end.
 The tests in `security/tests/test_wsl_move_rehearsal.py` hold this.
 
@@ -751,8 +754,8 @@ lead's read of the nodes (Ready, and the same address) covers the live VM.
 | --- | --- |
 | `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon), and the check reads back each file by its SHA-256. A second setup over A's distro at its path imports nothing and writes the files again. A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
 | `window` | First a read of the state that the window starts from, before any task starts: the last marker, A's disk file at its path and none at B's path or in the side folder, no list of disabled tasks, A's batch right, A's start task enabled and B's disabled; and after a way back the file had the owner, the protection and the explicit rules that step 4 saved (the play prints whether its inherited rules are those that its folder gives, and does not stop on it). Only after these checks do A's disk file and folder get the rules of an older WSL, as in setup; then A reads its distro and B lists none. The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file (B the owner, as below), both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. With B's start task started, the file has the rule of step 4 and a rule of B's VM; after B's stop task (a clean stop), no rule of a VM. Then B imports, unregisters and imports again into the same folder, and the file keeps its rule |
-| `wayback` | First, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). The check takes a refusal at the start, a last result that is not 0, or no new run in its wait, each with no result of this run: a task that ran well in an earlier window keeps the last result 0 of that run. Then B removes SYSTEM and the Administrators from the rules of its disk file (the stated case; `-e wsl_move_rehearsal_wayback_strip_case=false` leaves it out for one run, and the way back and each other check stay as they are). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro, the file has the saved owner, protection and explicit rules (the folder gives the inherited ones), and B lists none |
-| `interrupt` | The window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
+| `wayback` | First, after a done window, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). The check takes a refusal at the start, a last result that is not 0, or no new run in its wait, each with no result of this run: a task that ran well in an earlier window keeps the last result 0 of that run. Then B removes SYSTEM and the Administrators from the rules of its disk file (the stated case; `-e wsl_move_rehearsal_wayback_strip_case=false` leaves it out for one run, and the way back and each other check stay as they are). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro, the file has the saved owner, protection and explicit rules (the folder gives the inherited ones), and B lists none. After A left the group, the play removes an icon of the shortcut in A's folder that A does not own (see the icon below). `-e wsl_move_rehearsal_wayback_group_steps=false` runs the way back with no group step and no group test, as a standard A, as the boot run does: the check that the task can not start is left out, the play gives A its batch right (A holds it after `interrupt`) and removes an icon in A's folder that A does not own, both before the run; the log has no group moment, and the procedure starts A's start task itself |
+| `interrupt` | First a read of the icon of the shortcut in A's folder: the phase stops with nothing changed when A does not own it. Then the window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
 | `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task |
 | `after-boot` | The boot task ran the way back once: its marker first, no group step, no restart. A owns the distro, B lists none. Started again by hand, the boot task does nothing and writes no marker |
 | `remove-before-restart` | See the removal |
@@ -882,7 +885,25 @@ password with a batch logon, so A keeps its own batch right from the setup
 to the end of the window. Then the play takes it away, so the way back runs
 as it must after the demotion of the real account, with only the group step.
 At the end of the phase `wayback`, the play gives it back: the interruption,
-the boot task and the removal run A's tasks with no group step.
+the boot task and the removal run A's tasks with no group step. A way back
+with the group steps off needs it before the run: the play gives it then.
+
+**The icon of the shortcut.** The distro of the rehearsal has a shortcut with
+an icon, so each import in place writes `shortcut.ico` next to the disk file.
+WSL writes it as the importing account (the service impersonates its caller)
+with `CREATE_ALWAYS`, and an error there fails the import; the unregister
+deletes it as the account too, and goes on when it can not (WSL 3.0.5,
+`LxssUserSession.cpp`). A file that an account makes while it is in
+Administrators can get the Administrators as its owner, and the CREATOR
+OWNER rule of the folder then names the group, not the account. Such an
+icon stays the group's: a standard account can not replace it at its
+import, nor delete it at its unregister. So before A imports back as a
+standard account, the play makes sure that A's folder holds no icon that A
+does not own (`tasks/icon.yml`, as SYSTEM, this one file only: it prints the
+owner, the rules, the attributes and the times first, and removes the file
+only when A is not its owner). The phase `wayback` removes such an icon
+after A leaves the group, or before a way back with no group step; the
+phase `interrupt` only reads it, and stops when it is there.
 
 **What stays unproven here.** The procedure and the boot task restart the
 host only with `restart` on in their config, and the rehearsal keeps it
@@ -890,7 +911,10 @@ off: they log "would restart", and a unit test shows that the line runs only
 with the switch on. The restarts of the rehearsal come from the play. The
 boot run has the group steps off, so no temporary account is in
 Administrators across a restart; the group step of the way back is shown in
-the phase `wayback`, in a normal run, not at boot. The check for a session
+the phase `wayback`, in a normal run, not at boot. So the boot run shows a
+standard A that imports back at boot, a case of its own: the real present
+account is still in Administrators at a way back that comes before window
+step 7. The check for a session
 of the owner (site 1) is not built: the procedure refuses a config with it
 on. After a way back with no restart, it starts the start tasks of the
 present account (the third case of the design, a session of the owner, ends

@@ -181,7 +181,9 @@ def test_the_baseline_of_the_live_parts_is_read_before_the_first_account():
 
 def test_each_run_of_the_procedure_names_the_last_marker_that_its_phase_expects():
     # The window runs after setup, or again after a window that went back.
-    expected = {"window.yml": ["", "wayback-done"], "wayback.yml": ["window-done"], "interrupt.yml": ["wayback-done"]}
+    # The way back runs after a done window, and also ends a started window that did not end.
+    expected = {"window.yml": ["", "wayback-done"], "wayback.yml": ["window-done", "window-started", "boot-run"],
+                "interrupt.yml": ["wayback-done"]}
     for phase, markers in expected.items():
         runs = [t for t in tasks_of(phase) if t.get("ansible.builtin.include_tasks") == "run_procedure.yml"]
         assert [t["vars"]["wsl_move_rehearsal_last_markers"] for t in runs] == [markers], phase

@@ -16,6 +16,25 @@
 # rules all the same, and the play reads them after it. The case runs by
 # default; -e wsl_move_rehearsal_wayback_strip_case=false leaves it out for
 # one run.
+#
+# The group steps (wsl_move_rehearsal_wayback_group_steps, on by default):
+# -e wsl_move_rehearsal_wayback_group_steps=false runs the way back with no
+# group step and no group test, as a standard A, as the boot run does. Then
+# the check that A's import task can not start is left out, the play gives
+# A its own batch right first (A holds it after the phase interrupt), and the
+# procedure starts A's start task itself. The phase also ends a started
+# window that did not end (the last marker window-started or boot-run, as
+# after a boot run that failed), as the way back mode of the procedure does.
+# The check that A's import task can not start runs only after a done window
+# (the phase window took A's batch right), with the group steps on.
+#
+# The icon of the shortcut in A's folder (icon.yml says why): an icon that A
+# made while it was in Administrators can stay the group's, and a standard A
+# can not replace it at its import. With the group steps off, the play
+# removes such an icon before the way back. With them on, it removes it after
+# the run, when A has left the group, so the phases after it (the interrupt
+# and its boot run, where a standard A imports back) meet no icon of the
+# group.
 
 - name: The live parts at the start
   ansible.builtin.include_tasks: live.yml
@@ -33,12 +52,37 @@
   vars:
     wsl_move_rehearsal_host_files: assert
 
+- name: The group steps of this way back
+  ansible.builtin.set_fact:
+    wsl_move_rehearsal_wayback_group: "{{ wsl_move_rehearsal_wayback_group_steps | default(true) | bool }}"
+
 - name: The way back, and the reads after it
   when: not ansible_check_mode
   block:
+    - name: Read the last marker before the way back
+      ansible.windows.win_powershell:
+        parameters:
+          State: "{{ wsl_move_rehearsal_state_file }}"
+        script: |
+          param([string]$State)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
+          if ($lines.Count) { "$(($lines[-1] -split ' ', 2)[1])".Trim() } else { '' }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_wayback_marker
+
     # The task can not log on: no new run and no result. If it ran all the
     # same, it finds no disk file in the folder of A, and changes nothing.
+    # Only after a done window, with the group steps on: after the phase
+    # interrupt A holds its own batch right, and the task would run.
     - name: The import back task of A can not start before the way back
+      when:
+        - wsl_move_rehearsal_wayback_group
+        - (wsl_move_rehearsal_wayback_marker.output | last | default('')) == 'window-done'
       ansible.builtin.include_tasks: run_task.yml
       vars:
         wsl_move_rehearsal_run: {key: a, step: import, expect: not-run}
@@ -82,11 +126,39 @@
             fail_msg: "B did not remove SYSTEM and the Administrators from the rules of its disk file: {{ strip }}"
             quiet: true
 
+    # With no group step, A imports back as a standard account: it needs its
+    # own batch right (it holds it after the phase interrupt), and its folder
+    # must hold no icon that it does not own.
+    - name: A may log on as a batch job, for a way back with no group step
+      when: not wsl_move_rehearsal_wayback_group
+      ansible.windows.win_user_right:
+        name: SeBatchLogonRight
+        users: ["{{ wsl_move_rehearsal_sids.a }}"]
+        action: add
+
+    - name: The icon in the folder of A, before a way back with no group step
+      when: not wsl_move_rehearsal_wayback_group
+      ansible.builtin.include_tasks: icon.yml
+      vars:
+        wsl_move_rehearsal_icon_action: remove
+
     - name: The window procedure, way back mode
       ansible.builtin.include_tasks: run_procedure.yml
       vars:
-        wsl_move_rehearsal_request: {mode: wayback, group_steps: true, stop_after: 0, rehearsal_group_test: true}
-        wsl_move_rehearsal_last_markers: [window-done]
+        wsl_move_rehearsal_request:
+          mode: wayback
+          group_steps: "{{ wsl_move_rehearsal_wayback_group }}"
+          stop_after: 0
+          rehearsal_group_test: "{{ wsl_move_rehearsal_wayback_group }}"
+        wsl_move_rehearsal_last_markers: [window-done, window-started, boot-run]
+
+    # The import back ran with A in Administrators, and the end of the run
+    # took A out: an icon that it made then can be the group's.
+    - name: The icon in the folder of A, after A left the group
+      when: wsl_move_rehearsal_wayback_group
+      ansible.builtin.include_tasks: icon.yml
+      vars:
+        wsl_move_rehearsal_icon_action: remove
 
     - name: A may log on as a batch job again, with no group
       ansible.windows.win_user_right:
@@ -102,6 +174,7 @@
     # another starts keeps the count, not the set. After a restart (the
     # baseline is marked) the live VM is a new one: only the count compares.
     - name: No VM of the rehearsal before the start task of A
+      when: wsl_move_rehearsal_wayback_group
       ansible.windows.win_powershell:
         parameters:
           Path: "{{ wsl_move_rehearsal_baseline_file }}"
@@ -130,7 +203,9 @@
       failed_when: not (wsl_move_rehearsal_vm_count.output | last).same
 
     # The procedure leaves the start of A to the play in the group test.
+    # With no group step, the procedure starts it.
     - name: The start task of A, started by the play
+      when: wsl_move_rehearsal_wayback_group
       ansible.windows.win_powershell:
         parameters:
           Task: "{{ wsl_move_rehearsal_prefix }}-a-start"
@@ -210,8 +285,11 @@
       vars:
         wsl_move_rehearsal_disk_read: {key: a, rule: saved}
 
+    # The group moments, and who starts A's start task, follow the group
+    # steps of the run.
     - name: A owns the distro again, with its data; B lists none; the logs show each moment
       vars:
+        group_steps: "{{ wsl_move_rehearsal_wayback_group }}"
         check_a: "{{ wsl_move_rehearsal_runs.check[-2] }}"
         check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
         back: "{{ wsl_move_rehearsal_back_read.output | last }}"
@@ -228,10 +306,17 @@
           - back.start_a == 'Running' and back.start_b == 'Disabled'
           - wsl_move_rehearsal_procedure.result == 'done'
           - wsl_move_rehearsal_procedure.markers == ['window-started', 'wayback-done']
-          - wsl_move_rehearsal_procedure.groups == ['joined', 'left']
+          - wsl_move_rehearsal_procedure.groups == (['joined', 'left'] if group_steps else [])
           - wsl_move_rehearsal_procedure.would_restart == 1
-          - wsl_move_rehearsal_procedure.log | select('string') | select('match', '^the start tasks of .* are left to the play') | list | length == 1
-          - wsl_move_rehearsal_procedure.log | select('string') | select('match', '^no WSL process of .* before it leaves the group$') | list | length == 1
+          - >-
+            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^the start tasks of .* are left to the play')
+            | list | length == (1 if group_steps else 0)
+          - >-
+            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^no WSL process of .* before it leaves the group$')
+            | list | length == (1 if group_steps else 0)
+          - >-
+            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^the start tasks of .* run, with [0-9]+ WSL process')
+            | list | length == (0 if group_steps else 1)
           - "wsl_move_rehearsal_procedure.log | select('string') | select('match', '^read: ') | list | length == 1"
           - wsl_move_rehearsal_procedure.log | select('string') | select('match', '^task .*-a-import ended with 0;') | list | length == 1
         fail_msg: "After the way back, a read did not pass: {{ check_a }} {{ check_b }} {{ back }} {{ disk_a }} {{ wsl_move_rehearsal_procedure.log }}"

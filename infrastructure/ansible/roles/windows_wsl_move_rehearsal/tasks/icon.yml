@@ -1,0 +1,126 @@
+---
+# The icon of the shortcut in the folder of A (shortcut.ico, the name that WSL
+# gives it), read as SYSTEM: its owner, rules, attributes and times, printed
+# as found. wsl_move_rehearsal_icon_action:
+#   assert  stop when the icon is there and A does not own it; change nothing
+#   remove  remove the icon only when A does not own it, and nothing else
+#
+# Why: WSL writes this file at each import in place, as the importing
+# account (the service impersonates its caller), with CREATE_ALWAYS, and an
+# error there fails the import (WSL 3.0.5, LxssUserSession.cpp,
+# _ProcessImportResultMessage). A file that an account makes while it is in
+# Administrators can get the Administrators as its owner, and the CREATOR
+# OWNER rule of A's folder then names the group, not A. Such an icon stays
+# the group's: a standard A can not replace it at its import, nor delete it
+# at its unregister (WSL retries, then goes on and leaves it). So before A
+# imports back as a standard account, its folder must hold no icon that A
+# does not own. The import writes a new one, A's own.
+#
+# Only this one file, in A's folder of the rehearsal: the script refuses a
+# folder outside the folder of the rehearsal, another name, a folder or a
+# link at the path, and an empty SID of A.
+- name: Read the icon of the shortcut in the folder of A
+  ansible.windows.win_powershell:
+    parameters:
+      Folder: "{{ wsl_move_rehearsal_accounts.a.folder }}"
+      Root: "{{ wsl_move_rehearsal_dir }}"
+      Name: shortcut.ico
+      SidA: "{{ wsl_move_rehearsal_sids.a | default('') }}"
+      Remove: false
+      Procedure: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksMoveWindow.ps1'
+      Capability: "{{ wsl_move_rehearsal_vm_capability_sid }}"
+    script: &icon_script |
+      param([string]$Folder, [string]$Root, [string]$Name, [string]$SidA, [bool]$Remove, [string]$Procedure, [string]$Capability)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      {{ wsl_move_rehearsal_procedure_lib }}
+      if ($SidA -notmatch '^S-1-5-21-[0-9-]+$') { throw "No SID of A ('$SidA'). Nothing is changed." }
+      $sep = [IO.Path]::DirectorySeparatorChar
+      $base = [IO.Path]::GetFullPath($Root).TrimEnd($sep)
+      $dir = [IO.Path]::GetFullPath($Folder).TrimEnd($sep)
+      if (-not $dir.StartsWith($base + $sep, [StringComparison]::OrdinalIgnoreCase)) { throw "The folder $Folder is not under $Root. Nothing is changed." }
+      if ($Name -ne 'shortcut.ico') { throw "The name $Name is not the icon of the shortcut. Nothing is changed." }
+      $path = Join-Path $dir $Name
+      function Get-Masked([string]$Text) {
+          ($Text -replace ([regex]::Escape($SidA) + '(?![0-9-])'), '<a>') -replace 'S-1-5-21(-[0-9]+)+', '<sid>'
+      }
+      # The read: the owner and the rules with the privileges of SYSTEM (the
+      # file may grant SYSTEM nothing), each account masked.
+      function Read-TnwksIcon {
+          if (-not (Test-Path -LiteralPath $path)) {
+              return [pscustomobject]@{ exists = $false; owner_a = $false; owner = ''; sddl = ''; attributes = ''; created = ''; written = ''; length = 0 }
+          }
+          $item = Get-Item -LiteralPath $path -Force
+          if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+              throw "The path $path is not a plain file ($($item.Attributes)). Nothing is changed."
+          }
+          $sddl = Get-TnwksSddl $path
+          $owner = if ($sddl -match '^O:([^:]+?)(?=[GDS]:|$)') { $Matches[1] } else { '' }
+          [pscustomobject]@{
+              exists = $true
+              owner_a = ($owner -and (ConvertTo-TnwksSddlSid $owner) -eq $SidA)
+              owner = Get-Masked $owner
+              sddl = Get-Masked $sddl
+              attributes = "$($item.Attributes)"
+              created = $item.CreationTimeUtc.ToString('o')
+              written = $item.LastWriteTimeUtc.ToString('o')
+              length = [int64]$item.Length
+          }
+      }
+      $found = Read-TnwksIcon
+      $removed = $false
+      if ($Remove -and $found.exists -and -not $found.owner_a) {
+          Remove-Item -LiteralPath $path -Force
+          $removed = $true
+          $Ansible.Changed = $true
+          if (Test-Path -LiteralPath $path) { throw "The icon is still there after its removal: $path" }
+      }
+      $found | Add-Member -NotePropertyName removed -NotePropertyValue $removed
+      $found | Add-Member -NotePropertyName path -NotePropertyValue (Get-Masked $path)
+      $found
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  check_mode: false
+  register: wsl_move_rehearsal_icon
+
+- name: The icon of the shortcut in the folder of A, as found
+  ansible.builtin.debug:
+    msg: "{{ wsl_move_rehearsal_icon.output | last }}"
+
+- name: The folder of A holds no icon that A does not own
+  when: wsl_move_rehearsal_icon_action == 'assert'
+  vars:
+    icon: "{{ wsl_move_rehearsal_icon.output | last }}"
+  ansible.builtin.assert:
+    that: not icon.exists or icon.owner_a
+    fail_msg: >-
+      The icon {{ icon.path }} has the owner {{ icon.owner }}, not A: a standard A can not replace it at its
+      import back. The phase wayback of this release removes such an icon. Nothing is changed.
+    quiet: true
+
+# The same script, with the removal on: it reads the file again first and
+# removes it only when A still does not own it. A removal that leaves the
+# file there fails the task.
+- name: Remove the icon that A does not own
+  when:
+    - wsl_move_rehearsal_icon_action == 'remove'
+    - not ansible_check_mode
+    - (wsl_move_rehearsal_icon.output | last).exists
+    - not (wsl_move_rehearsal_icon.output | last).owner_a
+  ansible.windows.win_powershell:
+    parameters:
+      Folder: "{{ wsl_move_rehearsal_accounts.a.folder }}"
+      Root: "{{ wsl_move_rehearsal_dir }}"
+      Name: shortcut.ico
+      SidA: "{{ wsl_move_rehearsal_sids.a | default('') }}"
+      Remove: true
+      Procedure: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksMoveWindow.ps1'
+      Capability: "{{ wsl_move_rehearsal_vm_capability_sid }}"
+    script: *icon_script
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_icon_removal
