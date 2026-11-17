@@ -627,16 +627,23 @@ None of these values goes through an agent or a session. The search key is
 done: `agent/app/secret-search.sops.yaml` is in git with its value, and is
 listed with the Deployment.
 
-1. **The seed of the vault,** in the state copy of the cutover: through
-   the inbox pod, before the agent starts
+1. **The seed of the vault,** in the state copy of the cutover: an archive
+   through the inbox pod, which the restore Job checks and unpacks before
+   the agent starts
    ([The copy of the state](agent-platform-runbook.md#the-copy-of-the-state),
-   step 6). The `memory-index` step of the first start indexes the notes,
+   step 6). The notes can hold a secret: the owner scans the vault folder
+   first. The `memory-index` step of the first start indexes the notes,
    and the next nightly snapshot holds the vault. To seed a newer vault
    later, while the pod runs, from the host, with the vault folder in `V`:
    empty the folder first, so that a note deleted on a device goes here
-   too, then copy and count:
+   too, then copy and count. No Job checks this copy, so first check the
+   folder on the host: plain files and directories only, no setuid or
+   setgid bit, and no secret in a note (each command prints nothing):
 
    ```bash
+   find "$V" ! -type f ! -type d
+   find "$V" -perm /6000
+   betterleaks dir --redact --no-banner "$V" > /dev/null || echo "read the findings first"
    kubectl -n agents-finance exec deploy/agent -c agent -- find /home/node/data/vault -mindepth 1 -delete
    tar -C "$V" --exclude=.obsidian --exclude=.trash --exclude=.git -cf - . \
      | kubectl -n agents-finance exec -i deploy/agent -c agent -- tar -C /home/node/data/vault --no-same-owner -xf -

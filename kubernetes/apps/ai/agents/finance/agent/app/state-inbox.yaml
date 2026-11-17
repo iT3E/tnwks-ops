@@ -8,12 +8,14 @@
 # - it is the first pod of the volume, so local-path makes the volume on the
 #   node of the agent (the claim waits for its first pod, and a backup mover
 #   that came first would make it on any worker);
-# - the owner puts the copy of the state and the vault into the volume
-#   through it, with `kubectl exec` and tar, as the vault seed does.
+# - the owner puts the copy of the state and the seed of the vault into the
+#   volume through it, with `kubectl exec` and tar, as two archives in
+#   archives/start/ and archives/seed/. The restore Job checks each member
+#   and unpacks them (restore-job.yaml); nothing is unpacked here.
 # It runs no product code, holds no secret and no service account token, and
 # has no network: no policy of the namespace selects its label, so the
-# default deny holds. It makes the three directories as uid 1000 with mode
-# 0700, prints one line, and then waits.
+# default deny holds. It makes the directories as uid 1000 with mode 0700,
+# prints one line, and then waits.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -56,8 +58,8 @@ spec:
             - -c
             - |
               set -eu
-              mkdir -p /home/node/data/state /home/node/data/archives/start /home/node/data/vault
-              chmod 0700 /home/node/data/state /home/node/data/archives /home/node/data/archives/start /home/node/data/vault
+              mkdir -p /home/node/data/state /home/node/data/archives/start /home/node/data/archives/seed
+              chmod 0700 /home/node/data/state /home/node/data/archives /home/node/data/archives/start /home/node/data/archives/seed
               echo "state-inbox result=ready"
               trap 'exit 0' TERM INT
               while :; do sleep 3600 & wait $!; done

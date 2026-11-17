@@ -6,7 +6,9 @@
 # in this order (docs/apps/agent-platform-runbook.md, "The cutover of the
 # finance agent"). Each step is checked before the next one.
 # 1. ./pvc.yaml and ./state-inbox.yaml: the inbox is the first pod of the
-#    volume, so the volume is made on the node of the agent.
+#    volume, so the volume is made on the node of the agent. The volume is
+#    never pruned (its annotation): the way back takes out the agent and
+#    the inbox, never pvc.yaml.
 # 2. ./backup.yaml: the policy and schedule; the first snapshot runs at once,
 #    of the empty volume. It needs the ClusterRepository agents-finance
 #    (Ready) and its grant of agents-finance; the grant goes last.
@@ -16,7 +18,7 @@
 #    same value in its keys.json, docs/apps/litellm.md), TELEGRAM_BOT_TOKEN
 #    and TELEGRAM_ALLOW_FROM. Not listed yet.
 # 4. After the owner put the copy of the state and the vault in the volume:
-#    out ./state-inbox.yaml; in ./restore-job.yaml (ARCHIVE set),
+#    out ./state-inbox.yaml; in ./restore-job.yaml (ARCHIVE and VAULT set),
 #    ./secret.sops.yaml, ./secret-search.sops.yaml (BRAVE_API_KEY, the search
 #    key of finance, with its value) and ./deployment.yaml at replicas 0.
 # 5. The cutover, after the host stopped the finance bot: out

@@ -1,18 +1,32 @@
 ---
 # Not applied yet: step 4 of the cutover lists it in kustomization.yaml, with
-# ARCHIVE set to the name of the copy, and step 5 takes it out again
-# (docs/apps/agent-platform-runbook.md, "The cutover of the finance agent").
+# ARCHIVE and VAULT set to the names of the owner's two files, and step 5
+# takes it out again (docs/apps/agent-platform-runbook.md, "The cutover of
+# the finance agent").
 #
-# The restore Job of the runbook ("The restore Job"), with the image and the
-# node of deployment.yaml. The agent is at zero replicas. It checks the
-# archive against its checksum file, moves the state of now aside to
-# state.before-restore-<time>, and puts the archive in place as state/. Its
-# script uses no variable in braces, because Flux substitutes those in this
-# directory.
+# The restore Job of the runbook ("The restore Job"), narrowed to the copy of
+# the cutover, with the image and the node of deployment.yaml. The agent is at
+# zero replicas. It is the wall of the copy, not the owner's checks on the
+# host: it reads the list of each archive first and refuses it, before any
+# file is written, unless each member is a plain file or a directory, with
+# no absolute path, no ".." and no setuid or setgid bit, and each member of
+# the state archive is under ./workspace/. Then it moves the state of now
+# aside to state.before-restore-<time>, puts the copy in place as state/,
+# and unpacks the vault into the empty vault/. Each way out prints one line,
+# `restore result=ok ...` or `restore result=failed reason=<kind>`, which
+# names the kind of a refused member and never a name or a content.
+#
+# Executable bits stay, for the owner of the file only (umask 077): the
+# scripts of the workspace keep them. They run in a sandbox, where the
+# sandbox policy lets only python3 out, and with no setuid or setgid bit
+# they run as the user that starts them.
+#
+# The script uses no variable in braces, because Flux substitutes those in
+# this directory.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  # One name for each run: agent-restore-list, agent-restore, agent-restore-2.
+  # One name for each run: agent-restore, then agent-restore-2.
   name: agent-restore
 spec:
   backoffLimit: 0
@@ -38,57 +52,83 @@ spec:
           image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
           imagePullPolicy: IfNotPresent
           env:
-            # start/openclaw-state-<release>-<time>.tar.gz: the copy of the
-            # owner, with its .sha256 file next to it. Or list.
+            # The copy of the state: start/openclaw-state-<release>-<time>.tar.gz,
+            # with its .sha256 file next to it.
             - name: ARCHIVE
               value: start/openclaw-state-SET-ME.tar.gz
-            - name: OPENCLAW_OFFLINE
-              value: "1"
+            # The seed of the vault: vault-<time>.tar in archives/seed/.
+            # Empty: no vault in this run.
+            - name: VAULT
+              value: vault-SET-ME.tar
           command: ["sh", "-c"]
           args:
             - |
               set -eu
+              umask 077
               DATA=/home/node/data
-              if [ "$ARCHIVE" = daily/newest ]; then
-                ARCHIVE=daily/$(cd "$DATA/archives/daily" && ls openclaw-backup-*.tar.gz | tail -n 1)
-                echo "restore archive=$ARCHIVE"
-              fi
+              reason=start
+              trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "restore result=failed reason=$reason"; fi' EXIT
+              # check <archive> <allowed names> <label>: the list first, no write.
+              check() {
+                reason="unreadable archive=$3"
+                tar -tvf "$1" --quoting-style=escape > /tmp/check.types
+                tar -tf "$1" --quoting-style=escape > /tmp/check.names
+                reason="empty archive=$3"
+                test -s /tmp/check.names
+                kinds=$(awk '{ k = substr($1, 1, 1); if (k == "l") print "link"; else if (k == "h") print "hard-link"; else if (k == "c" || k == "b") print "device"; else if (k == "p") print "pipe"; else if (k != "-" && k != "d") print "other" }' /tmp/check.types | sort -u | paste -sd, -)
+                if [ -n "$kinds" ]; then reason="member-type archive=$3 kinds=$kinds"; return 1; fi
+                if ! awk '{ if (substr($1, 4, 1) ~ /[sS]/ || substr($1, 7, 1) ~ /[sS]/) n++ } END { exit (n > 0) }' /tmp/check.types; then
+                  reason="setid-bit archive=$3"; return 1
+                fi
+                if grep -q '^/' /tmp/check.names; then reason="absolute-path archive=$3"; return 1; fi
+                if grep -qE '(^|/)\.\.(/|$)' /tmp/check.names; then reason="dot-dot archive=$3"; return 1; fi
+                if grep -vqE "$2" /tmp/check.names; then reason="outside archive=$3"; return 1; fi
+                return 0
+              }
+              case "$ARCHIVE" in
+                start/openclaw-state-*.tar.gz) ;;
+                *) reason=archive-name; exit 1 ;;
+              esac
               A="$DATA/archives/$ARCHIVE"
+              reason=missing
+              test -f "$A"
+              test -f "$A.sha256"
+              reason=checksum
+              (cd "$DATA/archives/start" && sha256sum -c --quiet "$(basename "$A").sha256")
+              check "$A" '^\./(workspace(/.*)?)?$' state
+              reason=no-workspace
+              grep -qxE '\./workspace/?' /tmp/check.names
+              V=""
+              if [ -n "$VAULT" ]; then
+                case "$VAULT" in
+                  vault-*.tar) ;;
+                  *) reason=vault-name; exit 1 ;;
+                esac
+                V="$DATA/archives/seed/$VAULT"
+                reason=vault-missing
+                test -f "$V"
+                check "$V" '^\./.*$' vault
+                reason=vault-not-empty
+                if [ -d "$DATA/vault" ] && [ -n "$(ls -A "$DATA/vault")" ]; then exit 1; fi
+              fi
+              reason=unpack
               stamp=$(date -u +%Y%m%dT%H%M%SZ)
               stage="$DATA/restore-$stamp"
-              if [ "$ARCHIVE" = list ]; then
-                ls -l --time-style=+%Y-%m-%dT%H:%MZ "$DATA/archives/start" "$DATA/archives/daily"
-                exit 0
-              fi
-              test -f "$A"
-              case "$ARCHIVE" in
-                start/*)
-                  (cd "$(dirname "$A")" && sha256sum -c "$(basename "$A").sha256")
-                  mkdir -m 0700 "$stage"
-                  tar -xzf "$A" -C "$stage"
-                  new="$stage"
-                  ;;
-                daily/*)
-                  made=$(tar -xzOf "$A" --wildcards '*/manifest.json' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).runtimeVersion))')
-                  here=$(node /app/openclaw.mjs --version | grep -oE '[0-9]{4}\.[0-9]+\.[0-9]+' | head -n 1)
-                  if [ "$made" != "$here" ]; then
-                    echo "restore result=failed reason=release archive=$made image=$here"
-                    exit 1
-                  fi
-                  node /app/openclaw.mjs backup restore "$A" --target "$stage"
-                  new=$(find "$stage" -type d -path '*/payload/posix/home/node/data/state' | head -n 1)
-                  test -n "$new"
-                  ;;
-                *)
-                  echo "restore result=failed reason=archive"
-                  exit 1
-                  ;;
-              esac
+              mkdir -m 0700 "$stage"
+              tar -xf "$A" -C "$stage" --no-same-owner --no-same-permissions
               if [ -d "$DATA/state" ]; then mv "$DATA/state" "$DATA/state.before-restore-$stamp"; fi
-              mv "$new" "$DATA/state"
+              mv "$stage" "$DATA/state"
               chmod 0700 "$DATA/state"
-              rm -rf "$stage"
-              echo "restore result=ok archive=$ARCHIVE kept=state.before-restore-$stamp"
+              files=$(find "$DATA/state" -type f | wc -l)
+              notes=none
+              if [ -n "$V" ]; then
+                reason=vault-unpack
+                mkdir -p -m 0700 "$DATA/vault"
+                tar -xf "$V" -C "$DATA/vault" --no-same-owner --no-same-permissions
+                notes=$(find "$DATA/vault" -type f -name '*.md' | wc -l)
+                rm -f "$V"
+              fi
+              echo "restore result=ok archive=$ARCHIVE files=$files vault-notes=$notes kept=state.before-restore-$stamp"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

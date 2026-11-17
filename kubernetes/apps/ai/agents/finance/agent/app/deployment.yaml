@@ -74,6 +74,43 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
+        # The values check: the pod does not start while a value of its
+        # Secrets is empty or still the placeholder `pending` of git. It
+        # prints `values-check result=ok` or `values-check result=failed
+        # key=<name> reason=empty|placeholder`, the name of the key only,
+        # never a value, and fails the start. The pod then stays in
+        # Init:CrashLoopBackOff, not ready, and AgentPlatformWorkloadNotReady
+        # fires after 10 minutes.
+        - name: values-check
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM BRAVE_API_KEY; do
+                v=$(printenv "$k" || true)
+                if [ -z "$v" ]; then echo "values-check result=failed key=$k reason=empty"; exit 1; fi
+                if [ "$v" = pending ]; then echo "values-check result=failed key=$k reason=placeholder"; exit 1; fi
+              done
+              echo "values-check result=ok"
+          envFrom:
+            - secretRef:
+                name: agent-secret
+            - secretRef:
+                name: agent-search-secret
+          securityContext: &containerSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources: &small
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
         # The two directories of the state volume and /tmp, as uid 1000 with
         # mode 0700, and the client certificate of the sandbox gateway in the
         # directory of the CLI: the gateway address with each ":" and "/" as
@@ -81,7 +118,7 @@ spec:
         # on this cluster the kubelet can't reach the local-path directory,
         # so it would make a subPath directory as root (talos/wsl/README.md).
         - name: prepare
-          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          image: *image
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -94,17 +131,8 @@ spec:
               cp /openshell-tls/ca.crt /openshell-tls/tls.crt /openshell-tls/tls.key \
                 /home/node/.config/openshell/gateways/https___openshell.agents-finance.svc.cluster.local_8080/mtls/
               chmod 0600 /home/node/.config/openshell/gateways/https___openshell.agents-finance.svc.cluster.local_8080/mtls/*
-          securityContext: &containerSecurity
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          resources: &small
-            requests:
-              cpu: 10m
-              memory: 64Mi
-            limits:
-              memory: 256Mi
+          securityContext: *containerSecurity
+          resources: *small
           volumeMounts:
             - name: state
               mountPath: /home/node/data

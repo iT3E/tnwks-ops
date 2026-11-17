@@ -1381,11 +1381,11 @@ Three facts set the order:
 
 | Step | The change | What the merge applies | The check | The way back |
 | --- | --- | --- | --- | --- |
-| 1 | List `pvc.yaml` and `state-inbox.yaml` | The volume `agent-state` and the inbox pod, on the node of the agent. No product code, no secret, no network | `kubectl -n agents-finance get pvc agent-state` is `Bound`; `kubectl get pv <its volume> -o jsonpath='{.spec.nodeAffinity}'` names `homelab-wsl-worker-2`; `kubectl -n agents-finance logs deploy/agent-state-inbox` is `state-inbox result=ready` | Revert. The volume is empty |
-| 2 | List `backup.yaml` | The snapshot policy and schedule to the repository `agents-finance`. The first snapshot runs at once, of the empty volume | `kubectl -n agents-finance get snapshots.kopiur.home-operations.com`: one `Succeeded`. No `KopiurSnapshotFailed` | Revert. The policy needs the grant to go ([Move a trust domain to another repository](agent-platform.md#move-a-trust-domain-to-another-repository)) |
+| 1 | List `pvc.yaml` and `state-inbox.yaml` | The volume `agent-state` and the inbox pod, on the node of the agent. No product code, no secret, no network | `kubectl -n agents-finance get pvc agent-state` is `Bound`; `kubectl get pv <its volume> -o jsonpath='{.spec.nodeAffinity}'` names `homelab-wsl-worker-2`; `kubectl -n agents-finance logs deploy/agent-state-inbox` is `state-inbox result=ready` | Take the inbox out. The volume stays: it has `kustomize.toolkit.fluxcd.io/prune: disabled` |
+| 2 | List `backup.yaml` | The snapshot policy and schedule to the repository `agents-finance`. The first snapshot runs at once, of the empty volume | `kubectl -n agents-finance get snapshots.kopiur.home-operations.com`: one `Succeeded`. No `KopiurSnapshotFailed` | None needed: the policy stays with the volume |
 | 3 | The owner puts the values in `secret.sops.yaml` and in the key list of the model gateway ([Before the cutover](#before-the-cutover)) | The key `agents-finance` at the model gateway. The Secret file is not listed yet, so nothing in `agents-finance` | `kubectl -n ai logs deploy/litellm -c ensure-keys` has `agents-finance: created` (or `updated`) `(models: agents-finance, agents-finance-embeddings)` | Revert. The key stays at the model gateway until it is removed in the admin UI |
-| Host | The owner stops the finance bot on the host, makes the copy and puts it and the vault in the volume ([The copy of the state](#the-copy-of-the-state)) | Nothing in git | The checksum and the counts of the copy | Turn the bot on again on the host |
-| 4 | Out `state-inbox.yaml`; in `restore-job.yaml` (with `ARCHIVE` set), `secret.sops.yaml`, `secret-search.sops.yaml` and `deployment.yaml` (still `replicas: 0`) | The Job puts the copy in place as `state/`. The two Secrets and the Deployment at zero: no pod | `kubectl -n agents-finance get job agent-restore` is `1/1`; in Loki, `{namespace="agents-finance", app="agent-restore"}` has `restore result=ok archive=start/<name>`; `kubectl -n agents-finance get deploy agent` is `0/0` | Revert, then turn the bot on again on the host. The copy stays in `archives/start/` |
+| Host | The owner stops the finance bot on the host, makes the copy and the seed of the vault, and puts both archives in the volume ([The copy of the state](#the-copy-of-the-state)) | Nothing in git | The checksum and the counts of the copy | Turn the bot on again on the host |
+| 4 | Out `state-inbox.yaml`; in `restore-job.yaml` (with `ARCHIVE` and `VAULT` set), `secret.sops.yaml`, `secret-search.sops.yaml` and `deployment.yaml` (still `replicas: 0`) | The Job checks each member of the two archives, then puts the copy in place as `state/` and the vault in `vault/`. The two Secrets and the Deployment at zero: no pod | `kubectl -n agents-finance get job agent-restore` is `1/1`; in Loki, `{namespace="agents-finance", app="agent-restore"}` has `restore result=ok archive=start/<name> files=<n> vault-notes=<m>`, with the two counts of the owner. A refused archive is `restore result=failed reason=<kind>` (for example `member-type archive=state kinds=link`): fix the copy on the host and run again as `agent-restore-2`; nothing was written | Revert step 4, then turn the bot on again on the host. The copy stays in `archives/start/` |
 | 5 | Out `restore-job.yaml`; `replicas: 1` in `deployment.yaml` | The agent pod starts and polls the bot | [The cutover](#the-cutover) | [The way back](#the-way-back) |
 
 After step 5: the restore test of the state (the template
@@ -1395,7 +1395,10 @@ the state), and `openclaw-agents-finance` in `SERVICES` of
 Tempo, so the check never fails on a heartbeat that has not come yet.
 
 Between the steps no alert fires: the Deployment at zero has no pod that is
-not ready, the inbox is ready when it runs, the restore Job ends with exit 0
+not ready (with replicas 1 and a value that is still `pending`, the
+`values-check` step stops the start with `values-check result=failed
+key=<name> reason=placeholder`, and AgentPlatformWorkloadNotReady fires
+after 10 minutes), the inbox is ready when it runs, the restore Job ends with exit 0
 (a failed Job is `KubeJobFailed`, and that is a real fault), and the alerts
 of the backup container and of the heartbeat need a pod or a service in
 `SERVICES` first.
@@ -1458,6 +1461,12 @@ Left out, each on purpose:
 - The memory index: the `memory-index` step of the pod builds it again,
   with the embeddings of finance.
 - `.git` of the workspace, and logs.
+
+**The alternative, not written here:** the copy also holds the database of
+the finance agent, for its chat history. Then the auth profiles must be
+removed from it (`openclaw models auth logout` on a staging state), the
+agent id must map to `main`, the host must be on the release of the pod
+(D67), and the Job must allow `./agents/main/agent/`. The owner decides.
 
 Because the copy holds no database of the product, it needs no release
 match: the host can stay on its release for the copy (D67 was decided for a
@@ -1523,16 +1532,27 @@ tar -C "$STAGE" -cf - "$name" "$name.sha256" \
 kubectl -n agents-finance exec deploy/agent-state-inbox -- \
   sh -c "cd /home/node/data/archives/start && sha256sum -c $name.sha256"   # <name>: OK
 
-# 6. The seed of the vault, through the inbox, into its empty folder.
-tar -C "$V" --exclude=.obsidian --exclude=.trash --exclude=.git -cf - . \
-  | kubectl -n agents-finance exec -i deploy/agent-state-inbox -- tar -C /home/node/data/vault -xf -
-kubectl -n agents-finance exec deploy/agent-state-inbox -- \
-  sh -c 'find /home/node/data/vault -type f -name "*.md" | wc -l'   # the count of notes: write it down
+# 6. The seed of the vault. The notes can hold a secret (a password or a
+#    key written in a note): read each finding, and take the note out or
+#    change it in the vault folder first. The agent reads each note.
+betterleaks dir --redact --no-banner "$V"
+vault=vault-$(date -u +%Y%m%dT%H%M%SZ).tar
+tar -C "$V" --exclude=.obsidian --exclude=.trash --exclude=.git -cf "$STAGE/$vault" .
+tar -tf "$STAGE/$vault" | grep -c '\.md$'       # the count of notes: write it down
+tar -C "$STAGE" -cf - "$vault" \
+  | kubectl -n agents-finance exec -i deploy/agent-state-inbox -- tar -C /home/node/data/archives/seed -xf -
 ```
 
-7. Give the name of the archive (not its content) to the pull request of
-   step 4, as the value of `ARCHIVE` in `restore-job.yaml`:
-   `start/<name>`.
+The restore Job of step 4 checks each member of both archives before it
+writes a file: only plain files and directories, no link, no device, no
+absolute path, no `..`, no setuid or setgid bit, and in the copy of the
+state, nothing outside `./workspace/`. So a link or a stray file that the
+checks on the host missed stops the Job, with the kind of the member in its
+line.
+
+7. Give the names of the two archives (not their content) to the pull
+   request of step 4, as the values of `ARCHIVE` (`start/<name>`) and
+   `VAULT` (`<vault>`) in `restore-job.yaml`.
 8. After the exit check, remove `$STAGE` on the host. It is a copy of the
    workspace, and the host keeps the original.
 
@@ -1552,8 +1572,7 @@ Each step has a stop point: at a failed check, stop and take
 2. **The copy** ([The copy of the state](#the-copy-of-the-state)). Check:
    the checksum is `OK`, and the two counts are written down.
 3. **Merge step 4.** Checks: as in the table. Stop point: the restore Job
-   fails. The state of the volume is as it was (`state.before-restore-<time>`
-   is the empty folder of the inbox).
+   fails. It refuses before it writes, so the volume is as it was.
 4. **Merge step 5.** Checks, read only:
    - `kubectl -n agents-finance get pods -l app.kubernetes.io/name=agent`:
      `3/3` and `Running`, no restart.
@@ -1612,9 +1631,19 @@ lines above, and the two counts.
 
 ### The way back
 
-- **Before step 5:** revert the pull requests of steps 4 and 1 (the inbox
-  goes; the volume and its snapshots stay), and turn the finance bot on
-  again on the host. Nothing of the host changed.
+The way back takes out only what must go: the agent and the inbox. The
+volume, its backup policy, its snapshots and the copy in `archives/start/`
+stay; they hold no credential of the host. Flux never prunes the volume
+(`kustomize.toolkit.fluxcd.io/prune: disabled` on `pvc.yaml`). To remove it
+for real, one pull request takes the annotation out, and the next one takes
+the file and `backup.yaml` out: Flux then deletes the claim, and the reclaim
+policy wipes the volume on the node. The snapshots stay in the repository of
+finance until their retention ends.
+
+- **Before step 5:** a pull request takes out the files of step 4 (the
+  restore Job, the two Secrets, the Deployment) and the inbox, if it is
+  still in. Then turn the finance bot on again on the host. Nothing of the
+  host changed.
 - **After step 5:** a pull request sets `replicas: 0`; the pod stops and
   stops the polling. Then turn the bot on again on the host, with the state
   of the day of the cutover. The memory written on the platform since then
@@ -1628,8 +1657,6 @@ lines above, and the two counts.
 
   and merge by hand the files the owner wants (the scripts there use the
   read port, so keep the scripts of the host).
-- The volume, its snapshots and the copy in `archives/start/` stay. They
-  hold no credential of the host.
 
 ### Who does what, in order
 
