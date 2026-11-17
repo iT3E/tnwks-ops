@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.184.0 - 2026-11-17
+
+### Added
+
+* Backups: the session refresher of the finance repository runs (its role and profile in the wsl cluster settings, and its directory listed for Flux). The ClusterRepository comes in the next step.
+
 ## v2.183.0 - 2026-11-16
 
 ### Removed
