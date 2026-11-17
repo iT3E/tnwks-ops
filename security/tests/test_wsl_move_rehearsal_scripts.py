@@ -1469,6 +1469,37 @@ def test_the_after_boot_checks_read_each_run_as_a_list_of_lines(tmp_path):
     assert failed_by_assert(two_levels, "The run by hand did nothing")
 
 
+def test_the_after_boot_phase_checks_the_boot_run_before_any_task_of_a_or_b():
+    tasks = tasks_in("after-boot.yml")
+    names = [t.get("name", "") for t in tasks]
+    read = names.index("Read the log of the boot runs and the markers")
+    gate = names.index("The boot task ran the way back once")
+    acting = [i for i, t in enumerate(tasks) if t.get("ansible.builtin.include_tasks") in ("run_task.yml", "read_disk.yml")
+              or t.get("name", "").startswith("Start the boot task")]
+    assert gate == read + 1 and gate < min(acting)
+    # It reads the log of the boot runs only.
+    text = yaml.safe_dump(tasks[gate])
+    assert "wsl_move_rehearsal_boot_log.output" in text and "check_" not in text and "disk" not in text
+
+
+@no_ansible
+def test_a_boot_run_that_did_not_end_the_way_back_fails_the_first_check_of_after_boot(tmp_path):
+    done = {"runs": [["start, request: {}", "would restart (the end of the way back); the switch restart is off", "result: done"]],
+            "results": ["result: done"], "markers": ["wayback-done", "window-started", "boot-run", "wayback-done"]}
+    failed = {"runs": [["start, request: {}", "fail: check failed: the import back did not pass", "result: failed"]],
+              "results": ["result: failed"], "markers": ["wayback-done", "window-started", "boot-run"]}
+    # Each part alone: the result of the run, the markers, a group step.
+    result_only = {**done, "results": ["result: failed"]}
+    markers_only = {**done, "markers": failed["markers"]}
+    joined = {**done, "runs": [["start, request: {}", "group: a joined Administrators", *done["runs"][0][1:]]]}
+    gate = checks_of("after-boot.yml", ("The boot task ran the way back once",))
+    assert len(gate) == 1
+    ok, *bad = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_boot_log": registered([log])}, "tasks": gate}
+                                    for log in (done, failed, result_only, markers_only, joined)])
+    assert not passed(ok), passed(ok)
+    assert all(failed_by_assert(result, "The boot task ran the way back once") for result in bad)
+
+
 @needs_pwsh
 def test_each_wait_for_a_task_waits_through_queued_and_0x41301(tmp_path):
     """A task that never ran can read a new run time while it is Queued, or Ready with the
