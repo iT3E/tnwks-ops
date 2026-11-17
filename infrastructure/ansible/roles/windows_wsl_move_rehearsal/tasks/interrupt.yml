@@ -4,7 +4,8 @@
 # account lists the distro, and the last marker is that of a started window.
 # The group steps are off, so no temporary account is in Administrators
 # across the restart. The next phase is restart: the boot task runs the way
-# back once.
+# back once. Before the window, A's folder holds no icon of the shortcut that
+# A does not own.
 
 - name: The live parts at the start
   ansible.builtin.include_tasks: live.yml
@@ -18,6 +19,18 @@
   ansible.builtin.include_tasks: host_files.yml
   vars:
     wsl_move_rehearsal_host_files: refresh
+
+- name: Read the accounts of the rehearsal
+  ansible.builtin.include_tasks: read_accounts.yml
+
+# The boot run of this window imports A back as a standard account, so A's
+# folder must hold no icon of the shortcut that A does not own (icon.yml says
+# why). A read only, also in a check run: the phase wayback removes such an
+# icon.
+- name: The icon in the folder of A, before the window
+  ansible.builtin.include_tasks: icon.yml
+  vars:
+    wsl_move_rehearsal_icon_action: assert
 
 - name: The interrupted window, and the reads after it
   when: not ansible_check_mode

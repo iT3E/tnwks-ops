@@ -1347,13 +1347,19 @@ def test_the_wayback_checks_pass_on_the_reads_after_a_way_back(tmp_path):
         "wsl_move_rehearsal_disk": registered(rules),
         "wsl_move_rehearsal_runs": {"check": [check_a[-1], check_b[-1]], "strip-rules": [strip[-1]]},
         "wsl_move_rehearsal_a_started": registered([{"running": True, "wsl": 1}]),
+        "wsl_move_rehearsal_wayback_group": True,
     }
     names = ("Only B has a rule", "No WSL process of A", "A owns the distro again", "The start task of A")
     kept = {**facts, "wsl_move_rehearsal_runs": {**facts["wsl_move_rehearsal_runs"], "strip-rules": [kept_rules[-1]]}}
-    result, not_stripped = run_plays(tmp_path, [{"vars": facts, "tasks": checks_of("run_procedure.yml") + checks_of("wayback.yml", names)},
-                                                {"vars": kept, "tasks": checks_of("wayback.yml", names[:1])}])
+    # The same run read as one with the group steps off: its group moments fail the checks.
+    no_group = {**facts, "wsl_move_rehearsal_wayback_group": False}
+    result, not_stripped, as_no_group = run_plays(tmp_path, [
+        {"vars": facts, "tasks": checks_of("run_procedure.yml") + checks_of("wayback.yml", names)},
+        {"vars": kept, "tasks": checks_of("wayback.yml", names[:1])},
+        {"vars": no_group, "tasks": checks_of("wayback.yml", names[2:3])}])
     assert not passed(result), passed(result)
     assert failed_by_assert(not_stripped, names[0])
+    assert failed_by_assert(as_no_group, names[2])
 
 
 @needs_both
@@ -1369,12 +1375,264 @@ def test_a_log_text_over_two_lines_fails_a_check_and_breaks_no_template(tmp_path
     assert "" in procedure[-1]["log"] and None not in procedure[-1]["log"]
     facts = {"wsl_move_rehearsal_procedure_run": registered(procedure), "wsl_move_rehearsal_request": request,
              "wsl_move_rehearsal_runs": {"check": [{"result": {"registered": False}}, {"result": {"registered": False}}]},
-             "wsl_move_rehearsal_back_read": registered([{}]), "wsl_move_rehearsal_disk": registered([{}])}
+             "wsl_move_rehearsal_back_read": registered([{}]), "wsl_move_rehearsal_disk": registered([{}]),
+             "wsl_move_rehearsal_wayback_group": True}
     # A log of the play with a null entry, as a log read before the guard gave.
     null_log = {**facts, "wsl_move_rehearsal_procedure_run": registered([{**procedure[-1], "log": [*procedure[-1]["log"], None]}])}
     for result in run_plays(tmp_path, [{"vars": v, "tasks": checks_of("run_procedure.yml") + checks_of(
             "wayback.yml", ("A owns the distro again",))} for v in (facts, null_log)]):
         assert failed_by_assert(result, "A owns the distro again"), result
+
+
+# --- The icon of the shortcut in A's folder, and the way back as a standard A ---------------
+
+# An icon that A made while it was in Administrators: the group owns it, and the CREATOR
+# OWNER rule of A's folder names the group. And an icon that A made as a standard account.
+ICON_GROUP = "O:BAD:AI(A;ID;0x1301bf;;;BA)(A;ID;FR;;;AU)(A;ID;FA;;;SY)(A;ID;FA;;;BA)"
+ICON_A = f"O:{A_SID}D:AI(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)(A;ID;FA;;;SY)(A;ID;FA;;;BA)"
+
+
+def icon_run(tmp_path: Path, sddl: str = "", remove: bool = False, kind: str = "file", fails: bool = False,
+             root: Path | None = None, name: str = "shortcut.ico", sid: str = A_SID):
+    """The script of icon.yml on a folder of A with an icon (kind: file, folder, link or
+    none), whose read with the privileges of SYSTEM gives sddl. It gives the output and
+    $Ansible.Changed (or the error text, with fails), and the path of the icon."""
+    base = tmp_path / f"icon-{uuid.uuid4().hex[:6]}"
+    folder = base / "a"
+    folder.mkdir(parents=True)
+    path = folder / "shortcut.ico"
+    if kind == "file":
+        path.write_bytes(b"icon")
+    elif kind == "folder":
+        path.mkdir()
+    elif kind == "link":
+        (base / "other.ico").write_bytes(b"other")
+        path.symlink_to(base / "other.ico")
+    stand_ins = WINDOW_FAKES + f"$global:ReadSeq = @{{ {ps_str(path)} = @({ps_str(sddl)}) }}\n$global:ReadAt = 0\n"
+    out = run_script(tmp_path, "icon.yml", "Read the icon of the shortcut in the folder of A", {
+        "Folder": str(folder), "Root": str(root or base), "Name": name, "SidA": sid, "Remove": remove,
+        "Procedure": str(WINDOW), "Capability": CAPABILITY}, stand_ins=stand_ins, fails=fails, changed=not fails)
+    return out, path
+
+
+@needs_pwsh
+def test_the_icon_step_prints_the_icon_and_removes_it_only_when_a_does_not_own_it(tmp_path):
+    # The read only: the owner, the rules (each account masked), the attributes and the times.
+    (out, changed), path = icon_run(tmp_path, ICON_GROUP)
+    icon = out[-1]
+    assert icon["exists"] is True and icon["owner_a"] is False and icon["owner"] == "BA" and icon["sddl"] == ICON_GROUP
+    assert icon["removed"] is False and path.exists() and changed is False
+    assert icon["length"] == 4 and icon["attributes"] and icon["created"].endswith("Z") and icon["written"].endswith("Z")
+    # With the removal on: the icon of the group goes, and so does one of another account.
+    (out, changed), path = icon_run(tmp_path, ICON_GROUP, remove=True)
+    assert out[-1]["removed"] is True and not path.exists() and changed is True
+    other = ICON_A.replace(A_SID, "S-1-5-21-9-9-9-1003")
+    (out, changed), path = icon_run(tmp_path, other, remove=True)
+    assert out[-1]["owner"] == "<sid>" and out[-1]["removed"] is True and not path.exists()
+    # A's own icon stays, and no icon is no change.
+    (out, changed), path = icon_run(tmp_path, ICON_A, remove=True)
+    assert out[-1]["owner_a"] is True and out[-1]["owner"] == "<a>" and A_SID not in out[-1]["sddl"]
+    assert out[-1]["removed"] is False and path.exists() and changed is False
+    (out, changed), path = icon_run(tmp_path, kind="none", remove=True)
+    assert out[-1]["exists"] is False and out[-1]["removed"] is False and changed is False
+
+
+@needs_pwsh
+def test_the_icon_step_refuses_a_link_a_folder_another_place_or_name_and_no_sid_of_a(tmp_path):
+    for over, text in (({"kind": "link"}, "is not a plain file"), ({"kind": "folder"}, "is not a plain file"),
+                       ({"root": tmp_path / "elsewhere"}, "is not under"),
+                       ({"name": "other.ico"}, "is not the icon of the shortcut"), ({"sid": ""}, "No SID of A")):
+        error, path = icon_run(tmp_path, ICON_GROUP, remove=True, fails=True, **over)
+        assert text in error and "Nothing is changed" in error, (over, error)
+        # Nothing is removed: not the icon, not a link, not the file that a link names.
+        assert path.is_symlink() or path.exists(), over
+        if over.get("kind") == "link":
+            assert (path.parent.parent / "other.ico").read_bytes() == b"other"
+
+
+@no_ansible
+def test_the_icon_checks_stop_the_interrupt_and_the_removal_runs_only_in_the_wayback(tmp_path):
+    read = find_task("icon.yml", "Read the icon of the shortcut in the folder of A")
+    removal = find_task("icon.yml", "Remove the icon that A does not own")
+    gate = find_task("icon.yml", "The folder of A holds no icon that A does not own")
+    # One script: the removal reads the file again first. The read runs in a check run too.
+    module, again = read["ansible.windows.win_powershell"], removal["ansible.windows.win_powershell"]
+    assert again["script"] == module["script"] and module["parameters"]["Remove"] is False
+    assert again["parameters"] == {**module["parameters"], "Remove": True}
+    assert read["check_mode"] is False and "when" not in read
+    assert all(task["vars"]["ansible_become_user"] == "SYSTEM" for task in (read, removal))
+    icons = {"group": {"exists": True, "owner_a": False, "owner": "BA", "path": "x"},
+             "own": {"exists": True, "owner_a": True, "owner": "<a>", "path": "x"},
+             "none": {"exists": False, "owner_a": False, "owner": "", "path": "x"}}
+    runs = {"name": "the removal runs", "ansible.builtin.assert": {"that": removal["when"], "quiet": True}}
+    cases = [(action, key) for action in ("assert", "remove") for key in icons]
+    results = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_icon_action": action,
+                                             "wsl_move_rehearsal_icon": registered([icons[key]])},
+                                    "tasks": [gate, runs]} for action, key in cases])
+    outcome = {case: (failed_by_assert(r, "The folder of A"), not failed_by_assert(r, "the removal runs"))
+               for case, r in zip(cases, results)}
+    # (the interrupt stops, the removal runs)
+    assert outcome == {("assert", "group"): (True, False), ("assert", "own"): (False, False), ("assert", "none"): (False, False),
+                       ("remove", "group"): (False, True), ("remove", "own"): (False, False), ("remove", "none"): (False, False)}
+
+
+def test_the_interrupt_reads_the_icon_of_a_before_the_window_and_only_reads_it():
+    doc = yaml.safe_load((ROLE / "tasks/interrupt.yml").read_text())
+    names = [t.get("name") for t in doc]
+    icon = next(t for t in doc if t.get("ansible.builtin.include_tasks") == "icon.yml")
+    assert icon["vars"] == {"wsl_move_rehearsal_icon_action": "assert"} and "when" not in icon
+    order = ["The copies of the scripts, the configs and the tasks on the host (refresh)", "Read the accounts of the rehearsal",
+             icon["name"], "The interrupted window, and the reads after it"]
+    assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
+    assert sum(t.get("ansible.builtin.include_tasks") == "icon.yml" for t in tasks_in("interrupt.yml")) == 1
+
+
+WAYBACK_ORDER = ("The group steps of this way back", "Read the last marker before the way back",
+                 "The import back task of A can not start before the way back",
+                 "A may log on as a batch job, for a way back with no group step",
+                 "The icon in the folder of A, before a way back with no group step", "The window procedure, way back mode",
+                 "A may log on as a batch job again, with no group", "The icon in the folder of A, after A left the group",
+                 "No VM of the rehearsal before the start task of A", "The start task of A, started by the play")
+
+
+@no_ansible
+def test_the_switch_of_the_group_steps_sets_the_request_and_each_step_of_the_way_back(tmp_path):
+    """With the group steps on (the default), the phase runs as before: the check that A's
+    task can not start (after a done window only), the group test in the request, the
+    play's start of A, and the removal of an icon of the group after the run. With
+    -e wsl_move_rehearsal_wayback_group_steps=false, the request has no group step and no
+    group test, as JSON booleans (the procedure reads a text "False" as true), and the
+    play gives A its batch right and removes an icon that A does not own before the run."""
+    names = [t.get("name") for t in tasks_in("wayback.yml")]
+    assert [names.index(n) for n in WAYBACK_ORDER] == sorted(names.index(n) for n in WAYBACK_ORDER)
+    steps = {n: find_task("wayback.yml", n) for n in WAYBACK_ORDER}
+    run = steps["The window procedure, way back mode"]
+    assert run["vars"]["wsl_move_rehearsal_last_markers"] == ["window-done", "window-started", "boot-run"]
+    for n in ("The icon in the folder of A, before a way back with no group step", "The icon in the folder of A, after A left the group"):
+        assert steps[n]["ansible.builtin.include_tasks"] == "icon.yml" and steps[n]["vars"] == {"wsl_move_rehearsal_icon_action": "remove"}
+    gated = [n for n in WAYBACK_ORDER[2:] if "when" in steps[n]]
+    assert set(gated) == set(WAYBACK_ORDER[2:]) - {"The window procedure, way back mode", "A may log on as a batch job again, with no group"}
+    cases = [(switch, marker) for switch in (None, True, "true", "false", False) for marker in ("window-done", "boot-run")]
+    plays = []
+    for switch, marker in cases:
+        given = {} if switch is None else {"wsl_move_rehearsal_wayback_group_steps": switch}
+        tasks = [steps["The group steps of this way back"],
+                 {"name": "the request", "ansible.builtin.set_fact": {"tnwks_request": "{{ request | to_json }}"},
+                  "vars": {"request": run["vars"]["wsl_move_rehearsal_request"]}}]
+        tasks += [{"name": f"runs: {n}", "ansible.builtin.assert": {
+            "that": [steps[n]["when"]] if isinstance(steps[n]["when"], str) else steps[n]["when"], "quiet": True}} for n in gated]
+        plays.append({"vars": {**given, "wsl_move_rehearsal_wayback_marker": registered([marker])}, "tasks": tasks,
+                      "keep": ["tnwks_request"]})
+    for (switch, marker), result in zip(cases, run_plays(tmp_path, plays)):
+        group = switch in (None, True, "true")
+        request = result["facts"]["tnwks_request"]
+        request = json.loads(request) if isinstance(request, str) else request
+        assert request == {"mode": "wayback", "group_steps": group, "stop_after": 0, "rehearsal_group_test": group}, (switch, request)
+        assert type(request["group_steps"]) is bool and type(request["rehearsal_group_test"]) is bool
+        ran = {n for n in gated if not failed_by_assert(result, f"runs: {n}")}
+        if group:
+            expected = {"The icon in the folder of A, after A left the group", "No VM of the rehearsal before the start task of A",
+                        "The start task of A, started by the play"}
+            if marker == "window-done":
+                expected.add("The import back task of A can not start before the way back")
+        else:
+            expected = {"A may log on as a batch job, for a way back with no group step",
+                        "The icon in the folder of A, before a way back with no group step"}
+        assert ran == expected, (switch, marker, ran)
+
+
+RUNS_READ = "Read the runs of the window task and the boot task"
+RUNS_CHECK = "No run of the window task or the boot task goes on"
+
+
+def test_the_way_back_reads_that_no_run_of_the_procedure_goes_on_before_any_change():
+    """The procedure has no lock, and the window task and the boot task are two tasks: a
+    way back must not start beside a run of either. The read and its check come first in
+    the phase, before the block of its changes, and the read runs in a check run too."""
+    doc = yaml.safe_load((ROLE / "tasks/wayback.yml").read_text())
+    names = [t.get("name") for t in doc]
+    read, check = names.index(RUNS_READ), names.index(RUNS_CHECK)
+    block = names.index("The way back, and the reads after it")
+    assert read + 1 == check < names.index("The group steps of this way back") < block
+    assert all("block" not in t and t.get("ansible.builtin.include_tasks") in (None, "live.yml", "groups.yml",
+               "read_accounts.yml", "host_files.yml") for t in doc[:read])
+    task = doc[read]
+    assert task["check_mode"] is False and "when" not in task and "when" not in doc[check]
+    assert task["ansible.windows.win_powershell"]["parameters"]["Tasks"] == [
+        "{{ wsl_move_rehearsal_window_task }}", "{{ wsl_move_rehearsal_boot_task }}"]
+
+
+@needs_both
+def test_a_run_of_the_window_task_or_the_boot_task_stops_the_way_back_with_nothing_changed(tmp_path):
+    tasks = ["tnwks-moverh-window", "tnwks-moverh-boot"]
+
+    def read(states: dict, code: int = 0) -> list:
+        return run_script(tmp_path, "wayback.yml", RUNS_READ, {"Tasks": tasks}, stand_ins=TASKS + (
+            f"$global:Code = {code}\n$global:TaskStates = @{{ " +
+            "; ".join(f"{ps_str(k)} = {ps_str(v)}" for k, v in states.items()) + " }\n"))
+
+    idle = read({})
+    assert idle[-1]["busy"] == [] and idle[-1]["states"] == [f"{t} Ready 0x0" for t in tasks]
+    boot = read({"tnwks-moverh-boot": "Running"})
+    window = read({"tnwks-moverh-window": "Queued"})
+    # A task that never ran can read Ready with the result 0x41301 (the task is running).
+    pending = read({}, code=0x41301)
+    assert boot[-1]["busy"] == ["tnwks-moverh-boot"] and window[-1]["busy"] == ["tnwks-moverh-window"]
+    assert pending[-1]["busy"] == tasks
+    # A disabled task, or one that ended with an error, is no run.
+    assert read({"tnwks-moverh-boot": "Disabled"}, code=1)[-1]["busy"] == []
+    results = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_wayback_runs": registered(out)},
+                                    "tasks": checks_of("wayback.yml", (RUNS_CHECK,))} for out in (idle, boot, window, pending)])
+    assert not passed(results[0]), passed(results[0])
+    for result in results[1:]:
+        assert failed_by_assert(result, RUNS_CHECK)
+        assert "Nothing is changed" in next(r["msg"] for r in result["results"] if r["name"] == RUNS_CHECK)
+
+
+@needs_both
+def test_a_way_back_with_no_group_step_after_a_boot_run_that_did_not_end_passes_the_checks(tmp_path):
+    """The state after a boot run that did not end the way back (it stopped at its import back): A's disk file at its path
+    with the saved rules, no list of a done way back, the markers window-started then
+    boot-run. The way back mode with no group step moves nothing, imports A back, enables
+    A's start task and starts it; the checks of the phase pass with the group steps off,
+    and fail on the same run read with them on."""
+    request = {"mode": "wayback", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
+    state = "t window-started\nt wayback-done\nt window-started\nt boot-run\n"
+    run = run_window(tmp_path / "w", request, state=state, disk=("a",), acl_file=OLD_SDDL, marker_a=True,
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"},
+                     disabled="tnwks-moverh-a-start")
+    assert run["code"] == 0, run["log"]
+    assert not any(c.startswith(("join", "leave", "move")) for c in run["calls"]), run["calls"]
+    assert "way back 3: the file has its saved owner and rules" in run["log"]
+    markers = ["window-done", "window-started", "boot-run"]
+    procedure = procedure_output(tmp_path, run, "2026-01-01T00:00:00.0000000Z boot result: failed\r\n", state, request, markers)
+    assert procedure[-1]["markers"] == ["window-started", "wayback-done"] and procedure[-1]["groups"] == []
+    tokens = run_script(tmp_path, "tokens.yml", "Read the tokens", {"Sid": A_SID}, stand_ins=TOKENS_STAND_INS + (
+        f"function Get-CimInstance {{ param([string]$ClassName) @([pscustomobject]@{{ ProcessId = 1; Name = 'wsl.exe'; Owner = '{A_SID}' }}) }}\n"))
+    disk = tmp_path / "a.vhdx"
+    disk.write_text("disk")
+    back = run_script(tmp_path, "wayback.yml", "Read the tasks and the file", {
+        "Prefix": "tnwks-moverh", "Disk": str(disk), "DiskB": str(tmp_path / "none.vhdx")},
+        stand_ins=TASKS + "$global:TaskStates = @{ 'tnwks-moverh-a-start' = 'Running'; 'tnwks-moverh-b-start' = 'Disabled' }\n")
+    rules = disk_read(tmp_path, "saved", [OLD_SDDL + VM_ACE], saved=OLD_SDDL)
+    check_a = runner_output(tmp_path, "a", "check", check_result(f"{DIR}\\a\\ext4.vhdx"))
+    check_b = runner_output(tmp_path, "b", "check", {"registered": False, "oobe_complete": 1})
+    facts = {
+        "wsl_move_rehearsal_procedure_run": registered(procedure), "wsl_move_rehearsal_request": request,
+        "wsl_move_rehearsal_tokens": registered(tokens), "wsl_move_rehearsal_back_read": registered(back),
+        "wsl_move_rehearsal_disk": registered(rules), "wsl_move_rehearsal_runs": {"check": [check_a[-1], check_b[-1]]},
+        "wsl_move_rehearsal_wayback_group": False,
+    }
+    names = ("No WSL process of A", "A owns the distro again")
+    # The same run with no line of the start of A's start tasks by the procedure.
+    log = [line for line in procedure[-1]["log"] if not line.startswith("the start tasks of ")]
+    not_started = {**facts, "wsl_move_rehearsal_procedure_run": registered([{**procedure[-1], "log": log}])}
+    ok, as_group, no_start = run_plays(tmp_path, [
+        {"vars": facts, "tasks": checks_of("run_procedure.yml") + checks_of("wayback.yml", names)},
+        {"vars": {**facts, "wsl_move_rehearsal_wayback_group": True}, "tasks": checks_of("wayback.yml", names[1:])},
+        {"vars": not_started, "tasks": checks_of("run_procedure.yml") + checks_of("wayback.yml", names[1:])}])
+    assert not passed(ok), passed(ok)
+    assert failed_by_assert(as_group, names[1]) and failed_by_assert(no_start, names[1])
 
 
 # --- Interrupt: a log of one line before the run ------------------------------------------
