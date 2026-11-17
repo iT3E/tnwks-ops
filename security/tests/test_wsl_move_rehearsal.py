@@ -179,9 +179,12 @@ def test_the_play_waits_past_the_limit_of_the_window_task_and_the_worst_case_is_
     wait = int(re.search(r"\$deadline = \(Get-Date\)\.AddMinutes\((\d+)\)", (ROLE / "tasks/run_procedure.yml").read_text())[1])
     assert wait > limit_minutes
     minutes = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_window_config"]["task_minutes"]
-    # Four tasks of an account in the window, three in the way back, four waits for
-    # no WSL process (2 minutes each) and the start tasks (3 minutes).
-    worst = 7 * minutes + 4 * 2 + 3
+    # Four tasks of an account in the window and four waits for no WSL process
+    # (2 minutes each); in the way back three tasks and the start tasks (3 minutes),
+    # or in the group test four tasks (the stop of A before it leaves the group).
+    window = (ROLE / "files/Invoke-TnwksMoveWindow.ps1").read_text()
+    assert window.count("Wait-TnwksNoWsl $") == 4
+    worst = 4 * minutes + 4 * 2 + max(3 * minutes + 3, 4 * minutes)
     assert worst <= limit_minutes - 30
 
 
@@ -192,6 +195,14 @@ def test_after_the_way_back_of_the_group_test_the_play_starts_a_and_reads_its_to
              "The start task of A, started by the play", "The tokens of the WSL processes of A",
              "No WSL process of A holds a token from its time in Administrators"]
     assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
+    poll = next(t for t in tasks_of("wayback.yml") if t.get("name") == "No VM of the rehearsal before the start task of A")
+    script = poll["ansible.windows.win_powershell"]["script"]
+    # The set of the VM processes by process ID and start time, as the baseline
+    # keeps them, not only their count.
+    assert "$_.ProcessId" in script and "CreationDate.ToUniversalTime().ToString('o')" in script
+    assert '"$($_.id) $($_.created)"' in script and poll["failed_when"] == "not (wsl_move_rehearsal_vm_count.output | last).same"
+    live = (ROLE / "files/Get-TnwksMoveLiveState.ps1").read_text()
+    assert "id = [int]$_.ProcessId" in live and "created = $_.CreationDate.ToUniversalTime().ToString('o')" in live
     tokens = (ROLE / "tasks/tokens.yml").read_text()
     assert "(attributes & 0x4) != 0" in tokens and "-contains 'S-1-5-32-544'" in tokens
     boot = (ROLE / "tasks/after-boot.yml").read_text()
@@ -486,6 +497,7 @@ function Start-Sleep { }
 """
 
 OLD_SDDL = f"O:{A_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{A_SID})"
+STOPPED = {"terminate_exit": 0, "shutdown_exit": 0}
 
 
 def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = None, state: str = "",
@@ -528,11 +540,13 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
     state_of = {"tnwks-moverh-a-start": "Ready", "tnwks-moverh-b-start": "Disabled"}
     state_of.update(tasks or {})
     default_results = {
-        "tnwks-moverh-a-stop": {}, "tnwks-moverh-b-stop": {},
+        "tnwks-moverh-a-stop": STOPPED, "tnwks-moverh-b-stop": STOPPED,
         "tnwks-moverh-a-unregister": {"registered": False}, "tnwks-moverh-b-unregister": {"registered": False},
         "tnwks-moverh-a-import": {"disk": str(root / "a/ext4.vhdx")}, "tnwks-moverh-b-import": {"disk": str(root / "b/ext4.vhdx")},
     }
     default_results.update(results or {})
+    # None: the task writes no result in this run.
+    default_results = {k: v for k, v in default_results.items() if v is not None}
     acls = {str(root / "a/ext4.vhdx"): OLD_SDDL}
 
     def ps(value) -> str:
@@ -700,6 +714,40 @@ def test_the_way_back_mode_puts_a_into_administrators_at_its_step_1_and_out_at_t
     log = out["log"]
     assert log.index("group: tnwks-moverh-a joined Administrators") < log.index("way back 1 passed")
     assert log.index("way back 5 passed") < log.index("group: tnwks-moverh-a left Administrators")
+
+
+@needs_pwsh
+def test_a_stop_passes_only_with_a_shutdown_result_of_its_own_run(tmp_path):
+    """LastTaskResult 0 can be that of an earlier stop: with no result of this run,
+    or one of an earlier run, or a failed shutdown, the step fails."""
+    wayback = {"mode": "wayback", "group_steps": True, "stop_after": 0, "rehearsal_group_test": True}
+    stale = json.dumps({**STOPPED, "time": 1})
+    for i, (result, earlier) in enumerate(((None, None), (None, stale), ({"terminate_exit": 0, "shutdown_exit": 1}, None))):
+        # The group test: A's stop before it leaves Administrators.
+        root = tmp_path / f"back{i}/root"
+        (root / "log/a").mkdir(parents=True)
+        if earlier:
+            (root / "log/a/stop.json").write_text(earlier)
+        out = run_window(tmp_path / f"back{i}", wayback, state="t window-started\nt window-done\n", disk=("b",),
+                         acl_file=OLD_SDDL, marker_a=True, tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"},
+                         disabled="tnwks-moverh-a-start", results={"tnwks-moverh-a-stop": result})
+        # The run fails, so the play starts no task of A; A leaves the group only
+        # at the end of the failed run, as at the end of any run of the group test.
+        assert out["code"] == 1, out["log"]
+        assert out["calls"][-2:] == ["start tnwks-moverh-a-stop", f"leave {A_SID}"]
+        log = out["log"]
+        fail = next(i for i, line in enumerate(log) if line.startswith("fail: check failed: the stop task of tnwks-moverh-a ended with 0, with "))
+        assert "no WSL process of tnwks-moverh-a before it leaves the group" not in log
+        assert fail < log.index("group: tnwks-moverh-a left Administrators") < log.index("result: failed")
+        # The forward window: A's stop at step 3, before the file moves.
+        root = tmp_path / f"forward{i}/root"
+        (root / "log/a").mkdir(parents=True)
+        if earlier:
+            (root / "log/a/stop.json").write_text(earlier)
+        out = run_window(tmp_path / f"forward{i}", {"mode": "forward", "group_steps": False, "stop_after": 0,
+                                                    "rehearsal_group_test": False}, results={"tnwks-moverh-a-stop": result})
+        assert "step 3 passed" not in out["log"] and not any(c.startswith("move ") for c in out["calls"]), out["log"]
+        assert out["disk_a"] and not out["disk_b"]
 
 
 @needs_pwsh

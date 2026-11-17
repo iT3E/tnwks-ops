@@ -140,7 +140,7 @@
 
           # The token of each WSL process of the account. The owner of a
           # process comes from WMI, so a process of another user is not opened.
-          # The Ansible session holds the debug privilege, enabled, so it can open them.
+          # The checks run as SYSTEM (become runas), whose token holds the debug privilege, so they can open them.
           Add-Type -TypeDefinition @'
           using System;
           using System.Runtime.InteropServices;

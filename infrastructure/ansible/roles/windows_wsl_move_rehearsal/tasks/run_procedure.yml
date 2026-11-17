@@ -9,11 +9,12 @@
 #
 # The wait: the task of the procedure has a limit of 2 hours
 # (templates/system-task.xml.j2), and a run that the limit ends skips its
-# own end (the group step of the group test). The worst case is about 80
+# own end (the group step of the group test). The worst case is about 90
 # minutes: each task of an account waits up to task_minutes (10), four in the
-# forward window and three in the way back, each wait for no WSL process up
-# to 2 minutes, and the start tasks up to 3. The play waits past the limit,
-# so it always sees the end of the run.
+# forward window and four in the way back of the group test (in another way
+# back three, and the start tasks up to 3), and each of the four waits for no
+# WSL process up to 2. The play waits past the limit, so it always sees the
+# end of the run.
 - name: "The window procedure, mode {{ wsl_move_rehearsal_request.mode }}"
   ansible.windows.win_powershell:
     parameters:

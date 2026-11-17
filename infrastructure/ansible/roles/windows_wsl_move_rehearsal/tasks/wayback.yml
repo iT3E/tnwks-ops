@@ -43,8 +43,11 @@
 
     # The import back started A's VM while A was in Administrators; the
     # procedure ran A's stop task before A left the group. A VM process shows
-    # no account: the proof is that the count of VM processes is that of the
-    # baseline (the live VM only) before the start task of A starts.
+    # no account: the proof is that the VM processes are those of the
+    # baseline (the live VM only), each by its process ID and start time,
+    # before the start task of A starts. A VM of the rehearsal that ends while
+    # another starts keeps the count, not the set. After a restart (the
+    # baseline is marked) the live VM is a new one: only the count compares.
     - name: No VM of the rehearsal before the start task of A
       ansible.windows.win_powershell:
         parameters:
@@ -53,15 +56,19 @@
           param([string]$Path)
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
-          $base = @((Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json).vm).Count
+          $read = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+          $base = @($read.vm | ForEach-Object { "$($_.id) $($_.created)" } | Sort-Object)
+          $by = if ($read.restarted) { 'count' } else { 'process ID and start time' }
           $deadline = (Get-Date).AddMinutes(2)
           do {
-              $now = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'vmmem*' }).Count
-              if ($now -ne $base) { Start-Sleep -Seconds 3 }
-          } while ($now -ne $base -and (Get-Date) -lt $deadline)
-          [pscustomobject]@{ baseline = $base; now = $now }
+              $now = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'vmmem*' } | ForEach-Object {
+                  "$([int]$_.ProcessId) $($_.CreationDate.ToUniversalTime().ToString('o'))" } | Sort-Object)
+              $same = if ($read.restarted) { $now.Count -eq $base.Count } else { ($now -join ' | ') -eq ($base -join ' | ') }
+              if (-not $same) { Start-Sleep -Seconds 3 }
+          } while (-not $same -and (Get-Date) -lt $deadline)
+          [pscustomobject]@{ baseline = $base; now = $now; by = $by; same = $same }
       register: wsl_move_rehearsal_vm_count
-      failed_when: (wsl_move_rehearsal_vm_count.output | last).now != (wsl_move_rehearsal_vm_count.output | last).baseline
+      failed_when: not (wsl_move_rehearsal_vm_count.output | last).same
 
     # The procedure leaves the start of A to the play in the group test.
     - name: The start task of A, started by the play

@@ -102,8 +102,9 @@ function Get-TnwksRegistration([string]$Distro) {
 }
 
 # Whether a file is at a path, read so that it fails closed: only "not found"
-# reads as no file. Test-Path reads $false also when the account may not read
-# the attributes, and WSL deletes the file at the path of a registration.
+# reads as no file. When the account may not read the attributes, Test-Path
+# throws under the Stop preference and reads $false with its errors silenced,
+# and WSL deletes the file at the path of a registration.
 function Test-TnwksFile([string]$Path) {
     try {
         [void][IO.File]::GetAttributes($Path)
