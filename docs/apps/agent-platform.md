@@ -657,6 +657,11 @@ pod makes the jobs of the product equal to that list.
   writes the task in that file (the workspace is in the backups). A job
   whose file is missing answers that it is missing. The agent can change
   that file, as it can change its other workspace files.
+- **A run gets no `MEMORY.md`.** The product leaves the memory file out of
+  a scheduled session: in a lab with the image, a scheduled turn got
+  `AGENTS.md` and no `MEMORY.md`, and a chat turn got both. So a task file
+  names what the job needs, or tells the agent to search its memory
+  (`memory_search`).
 - **The tools of a run.** A job made with no tool list stores `*`: each
   run uses the tool policy of the agent as it is at that time, with its
   sandbox, its deny list and the filter of the MCP server. The test
