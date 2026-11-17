@@ -75,7 +75,12 @@ def test_each_config_map_of_the_pod_has_a_hash_in_its_name(agent):
 @pytest.mark.parametrize("agent", NAMES)
 def test_reloader_watches_the_secrets_only_and_the_pod_is_recreated(agent):
     d = deployment(agent)
-    reloader = {k: v for k, v in d["metadata"]["annotations"].items() if "reloader.stakater.com" in k}
+    # The domain of an annotation key is the part before the slash.
+    reloader = {
+        k: v
+        for k, v in d["metadata"]["annotations"].items()
+        if k.partition("/")[0].split(".")[-3:] == ["reloader", "stakater", "com"]
+    }
     assert reloader == {"secret.reloader.stakater.com/auto": "true"}
     assert not [k for k in d["spec"]["template"]["metadata"].get("annotations", {}) if "reloader" in k]
     # One process owns the state on one volume: the old pod stops first.
