@@ -1438,6 +1438,26 @@ the settings of the plan, D65), and the risk of web search, write access to
 the finance app and finance data in one session
 ([agent-platform.md](agent-platform.md#the-finance-app)).
 
+### The inventory of a move
+
+Before the copy, list what the agent has on the host, and for each item
+where it goes on the platform:
+
+- the workspace: the instruction files, the memory, the skills and the
+  scripts (the copy, below);
+- the vault or another folder the agent reads (the seed, below);
+- the channel account and its token, and each other credential (new values
+  in the Secrets, never a copy);
+- the MCP servers and the tools of the config (the config in git);
+- **the scheduled jobs of the product**: they live in the state database of
+  the host gateway, not in a file of the workspace, so the copy does not
+  hold them. List them with `openclaw cron list --all --json` (the
+  schedule, the zone, the session, the delivery and the message of each),
+  turn them off on the host at step 1 of [The cutover](#the-cutover), and
+  declare them in git
+  ([agent-platform.md](agent-platform.md), "Scheduled jobs"). The finance
+  move missed them at first.
+
 ### The copy of the state
 
 The owner, on the host, after the finance bot is off (step 1 of
@@ -1463,6 +1483,10 @@ Left out, each on purpose:
 - The memory index: the `memory-index` step of the pod builds it again,
   with the embeddings of finance.
 - `.git` of the workspace, and logs.
+- What the real run of 2026-11-17 left out too: backup files (`*.bak`,
+  `*.orig`, `*~`), caches (`__pycache__/`, `.cache/`, `node_modules/`), and
+  zone marker files (`*:Zone.Identifier`, which Windows writes next to a
+  downloaded file).
 
 The copy holds no database of the product, so it needs no release match:
 the host stays on its release for the copy.
@@ -1476,7 +1500,9 @@ openclaw agents list --json      # the "workspace" of the agent <id>
 WS=<that path>
 STAGE=$(mktemp -d)
 mkdir -m 0700 "$STAGE/state" "$STAGE/state/workspace"
-tar -C "$WS" --exclude=./.git -cf - . | tar -C "$STAGE/state/workspace" -xf -
+tar -C "$WS" --exclude=./.git --exclude='*.bak' --exclude='*.orig' --exclude='*~' \
+  --exclude=__pycache__ --exclude=.cache --exclude=node_modules --exclude='*:Zone.Identifier' \
+  -cf - . | tar -C "$STAGE/state/workspace" -xf -
 ```
 
 2. **Change the files in the copy, not on the host.** The first check of
@@ -1501,8 +1527,15 @@ tar -C "$WS" --exclude=./.git -cf - . | tar -C "$STAGE/state/workspace" -xf -
      - update a split transaction with `firefly__update_transaction` and the
        `transaction_journal_id` of each split (an update that leaves out a
        split deletes it).
-   - Then no file names the old address or the token file. Each command
-     prints nothing:
+   - Then **no file that steers the agent** names the old address or the
+     token file: the scripts, the instruction files and the skills, and
+     the operative lines of the memory file (a rule or a step it follows).
+     A line of history in the memory file or a daily memory file (what was
+     done, on a date) can keep the old name: add a note that it is
+     history, for example "(before the move to the platform)". The rule
+     was "no file names them", and the real run showed that history lines
+     name them too. Each command lists the files that still name them;
+     read each one:
 
      ```bash
      grep -rIl '<the old address of the app>' "$STAGE/state"
@@ -1511,9 +1544,14 @@ tar -C "$WS" --exclude=./.git -cf - . | tar -C "$STAGE/state/workspace" -xf -
 
 ```bash
 # 3. No secret, no link out of the copy.
-betterleaks dir --redact --no-banner "$STAGE/state"   # no finding
+betterleaks dir --redact --no-banner "$STAGE/state"   # no finding (see below)
 find "$STAGE/state" -type l                           # prints nothing
 find "$STAGE/state" \( -name '.env' -o -name '*.sqlite*' -o -iname '*token*' -o -iname '*credential*' \)   # prints nothing
+
+# The scan reports each finding, redacted, and exits 1. Read each one: a
+# real secret goes out of the copy or is changed; a value that only looks
+# like one (an example, a hash) can stay. Run it again until the findings
+# left are the ones you read.
 
 # 4. The archive, in the form of a start archive (the restore Job reads it).
 release=$(openclaw --version | grep -oE '[0-9]{4}\.[0-9]+\.[0-9]+' | head -n 1)
@@ -1562,12 +1600,15 @@ Each step has a stop point: at a failed check, stop and take
 
 1. **The host stops the finance agent.** The owner, on the host: turn off
    the Telegram account of the finance bot in the config of the host
-   gateway (`channels.telegram.accounts.<account>.enabled` to `false`), turn
-   off the scheduled jobs of the finance agent (`openclaw cron list`), and
-   start the host gateway again. The other agents of the host stop for that
-   restart. Check: `openclaw channels status --probe` shows the finance
-   account not running, and a message to the finance bot gets no answer.
-   From here the finance agent is off until step 4.
+   gateway (`channels.telegram.accounts.<account>.enabled` to `false`), and
+   turn off the scheduled jobs of the finance agent (`openclaw cron list
+   --all`, then `openclaw cron disable <id>` for each). At the release of
+   the host the gateway applies the account change live, with no restart
+   (the real run of 2026-11-17). Check: `openclaw channels status --probe`
+   shows the finance account not running, and a message to the finance bot
+   gets no answer. Start the host gateway again only if the channel state
+   still shows the account as running: the other agents of the host stop
+   for that restart. From here the finance agent is off until step 4.
 2. **The copy** ([The copy of the state](#the-copy-of-the-state)). Check:
    the checksum is `OK`, and the two counts are written down.
 3. **Merge step 4.** Checks: as in the table. Stop point: the restore Job
