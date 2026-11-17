@@ -119,10 +119,11 @@ values step.
 | `no-tools` | `NO_TOOLS_KEY` of the same file | the same |
 
 **The hash and the value stay in step** in two ways: the owner changes both
-in one commit (below), and a check finds a difference. The agent's start
-check calls the gateway with its key and stops the start on a 401 (the
-values check of the agent pod, in the cutover package); the gateway probe
-fails when one of its own keys gets a 401.
+in one commit (below), and a check finds a difference. The values check of
+the finance agent pod (its first start step) mounts this same config file
+and stops the start with `values-check result=failed key=MCP_GATEWAY_KEY
+reason=hash` when the SHA-256 of its key is not the hash of the client
+`finance`; the gateway probe fails when one of its own keys gets a 401.
 
 ## Network policy
 
