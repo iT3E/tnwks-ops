@@ -1,7 +1,7 @@
 ---
-# Not applied yet: step 1 of the cutover lists it in kustomization.yaml with
-# pvc.yaml, and step 4 takes it out again (docs/apps/agent-platform-runbook.md,
-# "The cutover of the finance agent").
+# Listed by step 1 of the cutover in kustomization.yaml, with pvc.yaml; step 4
+# takes it out again (docs/apps/agent-platform-runbook.md, "The cutover of the
+# finance agent").
 #
 # The inbox of the state volume, while the agent is at zero replicas. It
 # does two things:
