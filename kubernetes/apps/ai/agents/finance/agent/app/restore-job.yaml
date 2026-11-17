@@ -1,8 +1,10 @@
 ---
-# Not applied yet: step 4 of the cutover lists it in kustomization.yaml, with
-# ARCHIVE and VAULT set to the names of the owner's two files, and step 5
-# takes it out again (docs/apps/agent-platform-runbook.md, "The cutover of
-# the finance agent").
+# Listed by step 4 of the cutover in kustomization.yaml, with ARCHIVE and
+# VAULT set to the names of the owner's two files, and step 5 takes it out
+# again. While either still holds the placeholder of git, the Job refuses at
+# once (reason=not-set) and the step order test fails, so it can not run with
+# a placeholder (docs/apps/agent-platform-runbook.md, "The cutover of the
+# finance agent").
 #
 # The restore Job of the runbook ("The restore Job"), narrowed to the copy of
 # the cutover, with the image and the node of deployment.yaml. The agent is at
@@ -63,12 +65,14 @@ spec:
           env:
             # The copy of the state: start/openclaw-state-<release>-<time>.tar.gz,
             # with its .sha256 file next to it.
+            # SET AT STEP 4 from the owner's name, before the merge.
             - name: ARCHIVE
-              value: start/openclaw-state-SET-ME.tar.gz
+              value: start/openclaw-state-2026.9.6-20261117T073712Z.tar.gz
             # The seed of the vault: vault-<time>.tar in archives/seed/.
             # Empty: no vault in this run.
+            # SET AT STEP 4 from the owner's name, before the merge.
             - name: VAULT
-              value: vault-SET-ME.tar
+              value: vault-20261117T073724Z.tar
           command: ["sh", "-c"]
           args:
             - |
@@ -102,6 +106,9 @@ spec:
                 if grep -vqE "$2" /tmp/check.names; then reason="outside archive=$3"; return 1; fi
                 return 0
               }
+              case "$ARCHIVE $VAULT" in
+                *SET-ME*) reason=not-set; exit 1 ;;
+              esac
               case "$ARCHIVE" in
                 start/openclaw-state-*.tar.gz) ;;
                 *) reason=archive-name; exit 1 ;;

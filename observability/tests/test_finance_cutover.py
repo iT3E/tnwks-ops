@@ -104,7 +104,8 @@ def test_the_steps_never_meet_in_a_wrong_order():
         assert "deployment.yaml" in now and "restore-job.yaml" not in now
     if "restore-job.yaml" in now:
         assert replicas == 0 and "state-inbox.yaml" not in now
-        assert "SET-ME" not in (APP / "restore-job.yaml").read_text()
+        env = {e["name"]: e["value"] for e in pod("restore-job.yaml")["containers"][0]["env"]}
+        assert "SET-ME" not in env["ARCHIVE"] and "SET-ME" not in env["VAULT"]
 
 
 def test_the_volume_is_never_pruned():
@@ -240,6 +241,9 @@ def test_the_restore_job_refuses_before_it_writes(case, tmp):
 @pytest.mark.parametrize(("kwargs", "reason"), [
     ({"checksum": False}, "checksum"),
     ({"archive": "daily/openclaw-backup-2026-11-16.tar.gz"}, "archive-name"),
+    # The placeholders of git: the Job refuses before anything else.
+    ({"archive": "start/openclaw-state-SET-ME.tar.gz"}, "not-set"),
+    ({"vault_name": "vault-SET-ME.tar"}, "not-set"),
     ({"archive": "start/openclaw-state-none.tar.gz"}, "missing"),
     ({"vault_name": "notes.tar"}, "vault-name"),
     ({"vault": None}, "vault-missing"),
