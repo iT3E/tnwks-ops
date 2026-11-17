@@ -138,11 +138,12 @@ def ps_str(value: str | Path) -> str:
 
 
 def run_script(tmp_path: Path, file: str, name: str, params: dict, stand_ins: str = "", depth: int | None = None,
-               edits: tuple[tuple[str, str], ...] = (), fails: bool = False):
+               edits: tuple[tuple[str, str], ...] = (), fails: bool = False, changed: bool = False):
     """Runs the script of a win_powershell task as the module does, and gives its output.
 
     edits: texts of the script to replace, for a path that only Windows has.
     fails: the script must throw; the result is then its error text.
+    changed: give the output and the value of $Ansible.Changed, as a pair.
     """
     module = find_task(file, name)["ansible.windows.win_powershell"]
     script = module["script"]
@@ -164,13 +165,14 @@ $sb = [scriptblock]::Create((Get-Content -LiteralPath {ps_str(script_file)} -Raw
 $out = @(& $sb @params)
 $list = [Collections.Generic.List[object]]::new()
 foreach ($item in $out) {{ $list.Add((ConvertTo-TnwksModuleOutput $item {depth - 1})) }}
-[Console]::Out.Write((ConvertTo-Json -InputObject $list -Depth 50 -Compress))
+[Console]::Out.Write((ConvertTo-Json -InputObject @{{ out = $list; changed = [bool]$Ansible.Changed }} -Depth 50 -Compress))
 """)
     if fails:
         assert run.returncode != 0, run.stdout
         return run.stderr
     assert run.returncode == 0, run.stderr + run.stdout
-    return json.loads(run.stdout)
+    result = json.loads(run.stdout)
+    return (result["out"], result["changed"]) if changed else result["out"]
 
 
 def registered(output: list) -> dict:
@@ -227,21 +229,33 @@ def failed_by_assert(result: dict, name: str) -> bool:
 
 # --- Stand-ins for Windows ----------------------------------------------------------------
 
-# Task Scheduler: each start is a new run, with the exit code of $global:Code.
+# Task Scheduler: each start is a new run, with the exit code of $global:Code. With
+# $global:QueuedPolls, a run first reads Queued with the result 0x41301 (the task is
+# running) for that many reads, with its new run time already, as a task that never ran
+# can; $global:PendingNow is the count left.
 TASKS = r"""
 $global:Last = [datetime]'2026-01-01'
 $global:Code = 0
 $global:Started = @()
-function Get-ScheduledTaskInfo { param([string]$TaskName) [pscustomobject]@{ LastRunTime = $global:Last; LastTaskResult = $global:Code } }
+$global:PendingNow = 0
+function Get-ScheduledTaskInfo {
+    param([string]$TaskName)
+    if ($global:PendingNow -gt 0) {
+        $global:PendingNow--
+        return [pscustomobject]@{ LastRunTime = $global:Last; LastTaskResult = 0x41301 }
+    }
+    [pscustomobject]@{ LastRunTime = $global:Last; LastTaskResult = $global:Code }
+}
 function Start-ScheduledTask {
     param([string]$TaskName)
     $global:Started += $TaskName
     $global:Last = $global:Last.AddMinutes(1)
+    $global:PendingNow = [int]$global:QueuedPolls
     if ($global:OnStart) { & $global:OnStart $TaskName }
 }
 function Get-ScheduledTask {
     param([string]$TaskName)
-    $s = if ($global:TaskStates -and $global:TaskStates[$TaskName]) { $global:TaskStates[$TaskName] } else { 'Ready' }
+    $s = if ($global:PendingNow -gt 0) { 'Queued' } elseif ($global:TaskStates -and $global:TaskStates[$TaskName]) { $global:TaskStates[$TaskName] } else { 'Ready' }
     [pscustomobject]@{ TaskName = $TaskName; State = $s; Settings = [pscustomobject]@{ Enabled = ($s -ne 'Disabled') }; Triggers = $null }
 }
 function Start-Sleep { }
@@ -476,7 +490,7 @@ $global:OnStart = {
 """
 
 
-def procedure_output(tmp_path: Path, run: dict, log_before: str, state_before: str, request: dict, last_marker: str) -> list:
+def procedure_output(tmp_path: Path, run: dict, log_before: str, state_before: str, request: dict, last_markers: list) -> list:
     """The output of run_procedure.yml for a run of the procedure (run_window) that starts
     from the log and the state file given."""
     root = Path(run["root"])
@@ -492,7 +506,7 @@ def procedure_output(tmp_path: Path, run: dict, log_before: str, state_before: s
     (files / "run.state").write_text(new_state)
     return run_script(tmp_path, "run_procedure.yml", "The window procedure", {
         "Task": "tnwks-moverh-window", "Request": str(files / "request.json"), "RequestJson": json.dumps(request),
-        "Log": str(files / "window.log"), "State": str(files / "window.state"), "LastMarker": last_marker,
+        "Log": str(files / "window.log"), "State": str(files / "window.state"), "LastMarkers": last_markers,
     }, stand_ins=PROCEDURE_STAND_INS + f"""
 $global:LogPath = {ps_str(files / 'window.log')}; $global:StatePath = {ps_str(files / 'window.state')}
 $global:RunLog = {ps_str(files / 'run.log')}; $global:RunState = {ps_str(files / 'run.state')}
@@ -501,9 +515,343 @@ $global:RunLog = {ps_str(files / 'run.log')}; $global:RunState = {ps_str(files /
 
 READ_WINDOW_STAND_INS = TASKS + r"""
 $global:TaskStates = @{ 'tnwks-moverh-a-start' = 'Disabled'; 'tnwks-moverh-b-start' = 'Ready' }
-function Get-Acl { param([string]$LiteralPath) [pscustomobject]@{ Sddl = $global:Sddl; Owner = 'BUILTIN\Administrators' } }
+function Get-Acl { param([string]$LiteralPath) [pscustomobject]@{ Owner = 'BUILTIN\Administrators' } }
 function Get-LocalUser { param([string]$Name) [pscustomobject]@{ PasswordLastSet = [datetime]'2026-01-02T03:04:05' } }
 """
+
+
+# The rules of the moved file as Windows writes them: B the owner, full control (FA).
+MOVED_SDDL = f"O:{B_SID}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})"
+VM_ACE = "(A;;0x1301bf;;;S-1-5-83-1-1111-2222-3333-4444)"
+
+
+def disk_read(tmp_path: Path, rule: str, sddls: list[str], saved: str | None = None, wait: int = 0,
+              owner: str = "new-account", mask: str = "FA", exists: bool = True) -> list:
+    """The read of read_disk.yml, with Get-Acl giving each SDDL of sddls in turn (the last
+    one stays)."""
+    tag = uuid.uuid4().hex[:6]
+    disk = tmp_path / f"disk-{tag}.vhdx"
+    if exists:
+        disk.write_text("disk")
+    saved_file = tmp_path / f"saved-{tag}.sddl"
+    if saved is not None:
+        saved_file.write_text(saved + "\r\n")
+    stand_ins = ("$global:Reads = @(" + ", ".join(ps_str(x) for x in sddls) + ")\n$global:Read = 0\n"
+                 "function Get-Acl { param([string]$LiteralPath) $i = [Math]::Min($global:Read, $global:Reads.Count - 1)\n"
+                 "    $global:Read++; [pscustomobject]@{ Sddl = $global:Reads[$i] } }\n"
+                 "function Start-Sleep { }\n")
+    return run_script(tmp_path, "read_disk.yml", "Read the rules of the disk file", {
+        "Path": str(disk), "Rule": rule, "Saved": str(saved_file), "Owner": owner, "Mask": mask,
+        "SidA": A_SID, "SidB": B_SID, "Wait": wait}, stand_ins=stand_ins)
+
+
+@needs_pwsh
+def test_the_read_of_the_disk_file_allows_the_rules_of_a_vm_only_and_masks_each_account(tmp_path):
+    moved = disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE])[-1]
+    assert moved["rules_ok"] is True and moved["vm"] == 1, moved
+    assert moved["owner"] == "<b>"
+    assert moved["sddl"] == "O:<b>D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<b>)(A;;0x1301bf;;;S-1-5-83-1-<vm>)"
+    # A mask by its value: 0x1f01ff is FA.
+    assert disk_read(tmp_path, "moved", [MOVED_SDDL.replace(";FA;;;" + B_SID, ";0x1F01FF;;;" + B_SID)])[-1]["rules_ok"] is True
+    # Any other rule, another owner, a narrower mask, no protection, or the rule of the
+    # account replaced by a rule of a VM: not a pass.
+    for sddl in (MOVED_SDDL + "(A;;FA;;;S-1-5-21-9-9-9-1003)", MOVED_SDDL.replace(f"O:{B_SID}", "O:BA"),
+                 MOVED_SDDL.replace(f"(A;;FA;;;{B_SID})", f"(A;;0x1301bf;;;{B_SID})"), MOVED_SDDL.replace("D:P", "D:"),
+                 MOVED_SDDL.replace(f"(A;;FA;;;{B_SID})", VM_ACE)):
+        out = disk_read(tmp_path, "moved", [sddl])[-1]
+        assert out["rules_ok"] is False, sddl
+    # The owner and the mask come from the config.
+    admins = f"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;{B_SID})"
+    assert disk_read(tmp_path, "moved", [admins], owner="administrators", mask="0x1301bf")[-1]["rules_ok"] is True
+    assert disk_read(tmp_path, "moved", [admins])[-1]["rules_ok"] is False
+    # No file, or a read only: not a pass.
+    assert disk_read(tmp_path, "moved", [""], exists=False)[-1] == {
+        "exists": False, "saved": False, "rules_ok": False, "vm": 0, "owner": "", "sddl": ""}
+    assert disk_read(tmp_path, "none", [MOVED_SDDL])[-1]["rules_ok"] is False
+
+
+@needs_pwsh
+def test_the_read_of_the_saved_rules_compares_with_the_file_that_the_way_back_wrote(tmp_path):
+    saved = f"O:{A_SID}D:P(A;;FA;;;BA)(A;;FA;;;{A_SID})"
+    out = disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)[-1]
+    assert out["saved"] is True and out["rules_ok"] is True and out["vm"] == 1
+    assert out["sddl"] == "O:<a>D:P(A;;FA;;;BA)(A;;FA;;;<a>)(A;;0x1301bf;;;S-1-5-83-1-<vm>)"
+    # A stale rule of a VM in the saved text compares as no rule.
+    assert disk_read(tmp_path, "saved", [saved], saved=saved + VM_ACE)[-1]["rules_ok"] is True
+    assert disk_read(tmp_path, "saved", [saved.replace(f"O:{A_SID}", "O:BA")], saved=saved)[-1]["rules_ok"] is False
+    assert disk_read(tmp_path, "saved", [saved])[-1] | {"sddl": ""} == {
+        "exists": True, "saved": False, "rules_ok": False, "vm": 0, "owner": "<a>", "sddl": ""}
+
+
+@needs_pwsh
+def test_the_read_of_the_saved_rules_compares_each_inherited_rule(tmp_path):
+    # A file of an older WSL: no protection, the rules of its folder (ID), one explicit rule.
+    saved = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)"
+    assert disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)[-1]["rules_ok"] is True
+    # The CREATOR OWNER rule of the folder names the owner: another account is not a pass.
+    for sddl in (saved.replace("(A;ID;FR;;;AU)", ""), saved.replace("(A;ID;FR;;;AU)", "(A;;FR;;;AU)"),
+                 saved.replace("D:AI", "D:PAI"), saved.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")):
+        assert disk_read(tmp_path, "saved", [sddl], saved=saved)[-1]["rules_ok"] is False, sddl
+
+
+@needs_pwsh
+def test_the_read_after_a_clean_stop_waits_for_the_rule_of_the_vm_to_go(tmp_path):
+    gone = disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE, MOVED_SDDL + VM_ACE, MOVED_SDDL], wait=60)[-1]
+    assert gone["vm"] == 0 and gone["rules_ok"] is True
+    # With no wait, the first read; a rule that stays ends the wait at its limit.
+    assert disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE, MOVED_SDDL])[-1]["vm"] == 1
+    assert disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE], wait=1)[-1]["vm"] == 1
+
+
+BEFORE_STAND_INS = TASKS + r"""
+function secedit.exe {
+    $cfg = $args[[array]::IndexOf($args, '/cfg') + 1]
+    Set-Content -LiteralPath $cfg -Value $global:Policy
+    $global:LASTEXITCODE = 0
+}
+"""
+
+
+def before_read(tmp_path: Path, state: str, batch: str = f"*S-1-5-32-544,*{A_SID}", disks: tuple[str, ...] = ("a",),
+                disabled: bool = False, tasks: dict | None = None) -> list:
+    """The read of the state before the window (window.yml)."""
+    root = tmp_path / f"before-{uuid.uuid4().hex[:6]}"
+    for sub in ("a", "b", "side", "state"):
+        (root / sub).mkdir(parents=True)
+    for folder in disks:
+        (root / folder / "ext4.vhdx").write_text("disk")
+    (root / "state/window.state").write_text(state)
+    if disabled:
+        (root / "state/window.state.disabled").write_text("tnwks-moverh-a-start")
+    states = {"tnwks-moverh-a-start": "Ready", "tnwks-moverh-b-start": "Disabled", **(tasks or {})}
+    return run_script(tmp_path, "window.yml", "Read the state before the window", {
+        "State": str(root / "state/window.state"), "Prefix": "tnwks-moverh", "DiskA": str(root / "a/ext4.vhdx"),
+        "DiskB": str(root / "b/ext4.vhdx"), "DiskSide": str(root / "side/ext4.vhdx"), "SidA": A_SID, "NameA": "tnwks-moverh-a",
+    }, stand_ins=BEFORE_STAND_INS + f"$env:TEMP = {ps_str(root)}\n"
+        + f"$global:Policy = @('[Privilege Rights]', {ps_str('SeBatchLogonRight = ' + batch)})\n"
+        + "$global:TaskStates = @{ " + "; ".join(f"{ps_str(k)} = {ps_str(v)}" for k, v in states.items()) + " }\n")
+
+
+@needs_both
+def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state(tmp_path):
+    first = before_read(tmp_path, "")
+    assert first[-1] == {"last_marker": "", "disabled_list": False, "disk_a": True, "disk_b": False, "disk_side": False,
+                         "batch_a": True, "start_a": "Ready", "start_a_enabled": True, "start_b": "Disabled",
+                         "start_b_enabled": False}
+    second = before_read(tmp_path, "t window-started\r\nt wayback-done\r\n", batch="*S-1-5-32-544,tnwks-moverh-a",
+                         tasks={"tnwks-moverh-a-start": "Running"})
+    assert second[-1]["last_marker"] == "wayback-done" and second[-1]["batch_a"] is True
+    wrong = {
+        "started": before_read(tmp_path, "t window-started\r\n", disks=("b",)),
+        "done": before_read(tmp_path, "t window-started\r\nt window-done\r\n"),
+        "no right": before_read(tmp_path, "", batch="*S-1-5-32-544"),
+        "list": before_read(tmp_path, "t window-started\r\nt wayback-done\r\n", disabled=True),
+        "both": before_read(tmp_path, "", disks=("a", "b")),
+        "side": before_read(tmp_path, "", disks=("a", "side")),
+        "b enabled": before_read(tmp_path, "", tasks={"tnwks-moverh-b-start": "Ready"}),
+        "a disabled": before_read(tmp_path, "", tasks={"tnwks-moverh-a-start": "Disabled"}),
+    }
+    check_a = runner_output(tmp_path, "a", "check", check_result(f"{DIR}\\a\\ext4.vhdx"))
+    check_b = runner_output(tmp_path, "b", "check", {"registered": False, "oobe_complete": 1})
+    saved = f"O:{A_SID}D:P(A;;FA;;;BA)(A;;FA;;;{A_SID})"
+    as_saved = disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)
+    other = disk_read(tmp_path, "saved", [saved.replace(f"O:{A_SID}", "O:BA")], saved=saved)
+    no_saved = disk_read(tmp_path, "saved", [saved])
+    names = ("The window starts after setup", "After a way back, A's disk file had its saved rules",
+             "A owns the distro at its path")
+
+    def play(before, disk, checks=(check_a, check_b)):
+        return {"vars": {"wsl_move_rehearsal_before": registered(before), "wsl_move_rehearsal_disk_last": disk[-1],
+                         "wsl_move_rehearsal_runs": {"check": [c[-1] for c in checks]}},
+                "tasks": checks_of("window.yml", names)}
+
+    no_start = runner_output(tmp_path, "a", "check", check_result(f"{DIR}\\a\\ext4.vhdx", read_exit=1))
+    plays = [play(first, no_saved), play(second, as_saved), play(second, other), play(second, no_saved),
+             play(first, no_saved, (check_a, runner_output(tmp_path, "b", "check", check_result(f"{DIR}\\b\\ext4.vhdx")))),
+             play(first, no_saved, (no_start, check_b)),
+             *[play(w, no_saved) for w in wrong.values()]]
+    results = run_plays(tmp_path, plays)
+    assert not passed(results[0]), passed(results[0])
+    assert not passed(results[1]), passed(results[1])
+    # After a way back, the file had its saved rules.
+    for result in results[2:4]:
+        assert failed_by_assert(result, names[1]) and not failed_by_assert(result, names[0])
+        assert not failed_by_assert(result, names[2])
+    # B lists no distro; A's distro starts with the rules of an older WSL.
+    for result in results[4:6]:
+        assert failed_by_assert(result, names[2]) and not failed_by_assert(result, names[1])
+    for name, result in zip(wrong, results[6:], strict=True):
+        assert failed_by_assert(result, names[0]), name
+
+
+# The rules of a file as .NET gives them (FileSecurity), kept in a JSON file between runs:
+# the protection and the explicit rules, each a SID, a right, a type and its inheritance.
+# A SID that is not one (not S-1-...) throws, as Windows does.
+OLDER_STAND_INS = r"""
+function Read-Rules { Get-Content -LiteralPath $global:RulesFile -Raw | ConvertFrom-Json }
+function New-Rule([string]$Sid, [string]$Rights, [string]$Type) {
+    $rule = [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = $Sid }
+        FileSystemRights = [Security.AccessControl.FileSystemRights]$Rights; AccessControlType = $Type; InheritanceFlags = 'None' }
+    $rule | Add-Member -MemberType ScriptMethod -Name Key -Value { '{0}|{1}|{2}' -f $this.IdentityReference.Value, [int]$this.FileSystemRights, $this.AccessControlType }
+    $rule
+}
+function New-Object {
+    param([string]$TypeName, [object[]]$ArgumentList)
+    if ($TypeName -eq 'Security.Principal.SecurityIdentifier') {
+        if ("$($ArgumentList[0])" -notmatch '^S-1-[0-9-]+$') { throw 'Exception calling ".ctor" with "1" argument(s): "Value was invalid."' }
+        return [pscustomobject]@{ Value = "$($ArgumentList[0])" }
+    }
+    if ($TypeName -eq 'Security.AccessControl.FileSystemAccessRule') {
+        return New-Rule $ArgumentList[0].Value $ArgumentList[1] $ArgumentList[2]
+    }
+    Microsoft.PowerShell.Utility\New-Object -TypeName $TypeName -ArgumentList $ArgumentList
+}
+function Get-Item {
+    param([string]$LiteralPath)
+    $item = [pscustomobject]@{ FullName = $LiteralPath }
+    $item | Add-Member -MemberType ScriptMethod -Name GetAccessControl -Value {
+        param($Sections)
+        $read = Read-Rules
+        $acl = [pscustomobject]@{ AreAccessRulesProtected = [bool]$read.protected
+            Rules = [Collections.ArrayList]@($read.rules | ForEach-Object { New-Rule $_.sid $_.rights $_.type }) }
+        $acl | Add-Member -MemberType ScriptMethod -Name GetAccessRules -Value { param($e, $i, $t) @($this.Rules) }
+        $acl | Add-Member -MemberType ScriptMethod -Name SetAccessRuleProtection -Value { param($p, $keep) $this.AreAccessRulesProtected = $p }
+        $acl | Add-Member -MemberType ScriptMethod -Name RemoveAccessRuleSpecific -Value {
+            param($r) $hit = @($this.Rules | Where-Object { $_.Key() -eq $r.Key() })[0]; if ($hit) { $this.Rules.Remove($hit) } }
+        $acl | Add-Member -MemberType ScriptMethod -Name AddAccessRule -Value { param($r) [void]$this.Rules.Add($r) }
+        $acl
+    }
+    $item | Add-Member -MemberType ScriptMethod -Name SetAccessControl -Value {
+        param($acl)
+        $old = Read-Rules
+        [pscustomobject]@{ protected = $acl.AreAccessRulesProtected; writes = [int]$old.writes + 1
+            rules = @($acl.Rules | ForEach-Object { @{ sid = $_.IdentityReference.Value; rights = "$($_.FileSystemRights)"; type = "$($_.AccessControlType)" } })
+        } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $global:RulesFile
+    }
+    $item
+}
+"""
+
+
+@needs_pwsh
+def test_the_older_form_of_a_s_disk_file_is_set_once_and_then_changes_nothing(tmp_path):
+    """The script of older_disk.yml on the file that a newer WSL makes (A the owner, full
+    control for A and the Administrators, protected), with a rule of A's VM: the first
+    run gives no protection and one explicit rule for A, and keeps the VM rule; a second
+    run reports no change and writes nothing."""
+    rules = tmp_path / "rules.json"
+    vm = "S-1-5-83-1-1111-2222-3333-4444"
+    rules.write_text(json.dumps({"protected": True, "writes": 0, "rules": [
+        {"sid": A_SID, "rights": "FullControl", "type": "Allow"},
+        {"sid": "S-1-5-32-544", "rights": "FullControl", "type": "Allow"},
+        {"sid": vm, "rights": "ReadAndExecute, Write, Synchronize", "type": "Allow"}]}))
+    stand_ins = OLDER_STAND_INS + f"$global:RulesFile = {ps_str(rules)}\n"
+    params = {"Path": str(tmp_path / "ext4.vhdx"), "Sid": A_SID}
+    name = "A's disk file like a file of an older WSL"
+    _, first = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True)
+    after = json.loads(rules.read_text())
+    assert first is True and after["writes"] == 1 and after["protected"] is False
+    assert sorted(r["sid"] for r in after["rules"]) == sorted([A_SID, vm])
+    _, second = run_script(tmp_path, "older_disk.yml", name, params, stand_ins=stand_ins, changed=True)
+    assert second is False and json.loads(rules.read_text())["writes"] == 1
+
+
+@needs_pwsh
+def test_no_script_of_the_role_has_two_variables_that_differ_only_by_case(tmp_path):
+    """PowerShell names ignore case: a local $sid is the parameter $Sid. Per function (or
+    the script itself), each variable has one spelling, in each embedded script of the
+    task files and each script file of the role."""
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for file in sorted(p.name for p in (ROLE / "tasks").glob("*.yml")):
+        for i, task in enumerate(tasks_in(file)):
+            module = task.get("ansible.windows.win_powershell")
+            if isinstance(module, dict) and isinstance(module.get("script"), str):
+                (scripts / f"{Path(file).stem}--{i:03d}.ps1").write_text(module["script"])
+    for script in (ROLE / "files").glob("*.ps1"):
+        (scripts / script.name).write_text(script.read_text())
+    run = pwsh(f"""
+$skip = @('_', 'args', 'true', 'false', 'null', 'input', 'this', 'psitem', 'matches', 'lastexitcode', 'erroractionpreference',
+    'pscmdlet', 'psboundparameters', 'ansible')
+$found = @()
+foreach ($f in Get-ChildItem -LiteralPath {ps_str(scripts)} -Filter *.ps1) {{
+    $ast = [Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$null)
+    $groups = @{{}}
+    foreach ($v in $ast.FindAll({{ $args[0] -is [Management.Automation.Language.VariableExpressionAst] }}, $true)) {{
+        if ($v.VariablePath.DriveName -and $v.VariablePath.DriveName -notin @('script', 'global', 'local', 'private', 'using')) {{ continue }}
+        $name = $v.VariablePath.UserPath -replace '^(script|global|local|private|using):', ''
+        if ($name.ToLowerInvariant() -in $skip) {{ continue }}
+        $p = $v.Parent; while ($p -and $p -isnot [Management.Automation.Language.FunctionDefinitionAst]) {{ $p = $p.Parent }}
+        $key = if ($p) {{ "function $($p.Name)" }} else {{ 'script' }}
+        if (-not $groups[$key]) {{ $groups[$key] = @{{}} }}
+        $low = $name.ToLowerInvariant()
+        if (-not $groups[$key][$low]) {{ $groups[$key][$low] = New-Object System.Collections.Generic.HashSet[string] }}
+        [void]$groups[$key][$low].Add($name)
+    }}
+    foreach ($k in $groups.Keys) {{ foreach ($low in $groups[$k].Keys) {{
+        if ($groups[$k][$low].Count -gt 1) {{ $found += '{{0}} [{{1}}]: {{2}}' -f $f.Name, $k, (@($groups[$k][$low]) -join ' ') }} }} }}
+}}
+$found -join "`n"
+""")
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip() == "", run.stdout
+    assert len(list(scripts.glob("*.ps1"))) > 40
+
+
+def test_setup_and_the_window_give_a_s_disk_file_the_rules_of_an_older_wsl_from_one_task_file():
+    def names(file):
+        return [t.get("name", "") for t in tasks_in(file)]
+
+    def includes(file):
+        return [t.get("name", "") for t in tasks_in(file) if t.get("ansible.builtin.include_tasks") == "older_disk.yml"]
+
+    assert includes("setup.yml") == ["A's disk file like a file of an older WSL"]
+    assert includes("window.yml") == ["A's disk file like a file of an older WSL"]
+    setup = names("setup.yml")
+    assert (setup.index("A imports the distro into its folder") < setup.index("A's disk file like a file of an older WSL")
+            < setup.index("A reads its distro"))
+    # In the window: the read against the saved rules, the read of the state and
+    # their asserts, then the rules of an older WSL, then A's and B's reads and their
+    # assert.
+    window = names("window.yml")
+    # Every read and check of the start state comes before the first change.
+    order = ["The rules of A's disk file as the last way back left them", "Keep the read of A's disk file before its rules change",
+             "Read the state before the window", "The window starts after setup or after a way back",
+             "After a way back, A's disk file had its saved rules", "A's disk file like a file of an older WSL",
+             "A reads its distro before the window", "B lists no distro before the window", "A owns the distro at its path"]
+    at = [next(i for i, n in enumerate(window) if n.startswith(o)) for o in order]
+    assert at == sorted(at), at
+    # One text of the rule of the folder, in setup and in the task file.
+    older = yaml.safe_load((ROLE / "tasks/older_disk.yml").read_text())
+    folder = next(t for t in older if t["name"].startswith("The folder of A"))
+    assert folder["ansible.windows.win_powershell"]["parameters"]["Rule"] == "{{ wsl_move_rehearsal_older_folder_rule }}"
+    setup_folder = find_task("setup.yml", "Folders of the disk file")["ansible.windows.win_powershell"]["parameters"]
+    assert "wsl_move_rehearsal_older_folder_rule" in setup_folder["Extra"]
+    # Each change of the task file runs as SYSTEM, after its assert of the state.
+    tasks = [t["name"] for t in older]
+    assert tasks.index("The rules of A's disk file change only after setup or after a way back") < tasks.index(folder["name"])
+    for task in older[2:]:
+        assert task["vars"]["ansible_become_user"] == "SYSTEM", task["name"]
+
+
+@needs_both
+def test_the_rules_of_an_older_wsl_change_only_after_setup_or_after_a_way_back(tmp_path):
+    states = {"setup": "", "way back": "t window-started\r\nt wayback-done\r\n",
+              "started": "t window-started\r\n", "done": "t window-started\r\nt window-done\r\n",
+              "boot": "t window-started\r\nt window-done\r\nt wayback-started\r\n"}
+    plays = []
+    for name, text in states.items():
+        state = tmp_path / f"{name.replace(' ', '-')}.state"
+        state.write_text(text)
+        read = run_script(tmp_path, "older_disk.yml", "Read the last marker", {"State": str(state)})
+        plays.append({"vars": {"wsl_move_rehearsal_older_marker": registered(read)},
+                      "tasks": checks_of("older_disk.yml")})
+    results = run_plays(tmp_path, plays)
+    for name, result in zip(states, results, strict=True):
+        if name in ("setup", "way back"):
+            assert not passed(result), (name, passed(result))
+        else:
+            assert failed_by_assert(result, "The rules of A's disk file change only"), name
 
 
 @needs_both
@@ -512,7 +860,7 @@ def test_the_window_checks_pass_on_a_run_from_empty_files_and_the_reads_after_it
     run = run_window(tmp_path / "w", request, disk=("a",), saved_version="none", acl_file=None)
     assert run["code"] == 0, run["log"]
     # The window starts from the files that setup left: both empty.
-    procedure = procedure_output(tmp_path, run, "", "", request, "")
+    procedure = procedure_output(tmp_path, run, "", "", request, ["", "wayback-done"])
     assert procedure[-1]["markers"] == ["window-started", "window-done"]
     assert procedure[-1]["groups"] == ["joined", "left"]
     folder_b = tmp_path / "b"
@@ -528,9 +876,9 @@ def test_the_window_checks_pass_on_a_run_from_empty_files_and_the_reads_after_it
     (log_b / "import.json").write_text(json.dumps({"imported": True, "disk": str(folder_b / "ext4.vhdx"), "guid": "{x}",
                                                    "uid_after_import": "0", "uid_exit": 0, "step": "import", "time": 1}))
     read = run_script(tmp_path, "read_window.yml", "Read the folders", {
-        "FolderA": str(folder_a), "FolderB": str(folder_b), "LogB": str(log_b), "SidB": B_SID, "NameB": "tnwks-moverh-b",
+        "FolderA": str(folder_a), "FolderB": str(folder_b), "LogB": str(log_b), "NameB": "tnwks-moverh-b",
         "DiskName": "ext4.vhdx", "MarkerName": "tnwks-move.marker", "Prefix": "tnwks-moverh",
-    }, stand_ins=READ_WINDOW_STAND_INS + f"$global:Sddl = 'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;{B_SID})'\n")
+    }, stand_ins=READ_WINDOW_STAND_INS)
     windowed = read[-1]
     assert windowed["window_tasks_enabled_no_trigger"] is True, windowed
     assert windowed["icon_owner_b"] == ["shortcut.ico owner BUILTIN\\Administrators"]
@@ -542,19 +890,32 @@ def test_the_window_checks_pass_on_a_run_from_empty_files_and_the_reads_after_it
         "wsl_move_rehearsal_runs": {"check": [check[-1]]},
         "wsl_move_rehearsal_window_read": registered(read),
         "wsl_move_rehearsal_b_password": registered([windowed["password_b"]]),
+        "wsl_move_rehearsal_disk": registered(disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE])),
     }
-    [result] = run_plays(tmp_path, [{"vars": facts, "tasks": checks_of("run_procedure.yml") +
-                                     checks_of("window.yml", ("B owns the distro",))}])
-    assert not passed(result), passed(result)
+    running = disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE])
+    stopped = disk_read(tmp_path, "moved", [MOVED_SDDL + VM_ACE, MOVED_SDDL], wait=60)
+    started = [{"running": True, "wsl": 1}]
+    plays = [{"vars": facts, "tasks": checks_of("run_procedure.yml") + checks_of("window.yml", ("B owns the distro",))},
+             {"vars": {"wsl_move_rehearsal_disk": registered(running), "wsl_move_rehearsal_b_started": registered(started)},
+              "tasks": checks_of("window.yml", ("While B's VM runs", "failed_when of The start task of B"))},
+             {"vars": {"wsl_move_rehearsal_disk": registered(stopped)}, "tasks": checks_of("window.yml", ("After the clean stop",))},
+             # While the VM runs, a rule of the VM; after a clean stop, none.
+             {"vars": {"wsl_move_rehearsal_disk": registered(disk_read(tmp_path, "moved", [MOVED_SDDL]))},
+              "tasks": checks_of("window.yml", ("While B's VM runs",))},
+             {"vars": {"wsl_move_rehearsal_disk": registered(running)}, "tasks": checks_of("window.yml", ("After the clean stop",))}]
+    ok, run_ok, stop_ok, no_vm, vm_left = run_plays(tmp_path, plays)
+    for result in (ok, run_ok, stop_ok):
+        assert not passed(result), passed(result)
+    assert failed_by_assert(no_vm, "While B's VM runs")
+    assert failed_by_assert(vm_left, "After the clean stop")
 
 
 @needs_pwsh
 def test_a_window_task_with_no_trigger_or_an_empty_list_reads_as_no_trigger(tmp_path):
     out = run_script(tmp_path, "read_window.yml", "Read the folders", {
-        "FolderA": str(tmp_path), "FolderB": str(tmp_path), "LogB": str(tmp_path), "SidB": B_SID, "NameB": "b",
+        "FolderA": str(tmp_path), "FolderB": str(tmp_path), "LogB": str(tmp_path), "NameB": "b",
         "DiskName": "ext4.vhdx", "MarkerName": "m", "Prefix": "tnwks-moverh"},
         stand_ins=READ_WINDOW_STAND_INS + r"""
-$global:Sddl = 'O:BAD:'
 $global:Triggers = @{ 'tnwks-moverh-a-stop' = @(); 'tnwks-moverh-b-import' = $null }
 function Get-ScheduledTask {
     param([string]$TaskName)
@@ -564,10 +925,9 @@ function Get-ScheduledTask {
 """ + f"[IO.File]::WriteAllText({ps_str(tmp_path / 'import.json')}, '{{}}')\n")
     assert out[-1]["window_tasks_enabled_no_trigger"] is True
     with_trigger = run_script(tmp_path, "read_window.yml", "Read the folders", {
-        "FolderA": str(tmp_path), "FolderB": str(tmp_path), "LogB": str(tmp_path), "SidB": B_SID, "NameB": "b",
+        "FolderA": str(tmp_path), "FolderB": str(tmp_path), "LogB": str(tmp_path), "NameB": "b",
         "DiskName": "ext4.vhdx", "MarkerName": "m", "Prefix": "tnwks-moverh"},
         stand_ins=READ_WINDOW_STAND_INS + r"""
-$global:Sddl = 'O:BAD:'
 function Get-ScheduledTask {
     param([string]$TaskName)
     $t = if ($TaskName -eq 'tnwks-moverh-a-import') { @([pscustomobject]@{ Enabled = $true }) } else { $null }
@@ -692,30 +1052,36 @@ def test_the_wayback_checks_pass_on_the_reads_after_a_way_back(tmp_path):
                      disabled="tnwks-moverh-a-start")
     assert run["code"] == 0, run["log"]
     procedure = procedure_output(tmp_path, run, "2026-01-01T00:00:00.0000000Z forward result: done\r\n", state, request,
-                                 "window-done")
+                                 ["window-done"])
     # One process of A, with no Administrators group enabled.
     tokens = run_script(tmp_path, "tokens.yml", "Read the tokens", {"Sid": A_SID}, stand_ins=TOKENS_STAND_INS + (
         f"function Get-CimInstance {{ param([string]$ClassName) @([pscustomobject]@{{ ProcessId = 1; Name = 'wsl.exe'; Owner = '{A_SID}' }}) }}\n"))
     assert tokens[-1] == {"processes": 1, "admin_enabled": 0, "errors": []}
     disk = tmp_path / "a.vhdx"
     disk.write_text("disk")
-    saved = tmp_path / "disk.sddl"
-    saved.write_text(OLD_SDDL)
     back = run_script(tmp_path, "wayback.yml", "Read the tasks and the file", {
-        "Prefix": "tnwks-moverh", "Disk": str(disk), "DiskB": str(tmp_path / "none.vhdx"), "Saved": str(saved)},
-        stand_ins=TASKS + "$global:TaskStates = @{ 'tnwks-moverh-a-start' = 'Running'; 'tnwks-moverh-b-start' = 'Disabled' }\n"
-        + f"function Get-Acl {{ param([string]$LiteralPath) [pscustomobject]@{{ Sddl = '{OLD_SDDL}' }} }}\n")
+        "Prefix": "tnwks-moverh", "Disk": str(disk), "DiskB": str(tmp_path / "none.vhdx")},
+        stand_ins=TASKS + "$global:TaskStates = @{ 'tnwks-moverh-a-start' = 'Running'; 'tnwks-moverh-b-start' = 'Disabled' }\n")
+    # The start task of A started a VM since the restore: its rule is allowed.
+    rules = disk_read(tmp_path, "saved", [OLD_SDDL + VM_ACE], saved=OLD_SDDL)
+    assert rules[-1]["rules_ok"] is True
     check_a = runner_output(tmp_path, "a", "check", check_result(f"{DIR}\\a\\ext4.vhdx"))
     check_b = runner_output(tmp_path, "b", "check", {"registered": False, "oobe_complete": 1})
+    strip = runner_output(tmp_path, "b", "strip-rules", {"owner_self": True, "system_or_admins": 0, "rules": 1})
+    kept_rules = runner_output(tmp_path, "b", "strip-rules", {"owner_self": True, "system_or_admins": 2, "rules": 3})
     facts = {
         "wsl_move_rehearsal_procedure_run": registered(procedure), "wsl_move_rehearsal_request": request,
         "wsl_move_rehearsal_tokens": registered(tokens), "wsl_move_rehearsal_back_read": registered(back),
-        "wsl_move_rehearsal_runs": {"check": [check_a[-1], check_b[-1]]},
+        "wsl_move_rehearsal_disk": registered(rules),
+        "wsl_move_rehearsal_runs": {"check": [check_a[-1], check_b[-1]], "strip-rules": [strip[-1]]},
         "wsl_move_rehearsal_a_started": registered([{"running": True, "wsl": 1}]),
     }
-    [result] = run_plays(tmp_path, [{"vars": facts, "tasks": checks_of("run_procedure.yml") + checks_of(
-        "wayback.yml", ("No WSL process of A", "A owns the distro again", "The start task of A"))}])
+    names = ("Only B has a rule", "No WSL process of A", "A owns the distro again", "The start task of A")
+    kept = {**facts, "wsl_move_rehearsal_runs": {**facts["wsl_move_rehearsal_runs"], "strip-rules": [kept_rules[-1]]}}
+    result, not_stripped = run_plays(tmp_path, [{"vars": facts, "tasks": checks_of("run_procedure.yml") + checks_of("wayback.yml", names)},
+                                                {"vars": kept, "tasks": checks_of("wayback.yml", names[:1])}])
     assert not passed(result), passed(result)
+    assert failed_by_assert(not_stripped, names[0])
 
 
 # --- Interrupt: a log of one line before the run ------------------------------------------
@@ -727,7 +1093,7 @@ def test_the_interrupt_checks_pass_on_a_run_after_a_log_of_one_line(tmp_path):
     run = run_window(tmp_path / "w", request, state=state, disk=("a",), saved_version="none")
     assert run["code"] == 0, run["log"]
     procedure = procedure_output(tmp_path, run, "2026-01-01T00:00:00.0000000Z boot result: no-action\r\n", state, request,
-                                 "wayback-done")
+                                 ["wayback-done"])
     # One new marker: a list of one, not a text.
     assert procedure[-1]["markers"] == ["window-started"] and procedure[-1]["groups"] == []
     check_a = runner_output(tmp_path, "a", "check", {"registered": False, "oobe_complete": 1})
@@ -738,9 +1104,9 @@ def test_the_interrupt_checks_pass_on_a_run_after_a_log_of_one_line(tmp_path):
     # Out of order: the run does not start.
     error = run_script(tmp_path, "run_procedure.yml", "The window procedure", {
         "Task": "t", "Request": str(tmp_path / "r.json"), "RequestJson": "{}", "Log": str(tmp_path / "x.log"),
-        "State": str(Path(run["root"]) / "state/window.state"), "LastMarker": "wayback-done"},
+        "State": str(Path(run["root"]) / "state/window.state"), "LastMarkers": ["wayback-done"]},
         stand_ins=TASKS, fails=True)
-    assert "the phase runs out of order" in error
+    assert "The last marker is 'window-started', not one of 'wayback-done': the phase runs out of order" in error
 
 
 # --- Restart, after-boot, removal: the boot runs in the log -------------------------------
@@ -789,8 +1155,10 @@ def test_the_after_boot_checks_read_each_run_as_a_list_of_lines(tmp_path):
     check_a = runner_output(tmp_path, "a", "check", check_result(f"{DIR}\\a\\ext4.vhdx"))
     check_b = runner_output(tmp_path, "b", "check", {"registered": False, "oobe_complete": 1})
     hand = [{"task": "tnwks-moverh-boot", "ran": True, "code": 0, "hex": "0x00000000", "refused": "", "result": None}]
+    # The saved rules, and a stale rule of a VM from before the restart.
+    disk = disk_read(tmp_path, "saved", [OLD_SDDL + VM_ACE + VM_ACE.replace("4444", "5555")], saved=OLD_SDDL)
     facts = {"wsl_move_rehearsal_boot_log": registered(first), "wsl_move_rehearsal_boot_log2": registered(second),
-             "wsl_move_rehearsal_boot_hand": registered(hand),
+             "wsl_move_rehearsal_boot_hand": registered(hand), "wsl_move_rehearsal_disk": registered(disk),
              "wsl_move_rehearsal_runs": {"check": [check_a[-1], check_b[-1]]}}
     # With the default of two levels, each run would be one text.
     flat = {**facts,
@@ -805,6 +1173,37 @@ def test_the_after_boot_checks_read_each_run_as_a_list_of_lines(tmp_path):
                                           {"vars": flat, "tasks": checks_of("after-boot.yml")}])
     assert not passed(ok), passed(ok)
     assert failed_by_assert(two_levels, "The run by hand did nothing")
+
+
+@needs_pwsh
+def test_each_wait_for_a_task_waits_through_queued_and_0x41301(tmp_path):
+    """A task that never ran can read a new run time while it is Queued, or Ready with the
+    result 0x41301: the runner, the run of the procedure and the wait for the boot task
+    wait for the real end (the procedure's own wait: test_wsl_move_rehearsal.py)."""
+    queued = "$global:QueuedPolls = 2\n"
+    log_dir = tmp_path / "log"
+    log_dir.mkdir()
+    (log_dir / "check.json").write_text(json.dumps({"step": "check", "time": 4102444800}))
+    runner = run_script(tmp_path, "run_task.yml", "Run the task", {
+        "Runner": str(RUNNER), "Task": "tnwks-moverh-a-check", "Result": str(log_dir / "check.json"), "Minutes": "20",
+    }, stand_ins=TASKS + queued)
+    assert runner[-1]["code"] == 0 and runner[-1]["ran"] and runner[-1]["result"], runner
+    files = tmp_path / "proc"
+    files.mkdir()
+    for name, text in (("window.log", ""), ("window.state", ""), ("run.log", "2026-01-01T00:00:00.0000000Z forward result: done\r\n"),
+                       ("run.state", "2026-01-01T00:00:00Z window-started\r\n2026-01-01T00:00:01Z window-done\r\n")):
+        (files / name).write_text(text)
+    procedure = run_script(tmp_path, "run_procedure.yml", "The window procedure", {
+        "Task": "tnwks-moverh-window", "Request": str(files / "request.json"), "RequestJson": "{}",
+        "Log": str(files / "window.log"), "State": str(files / "window.state"), "LastMarkers": [""],
+    }, stand_ins=PROCEDURE_STAND_INS + queued + f"""
+$global:LogPath = {ps_str(files / 'window.log')}; $global:StatePath = {ps_str(files / 'window.state')}
+$global:RunLog = {ps_str(files / 'run.log')}; $global:RunState = {ps_str(files / 'run.state')}
+""")
+    assert procedure[-1]["code"] == 0 and procedure[-1]["ran"] and procedure[-1]["result"] == "done", procedure
+    boot = run_script(tmp_path, "restart.yml", "Wait for the end", {"Task": "tnwks-moverh-boot"},
+                      stand_ins=TASKS + BOOT_STAND_INS + "$global:Boot = [datetime]'2025-12-31'\n$global:PendingNow = 2\n")
+    assert boot == [{"done": True, "code": 0}]
 
 
 @needs_both
@@ -863,7 +1262,8 @@ function Get-ScheduledTaskInfo { param([string]$TaskName) $global:Calls++; if ($
 PARAMETER_VARS = {
     "wsl_move_rehearsal_sids": {"a": A_SID, "b": B_SID}, "windows_desktop_user": "person",
     "wsl_move_rehearsal_side_to": "side", "wsl_move_rehearsal_run": {"key": "a", "step": "check"},
-    "wsl_move_rehearsal_request": {"mode": "forward"}, "wsl_move_rehearsal_last_marker": "",
+    "wsl_move_rehearsal_request": {"mode": "forward"}, "wsl_move_rehearsal_last_markers": ["", "wayback-done"],
+    "wsl_move_rehearsal_disk_read": {"key": "b", "rule": "moved"},
     "wsl_move_rehearsal_live": {"output": [{"vm": []}]}, "wsl_move_rehearsal_removed_sids": A_SID,
 }
 

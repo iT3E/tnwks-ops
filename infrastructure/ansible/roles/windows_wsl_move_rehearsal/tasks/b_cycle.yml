@@ -43,6 +43,17 @@
   vars:
     wsl_move_rehearsal_run: {key: b, step: stop}
 
+# The side folder and back keep the owner and the rules; the import in place
+# and the read start new VMs, and the clean stop removes the rule of each.
+- name: The rules of B's disk file after the second import and a clean stop
+  ansible.builtin.include_tasks: read_disk.yml
+  vars:
+    wsl_move_rehearsal_disk_read: {key: b, rule: moved, wait: 60}
+
+- name: The owner and the rules of B's disk file after the second import and a clean stop, each account masked
+  ansible.builtin.debug:
+    msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
 # The read after the second import is a new start of the distro: the uid
 # and the SHA-256 of /etc/wsl.conf show the default user that B wrote.
 - name: The second import of B passed, with the data and the default user
@@ -50,6 +61,7 @@
     unregister: "{{ wsl_move_rehearsal_runs.unregister | last }}"
     reimport: "{{ wsl_move_rehearsal_runs.import | last }}"
     check: "{{ wsl_move_rehearsal_runs.check | last }}"
+    disk: "{{ wsl_move_rehearsal_disk.output | last }}"
   ansible.builtin.assert:
     that:
       - not unregister.result.registered
@@ -64,5 +76,6 @@
       - check.result.mem_total_kib | int > 0
       - check.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
       - wsl_move_rehearsal_side_moves | select | list | length == 2
-    fail_msg: "The cycle of B did not pass: {{ unregister }} {{ reimport }} {{ check }}"
+      - disk.rules_ok and disk.vm == 0
+    fail_msg: "The cycle of B did not pass: {{ unregister }} {{ reimport }} {{ check }} {{ disk }}"
     quiet: true

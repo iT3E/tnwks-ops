@@ -700,6 +700,8 @@ procedure refuses an account or a task outside its pattern, a path outside
 the folder, and a config with the session check on. Each phase that runs the
 procedure first reads the last marker in the state file, and does not start
 on another one than its order gives (a phase run twice, or out of order).
+The phase `window` runs after the setup, or again after a window that went
+back (the last marker `wayback-done`), as a second real window would.
 The procedure itself does not go forward after a started window with no end.
 The tests in `security/tests/test_wsl_move_rehearsal.py` hold this.
 
@@ -718,8 +720,8 @@ lead's read of the nodes (Ready, and the same address) covers the live VM.
 | Phase | What it does, and what it shows |
 | --- | --- |
 | `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon), and the check reads back each file by its SHA-256. A second setup over A's distro at its path imports nothing and writes the files again. A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
-| `window` | The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file, both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. Then B imports, unregisters and imports again into the same folder |
-| `wayback` | First, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro with the saved owner and rules of the file, B lists none |
+| `window` | First a read of the state that the window starts from, before any task starts: the last marker, A's disk file at its path and none at B's path or in the side folder, no list of disabled tasks, A's batch right, A's start task enabled and B's disabled; and after a way back the file had the rules that step 4 saved. Only after these checks do A's disk file and folder get the rules of an older WSL, as in setup; then A reads its distro and B lists none. The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file (B the owner, as below), both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. With B's start task started, the file has the rule of step 4 and a rule of B's VM; after B's stop task (a clean stop), no rule of a VM. Then B imports, unregisters and imports again into the same folder, and the file keeps its rule |
+| `wayback` | First, B removes SYSTEM and the Administrators from the rules of its disk file, and A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro, the file has the saved owner and rules (each explicit and inherited rule), and B lists none |
 | `interrupt` | The window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
 | `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task |
 | `after-boot` | The boot task ran the way back once: its marker first, no group step, no restart. A owns the distro, B lists none. Started again by hand, the boot task does nothing and writes no marker |
@@ -731,6 +733,71 @@ The check play also reads, at any time between the phases, that each
 account is in Users only, and that each moment in Administrators in the log
 of the procedure is a stated one: a join only in a run of the group test
 (mode forward or way back), with its leave in the same run.
+
+**The rule of the moved disk file.** At each attach of the disk (the import
+in place and every start), WSL grants the new VM access to the file as the
+account that owns the distro: it adds a rule for the virtual machine SID
+(`S-1-5-83-...`) to the rules of the file, so the account needs the right
+to change them, which an owner has. A clean stop of the VM removes the rule
+again. So window step 4 makes the new account the owner of the moved file,
+with full control for SYSTEM, the Administrators and the account, and no
+inheritance; SYSTEM sets that owner with SeRestorePrivilege, as the way back
+does for the saved owner. The role holds the rule as two values,
+`wsl_move_rehearsal_disk_owner` and `wsl_move_rehearsal_disk_new_mask`, and
+the procedure, its checks and the reads of the play take it from them. Each
+check of the rules of a disk file compares the owner, the protection, every
+explicit rule and each inherited rule, and allows the explicit rules of a
+virtual machine SID only. Right after the procedure writes rules, they must
+be the ones written. The procedure logs the rules before the move and after
+the import, and the play prints them after setup, before and after the
+window, while B's VM runs and after its stop, each account SID masked.
+
+As the owner, the account may also remove SYSTEM and the Administrators from
+the rules of its file. So each run of the procedure, in every mode, first
+turns on the privileges of SYSTEM (backup, restore, take ownership), before
+it reads the state, and stops when one of them is not on, with no marker
+and nothing changed. The move of the file works by these privileges, not
+by the right of SYSTEM on the folders: the page of `MoveFileEx` names
+delete on the file or delete child on the folder, but the rename also opens
+the file, and on a file that grants SYSTEM nothing that open is refused
+unless the privileges are on. The read of the rules asks for `READ_CONTROL`
+only, and either the backup or the restore privilege grants it: the restore
+privilege grants `FILE_GENERIC_WRITE`, which holds `STANDARD_RIGHTS_WRITE`,
+that is `READ_CONTROL` (Microsoft's pages Privilege Constants, File
+Security and Access Rights, and Standard Access Rights). A write of the
+rules takes ownership for the Administrators, then writes
+the owner, the explicit rules and the protection in one write by name.
+Windows gives the inherited rules from the folder in that write, so a
+CREATOR OWNER rule of the folder names the owner that the write sets (a
+write of the rules before the owner would name the Administrators). A group
+(`G:`) in a saved set is not written. Way back
+step 3 moves the file back first, then restores the saved owner and rules
+at the old path, where the folder gives the inherited rules that were
+saved; a file at the old path with other rules (a power loss between the
+two) is restored only, and one with the saved rules is left as it is. Step
+2 removes the saved rules of an earlier window before the marker of a
+started window, so a way back restores only rules that step 4 of its own
+window saved. In setup, and again at the start of each window, A's disk file
+is made like one of an older WSL: no protection, the rules of its folder
+(which gives files a read rule for Authenticated Users), and one explicit
+rule for A (`tasks/older_disk.yml`, which changes nothing when the file and
+the folder are so already, and runs only after setup or a way back). A
+stays the owner with full control, so its start and the rule that WSL adds
+for its VM need nothing more; A's read after it starts the distro. In the
+window, the read against the saved rules of the last way back, the read of
+the state and their checks all come before it, so a stop at a check changes
+nothing. In the phase `wayback`,
+before the way back mode, B removes SYSTEM and the Administrators from the
+rules of its own file (its task `strip-rules`), and the way back must still
+put back the saved set.
+
+**The end of a task run.** Each wait for a task (the runner of the tasks of
+an account, the run of the procedure, the procedure's own runs of the
+tasks of an account, and the wait for the boot task) takes a run as ended
+only when the task is not `Running` or `Queued`, its last run time is new,
+and its last result is not `0x41301` (the task is running). A task that
+never ran, as the window task and the tasks of the accounts at the first
+window, can read a new run time before its run ends.
 
 **The batch right of A.** The registration of a task of A checks its new
 password with a batch logon, so A keeps its own batch right from the setup
@@ -761,7 +828,15 @@ restart until the group check of the next phase or the removal, which logs
 the leave; the check play counts that leave as a problem. The design speaks of
 the installed version of WSL: the scripts read it as the file version of
 `C:\Program Files\WSL\wslservice.exe`, as SYSTEM, in the same way at each
-place where a version is compared.
+place where a version is compared. That the write of the owner and the
+rules in one call names the new owner in a CREATOR OWNER rule is the
+documented behaviour of Windows, not shown on a host by the unit tests. A
+rule for OWNER RIGHTS that the account writes on its file could take the
+right to write the rules from the Administrators after the take of
+ownership: if so, the write fails and the way back stops, with the file at
+the old path, the Administrators as its owner and its rules as they were. Not shown on a host either: that WSL writes the
+rule of its VM as an explicit rule, keeps the protection of the file, and
+removes the rule at a clean shutdown; the phases print what they read.
 
 **The removal.** `remove-before-restart` first ends a run of the window
 task or the boot task. Each removal phase then takes A and B out of every

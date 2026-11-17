@@ -19,7 +19,7 @@
       ansible.builtin.include_tasks: run_procedure.yml
       vars:
         wsl_move_rehearsal_request: {mode: forward, group_steps: false, stop_after: 5, rehearsal_group_test: false}
-        wsl_move_rehearsal_last_marker: wayback-done
+        wsl_move_rehearsal_last_markers: [wayback-done]
 
     - name: A lists no distro after step 5
       ansible.builtin.include_tasks: run_task.yml

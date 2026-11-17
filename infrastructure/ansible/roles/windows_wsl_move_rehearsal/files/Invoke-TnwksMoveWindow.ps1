@@ -19,6 +19,13 @@ Each line of the log and each marker is flushed to disk before the next step
 starts. The restart at the end is behind the switch "restart" of the config:
 with it off, the script logs "would restart" and does not restart.
 
+Each run, in every mode, first turns on the privileges of SYSTEM
+(SeBackupPrivilege, SeRestorePrivilege, SeTakeOwnershipPrivilege) and stops
+if one is not on, before it reads the state. The move of the disk file and
+each read and write of its rules work by these privileges, not by the rules
+of the file or the right of SYSTEM on its folders: the account that owns
+the file may remove SYSTEM and the Administrators from its rules.
+
 The script acts as an account only through the tasks of that account
 (Invoke-TnwksWslAccountTask.ps1), because WSL refuses SYSTEM. It reads no
 registration of an account: each task reads its own.
@@ -143,12 +150,17 @@ function Wait-TnwksNoWsl([string]$Sid, [string]$Account) {
 function Invoke-TnwksAccountTask([string]$Task, [string]$ResultFile) {
     $start = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $before = (Get-ScheduledTaskInfo -TaskName $Task).LastRunTime
-    Start-ScheduledTask -TaskName $Task
+    Start-ScheduledTask -TaskName $Task | Out-Null
     $deadline = (Get-Date).AddMinutes([int]$cfg.task_minutes)
+    # A run has ended when the task is not Running or Queued, its last run
+    # time is new, and its result is not 0x41301 (the task is running): a
+    # task that never ran can read a new time before its run ends.
     do {
         Start-Sleep -Seconds 2
         $info = Get-ScheduledTaskInfo -TaskName $Task
-    } while (((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -or $info.LastRunTime -eq $before) -and (Get-Date) -lt $deadline)
+        $ended = "$((Get-ScheduledTask -TaskName $Task).State)" -notin @('Running', 'Queued') -and
+            $info.LastRunTime -ne $before -and [int64]$info.LastTaskResult -ne 0x41301
+    } while (-not $ended -and (Get-Date) -lt $deadline)
     $result = $null
     if (Test-Path -LiteralPath $ResultFile) {
         $read = Get-Content -LiteralPath $ResultFile -Raw | ConvertFrom-Json
@@ -208,14 +220,156 @@ function Set-TnwksGroup([string]$Sid, [string]$Account, [bool]$In) {
     if ($In -ne $now) { Write-Log "group: $Account $(if ($In) { 'joined' } else { 'left' }) Administrators" }
 }
 
-# --- Rights of a file, by SDDL. Get-Acl reads them and Set-Acl writes the
-# owner and the access rules only.
-function Get-TnwksSddl([string]$Path) { (Get-Acl -LiteralPath $Path).Sddl }
+# --- Rights of a file, by SDDL. The account that owns its disk file may
+# change its rules, also remove SYSTEM and the Administrators, so SYSTEM
+# reads and writes them with its privileges, not with the rules of the file:
+# each handle opens with backup semantics (CreateFile: with the flag, the
+# privileges override the checks of the file), with SeBackupPrivilege,
+# SeRestorePrivilege and SeTakeOwnershipPrivilege enabled. The read asks
+# for READ_CONTROL only, and either privilege grants it: SeBackupPrivilege
+# directly, SeRestorePrivilege through FILE_GENERIC_WRITE, which holds
+# STANDARD_RIGHTS_WRITE, that is READ_CONTROL (Microsoft: Privilege
+# Constants; File Security and Access Rights; Standard Access Rights). A write
+# takes ownership for the Administrators first (the owner's group may then
+# write the rules), then sets the owner of the SDDL and its rules in one
+# write by name (SeRestorePrivilege allows any owner), with the explicit
+# rules and the protection of the SDDL; the inherited rules of an
+# SDDL with no protection come from the folder of the file, so Windows
+# computes them in that write (a CREATOR OWNER rule names the owner of the
+# SDDL), and a check compares them after. A move is
+# a rename, with the right to delete a child on the folder, which SYSTEM has.
+$TnwksSecuritySource = @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+public static class TnwksSecurity {
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    struct TokPriv1Luid { public int Count; public long Luid; public int Attr; }
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool AdjustTokenPrivileges(IntPtr h, bool disable, ref TokPriv1Luid n, int len, IntPtr prev, IntPtr rel);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr p, int access, out IntPtr h);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool LookupPrivilegeValue(string host, string name, out long luid);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr LocalFree(IntPtr p);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern SafeFileHandle CreateFile(string name, int access, int share, IntPtr sa, int disposition, int flags, IntPtr template);
+    [DllImport("advapi32.dll")]
+    static extern int GetSecurityInfo(SafeFileHandle h, int type, int info, out IntPtr owner, out IntPtr group, out IntPtr dacl, out IntPtr sacl, out IntPtr sd);
+    [DllImport("advapi32.dll")]
+    static extern int SetSecurityInfo(SafeFileHandle h, int type, int info, IntPtr owner, IntPtr group, IntPtr dacl, IntPtr sacl);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+    static extern int SetNamedSecurityInfo(string name, int type, int info, IntPtr owner, IntPtr group, IntPtr dacl, IntPtr sacl);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool ConvertSecurityDescriptorToStringSecurityDescriptor(IntPtr sd, int revision, int info, out IntPtr text, out int length);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor(string text, int revision, out IntPtr sd, out int size);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool ConvertStringSidToSid(string text, out IntPtr sid);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool GetSecurityDescriptorOwner(IntPtr sd, out IntPtr owner, out bool defaulted);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool GetSecurityDescriptorDacl(IntPtr sd, out bool present, out IntPtr dacl, out bool defaulted);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool GetSecurityDescriptorControl(IntPtr sd, out short control, out int revision);
+    const int OWNER = 0x1, DACL = 0x4, PROTECTED_DACL = unchecked((int)0x80000000), UNPROTECTED_DACL = 0x20000000;
+    const int READ_CONTROL = 0x20000, WRITE_DAC = 0x40000, WRITE_OWNER = 0x80000;
+
+    static bool EnableOne(string name) {
+        IntPtr h; long luid;
+        if (!OpenProcessToken(GetCurrentProcess(), 0x28, out h)) return false;
+        try {
+            if (!LookupPrivilegeValue(null, name, out luid)) return false;
+            TokPriv1Luid tp = new TokPriv1Luid();
+            tp.Count = 1; tp.Luid = luid; tp.Attr = 2;
+            return AdjustTokenPrivileges(h, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero) && Marshal.GetLastWin32Error() == 0;
+        } finally { CloseHandle(h); }
+    }
+    public static string Enable() {
+        string[] names = { "SeBackupPrivilege", "SeRestorePrivilege", "SeTakeOwnershipPrivilege" };
+        string[] parts = new string[names.Length];
+        for (int i = 0; i < names.Length; i++) parts[i] = names[i] + " " + EnableOne(names[i]);
+        return String.Join(", ", parts);
+    }
+    static SafeFileHandle Open(string path, int access) {
+        // OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS; every share mode.
+        SafeFileHandle h = CreateFile(path, access, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero);
+        if (h.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "open " + path);
+        return h;
+    }
+    public static string ReadSddl(string path) {
+        using (SafeFileHandle h = Open(path, READ_CONTROL)) {
+            IntPtr owner, group, dacl, sacl, sd, text; int length;
+            int r = GetSecurityInfo(h, 1, OWNER | DACL, out owner, out group, out dacl, out sacl, out sd);
+            if (r != 0) throw new Win32Exception(r, "read the rules of " + path);
+            try {
+                if (!ConvertSecurityDescriptorToStringSecurityDescriptor(sd, 1, OWNER | DACL, out text, out length))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                try { return Marshal.PtrToStringUni(text); } finally { LocalFree(text); }
+            } finally { LocalFree(sd); }
+        }
+    }
+    public static void SetOwner(string path, string owner) {
+        IntPtr sid;
+        if (!ConvertStringSidToSid(owner, out sid)) throw new Win32Exception(Marshal.GetLastWin32Error(), "the owner " + owner);
+        try {
+            using (SafeFileHandle h = Open(path, WRITE_OWNER)) {
+                int r = SetSecurityInfo(h, 1, OWNER, sid, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                if (r != 0) throw new Win32Exception(r, "set the owner of " + path);
+            }
+        } finally { LocalFree(sid); }
+    }
+    // The owner and the rules of an SDDL in one write by name. With no
+    // protection, Windows computes the inherited rules from the folder in
+    // this write, so a CREATOR OWNER rule of the folder names the owner of
+    // the SDDL. WRITE_DAC comes from the take of ownership by the
+    // Administrators, WRITE_OWNER from SeTakeOwnershipPrivilege, and any
+    // owner is allowed with SeRestorePrivilege.
+    public static void SetRules(string path, string sddl) {
+        IntPtr sd, owner, dacl; int size; bool present, defaulted, ownerDefaulted; short control; int revision;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptor(sddl, 1, out sd, out size)) throw new Win32Exception(Marshal.GetLastWin32Error(), "the rules " + sddl);
+        try {
+            if (!GetSecurityDescriptorOwner(sd, out owner, out ownerDefaulted) || owner == IntPtr.Zero) throw new InvalidOperationException("no owner in " + sddl);
+            if (!GetSecurityDescriptorDacl(sd, out present, out dacl, out defaulted) || !present) throw new InvalidOperationException("no rules in " + sddl);
+            if (!GetSecurityDescriptorControl(sd, out control, out revision)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            // SE_DACL_PROTECTED: the rules take no rule from the folder.
+            int info = OWNER | DACL | (((control & 0x1000) != 0) ? PROTECTED_DACL : UNPROTECTED_DACL);
+            int r = SetNamedSecurityInfo(path, 1, info, owner, IntPtr.Zero, dacl, IntPtr.Zero);
+            if (r != 0) throw new Win32Exception(r, "set the owner and the rules of " + path);
+        } finally { LocalFree(sd); }
+    }
+}
+'@
+
+# Once per run: the type, then each privilege on. A privilege that is not on
+# stops here. Each run calls it at its start, in every mode, before the
+# state read and before any move (see the end of the script); the read and
+# the write of the rules call it too, at no cost.
+function Initialize-TnwksSecurity {
+    if (-not ('TnwksSecurity' -as [type])) { Add-Type -TypeDefinition $TnwksSecuritySource }
+    if (-not $script:TnwksPrivileges) {
+        $enabled = [TnwksSecurity]::Enable()
+        Write-Log "privileges: $enabled"
+        Assert-Tnwks ($enabled -eq 'SeBackupPrivilege True, SeRestorePrivilege True, SeTakeOwnershipPrivilege True') "a privilege of SYSTEM is not on: $enabled"
+        $script:TnwksPrivileges = $enabled
+    }
+}
+
+function Get-TnwksSddl([string]$Path) {
+    Initialize-TnwksSecurity
+    [TnwksSecurity]::ReadSddl($Path)
+}
 
 function Set-TnwksSddl([string]$Path, [string]$Sddl) {
-    $acl = Get-Acl -LiteralPath $Path
-    $acl.SetSecurityDescriptorSddlForm($Sddl, 'Owner, Access')
-    Set-Acl -LiteralPath $Path -AclObject $acl
+    Initialize-TnwksSecurity
+    # The owner, then a group (G:, which is not written), then the rules.
+    if ($Sddl -notmatch '^O:([^:]+?)(?=[GD]:)') { throw "no owner in the rules $Sddl" }
+    $owner = $Matches[1]
+    $dacl = if ($Sddl -match '(D:[^:]*)$') { $Matches[1] } else { throw "no rules in $Sddl" }
+    # The explicit rules only: Windows gives the inherited ones.
+    $explicit = $dacl -replace '\([^;()]*;[A-Z]*ID[A-Z]*;[^)]*\)', ''
+    [TnwksSecurity]::SetOwner($Path, 'BA')
+    [TnwksSecurity]::SetRules($Path, "O:$owner$explicit")
 }
 
 # The parts that a check compares: the owner, whether the rules are protected
@@ -228,54 +382,76 @@ function ConvertTo-TnwksSddlSid([string]$Account) {
     try { (New-Object Security.Principal.SecurityIdentifier $Account).Value } catch { $Account }
 }
 
+# The rights of a rule as one number: SDDL writes a mask as hex or as names of
+# two letters (FA, or CC and DC and so on), whichever Windows picks.
+$TnwksRightNames = @{
+    GA = 0x10000000; GR = 2147483648; GW = 0x40000000; GX = 0x20000000
+    FA = 0x1F01FF; FR = 0x120089; FW = 0x120116; FX = 0x1200A0
+    CC = 0x1; DC = 0x2; LC = 0x4; SW = 0x8; RP = 0x10; WP = 0x20; DT = 0x40; LO = 0x80; CR = 0x100
+    SD = 0x10000; RC = 0x20000; WD = 0x40000; WO = 0x80000
+}
+function ConvertTo-TnwksSddlMask([string]$Rights) {
+    if ($Rights -match '^0x[0-9a-fA-F]+$') { return '0x{0:x}' -f [Convert]::ToInt64($Rights.Substring(2), 16) }
+    if ($Rights.Length -eq 0 -or $Rights.Length % 2) { return $Rights }
+    [int64]$mask = 0
+    for ($i = 0; $i -lt $Rights.Length; $i += 2) {
+        $name = $Rights.Substring($i, 2).ToUpperInvariant()
+        if (-not $TnwksRightNames.ContainsKey($name)) { return $Rights }
+        $mask = $mask -bor [int64]$TnwksRightNames[$name]
+    }
+    '0x{0:x}' -f $mask
+}
+
+# WSL grants the VM of each start access to the disk file, as an explicit rule
+# of a virtual machine SID (S-1-5-83-...). A check compares every other
+# explicit rule and each inherited rule (as its folder gives it), and allows
+# the rules of a VM only: their count is "vm".
 function Get-TnwksSddlParts([string]$Sddl) {
     $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { ConvertTo-TnwksSddlSid $Matches[1] } else { '' }
     $dacl = if ($Sddl -match 'D:([A-Z]*)((\([^)]*\))*)') { $Matches } else { @{ 1 = ''; 2 = '' } }
-    $aces = @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value } |
-        Where-Object { ($_ -split ';')[1] -notmatch 'ID' } | ForEach-Object {
-            $f = $_ -split ';'
-            $f[-1] = ConvertTo-TnwksSddlSid $f[-1]
-            $f -join ';' } | Sort-Object)
-    [pscustomobject]@{ owner = $owner; protected = ($dacl[1] -match 'P'); aces = ($aces -join ' ') }
+    $aces = @(); $inherited = @(); $vm = 0
+    foreach ($ace in @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value })) {
+        $f = $ace -split ';'
+        if ($f.Count -lt 6) { continue }
+        $f[2] = ConvertTo-TnwksSddlMask $f[2]
+        $f[-1] = ConvertTo-TnwksSddlSid $f[-1]
+        if ($f[1] -match 'ID') { $inherited += ($f -join ';') }
+        elseif ($f[-1] -match '^S-1-5-83-') { $vm++ }
+        else { $aces += ($f -join ';') }
+    }
+    [pscustomobject]@{ owner = $owner; protected = ($dacl[1] -match 'P'); aces = (@($aces | Sort-Object) -join ' ')
+        inherited = (@($inherited | Sort-Object) -join ' '); vm = $vm }
 }
 
-function Test-TnwksSddl([string]$Path, [string]$Expected) {
+# -Exact: right after a write, which replaces every rule, also no rule of a VM
+# but those of the SDDL written (a stale rule of an earlier VM goes).
+function Test-TnwksSddl([string]$Path, [string]$Expected, [switch]$Exact) {
     $want = Get-TnwksSddlParts $Expected
     $have = Get-TnwksSddlParts (Get-TnwksSddl $Path)
-    $want.owner -eq $have.owner -and $want.protected -eq $have.protected -and $want.aces -eq $have.aces
+    $want.owner -eq $have.owner -and $want.protected -eq $have.protected -and $want.aces -eq $have.aces -and
+        $want.inherited -eq $have.inherited -and (-not $Exact -or $want.vm -eq $have.vm)
 }
 
-# A restore of a saved owner that is not SYSTEM or a group of its token needs
-# SeRestorePrivilege enabled in the token.
-function Enable-TnwksRestorePrivilege {
+# The owner and the rules of a file for the log, with the SID of each account
+# masked: <present>, <new>, S-1-5-83-<class>-<vm> for a virtual machine, <sid>
+# for any other.
+function Get-TnwksMaskedSddl([string]$Path) {
     try {
-        if (-not ('TnwksPrivilege' -as [type])) {
-            Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class TnwksPrivilege {
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    struct TokPriv1Luid { public int Count; public long Luid; public int Attr; }
-    [DllImport("advapi32.dll", SetLastError = true)] static extern bool AdjustTokenPrivileges(IntPtr h, bool disable, ref TokPriv1Luid n, int len, IntPtr prev, IntPtr rel);
-    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr p, int access, out IntPtr h);
-    [DllImport("advapi32.dll", SetLastError = true)] static extern bool LookupPrivilegeValue(string host, string name, out long luid);
-    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
-    public static bool Enable(string name) {
-        IntPtr h; long luid;
-        if (!OpenProcessToken(GetCurrentProcess(), 0x28, out h)) return false;
-        if (!LookupPrivilegeValue(null, name, out luid)) return false;
-        var tp = new TokPriv1Luid { Count = 1, Luid = luid, Attr = 2 };
-        return AdjustTokenPrivileges(h, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero) && Marshal.GetLastWin32Error() == 0;
-    }
-}
-'@
-        }
-        $ok = [TnwksPrivilege]::Enable('SeRestorePrivilege')
-        Write-Log "SeRestorePrivilege enabled: $ok"
-    } catch { Write-Log "SeRestorePrivilege: $($_.Exception.Message)" }
+        if (-not (Test-Path -LiteralPath $Path)) { return 'no file' }
+        $text = Get-TnwksSddl $Path
+        $sids = @{ (Get-TnwksSid $present.account) = '<present>'; (Get-TnwksSid $new.account) = '<new>' }
+        foreach ($sid in $sids.Keys) { $text = $text -replace ([regex]::Escape($sid) + '(?![0-9-])'), $sids[$sid] }
+        $text -replace 'S-1-5-83-([0-9]+)(-[0-9]+)+', 'S-1-5-83-$1-<vm>' -replace 'S-1-5-21(-[0-9]+)+', '<sid>'
+    } catch { "not read: $($_.Exception.Message)" }
 }
 
-function Get-TnwksDiskSddl([string]$Sid) { 'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;{0})' -f $Sid }
+# The rule of the disk file in the folder of the new account (the config,
+# disk_rule): its owner, and the access mask of the new account. SYSTEM and
+# the Administrators have full control; no inheritance.
+function Get-TnwksDiskSddl([string]$Sid) {
+    $owner = if ($cfg.disk_rule.owner -eq 'new-account') { $Sid } else { 'BA' }
+    'O:{0}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;{1};;;{2})' -f $owner, $cfg.disk_rule.new_mask, $Sid
+}
 function Get-TnwksMarkerSddl([string]$Sid) { 'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;{0})' -f $Sid }
 
 # The marker file of the procedure keeps a folder through an unregister,
@@ -308,6 +484,8 @@ function Test-TnwksScope {
     foreach ($task in $tasks) {
         if ("$task" -notmatch $cfg.task_pattern) { return "the task $task is outside the scope ($($cfg.task_pattern))" }
     }
+    if ("$($cfg.disk_rule.owner)" -notin @('administrators', 'new-account')) { return "the owner of the moved file is '$($cfg.disk_rule.owner)': administrators or new-account" }
+    if ("$($cfg.disk_rule.new_mask)" -notmatch '^(0x[0-9a-fA-F]{1,8}|F[ARWX])$') { return "the mask of the new account is '$($cfg.disk_rule.new_mask)': a hex mask or FA, FR, FW, FX" }
     # The check for a session of the owner (site 1) is not in this script.
     if ($cfg.session_check) { return 'the session check is on, and this script does not have it' }
     ''
@@ -332,6 +510,13 @@ $new = $cfg.new
 $oldPath = Join-Path $present.folder $cfg.disk_name
 $newPath = Join-Path $new.folder $cfg.disk_name
 
+function Test-TnwksOldAsSaved {
+    try {
+        if (-not ((Test-Path -LiteralPath $oldPath) -and (Test-Path -LiteralPath $cfg.acl_file))) { return $false }
+        Test-TnwksSddl $oldPath ("$(Get-Content -LiteralPath $cfg.acl_file -Raw)").Trim()
+    } catch { "not read: $($_.Exception.Message)" }
+}
+
 function Read-TnwksState {
     $pSid = Get-TnwksSid $present.account
     $nSid = Get-TnwksSid $new.account
@@ -349,6 +534,8 @@ function Read-TnwksState {
         tasks = $tasks
         version = Get-TnwksWslVersion
         last_marker = Get-LastMarker
+        # The rules at the old path, against the saved set of step 4.
+        old_as_saved = Test-TnwksOldAsSaved
     }
     Write-Log "read: $($state | ConvertTo-Json -Compress -Depth 3)"
     $state
@@ -381,6 +568,12 @@ function Invoke-TnwksForward {
     # The tasks that this step disables, saved first, for way back step 6.
     $enabled = @($present.disable_tasks | Where-Object { Test-TnwksTaskEnabled $_ })
     Write-TnwksFile $DisabledFile ($enabled -join "`r`n")
+    # The saved rules of an earlier window are spent: way back step 3 restores
+    # only the rules that step 4 of this window saves.
+    if (Test-Path -LiteralPath $cfg.acl_file) {
+        Remove-Item -LiteralPath $cfg.acl_file -Force
+        Write-Log 'step 2: removed the saved rules of an earlier window'
+    }
     Add-Marker 'window-started'
     foreach ($t in @($present.disable_tasks)) { Disable-TnwksTask $t }
     Write-Log 'step 2 passed'
@@ -390,19 +583,20 @@ function Invoke-TnwksForward {
     Invoke-TnwksStopTask $present
     Wait-TnwksNoWsl $pSid $present.account
     Write-Log 'step 3 passed'
-    # (4) The markers, then the move, the owner and the rules.
+    # (4) The markers, then the move, the owner and the rules. The move is a
+    # rename by the privileges that the run turned on at its start.
     Add-TnwksFolderMarker $present.folder $pSid
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $new.folder $cfg.marker_name)) "no marker file in $($new.folder)"
     Assert-Tnwks ((Test-Path -LiteralPath $oldPath) -and -not (Test-Path -LiteralPath $newPath)) 'the disk file is not at the old path only'
     $rules = Get-TnwksSddl $oldPath
     Write-TnwksFile $cfg.acl_file $rules
     $size = (Get-Item -LiteralPath $oldPath).Length
-    Write-Log "step 4: saved the rules of the disk file; size $size"
+    Write-Log "step 4: saved the rules of the disk file; size $size; the rules: $(Get-TnwksMaskedSddl $oldPath)"
     Move-Item -LiteralPath $oldPath -Destination $newPath
     Set-TnwksSddl $newPath (Get-TnwksDiskSddl $nSid)
     Assert-Tnwks (-not (Test-Path -LiteralPath $oldPath)) 'the old path is not empty'
     Assert-Tnwks ((Get-Item -LiteralPath $newPath).Length -eq $size) 'the moved file has another size'
-    Assert-Tnwks (Test-TnwksSddl $newPath (Get-TnwksDiskSddl $nSid)) 'the moved file has another owner or other rules'
+    Assert-Tnwks (Test-TnwksSddl $newPath (Get-TnwksDiskSddl $nSid) -Exact) 'the moved file has another owner or other rules'
     Write-Log 'step 4 passed'
     # (5) The unregister of the present account, with no file at its path.
     Assert-Tnwks (-not (Test-Path -LiteralPath $oldPath)) 'a file is at the path of the registration of the present account'
@@ -418,6 +612,9 @@ function Invoke-TnwksForward {
     }
     # (6) The import of the new account, then its stop.
     $import = Invoke-TnwksAccountTask $new.window_tasks.import (Join-Path $new.result_dir 'import.json')
+    # What the import and its first start of the distro left on the file (the
+    # rule of a VM), whether the import passed or not.
+    Write-Log "step 6: the rules of the disk file after the import: $(Get-TnwksMaskedSddl $newPath)"
     Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $newPath, [StringComparison]::OrdinalIgnoreCase)) "the import of $($new.account) did not pass"
     Invoke-TnwksStopTask $new
     Wait-TnwksNoWsl $nSid $new.account
@@ -457,22 +654,42 @@ function Invoke-TnwksWayBack {
     Invoke-TnwksStopTask $new
     Wait-TnwksNoWsl $nSid $new.account
     Write-Log 'way back 2 passed'
-    # (3) For step 4.
+    # (3) For step 4. First the move back: a rename keeps the rules. SYSTEM
+    # moves the file by the privileges that the run turned on at its start,
+    # not by its right on the folders: the file may grant SYSTEM nothing.
+    # MoveFileEx names delete on the file or delete child on the folder, but
+    # the rename also opens the file, and on such a file that open is refused
+    # unless the privileges are on (Microsoft: MoveFileEx; Privilege
+    # Constants). Then, at the old path, the
+    # saved owner and rules: their inherited rules come from the old folder,
+    # so they can be put back there only. A run that a power loss ends between
+    # the two finds the file at the old path with other rules, and restores
+    # only; with the saved rules there, nothing.
+    $saved = if (Test-Path -LiteralPath $cfg.acl_file) { ("$(Get-Content -LiteralPath $cfg.acl_file -Raw)").Trim() } else { '' }
     if (Test-Path -LiteralPath $newPath) {
         Assert-Tnwks ((Get-TnwksWslProcess $pSid).Count -eq 0 -and (Get-TnwksWslProcess $nSid).Count -eq 0) 'a WSL process runs before the move back'
         Assert-Tnwks (Test-Path -LiteralPath (Join-Path $present.folder $cfg.marker_name)) 'the old folder or its marker is gone: no move back'
         # Window step 4 saved the rules before the move: with no saved rules,
         # no move back.
         Assert-Tnwks (Test-Path -LiteralPath $cfg.acl_file) 'no saved rules of the disk file: no move back'
-        $saved = ("$(Get-Content -LiteralPath $cfg.acl_file -Raw)").Trim()
         Assert-Tnwks ($saved -like 'O:*') 'the saved rules of the disk file are empty: no move back'
         $size = (Get-Item -LiteralPath $newPath).Length
         Move-Item -LiteralPath $newPath -Destination $oldPath
-        Enable-TnwksRestorePrivilege
-        Set-TnwksSddl $oldPath $saved
-        Assert-Tnwks (Test-TnwksSddl $oldPath $saved) 'the file has not its saved owner and rules'
         Assert-Tnwks (-not (Test-Path -LiteralPath $newPath)) 'the new path is not empty'
         Assert-Tnwks ((Get-Item -LiteralPath $oldPath).Length -eq $size) 'the file moved back with another size'
+        Write-Log 'way back 3: moved the file back'
+    }
+    # With no saved rules, step 4 did not start in this window: nothing to
+    # restore.
+    if ($saved -like 'O:*' -and (Test-Path -LiteralPath $oldPath)) {
+        if (Test-TnwksSddl $oldPath $saved) {
+            Write-Log 'way back 3: the file has its saved owner and rules'
+        } else {
+            Assert-Tnwks ((Get-TnwksWslProcess $pSid).Count -eq 0 -and (Get-TnwksWslProcess $nSid).Count -eq 0) 'a WSL process runs before the restore of the rules'
+            Set-TnwksSddl $oldPath $saved
+            Assert-Tnwks (Test-TnwksSddl $oldPath $saved -Exact) 'the file has not its saved owner and rules'
+            Write-Log "way back 3: restored the saved owner and rules: $(Get-TnwksMaskedSddl $oldPath)"
+        }
     }
     Write-Log 'way back 3 passed'
     # (4) For step 6: the unregister of the new account. No distro is a pass.
@@ -531,6 +748,10 @@ if ($scope) {
 Write-Log "start, request: $($req | ConvertTo-Json -Compress)"
 $outcome = 'failed'
 try {
+    # The privileges first, in every mode: the state read, the move and the
+    # rules of the disk file come after. A privilege that is not on fails
+    # the run here, with no marker and nothing changed.
+    Initialize-TnwksSecurity
     switch ($Mode) {
         'forward' {
             try {

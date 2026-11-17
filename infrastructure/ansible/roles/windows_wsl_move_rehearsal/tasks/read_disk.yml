@@ -1,0 +1,100 @@
+---
+# Reads the owner and the rules of a disk file as SYSTEM, and compares them
+# with the rules that it should have (wsl_move_rehearsal_disk_read):
+#   key: a or b, the folder of the file
+#   rule: moved (the rule of window step 4, from wsl_move_rehearsal_disk_owner
+#     and wsl_move_rehearsal_disk_new_mask), saved (the rules that window
+#     step 4 saved and the way back restores), or none (a read only)
+#   wait: seconds to wait for no rule of a VM (after a clean stop of the VM,
+#     WSL removes its rule), 0 by default
+# As the procedure compares (Get-TnwksSddlParts): the owner, whether the
+# rules are protected, every explicit rule, and each inherited rule (as the
+# folder gives it), each account as its SID and each mask as a number. WSL grants the VM of each start access to the file,
+# as a rule of a virtual machine SID (S-1-5-83-...): the rules of a VM are
+# allowed, and no other rule.
+# The result, wsl_move_rehearsal_disk: exists, saved (a saved rule is
+# there), rules_ok, vm (the count of the rules of a VM), and the owner and
+# the rules with the SID of each account masked (<a>, <b>, <sid>, and
+# S-1-5-83-<class>-<vm> for a VM).
+- name: "Read the rules of the disk file of {{ wsl_move_rehearsal_disk_read.key | upper }}"
+  ansible.windows.win_powershell:
+    parameters:
+      Path: '{{ wsl_move_rehearsal_accounts[wsl_move_rehearsal_disk_read.key].folder }}\{{ wsl_move_rehearsal_disk_name }}'
+      Rule: "{{ wsl_move_rehearsal_disk_read.rule }}"
+      Saved: "{{ wsl_move_rehearsal_acl_file }}"
+      Owner: "{{ wsl_move_rehearsal_disk_owner }}"
+      Mask: "{{ wsl_move_rehearsal_disk_new_mask }}"
+      SidA: "{{ wsl_move_rehearsal_sids.a }}"
+      SidB: "{{ wsl_move_rehearsal_sids.b }}"
+      Wait: "{{ wsl_move_rehearsal_disk_read.wait | default(0) }}"
+    script: |
+      param([string]$Path, [string]$Rule, [string]$Saved, [string]$Owner, [string]$Mask, [string]$SidA, [string]$SidB, [int]$Wait)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      function ConvertTo-Sid([string]$Account) {
+          if ($Account -match '^S-1-') { return $Account }
+          try { (New-Object Security.Principal.SecurityIdentifier $Account).Value } catch { $Account }
+      }
+      $names = @{
+          GA = 0x10000000; GR = 2147483648; GW = 0x40000000; GX = 0x20000000
+          FA = 0x1F01FF; FR = 0x120089; FW = 0x120116; FX = 0x1200A0
+          CC = 0x1; DC = 0x2; LC = 0x4; SW = 0x8; RP = 0x10; WP = 0x20; DT = 0x40; LO = 0x80; CR = 0x100
+          SD = 0x10000; RC = 0x20000; WD = 0x40000; WO = 0x80000
+      }
+      function ConvertTo-Mask([string]$Rights) {
+          if ($Rights -match '^0x[0-9a-fA-F]+$') { return '0x{0:x}' -f [Convert]::ToInt64($Rights.Substring(2), 16) }
+          if ($Rights.Length -eq 0 -or $Rights.Length % 2) { return $Rights }
+          [int64]$m = 0
+          for ($i = 0; $i -lt $Rights.Length; $i += 2) {
+              $n = $Rights.Substring($i, 2).ToUpperInvariant()
+              if (-not $names.ContainsKey($n)) { return $Rights }
+              $m = $m -bor [int64]$names[$n]
+          }
+          '0x{0:x}' -f $m
+      }
+      function Get-Parts([string]$Sddl) {
+          $o = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { ConvertTo-Sid $Matches[1] } else { '' }
+          $dacl = if ($Sddl -match 'D:([A-Z]*)((\([^)]*\))*)') { $Matches } else { @{ 1 = ''; 2 = '' } }
+          $aces = @(); $inherited = @(); $vm = 0
+          foreach ($ace in @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value })) {
+              $f = $ace -split ';'
+              if ($f.Count -lt 6) { continue }
+              $f[2] = ConvertTo-Mask $f[2]
+              $f[-1] = ConvertTo-Sid $f[-1]
+              if ($f[1] -match 'ID') { $inherited += ($f -join ';') }
+              elseif ($f[-1] -match '^S-1-5-83-') { $vm++ }
+              else { $aces += ($f -join ';') }
+          }
+          [pscustomobject]@{ text = "$o|$($dacl[1] -match 'P')|$(@($aces | Sort-Object) -join ' ')|$(@($inherited | Sort-Object) -join ' ')"; vm = $vm }
+      }
+      function Get-Masked([string]$Text) {
+          foreach ($s in @(@($SidA, '<a>'), @($SidB, '<b>'))) { if ($s[0]) { $Text = $Text -replace ([regex]::Escape($s[0]) + '(?![0-9-])'), $s[1] } }
+          $Text -replace 'S-1-5-83-([0-9]+)(-[0-9]+)+', 'S-1-5-83-$1-<vm>' -replace 'S-1-5-21(-[0-9]+)+', '<sid>'
+      }
+      $deadline = (Get-Date).AddSeconds($Wait)
+      do {
+          $exists = [bool](Test-Path -LiteralPath $Path)
+          $sddl = if ($exists) { (Get-Acl -LiteralPath $Path).Sddl } else { '' }
+          $have = Get-Parts $sddl
+          $more = $have.vm -gt 0 -and (Get-Date) -lt $deadline
+          if ($more) { Start-Sleep -Seconds 2 }
+      } while ($more)
+      $isSaved = [bool](Test-Path -LiteralPath $Saved)
+      $want = switch ($Rule) {
+          'moved' { 'O:{0}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;{1};;;{2})' -f $(if ($Owner -eq 'new-account') { $SidB } else { 'BA' }), $Mask, $SidB }
+          'saved' { if ($isSaved) { "$(Get-Content -LiteralPath $Saved -Raw)".Trim() } else { '' } }
+          default { '' }
+      }
+      [pscustomobject]@{
+          exists = $exists
+          saved = $isSaved
+          rules_ok = $exists -and $want -like 'O:*' -and $have.text -eq (Get-Parts $want).text
+          vm = $have.vm
+          owner = if ($sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { Get-Masked $Matches[1] } else { '' }
+          sddl = Get-Masked $sddl
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_disk

@@ -10,6 +10,11 @@ wsl_move_rehearsal_task_list: >-
   {%- endfor -%}
   {{ out }}
 
+# The rule that the folder of A gives its files, as the drive of an older
+# disk file does: Authenticated Users may read (files only). Setup sets it
+# with the rules of the folder, and older_disk.yml adds it when it is absent.
+wsl_move_rehearsal_older_folder_rule: (A;OIIO;FR;;;AU)
+
 # One config for each account (Invoke-TnwksWslAccountTask.ps1), and one for
 # the procedure (Invoke-TnwksMoveWindow.ps1).
 wsl_move_rehearsal_account_config_common:
@@ -48,6 +53,9 @@ wsl_move_rehearsal_window_config:
   log_file: "{{ wsl_move_rehearsal_log_file }}"
   acl_file: "{{ wsl_move_rehearsal_acl_file }}"
   version_file: "{{ wsl_move_rehearsal_version_file }}"
+  disk_rule:
+    owner: "{{ wsl_move_rehearsal_disk_owner }}"
+    new_mask: "{{ wsl_move_rehearsal_disk_new_mask }}"
   service_binary: "{{ wsl_move_rehearsal_service_binary }}"
   restart: "{{ wsl_move_rehearsal_restart | bool }}"
   # The check for a session of the owner (site 1 only) is not built here.
