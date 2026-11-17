@@ -647,7 +647,11 @@ more try. It resolves at the next good run.
 **First checks.** In Loki,
 `{namespace="monitoring", app="agent-heartbeat-check"}`:
 `result=missing service=<service>` is an agent that did not complete its
-heartbeat, `result=error` is a check that could not ask Tempo. Then:
+heartbeat, `result=error` is a check that could not ask Tempo. The check
+has one line for each service, and the alert fires when one of them is not
+`result=ok`. The namespace is the end of the service name
+(`openclaw-agents-pilot` is `agents-pilot`, `openclaw-agents-finance` is
+`agents-finance`). Then, with that namespace:
 
 ```sh
 kubectl -n agents-pilot get pods
