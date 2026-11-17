@@ -67,12 +67,12 @@ spec:
             # with its .sha256 file next to it.
             # SET AT STEP 4 from the owner's name, before the merge.
             - name: ARCHIVE
-              value: start/openclaw-state-SET-ME.tar.gz
+              value: start/openclaw-state-2026.9.6-20261117T073712Z.tar.gz
             # The seed of the vault: vault-<time>.tar in archives/seed/.
             # Empty: no vault in this run.
             # SET AT STEP 4 from the owner's name, before the merge.
             - name: VAULT
-              value: vault-SET-ME.tar
+              value: vault-20261117T073724Z.tar
           command: ["sh", "-c"]
           args:
             - |
