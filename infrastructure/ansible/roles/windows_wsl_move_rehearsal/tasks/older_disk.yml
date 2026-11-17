@@ -3,14 +3,21 @@
 # takes the inherited rules of its folder, and it has one explicit rule, full
 # control for A; A stays the owner. The folder of A gives its files one more
 # rule, as the drive of an older disk file does: Authenticated Users may read
-# (files only). The window saves this set, and the way back must put it back
-# exactly.
+# (files only); and A reads the folder and its rules, as a present account
+# does on the folder of its own disk file (wsl_move_rehearsal_folder_rights).
+# The window saves this set, and the way back must put back its owner,
+# protection and explicit rules, with the inherited rules that the folder
+# gives.
 #
 # Setup runs it after the import of A, and the phase window runs it again
 # before its read of the state, for a file that a newer WSL made protected.
-# It changes nothing when the folder and the file are already so. A rule of a
-# VM on the file stays as it is. It runs only after setup or after a way back:
-# at any other state, the disk file is not A's alone.
+# It changes nothing when the folder and the file are already so: also the
+# inherited rules that the folder gives (Windows' own inheritance function).
+# The rules of WSL on the file (a VM, its capability) stay as they are. The
+# file is read and written with the privileges of SYSTEM (the functions of
+# the procedure), as A may have removed SYSTEM from its rules. It runs only
+# after setup or after a way back: at any other state, the disk file is not
+# A's alone.
 
 - name: Read the last marker before the rules of A's disk file
   ansible.windows.win_powershell:
@@ -33,30 +40,38 @@
     fail_msg: "The last marker is '{{ last }}': the rules of A's disk file are not changed. Nothing is changed."
     quiet: true
 
-- name: The folder of A gives its files the read of an older drive
+- name: The folder of A gives its files the read of an older drive, and A reads the folder
   ansible.windows.win_powershell:
     parameters:
       Path: "{{ wsl_move_rehearsal_accounts.a.folder }}"
-      Rule: "{{ wsl_move_rehearsal_older_folder_rule }}"
+      Rules:
+        - "{{ wsl_move_rehearsal_older_folder_rule }}"
+        - "(A;;{{ wsl_move_rehearsal_folder_rights.a }};;;{{ wsl_move_rehearsal_sids.a }})"
     script: |
       [CmdletBinding(SupportsShouldProcess)]
-      param([string]$Path, [string]$Rule)
+      param([string]$Path, [string[]]$Rules)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $false
       $folder = Get-Item -LiteralPath $Path
       $acl = $folder.GetAccessControl('Access')
-      $want = New-Object Security.AccessControl.DirectorySecurity
-      $want.SetSecurityDescriptorSddlForm("D:$Rule", 'Access')
-      $add = @($want.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))[0]
-      $have = @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]) | Where-Object {
-          $_.IdentityReference -eq $add.IdentityReference -and $_.FileSystemRights -eq $add.FileSystemRights -and
-          $_.InheritanceFlags -eq $add.InheritanceFlags -and $_.PropagationFlags -eq $add.PropagationFlags -and
-          $_.AccessControlType -eq $add.AccessControlType })
-      if ($have.Count) { return }
+      $missing = @()
+      foreach ($rule in $Rules) {
+          $want = New-Object Security.AccessControl.DirectorySecurity
+          $want.SetSecurityDescriptorSddlForm("D:$rule", 'Access')
+          $add = @($want.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))[0]
+          $have = @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]) | Where-Object {
+              $_.IdentityReference -eq $add.IdentityReference -and $_.FileSystemRights -eq $add.FileSystemRights -and
+              $_.InheritanceFlags -eq $add.InheritanceFlags -and $_.PropagationFlags -eq $add.PropagationFlags -and
+              $_.AccessControlType -eq $add.AccessControlType })
+          if (-not $have.Count) { $missing += $add }
+      }
+      if (-not $missing.Count) { return }
       $Ansible.Changed = $true
-      if ($PSCmdlet.ShouldProcess($Path, 'add the read of an older drive')) {
-          # The rules only: the owner and the protection of the folder stay.
-          $acl.AddAccessRule($add)
+      if ($PSCmdlet.ShouldProcess($Path, 'add the read of an older drive, and the read of A')) {
+          # The rules only: the owner and the protection of the folder stay. A
+          # rule of the same account and flags merges: A's right of step 3
+          # takes the read.
+          foreach ($add in $missing) { $acl.AddAccessRule($add) }
           $folder.SetAccessControl($acl)
       }
   vars:
@@ -69,32 +84,33 @@
     parameters:
       Path: '{{ wsl_move_rehearsal_accounts.a.folder }}\{{ wsl_move_rehearsal_disk_name }}'
       Sid: "{{ wsl_move_rehearsal_sids.a }}"
+      Procedure: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksMoveWindow.ps1'
+      Capability: "{{ wsl_move_rehearsal_vm_capability_sid }}"
     script: |
       [CmdletBinding(SupportsShouldProcess)]
-      param([string]$Path, [string]$Sid)
+      param([string]$Path, [string]$Sid, [string]$Procedure, [string]$Capability)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $false
-      $file = Get-Item -LiteralPath $Path
-      $acl = $file.GetAccessControl('Access')
-      # The type as written: a variable $sid would be the parameter $Sid
-      # (PowerShell names ignore case).
-      $explicit = @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))
-      # A rule of a VM is WSL's: it stays, and it counts as no rule.
-      $vm = @($explicit | Where-Object { $_.IdentityReference.Value -like 'S-1-5-83-*' })
-      $own = @($explicit | Where-Object { $_.IdentityReference.Value -notlike 'S-1-5-83-*' })
-      $only = $own.Count -eq 1 -and $own[0].IdentityReference.Value -eq $Sid -and
-          $own[0].FileSystemRights -eq [Security.AccessControl.FileSystemRights]::FullControl -and
-          "$($own[0].AccessControlType)" -eq 'Allow' -and "$($own[0].InheritanceFlags)" -eq 'None'
-      if (-not $acl.AreAccessRulesProtected -and $only) { return }
+      {{ wsl_move_rehearsal_procedure_lib }}
+      $sddl = Get-TnwksSddl $Path
+      $parts = Get-TnwksSddlParts $sddl
+      # What the folder gives the file once it has no protection.
+      $gives = Get-TnwksFileGives $Path ([pscustomobject]@{ protected = $false; owner = $parts.owner })
+      $already = -not $parts.protected -and $parts.aces -eq "A;;0x1f01ff;;;$Sid" -and $parts.deny -eq 0 -and $parts.inherited -eq $gives
+      if ($already) { return }
       $Ansible.Changed = $true
       if ($PSCmdlet.ShouldProcess($Path, 'take the rules of the folder')) {
-          # No protection: Windows adds the inherited rules of the folder. The
-          # rules only: A stays the owner.
-          $acl.SetAccessRuleProtection($false, $false)
-          foreach ($rule in $own) { [void]$acl.RemoveAccessRuleSpecific($rule) }
-          $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
-              (New-Object Security.Principal.SecurityIdentifier $Sid), 'FullControl', 'Allow')))
-          $file.SetAccessControl($acl)
+          # The rules of WSL stay, as they are: a VM may run.
+          $wslSids = 'S-1-5-83-1-[0-9]+-[0-9]+-[0-9]+-[0-9]+' + $(if ($Capability) { '|' + [regex]::Escape($Capability) } else { '' })
+          $wslRules = @([regex]::Matches($sddl, '\(A;;(FA|0x1[fF]01[fF]{2});;;(' + $wslSids + ')\)') | ForEach-Object { $_.Value }) -join ''
+          # No protection: Windows gives the inherited rules of the folder in
+          # this write. The owner stays. The take of ownership first, then the
+          # owner and the rules in one write, as the procedure writes.
+          [TnwksSecurity]::SetOwner($Path, 'BA')
+          [TnwksSecurity]::SetRules($Path, "O:$($parts.owner)D:AI(A;;FA;;;$Sid)$wslRules")
+          $after = Get-TnwksSddlParts (Get-TnwksSddl $Path)
+          Assert-Tnwks (-not $after.protected -and $after.inherited -eq $gives) (
+              "A's disk file has not the inherited rules that its folder gives: '$($after.inherited)', not '$gives'")
       }
   vars:
     ansible_become: true

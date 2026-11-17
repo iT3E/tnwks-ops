@@ -119,7 +119,7 @@ def test_only_the_rehearsal_sets_the_option_that_keeps_the_enabled_state():
     assert others and not any("keep_task_enabled_state" in path.read_text() for path in others)
     for path in ANSIBLE.glob("playbooks/*.yml"):
         assert "keep_task_enabled_state" not in path.read_text(), path.name
-    setup = next(t for t in tasks_of("setup.yml") if t.get("name") == "Tasks of the accounts")
+    setup = next(t for t in tasks_of("host_files.yml") if t.get("name") == "Tasks of the accounts")
     assert setup["tnwks_win_scheduled_task"]["keep_task_enabled_state"] == "{{ task.step == 'start' }}"
     again = next(t for t in tasks_of("window.yml") if t.get("name") == "An apply after the window does not change the start tasks")
     assert again["tnwks_win_scheduled_task"]["keep_task_enabled_state"] is True
@@ -168,8 +168,10 @@ def test_the_baseline_of_the_live_parts_is_read_before_the_first_account():
     assert "windows-host.yml --limit WSL-02" not in docs
     marker = next(t for t in tasks_of("setup.yml") if t.get("name") == "The state file holds no marker")
     assert marker["ansible.builtin.assert"]["that"] == "(wsl_move_rehearsal_setup_markers.output | last | int) == 0"
-    # Each read of the rules converts an alias to its SID, as the procedure does.
-    assert "$f[-1] = ConvertTo-Sid $f[-1]" in (ROLE / "tasks/read_disk.yml").read_text()
+    # Each read of the rules is the procedure's (Get-TnwksSddlParts converts an alias to
+    # its SID), from the copy of the procedure on the host.
+    for name in ("read_disk.yml", "older_disk.yml"):
+        assert "{{ wsl_move_rehearsal_procedure_lib }}" in (ROLE / "tasks" / name).read_text(), name
     # No cmdlet of the role takes a plain password.
     for path in ROLE.rglob("*"):
         if path.is_file():
@@ -835,9 +837,46 @@ class TnwksSecurity {
     }
     static [string] Leaf([string]$Path) { return [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($Path)) + '/' + [IO.Path]::GetFileName($Path) }
     static [string] ReadSddl([string]$Path) {
+        # $global:ReadSeq: the reads of a file in turn, one more for each wait (Start-Sleep).
+        if ($global:ReadSeq -and $global:ReadSeq.ContainsKey($Path)) {
+            $q = @($global:ReadSeq[$Path]); return $q[[Math]::Min([int]$global:ReadAt, $q.Count - 1)]
+        }
+        # A folder gives its files exactly the rules of $global:Inherit (as OI rules).
+        if ([IO.Directory]::Exists($Path)) {
+            if ($global:FolderAcls -and $global:FolderAcls.ContainsKey($Path)) { return $global:FolderAcls[$Path] }
+            return 'O:BAD:P' + ("$($global:Inherit[$Path])" -replace ';ID;', ';OI;')
+        }
         if (-not [IO.File]::Exists($Path)) { throw [IO.FileNotFoundException]::new($Path) }
         if ($global:Acls.ContainsKey($Path)) { return $global:Acls[$Path] }
-        return 'O:BAD:(A;ID;FA;;;SY)'
+        # A file that SYSTEM made: the rules that its folder gives, owner the Administrators.
+        return 'O:BA' + [TnwksSecurity]::FileGives([TnwksSecurity]::ReadSddl([IO.Path]::GetDirectoryName($Path)), 'BA')
+    }
+    # What a folder gives a new file in it, by the rule of inheritance (the stand-in of
+    # CreatePrivateObjectSecurityEx): each rule of the folder that reaches a file (OI,
+    # with or without IO and NP; CI alone does not), with the flag ID only, CREATOR
+    # OWNER as the owner of the file, and each generic right as the rights of a file.
+    static [string] FileGives([string]$FolderSddl, [string]$Owner) {
+        $names = @{ GA = [int64]0x10000000; GR = [int64]2147483648; GW = [int64]0x40000000; GX = [int64]0x20000000
+            FA = [int64]0x1F01FF; FR = [int64]0x120089; FW = [int64]0x120116; FX = [int64]0x1200A0
+            CC = [int64]0x1; DC = [int64]0x2; LC = [int64]0x4; SW = [int64]0x8; RP = [int64]0x10; WP = [int64]0x20
+            DT = [int64]0x40; LO = [int64]0x80; CR = [int64]0x100; SD = [int64]0x10000; RC = [int64]0x20000
+            WD = [int64]0x40000; WO = [int64]0x80000 }
+        $generic = @{ [int64]2147483648 = [int64]0x120089; [int64]0x40000000 = [int64]0x120116
+            [int64]0x20000000 = [int64]0x1200A0; [int64]0x10000000 = [int64]0x1F01FF }
+        $out = ''
+        $dacl = if ($FolderSddl -match 'D:[A-Z]*((\([^)]*\))*)') { $Matches[1] } else { '' }
+        foreach ($m in [regex]::Matches($dacl, '\(([^)]*)\)')) {
+            $f = $m.Groups[1].Value -split ';'
+            $flags = @(for ($i = 0; $i + 1 -lt $f[1].Length; $i += 2) { $f[1].Substring($i, 2) })
+            if ($flags -notcontains 'OI') { continue }
+            [int64]$mask = 0
+            if ($f[2] -match '^0x') { $mask = [Convert]::ToInt64($f[2].Substring(2), 16) }
+            else { for ($i = 0; $i + 1 -lt $f[2].Length; $i += 2) { $mask = $mask -bor $names[$f[2].Substring($i, 2)] } }
+            foreach ($g in $generic.Keys) { if ($mask -band $g) { $mask = ($mask -band (-bnot $g)) -bor $generic[$g] } }
+            $sid = if ($f[5] -in @('CO', 'S-1-3-0')) { $Owner } else { $f[5] }
+            $out += '({0};ID;0x{1:x};;;{2})' -f $f[0], $mask, $sid
+        }
+        return 'D:AI' + $out
     }
     static [void] SetOwner([string]$Path, [string]$Owner) {
         $s = [TnwksSecurity]::ReadSddl($Path)
@@ -859,7 +898,13 @@ class TnwksSecurity {
         # With no protection, the inherited rules come from the folder of the file,
         # and a CREATOR OWNER rule (CO) of the folder names the owner of this write.
         $written = $dacl
-        if ($dacl -notmatch '^D:[A-Z]*P') { $written += ("$($global:Inherit[[IO.Path]::GetDirectoryName($Path)])" -replace ';;;CO\)', ";;;$owner)") }
+        $folder = [IO.Path]::GetDirectoryName($Path)
+        if ($dacl -notmatch '^D:[A-Z]*P') {
+            if ($global:FolderAcls -and $global:FolderAcls.ContainsKey($folder)) {
+                $g = [TnwksSecurity]::FileGives($global:FolderAcls[$folder], $owner)
+                $written += $g.Substring(4)
+            } else { $written += ("$($global:Inherit[$folder])" -replace ';;;CO\)', ";;;$owner)") }
+        }
         $s = "O:$owner$written"
         if ($global:AclEdit -and $Path -like '*ext4.vhdx') { $s = & $global:AclEdit $s }
         $global:Acls[$Path] = $s
@@ -899,7 +944,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
                config: dict | None = None, tasks: dict | None = None, acl_file: str | None = None,
                marker_a: bool = False, disabled: str | None = None, acl_edit: str = "", vm_rule: str = "",
                acls: dict | None = None, inherit: dict | None = None, enabled: str = "", queued_polls: int = 0,
-               window: Path = WINDOW) -> dict:
+               window: Path = WINDOW, folder_acls: dict | None = None) -> dict:
     root = tmp_path / "root"
     for sub in ("a", "b", "state", "log/a", "log/b"):
         (root / sub).mkdir(parents=True, exist_ok=True)
@@ -922,6 +967,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
         "acl_file": str(root / "state/disk.sddl"), "version_file": str(root / "state/wsl-version.txt"),
         "service_binary": str(root / "no-such-binary.exe"), "restart": restart, "session_check": False, "task_minutes": 1,
         "disk_rule": {"owner": DEFAULTS["wsl_move_rehearsal_disk_owner"], "new_mask": DEFAULTS["wsl_move_rehearsal_disk_new_mask"]},
+        "vm_capability_sid": DEFAULTS["wsl_move_rehearsal_vm_capability_sid"],
         "present": {"account": "tnwks-moverh-a", "folder": str(root / "a"), "result_dir": str(root / "log/a"),
                     "window_tasks": {k: f"tnwks-moverh-a-{v}" for k, v in names.items()},
                     "disable_tasks": ["tnwks-moverh-a-start"], "start_tasks": ["tnwks-moverh-a-start"]},
@@ -970,6 +1016,7 @@ $global:EnableText = {ps(enabled)}
 $global:QueuedPolls = {queued_polls}
 $global:FolderA = {ps(str(root / "a"))}; $global:FolderB = {ps(str(root / "b"))}
 $global:Inherit = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (inherit or {}).items()})}.PSObject.Properties) {{ $global:Inherit[$p.Name] = $p.Value }}
+$global:FolderAcls = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (folder_acls or {}).items()})}.PSObject.Properties) {{ $global:FolderAcls[$p.Name] = $p.Value }}
 if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false'}) {{
     foreach ($t in @($global:Running.Keys | Where-Object {{ $global:Running[$_] }})) {{
         $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}) }}
@@ -1022,7 +1069,7 @@ def test_the_window_moves_the_file_in_order_and_logs_each_moment_in_administrato
     assert groups == ["group: tnwks-moverh-a joined Administrators", "group: tnwks-moverh-a left Administrators"]
     # The join is before step 1, the leave is step 7.
     log = out["log"]
-    assert log.index(groups[0]) < next(i for i, line in enumerate(log) if line.startswith("step 1:"))
+    assert log.index(groups[0]) < next(i for i, line in enumerate(log) if line.startswith("step 1: WSL"))
     assert log.index("step 6 passed") < log.index(groups[1]) < log.index("step 7 passed")
     # The restart is behind the switch: off, the run logs it and does not restart.
     assert "restart" not in calls
@@ -1289,26 +1336,27 @@ def test_a_window_removes_the_saved_rules_of_an_earlier_window_so_its_way_back_r
     assert out["sec_calls"] == [] and out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL
 
 
-VM_RULE = "(A;;0x1301bf;;;S-1-5-83-1-11-22-33-44)"
+VM_RULE = "(A;;FA;;;S-1-5-83-1-11-22-33-44)"
+CAP_RULE = f"(A;;FA;;;{DEFAULTS['wsl_move_rehearsal_vm_capability_sid']})"
 
 
 @needs_pwsh
 def test_the_checks_of_the_rules_allow_the_rule_of_a_vm_and_a_write_clears_it(tmp_path):
     """WSL adds a rule of a virtual machine SID at an attach: the checks of the rules
-    allow it. Step 4 and way back step 3 replace every rule, and right after each, the
-    rules must be the ones written: a stale rule of a VM goes."""
+    allow it. Step 4 and way back step 3 replace every rule and write no rule of WSL,
+    and right after each, the rules must be the ones written: a stale rule of a VM goes."""
     stale = OLD_SDDL + VM_RULE
     forward = run_window(tmp_path / "1", FORWARD_TEST, vm_rule=VM_RULE, acls={"a/ext4.vhdx": stale})
     assert forward["code"] == 0, forward["log"]
     assert forward["acls"][str(Path(forward["root"]) / "b/ext4.vhdx")].endswith(f"(A;;FA;;;{B_SID}){VM_RULE}")
-    # The import gives another path: the way back writes the saved rules (with the
-    # stale rule that they held when step 4 saved them), not the rule of B's VM.
+    # The import gives another path: the way back writes the saved rules without the
+    # stale rule of WSL that they held when step 4 saved them, and not the rule of B's VM.
     back = run_window(tmp_path / "2", FORWARD_TEST, vm_rule=VM_RULE, acls={"a/ext4.vhdx": stale},
                       results={"tnwks-moverh-b-import": {"disk": "elsewhere"}})
     assert back["code"] == 4, back["log"]
-    assert back["calls"].index("move b -> a") < back["calls"].index(f"acl a/ext4.vhdx {stale}")
+    assert back["calls"].index("move b -> a") < back["calls"].index(f"acl a/ext4.vhdx {OLD_SDDL}")
     # Then A's import back attaches the file in a new VM.
-    assert back["acls"][str(Path(back["root"]) / "a/ext4.vhdx")] == stale + VM_RULE
+    assert back["acls"][str(Path(back["root"]) / "a/ext4.vhdx")] == OLD_SDDL + VM_RULE
     # Another rule after a write is not a pass.
     other = "{ param($s) $s + '(A;;FA;;;S-1-5-21-9-9-9-1003)' }"
     out = run_window(tmp_path / "3", FORWARD_TEST, acl_edit=other)
@@ -1323,6 +1371,133 @@ def test_the_checks_of_the_rules_allow_the_rule_of_a_vm_and_a_write_clears_it(tm
     lost = "{ param($s) $s.Replace('(A;;FA;;;" + B_SID + ")', '" + VM_RULE + "') }"
     out = run_window(tmp_path / "5", FORWARD_TEST, acl_edit=lost)
     assert out["code"] == 4 and "fail: check failed: the moved file has another owner or other rules" in out["log"]
+
+
+@needs_pwsh
+def test_the_checks_of_the_rules_allow_one_rule_of_the_capability_of_the_vm_and_no_other_form(tmp_path):
+    """While a VM runs, its disk file may also hold a rule of the capability SID of
+    vmWorkerProcess (the config's value): the checks allow one, a write clears it, and
+    right after a write it is not allowed. Another capability SID, two of them, a deny
+    rule, or a rule of WSL in another form is a rule like any other: not a pass."""
+    both = VM_RULE + CAP_RULE
+    out = run_window(tmp_path / "1", FORWARD_TEST, vm_rule=both, acls={"a/ext4.vhdx": OLD_SDDL + both})
+    assert out["code"] == 0, out["log"]
+    assert out["acls"][str(Path(out["root"]) / "b/ext4.vhdx")].endswith(f"(A;;FA;;;{B_SID}){both}")
+    # The write of step 4 dropped the stale rules of WSL that A's file held.
+    assert not any(CAP_RULE in c or VM_RULE in c for c in out["sec_calls"] if c.startswith("rules "))
+    # Right after a write: no rule of the capability.
+    cap_after = "{ param($s) $s + '" + CAP_RULE + "' }"
+    out = run_window(tmp_path / "2", FORWARD_TEST, acl_edit=cap_after)
+    assert out["code"] == 1 and "fail: check failed: the moved file has another owner or other rules" in out["log"]
+    # The compare that allows WSL's rules (the restore-only condition of way back step 3,
+    # in a boot run): the saved set with WSL's rules is as saved, and nothing is
+    # written; with a rule in any other form, step 3 restores the saved set.
+    second_vm = "(A;;FA;;;S-1-5-83-1-55-66-77-88)"
+    allowed = (VM_RULE, CAP_RULE, VM_RULE + second_vm, VM_RULE + CAP_RULE)
+    refused = (CAP_RULE + CAP_RULE, "(A;;FA;;;S-1-15-3-1024-1-2-3-4-5-6-7-8)", f"(D;;FA;;;{A_SID})",
+               VM_RULE.replace("(A;;FA;", "(D;;FA;"), VM_RULE.replace(";FA;", ";0x1301bf;"),
+               VM_RULE.replace("(A;;", "(A;OI;"), "(A;;FA;;;S-1-5-83-1-11-22-33-44-55)", "(A;;FA;;;S-1-5-83-1-11-22-33)",
+               "(A;;FA;;;S-1-5-83-0-11-22-33-44)")
+    for i, extra in enumerate(allowed + refused):
+        out = run_window(tmp_path / f"x{i}", mode="boot", state=BOOT_STATE, disk=("a",), acl_file=OLD_SDDL, marker_a=True,
+                         disabled="tnwks-moverh-a-start", acls={"a/ext4.vhdx": OLD_SDDL + extra},
+                         tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
+        assert out["code"] == 0, (extra, out["log"])
+        as_saved = '"old_as_saved":true' in next(line for line in out["log"] if line.startswith("read: "))
+        if extra in allowed:
+            assert as_saved and out["sec_calls"] == [], extra
+        else:
+            assert not as_saved and out["sec_calls"] == ["owner a/ext4.vhdx BA", f"rules a/ext4.vhdx {OLD_SDDL}"], extra
+            assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_SDDL, extra
+
+
+@needs_pwsh
+def test_the_window_stops_at_step_1_when_the_disk_file_has_not_the_inherited_rules_of_its_folder(tmp_path):
+    """Before any change: a disk file with no protection must have the inherited rules
+    that its folder gives (way back step 3 writes the explicit rules, and Windows gives
+    the inherited ones from the folder). A file that lost them stops the window with
+    nothing changed, and the log holds both sets, each account masked."""
+    bare = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})"
+    out = run_window(tmp_path / "1", FORWARD_TEST, acls={"a/ext4.vhdx": bare}, inherit=INHERIT)
+    assert out["code"] == 3, out["log"]
+    assert out["markers"] == [] and out["sec_calls"] == [] and out["admins"] == []
+    assert not any(c.startswith(("join ", "disable ", "move ")) for c in out["calls"])
+    stop = next(line for line in out["log"] if line.startswith("stop at step 1: the inherited rules"))
+    assert "The file: ''" in stop and "A;ID;0x1301bf;;;<present>" in stop and A_SID not in stop
+    # The rules that the folder gives: a pass, as is a protected file in any folder.
+    ok = run_window(tmp_path / "2", FORWARD_TEST, acls={"a/ext4.vhdx": OLD_INHERITS}, inherit=INHERIT)
+    assert "step 1: the disk file has the inherited rules that its folder gives" in ok["log"]
+    assert ok["log"].index("step 1: the disk file has the inherited rules that its folder gives") < next(
+        i for i, line in enumerate(ok["log"]) if line.startswith("group: "))
+    protected = run_window(tmp_path / "3", FORWARD_TEST, inherit=INHERIT)
+    assert protected["code"] == 0 and "step 1: the disk file has the inherited rules that its folder gives" in protected["log"]
+    # Another inherited rule than the folder gives: a stop.
+    other = OLD_INHERITS.replace("(A;ID;FR;;;AU)", "(A;ID;FA;;;AU)")
+    out = run_window(tmp_path / "4", FORWARD_TEST, acls={"a/ext4.vhdx": other}, inherit=INHERIT)
+    assert out["code"] == 3 and out["markers"] == [], out["log"]
+
+
+@needs_pwsh
+def test_the_way_back_restores_a_saved_set_with_no_inherited_rule_and_notes_what_the_folder_gives(tmp_path):
+    """A saved set with the flag AI and no inherited rule: way back step 3 writes its
+    owner, protection and explicit rules at the old path, and Windows gives the rules of
+    the folder. The check after it compares the owner, the protection and the explicit
+    rules exactly, and the inherited rules with what the folder gives: a pass, with a
+    note of the difference from the saved set. The boot run never runs the guard of
+    window step 1. The restore-only condition uses the same compare."""
+    bare = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})"
+    out = run_window(tmp_path / "1", mode="boot", state=BOOT_STATE, disk=("b",), acl_file=bare, marker_a=True,
+                     disabled="tnwks-moverh-a-start", acls={"b/ext4.vhdx": MOVED}, inherit=INHERIT,
+                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
+    assert out["code"] == 0, out["log"]
+    assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_INHERITS
+    note = next(line for line in out["log"] if line.startswith("way back 3: note: the inherited rules differ"))
+    assert "saved ''" in note and "A;ID;0x1301bf;;;<present>" in note
+    assert not any("step 1: " in line and "inherited" in line for line in out["log"])
+    # The file at the old path with the saved explicit rules and the inherited rules of
+    # its folder: as saved, so step 3 only restores nothing.
+    done = run_window(tmp_path / "2", mode="boot", state=BOOT_STATE, disk=("a",), acl_file=bare, marker_a=True,
+                      disabled="tnwks-moverh-a-start", acls={"a/ext4.vhdx": OLD_INHERITS}, inherit=INHERIT,
+                      tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
+    assert done["code"] == 0, done["log"]
+    assert '"old_as_saved":true' in next(line for line in done["log"] if line.startswith("read: "))
+    assert done["sec_calls"] == [] and "way back 3: the file has its saved owner and rules" in done["log"]
+
+
+FOLDER_VECTORS = [
+    (f"O:BAD:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;{PERSON_SID})", A_SID,
+     f"(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;{PERSON_SID})"),
+    ("O:BAD:(A;ID;FA;;;BA)(A;OICIIOID;GA;;;BA)(A;ID;FA;;;SY)(A;OICIIOID;GA;;;SY)(A;ID;0x1301bf;;;AU)"
+     "(A;OICIIOID;SDGXGWGR;;;AU)(A;ID;0x1200a9;;;BU)(A;OICIIOID;GXGR;;;BU)", A_SID,
+     "(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;0x1301bf;;;AU)(A;ID;0x1200a9;;;BU)"),
+    (f"O:BAD:PAI(A;OIIO;0x1301bf;;;CO)(A;OIIO;FR;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;0x100002;;;{A_SID})", A_SID,
+     f"(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)(A;ID;FA;;;SY)(A;ID;FA;;;BA)"),
+]
+
+
+@needs_pwsh
+def test_what_a_folder_gives_a_file_follows_the_rule_of_inheritance_on_three_real_forms():
+    """The stand-in of Windows' inheritance function (TnwksSecurity::FileGives), compared
+    by Get-TnwksSddlParts, on three forms of a folder: a folder of a profile, a folder
+    under the root of a drive (generic rights, OI with IO), and the folder of A in the
+    rehearsal (CREATOR OWNER, a rule for folders only). The host proves the function of
+    Windows on the same forms against a real write (hand test 4)."""
+    lib = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_procedure_lib"]
+    lines = []
+    for folder, owner, want in FOLDER_VECTORS:
+        lines.append(f"$have = Get-TnwksFolderGives '{folder}' '{owner}'; $want = (Get-TnwksSddlParts 'D:AI{want}').inherited\n"
+                     "[Console]::Out.WriteLine(\"$($have -eq $want)|$have|$want\")")
+    run = pwsh(WINDOW_FAKES + f"$Procedure = '{WINDOW}'; $Capability = ''\n" + lib + "\n" + "\n".join(lines))
+    assert run.returncode == 0, run.stderr
+    results = run.stdout.strip().splitlines()
+    assert len(results) == 3 and all(r.startswith("True|") for r in results), results
+    # The role asks Windows: the parent, the owner as the creator with an empty DACL, the
+    # generic mapping of files, and no container.
+    text = WINDOW.read_text()
+    assert "CreatePrivateObjectSecurityEx(parent, creator, out created, IntPtr.Zero, false, 0x1 | 0x8 | 0x10, token, ref map)" in text
+    assert "map.Read = 0x120089; map.Write = 0x120116; map.Execute = 0x1200A0; map.All = 0x1F01FF;" in text
+    assert '"O:" + owner + "G:" + owner + "D:"' in text
+    assert "(Get-TnwksSddlParts ([TnwksSecurity]::FileGives($FolderSddl, $Owner))).inherited" in text
 
 
 @needs_pwsh
@@ -1348,7 +1523,7 @@ def test_the_log_holds_the_rules_before_the_move_and_after_the_import_with_each_
     log = out["log"]
     assert "step 4: saved the rules of the disk file; size 10; the rules: O:<present>D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<present>)" in log
     assert ("step 6: the rules of the disk file after the import: "
-            "O:<new>D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<new>)(A;;0x1301bf;;;S-1-5-83-1-<vm>)") in log
+            "O:<new>D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<new>)(A;;FA;;;S-1-5-83-1-<vm>)") in log
     # The class of a VM's SID stays (S-1-5-83-1), and no SID of an account or a VM.
     assert not any(re.search(r"S-1-5-21-|S-1-5-83-\d+-\d", line) for line in log if line.startswith(("step 4", "step 6")))
     # The import that fails leaves its line too, before the way back.

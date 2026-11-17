@@ -16,7 +16,9 @@
 # distro. A's read starts its distro, as the keepalive holds it in the real
 # case; window step 3 stops it.
 #
-# First, a read of A's disk file against the rules that the last window saved
+# First, the copies of the scripts, the configs and the tasks of this
+# release on the host (host_files.yml). Then a read of A's disk file against
+# the rules that the last window saved
 # (after a way back), the read of the state and their checks, all before any
 # change. Then the rules of an older WSL on A's disk file and its folder
 # (older_disk.yml, the same tasks as setup), so that each window starts from
@@ -32,6 +34,16 @@
 
 - name: Read the accounts of the rehearsal
   ansible.builtin.include_tasks: read_accounts.yml
+
+# The copies of this release on the host before anything reads with them
+# (read_disk.yml runs the functions of the procedure's copy): only at the
+# marker of no started window, which host_files.yml checks first. The other
+# checks of the state follow; a stop there leaves the copies of this release
+# and no started window.
+- name: The copies of the scripts, the configs and the tasks on the host (refresh)
+  ansible.builtin.include_tasks: host_files.yml
+  vars:
+    wsl_move_rehearsal_host_files: refresh
 
 - name: The window, and the reads after it
   when: not ansible_check_mode
@@ -127,6 +139,18 @@
     # The first change of the phase, after the checks of the state.
     - name: A's disk file like a file of an older WSL
       ansible.builtin.include_tasks: older_disk.yml
+
+    # Right after the shaping, before A's read starts its distro: the next
+    # reads (after A's read, and the log of window step 4 after A's stop)
+    # show whether WSL's grant at the start keeps the inherited rules.
+    - name: The rules of A's disk file right after the rules of an older WSL
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: a, rule: none}
+
+    - name: The owner and the rules of A's disk file right after the rules of an older WSL, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
 
     - name: A reads its distro before the window
       ansible.builtin.include_tasks: run_task.yml
@@ -288,6 +312,7 @@
         that:
           - running.rules_ok
           - running.vm > 0
+          - running.capability <= 1
         fail_msg: "While B's VM runs, the rules of the file are not as they should be: {{ running }}"
         quiet: true
 
@@ -326,6 +351,7 @@
         that:
           - stopped.rules_ok
           - stopped.vm == 0
+          - stopped.capability == 0
         fail_msg: "After the clean stop of B's VM, the rules of the file are not as they should be: {{ stopped }}"
         quiet: true
 

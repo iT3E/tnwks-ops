@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Rehearsal of the move: each phase takes the scripts, configs and tasks of the role from one task file, refreshed only with no started window and compared by SHA-256 before each run of the procedure; the checks compare the inherited rules of a disk file with what its folder gives (Windows'' own inheritance function), allow the capability SID of the VM and the four-part VM SID only as allow rules with full control, and refuse deny rules; window step 1 stops on a disk file without the inherited rules of its folder; A reads the folder of its disk file'
+time: 2026-11-17T14:00:00.000000+00:00

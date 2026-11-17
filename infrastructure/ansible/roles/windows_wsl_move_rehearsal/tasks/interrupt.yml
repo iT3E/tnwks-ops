@@ -12,6 +12,13 @@
 - name: The groups at the start
   ansible.builtin.include_tasks: groups.yml
 
+# The window of this phase runs with the copies of this release: it starts
+# from the marker of a done way back.
+- name: The copies of the scripts, the configs and the tasks on the host (refresh)
+  ansible.builtin.include_tasks: host_files.yml
+  vars:
+    wsl_move_rehearsal_host_files: refresh
+
 - name: The interrupted window, and the reads after it
   when: not ansible_check_mode
   block:

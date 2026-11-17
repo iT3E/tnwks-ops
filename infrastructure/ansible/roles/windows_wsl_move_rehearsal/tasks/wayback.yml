@@ -24,6 +24,13 @@
 - name: Read the accounts of the rehearsal
   ansible.builtin.include_tasks: read_accounts.yml
 
+# The way back runs with the copies that the window started with, never
+# others: a copy that differs from the role's stops the phase.
+- name: The copies of the scripts, the configs and the tasks on the host (assert)
+  ansible.builtin.include_tasks: host_files.yml
+  vars:
+    wsl_move_rehearsal_host_files: assert
+
 - name: The way back, and the reads after it
   when: not ansible_check_mode
   block:
