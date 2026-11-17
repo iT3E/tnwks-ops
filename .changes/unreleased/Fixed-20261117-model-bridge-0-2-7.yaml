@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'model-bridge: image 0.2.7, a call after a model call of the engine that no caller waits for is rebuilt at once and no longer waits for the call timeout (it also brings the releases 0.2.4 to 0.2.6)'
-time: 2026-11-17T19:45:00.000000+00:00

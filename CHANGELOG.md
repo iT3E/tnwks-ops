@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.189.9 - 2026-11-17
+
+### Fixed
+
+* model-bridge: image 0.2.7, a call after a model call of the engine that no caller waits for is rebuilt at once and no longer waits for the call timeout (it also brings the releases 0.2.4 to 0.2.6)
+
 ## v2.189.8 - 2026-11-17
 
 ### Fixed
