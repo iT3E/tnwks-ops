@@ -497,13 +497,60 @@ def test_a_task_that_can_not_start_is_not_run_also_after_an_earlier_good_run(tmp
     # A new run with exit 0 and no result of its own: it started, so not a pass either.
     started = runner_output(tmp_path, "a", "import", None)
     assert started[-1]["ran"] is True and started[-1]["code"] == 0 and started[-1]["result"] is None
+    # A new run that exits 1 and writes a result: only its result tells it from a task
+    # that could not start.
+    failed_run = runner_output(tmp_path, "a", "import", {"disk": "new"}, code=1)
+    assert failed_run[-1]["ran"] is True and failed_run[-1]["code"] == 1 and failed_run[-1]["result"] is not None
     expect = {"key": "a", "step": "import", "expect": "not-run"}
+    forms = (never, refused, earlier, new_run, started, failed_run)
     results = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_run": expect, "wsl_move_rehearsal_run_out": registered(out)},
-                                    "tasks": checks_of("run_task.yml")} for out in (never, refused, earlier, new_run, started)])
+                                    "tasks": checks_of("run_task.yml")} for out in forms])
     for name, result in zip(("never", "refused", "earlier"), results[:3]):
         assert not passed(result), (name, passed(result))
-    for name, result in zip(("new run", "started"), results[3:]):
+    for name, result in zip(("new run", "started", "exit 1 with a result"), results[3:]):
         assert failed_by_assert(result, "failed_when of Run the task"), (name, result)
+
+
+STRIP_CASE = ("The task of B that removes SYSTEM and the Administrators from the rules of its disk file",
+              "B removes SYSTEM and the Administrators from the rules of its disk file",
+              "Only B has a rule on its disk file before the way back")
+
+
+@no_ansible
+def test_the_stated_case_of_the_way_back_runs_by_default_and_a_switch_leaves_only_it_out(tmp_path):
+    """The three tasks of the stated case (B removes SYSTEM and the Administrators from the
+    rules of its disk file) sit in one block under wsl_move_rehearsal_wayback_strip_case,
+    which is true when it is not given. With false, as -e gives it (a text), the block
+    does not run; no other task of the phase names the switch or the result of the case,
+    so the way back and each other check run as they are."""
+    doc = yaml.safe_load((ROLE / "tasks/wayback.yml").read_text())
+    outer = next(t for t in doc if t.get("name") == "The way back, and the reads after it")
+    blocks = [t for t in outer["block"] if "block" in t]
+    assert len(blocks) == 1
+    case = blocks[0]
+    assert [t["name"] for t in case["block"]] == list(STRIP_CASE)
+    condition = case["when"]
+    assert condition == "wsl_move_rehearsal_wayback_strip_case | default(true) | bool"
+    # The rest of the phase: the same tasks in the same order, none under the switch.
+    names = [t.get("name") for t in tasks_in("wayback.yml")]
+    rest = [n for n in names if n not in STRIP_CASE]
+    assert rest.index("The import back task of A can not start before the way back") < rest.index(
+        "The window procedure, way back mode") < rest.index("The rules of A's disk file after the way back") < rest.index(
+        "A owns the distro again, with its data; B lists none; the logs show each moment")
+    for task in tasks_in("wayback.yml"):
+        if task.get("name") in STRIP_CASE:
+            continue
+        text = yaml.safe_dump(task)
+        assert "wayback_strip_case" not in text and "strip-rules" not in text, task.get("name")
+    for task in [t for t in doc if "block" not in t] + [t for t in outer["block"] if "block" not in t]:
+        assert "wayback_strip_case" not in str(task.get("when", "")), task.get("name")
+    # The value of the switch, as the play reads it: not given, true, and the texts of -e.
+    plays = [{"vars": v, "tasks": [{"name": "the case runs", "ansible.builtin.assert": {"that": [condition], "quiet": True}}]}
+             for v in ({}, {"wsl_move_rehearsal_wayback_strip_case": True},
+                       {"wsl_move_rehearsal_wayback_strip_case": "false"}, {"wsl_move_rehearsal_wayback_strip_case": False})]
+    default, true, text_false, false = run_plays(tmp_path, plays)
+    assert not passed(default) and not passed(true)
+    assert failed_by_assert(text_false, "the case runs") and failed_by_assert(false, "the case runs")
 
 
 def test_the_check_step_writes_the_repeated_keys_as_a_count_and_one_text():

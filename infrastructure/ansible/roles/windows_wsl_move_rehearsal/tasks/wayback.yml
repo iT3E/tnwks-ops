@@ -13,7 +13,9 @@
 # Before the way back mode, the stated case of a file that grants SYSTEM
 # nothing: B, the owner of its disk file, removes SYSTEM and the
 # Administrators from its rules. The way back restores the saved owner and
-# rules all the same, and the play reads them after it.
+# rules all the same, and the play reads them after it. The case runs by
+# default; -e wsl_move_rehearsal_wayback_strip_case=false leaves it out for
+# one run.
 
 - name: The live parts at the start
   ansible.builtin.include_tasks: live.yml
@@ -45,33 +47,40 @@
     # Administrators from its rules. Way back step 3 must restore the saved
     # owner and rules all the same, with the privileges of SYSTEM. The task
     # is registered here too: it came after the setup of a running rehearsal.
-    - name: The task of B that removes SYSTEM and the Administrators from the rules of its disk file
-      tnwks_win_scheduled_task:
-        name: "{{ wsl_move_rehearsal_prefix }}-{{ task.key }}-{{ task.step }}"
-        xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
-        s4u_user: "{{ wsl_move_rehearsal_accounts[task.key].name }}"
-        s4u_description: "{{ wsl_move_rehearsal_accounts[task.key].description }}"
-      vars:
-        task: {key: b, step: strip-rules}
-        ansible_become: true
-        ansible_become_method: ansible.builtin.runas
-        ansible_become_user: SYSTEM
+    # The case runs by default. -e wsl_move_rehearsal_wayback_strip_case=false
+    # leaves it out for one run: the way back and each other check stay as
+    # they are, and the saved owner and rules are checked after it all the
+    # same (the rules of A's disk file after the way back).
+    - name: The stated case of a file that grants SYSTEM nothing
+      when: wsl_move_rehearsal_wayback_strip_case | default(true) | bool
+      block:
+        - name: The task of B that removes SYSTEM and the Administrators from the rules of its disk file
+          tnwks_win_scheduled_task:
+            name: "{{ wsl_move_rehearsal_prefix }}-{{ task.key }}-{{ task.step }}"
+            xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
+            s4u_user: "{{ wsl_move_rehearsal_accounts[task.key].name }}"
+            s4u_description: "{{ wsl_move_rehearsal_accounts[task.key].description }}"
+          vars:
+            task: {key: b, step: strip-rules}
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
 
-    - name: B removes SYSTEM and the Administrators from the rules of its disk file
-      ansible.builtin.include_tasks: run_task.yml
-      vars:
-        wsl_move_rehearsal_run: {key: b, step: strip-rules}
+        - name: B removes SYSTEM and the Administrators from the rules of its disk file
+          ansible.builtin.include_tasks: run_task.yml
+          vars:
+            wsl_move_rehearsal_run: {key: b, step: strip-rules}
 
-    - name: Only B has a rule on its disk file before the way back
-      vars:
-        strip: "{{ wsl_move_rehearsal_runs['strip-rules'] | last }}"
-      ansible.builtin.assert:
-        that:
-          - strip.result.owner_self
-          - strip.result.system_or_admins == 0
-          - strip.result.rules == 1
-        fail_msg: "B did not remove SYSTEM and the Administrators from the rules of its disk file: {{ strip }}"
-        quiet: true
+        - name: Only B has a rule on its disk file before the way back
+          vars:
+            strip: "{{ wsl_move_rehearsal_runs['strip-rules'] | last }}"
+          ansible.builtin.assert:
+            that:
+              - strip.result.owner_self
+              - strip.result.system_or_admins == 0
+              - strip.result.rules == 1
+            fail_msg: "B did not remove SYSTEM and the Administrators from the rules of its disk file: {{ strip }}"
+            quiet: true
 
     - name: The window procedure, way back mode
       ansible.builtin.include_tasks: run_procedure.yml
