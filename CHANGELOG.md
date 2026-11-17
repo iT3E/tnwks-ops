@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.187.0 - 2026-11-17
+
+### Added
+
+* Agent platform: the finance app as a tool of the finance agent, read and write and never delete. A proxy in agents-finance holds the token of the agent at the app and lets through only an allow list of calls (GET, POST and PUT on the paths of the kept tools; each delete, trigger, rule write, export, attachment and setting refused). The MCP server of the app (fireflyiii-mcp 1.0.1, pinned by digest, 7 days of release age and a review for each update) calls the app through it with no token, and the sandboxes of the agent read through its read port, which lets through no write and is the only port of it that their network policy lets them reach, with no credential. The proxy drops or refuses a method override and lets through a write only with a JSON body, and the two pods resolve one name each. The agent filters and denies the same tools. A daily probe tests both clients of the proxy and the proxy itself, and a daily check tests the DNS rule. The token is a placeholder until the owner puts it in (docs/apps/agent-platform.md, "The finance app").
+
 ## v2.186.0 - 2026-11-17
 
 ### Added
