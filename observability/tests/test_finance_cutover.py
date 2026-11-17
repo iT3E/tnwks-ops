@@ -162,7 +162,7 @@ def run_restore(tmp, state=GOOD_STATE, vault=GOOD_VAULT, archive=STATE, vault_na
     script.write_text(text)
     script.chmod(0o644)
     result = subprocess.run(
-        [docker(), "run", "--rm", "--network", "none", "-u", f"{USER['runAsUser']}:{USER['runAsGroup']}",
+        [docker(), "run", "--rm", "--quiet", "--network", "none", "-u", f"{USER['runAsUser']}:{USER['runAsGroup']}",
          "-e", f"ARCHIVE={archive}", "-e", f"VAULT={vault_name}",
          "-v", f"{data}:/home/node/data", "-v", f"{script}:/s/restore.sh:ro",
          "--entrypoint", "sh", IMAGE, "/s/restore.sh"],
@@ -313,7 +313,7 @@ def run_values(env, config=None):
     (tmp / "config.yaml").write_text(gateway_config() if config is None else config)
     (tmp / "config.yaml").chmod(0o644)
     tmp.chmod(0o755)
-    args = [docker(), "run", "--rm", "--network", "none", "-v", f"{tmp}:/gateway:ro"]
+    args = [docker(), "run", "--rm", "--quiet", "--network", "none", "-v", f"{tmp}:/gateway:ro"]
     for key, value in env.items():
         args += ["-e", f"{key}={value}"]
     result = subprocess.run([*args, "--entrypoint", "sh", IMAGE, "-c", check["command"][2]],
