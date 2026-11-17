@@ -63,11 +63,11 @@ routes:
             name: Authorization
             prefix: "Bearer "
         keys:
-          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          - keyHash: "sha256:2999b940b101d4e6e12bf6892ed64e893e084afc69022e6cf2307c94e70aa842"
             metadata: {client: finance}
-          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+          - keyHash: "sha256:f90e324c19915593f3c590ff7f13b0228b3a6f4a2f7c5f96ddfb8c95b3aea3ae"
             metadata: {client: finance-probe}
-          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000002"
+          - keyHash: "sha256:e65ee3f86e8c4461ce8740868d2fb725d9d859460b856291715eefe9383ef7c9"
             metadata: {client: no-tools}
       timeout:
         requestTimeout: 60s
