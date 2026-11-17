@@ -24,6 +24,8 @@ wsl_move_rehearsal_account_config_common:
   linux_user: "{{ wsl_move_rehearsal_linux_user }}"
   data_token: "{{ wsl_move_rehearsal_data_token }}"
   icon_base64: "{{ wsl_move_rehearsal_icon_base64 }}"
+  distribution_conf: "{{ wsl_move_rehearsal_distribution_conf }}"
+  wsl_conf: "{{ wsl_move_rehearsal_wsl_conf }}"
   registration_values: "{{ wsl_move_rehearsal_registration_values }}"
 
 wsl_move_rehearsal_window_tasks:

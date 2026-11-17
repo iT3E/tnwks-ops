@@ -642,10 +642,22 @@ runs only when the lead gives it, in this order, and reads its result:
 
 ```sh
 cd infrastructure/ansible
-uv run ansible-playbook playbooks/windows-host.yml --limit WSL-02 --tags wsl-move-rehearsal \
+uv run ansible-playbook playbooks/windows-host.yml --limit 'localhost,WSL-02' --tags wsl-move-rehearsal \
   -e wsl_move_rehearsal_phase=<phase>
 uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02
 ```
+
+Each script that runs in a distro goes to `wsl.exe` as base64 in one fixed
+command, and the distro decodes and runs it. Windows PowerShell 5.1 does not
+escape a double quote inside an argument to a native program, so shell text
+passed as an argument breaks at its first quote. The check step reads each
+value by its key, not by its line.
+
+The limit of the phase run names `localhost` too: the first play of
+`windows-host.yml` runs on the controller and downloads the pinned root file
+system to its cache, and a limit of `WSL-02` alone skips that play. The setup
+then stops at its first step with a message that names the file and this
+limit. The check play runs on the Windows hosts only, so `WSL-02` is enough.
 
 A check run (`--check`) of any phase reads only: it starts no task, waits
 for nothing and moves no file. The registrations go through
@@ -690,9 +702,9 @@ lead's read of the nodes (Ready, and the same address) covers the live VM.
 
 | Phase | What it does, and what it shows |
 | --- | --- |
-| `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon). A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
+| `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon), and the check reads back each file by its SHA-256. A second setup over A's distro at its path imports nothing and writes the files again. A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
 | `window` | The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file, both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. Then B imports, unregisters and imports again into the same folder |
-| `wayback` | First, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started, no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the count of VM processes is that of the baseline, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro with the saved owner and rules of the file, B lists none |
+| `wayback` | First, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro with the saved owner and rules of the file, B lists none |
 | `interrupt` | The window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
 | `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task |
 | `after-boot` | The boot task ran the way back once: its marker first, no group step, no restart. A owns the distro, B lists none. Started again by hand, the boot task does nothing and writes no marker |

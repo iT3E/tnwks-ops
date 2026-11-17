@@ -159,6 +159,15 @@ function Invoke-TnwksAccountTask([string]$Task, [string]$ResultFile) {
     [pscustomobject]@{ code = $code; result = $result }
 }
 
+# Runs the stop task of an account. It passes only with a result of this run
+# with a shutdown that exited 0: LastTaskResult alone can be the 0 of an
+# earlier stop, when this start did not run.
+function Invoke-TnwksStopTask([pscustomobject]$Who) {
+    $stop = Invoke-TnwksAccountTask $Who.window_tasks.stop (Join-Path $Who.result_dir 'stop.json')
+    Assert-Tnwks ($stop.code -eq 0 -and $stop.result -and $stop.result.shutdown_exit -eq 0) `
+        "the stop task of $($Who.account) ended with $($stop.code), with $(if ($stop.result) { "shutdown exit $($stop.result.shutdown_exit)" } else { 'no result of this run' })"
+}
+
 # Whether a task is enabled: its flag, Settings.Enabled. Not its State: a task
 # with a running instance reads Running, also when it is disabled (TASK_STATE
 # reads Disabled only with no instance), and the start task of the present
@@ -378,8 +387,7 @@ function Invoke-TnwksForward {
     # (3) End their instances (a disabled task can still have one running), and
     # stop the VM of the present account.
     foreach ($t in @($present.disable_tasks)) { Stop-ScheduledTask -TaskName $t }
-    $stop = Invoke-TnwksAccountTask $present.window_tasks.stop (Join-Path $present.result_dir 'stop.json')
-    Assert-Tnwks ($stop.code -eq 0) "the stop task of $($present.account) ended with $($stop.code)"
+    Invoke-TnwksStopTask $present
     Wait-TnwksNoWsl $pSid $present.account
     Write-Log 'step 3 passed'
     # (4) The markers, then the move, the owner and the rules.
@@ -411,8 +419,7 @@ function Invoke-TnwksForward {
     # (6) The import of the new account, then its stop.
     $import = Invoke-TnwksAccountTask $new.window_tasks.import (Join-Path $new.result_dir 'import.json')
     Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $newPath, [StringComparison]::OrdinalIgnoreCase)) "the import of $($new.account) did not pass"
-    $stop = Invoke-TnwksAccountTask $new.window_tasks.stop (Join-Path $new.result_dir 'stop.json')
-    Assert-Tnwks ($stop.code -eq 0) "the stop task of $($new.account) ended with $($stop.code)"
+    Invoke-TnwksStopTask $new
     Wait-TnwksNoWsl $nSid $new.account
     Write-Log 'step 6 passed'
     # (7) The present account leaves Administrators.
@@ -447,8 +454,7 @@ function Invoke-TnwksWayBack {
         Disable-TnwksTask $t
         Stop-ScheduledTask -TaskName $t
     }
-    $stop = Invoke-TnwksAccountTask $new.window_tasks.stop (Join-Path $new.result_dir 'stop.json')
-    Assert-Tnwks ($stop.code -eq 0) "the stop task of $($new.account) ended with $($stop.code)"
+    Invoke-TnwksStopTask $new
     Wait-TnwksNoWsl $nSid $new.account
     Write-Log 'way back 2 passed'
     # (3) For step 4.
@@ -506,8 +512,7 @@ function Invoke-TnwksWayBack {
         # The import back started A's VM with that token: A's stop task ends
         # it first, and no WSL process of A is left. A has no batch right of
         # its own here: the play starts its start task after the run.
-        $stop = Invoke-TnwksAccountTask $present.window_tasks.stop (Join-Path $present.result_dir 'stop.json')
-        Assert-Tnwks ($stop.code -eq 0) "the stop task of $($present.account) ended with $($stop.code)"
+        Invoke-TnwksStopTask $present
         Wait-TnwksNoWsl $pSid $present.account
         Write-Log "no WSL process of $($present.account) before it leaves the group"
         Set-TnwksGroup $pSid $present.account $false
