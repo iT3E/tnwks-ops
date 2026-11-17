@@ -18,7 +18,7 @@ spec:
     snapshotRef:
       # A Succeeded snapshot of the finance policy, by name
       # (kubectl -n agents-finance get snapshots.kopiur.home-operations.com).
-      name: agent-state-SET-ME
+      name: agent-state-20261117103300
   target:
     # The claim of pvc.yaml. No pod holds it, so the mover is not pinned to
     # a node.
