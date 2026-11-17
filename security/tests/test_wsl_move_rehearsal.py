@@ -147,11 +147,15 @@ def test_each_task_that_acts_on_a_scheduled_task_runs_as_system():
 
 def test_the_baseline_of_the_live_parts_is_read_before_the_first_account():
     names = [t["name"] for t in yaml.safe_load((ROLE / "tasks/setup.yml").read_text())]
-    order = ["Folder of the rehearsal", "Folders of the procedure", "The read of the live parts", "The live parts at the start",
+    order = ["The state file holds no marker", "Folder of the rehearsal", "Folders of the procedure", "The read of the live parts", "The live parts at the start",
              "The baseline of the live parts is kept, and it read the registrations", "The accounts of the rehearsal"]
     assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
-    gate = next(t for t in tasks_of("setup.yml") if t.get("name") == order[4])
+    gate = next(t for t in tasks_of("setup.yml") if t.get("name") == order[5])
     assert "(wsl_move_rehearsal_baseline.output | last).registrations is not match('not read')" in gate["ansible.builtin.assert"]["that"]
+    marker = next(t for t in tasks_of("setup.yml") if t.get("name") == "The state file holds no marker")
+    assert marker["ansible.builtin.assert"]["that"] == "(wsl_move_rehearsal_setup_markers.output | last | int) == 0"
+    # Each read of the rules converts an alias to its SID, as the procedure does.
+    assert "$f[-1] = ConvertTo-Sid $f[-1]" in (ROLE / "tasks/read_window.yml").read_text()
     # No cmdlet of the role takes a plain password.
     for path in ROLE.rglob("*"):
         if path.is_file():
@@ -184,6 +188,7 @@ def test_the_play_waits_past_the_limit_of_the_window_task_and_the_worst_case_is_
 def test_after_the_way_back_of_the_group_test_the_play_starts_a_and_reads_its_tokens():
     names = [t.get("name") for t in tasks_of("wayback.yml")]
     order = ["The window procedure, way back mode", "A may log on as a batch job again, with no group",
+             "No VM of the rehearsal before the start task of A",
              "The start task of A, started by the play", "The tokens of the WSL processes of A",
              "No WSL process of A holds a token from its time in Administrators"]
     assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
@@ -660,9 +665,15 @@ def test_a_failed_check_after_the_start_goes_back_from_the_state_it_reads(tmp_pa
     assert back[:2] == ["stop tnwks-moverh-b-start", "start tnwks-moverh-b-stop"]
     assert back[2] == "move b -> a" and back[3] == f"acl a/ext4.vhdx {OLD_SDDL}"
     assert back[4:7] == ["start tnwks-moverh-b-unregister", "start tnwks-moverh-a-import", "enable tnwks-moverh-a-start"]
-    # The group test: A leaves Administrators before any task of A starts, and the
-    # play starts its start task after the run.
-    assert back[7:] == [f"leave {A_SID}"] and out["admins"] == []
+    # The group test: the import back started A's VM while A was in Administrators.
+    # A's stop task ends it, no WSL process of A is left, and only then A leaves;
+    # the play starts its start task after the run.
+    assert back[7:] == ["start tnwks-moverh-a-stop", f"leave {A_SID}"] and out["admins"] == []
+    log = out["log"]
+    last_stop = max(i for i, line in enumerate(log) if line.startswith("task tnwks-moverh-a-stop ended with 0;"))
+    assert last_stop < log.index("no WSL process of tnwks-moverh-a before it leaves the group") \
+        < log.index("group: tnwks-moverh-a left Administrators") \
+        < log.index("the start tasks of tnwks-moverh-a are left to the play (the group test)")
     assert "start tnwks-moverh-a-start" not in calls
     assert "the start tasks of tnwks-moverh-a are left to the play (the group test)" in out["log"]
     assert [line for line in out["log"] if line.startswith("group: ")] == [
@@ -679,7 +690,10 @@ def test_the_way_back_mode_puts_a_into_administrators_at_its_step_1_and_out_at_t
     assert out["code"] == 0, out["log"]
     calls = out["calls"]
     assert calls[0] == f"join {A_SID}" and calls[-1] == f"leave {A_SID}"
-    assert calls[-2] == "enable tnwks-moverh-a-start" and "start tnwks-moverh-a-start" not in calls
+    assert calls[-3:-1] == ["enable tnwks-moverh-a-start", "start tnwks-moverh-a-stop"]
+    assert "start tnwks-moverh-a-start" not in calls
+    # The list of the tasks that step 2 disabled is spent.
+    assert not (Path(out["root"]) / "state/window.state.disabled").exists()
     assert calls.index("start tnwks-moverh-a-import") < calls.index(f"leave {A_SID}")
     assert out["markers"][-2:] == ["window-started", "wayback-done"]
     assert out["disk_a"] and not out["disk_b"]
@@ -729,9 +743,10 @@ def test_the_boot_task_goes_back_once_with_no_group_step_and_never_restarts_itse
     assert again["code"] == 0 and again["calls"] == [] and again["markers"] == out["markers"]
     # A failed boot run does not restart, even with the switch on.
     failed = run_window(tmp_path / "3", mode="boot", state="t window-started\n", disk=("b",), restart=True,
-                        marker_a=True, codes={"tnwks-moverh-b-stop": 1})
+                        marker_a=True, codes={"tnwks-moverh-b-stop": 1}, disabled="tnwks-moverh-a-start")
     # With no marker in the old folder, nothing moves back.
-    lost = run_window(tmp_path / "4", mode="boot", state="t window-started\n", disk=("b",), acl_file=OLD_SDDL)
+    lost = run_window(tmp_path / "4", mode="boot", state="t window-started\n", disk=("b",), acl_file=OLD_SDDL,
+                      disabled="tnwks-moverh-a-start")
     assert lost["code"] == 1 and lost["disk_b"] and not lost["disk_a"]
     assert "fail: check failed: the old folder or its marker is gone: no move back" in lost["log"]
     assert failed["code"] == 1 and "restart" not in failed["calls"]
@@ -781,6 +796,14 @@ def test_the_way_back_moves_nothing_back_with_no_saved_rules(tmp_path):
     assert out["disk_b"] and not out["disk_a"]
     assert not any(c.startswith("move ") for c in out["calls"])
     assert "fail: check failed: no saved rules of the disk file: no move back" in out["log"]
+
+
+@needs_pwsh
+def test_the_way_back_moves_nothing_with_no_list_of_the_tasks_that_step_2_disabled(tmp_path):
+    out = run_window(tmp_path, mode="boot", state="t window-started\n", disk=("b",), acl_file=OLD_SDDL, marker_a=True)
+    assert out["code"] == 1, out["log"]
+    assert out["calls"] == [] and out["disk_b"] and not out["disk_a"]
+    assert "fail: check failed: no list of the tasks that step 2 disabled: nothing moves back" in out["log"]
 
 
 @needs_pwsh

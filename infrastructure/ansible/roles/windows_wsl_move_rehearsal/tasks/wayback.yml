@@ -41,6 +41,28 @@
         users: ["{{ wsl_move_rehearsal_sids.a }}"]
         action: add
 
+    # The import back started A's VM while A was in Administrators; the
+    # procedure ran A's stop task before A left the group. A VM process shows
+    # no account: the proof is that the count of VM processes is that of the
+    # baseline (the live VM only) before the start task of A starts.
+    - name: No VM of the rehearsal before the start task of A
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ wsl_move_rehearsal_baseline_file }}"
+        script: |
+          param([string]$Path)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $base = @((Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json).vm).Count
+          $deadline = (Get-Date).AddMinutes(2)
+          do {
+              $now = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'vmmem*' }).Count
+              if ($now -ne $base) { Start-Sleep -Seconds 3 }
+          } while ($now -ne $base -and (Get-Date) -lt $deadline)
+          [pscustomobject]@{ baseline = $base; now = $now }
+      register: wsl_move_rehearsal_vm_count
+      failed_when: (wsl_move_rehearsal_vm_count.output | last).now != (wsl_move_rehearsal_vm_count.output | last).baseline
+
     # The procedure leaves the start of A to the play in the group test.
     - name: The start task of A, started by the play
       ansible.windows.win_powershell:
@@ -139,6 +161,7 @@
           - wsl_move_rehearsal_procedure.groups == ['joined', 'left']
           - wsl_move_rehearsal_procedure.would_restart == 1
           - wsl_move_rehearsal_procedure.log | select('match', '^the start tasks of .* are left to the play') | list | length == 1
+          - wsl_move_rehearsal_procedure.log | select('match', '^no WSL process of .* before it leaves the group$') | list | length == 1
           - "wsl_move_rehearsal_procedure.log | select('match', '^read: ') | list | length == 1"
           - wsl_move_rehearsal_procedure.log | select('match', '^task .*-a-import ended with 0;') | list | length == 1
         fail_msg: "After the way back, a read did not pass: {{ check_a }} {{ check_b }} {{ back }} {{ wsl_move_rehearsal_procedure.log }}"

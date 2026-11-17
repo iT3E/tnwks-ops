@@ -5,6 +5,28 @@
 # the procedure on an unknown state or another version (with a test config,
 # no WSL), and a disabled task that does not run.
 
+# A setup after a window would import a second disk at the path of A: the
+# setup runs only while the state file holds no marker.
+- name: Read the markers of the state file
+  ansible.windows.win_powershell:
+    parameters:
+      State: "{{ wsl_move_rehearsal_state_file }}"
+    script: |
+      param([string]$State)
+      $Ansible.Changed = $false
+      if (-not (Test-Path -LiteralPath $State)) { return 0 }
+      @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() }).Count
+  check_mode: false
+  register: wsl_move_rehearsal_setup_markers
+
+- name: The state file holds no marker
+  ansible.builtin.assert:
+    that: (wsl_move_rehearsal_setup_markers.output | last | int) == 0
+    fail_msg: >-
+      The state file holds {{ wsl_move_rehearsal_setup_markers.output | last }} marker(s): the setup runs only before
+      the window. Nothing is changed.
+    quiet: true
+
 # The folder, the state folder and the read of the live parts come first, so
 # the first read, before any VM of the rehearsal, is the baseline.
 # Only SYSTEM and the Administrators may change the scripts, the configs, the

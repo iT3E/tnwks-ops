@@ -84,7 +84,8 @@ function Write-TnwksFile([string]$Path, [string]$Text) {
 }
 
 # The tasks that step 2 disabled (they were enabled before the window): way
-# back step 6 enables these only.
+# back step 6 enables these only. Step 2 writes the list before the marker of
+# a started window, and the end of a way back removes it.
 $DisabledFile = "$($cfg.state_file).disabled"
 
 function Get-LastMarker {
@@ -435,6 +436,9 @@ function Invoke-TnwksWayBack {
         Write-Log "stop: the disk file is at $(if ($state.old) { 'both paths' } else { 'neither path' }). Nothing is changed."
         return 'stopped'
     }
+    # Step 2 wrote the list of the tasks that it disabled before the marker
+    # of a started window: with no list, nothing moves.
+    Assert-Tnwks (Test-Path -LiteralPath $DisabledFile) 'no list of the tasks that step 2 disabled: nothing moves back'
     # (1) For step 7.
     if ($req.group_steps) { Set-TnwksGroup $pSid $present.account $true }
     Write-Log 'way back 1 passed'
@@ -478,12 +482,14 @@ function Invoke-TnwksWayBack {
     Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $oldPath, [StringComparison]::OrdinalIgnoreCase)) "the import back of $($present.account) did not pass"
     Write-Log 'way back 5 passed'
     # (6) For step 2: only the tasks that step 2 disabled.
-    $enable = if (Test-Path -LiteralPath $DisabledFile) { @(Get-Content -LiteralPath $DisabledFile | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } else { @() }
+    $enable = @(Get-Content -LiteralPath $DisabledFile | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     foreach ($t in @($present.disable_tasks)) {
         if ($enable -contains $t) { Enable-TnwksTask $t } else { Write-Log "task $t stays as it is: step 2 did not disable it" }
     }
     Write-Log 'way back 6 passed'
     Add-Marker 'wayback-done'
+    # The list is spent: a later way back needs a new forward run.
+    Remove-Item -LiteralPath $DisabledFile -Force
     # The end of the way back (the design): a restart. With no restart allowed
     # (a session of the owner on site 1, or the switch restart off), no
     # restart, and the start tasks of the present account start.
@@ -497,8 +503,13 @@ function Invoke-TnwksWayBack {
     if ($req.rehearsal_group_test) {
         # The rehearsal only: A leaves Administrators before any task of A
         # starts, so no process of A holds a token from its time in the group.
-        # A has no batch right of its own here: the play starts its start task
-        # after the run.
+        # The import back started A's VM with that token: A's stop task ends
+        # it first, and no WSL process of A is left. A has no batch right of
+        # its own here: the play starts its start task after the run.
+        $stop = Invoke-TnwksAccountTask $present.window_tasks.stop (Join-Path $present.result_dir 'stop.json')
+        Assert-Tnwks ($stop.code -eq 0) "the stop task of $($present.account) ended with $($stop.code)"
+        Wait-TnwksNoWsl $pSid $present.account
+        Write-Log "no WSL process of $($present.account) before it leaves the group"
         Set-TnwksGroup $pSid $present.account $false
         Write-Log "the start tasks of $($present.account) are left to the play (the group test)"
     } else {

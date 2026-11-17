@@ -17,11 +17,18 @@
           [string]$DiskName, [string]$MarkerName, [string]$Prefix)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $false
+      # As the procedure compares (Get-TnwksSddlParts): each account as a SID,
+      # so a rule that Windows writes with an alias (BA, SY, LG) compares equal.
+      function ConvertTo-Sid([string]$Account) {
+          if ($Account -match '^S-1-') { return $Account }
+          try { (New-Object Security.Principal.SecurityIdentifier $Account).Value } catch { $Account }
+      }
       function Get-Parts([string]$Sddl) {
-          $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { $Matches[1] } else { '' }
+          $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { ConvertTo-Sid $Matches[1] } else { '' }
           $dacl = if ($Sddl -match 'D:([A-Z]*)((\([^)]*\))*)') { $Matches } else { @{ 1 = ''; 2 = '' } }
           $aces = @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value } |
-              Where-Object { ($_ -split ';')[1] -notmatch 'ID' } | Sort-Object) -join ' '
+              Where-Object { ($_ -split ';')[1] -notmatch 'ID' } | ForEach-Object {
+                  $f = $_ -split ';'; $f[-1] = ConvertTo-Sid $f[-1]; $f -join ';' } | Sort-Object) -join ' '
           "$owner|$($dacl[1] -match 'P')|$aces"
       }
       $disk = Join-Path $FolderB $DiskName
