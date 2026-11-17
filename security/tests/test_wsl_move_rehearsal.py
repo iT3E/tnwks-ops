@@ -13,6 +13,7 @@ work, phase by phase (docs/wsl/windows-ansible.md).
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -335,29 +336,72 @@ function New-Item { [CmdletBinding()] param([string]$Path, [switch]$Force) }
 """
 
 
+# The fake wsl.exe. It records each call twice: as one line, and as its argv (fields
+# split by 0x1f, calls by 0x1e). A call with -c must be the fixed command of
+# Invoke-WslScript; the fake decodes its script and runs it in a real sh, with the
+# paths of the distro under $TNWKS_FS and shims for adduser and id.
+FAKE_WSL = r"""#!/bin/sh
+echo "wsl $*" >> "$TNWKS_CALLS"
+for a in "$@"; do printf '%s\037' "$a"; done >> "$TNWKS_ARGV"; printf '\036' >> "$TNWKS_ARGV"
+c=""; last=""
+for a in "$@"; do [ "$last" = "-c" ] && c=$a; last=$a; done
+[ -n "$c" ] || exit 0
+b64=$(printf '%s' "$c" | sed -n 's#^echo \([A-Za-z0-9+/=]*\) | base64 -d > /tmp/tnwks-move-[a-z]*\.sh \&\& exec /bin/sh -e /tmp/tnwks-move-[a-z]*\.sh$#\1#p')
+[ -n "$b64" ] || { echo "not the command of Invoke-WslScript"; exit 99; }
+f="$TNWKS_FS/tmp/tnwks-move-step.sh"
+printf '%s' "$b64" | base64 -d | sed "s#/etc/#$TNWKS_FS/etc/#g; s#/usr/share/#$TNWKS_FS/usr/share/#g; s#/proc/#$TNWKS_FS/proc/#g" > "$f"
+PATH="$TNWKS_SHIMS:$PATH" exec /bin/sh -e "$f"
+"""
+SHIMS = {
+    "adduser": '#!/bin/sh\n[ "$1 $2" = "-D -u" ] || exit 2\necho "$4:x:$3" >> "$TNWKS_FS/etc/passwd"\n',
+    "id": '#!/bin/sh\nif [ "$1" = "-u" ] && [ -n "$2" ]; then\n'
+          '  grep "^$2:" "$TNWKS_FS/etc/passwd" | cut -d : -f 3 | grep . || exit 1\nelse exec /usr/bin/id "$@"; fi\n',
+}
+DISTRIBUTION_CONF = DEFAULTS["wsl_move_rehearsal_distribution_conf"]
+
+
 def run_account(tmp_path: Path, step: str, registered: str | None = None, disk_at: str | None = None,
-                distro: str = "tnwks-moverh", pattern: str = "^tnwks-moverh", folder: str | None = None) -> dict:
+                distro: str = "tnwks-moverh", pattern: str = "^tnwks-moverh", folder: str | None = None,
+                config: dict | None = None, rootfs: bool = False) -> dict:
     """Runs one step of the account script. registered: the folder where the account
-    lists the distro (a, b, or None). disk_at: the folder that holds a disk file."""
+    lists the distro (a, b, or None). disk_at: the folder that holds a disk file.
+    rootfs: a root file system with the SHA-256 of the config. The distro's files
+    are under fs/."""
     root = tmp_path / "root"
     for sub in ("a", "b", "elsewhere", "log"):
         (root / sub).mkdir(parents=True, exist_ok=True)
+    fs = tmp_path / "fs"
+    for sub in ("etc", "tmp", "proc", "usr/share"):
+        (fs / sub).mkdir(parents=True, exist_ok=True)
+    (fs / "proc/meminfo").write_text("MemTotal:        2014784 kB\nMemFree:          1000 kB\n")
+    shims = tmp_path / "shims"
+    shims.mkdir(exist_ok=True)
+    for name, text in SHIMS.items():
+        (shims / name).write_text(text)
+        (shims / name).chmod(0o755)
     system = tmp_path / "win/System32"
     system.mkdir(parents=True, exist_ok=True)
     calls = tmp_path / "calls.txt"
     calls.write_text("")
+    argv = tmp_path / "argv.bin"
+    argv.write_bytes(b"")
     wsl = system / "wsl.exe"
-    wsl.write_text('#!/bin/sh\necho "wsl $*" >> "$TNWKS_CALLS"\nexit 0\n')
+    wsl.write_text(FAKE_WSL)
     wsl.chmod(0o755)
     if disk_at:
         (root / disk_at / "ext4.vhdx").write_text("disk")
-    config = {
+    (root / "rootfs.tar.gz").write_bytes(b"rootfs")
+    cfg = {
         "name_pattern": pattern, "refused_names": ["Ubuntu"], "root": str(root), "distro": distro,
         "folder": str(root / "b"), "disk_name": "ext4.vhdx", "log_dir": str(root / "log"),
-        "marker_name": "tnwks-move.marker", "rootfs": str(root / "rootfs.tar.gz"), "rootfs_sha256": "00",
-        "linux_user": "moverh", "data_token": "token", "icon_base64": "AA==", "registration_values": {"DefaultUid": 1000},
+        "marker_name": "tnwks-move.marker", "rootfs": str(root / "rootfs.tar.gz"),
+        "rootfs_sha256": hashlib.sha256(b"rootfs").hexdigest().upper() if rootfs else "00",
+        "linux_user": "moverh", "data_token": "token", "icon_base64": DEFAULTS["wsl_move_rehearsal_icon_base64"],
+        "distribution_conf": DISTRIBUTION_CONF, "wsl_conf": "[user]\ndefault = moverh\n",
+        "registration_values": {"DefaultUid": 1000},
     }
-    (tmp_path / "config.json").write_text(json.dumps(config))
+    cfg.update(config or {})
+    (tmp_path / "config.json").write_text(json.dumps(cfg))
     reg = ""
     if registered:
         reg = f"$global:Reg['{{g1}}'] = @{{ DistributionName = '{distro}'; BasePath = '\\\\?\\{root / registered}'; VhdFileName = 'ext4.vhdx' }}"
@@ -365,6 +409,9 @@ def run_account(tmp_path: Path, step: str, registered: str | None = None, disk_a
     script = ACCOUNT_FAKES + f"""
 $env:SystemRoot = '{tmp_path / "win"}'
 $env:TNWKS_CALLS = '{calls}'
+$env:TNWKS_ARGV = '{argv}'
+$env:TNWKS_FS = '{fs}'
+$env:TNWKS_SHIMS = '{shims}'
 {reg}
 & '{ACCOUNT}' -Config '{tmp_path / "config.json"}' -Step {step} {extra}
 $code = $LASTEXITCODE
@@ -377,6 +424,8 @@ $result = if (Microsoft.PowerShell.Management\\Test-Path -LiteralPath $file) {{ 
     assert run.returncode == 0, run.stderr
     out = json.loads(run.stdout)
     out["wsl"] = [line for line in calls.read_text().splitlines() if line]
+    out["argv"] = [call.split("\x1f")[:-1] for call in argv.read_text().split("\x1e") if call]
+    out["fs"] = fs
     out["disk_a"] = (root / "a/ext4.vhdx").exists()
     out["disk_b"] = (root / "b/ext4.vhdx").exists()
     return out
@@ -434,6 +483,164 @@ def test_the_account_script_refuses_a_name_or_a_path_outside_its_scope(tmp_path)
     assert outside["code"] == 2 and "is outside" in outside["result"]["refused"]
     for out in (live, named, outside):
         assert out["wsl"] == [] and out["sets"] == []
+
+
+# How Windows PowerShell 5.1 passes the arguments of a native program, and how the
+# program splits its command line again (CommandLineToArgvW). 5.1 puts an argument
+# with a space or a tab outside its own quotes in double quotes, and escapes no
+# quote and no backslash in it. It drops an empty argument.
+def ps51_command_line(args: list[str]) -> str:
+    parts = []
+    for arg in args:
+        if arg == "":
+            continue
+        quotes, needs = 0, False
+        for ch in arg:
+            if ch == '"':
+                quotes += 1
+            elif ch in " \t" and quotes % 2 == 0:
+                needs = True
+                break
+        parts.append(f'"{arg}"' if needs else arg)
+    return " ".join(parts)
+
+
+def windows_argv(line: str) -> list[str]:
+    args, cur, quoted, have, i = [], [], False, False, 0
+    while i < len(line):
+        ch = line[i]
+        if ch == "\\":
+            n = 0
+            while i < len(line) and line[i] == "\\":
+                n, i = n + 1, i + 1
+            if i < len(line) and line[i] == '"':
+                cur.append("\\" * (n // 2))
+                if n % 2:
+                    cur.append('"')
+                    i += 1
+            else:
+                cur.append("\\" * n)
+            have = True
+            continue
+        if ch == '"':
+            if quoted and i + 1 < len(line) and line[i + 1] == '"':
+                cur.append('"')
+                i += 2
+                continue
+            quoted, have = not quoted, True
+        elif ch in " \t" and not quoted:
+            if have:
+                args.append("".join(cur))
+            cur, have = [], False
+        else:
+            cur.append(ch)
+            have = True
+        i += 1
+    if have:
+        args.append("".join(cur))
+    return args
+
+
+def survives_ps51(args: list[str]) -> bool:
+    return windows_argv(ps51_command_line(args)) == args
+
+
+def test_the_model_of_windows_powershell_5_1_breaks_shell_text_with_quotes():
+    """The model takes plain arguments through, and splits the texts that the
+    account script passed before: the shell text of the prepare and of wsl.conf."""
+    assert survives_ps51(["-d", "tnwks-moverh", "-e", "/bin/sh", "-c", "id -u; cat /etc/x"])
+    assert survives_ps51(["--import", "tnwks-moverh", "C:\\ProgramData\\tnwks-moverh\\a", "--version", "2"])
+    old_prepare = 'set -e; printf %s token > /etc/t; printf "[shortcut]\\nenabled = true\\n" > /etc/wsl-distribution.conf'
+    old_wslconf = 'printf "[user]\\ndefault = moverh\\n" > /etc/wsl.conf'
+    for text in (old_prepare, old_wslconf):
+        got = windows_argv(ps51_command_line(["-e", "/bin/sh", "-c", text]))
+        assert got != ["-e", "/bin/sh", "-c", text]
+    # The text after the quote is a new argument: sh -c runs only the first part.
+    assert windows_argv(ps51_command_line(["-c", old_wslconf]))[1] == "printf [user]\\ndefault"
+
+
+def test_no_shell_text_goes_to_wsl_exe_outside_the_safe_command():
+    text = ACCOUNT.read_text()
+    # Only Invoke-WslScript passes -c, with base64 in a command that has no quote,
+    # no backslash and no dollar sign of its own.
+    assert text.count("'-c'") == 1
+    func = re.search(r"function Invoke-WslScript\(.*?\n\}", text, re.DOTALL)[0]
+    command = re.search(r"'-c', (\"[^\"]*\")\)", func)[1]
+    assert command == '"echo $b64 | base64 -d > $file && exec /bin/sh -e $file"'
+    assert not re.search(r"['\"\\]", command[1:-1].replace("$b64", "").replace("$file", ""))
+    # Each other call of wsl.exe passes names, paths and flags only.
+    for call in re.findall(r"Invoke-Wsl @\((.*?)\)", text):
+        assert "/bin/sh" not in call and '"' not in call, call
+    # The live roles pass no shell text with a quote or a backslash to wsl.exe.
+    for path in ANSIBLE.glob("roles/*/files/*.ps1"):
+        for line in path.read_text().splitlines():
+            m = re.search(r"wsl\.exe.*-c (.*)$", line)
+            if m:
+                assert not re.search(r"\\|\"[^\"]*\"[^\"]*\"", m[1]), (path.name, line)
+
+
+@needs_pwsh
+def test_the_account_steps_write_and_read_the_distro_through_windows_powershell_5_1(tmp_path):
+    """Each argument survives the 5.1 rule; the scripts run in a real sh; each file
+    has a newline at its end; the check reads each value by its key."""
+    rootfs = run_account(tmp_path / "1", "import-rootfs", rootfs=True)
+    assert rootfs["code"] == 0, rootfs
+    assert rootfs["result"]["prepare_exit"] == 0 and rootfs["result"]["imported"] is True
+    fs = rootfs["fs"]
+    assert (fs / "etc/tnwks-move-token").read_text() == "token\n"
+    assert (fs / "etc/wsl-distribution.conf").read_text() == DISTRIBUTION_CONF
+    assert DISTRIBUTION_CONF.endswith("icon = /usr/share/tnwks-move/icon.ico\n")
+    icon = (fs / "usr/share/tnwks-move/icon.ico").read_bytes()
+    assert hashlib.sha256(icon).hexdigest() == DEFAULTS["wsl_move_rehearsal_icon_sha256"]
+    assert icon == base64.b64decode(DEFAULTS["wsl_move_rehearsal_icon_base64"])
+    assert (fs / "etc/passwd").read_text() == "moverh:x:1000\n"
+    assert not any((fs / "tmp").iterdir()), "the script removes its file"
+    # A second setup over its own distro imports nothing and writes the files
+    # again, as from the faulty prepare: no shortcut, a token with no newline.
+    (fs / "etc/wsl-distribution.conf").unlink()
+    (fs / "etc/tnwks-move-token").write_text("token")
+    again = run_account(tmp_path / "1", "import-rootfs", registered="b")
+    assert again["code"] == 0 and again["result"]["existed"] is True and again["result"]["prepare_exit"] == 0
+    assert not any(c.startswith("wsl --import ") for c in again["wsl"])
+    assert (fs / "etc/wsl-distribution.conf").read_text() == DISTRIBUTION_CONF
+    assert (fs / "etc/tnwks-move-token").read_text() == "token\n"
+    assert (fs / "etc/passwd").read_text() == "moverh:x:1000\n"
+    # At another path it refuses and changes nothing.
+    other = run_account(tmp_path / "1", "import-rootfs", registered="a")
+    assert other["code"] == 2 and other["wsl"] == []
+    wslconf = run_account(tmp_path / "1", "wslconf")
+    assert wslconf["code"] == 0 and (fs / "etc/wsl.conf").read_text() == "[user]\ndefault = moverh\n"
+    # The token file of the old prepare has no newline at its end.
+    (fs / "etc/tnwks-move-token").write_text("token")
+    check = run_account(tmp_path / "1", "check", registered="b")
+    result = check["result"]
+    assert result["read_exit"] == 0 and result["token"] == "token" and result["user_uid"] == "1000"
+    assert result["uid"].isdigit() and result["mem_total_kib"] == 2014784
+    assert result["distribution_conf_sha256"] == hashlib.sha256(DISTRIBUTION_CONF.encode()).hexdigest()
+    assert result["wsl_conf_sha256"] == hashlib.sha256(b"[user]\ndefault = moverh\n").hexdigest()
+    assert result["icon_sha256"] == DEFAULTS["wsl_move_rehearsal_icon_sha256"]
+    for out in (rootfs, again, wslconf, check):
+        for call in out["argv"]:
+            assert survives_ps51(call), call
+    # A file that is not there reads as an empty value, and moves no other one.
+    (fs / "etc/wsl.conf").unlink()
+    again = run_account(tmp_path / "1", "check", registered="b")["result"]
+    assert again["wsl_conf_sha256"] == "" and again["token"] == "token" and again["mem_total_kib"] == 2014784
+
+
+def test_the_role_reads_back_each_file_that_it_writes_in_the_distro():
+    setup = next(t for t in tasks_of("setup.yml") if t.get("name", "").startswith("A owns the distro"))
+    that = setup["ansible.builtin.assert"]["that"]
+    assert "check.result.distribution_conf_sha256 == wsl_move_rehearsal_distribution_conf | hash('sha256')" in that
+    assert "check.result.icon_sha256 == wsl_move_rehearsal_icon_sha256" in that
+    assert "check.result.user_uid == '1000'" in that and "check.result.mem_total_kib | int > 0" in that
+    cycle = next(t for t in tasks_of("b_cycle.yml") if t.get("name", "").startswith("The second import of B"))
+    assert "check.result.wsl_conf_sha256 == wsl_move_rehearsal_wsl_conf | hash('sha256')" in cycle["ansible.builtin.assert"]["that"]
+    assert hashlib.sha256(base64.b64decode(DEFAULTS["wsl_move_rehearsal_icon_base64"])).hexdigest() == \
+        DEFAULTS["wsl_move_rehearsal_icon_sha256"]
+    configs = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_account_config_common"]
+    assert configs["distribution_conf"] == "{{ wsl_move_rehearsal_distribution_conf }}"
+    assert configs["wsl_conf"] == "{{ wsl_move_rehearsal_wsl_conf }}"
 
 
 # --- The window procedure, in PowerShell --------------------------------------------------

@@ -43,6 +43,8 @@
   vars:
     wsl_move_rehearsal_run: {key: b, step: stop}
 
+# The read after the second import is a new start of the distro: the uid
+# and the SHA-256 of /etc/wsl.conf show the default user that B wrote.
 - name: The second import of B passed, with the data and the default user
   vars:
     unregister: "{{ wsl_move_rehearsal_runs.unregister | last }}"
@@ -53,9 +55,12 @@
       - not unregister.result.registered
       - reimport.result.imported | default(false)
       - check.result.registered
+      - check.result.read_exit == 0
       - check.result.token == wsl_move_rehearsal_data_token
       - check.result.uid == (wsl_move_rehearsal_registration_values.DefaultUid | string)
+      - check.result.wsl_conf_sha256 == wsl_move_rehearsal_wsl_conf | hash('sha256')
       - check.result.default_distribution
+      - check.result.mem_total_kib | int > 0
       - check.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
       - wsl_move_rehearsal_side_moves | select | list | length == 2
     fail_msg: "The cycle of B did not pass: {{ unregister }} {{ reimport }} {{ check }}"

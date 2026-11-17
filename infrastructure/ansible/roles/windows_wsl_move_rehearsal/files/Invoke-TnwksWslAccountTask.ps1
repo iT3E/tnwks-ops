@@ -16,8 +16,9 @@ nothing. Exit 1: the step failed.
                  profile.
   import-rootfs  wsl --import of the distro from the pinned root file system
                  into the folder of the account, and the files of the
-                 rehearsal in the distro. Nothing when the account has the
-                 distro already.
+                 rehearsal in the distro. When the account has the distro at
+                 that path already, no import: the files are written again.
+                 Refused, with no change, when it lists it at another path.
   import         wsl --import-in-place of the disk file in the folder of the
                  account. Nothing when the account lists the distro at that
                  path; refused, with no change, when it lists it at another
@@ -87,6 +88,40 @@ function Invoke-Wsl([string[]]$Arguments) {
     @{ exit = $LASTEXITCODE; output = $out }
 }
 
+# Runs a shell script in the distro. The text never passes as an argument of
+# its own: Windows PowerShell 5.1 does not escape a double quote inside an
+# argument to a native program, so wsl.exe would split the text at each
+# quote, and sh would then drop each backslash. The script goes as base64
+# (letters, digits, +, / and =) in one fixed command with no quote, backslash
+# or dollar sign. sh decodes it to a file in the distro and runs that file
+# with -e; the file removes itself first.
+function Invoke-WslScript([string]$Script, [switch]$Root) {
+    $text = 'rm -f "$0"' + "`n" + ($Script -replace "`r`n", "`n")
+    if (-not $text.EndsWith("`n")) { $text += "`n" }
+    $b64 = [Convert]::ToBase64String((New-Object Text.UTF8Encoding $false).GetBytes($text))
+    $file = if ($Root) { '/tmp/tnwks-move-root.sh' } else { '/tmp/tnwks-move-user.sh' }
+    $user = if ($Root) { @('-u', 'root') } else { @() }
+    Invoke-Wsl (@('-d', $distro) + $user + @('-e', '/bin/sh', '-c', "echo $b64 | base64 -d > $file && exec /bin/sh -e $file"))
+}
+
+# The shell line that writes a file in the distro with exactly this text, and
+# a newline at its end.
+function Get-WslWriteLine([string]$Path, [string]$Text) {
+    $body = $Text -replace "`r`n", "`n"
+    if (-not $body.EndsWith("`n")) { $body += "`n" }
+    'echo {0} | base64 -d > {1}' -f [Convert]::ToBase64String((New-Object Text.UTF8Encoding $false).GetBytes($body)), $Path
+}
+
+# The values of a read in the distro, one key=value line each, by key: a line
+# that a value runs into does not move the others.
+function ConvertFrom-WslValues([string]$Output) {
+    $values = @{}
+    foreach ($line in @($Output -split "`r?`n")) {
+        if ($line -match '^([a-z_0-9]+)=(.*)$') { $values[$Matches[1]] = $Matches[2].Trim() }
+    }
+    $values
+}
+
 # The registration of the distro in the registry of this account, or $null.
 function Get-TnwksRegistration([string]$Distro) {
     if (-not (Test-Path -LiteralPath $lxssKey)) { return $null }
@@ -146,23 +181,33 @@ switch ($Step) {
         }
     }
     'import-rootfs' {
-        if (Get-TnwksRegistration $distro) { Exit-Tnwks 0 @{ existed = $true } }
-        $hash = (Get-FileHash -LiteralPath $cfg.rootfs -Algorithm SHA256).Hash
-        if ($hash -ne $cfg.rootfs_sha256) { Exit-Tnwks 1 @{ failed = "the root file system has the SHA-256 $hash, not the pinned one" } }
-        if (-not (Test-Path -LiteralPath $lxssKey)) { New-Item -Path $lxssKey -Force | Out-Null }
-        Set-ItemProperty -LiteralPath $lxssKey -Name OOBEComplete -Value 1 -Type DWord
-        $run = Invoke-Wsl @('--import', $distro, $diskDir, $cfg.rootfs, '--version', '2')
-        if ($run.exit -ne 0) { Exit-Tnwks 1 @{ failed = "wsl --import exited $($run.exit)"; output = $run.output } }
+        $reg = Get-TnwksRegistration $distro
+        $existed = [bool]$reg
+        if ($reg -and -not [string]::Equals($reg.disk, $target, [StringComparison]::OrdinalIgnoreCase)) {
+            Exit-Tnwks 2 @{ refused = "the account lists $distro at $($reg.disk), not at $target"; disk = $reg.disk }
+        }
+        if (-not $reg) {
+            $hash = (Get-FileHash -LiteralPath $cfg.rootfs -Algorithm SHA256).Hash
+            if ($hash -ne $cfg.rootfs_sha256) { Exit-Tnwks 1 @{ failed = "the root file system has the SHA-256 $hash, not the pinned one" } }
+            if (-not (Test-Path -LiteralPath $lxssKey)) { New-Item -Path $lxssKey -Force | Out-Null }
+            Set-ItemProperty -LiteralPath $lxssKey -Name OOBEComplete -Value 1 -Type DWord
+            $run = Invoke-Wsl @('--import', $distro, $diskDir, $cfg.rootfs, '--version', '2')
+            if ($run.exit -ne 0) { Exit-Tnwks 1 @{ failed = "wsl --import exited $($run.exit)"; output = $run.output } }
+        }
         # The files of the rehearsal: a token that shows the data after the
         # move, a user of UID 1000, and a shortcut with an icon (as the distro
-        # of site 2 has), so that the import in place writes the icon.
-        $prepare = 'set -e; adduser -D -u 1000 {0}; printf %s {1} > /etc/tnwks-move-token; mkdir -p /usr/share/tnwks-move; ' +
-            'printf %s {2} | base64 -d > /usr/share/tnwks-move/icon.ico; ' +
-            'printf "[shortcut]\nenabled = true\nicon = /usr/share/tnwks-move/icon.ico\n" > /etc/wsl-distribution.conf'
-        $script = $prepare -f $cfg.linux_user, $cfg.data_token, $cfg.icon_base64
-        $in = Invoke-Wsl @('-d', $distro, '-u', 'root', '-e', '/bin/sh', '-c', $script)
+        # of site 2 has), so that the import in place writes the icon. The
+        # check step reads each one back. A second run writes them again.
+        $script = @(
+            ('id -u {0} >/dev/null 2>&1 || adduser -D -u 1000 {0}' -f $cfg.linux_user),
+            (Get-WslWriteLine '/etc/tnwks-move-token' $cfg.data_token),
+            'mkdir -p /usr/share/tnwks-move',
+            ('echo {0} | base64 -d > /usr/share/tnwks-move/icon.ico' -f $cfg.icon_base64),
+            (Get-WslWriteLine '/etc/wsl-distribution.conf' $cfg.distribution_conf)
+        ) -join "`n"
+        $in = Invoke-WslScript $script -Root
         $stop = Invoke-Wsl @('--terminate', $distro)
-        Exit-Tnwks ([int]($in.exit -ne 0)) @{ imported = $true; prepare_exit = $in.exit; prepare = $in.output; terminate_exit = $stop.exit }
+        Exit-Tnwks ([int]($in.exit -ne 0)) @{ imported = $true; existed = $existed; prepare_exit = $in.exit; prepare = $in.output; terminate_exit = $stop.exit }
     }
     'import' {
         $reg = Get-TnwksRegistration $distro
@@ -213,19 +258,26 @@ switch ($Step) {
             $data.disk = $reg.disk
             $data.default_distribution = ($root.DefaultDistribution -eq $reg.guid)
             $data.default_uid = $reg.values.DefaultUid
-            $read = Invoke-Wsl @('-d', $distro, '-e', '/bin/sh', '-c', 'id -u; cat /etc/tnwks-move-token; grep MemTotal /proc/meminfo')
+            # As the default user. A file that is not there reads as an empty
+            # value; a file with no newline at its end changes no other value.
+            $read = Invoke-WslScript (@(
+                'printf ''uid=%s\n'' "$(id -u)"',
+                ('printf ''user_uid=%s\n'' "$(id -u {0} 2>/dev/null)"' -f $cfg.linux_user),
+                'printf ''token=%s\n'' "$(cat /etc/tnwks-move-token 2>/dev/null)"',
+                'printf ''mem_total_kib=%s\n'' "$(awk ''/^MemTotal:/ {print $2}'' /proc/meminfo)"',
+                'printf ''distribution_conf_sha256=%s\n'' "$(sha256sum 2>/dev/null < /etc/wsl-distribution.conf | cut -d '' '' -f 1)"',
+                'printf ''wsl_conf_sha256=%s\n'' "$(sha256sum 2>/dev/null < /etc/wsl.conf | cut -d '' '' -f 1)"',
+                'printf ''icon_sha256=%s\n'' "$(sha256sum 2>/dev/null < /usr/share/tnwks-move/icon.ico | cut -d '' '' -f 1)"'
+            ) -join "`n")
             $data.read_exit = $read.exit
-            $lines = @($read.output -split "`r?`n")
-            if ($lines.Count -ge 3) {
-                $data.uid = $lines[0].Trim()
-                $data.token = $lines[1].Trim()
-                $data.mem_total_kib = [int64](($lines[2] -replace '[^0-9]', ''))
-            }
+            $values = ConvertFrom-WslValues $read.output
+            foreach ($key in @('uid', 'user_uid', 'token', 'distribution_conf_sha256', 'wsl_conf_sha256', 'icon_sha256')) { $data[$key] = $values[$key] }
+            $data.mem_total_kib = if ($values.mem_total_kib -match '^[0-9]+$') { [int64]$values.mem_total_kib } else { $null }
         }
         Exit-Tnwks 0 $data
     }
     'wslconf' {
-        $run = Invoke-Wsl @('-d', $distro, '-u', 'root', '-e', '/bin/sh', '-c', ('printf "[user]\ndefault = {0}\n" > /etc/wsl.conf' -f $cfg.linux_user))
+        $run = Invoke-WslScript (Get-WslWriteLine '/etc/wsl.conf' $cfg.wsl_conf) -Root
         Exit-Tnwks ([int]($run.exit -ne 0)) @{ exit = $run.exit; output = $run.output }
     }
     'filetest' {

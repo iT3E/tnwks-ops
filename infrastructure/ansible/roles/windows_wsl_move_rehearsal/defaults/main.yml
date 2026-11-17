@@ -94,6 +94,18 @@ wsl_move_rehearsal_linux_user: moverh
 wsl_move_rehearsal_data_token: tnwks-move-rehearsal-data
 wsl_move_rehearsal_icon_base64: >-
   AAABAAEAEBAAAAEAIABSAAAAFgAAAIlQTkcNChoKAAAADUlIRFIAAAAQAAAAEAgGAAAAH/P/YQAAABlJREFUeNpj0Ks1+k8JZhg1YNSAUQOGiwEACKrcEIRwp7QAAAAASUVORK5CYII=
+# Its SHA-256, which the check step reads back from the file in the distro.
+wsl_move_rehearsal_icon_sha256: a1080dae659a5ecc1df3518211f90da96a83d3a1b95c5dd65af61b545a8384c5
+# The shortcut of the distro, and the default user that the B cycle writes.
+# The scripts write each file with a newline at its end, and the check step
+# reads back the SHA-256 of each.
+wsl_move_rehearsal_distribution_conf: |
+  [shortcut]
+  enabled = true
+  icon = /usr/share/tnwks-move/icon.ico
+wsl_move_rehearsal_wsl_conf: |
+  [user]
+  default = {{ wsl_move_rehearsal_linux_user }}
 # The values that the import task writes into the registration in the
 # registry of its own account (step 3 reads them from the present account).
 wsl_move_rehearsal_registration_values:
