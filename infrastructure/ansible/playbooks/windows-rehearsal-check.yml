@@ -96,9 +96,14 @@
                   @($vms | ForEach-Object { "$($_.name) $($_.id) (not counted): $($_.token -replace '^user=\S+ ', '')" })
               @{ pass = [bool]($failed.Count -eq 0 -and $bad.Count -eq 0 -and $clients.Count -gt 0); value = $shown -join '; ' }
           }
+          # The output holds the one answer line of write-test.sh, and the
+          # warnings that wsl.exe writes to stderr, in either order. Exactly
+          # one answer line, and it is a refusal with EACCES or EPERM.
           function Test-TnwksWrite($Write) {
               if (-not $Write) { return @{ pass = $false; value = 'the write task gave no result' } }
-              @{ pass = [bool]("$($Write.output)" -match '^refused (EACCES|EPERM) '); value = "$($Write.output) (exit $($Write.exit))" }
+              $answers = @("$($Write.output)" -split "`r?`n" | Where-Object { $_ -match '^(refused \S+ |other \S+ |written$)' })
+              @{ pass = [bool]($answers.Count -eq 1 -and $answers[0] -match '^refused (EACCES|EPERM) ')
+                 value = "$($Write.output) (exit $($Write.exit))" }
           }
           function Test-TnwksMount($Mount) {
               if (-not $Mount) { return @{ pass = $false; value = 'the mount task gave no result' } }
@@ -135,6 +140,7 @@
 
           # The token of each WSL process of the account. The owner of a
           # process comes from WMI, so a process of another user is not opened.
+          # The Ansible session holds the debug privilege, enabled, so it can open them.
           Add-Type -TypeDefinition @'
           using System;
           using System.Runtime.InteropServices;

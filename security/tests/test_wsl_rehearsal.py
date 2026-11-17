@@ -414,6 +414,7 @@ def test_each_stderr_redirect_runs_under_continue():
     script = SCRIPT.read_text()
     function = script[script.index("function Invoke-Wsl"):script.index("function Get-Distros")]
     assert "$ErrorActionPreference = 'Continue'" in function and function.count("2>&1") == 1
+    assert function.index("$ErrorActionPreference = 'Continue'") < function.index("2>&1"), "Continue comes first"
     assert script.count("2>&1") == 1
     for path in (ROLE / "tasks/main.yml", ANSIBLE / "playbooks/windows-rehearsal-check.yml"):
         lines = [line for line in path.read_text().splitlines() if "2>&1" in line]
@@ -867,7 +868,15 @@ def test_the_write_check_takes_only_eacces_or_eperm():
                            ("refused ENOENT sh: no such file", False), ("other ENOENT sh: no such file", False),
                            ("other EEXIST sh: file exists", False), ("other EIO sh: i/o error", False),
                            ("other UNKNOWN sh: x", False), ("written", False), ("other NOT_LISTED ls: x", False),
-                           ("x refused EACCES", False), ("", False)]:
+                           ("x refused EACCES", False), ("", False),
+                           # A warning of wsl.exe on stderr, before or after the answer.
+                           ("wsl: a warning\nrefused EACCES sh: denied", True),
+                           ("refused EPERM sh: not permitted\r\nwsl: a warning", True),
+                           ("wsl: a warning\nwritten", False), ("wsl: a warning\nother ENOENT sh: no such file", False),
+                           ("wsl: refused EACCES x\nwritten", False),
+                           # Two answers are not one refusal.
+                           ("refused EACCES sh: denied\nwritten", False),
+                           ("refused EACCES sh: denied\nother EIO sh: i/o error", False)]:
         assert check(call, {"exit": 0, "output": output})["pass"] is passes, output
     assert check("Test-TnwksWrite $null", None)["pass"] is False
 
