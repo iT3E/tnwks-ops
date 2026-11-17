@@ -22,7 +22,17 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: firefly-proxy
+        # Its own DNS rule, for one name (networkpolicy.yaml), and not the
+        # namespace's rule for any name (../../namespace.yaml).
+        agents.home.arpa/dns: own-rule
     spec:
+      # A name with a dot is looked up as it is, with no search domain: the
+      # DNS rule allows the one full name, and the resolver of the image
+      # (musl) stops at the first refused name of a search.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
       automountServiceAccountToken: false
       enableServiceLinks: false
       securityContext:

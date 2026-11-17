@@ -8,8 +8,12 @@
 # finance app (../../firefly-mcp/app/proxy.yaml), over plain HTTP in the
 # cluster, for Python only. The sandbox holds no credential for it: the proxy
 # sets the token, and it lets through only the calls of its allow list. This
-# rule is a second wall in front of it: GET, POST and PUT under /api/v1 only,
-# so no DELETE leaves the sandbox. Nothing else leaves the sandbox.
+# rule is a second wall in front of it: GET under /api/v1 only. The scripts of
+# the agent only read; its writes go through the MCP server, whose update of
+# a transaction sends each split of it (an update that leaves a split out
+# deletes that split in the app). Writes from a sandbox are a question for
+# the owner (docs/apps/agent-platform.md, "The finance app"). Nothing else
+# leaves the sandbox.
 version: 1
 filesystem_policy:
   include_workdir: true
@@ -28,8 +32,6 @@ network_policies:
         enforcement: enforce
         rules:
           - allow: {method: GET, path: "/api/v1/**"}
-          - allow: {method: POST, path: "/api/v1/**"}
-          - allow: {method: PUT, path: "/api/v1/**"}
     binaries:
       - {path: /usr/local/bin/python3.13}
       - {path: /usr/local/bin/python3}

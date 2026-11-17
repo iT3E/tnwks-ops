@@ -17,7 +17,13 @@ A CronJob in each agents-<name> namespace runs one of:
       server, called as the agent calls it, and a sandbox made with the
       sandbox policy of the agent. An allowed read reaches the app; each
       delete and each call off the allow list of the proxy is refused. The
-      run removes its sandbox at its end, as the probe does.
+      calls that only a direct client can send (a method override, a form
+      body) go straight to the proxy. The run removes its sandbox at its
+      end, as the probe does.
+  platform_checks.py dns
+      A pod with its own DNS rule, out of the namespace's rule for any name,
+      resolves the names of DNS_ALLOWED and none of DNS_REFUSED (finance
+      only, as the pods of the finance app).
 
 Each probe prints one JSON line. The exit code is 1 when a probe fails, so
 the Job fails. Standard library only; the OpenShell CLI comes from the init
@@ -500,9 +506,12 @@ for method, path in CALLS:
 out["proxy address, direct"] = tcp("PROXY_IP", PROXY_PORT)
 print("PROBE " + json.dumps(out))
 '''
-# Calls that must not reach the app from a sandbox: each delete, and calls
-# off the allow list of the proxy (firefly-mcp/app/proxy/default.conf.template).
+# Calls that must not reach the app from a sandbox: each write (the sandbox
+# policy lets through reads only), each delete, and calls off the allow list
+# of the proxy (firefly-mcp/app/proxy/default.conf.template).
 REFUSED_CALLS = [
+    ("POST", "/api/v1/tags"),
+    ("PUT", "/api/v1/tags/0"),
     ("DELETE", "/api/v1/transactions/0"),
     ("DELETE", "/api/v1/tags/0"),
     ("GET", "/api/v1/preferences"),
@@ -545,8 +554,71 @@ def run_firefly_probe() -> None:
         report("firefly-probe", f"sandbox: {target}", expected, got)
 
 
+def direct(method: str, path: str, body: bytes | None = None,
+           headers: dict | None = None) -> str:
+    """A call straight to the proxy. The proxy marks its refusal with a
+    header. A 405 is the app's answer to a method that a path has no route
+    for: here, a method override that reached the app."""
+    request = urllib.request.Request(APP_PROXY + path, method=method, data=body,
+                                     headers={"Accept": "application/json", **(headers or {})})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as r:
+            return f"reached: HTTP {r.status}"
+    except urllib.error.HTTPError as e:
+        if e.headers.get("X-Firefly-Proxy") == "refused":
+            return "refused: proxy"
+        if e.code == 405:
+            return "override applied: HTTP 405"
+        return f"reached: HTTP {e.code}"
+    except OSError as e:
+        return f"failed: {type(e).__name__}"
+
+
+JSON = {"Content-Type": "application/json"}
+
+
+def direct_checks() -> None:
+    """The calls that neither the MCP server nor a sandbox (reads only) can
+    send. No call can change data: the app refuses an empty body, and ids
+    are "0"."""
+    for target, expected, args in (
+            ("allowed read (GET /api/v1/about)", "reached", ("GET", "/api/v1/about")),
+            # The proxy drops the header, so the app routes a POST, and
+            # refuses its empty body; a PUT on /api/v1/tags has no route.
+            ("X-HTTP-Method-Override: PUT on POST /api/v1/tags", "reached",
+             ("POST", "/api/v1/tags", b"{}", {**JSON, "X-HTTP-Method-Override": "PUT"})),
+            ("_method in the query (POST /api/v1/tags?_method=PUT)", "refused",
+             ("POST", "/api/v1/tags?_method=PUT", b"{}", JSON)),
+            ("form body (POST /api/v1/tags, _method=PUT)", "refused",
+             ("POST", "/api/v1/tags", b"_method=PUT",
+              {"Content-Type": "application/x-www-form-urlencoded"})),
+            ("DELETE /api/v1/tags/0", "refused", ("DELETE", "/api/v1/tags/0")),
+            ("PATCH /api/v1/transactions/0", "refused",
+             ("PATCH", "/api/v1/transactions/0", b"{}", JSON)),
+            ("GET /api/v1/preferences", "refused", ("GET", "/api/v1/preferences")),
+            ("GET /api/v1/accounts/%2e%2e/preferences", "refused",
+             ("GET", "/api/v1/accounts/%2e%2e/preferences"))):
+        report("firefly-probe", f"proxy, direct: {target}", expected, direct(*args))
+
+
+def lookup(name: str) -> str:
+    try:
+        socket.getaddrinfo(name, None)
+        return "resolved"
+    except OSError as e:
+        return f"blocked: {type(e).__name__}"
+
+
+def dns() -> None:
+    for name in os.environ.get("DNS_ALLOWED", "").split():
+        report("dns", f"lookup {name}", "resolved", lookup(name))
+    for name in os.environ.get("DNS_REFUSED", "").split():
+        report("dns", f"lookup {name}", "blocked", lookup(name))
+
+
 def firefly_probe() -> None:
     mcp_checks()
+    direct_checks()
     setup_cli()
     if not remove_leftover():
         return
@@ -559,5 +631,6 @@ def firefly_probe() -> None:
 
 
 if __name__ == "__main__":
-    {"isolation": isolation, "probe": probe, "firefly-probe": firefly_probe}[sys.argv[1]]()
+    {"isolation": isolation, "probe": probe, "firefly-probe": firefly_probe,
+     "dns": dns}[sys.argv[1]]()
     sys.exit(1 if failures else 0)

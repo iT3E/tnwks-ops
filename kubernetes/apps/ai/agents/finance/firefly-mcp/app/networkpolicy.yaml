@@ -1,10 +1,12 @@
 ---
-# The proxy of the finance app. In: the MCP server, and the supervisors of the
-# sandboxes of this trust domain. A sandbox has two pods: the workload pod has
-# no egress at all, and its supervisor opens each connection that the sandbox
-# policy approves, from its own pod. So the supervisor is the client here, and
-# only for a sandbox whose policy names the proxy (the agent's, and the
-# probe's). Out: the app, and DNS (the namespace's allow-dns).
+# The proxy of the finance app. In: the MCP server, the supervisors of the
+# sandboxes of this trust domain, and the probe of the app. A sandbox has two
+# pods: the workload pod has no egress at all, and its supervisor opens each
+# connection that the sandbox policy approves, from its own pod. So the
+# supervisor is the client here, and only for a sandbox whose policy names
+# the proxy (the agent's, and the probe's). The probe
+# (../../checks/app/firefly-probe.yaml) sends the calls that the proxy must
+# refuse straight to it. Out: the app, and DNS for the name of the app only.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -24,6 +26,11 @@ spec:
             io.kubernetes.pod.namespace: agents-finance
             openshell.ai/boundary-role: supervisor
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: platform-checks
+            app.kubernetes.io/component: firefly-probe
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:
             - port: "8080"
@@ -40,10 +47,25 @@ spec:
         - ports:
             - port: "8080"
               protocol: TCP
+    # Its own DNS rule (the pod is out of the namespace's allow-dns): the name
+    # of the app's Service, and no other name.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: firefly.production.svc.cluster.local
 ---
 # The MCP server of the finance app. In: the agent pod (its gateway is the MCP
-# client) and the checks of this namespace (the probe calls the server, as the
-# agent does). Out: the proxy only, and DNS (the namespace's allow-dns).
+# client) and the probe of the app (it calls the server as the agent does).
+# Out: the proxy only, and DNS for the name of the proxy only. DNS would be a
+# way out too, so this pod resolves no other name.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -61,6 +83,7 @@ spec:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-finance
             app.kubernetes.io/name: platform-checks
+            app.kubernetes.io/component: firefly-probe
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:
@@ -76,3 +99,15 @@ spec:
         - ports:
             - port: "8080"
               protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: firefly-proxy.agents-finance.svc.cluster.local

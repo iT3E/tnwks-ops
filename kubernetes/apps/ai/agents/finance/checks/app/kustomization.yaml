@@ -1,7 +1,7 @@
 ---
 # The checks of the agent platform in agents-finance: the checks of every
-# trust domain (kubernetes/apps/ai/agents/checks/app), and the probe of the
-# finance app (firefly-probe.yaml).
+# trust domain (kubernetes/apps/ai/agents/checks/app), and the probe and the
+# DNS check of the finance app (firefly-probe.yaml).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

@@ -11,7 +11,8 @@
 # method, each other path (the preferences, webhooks, cron, configuration,
 # users and tokens, the bulk update, the rule and recurrence triggers, the
 # exports, the attachments), and the writes of rules and rule groups (a rule
-# can delete a transaction). observability/tests/test_firefly_proxy.py checks
+# can delete a transaction). A method override is refused or dropped, and a
+# write must have a JSON body (the maps below). observability/tests/test_firefly_proxy.py checks
 # the list against the calls of the server.
 #
 # The entrypoint of the image renders this file at start, with the env vars of
@@ -58,9 +59,28 @@ map "$request_method $uri" $firefly_allowed {
     "~^PUT /api/v1/tags/[^/]+$" 1;
 }
 
-map "$firefly_raw_ok$firefly_allowed" $firefly_refused {
+# A method override. The framework of the app (Laravel 12 on Symfony 7.4)
+# routes a POST as the method of the header X-HTTP-Method-Override, or of a
+# "_method" argument in the query, a form body or a JSON body. The proxy
+# drops the header and its variants (below), refuses a query with "_method",
+# and lets through a write only with a JSON body, so no form body. A JSON
+# body with "_method" still reaches the app: at 6.5.9 the app has only GET
+# and POST routes on the paths where the list allows a POST, so such a POST
+# gets a 405 or a read (docs/apps/agent-platform.md, "The finance app").
+map $args $firefly_args_ok {
     default 1;
-    "11" 0;
+    "~*(^|&)(_|%5f)method(=|&|\[|%5b|$)" 0;
+}
+
+map "$request_method $content_type" $firefly_type_ok {
+    default 0;
+    "~^GET " 1;
+    "~*^(POST|PUT) application/json\s*(;.*)?$" 1;
+}
+
+map "$firefly_raw_ok$firefly_allowed$firefly_args_ok$firefly_type_ok" $firefly_refused {
+    default 1;
+    "1111" 0;
 }
 
 # One line for each request: the method, the path with no query string, the
@@ -94,6 +114,9 @@ server {
         proxy_set_header X-Forwarded-Port "";
         proxy_set_header X-Forwarded-Proto "";
         proxy_set_header X-Real-IP "";
+        proxy_set_header X-HTTP-Method-Override "";
+        proxy_set_header X-HTTP-Method "";
+        proxy_set_header X-Method-Override "";
         proxy_hide_header Set-Cookie;
         proxy_redirect off;
         proxy_read_timeout 60s;

@@ -230,16 +230,21 @@ def lookup(name: str, value: str) -> str:
     return next((v for rx, v in entries if rx.search(value)), default)
 
 
-def proxy_allows(call: str) -> bool:
+def proxy_allows(call: str, content_type: str | None = None) -> bool:
     """The proxy's decision for "<method> <raw path>", as nginx makes it:
-    the raw path checked first, then the method and the decoded path on the
-    allow list."""
+    the raw path, the method and the decoded path on the allow list, the
+    query (no method override) and the content type (JSON for a write, the
+    MCP server's own). A GET has no content type."""
     method, raw = call.split(" ", 1)
-    path = raw.split("?", 1)[0]
+    path, _, args = raw.partition("?")
+    if content_type is None:
+        content_type = "" if method == "GET" else "application/json"
     uri = re.sub(r"/+", "/", urllib.parse.unquote(path))
-    ok_raw = lookup("firefly_raw_ok", raw)
-    allowed = lookup("firefly_allowed", f"{method} {uri}")
-    return lookup("firefly_refused", ok_raw + allowed) == "0"
+    flags = (lookup("firefly_raw_ok", raw)
+             + lookup("firefly_allowed", f"{method} {uri}")
+             + lookup("firefly_args_ok", args)
+             + lookup("firefly_type_ok", f"{method} {content_type}"))
+    return lookup("firefly_refused", flags) == "0"
 
 
 def concrete(call: str) -> str:
@@ -265,9 +270,40 @@ def test_proxy_refuses_other_calls(call):
     assert not proxy_allows(call), call
 
 
-def test_proxy_reads_the_query_string_nowhere():
+def test_proxy_lets_through_dots_and_slashes_in_the_query():
     assert proxy_allows("GET /api/v1/search/transactions?query=a%2Fb..c")
     assert proxy_allows("PUT /api/v1/tags/my%20tag")
+
+
+# The framework of the app (Laravel 12.55 on Symfony http-foundation 7.4)
+# routes a POST as the method that a "_method" argument names, in the query
+# or the body (Request::getMethod).
+@pytest.mark.parametrize("call", [
+    "POST /api/v1/tags?_method=DELETE", "POST /api/v1/tags?_METHOD=DELETE",
+    "POST /api/v1/tags?%5Fmethod=DELETE", "POST /api/v1/tags?a=1&_method=PUT",
+    "POST /api/v1/tags?_method[]=DELETE", "POST /api/v1/tags?_method",
+    "GET /api/v1/tags?_method=DELETE", "PUT /api/v1/tags/1?_method=DELETE",
+])
+def test_proxy_refuses_a_method_override_in_the_query(call):
+    assert not proxy_allows(call), call
+
+
+@pytest.mark.parametrize("content_type", [
+    "application/x-www-form-urlencoded", "multipart/form-data; boundary=x", "text/plain",
+    "", "application/jsonx", "application/xml",
+])
+@pytest.mark.parametrize("call", ["POST /api/v1/tags", "PUT /api/v1/tags/1"])
+def test_proxy_lets_through_a_write_with_a_json_body_only(call, content_type):
+    assert not proxy_allows(call, content_type), (call, content_type)
+    assert proxy_allows(call, "application/json")
+    assert proxy_allows(call, "application/json; charset=utf-8")
+    assert proxy_allows(call, "Application/JSON")
+
+
+def test_proxy_drops_the_method_override_headers():
+    text = TEMPLATE.read_text()
+    for header in ("X-HTTP-Method-Override", "X-HTTP-Method", "X-Method-Override"):
+        assert f'proxy_set_header {header} "";' in text, header
 
 
 def mcp_groups() -> list[str]:
@@ -354,13 +390,53 @@ def test_the_pieces_name_the_same_addresses():
     (rule,) = policy["network_policies"].values()
     (endpoint,) = rule["endpoints"]
     assert (endpoint["host"], endpoint["port"]) == ("firefly-proxy.agents-finance.svc.cluster.local", 8080)
-    assert {r["allow"]["method"] for r in endpoint["rules"]} == {"GET", "POST", "PUT"}
+    # Reads only: the scripts of the agent only read.
+    assert {r["allow"]["method"] for r in endpoint["rules"]} == {"GET"}
     assert config["plugins"]["entries"]["openshell"]["config"]["policy"] == \
         "/home/node/config/sandbox-policy.yaml"
-    (cronjob, _) = yaml.safe_load_all(PROBE.read_text())
+    cronjob = next(yaml.safe_load_all(PROBE.read_text()))
     container = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
     env = {e["name"]: e.get("value") for e in container["env"]}
     assert env["MCP_URL"] == config["mcp"]["servers"][SERVER]["url"]
     assert env["APP_PROXY"] == f"http://{endpoint['host']}:{endpoint['port']}"
     # The probe's sandbox runs the image of the agent's sandboxes.
     assert env["PROBE_IMAGE"] == config["plugins"]["entries"]["openshell"]["config"]["from"]
+
+
+def docs(path: Path) -> list[dict]:
+    return [d for d in yaml.safe_load_all(path.read_text()) if d]
+
+
+NAMESPACE = ROOT / "kubernetes/apps/ai/agents/finance/namespace.yaml"
+POLICY = APP / "networkpolicy.yaml"
+
+
+def dns_names(policy: dict) -> list[str]:
+    return [r.get("matchName") or r.get("matchPattern")
+            for rule in policy["spec"].get("egress", [])
+            for port in rule.get("toPorts", [])
+            for r in port.get("rules", {}).get("dns", [])]
+
+
+def test_the_app_pods_resolve_one_name_each():
+    """DNS is a way out too. Cilium adds up the allows of the policies that
+    select a pod, so the pods must be out of the namespace's rule for any
+    name, and each has its own rule for one name."""
+    (wide,) = [d for d in docs(NAMESPACE) if d["metadata"]["name"] == "allow-dns"]
+    assert {"key": "agents.home.arpa/dns", "operator": "DoesNotExist"} in \
+        wide["spec"]["endpointSelector"]["matchExpressions"]
+    names = {d["spec"]["endpointSelector"]["matchLabels"]["app.kubernetes.io/name"]: dns_names(d)
+             for d in docs(POLICY)}
+    assert names == {"firefly-proxy": ["firefly.production.svc.cluster.local"],
+                     "firefly-mcp": ["firefly-proxy.agents-finance.svc.cluster.local"]}
+    for path in (APP / "mcp.yaml", APP / "proxy.yaml", PROBE):
+        for doc in docs(path):
+            spec = (doc["spec"]["template"]["spec"] if doc["kind"] == "Deployment" else
+                    doc["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+                    if doc["kind"] == "CronJob" else None)
+            if spec is None or doc["metadata"]["name"] == "platform-check-firefly-probe":
+                continue
+            labels = (doc["spec"]["template"]["metadata"]["labels"] if doc["kind"] == "Deployment"
+                      else doc["spec"]["jobTemplate"]["spec"]["template"]["metadata"]["labels"])
+            assert labels["agents.home.arpa/dns"] == "own-rule", doc["metadata"]["name"]
+            assert {"name": "ndots", "value": "1"} in spec["dnsConfig"]["options"]
