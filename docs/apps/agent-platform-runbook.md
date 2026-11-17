@@ -1712,7 +1712,10 @@ of the vault work. The lead reads; the owner makes the turns.
 
    A failed check Job fires `KubeJobFailed` (`agents-finance`,
    `agent-restore-check`); a failed or stuck Restore fires
-   `KopiurRestoreFailed`. The cleanup is the revert of that pull request.
+   `KopiurRestoreFailed`. The cleanup is a pull request that takes
+   `./agent/restore-test/ks.yaml` out of the list again and sets the name
+   of the snapshot back to its placeholder; Flux then removes the Restore,
+   the check Job and the scratch volume.
 6. **The heartbeat.** The first heartbeat of `openclaw-agents-finance` is
    in Tempo; then the pull request that adds it to `SERVICES`.
 
