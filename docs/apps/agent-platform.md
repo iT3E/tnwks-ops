@@ -621,6 +621,49 @@ from the pilot:
   gateway, the MCP server of the app and its proxy
   ([The finance app](#the-finance-app)).
 
+### Scheduled jobs
+
+The scheduled jobs of the agent are in git:
+`finance/agent/config/automations.json`, one entry for each job (a key, a
+cron expression and a message). The `automations-sync` container of the
+pod makes the jobs of the product equal to that list.
+
+- **Why a container.** At the release of the image (OpenClaw 2026.11.3)
+  the product keeps its jobs in its state database, and only a running
+  gateway changes them, through its CLI (`openclaw automations`) or its
+  API. Its config has no key for jobs (`cron` holds settings only), and its
+  docs say to change jobs with the CLI, not in a file. A job can carry a
+  declaration key: an add with a key that is there already updates that
+  job, with the same id. The product's own declared jobs use it (the
+  heartbeat `heartbeat:main`, the job of `memory-core`). An init step
+  can't do it (no gateway runs yet), so the container does it once the
+  gateway is up, with the keys `flux:<key>`.
+- **What it does.** At the start of the pod and then each hour: an add for
+  each entry (it makes the job, or sets it back to git after a change in a
+  chat), and a remove for each `flux:` job that is not in the list. A job
+  with another key, or with none (made in a chat), stays. It never turns a
+  job on: a job that the owner or the scheduler turned off stays off, and
+  its line says `enabled=false`. A change of the list starts the pod again
+  (Reloader). Each line is
+  `automations-sync key=<key> result=ok|failed|removed`, in Loki.
+- **Each job:** an agent turn of the agent `main` in a new session
+  (`isolated`), at the time of its cron expression in the zone of the
+  cluster (the cluster variable `TIMEZONE`, the `TZ` of the container, set
+  on each job). The other containers have no `TZ`, so the product runs in
+  UTC, and a job with no zone would run in UTC. The answer goes to the
+  owner's chat, the one id of `TELEGRAM_ALLOW_FROM`.
+- **The task text is not in git.** The message of a job is neutral: it
+  names a file of the workspace, `automations/<key>.md`, and the owner
+  writes the task in that file (the workspace is in the backups). A job
+  whose file is missing answers that it is missing. The agent can change
+  that file, as it can change its other workspace files.
+- **The tools of a run.** A job made with no tool list stores `*`: each
+  run uses the tool policy of the agent as it is at that time, with its
+  sandbox, its deny list and the filter of the MCP server. The test
+  `observability/tests/test_agent_automations.py` runs a job and a chat
+  turn against a fake model and a fake MCP server: both get the same
+  tools, and a search finds the same finance tools (no delete).
+
 ### The steps of the owner
 
 None of these values goes through an agent or a session. The search key is
@@ -1218,7 +1261,7 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 | The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
 | The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
 | A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
-| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory) and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
+| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory) and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed`. `automations-sync` (finance): `automations-sync key=<key> result=ok\|failed\|removed`, with `enabled=false` for a job that is off | Some KB, most of it at a start of the pod |
 | The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
 
 Not in Loki, on purpose:

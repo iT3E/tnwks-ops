@@ -57,7 +57,8 @@ spec:
       # namespace ("run this command inside the Gateway container or with a
       # shared PID namespace"). The containers run the same image, as the
       # same user. The backup container has the same secret env as the
-      # gateway, so it sees no more than it holds already; the sandbox-start
+      # gateway, so it sees no more than it holds already; the
+      # automations-sync container has two of those values; the sandbox-start
       # container has none, but it can see the processes of the others. The
       # restricted Pod Security level allows it.
       shareProcessNamespace: true
@@ -434,6 +435,61 @@ spec:
           resources: *small
           securityContext: *containerSecurity
           volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+              readOnly: true
+        # The automations-sync container (scripts/automations-sync.sh in
+        # ../config): it makes the scheduled jobs of the product equal to
+        # automations.json of the config, when the pod starts and then each
+        # hour. It calls the gateway on loopback with the CLI of the image.
+        # Two values of agent-secret only: the gateway token for the call,
+        # and the owner's chat id, where the answer of a job goes. TZ is the
+        # zone of each job: the zone of the cluster. The other containers
+        # have no TZ, so the product itself runs in UTC.
+        - name: automations-sync
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/automations-sync.sh"]
+          env:
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            - name: TZ
+              value: ${TIMEZONE}
+            - name: OPENCLAW_GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: OPENCLAW_GATEWAY_TOKEN
+            - name: TELEGRAM_ALLOW_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: TELEGRAM_ALLOW_FROM
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext: *containerSecurity
+          volumeMounts:
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
             - name: scripts
               mountPath: /scripts
               readOnly: true
