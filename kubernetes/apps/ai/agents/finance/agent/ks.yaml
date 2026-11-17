@@ -1,31 +1,13 @@
 ---
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
-# The config of the finance agent (openclaw.json) and the scripts of its pod.
-# No ${VAR} substitution here: each ${NAME} in the config is for the product,
-# which reads it from an env var of the pod. The scripts are the pilot's
-# (pilot/agent/config/scripts), so the two trust domains run the same steps.
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: agents-finance-agent-config
-  namespace: flux-system
-  labels:
-    substitution.flux.home.arpa/disabled: "true"
-spec:
-  targetNamespace: agents-finance
-  path: ./kubernetes/apps/ai/agents/finance/agent/config
-  prune: true
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  wait: false
-  interval: 30m
-  retryInterval: 1m
-  timeout: 5m
----
-# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
-# The finance agent (docs/apps/agent-platform.md). For now its network policy
-# only: app/kustomization.yaml says what joins it, and when.
+# The finance agent (docs/apps/agent-platform.md): app/kustomization.yaml
+# says what joins it, and when.
+# One Flux Kustomization for the pod and its config: the ConfigMaps are
+# generated in app/ with a hash in their names, so a merge that changes the
+# config and the pod template is one apply and one rollout. With the config
+# in a Kustomization of its own, such a merge made two rollouts: Reloader
+# for the ConfigMap, then Flux for the template
+# (docs/apps/agent-platform.md, "A start of the agent pod").
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -39,8 +21,6 @@ spec:
     kind: GitRepository
     name: flux-system
   dependsOn:
-    # The config and the scripts the pod mounts.
-    - name: agents-finance-agent-config
     # The client certificate, and the gateway of the sandboxes.
     - name: agents-finance-sandbox-gateway
   wait: false

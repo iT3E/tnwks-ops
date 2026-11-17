@@ -78,9 +78,11 @@ def test_the_two_jobs_of_the_host_are_in_the_list_and_on_since_the_task_files_ar
 
 
 def test_the_config_maps_hold_the_list_and_the_script():
-    kustomization = yaml.safe_load((FINANCE / "config/kustomization.yaml").read_text())
+    # In the Kustomization of the pod, with a hash in each name: a change of
+    # the list starts the pod again (test_agent_rollout.py).
+    kustomization = yaml.safe_load((FINANCE / "app/kustomization.yaml").read_text())
     files = {m["name"]: m["files"] for m in kustomization["configMapGenerator"]}
-    assert "automations.json=./automations.json" in files["agent-config"]
+    assert "automations.json=../config/automations.json" in files["agent-config"]
     assert ("automations-sync.sh=../../../pilot/agent/config/scripts/automations-sync.sh"
             in files["agent-scripts"])
 

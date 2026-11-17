@@ -895,7 +895,9 @@ sandbox filter is `src/plugins/web-provider-resolution-shared.ts:85-90`.)
    by default. It must be in `tools.sandbox.tools.alsoAllow`, and
    `tools.web.search.enabled` must be `true`:
    ```sh
-   kubectl -n agents-pilot get configmap agent-config -o jsonpath='{.data.openclaw\.json}' | jq '.tools'
+   cm=$(kubectl -n agents-pilot get deploy agent \
+     -o jsonpath='{.spec.template.spec.volumes[?(@.name=="config")].configMap.name}')
+   kubectl -n agents-pilot get configmap "$cm" -o jsonpath='{.data.openclaw\.json}' | jq '.tools'
    ```
 5. **Read only.** The network path: a dropped flow to the vendor shows in
    Hubble, through a read-only port-forward to `hubble-relay` in
@@ -930,8 +932,9 @@ sandbox filter is `src/plugins/web-provider-resolution-shared.ts:85-90`.)
 
 ## The official plugins step fails
 
-The pod of the pilot does not start: its `official-plugins` init container
-failed, and `AgentPlatformWorkloadNotReady` fires after 10 minutes. The
+The pod of an agent (pilot or finance) does not start: its
+`official-plugins` init container failed, and
+`AgentPlatformWorkloadNotReady` fires after 10 minutes. The
 step installs the Brave plugin from the image at each start
 ([agent-platform.md](agent-platform.md), "Web search"). It stops the whole
 pod on purpose, and does not let the gateway start without it, for two
@@ -956,8 +959,27 @@ reasons:
      copy of the volume for the review, and find the writer before a
      restore.
    - `id=brave ... result=failed`: the install itself failed. The lines
-     above it are the product's installer. An image of a bad build fails
-     the same step in CI, so look at the release first.
+     above it are the product's installer. The step runs with
+     `OPENCLAW_DEBUG=1`, so the CLI of the product prints the cause:
+     `[openclaw] Reason: <text>` and a stack, after
+     `[openclaw] The CLI command failed.` (a pod from before 2026-11-17
+     printed that line only). The step has no secret, so the reason holds
+     none. In Loki, for finance:
+     `{namespace="agents-finance"} |= "official-plugins" |~ "Reason|result="`.
+     An image of a bad build fails the same step in CI, so look at the
+     release first.
+
+   **Seen so far.** 2026-11-17, finance, 09:41 to 09:43 UTC: one merge gave
+   two rollouts (see [agent-platform.md](agent-platform.md), "A start of
+   the agent pod"). The first new pod was stopped during its
+   `official-plugins` step, before the installer printed a line. The step
+   of the next pod failed four times, each in about 5 seconds, with no
+   reason in the log, and passed on its fifth run at 09:43:39. The cause of
+   the four failures is not known. The product serializes plugin installs
+   with a lease in the state database (`plugins.lifecycle.lease`), but its
+   CLI waits for a held lease (up to 10 minutes in release 2026.11.3), so a
+   lease alone does not explain a failure in 5 seconds. Since that day a
+   merge gives one rollout, and the next failure prints its reason.
 2. **Fix.**
    - **A failed install:** revert the image pin to the last release that
      started, through a merge.

@@ -116,7 +116,8 @@ not change it.
 
 The mover roles of kopiur give `get` and `patch` on each ConfigMap of the
 namespace where a mover runs. In a trust domain that reaches the config and
-the scripts of the agent pod, and Reloader starts the pod again on a change.
+the scripts of the agent pod: the kubelet updates a mounted ConfigMap in the
+running pod, and each later start of the pod reads it.
 At kopiur 0.10.20 a mover writes a ConfigMap only for the result of a
 repository bootstrap or discovery run, and those runs go in `kopiur-system`.
 A snapshot or a restore writes none.
@@ -330,7 +331,7 @@ keys in the secret. Then link the number (below).
 | Part | What it is |
 | --- | --- |
 | `agent` (Deployment) | The gateway of the product, on loopback port 18789, `Recreate`, on the second worker, memory request 2 GiB and limit 4 GiB |
-| `agent-config` (ConfigMap) | `openclaw.json`, a read-only file in the pod at `/home/node/config/` (`OPENCLAW_CONFIG_PATH`, with `OPENCLAW_CONFIG_READONLY=1`). Applied with no `${VAR}` substitution (`agents-pilot-agent-config`) |
+| `agent-config` (ConfigMap) | `openclaw.json`, a read-only file in the pod at `/home/node/config/` (`OPENCLAW_CONFIG_PATH`, with `OPENCLAW_CONFIG_READONLY=1`). Its name has a hash of its content (`agent-config-<hash>`), so a change of the file starts the pod again. Applied with no `${VAR}` substitution ([A start of the agent pod](#a-start-of-the-agent-pod)) |
 | `agent-state` (PVC, 10 GiB) | Mounted at `/home/node/data`: `state/` (the state of the product, `OPENCLAW_STATE_DIR`, with the workspace in `state/workspace/`) and `archives/` |
 | `signal-daemon` (Deployment and Service) | signal-cli, native build, as an HTTP daemon on port 8080, in multi-account mode |
 | `signal-state` (PVC, 1 GiB) | Mounted at `/var/lib/signal-cli`: `data/` (the account state, `--config`) and `archives/` |
@@ -442,7 +443,8 @@ the sandbox plugin copies the workspace only.
     `LITELLM_API_KEY`. It prints one line, `memory-index result=ok` or
     `memory-index result=failed`, and nothing of the CLI's own output.
   - A later change of the embedding model needs no step by hand: the
-    config change restarts the pod (Reloader), and the step rebuilds.
+    config change starts the pod again (a new pod template), and the step
+    rebuilds.
   - When the step fails (the model gateway or the host's Ollama is down,
     or the limit fires), the pod still starts. The index stays as it was,
     so a stale index stays stale until the next start that ends with
@@ -561,6 +563,69 @@ the `backup` container, so the restart shows on the pod. The first archive
 with the name of a release holds the state from before that release; restore
 that one after a failed update.
 
+### A start of the agent pod
+
+The pod of each agent (pilot and finance) starts again only when its pod
+template changes, and one merge gives one rollout:
+
+- **The config and the scripts.** `agent/app/kustomization.yaml` makes the
+  ConfigMaps `agent-config` and `agent-scripts` with a hash of their content
+  in the name (`agent-config-<hash>`), and Kustomize puts that name in the
+  Deployment. A change of `openclaw.json`, of `automations.json` or of a
+  script is a new name, so it is a change of the pod template. Flux applies
+  the ConfigMaps and the Deployment in one apply, with no `${VAR}`
+  substitution in the ConfigMaps (the annotation
+  `kustomize.toolkit.fluxcd.io/substitute: disabled`), and prunes the old
+  ones. This is the documented way of Kustomize: a new ConfigMap for each
+  change of its content
+  ([Kubernetes docs, Kustomize, generatorOptions](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#generatoroptions)).
+  The MCP gateway does the same with its config.
+- **The Secrets.** Reloader starts the pod again when a Secret that it uses
+  changes (`agent-secret`, `agent-search-secret`, and the client
+  certificate `openshell-client-tls` at a renewal): the annotation
+  `secret.reloader.stakater.com/auto: "true"` watches Secrets only
+  ([Reloader README, v1.4.24](https://github.com/stakater/Reloader/blob/v1.4.24/README.md)).
+  The Secrets of SOPS have fixed names, so they need it. A merge that
+  changes a Secret and the pod template together can still give two
+  rollouts, so change a Secret in a pull request of its own.
+
+Before 2026-11-17 the config had a Flux Kustomization of its own, and
+Reloader watched the ConfigMaps too. A merge that changed the config and the
+pod template then gave two rollouts: Reloader for the ConfigMap, then Flux
+for the template about 20 seconds later. Kubernetes stops the first new pod
+for the second one, in the middle of its init steps
+([Kubernetes docs, Deployments, rollover](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rollover-aka-multiple-updates-in-flight)).
+On 2026-11-17 at 09:41 UTC that stopped a pod of finance in its
+`official-plugins` step, and the same step of the next pod failed four
+times before it passed: the agent was away for about five minutes. The
+grafana HelmRelease has the same lesson (Reloader on its Secret only).
+
+**Recreate.** The Deployment has the `Recreate` strategy: Kubernetes stops
+the old pod, waits until it is gone, and only then makes the new one
+([Kubernetes docs, Recreate](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#recreate-deployment)).
+That is right for this pod: one gateway process owns the state on one
+`ReadWriteOnce` volume, and the `archive` step reads the state with no
+writer. A rolling update would run two gateways on one state. The guarantee
+holds for a rollout only: a pod deleted by hand gets its replacement at
+once, while the old one still stops (the same page).
+
+**What a rollout costs.** The agent is away from the stop of the old pod
+until the new pod is ready: the init steps, then the start of the gateway.
+Measured on 2026-11-16 (pilot) and 2026-11-17 (finance), about 2 minutes:
+
+| Step | Time |
+| --- | --- |
+| `values-check` (finance only), `prepare` | Under 2 seconds |
+| `archive` | 2 to 4 seconds |
+| `official-plugins` | About 22 seconds |
+| `doctor` | About 33 seconds |
+| `memory-index` | 7 to 9 seconds for an update of the index; a full rebuild takes longer, up to its limit of 180 seconds |
+| The gateway, to ready | About 45 seconds |
+
+No scheduled job of the product runs while the gateway is down. So merge a
+change of an agent at a quiet time, and not at the time of one of its
+scheduled jobs.
+
 ### Link the test Signal number
 
 Once, after the first start of the daemon (Signal is off for now, see
@@ -662,7 +727,8 @@ pod makes the jobs of the product equal to that list.
   each entry (it makes the job, or sets it back to git after a change in a
   chat), and a remove for each `flux:` job that is not in the list. A job
   with another key, or with none (made in a chat), stays. A change of the
-  list starts the pod again (Reloader).
+  list starts the pod again (the ConfigMap gets a new name, so the pod
+  template changes), and the pass at the start applies it.
 - **A broken list changes nothing.** With no file, the sync declares
   nothing (`result=none`). A file that does not parse, with no `jobs`
   list, or with one bad entry stops the pass with
@@ -1314,7 +1380,7 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 | The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
 | The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
 | A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
-| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory) and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed`. `automations-sync` (finance): `automations-sync key=<key> result=ok state=on\|off\|stopped`, `result=removed\|failed`, and one `automations-sync result=ok jobs=<n>\|failed reason=<reason>` line for each pass | Some KB, most of it at a start of the pod |
+| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory), on a failure the reason and the stack of its CLI (`[openclaw] Reason: ...`, from `OPENCLAW_DEBUG=1`; the step has no secret), and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed`. `automations-sync` (finance): `automations-sync key=<key> result=ok state=on\|off\|stopped`, `result=removed\|failed`, and one `automations-sync result=ok jobs=<n>\|failed reason=<reason>` line for each pass | Some KB, most of it at a start of the pod |
 | The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
 
 Not in Loki, on purpose:

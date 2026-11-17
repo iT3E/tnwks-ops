@@ -5,7 +5,8 @@
 # The mover roles of the backup operator (kopiur 0.10.20) give `get` and
 # `patch` on every ConfigMap of each namespace where a mover runs, with no
 # resourceNames. In an agent namespace that reaches the config and the
-# scripts of the agent pod, and Reloader starts the pod again on a change.
+# scripts of the agent pod: the kubelet updates a mounted ConfigMap in the
+# running pod, and each later start reads it.
 #
 # At kopiur 0.10.20 a mover writes a ConfigMap for one thing only: the
 # result of a repository bootstrap or discovery run, into the ConfigMap that
