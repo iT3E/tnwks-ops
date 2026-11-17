@@ -1,0 +1,385 @@
+---
+# Phase setup: the accounts, their rights and folders, the scripts and
+# configs, the tasks, the state file. Then A imports the distro, and the
+# reads that need no window: the token probe, the folder rights, the stops of
+# the procedure on an unknown state or another version (with a test config,
+# no WSL), and a disabled task that does not run.
+
+# A setup after a window would import a second disk at the path of A: the
+# setup runs only while the state file holds no marker.
+- name: Read the markers of the state file
+  ansible.windows.win_powershell:
+    parameters:
+      State: "{{ wsl_move_rehearsal_state_file }}"
+    script: |
+      param([string]$State)
+      $Ansible.Changed = $false
+      if (-not (Test-Path -LiteralPath $State)) { return 0 }
+      @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() }).Count
+  check_mode: false
+  register: wsl_move_rehearsal_setup_markers
+
+- name: The state file holds no marker
+  ansible.builtin.assert:
+    that: (wsl_move_rehearsal_setup_markers.output | last | int) == 0
+    fail_msg: >-
+      The state file holds {{ wsl_move_rehearsal_setup_markers.output | last }} marker(s): the setup runs only before
+      the window. Nothing is changed.
+    quiet: true
+
+# The folder, the state folder and the read of the live parts come first, so
+# the first read, before any VM of the rehearsal, is the baseline.
+# Only SYSTEM and the Administrators may change the scripts, the configs, the
+# root file system and the state; Users may read. The folder of each account
+# and its log folder keep their own rules.
+- name: Folder of the rehearsal
+  tnwks_win_dir_acl:
+    path: "{{ wsl_move_rehearsal_dir }}"
+    items: reset
+    keep: "{{ wsl_move_rehearsal_accounts.values() | map(attribute='folder') | list + wsl_move_rehearsal_accounts.values() | map(attribute='log_dir') | list }}"
+
+- name: Folders of the procedure
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - "{{ wsl_move_rehearsal_state_dir }}"
+    - "{{ wsl_move_rehearsal_side }}"
+    - "{{ wsl_move_rehearsal_elsewhere }}"
+    - '{{ wsl_move_rehearsal_dir }}\log'
+
+- name: The read of the live parts
+  ansible.windows.win_copy:
+    src: Get-TnwksMoveLiveState.ps1
+    dest: '{{ wsl_move_rehearsal_dir }}\Get-TnwksMoveLiveState.ps1'
+
+- name: The live parts at the start
+  ansible.builtin.include_tasks: live.yml
+
+# Before the first account task: the baseline is there, and it read the
+# registrations (a read with the hive not loaded says "not read", and two such
+# reads compare equal with no proof).
+- name: The baseline of the live parts is kept, and it read the registrations
+  ansible.builtin.assert:
+    that:
+      - wsl_move_rehearsal_baseline.output | default([]) | last | default(none, true) is not none
+      - (wsl_move_rehearsal_baseline.output | last).registrations is not match('not read')
+      - (wsl_move_rehearsal_live.output | last).registrations is not match('not read')
+    fail_msg: >-
+      The baseline of the live parts is missing, or it did not read the registrations of the live distro (the hive of
+      the account of the host's person is not loaded). The rehearsal stops before its first account.
+    quiet: true
+  when: not ansible_check_mode
+
+# Local accounts with no admin group, members of Users. Each password is
+# random, made here, and kept nowhere: each registration of a task sets a new
+# one (tnwks_win_scheduled_task, s4u_user).
+- name: The accounts of the rehearsal
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ item.value.name }}"
+      Description: "{{ item.value.description }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Name, [string]$Description)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
+      if (-not $user) {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Name, 'make the local account')) {
+              $bytes = New-Object byte[] 48
+              [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+              # No cmdlet takes the plain value: module logging would record it.
+              $secret = [Net.NetworkCredential]::new('', [Convert]::ToBase64String($bytes) + 'aA1!').SecurePassword
+              $user = New-LocalUser -Name $Name -Password $secret -PasswordNeverExpires -AccountNeverExpires `
+                  -UserMayNotChangePassword -Description $Description
+              $secret.Dispose()
+          }
+      }
+      if ($user) {
+          $users = @(Get-LocalGroupMember -SID 'S-1-5-32-545' | ForEach-Object { $_.SID.Value })
+          if ($users -notcontains $user.SID.Value) {
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess($Name, 'add to Users')) { Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $user }
+          }
+          $admins = @(Get-LocalGroupMember -SID 'S-1-5-32-544' | ForEach-Object { $_.SID.Value })
+          if ($admins -contains $user.SID.Value) { throw "$Name is a member of Administrators. Nothing more is changed." }
+      }
+  loop: "{{ wsl_move_rehearsal_accounts | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+
+- name: Read the accounts of the rehearsal
+  ansible.builtin.include_tasks: read_accounts.yml
+
+# S4U needs it, and the registration of each task checks the new password with
+# a batch logon. A loses it after the window (phase window), as the real
+# present account does when it leaves Administrators.
+- name: The accounts may log on as a batch job
+  ansible.windows.win_user_right:
+    name: SeBatchLogonRight
+    users: "{{ wsl_move_rehearsal_sids.values() | list }}"
+    action: add
+  when: wsl_move_rehearsal_sids | length == 2
+
+- name: The accounts may not log on at the keyboard, by Remote Desktop or from the network
+  ansible.windows.win_user_right:
+    name: "{{ item }}"
+    users: "{{ wsl_move_rehearsal_sids.values() | list }}"
+    action: add
+  loop: "{{ wsl_move_rehearsal_deny_rights }}"
+  when: wsl_move_rehearsal_sids | length == 2
+
+- name: The accounts are not on the sign-in screen
+  ansible.windows.win_regedit:
+    path: '{{ wsl_move_rehearsal_userlist_key }}'
+    name: "{{ item.value.name }}"
+    data: 0
+    type: dword
+  loop: "{{ wsl_move_rehearsal_accounts | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Log folders of the accounts
+  tnwks_win_dir_acl:
+    path: "{{ item.value.log_dir }}"
+    writer: "{{ item.value.name }}"
+  loop: "{{ wsl_move_rehearsal_accounts | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: wsl_move_rehearsal_sids | length == 2
+
+# The folder of a disk file, with the rights of step 3: the account may make
+# files in this folder only (no delete of a child, no change of rules), and
+# CREATOR OWNER on files lets it replace or delete a file that it made, and no
+# other file. SYSTEM and the Administrators have full control. No inheritance.
+- name: Folders of the disk file, with the rights of step 3
+  ansible.windows.win_powershell:
+    parameters:
+      Path: "{{ wsl_move_rehearsal_accounts[item].folder }}"
+      Sid: "{{ wsl_move_rehearsal_sids[item] }}"
+    script: &folder_rights |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Path, [string]$Sid)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $want = 'O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;0x100002;;;{0})(A;OIIO;0x1301bf;;;CO)' -f $Sid
+      if (-not (Test-Path -LiteralPath $Path)) {
+          $Ansible.Changed = $true
+          if (-not $PSCmdlet.ShouldProcess($Path, 'make the folder')) { return }
+          New-Item -ItemType Directory -Path $Path | Out-Null
+      }
+      # The owner, the protection, and the explicit rules, as Windows writes them.
+      function Get-Parts([string]$Sddl) {
+          $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { $Matches[1] } else { '' }
+          $dacl = if ($Sddl -match 'D:([A-Z]*)((\([^)]*\))*)') { $Matches } else { @{ 1 = ''; 2 = '' } }
+          $aces = @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value } |
+              Where-Object { ($_ -split ';')[1] -notmatch 'ID' } | Sort-Object) -join ' '
+          "$owner|$($dacl[1] -match 'P')|$aces"
+      }
+      $acl = Get-Acl -LiteralPath $Path
+      $norm = New-Object Security.AccessControl.DirectorySecurity
+      $norm.SetSecurityDescriptorSddlForm($want, 'Owner, Access')
+      if ((Get-Parts $acl.Sddl) -eq (Get-Parts $norm.Sddl)) { return }
+      $Ansible.Changed = $true
+      if ($PSCmdlet.ShouldProcess($Path, 'set the rules of step 3')) {
+          $acl.SetSecurityDescriptorSddlForm($want, 'Owner, Access')
+          Set-Acl -LiteralPath $Path -AclObject $acl
+      }
+  loop: [a, b]
+  when: wsl_move_rehearsal_sids | length == 2
+
+# The marker of the procedure in the folder of the new account (step 3 writes
+# it; window step 4 writes the one in the old folder). Its own rules: SYSTEM
+# and the Administrators full, the account read only, so the account can not
+# remove it. Written only when absent.
+- name: The marker file in the folder of B
+  ansible.windows.win_powershell:
+    parameters:
+      Path: '{{ wsl_move_rehearsal_accounts.b.folder }}\{{ wsl_move_rehearsal_marker_name }}'
+      Sid: "{{ wsl_move_rehearsal_sids.b }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Path, [string]$Sid)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      if (Test-Path -LiteralPath $Path) { return }
+      $Ansible.Changed = $true
+      if ($PSCmdlet.ShouldProcess($Path, 'write the marker')) {
+          [IO.File]::WriteAllText($Path, "tnwks-ops: the marker of the move window. No step removes it.`r`n")
+          $acl = Get-Acl -LiteralPath $Path
+          $acl.SetSecurityDescriptorSddlForm(('O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;{0})' -f $Sid), 'Owner, Access')
+          Set-Acl -LiteralPath $Path -AclObject $acl
+      }
+  when: wsl_move_rehearsal_sids | length == 2
+
+- name: Scripts of the rehearsal
+  ansible.windows.win_copy:
+    src: "{{ item }}"
+    dest: '{{ wsl_move_rehearsal_dir }}\{{ item }}'
+  loop:
+    - Invoke-TnwksWslAccountTask.ps1
+    - Invoke-TnwksMoveWindow.ps1
+    - Invoke-TnwksStartTask.ps1
+
+- name: The root file system
+  ansible.windows.win_copy:
+    src: "{{ wsl_move_rehearsal_cache }}/{{ wsl_move_rehearsal_rootfs.url | basename }}"
+    dest: '{{ wsl_move_rehearsal_dir }}\{{ wsl_move_rehearsal_rootfs.url | basename }}'
+
+- name: The configs of the scripts
+  ansible.windows.win_copy:
+    dest: '{{ wsl_move_rehearsal_dir }}\{{ item.key }}.json'
+    content: "{{ item.value | to_nice_json }}"
+  loop: "{{ wsl_move_rehearsal_configs | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+# The state file is made only when it is absent: no apply writes a marker or
+# changes it. The installed version of WSL is saved once: the procedure stops
+# on another one.
+- name: The state file and the saved version of WSL, only when absent
+  ansible.windows.win_powershell:
+    parameters:
+      State: "{{ wsl_move_rehearsal_state_file }}"
+      Log: "{{ wsl_move_rehearsal_log_file }}"
+      Version: "{{ wsl_move_rehearsal_version_file }}"
+      Binary: "{{ wsl_move_rehearsal_service_binary }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$State, [string]$Log, [string]$Version, [string]$Binary)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      foreach ($path in @($State, $Log)) {
+          if (-not (Test-Path -LiteralPath $path)) {
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess($path, 'make the file')) { [IO.File]::WriteAllText($path, '') }
+          }
+      }
+      $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($Binary).FileVersion
+      if (-not (Test-Path -LiteralPath $Version)) {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Version, 'save the version of WSL')) { [IO.File]::WriteAllText($Version, $installed) }
+      }
+      $installed
+
+# An administrator registers an S4U task for a different account only with
+# its password, and the account has none that anything keeps: the module sets
+# a new random password at each registration (s4u_user), as SYSTEM. The start
+# task of B keeps the state that the window gives it (keep_task_enabled_state).
+- name: Tasks of the accounts
+  tnwks_win_scheduled_task:
+    name: "{{ wsl_move_rehearsal_prefix }}-{{ task.key }}-{{ task.step }}"
+    xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
+    s4u_user: "{{ wsl_move_rehearsal_accounts[task.key].name }}"
+    s4u_description: "{{ wsl_move_rehearsal_accounts[task.key].description }}"
+    keep_task_enabled_state: "{{ task.step == 'start' }}"
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  loop: "{{ wsl_move_rehearsal_task_list }}"
+  loop_control:
+    loop_var: task
+    label: "{{ task.key }}-{{ task.step }}"
+  when: wsl_move_rehearsal_sids | length == 2
+
+- name: The window procedure and the boot task of the way back, tasks of SYSTEM
+  tnwks_win_scheduled_task:
+    name: "{{ wsl_move_rehearsal_window_task if item == 'window' else wsl_move_rehearsal_boot_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'system-task.xml.j2') }}"
+  loop: [window, boot]
+
+- name: The rest runs the tasks, so a check run stops here
+  when: not ansible_check_mode
+  block:
+    - name: The token probe of each account, which also makes its profile
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: "{{ item }}", step: probe}
+      loop: [a, b]
+
+    - name: Each probe reads a medium token, no Administrators group, and a profile under Users
+      ansible.builtin.assert:
+        that:
+          - item.result.medium
+          - not item.result.administrators
+          - item.result.hive
+          - item.result.profile is match('^[A-Za-z]:\\\\Users\\\\[^\\\\]+$')
+        fail_msg: "The probe of {{ item.task }} did not pass: {{ item }}"
+        quiet: true
+      loop: "{{ wsl_move_rehearsal_runs.probe }}"
+      loop_control:
+        label: "{{ item.task }}"
+
+    # Only after the probe made the profile; no folder of a profile is made in
+    # advance.
+    - name: .wslconfig of each account
+      ansible.windows.win_copy:
+        dest: '{{ item.result.profile }}\.wslconfig'
+        content: |
+          # Managed by tnwks-ops (role windows_wsl_move_rehearsal): the VM of the
+          # rehearsal stays small. No key for networking.
+          [wsl2]
+          memory={{ wsl_move_rehearsal_memory }}
+          processors=1
+          swap=0
+      loop: "{{ wsl_move_rehearsal_runs.probe }}"
+      loop_control:
+        label: "{{ item.task }}"
+
+    - name: A imports the distro into its folder
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: a, step: import-rootfs}
+
+    - name: A reads its distro
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: a, step: check}
+
+    - name: A owns the distro, with its data, the default distro, the first-run value and a small VM
+      vars:
+        check: "{{ wsl_move_rehearsal_runs.check | last }}"
+      ansible.builtin.assert:
+        that:
+          - check.result.registered
+          - check.result.token == wsl_move_rehearsal_data_token
+          - check.result.default_distribution
+          - check.result.oobe_complete == 1
+          - check.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
+        fail_msg: "The distro of A does not read as it should: {{ check }}"
+        quiet: true
+
+    # A disabled task does not run (MS-TSCH, SchRpcRun).
+    - name: The disabled start task of B does not run
+      ansible.windows.win_powershell:
+        parameters:
+          Task: "{{ wsl_move_rehearsal_prefix }}-b-start"
+        script: |
+          param([string]$Task)
+          $Ansible.Changed = $false
+          $before = (Get-ScheduledTaskInfo -TaskName $Task).LastRunTime
+          $state = "$((Get-ScheduledTask -TaskName $Task).State)"
+          $refused = ''
+          try { Start-ScheduledTask -TaskName $Task -ErrorAction Stop } catch { $refused = $_.Exception.Message }
+          Start-Sleep -Seconds 10
+          [pscustomobject]@{ state = $state; ran = ((Get-ScheduledTaskInfo -TaskName $Task).LastRunTime -ne $before); refused = $refused }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_disabled
+      failed_when: >-
+        (wsl_move_rehearsal_disabled.output | last).state != 'Disabled' or (wsl_move_rehearsal_disabled.output | last).ran
+
+    - name: The stops of the procedure, with a test config and no WSL
+      ansible.builtin.include_tasks: procedure_stops.yml
+
+- name: The groups at the end
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The live parts at the end
+  ansible.builtin.include_tasks: live.yml

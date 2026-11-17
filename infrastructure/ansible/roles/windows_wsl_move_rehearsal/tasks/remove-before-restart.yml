@@ -1,0 +1,140 @@
+---
+# Phase remove-before-restart: the distro and the tasks go, while the
+# accounts may still run a task. First no run of the procedure, then the
+# groups, whatever the state. Then
+# each account stops its distro, the disk files go (only the named paths
+# under the folder of the rehearsal), and each account unregisters with no
+# file at its path. The boot task stays for the second restart, unless the
+# last marker is that of a started window. The profiles of the accounts stay
+# loaded until the restart (each run of an S4U task adds a reference that is
+# not released), so the accounts and their profiles go in the phase remove.
+
+# No run of the procedure goes on during the removal: a run of the group test
+# could put A back into Administrators after the groups go.
+- name: No run of the procedure, first
+  ansible.builtin.include_tasks: stop_procedure.yml
+
+- name: The groups, then
+  ansible.builtin.include_tasks: groups_out.yml
+
+- name: The live parts at the start
+  ansible.builtin.include_tasks: live.yml
+
+- name: Read the accounts of the rehearsal
+  ansible.builtin.include_tasks: read_accounts.yml
+
+- name: The accounts may log on as a batch job, so that their tasks run
+  ansible.windows.win_user_right:
+    name: SeBatchLogonRight
+    users: "{{ wsl_move_rehearsal_sids.values() | list }}"
+    action: add
+  when: wsl_move_rehearsal_sids | length > 0
+
+- name: Stop the distros, remove the disk files, unregister
+  ansible.windows.win_powershell:
+    parameters:
+      Runner: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksStartTask.ps1'
+      Prefix: "{{ wsl_move_rehearsal_prefix }}"
+      Root: "{{ wsl_move_rehearsal_dir }}"
+      Disks: >-
+        {{ (wsl_move_rehearsal_accounts.values() | map(attribute='folder') | list
+            + [wsl_move_rehearsal_side, wsl_move_rehearsal_elsewhere])
+           | map('regex_replace', '$', '\\' ~ wsl_move_rehearsal_disk_name) | list }}
+      Keys: [a, b]
+      LogDirs: ["{{ wsl_move_rehearsal_accounts.a.log_dir }}", "{{ wsl_move_rehearsal_accounts.b.log_dir }}"]
+      Sids: "{{ wsl_move_rehearsal_sids.values() | list }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Runner, [string]$Prefix, [string]$Root, [string[]]$Disks, [string[]]$LogDirs, [string[]]$Keys, [string[]]$Sids)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $out = [ordered]@{}
+      function Test-Task([string]$Name) { [bool](Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue) }
+      $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+      foreach ($d in $Disks) {
+          if (-not [IO.Path]::GetFullPath($d).StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) { throw "$d is outside $Root. Nothing is changed." }
+      }
+      # The start tasks first: disabled, and their instances end.
+      foreach ($k in $Keys) {
+          $t = "$Prefix-$k-start"
+          if (-not (Test-Task $t)) { continue }
+          $Ansible.Changed = $true
+          # A disabled task can still have an instance running: stop it too.
+          if ($PSCmdlet.ShouldProcess($t, 'disable and stop')) { Disable-ScheduledTask -TaskName $t | Out-Null; Stop-ScheduledTask -TaskName $t }
+      }
+      for ($i = 0; $i -lt $Keys.Count; $i++) {
+          $t = "$Prefix-$($Keys[$i])-stop"
+          if (-not (Test-Task $t)) { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($t, 'run')) { $out["stop-$($Keys[$i])"] = & $Runner -Task $t -Result (Join-Path $LogDirs[$i] 'stop.json') -Minutes 10 }
+      }
+      if ($WhatIfPreference) { $out.note = 'a check run stops no distro and removes no file'; return $out }
+      # No WSL process of either account may hold a file.
+      $deadline = (Get-Date).AddMinutes(2)
+      do {
+          $procs = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('wsl.exe', 'wslhost.exe', 'wslrelay.exe') } | Where-Object {
+              $o = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue; $o -and $o.Sid -in $Sids })
+          if ($procs.Count) { Start-Sleep -Seconds 3 }
+      } while ($procs.Count -and (Get-Date) -lt $deadline)
+      if ($procs.Count) {
+          throw "$($procs.Count) WSL process(es) of the accounts still run. Restart the host (with the owner's go), then run the phase remove."
+      }
+      foreach ($d in $Disks) {
+          if (Test-Path -LiteralPath $d) {
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess($d, 'remove the disk file')) { Remove-Item -LiteralPath $d -Force }
+          }
+      }
+      for ($i = 0; $i -lt $Keys.Count; $i++) {
+          $t = "$Prefix-$($Keys[$i])-unregister"
+          if (-not (Test-Task $t)) { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($t, 'run')) {
+              $run = & $Runner -Task $t -Result (Join-Path $LogDirs[$i] 'unregister.json') -Minutes 10
+              $out["unregister-$($Keys[$i])"] = $run
+              if ($run.code -ne 0 -or -not $run.result -or $run.result.registered) {
+                  throw "The unregister of $($Keys[$i]) did not pass: $($run | ConvertTo-Json -Compress -Depth 4)"
+              }
+          }
+      }
+      $out
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_unregistered
+
+- name: Read the last marker
+  ansible.windows.win_powershell:
+    parameters:
+      State: "{{ wsl_move_rehearsal_state_file }}"
+    script: |
+      param([string]$State)
+      $Ansible.Changed = $false
+      if (-not (Test-Path -LiteralPath $State)) { return '' }
+      $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
+      if ($lines.Count) { ($lines[-1] -split ' ', 2)[1].Trim() } else { '' }
+  check_mode: false
+  register: wsl_move_rehearsal_last_marker
+
+# The boot task runs at the second restart and must find nothing to do.
+# After a started window with no end, it would act: then it goes now.
+- name: No task of the rehearsal, but the boot task
+  tnwks_win_scheduled_task:
+    name: "{{ item }}"
+    state: absent
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  loop: >-
+    {{ wsl_move_rehearsal_task_list | map(attribute='key') | zip(wsl_move_rehearsal_task_list | map(attribute='step'))
+       | map('join', '-') | map('regex_replace', '^', wsl_move_rehearsal_prefix ~ '-') | list
+       + [wsl_move_rehearsal_window_task]
+       + ([wsl_move_rehearsal_boot_task] if (wsl_move_rehearsal_last_marker.output | last | default('')) == 'window-started' else []) }}
+
+- name: The groups at the end
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The live parts at the end
+  ansible.builtin.include_tasks: live.yml

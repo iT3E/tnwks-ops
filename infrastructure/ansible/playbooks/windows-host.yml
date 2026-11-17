@@ -51,6 +51,16 @@
       when: groups['windows_hosts'] | map('extract', hostvars, 'wsl_rehearsal') | select | list | length > 0
       tags: [wsl-rehearsal]
 
+    # Only when a host has the rehearsal of the move on, at its phase setup.
+    - name: Root file system of the rehearsal of the move
+      ansible.builtin.include_role:
+        name: windows_wsl_move_rehearsal
+        tasks_from: controller.yml
+        apply:
+          tags: [wsl-move-rehearsal]
+      when: groups['windows_hosts'] | map('extract', hostvars, 'wsl_move_rehearsal') | select | list | length > 0
+      tags: [wsl-move-rehearsal]
+
 - name: Windows host
   hosts: windows_hosts
   gather_facts: false
@@ -151,3 +161,9 @@
     - role: windows_wsl_rehearsal
       when: wsl_rehearsal | bool
       tags: [wsl-rehearsal]
+    # The rehearsal of the move (Design Doc 0004, section 9, step 0). Last,
+    # and each phase only when given by hand:
+    #   --tags wsl-move-rehearsal -e wsl_move_rehearsal_phase=<phase>
+    - role: windows_wsl_move_rehearsal
+      when: wsl_move_rehearsal | bool
+      tags: [wsl-move-rehearsal]

@@ -43,6 +43,10 @@ FOLDERS = {
     # The rehearsal of the account change, on WSL-02 while it runs: a role
     # folder whose log and disk folders the temporary account writes to.
     "wsl_rehearsal_dir": "rehearsal",
+    # The rehearsal of the move, on WSL-02 while it runs: a role folder whose
+    # disk and log folders the two temporary accounts write to
+    # (test_wsl_move_rehearsal.py).
+    "wsl_move_rehearsal_dir": "move rehearsal",
 }
 # The folders below a role folder that the account writes to, with their own call
 # of the module and a writer. The SYSTEM log of the watchdog has its own call too.

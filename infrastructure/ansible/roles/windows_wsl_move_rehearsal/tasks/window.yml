@@ -1,0 +1,129 @@
+---
+# Phase window: the procedure runs the window forward, steps 1 to 9, with A
+# in the place of the present account and B in the place of the new one. For
+# the test of the way back after the demotion, the procedure first puts A into
+# Administrators (logged), and step 7 takes it out (logged); then the play
+# takes away A's own batch right, so A is like the real demoted account. The
+# procedure does not restart (restart is off). Then the reads of B.
+
+- name: The live parts at the start
+  ansible.builtin.include_tasks: live.yml
+
+- name: The groups at the start
+  ansible.builtin.include_tasks: groups.yml
+
+- name: Read the accounts of the rehearsal
+  ansible.builtin.include_tasks: read_accounts.yml
+
+- name: The window, and the reads after it
+  when: not ansible_check_mode
+  block:
+    - name: Read when the password of B was last set
+      ansible.windows.win_powershell:
+        parameters:
+          Name: "{{ wsl_move_rehearsal_accounts.b.name }}"
+        script: |
+          param([string]$Name)
+          $Ansible.Changed = $false
+          (Get-LocalUser -Name $Name).PasswordLastSet.ToUniversalTime().ToString('o')
+      register: wsl_move_rehearsal_b_password
+
+    - name: The window procedure, forward
+      ansible.builtin.include_tasks: run_procedure.yml
+      vars:
+        wsl_move_rehearsal_request: {mode: forward, group_steps: true, stop_after: 0, rehearsal_group_test: true}
+        wsl_move_rehearsal_last_marker: ''
+
+    # A leaves Administrators at window step 7. The real present account then
+    # has no batch right at all; A loses its own as well.
+    - name: A no longer holds its own batch right
+      ansible.windows.win_user_right:
+        name: SeBatchLogonRight
+        users: ["{{ wsl_move_rehearsal_sids.a }}"]
+        action: remove
+
+    - name: B reads its distro after the window
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: check}
+
+    - name: The reads of the folders, the files and the tasks after the window
+      ansible.builtin.include_tasks: read_window.yml
+
+    # The value that the import wrote (DefaultUid) shows at the next start of
+    # the distro: the import ran id -u before it wrote the value, and the read
+    # after the stop of step 6 is a new start.
+    - name: B owns the distro, with its data, and WSL took the value that B's import wrote
+      vars:
+        check: "{{ wsl_move_rehearsal_runs.check | last }}"
+        windowed: "{{ wsl_move_rehearsal_window_read.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - check.result.registered
+          - check.result.disk | lower == (wsl_move_rehearsal_accounts.b.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
+          - check.result.token == wsl_move_rehearsal_data_token
+          - check.result.uid == (wsl_move_rehearsal_registration_values.DefaultUid | string)
+          - check.result.default_uid == wsl_move_rehearsal_registration_values.DefaultUid
+          - check.result.default_distribution
+          - check.result.oobe_complete == 1
+          - check.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
+          - windowed.import_b.uid_after_import is search('(^|\n)0$')
+          - windowed.disk_rules_ok
+          - not windowed.disk_at_a
+          - windowed.marker_a and windowed.marker_b
+          - windowed.icon_owner_b | length > 0
+          - windowed.window_tasks_enabled_no_trigger
+          - windowed.start_b_enabled and not windowed.start_a_enabled
+          - windowed.start_b == 'Ready' and windowed.start_a == 'Disabled'
+          - windowed.password_b == (wsl_move_rehearsal_b_password.output | last)
+          - wsl_move_rehearsal_procedure.result == 'done'
+          - wsl_move_rehearsal_procedure.markers == ['window-started', 'window-done']
+          - wsl_move_rehearsal_procedure.groups == ['joined', 'left']
+          - wsl_move_rehearsal_procedure.would_restart == 1
+        fail_msg: "After the window, a read did not pass: {{ check }} {{ windowed }} {{ wsl_move_rehearsal_procedure.log }}"
+        quiet: true
+
+    - name: B makes, replaces and deletes a file of its own, and can not remove the marker
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: filetest}
+
+    - name: The unregister task of B refuses while a file is at the path of its registration
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: unregister, expect: refused}
+
+    - name: The import task of B refuses another path while B lists the distro
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: import-elsewhere, expect: refused}
+
+    # No apply changes the state of a start task (keep_task_enabled_state): B's
+    # is enabled by the window, A's disabled, and the template of B's says
+    # disabled.
+    - name: An apply after the window does not change the start tasks
+      tnwks_win_scheduled_task:
+        name: "{{ wsl_move_rehearsal_prefix }}-{{ task.key }}-start"
+        xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
+        s4u_user: "{{ wsl_move_rehearsal_accounts[task.key].name }}"
+        s4u_description: "{{ wsl_move_rehearsal_accounts[task.key].description }}"
+        keep_task_enabled_state: true
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      loop: [{key: a, step: start}, {key: b, step: start}]
+      loop_control:
+        loop_var: task
+        label: "{{ task.key }}-start"
+      register: wsl_move_rehearsal_keep
+      failed_when: wsl_move_rehearsal_keep.changed or wsl_move_rehearsal_keep.failed | default(false)
+
+    - name: B imports, unregisters and imports again into the same folder
+      ansible.builtin.include_tasks: b_cycle.yml
+
+- name: The groups at the end
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The live parts at the end
+  ansible.builtin.include_tasks: live.yml

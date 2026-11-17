@@ -19,6 +19,7 @@ run that shows drift.
 | `windows_wsl_maintenance` (`wsl-maintenance`) | `Watch-TnwksWsl.ps1` and the task `tnwks-wsl-watchdog` (every 5 min), `Compact-WslVhdx.ps1` and the on-demand task `tnwks-vhdx-compact` |
 | `windows_observability_storage` (`observability-storage`) | The 20Gi Prometheus disk `C:\WSL\observability.vhdx` and the task `tnwks-observability-mount` (site 1, [observability-implementation.md](../operations/observability-implementation.md#site-1-prometheus-volume)) |
 | `windows_wsl_rehearsal` (`wsl-rehearsal`) | hosts with `wsl_rehearsal` (WSL-02): a temporary standard account `tnwks-rehearsal` with a distro of its own and five tasks, for the rehearsal of the account change ([below](#the-rehearsal-of-the-account-change)) |
+| `windows_wsl_move_rehearsal` (`wsl-move-rehearsal`) | hosts with `wsl_move_rehearsal` (WSL-02): two temporary standard accounts, a small distro, and the scripts of the move window, run phase by phase by hand ([below](#the-rehearsal-of-the-move)) |
 | `windows_power` (`power`)                   | hosts with `power_no_sleep` (WSL-02): standby (S1-S3) not allowed on the active scheme, plugged in or on battery, and hibernation off, so neither a program nor the Start menu can sleep the host. Skipped elsewhere; how to undo it is in the role's defaults |
 | `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
 | `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
@@ -153,6 +154,13 @@ into the template, and check that `--check` reports no change. S4U tasks
 (desktop user, no stored password) register fine over the SSH session when
 their principal is the account of the session. For a different account, see
 the option `s4u_user` ([below](#the-rehearsal-of-the-account-change)).
+
+The option `keep_task_enabled_state` (off by default) is for a task that
+another step disables and enables, such as a start task of the move window.
+With it on, the comparison leaves out `Settings/Enabled`, and a registration
+of a task that exists keeps the state that the task has. A new task takes the
+state of its template. No role but the rehearsal of the move sets it, so the
+tasks of the other roles compare and register as before.
 
 ## Start WSL with no elevation
 
@@ -618,6 +626,139 @@ account or its SID; no value for the tile; no task; no profile, and no
 folder of the account in the users folder; and no folder of the rehearsal. It shows the local accounts, the members of Administrators and the
 holders of the rights, and a SID of another origin that names no account
 as a note.
+
+## The rehearsal of the move
+
+Per host, `wsl_move_rehearsal` (`group_vars/windows_hosts.yml`, on in
+`host_vars/WSL-02` only) adds the role `windows_wsl_move_rehearsal`: step 0
+of the move of a distro to another account (Design Doc 0004, section 9). It
+runs the scripts of the window on a small distro of its own, with two
+temporary accounts: A in the place of the account that owns the distro
+today, and B in the place of the new account. It does not touch the live
+distro, its registration, its VM or the account of the host's person.
+
+With the switch on, a run does nothing but check its guards. Each phase
+runs only when the lead gives it, in this order, and reads its result:
+
+```sh
+cd infrastructure/ansible
+uv run ansible-playbook playbooks/windows-host.yml --limit WSL-02 --tags wsl-move-rehearsal \
+  -e wsl_move_rehearsal_phase=<phase>
+uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02
+```
+
+A check run (`--check`) of any phase reads only: it starts no task, waits
+for nothing and moves no file. The registrations go through
+`tnwks_win_scheduled_task`, which changes nothing in a check run.
+
+| Part | What it is |
+| --- | --- |
+| The accounts `tnwks-moverh-a` and `tnwks-moverh-b` | Local accounts, members of Users only, with a random password that nothing keeps. They may log on as a batch job (S4U needs it), and not at the keyboard, by Remote Desktop or from the network. No tile |
+| `C:\ProgramData\tnwks-moverh` | The scripts, their configs, the pinned Alpine root file system, the state of the procedure (`state\`). Only SYSTEM and the Administrators may change them |
+| `...\a`, `...\b` | The folders of the disk file. Each account may make files there, in that folder only, and an entry for CREATOR OWNER on files lets it replace or delete a file that it made. No inheritance |
+| The marker file `tnwks-move.marker` | In the folder of B (setup) and of A (the window). SYSTEM and the Administrators full, the account read only. It keeps the folder through an unregister |
+| `...\log\a`, `...\log\b` | The result of each task of the account, one JSON file for each step |
+| The tasks `tnwks-moverh-<a\|b>-<step>` | As the account, S4U, no elevation, no trigger. `stop`, `unregister` and `import` are the window tasks, always enabled. `start` holds the distro, as the keepalive does: A's is enabled, B's is registered disabled |
+| The tasks `tnwks-moverh-window` and `tnwks-moverh-boot` | As SYSTEM: the procedure (`Invoke-TnwksMoveWindow.ps1`, no trigger, started by the play with a run request), and the boot task of the way back (a boot trigger) |
+| The profiles of the accounts | Their `.wslconfig` (1 GB, one processor, no swap), written only after the probe made the profile, and their registrations of the distro `tnwks-moverh` |
+
+**The guards.** Each name of the rehearsal starts with `tnwks-moverh`, and
+each path is under its folder. The play checks this before any phase, and
+also that no account of the rehearsal is the account of the host's person
+and that the disk of the live distro is not under the folder. Each script
+checks it again before any action: the account script refuses a distro name
+outside its pattern and the names of `wsl_move_rehearsal_refused_names` (the
+live distro), whatever the pattern, and a path outside the folder; the
+procedure refuses an account or a task outside its pattern, a path outside
+the folder, and a config with the session check on. Each phase that runs the
+procedure first reads the last marker in the state file, and does not start
+on another one than its order gives (a phase run twice, or out of order).
+The procedure itself does not go forward after a started window with no end.
+The tests in `security/tests/test_wsl_move_rehearsal.py` hold this.
+
+**The live parts.** At the start and the end of each phase, the play reads
+the port proxy, the NAT networks, the VM processes, and the registrations
+of the distros of the account of the host's person (from its loaded hive,
+as a count and a SHA-256, so the output names no path). The first read is
+the baseline, in the state folder: the setup makes the folder and copies
+the read before it, and stops before its first account unless the baseline
+is there and it read the registrations (with the hive not loaded, the read
+says "not read"). A later read that differs stops the
+phase: run the removal. A VM process does not show its account, so the
+check of the VM processes holds until the first restart only. After it, the
+lead's read of the nodes (Ready, and the same address) covers the live VM.
+
+| Phase | What it does, and what it shows |
+| --- | --- |
+| `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon). A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
+| `window` | The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file, both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. Then B imports, unregisters and imports again into the same folder |
+| `wayback` | First, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started, no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the count of VM processes is that of the baseline, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro with the saved owner and rules of the file, B lists none |
+| `interrupt` | The window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
+| `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task |
+| `after-boot` | The boot task ran the way back once: its marker first, no group step, no restart. A owns the distro, B lists none. Started again by hand, the boot task does nothing and writes no marker |
+| `remove-before-restart` | See the removal |
+| `restart` | The second restart, with its own go and time. The boot task finds no started window and does nothing |
+| `remove` | See the removal. Then the exit check |
+
+The check play also reads, at any time between the phases, that each
+account is in Users only, and that each moment in Administrators in the log
+of the procedure is a stated one: a join only in a run of the group test
+(mode forward or way back), with its leave in the same run.
+
+**The batch right of A.** The registration of a task of A checks its new
+password with a batch logon, so A keeps its own batch right from the setup
+to the end of the window. Then the play takes it away, so the way back runs
+as it must after the demotion of the real account, with only the group step.
+At the end of the phase `wayback`, the play gives it back: the interruption,
+the boot task and the removal run A's tasks with no group step.
+
+**What stays unproven here.** The procedure and the boot task restart the
+host only with `restart` on in their config, and the rehearsal keeps it
+off: they log "would restart", and a unit test shows that the line runs only
+with the switch on. The restarts of the rehearsal come from the play. The
+boot run has the group steps off, so no temporary account is in
+Administrators across a restart; the group step of the way back is shown in
+the phase `wayback`, in a normal run, not at boot. The check for a session
+of the owner (site 1) is not built: the procedure refuses a config with it
+on. After a way back with no restart, it starts the start tasks of the
+present account (the third case of the design, a session of the owner, ends
+the same way); in the group test, A leaves Administrators first and the play
+starts them. Way back step 6 enables only the tasks that step 2 disabled (a
+list in the state folder, written before the marker of a started window
+and removed at the end of a way back); with no list, the way back moves
+nothing. The import writes `DefaultUid` and the default
+distribution, and only these are read back: window step 6 and way back
+step 5 check the path of the registration, not its values. A power loss in
+the phase `window` or `wayback` leaves A in Administrators across the
+restart until the group check of the next phase or the removal, which logs
+the leave; the check play counts that leave as a problem. The design speaks of
+the installed version of WSL: the scripts read it as the file version of
+`C:\Program Files\WSL\wslservice.exe`, as SYSTEM, in the same way at each
+place where a version is compared.
+
+**The removal.** `remove-before-restart` first ends a run of the window
+task or the boot task. Each removal phase then takes A and B out of every
+local group but Users, whatever the state, and logs each leave.
+`remove-before-restart` then has each account stop its distro, removes the
+disk files (only the named paths under the folder), has each account
+unregister with no file at its path, and removes the tasks. It keeps the
+boot task for the second restart, unless the last marker is that of a
+started window. The profiles stay loaded until a restart (each run of an S4U
+task adds a reference to the profile that the system does not release).
+After the second restart, `remove` runs no task of an account. It reads the
+run of the boot task at that boot, removes the profiles (a loaded profile
+stops it before the tasks go, and the message says what stays), the tasks,
+the rights, the values
+of the sign-in screen, the accounts and the folder. It prints the SIDs of
+the accounts for the exit check:
+
+```sh
+uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02 \
+  -e wsl_move_rehearsal_removed_sids=<SID>,<SID>
+```
+
+It reads no account, right, tile, task, profile or folder of the rehearsal
+left.
 
 ## Check-only settings
 

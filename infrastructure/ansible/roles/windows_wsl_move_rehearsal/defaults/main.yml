@@ -1,0 +1,118 @@
+---
+# windows_wsl_move_rehearsal: the rehearsal of the move of a distro to
+# another account (Design Doc 0004, section 9, step 0, "The rehearsal of the
+# move"). It runs only where wsl_move_rehearsal (host_vars) is on.
+#
+# Two temporary local accounts with no admin group, A (in the place of the
+# present account) and B (in the place of the new account), and a small
+# distro that A imports first. The window procedure
+# (files/Invoke-TnwksMoveWindow.ps1, as SYSTEM) moves its disk file to the
+# folder of B, A unregisters it, and B imports the file in place; its way
+# back and its boot task bring it back to A. The scripts are the ones of the
+# window: the rehearsal gives them a config of its own.
+#
+# The lead starts each phase by hand, in this order, and reads its result
+# (docs/wsl/windows-ansible.md, "The rehearsal of the move"):
+#   setup, window, wayback, interrupt, restart, after-boot,
+#   remove-before-restart, restart, remove
+# none: the role only checks its guards. A check run of any phase only reads.
+wsl_move_rehearsal_phase: none
+wsl_move_rehearsal_phases:
+  - none
+  - setup
+  - window
+  - wayback
+  - interrupt
+  - restart
+  - after-boot
+  - remove-before-restart
+  - remove
+# A restart of the host runs only with this set on the command line, for the
+# owner's go and time (R4): -e wsl_move_rehearsal_restart_go=true
+wsl_move_rehearsal_restart_go: false
+
+# Every name of the rehearsal starts with this, and every path is under the
+# folder of the rehearsal. The scripts refuse any other name or path.
+wsl_move_rehearsal_prefix: tnwks-moverh
+wsl_move_rehearsal_dir: 'C:\ProgramData\tnwks-moverh'
+# Names that the scripts refuse, whatever the pattern: the live distro.
+wsl_move_rehearsal_refused_names: [Ubuntu]
+
+# The two accounts. New-LocalUser of Windows PowerShell 5.1 takes a name of 20
+# characters at most and a description of 48 at most.
+wsl_move_rehearsal_accounts:
+  a:
+    name: tnwks-moverh-a
+    description: 'tnwks-ops: temporary account A, move rehearsal'
+    folder: '{{ wsl_move_rehearsal_dir }}\a'
+    log_dir: '{{ wsl_move_rehearsal_dir }}\log\a'
+  b:
+    name: tnwks-moverh-b
+    description: 'tnwks-ops: temporary account B, move rehearsal'
+    folder: '{{ wsl_move_rehearsal_dir }}\b'
+    log_dir: '{{ wsl_move_rehearsal_dir }}\log\b'
+
+# The tasks of each account, by step of Invoke-TnwksWslAccountTask.ps1. The
+# three window tasks (stop, unregister, import) have no trigger and stay
+# enabled. The start task holds one wsl.exe client, as the keepalive does: A's
+# is enabled, and B's is registered disabled, as step 3 registers the start
+# tasks of the new account.
+wsl_move_rehearsal_tasks:
+  a: [probe, import-rootfs, import, stop, unregister, check, start]
+  b: [probe, import, stop, unregister, check, wslconf, filetest, import-elsewhere, start]
+wsl_move_rehearsal_window_task: '{{ wsl_move_rehearsal_prefix }}-window'
+wsl_move_rehearsal_boot_task: '{{ wsl_move_rehearsal_prefix }}-boot'
+
+wsl_move_rehearsal_distro: tnwks-moverh
+wsl_move_rehearsal_disk_name: ext4.vhdx
+wsl_move_rehearsal_marker_name: tnwks-move.marker
+# The folder that the import of B refuses, because B lists the distro in its
+# own folder (a test of the import task). Nothing is ever put there.
+wsl_move_rehearsal_elsewhere: '{{ wsl_move_rehearsal_dir }}\elsewhere'
+# The folder where the disk file waits while B unregisters and imports again.
+wsl_move_rehearsal_side: '{{ wsl_move_rehearsal_dir }}\side'
+
+# The state of the procedure: only SYSTEM and the Administrators may change it.
+wsl_move_rehearsal_state_dir: '{{ wsl_move_rehearsal_dir }}\state'
+wsl_move_rehearsal_state_file: '{{ wsl_move_rehearsal_state_dir }}\window.state'
+wsl_move_rehearsal_log_file: '{{ wsl_move_rehearsal_state_dir }}\window.log'
+wsl_move_rehearsal_acl_file: '{{ wsl_move_rehearsal_state_dir }}\disk.sddl'
+wsl_move_rehearsal_version_file: '{{ wsl_move_rehearsal_state_dir }}\wsl-version.txt'
+wsl_move_rehearsal_request_file: '{{ wsl_move_rehearsal_state_dir }}\request.json'
+wsl_move_rehearsal_baseline_file: '{{ wsl_move_rehearsal_state_dir }}\live-baseline.json'
+# The installed version of WSL is the file version of its service binary, read
+# as SYSTEM (wsl --version runs no session for SYSTEM).
+wsl_move_rehearsal_service_binary: 'C:\Program Files\WSL\wslservice.exe'
+# The procedure and the boot task restart the host only with this on. The
+# rehearsal keeps it off: they log "would restart".
+wsl_move_rehearsal_restart: false
+
+# Inside the distro: a user of UID 1000, a token that shows the data after the
+# move, and a shortcut with an icon (as the distro of site 2 has one), so the
+# import in place writes the icon in the folder of B.
+wsl_move_rehearsal_linux_user: moverh
+wsl_move_rehearsal_data_token: tnwks-move-rehearsal-data
+wsl_move_rehearsal_icon_base64: >-
+  AAABAAEAEBAAAAEAIABSAAAAFgAAAIlQTkcNChoKAAAADUlIRFIAAAAQAAAAEAgGAAAAH/P/YQAAABlJREFUeNpj0Ks1+k8JZhg1YNSAUQOGiwEACKrcEIRwp7QAAAAASUVORK5CYII=
+# The values that the import task writes into the registration in the
+# registry of its own account (step 3 reads them from the present account).
+wsl_move_rehearsal_registration_values:
+  DefaultUid: 1000
+
+# The root file system of the first rehearsal, pinned by its digest
+# (alpinelinux.org, the release file of v3.24 and its .sha256).
+wsl_move_rehearsal_rootfs:
+  url: https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.4-x86_64.tar.gz
+  sha256: cdaa38cb8de3537967ee5b6c9b6cd00cc962da2b018e6eea48696bb274923012
+wsl_move_rehearsal_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/tnwks-ops/windows-wsl-move-rehearsal"
+
+# The .wslconfig of each account, written only after its probe made the
+# profile. A VM of the rehearsal over 1 GiB stops it.
+wsl_move_rehearsal_memory: 1GB
+wsl_move_rehearsal_memory_limit_kib: 1048576
+
+wsl_move_rehearsal_deny_rights:
+  - SeDenyInteractiveLogonRight
+  - SeDenyRemoteInteractiveLogonRight
+  - SeDenyNetworkLogonRight
+wsl_move_rehearsal_userlist_key: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList'
