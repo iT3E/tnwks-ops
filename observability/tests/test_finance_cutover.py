@@ -303,10 +303,17 @@ VALUE = "a-real-looking-value"
 def gateway_config(finance_key=VALUE):
     """The config of the gateway, with the hash of finance_key for the client
     finance, as the owner's values step leaves it."""
+    return with_hash("finance", finance_key)
+
+
+def with_hash(client, key):
+    """The config of the gateway with the hash of key for client, in place of
+    the hash in git (a placeholder or a real one)."""
     text = GATEWAY_CONFIG.read_text()
-    digest = hashlib.sha256(finance_key.encode()).hexdigest()
-    old = re.search(r'keyHash: "(sha256:[0-9a-f]{64})"\n\s+metadata: \{client: finance\}', text).group(1)
-    return text.replace(old, f"sha256:{digest}")
+    (finance,) = [r for r in yaml.safe_load(text)["routes"] if r["name"] == "finance"]
+    (old,) = [k["keyHash"] for k in finance["policies"]["apiKey"]["keys"] if k["metadata"]["client"] == client]
+    assert text.count(old) == 1
+    return text.replace(old, "sha256:" + hashlib.sha256(key.encode()).hexdigest())
 
 
 def run_values(env, config=None):
@@ -356,17 +363,16 @@ def test_the_values_check_passes_with_every_value():
     assert (code, out) == (0, "values-check result=ok")
 
 
-@pytest.mark.parametrize("config", ["placeholder", "other key", "probe key"])
+@pytest.mark.parametrize("config", ["git", "other key", "probe key"])
 def test_the_values_check_refuses_a_key_whose_hash_is_not_the_one_of_finance(config):
-    """The key and its hash in the gateway's config stay in step: the hash of
-    git now (a placeholder), the hash of another key, and the right hash on
-    another client each stop the start."""
+    """The key and its hash in the gateway's config stay in step: the hash in
+    git (a placeholder, or the hash of the real key, never of the test
+    value), the hash of another key, and the right hash on another client
+    each stop the start."""
     text = {
-        "placeholder": GATEWAY_CONFIG.read_text(),
+        "git": GATEWAY_CONFIG.read_text(),
         "other key": gateway_config("another-value"),
-        "probe key": GATEWAY_CONFIG.read_text().replace(
-            "sha256:0000000000000000000000000000000000000000000000000000000000000001",
-            "sha256:" + hashlib.sha256(VALUE.encode()).hexdigest()),
+        "probe key": with_hash("finance-probe", VALUE),
     }[config]
     code, out = run_values(dict.fromkeys(VALUES, VALUE), config=text)
     assert code != 0

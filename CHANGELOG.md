@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.189.1 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the account script passes each shell script to wsl.exe as base64 in one fixed command, so no quote or backslash of the text is lost to the argument rules of Windows PowerShell 5.1; it writes each file in the distro with a newline at its end, reads each value back by its key, and the setup asserts the SHA-256 of each written file. A second setup over the distro of A writes its files again. Each stop step of the window procedure passes only with a shutdown result of its own run, the way back compares the VM processes with the baseline by process ID and start time, the setup stops first when the controller cache has no root file system, the phase command of the docs runs the controller play too (--limit 'localhost,WSL-02'), and the comments on the worst case, the file read and the debug privilege are correct.
+
 ## v2.189.0 - 2026-11-17
 
 ### Added

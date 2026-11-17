@@ -66,6 +66,8 @@
           - check.result.default_uid == wsl_move_rehearsal_registration_values.DefaultUid
           - check.result.default_distribution
           - check.result.oobe_complete == 1
+          - check.result.distribution_conf_sha256 == wsl_move_rehearsal_distribution_conf | hash('sha256')
+          - check.result.mem_total_kib | int > 0
           - check.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
           - windowed.import_b.uid_after_import is search('(^|\n)0$')
           - windowed.disk_rules_ok
