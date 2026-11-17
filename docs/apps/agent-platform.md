@@ -641,6 +641,82 @@ from the pilot:
     image: a scheduled turn got `AGENTS.md` and no `MEMORY.md`, a chat turn
     got both).
 
+### Scheduled jobs
+
+The scheduled jobs of the agent are in git:
+`finance/agent/config/automations.json`, one entry for each job (a key, a
+cron expression and a message). The `automations-sync` container of the
+pod makes the jobs of the product equal to that list.
+
+- **Why a container.** At the release of the image (OpenClaw 2026.11.3)
+  the product keeps its jobs in its state database, and only a running
+  gateway changes them, through its CLI (`openclaw automations`) or its
+  API. Its config has no key for jobs (`cron` holds settings only), and its
+  docs say to change jobs with the CLI, not in a file. A job can carry a
+  declaration key: an add with a key that is there already updates that
+  job, with the same id. The product's own declared jobs use it (the
+  heartbeat `heartbeat:main`, the job of `memory-core`). An init step
+  can't do it (no gateway runs yet), so the container does it once the
+  gateway is up, with the keys `flux:<key>`.
+- **What it does.** At the start of the pod and then each hour: an add for
+  each entry (it makes the job, or sets it back to git after a change in a
+  chat), and a remove for each `flux:` job that is not in the list. A job
+  with another key, or with none (made in a chat), stays. A change of the
+  list starts the pod again (Reloader).
+- **A broken list changes nothing.** With no file, the sync declares
+  nothing (`result=none`). A file that does not parse, with no `jobs`
+  list, or with one bad entry stops the pass with
+  `automations-sync result=failed reason=bad-list`, and no job is made,
+  changed or removed. Only `{"jobs": []}` on purpose removes each `flux:`
+  job.
+- **On and off: git decides, in one way** (`enabled` of each entry):
+  - `false`: the job is off; the sync turns it off at each pass.
+  - `true`: the sync turns the job on when it makes it, and when the value
+    in git changes from `false` to `true`. Between two such changes, a job
+    that is off (stopped in a chat, or by the scheduler after errors)
+    stays off, and its line says `state=stopped`. To start it again: false
+    and then true in git (two pull requests), or
+    `openclaw automations enable <id>` by hand.
+
+  The value of git of the last pass is in the description of the job
+  (`git enabled=true|false`). A chat can edit that field, so a job that is
+  off and has no value the sync can read is a stop of the owner: the sync
+  never turns it on, and its line says `state=stopped note=no-git-value`
+  once. A turn-on writes `true` first and then enables the job; when the
+  enable fails, the sync writes `false` again so the next pass tries again,
+  and the job never comes on by mistake. Both jobs of the host are `false` in git
+  until the owner writes their task files; a pull request turns each on.
+- **The lines,** in Loki: one for each job,
+  `automations-sync key=<key> result=ok state=on|off|stopped`, `result=removed`
+  or `result=failed`, and one for each pass,
+  `automations-sync result=ok jobs=<n>` or
+  `automations-sync result=failed reason=<reason>`. With no `TZ` or no chat
+  id, the sync changes nothing and prints the failed line again each hour,
+  so the alert holds until the pod starts with them. The pass line fires
+  `AgentAutomationsSyncFailed` ([Alerts](#alerts)).
+- **Each job:** an agent turn of the agent `main` in a new session
+  (`isolated`), at the time of its cron expression in the zone of the
+  cluster (the cluster variable `TIMEZONE`, the `TZ` of the container, set
+  on each job). The other containers have no `TZ`, so the product runs in
+  UTC, and a job with no zone would run in UTC. The answer goes to the
+  owner's chat, the one id of `TELEGRAM_ALLOW_FROM`.
+- **The task text is not in git.** The message of a job is neutral: it
+  names a file of the workspace, `automations/<key>.md`, and the owner
+  writes the task in that file (the workspace is in the backups). A job
+  whose file is missing answers that it is missing. The agent can change
+  that file, as it can change its other workspace files.
+- **A run gets no `MEMORY.md`.** The product leaves the memory file out of
+  a scheduled session: in a lab with the image, a scheduled turn got
+  `AGENTS.md` and no `MEMORY.md`, and a chat turn got both. So a task file
+  names what the job needs, or tells the agent to search its memory
+  (`memory_search`).
+- **The tools of a run.** A job made with no tool list stores `*`: each
+  run uses the tool policy of the agent as it is at that time, with its
+  sandbox, its deny list and the filter of the MCP server. The test
+  `observability/tests/test_agent_automations.py` runs a job and a chat
+  turn against a fake model and a fake MCP server: both get the same
+  tools, and a search finds the same finance tools (no delete).
+
 ### The steps of the owner
 
 None of these values goes through an agent or a session. The search key is
@@ -1238,7 +1314,7 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 | The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
 | The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
 | A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
-| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory) and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
+| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory) and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed`. `automations-sync` (finance): `automations-sync key=<key> result=ok state=on\|off\|stopped`, `result=removed\|failed`, and one `automations-sync result=ok jobs=<n>\|failed reason=<reason>` line for each pass | Some KB, most of it at a start of the pod |
 | The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
 
 Not in Loki, on purpose:
@@ -1299,9 +1375,11 @@ The rules are in `monitoring/app/prometheusrule.yaml` and
 War Room, the default Telegram route of Alertmanager, with severity
 `warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
 `AgentInstructionFileChanged`, `AgentInstructionCheckStale`,
-`AgentMemoryIndexFailed` and `ModelBridgeRateLimited` read lines of the logs,
-as gauges of Vector: the aggregator for the `<check> result=` lines
-(`WorkflowAppDrift`, `AgentInstructionCheckStale`, `AgentMemoryIndexFailed`),
+`AgentMemoryIndexFailed`, `AgentAutomationsSyncFailed` and
+`ModelBridgeRateLimited` read lines of the logs, as gauges of Vector: the
+aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
+`AgentInstructionCheckStale`, `AgentMemoryIndexFailed`,
+`AgentAutomationsSyncFailed`),
 the platform agent for the `instruction-check file=` lines and the bridge
 (`AgentInstructionFileChanged`, `ModelBridgeRateLimited`) ([Logs](#logs)).
 `AgentBackupMoverConfigMapDenied` reads a counter of the API server, and
@@ -1328,6 +1406,7 @@ by hand, and the steps at a limit of the Claude plan.
 | `AgentInstructionFileChanged` | An `instruction-check file=<name> change=<change>` line in the last 20 minutes: an instruction file of the agent's workspace (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `skills/`) is new, changed or gone since the day before | none | The lines in Loki name each file. Compare it with the daily archive, and find what made the change before the agent runs on it |
 | `AgentInstructionCheckStale` | No `instruction-check result=` line of the pilot's agent pod in 26 hours, once its `backup` container has run for 26 hours | 15m | `kubectl -n agents-pilot logs deploy/agent -c backup`. A backup that waits on a gateway that is not ready logs nothing |
 | `AgentMemoryIndexFailed` | The newest `memory-index result=` line of the pilot's agent pod is `result=failed`, and it is not older than the start of the newest agent pod. It clears at a start that ends ok. A new pod that has not run the step yet, or no pod, does not fire | none | `kubectl -n agents-pilot logs deploy/agent -c memory-index`. When the model gateway and the model server of the host answer, start the pod again |
+| `AgentAutomationsSyncFailed` | The newest `automations-sync result=` line of an agent pod is `result=failed`, in the last 3 hours: the scheduled jobs of the product are not as `automations.json`. A pass that ends ok clears it | none | `kubectl -n agents-finance logs deploy/agent -c automations-sync`. The `reason=` of the pass says what failed |
 | `AgentBackupMoverConfigMapDenied` | The admission rule `agents-backup-mover-configmaps` refused a ConfigMap write of a backup mover in a trust domain ([The backup mover and ConfigMaps](#the-backup-mover-and-configmaps)). It fires for one to two hours after each denial (`keep_firing_for: 1h`) | none | The audit lines of that hour in Loki name the namespace, the ConfigMap and the ServiceAccount, and the events of the namespace name the mover Job. Suspend the snapshots of that namespace |
 | `AgentBackupRepositoryNotReady` | The backup repository of the trust domains (`agents`) is `Pending` or `Initializing`: it never got `Ready`, so no snapshot of a trust domain runs. `Failed` and `Degraded` are the chart rule `KopiurRepositoryNotReady` | 1h | `kubectl get clusterrepository agents -o yaml`, then the refresher of its session ([Backups of the agent trust domains](#backups-of-the-agent-trust-domains)) |
 | `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |

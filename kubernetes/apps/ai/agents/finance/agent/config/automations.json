@@ -1,0 +1,16 @@
+{
+  "jobs": [
+    {
+      "key": "weekday-check",
+      "cron": "0 9 * * 1-5",
+      "message": "This is the scheduled job weekday-check. Read the file automations/weekday-check.md in your workspace and do the task it describes. If that file is missing or empty, reply with one line: the task file automations/weekday-check.md is missing.",
+      "enabled": false
+    },
+    {
+      "key": "weekly-review",
+      "cron": "0 18 * * 0",
+      "message": "This is the scheduled job weekly-review. Read the file automations/weekly-review.md in your workspace and do the task it describes. If that file is missing or empty, reply with one line: the task file automations/weekly-review.md is missing.",
+      "enabled": false
+    }
+  ]
+}

@@ -16,9 +16,14 @@ configMapGenerator:
       # The sandbox policy (the policy of the openshell entry of
       # openclaw.json): one network rule, to the proxy of the finance app.
       - sandbox-policy.yaml=./sandbox-policy.yaml
+      # The scheduled jobs of the agent, for automations-sync.sh: the
+      # message of each job names a task file of the workspace, so no task
+      # text is in git.
+      - automations.json=./automations.json
   - name: agent-scripts
     files:
       - archive-state.sh=../../../pilot/agent/config/scripts/archive-state.sh
+      - automations-sync.sh=../../../pilot/agent/config/scripts/automations-sync.sh
       - daily-backup.sh=../../../pilot/agent/config/scripts/daily-backup.sh
       - memory-index.sh=../../../pilot/agent/config/scripts/memory-index.sh
       - sandbox-start.sh=../../../pilot/agent/config/scripts/sandbox-start.sh
