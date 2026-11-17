@@ -22,12 +22,12 @@
 #    TELEGRAM_ALLOW_FROM and MCP_GATEWAY_KEY (the key of the client finance
 #    of the MCP gateway, with its hash in the gateway's config,
 #    docs/apps/mcp-gateway.md).
-# 4. Listed, after the owner put the copy of the state and the vault in the
+# 4. Done, after the owner put the copy of the state and the vault in the
 #    volume:
 #    out ./state-inbox.yaml; in ./restore-job.yaml (ARCHIVE and VAULT set),
 #    ./secret.sops.yaml, ./secret-search.sops.yaml (BRAVE_API_KEY, the search
 #    key of finance, with its value) and ./deployment.yaml at replicas 0.
-# 5. The cutover, after the host stopped the finance bot: out
+# 5. Listed: the cutover, after the host stopped the finance bot: out
 #    ./restore-job.yaml, and replicas 1 in ./deployment.yaml.
 # The restore test (../restore-test/, a template) follows the first nightly
 # snapshot with the state in it.
@@ -43,10 +43,10 @@ resources:
   - ./pvc.yaml
   # Step 2.
   - ./backup.yaml
-  # Step 4.
-  - ./restore-job.yaml
+  # Step 4 (the restore Job is out again at step 5).
   - ./secret.sops.yaml
   - ./secret-search.sops.yaml
+  # Step 5: replicas 1.
   - ./deployment.yaml
 # The config of the MCP gateway, the same file, for the values check of the
 # agent pod: it holds hashes and tool rules, no secret.
