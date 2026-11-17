@@ -14,3 +14,7 @@ resources:
   # The finance app as a tool of the agent: the proxy that holds the token of
   # the agent at the app, and the MCP server of the app.
   - ./firefly-mcp/ks.yaml
+  # The restore test of the state into a scratch volume
+  # (agent/restore-test/ks.yaml). The next pull request takes it out again,
+  # when the result is read.
+  - ./agent/restore-test/ks.yaml

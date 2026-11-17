@@ -1611,8 +1611,21 @@ of the vault work. The lead reads; the owner makes the turns.
    (`daily-backup result=ok`) with `instruction-check result=first`.
 5. **The restore test**, with that snapshot (the template
    `finance/agent/restore-test/`, owner's go): the check Job, at the path of
-   the agent pod, passes (`restore-check result=ok`), and its
-   `vault-notes` equals the count of the seed.
+   the agent pod, passes (`restore-check result=ok`). Three counts, each
+   in its own way:
+   - `vault-notes` **equals** the `vault-notes` of the restore Job of step
+     4 (no tool of the agent writes the vault). The reader compares them:
+     the count is not in git.
+   - `workspace-files` is **at least** `copy-files`, the plain files of the
+     copy of the cutover (the Job checks it, `workspace-below-copy`): the
+     agent adds files to its workspace.
+   - `bytes` **equals** the size that the snapshot records:
+     `kubectl -n agents-finance get snapshots.kopiur.home-operations.com <name> -o jsonpath='{.status.stats.sizeBytes}'`.
+     A difference is a finding to read, not a pass.
+
+   A failed check Job fires `KubeJobFailed` (`agents-finance`,
+   `agent-restore-check`); a failed or stuck Restore fires
+   `KopiurRestoreFailed`. The cleanup is the revert of that pull request.
 6. **The heartbeat.** The first heartbeat of `openclaw-agents-finance` is
    in Tempo; then the pull request that adds it to `SERVICES`.
 
