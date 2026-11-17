@@ -2,8 +2,10 @@
 # The finance agent (docs/apps/agent-platform.md): the product (OpenClaw) in
 # the agent image, as the pilot runs it. A scaffold: replicas 0, and not in
 # kustomization.yaml until its Secret exists (the owner makes the bot token,
-# R4) and the owner gives the go of the cutover. The tool set is the pilot's
-# without web search: the owner decides the tool credentials of finance (D3).
+# R4) and the owner gives the go of the cutover. The tool set is the pilot's,
+# with its own search key, and the notes vault in the state volume
+# (docs/apps/agent-platform.md, "The finance agent"). The finance app is not
+# a tool yet.
 # Each command it runs goes to a sandbox of this trust domain, through the
 # sandbox gateway; each model call goes to the model gateway, with the key of
 # this trust domain.
@@ -17,8 +19,8 @@ metadata:
   labels:
     app.kubernetes.io/name: agent
   annotations:
-    # Start the pod again when agent-config, agent-scripts or agent-secret
-    # changes.
+    # Start the pod again when agent-config, agent-scripts, agent-secret or
+    # agent-search-secret changes.
     reloader.stakater.com/auto: "true"
 spec:
   # Zero until the cutover (phase 5 of the platform design).
@@ -156,8 +158,42 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
-        # No official plugins step: the pilot's installs the web search
-        # plugin, which finance does not have until D3 says so.
+        # The official plugins step of the image (the image README, "The
+        # official plugins"): it installs the Brave plugin from the npm cache
+        # of the image, with no network, as a verified official install, in
+        # the state directory. A sandboxed session uses a search provider
+        # only when it is bundled or a verified official install, and each
+        # session of this agent is sandboxed. It runs before doctor, which
+        # would try to install a missing configured plugin from the npm
+        # registry. It installs the plugin again at each start, and stops
+        # the start on a plugin in the state that the image did not put
+        # there. It prints `official-plugins id=brave version=...
+        # result=installed|failed` or `official-plugins result=failed
+        # reason=...`, and a failure stops the start.
+        # It needs no secret.
+        - name: official-plugins
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["install-official-plugins"]
+          env: *env
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
         # Doctor of the product, on a copy of the config (the image README):
         # it migrates the state for a new release.
         - name: doctor
@@ -271,6 +307,12 @@ spec:
           envFrom:
             - secretRef:
                 name: agent-secret
+            # BRAVE_API_KEY (the key of finance, not the pilot's), for the
+            # web search of the gateway. This container only: not the init
+            # containers, not the backup container, and no sandbox
+            # (autoProviders is off).
+            - secretRef:
+                name: agent-search-secret
           ports:
             - name: gateway
               containerPort: 18789

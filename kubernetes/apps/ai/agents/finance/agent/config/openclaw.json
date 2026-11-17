@@ -16,9 +16,9 @@
   "session": {"dmScope": "per-channel-peer"},
   "tools": {
     "elevated": {"enabled": false},
-    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish", "web_search"],
-    "web": {"search": {"enabled": false}},
-    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get"]}}
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search"]}},
+    "web": {"search": {"enabled": true, "provider": "brave"}}
   },
   "memory": {
     "search": {
@@ -29,6 +29,7 @@
         "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"}
       },
       "sources": ["memory"],
+      "extraPaths": [{"path": "/home/node/data/vault", "pattern": "**/*.md"}],
       "rememberAcrossConversations": false
     }
   },
@@ -81,6 +82,7 @@
   },
   "plugins": {
     "allow": [
+      "brave",
       "diagnostics-otel",
       "memory-core",
       "openshell",
@@ -102,6 +104,7 @@
           "timeoutSeconds": 300
         }
       },
+      "brave": {"enabled": true},
       "diagnostics-otel": {"enabled": true}
     }
   },

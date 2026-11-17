@@ -580,6 +580,66 @@ Then start the agent pod again by a delete of the pod
 the Signal channel finds the account. Not `rollout restart`: Flux removes
 its annotation at the next reconcile, which starts the pod one more time.
 
+## The finance agent
+
+The finance agent runs as the pilot does, in `agents-finance`
+(`kubernetes/apps/ai/agents/finance/`), with its own key at the model
+gateway, its own sandbox gateway and its own backup repository. It is in git
+and not applied yet: the Deployment, the volume and the backup policy wait
+for the values of the owner (R4) and for the cutover. The finance app is not
+a tool yet: its design is open. The tools that differ from the pilot:
+
+- **Web search,** as the pilot's ([The pilot agent](#the-pilot-agent)): the
+  Brave plugin, the official plugins step, `tools.web.search` and the rule
+  to `api.search.brave.com`, with a key of its own: `BRAVE_API_KEY` in the
+  Secret `agent-search-secret` of `agents-finance`
+  (`agent/app/secret-search.sops.yaml`), not the pilot's key. The gateway
+  process makes the call. The query goes to the vendor, and the query and
+  the result stay in the session store of the agent, so in its archives
+  and snapshots: the model can put words of a finance conversation in a
+  query.
+- **The notes vault,** read only. The owner decided on 2026-11-16: no sync
+  job. The owner copies the vault once into the state volume, at
+  `/home/node/data/vault`, and the backup of the volume holds it (the
+  policy `agent-state` copies the whole volume to the repository of
+  finance; the restore test counts its notes and fails with `no-vault`).
+  - The agent reads it with `memory_search` and `memory_get`: the config
+    names it in `memory.search.extraPaths`, Markdown files only
+    (`**/*.md`). The gateway process indexes it with the embeddings of
+    finance (`agents-finance-embeddings`, the Ollama of the host, so no
+    vendor gets the text of a note) and reads it from the volume. It is
+    outside the workspace, so no sandbox gets a copy, and no tool of the
+    agent writes it.
+  - **The copy is apart from the vault on the owner's devices.** After the
+    seed, a change on a device does not reach the agent, and the agent
+    changes nothing on a device. To bring the agent a newer vault, seed it
+    again (below).
+
+### The steps of the owner
+
+None of these values goes through an agent or a session. The search key is
+done: `agent/app/secret-search.sops.yaml` is in git with its value, and is
+listed with the Deployment.
+
+1. **The seed of the vault,** in the state copy of the cutover: after the
+   state of the finance agent is on its volume and the pod runs, and before
+   the first chat. From the host, with the vault folder in `V`:
+
+   ```bash
+   kubectl -n agents-finance exec deploy/agent -c agent -- mkdir -p /home/node/data/vault
+   tar -C "$V" --exclude=.obsidian --exclude=.trash --exclude=.git -cf - . \
+     | kubectl -n agents-finance exec -i deploy/agent -c agent -- tar -C /home/node/data/vault --no-same-owner -xf -
+   kubectl -n agents-finance exec deploy/agent -c agent -- sh -c 'find /home/node/data/vault -type f -name "*.md" | wc -l'
+   ```
+
+   The count is the number of notes. The product watches the folder and
+   indexes the notes; the next start of the pod indexes them in any case
+   (the `memory-index` step). The next nightly snapshot holds the vault.
+   To seed a newer vault later, empty the folder first, so that a note
+   deleted on a device goes here too:
+   `kubectl -n agents-finance exec deploy/agent -c agent -- find /home/node/data/vault -mindepth 1 -delete`,
+   then the three commands again.
+
 ## The run receiver
 
 The one entry for a run of a workflow agent, in `agents-workflows`
