@@ -26,8 +26,8 @@ metadata:
     # agent-search-secret changes.
     reloader.stakater.com/auto: "true"
 spec:
-  # Zero until the cutover (phase 5 of the platform design).
-  replicas: 0
+  # One since step 5 of the cutover (phase 5 of the platform design).
+  replicas: 1
   revisionHistoryLimit: 2
   # The old pod stops before the new one starts: one process holds the state,
   # and the archive step reads it with no writer.
