@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.185.2 - 2026-11-17
+
+### Fixed
+
+* CI: the summary of the hosts workflow shows a host with no recap line as "did not run" instead of a count of ok 0 and failed 1. ansible-playbook stops before wsl-distro.yml when the play of windows-host.yml ends with a failure, so the distro of a failed Windows host did not run. The drift metrics still count it as failed, and the run still fails.
+
 ## v2.185.1 - 2026-11-17
 
 ### Fixed

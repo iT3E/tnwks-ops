@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'CI: the summary of the hosts workflow shows a host with no recap line as "did not run" instead of a count of ok 0 and failed 1. ansible-playbook stops before wsl-distro.yml when the play of windows-host.yml ends with a failure, so the distro of a failed Windows host did not run. The drift metrics still count it as failed, and the run still fails.'
-time: 2026-11-16T18:00:00.000000000Z
