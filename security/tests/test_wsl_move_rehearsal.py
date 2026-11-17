@@ -209,10 +209,14 @@ def test_the_play_waits_past_the_limit_of_the_window_task_and_the_worst_case_is_
     minutes = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_window_config"]["task_minutes"]
     # Four tasks of an account in the window and four waits for no WSL process
     # (2 minutes each); in the way back three tasks and the start tasks (3 minutes),
-    # or in the group test four tasks (the stop of A before it leaves the group).
+    # or in the group test four tasks and one wait (the stop of A before it leaves
+    # the group). The fifth wait is that of the stop at the end of a run of the
+    # group test: it runs only when the stop before the leave did not run, so a
+    # run has at most one stop of A.
     window = (ROLE / "files/Invoke-TnwksMoveWindow.ps1").read_text()
-    assert window.count("Wait-TnwksNoWsl $") == 4
-    worst = 4 * minutes + 4 * 2 + max(3 * minutes + 3, 4 * minutes)
+    assert window.count("Wait-TnwksNoWsl $") == 5
+    assert "if ($script:ImportBackRan -and $script:StopBeforeLeaveRan) {" in window
+    worst = 4 * minutes + 4 * 2 + max(3 * minutes + 3, 4 * minutes + 2)
     assert worst <= limit_minutes - 30
 
 
@@ -269,7 +273,7 @@ def test_a_restart_needs_the_owners_go_and_only_the_phase_restart_has_one():
     assert DEFAULTS["wsl_move_rehearsal_restart"] is False
     config = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_window_config"]
     assert config["restart"] == "{{ wsl_move_rehearsal_restart | bool }}"
-    assert config["boot"] == {"group_steps": False}
+    assert config["boot"] == {"group_steps": False, "rehearsal_group_test": False}
     text = WINDOW.read_text()
     assert text.count("Restart-Computer") == 1
     assert re.search(r"if \(\$cfg\.restart\) \{\s*Write-Log \"restart: \$Why\"\s*Restart-Computer -Force", text)
@@ -778,7 +782,12 @@ $global:Runs = @{}
 function Get-LocalUser { param([string]$Name) [pscustomobject]@{ SID = [pscustomobject]@{ Value = $global:Sids[$Name] } } }
 function Get-LocalGroupMember { param([string]$SID) @($global:Admins | ForEach-Object { [pscustomobject]@{ SID = [pscustomobject]@{ Value = $_ } } }) }
 function Add-LocalGroupMember { param([string]$SID, $Member) $global:Calls.Add("join $Member"); $global:Admins.Add($Member) }
-function Remove-LocalGroupMember { param([string]$SID, $Member) $global:Calls.Add("leave $Member"); [void]$global:Admins.Remove($Member) }
+# $global:FailLeave: Windows refuses the leave.
+function Remove-LocalGroupMember {
+    param([string]$SID, $Member)
+    if ($global:FailLeave) { $global:Calls.Add("refused leave $Member"); throw 'the leave is refused' }
+    $global:Calls.Add("leave $Member"); [void]$global:Admins.Remove($Member)
+}
 # As Task Scheduler reads it (TASK_STATE): a task with a running instance is Running,
 # also when it is disabled; Disabled only with no instance. Settings.Enabled is the flag.
 $global:Enabled = @{}
@@ -801,7 +810,12 @@ function Get-ScheduledTaskInfo {
     [pscustomobject]@{ LastRunTime = [int]$global:Runs[$TaskName]; LastTaskResult = [int]$global:Codes[$TaskName] }
 }
 function Disable-ScheduledTask { param([string]$TaskName) $global:Calls.Add("disable $TaskName"); $global:Enabled[$TaskName] = $false }
-function Enable-ScheduledTask { param([string]$TaskName) $global:Calls.Add("enable $TaskName"); $global:Enabled[$TaskName] = $true }
+# $global:ThrowOnEnable: an error that no step handles (way back step 6).
+function Enable-ScheduledTask {
+    param([string]$TaskName)
+    if ($global:ThrowOnEnable) { throw 'an error that no step handles' }
+    $global:Calls.Add("enable $TaskName"); $global:Enabled[$TaskName] = $true
+}
 function Get-TaskSid([string]$TaskName) { if ($TaskName -like '*-a-*') { $global:Sids['tnwks-moverh-a'] } else { $global:Sids['tnwks-moverh-b'] } }
 function Stop-ScheduledTask {
     param([string]$TaskName)
@@ -973,7 +987,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
                config: dict | None = None, tasks: dict | None = None, acl_file: str | None = None,
                marker_a: bool = False, disabled: str | None = None, acl_edit: str = "", vm_rule: str = "",
                acls: dict | None = None, inherit: dict | None = None, enabled: str = "", queued_polls: int = 0,
-               window: Path = WINDOW, folder_acls: dict | None = None, groups: dict | None = None) -> dict:
+               window: Path = WINDOW, folder_acls: dict | None = None, groups: dict | None = None, faults: str = "") -> dict:
     root = tmp_path / "root"
     for sub in ("a", "b", "state", "log/a", "log/b"):
         (root / sub).mkdir(parents=True, exist_ok=True)
@@ -1003,7 +1017,7 @@ def run_window(tmp_path: Path, request: dict | None = None, mode: str | None = N
         "new": {"account": "tnwks-moverh-b", "folder": str(root / "b"), "result_dir": str(root / "log/b"),
                 "window_tasks": {k: f"tnwks-moverh-b-{v}" for k, v in names.items()},
                 "start_tasks": ["tnwks-moverh-b-start"]},
-        "boot": {"group_steps": False},
+        "boot": {"group_steps": False, "rehearsal_group_test": False},
     }
     for key, value in (config or {}).items():
         cfg[key] = value
@@ -1051,6 +1065,7 @@ if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false
     foreach ($t in @($global:Running.Keys | Where-Object {{ $global:Running[$_] }})) {{
         $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}) }}
 }}
+{faults}
 & '{window}' {args}
 $code = $LASTEXITCODE
 $tasks = @{{}}; foreach ($t in @($global:Enabled.Keys)) {{ $tasks[$t] = (Get-ScheduledTask -TaskName $t).State }}
@@ -1227,10 +1242,10 @@ def test_a_way_back_from_window_done_moves_a_file_that_grants_system_nothing_by_
     # The same run with no call at its start: its first read of the rules comes after the
     # move, so the move is refused, as on a host.
     script = WINDOW.read_text()
-    first = "    Initialize-TnwksSecurity\n    switch ($Mode) {"
+    first = "    Initialize-TnwksSecurity\n    # The rehearsal only: in the group test of a boot run"
     assert script.count(first) == 1
     plain = tmp_path / "Invoke-TnwksMoveWindow.ps1"
-    plain.write_text(script.replace(first, "    switch ($Mode) {"))
+    plain.write_text(script.replace(first, "    # The rehearsal only: in the group test of a boot run"))
     out = run_window(tmp_path / "2", mode="wayback", window=plain, **WAYBACK_LOCKED)
     assert out["code"] == 1, out["log"]
     assert "refused move b" in out["calls"] and out["disk_b"] and not out["disk_a"]
@@ -1840,6 +1855,123 @@ def test_the_boot_task_goes_back_once_with_no_group_step_and_never_restarts_itse
     assert failed["code"] == 1 and "restart" not in failed["calls"]
 
 
+# --- The boot run of the group test --------------------------------------------------------
+
+BOOT_GROUP = {"group_steps": True, "rehearsal_group_test": True}
+BOOT_STARTED = {"state": "t window-started\n", "disk": ("b",), "acl_file": OLD_SDDL, "marker_a": True,
+                "tasks": {"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"},
+                "disabled": "tnwks-moverh-a-start"}
+JOIN, LEAVE = f"join {A_SID}", f"leave {A_SID}"
+
+
+def boot_group_run(tmp_path: Path, request=BOOT_GROUP, **kw) -> tuple[dict, Path]:
+    """A boot run with a boot request (none with request=None), and the path of the request."""
+    state = tmp_path / "root/state"
+    state.mkdir(parents=True, exist_ok=True)
+    path = state / "boot-request.json"
+    if request is not None:
+        path.write_text(request if isinstance(request, str) else json.dumps(request))
+    config = {"boot_request_file": str(path), **kw.pop("config", {})}
+    return run_window(tmp_path, mode="boot", config=config, **{**BOOT_STARTED, **kw}), path
+
+
+@needs_pwsh
+def test_the_boot_run_of_the_group_test_joins_a_after_the_restart_and_takes_it_out_at_its_end(tmp_path):
+    out, request = boot_group_run(tmp_path)
+    assert out["code"] == 0, out["log"]
+    calls = out["calls"]
+    # Way back step 1 joins A; the import back runs in the group; A's stop task ends
+    # its VM, and A leaves, before any start task of A.
+    assert calls.index(JOIN) < calls.index("start tnwks-moverh-a-import") < calls.index("start tnwks-moverh-a-stop") < calls.index(LEAVE)
+    assert "start tnwks-moverh-a-start" not in calls and out["admins"] == []
+    assert out["markers"] == ["window-started", "boot-run", "wayback-done"]
+    assert json.loads(out["log"][0].removeprefix("start, request: ")) == {"mode": "boot", "stop_after": 0, **BOOT_GROUP}
+    for line in ("group: tnwks-moverh-a joined Administrators", "group: tnwks-moverh-a left Administrators",
+                 "no WSL process of tnwks-moverh-a before it leaves the group",
+                 "the start tasks of tnwks-moverh-a are left to the play (the group test)", "the boot request is spent: removed"):
+        assert line in out["log"], line
+    assert not request.exists()
+    # A boot run with no request: no group step, as before, and nothing to remove.
+    plain, _ = boot_group_run(tmp_path / "plain", request=None)
+    assert plain["code"] == 0 and not any(c.startswith(("join", "leave")) for c in plain["calls"])
+    assert "start tnwks-moverh-a-start" in plain["calls"] and not any("boot request" in line for line in plain["log"])
+
+
+# Each way that a boot run of the group test can end short: a failed check before and
+# after the import back, a failed stop at the end, an error that no step handles, and the
+# stops before way back step 1. Whether the import back ran (A's VM may run, started in
+# the group), and whether A joined.
+BOOT_GROUP_FAULTS = {
+    "B's stop gives no result": ({"results": {"tnwks-moverh-b-stop": None}}, False, True),
+    "B's unregister lists a distro": ({"results": {"tnwks-moverh-b-unregister": {"registered": True}}}, False, True),
+    "the import back fails": ({"codes": {"tnwks-moverh-a-import": 1}, "results": {"tnwks-moverh-a-import": None}}, True, True),
+    "A's stop at the end fails": ({"results": {"tnwks-moverh-a-stop": None}}, True, True),
+    "an error at way back step 6": ({"faults": "$global:ThrowOnEnable = $true"}, True, True),
+    "another version of WSL": ({"saved_version": "1.2.3"}, False, False),
+    "no list of the disabled tasks": ({"disabled": None}, False, False),
+}
+
+
+@needs_pwsh
+@pytest.mark.parametrize("name", list(BOOT_GROUP_FAULTS))
+def test_no_way_that_a_boot_run_of_the_group_test_ends_leaves_a_in_administrators(tmp_path, name):
+    over, imported, joined = BOOT_GROUP_FAULTS[name]
+    out, request = boot_group_run(tmp_path, **over)
+    assert out["code"] != 0 or name == "another version of WSL", out["log"]
+    calls = out["calls"]
+    assert out["admins"] == [], (name, calls)
+    assert (JOIN in calls) == joined and (LEAVE in calls) == joined, (name, calls)
+    assert ("start tnwks-moverh-a-import" in calls) == imported
+    if imported:
+        # The stop task of A runs after the import back and before the leave.
+        last_stop = max(i for i, c in enumerate(calls) if c == "start tnwks-moverh-a-stop")
+        assert calls.index("start tnwks-moverh-a-import") < last_stop < calls.index(LEAVE), (name, calls)
+        # One stop of A after the import back, also when it fails: the time limit of the task holds one.
+        assert calls[calls.index("start tnwks-moverh-a-import"):].count("start tnwks-moverh-a-stop") == 1, (name, calls)
+    assert "start tnwks-moverh-a-start" not in calls and "restart" not in calls
+    # The request is spent once A is out of the group.
+    assert not request.exists() and "the boot request is spent: removed" in out["log"], out["log"]
+
+
+@needs_pwsh
+def test_a_boot_run_after_a_power_loss_in_the_group_takes_a_out_first_and_the_check_play_shows_it(tmp_path):
+    # A run that a power loss ended: A is still in Administrators, the request is still
+    # there, and the last marker is that of the boot run.
+    out, request = boot_group_run(tmp_path, admins=(A_SID,), state="t window-started\nt boot-run\n")
+    assert out["code"] == 0, out["log"]
+    assert out["calls"] == [LEAVE] and out["admins"] == []
+    log = out["log"]
+    assert log.index("tnwks-moverh-a is in Administrators at the start of a boot run: an earlier run did not end") < log.index(
+        "group: tnwks-moverh-a left Administrators") < log.index("no action: the last marker is 'boot-run'")
+    assert not request.exists()
+    # The check play counts this leave as a problem: A was in the group across a restart.
+    raw = (Path(out["root"]) / "state/window.log").read_text().splitlines()
+    assert any("a leave with no join" in p for p in run_group_log(raw))
+
+
+@needs_pwsh
+def test_a_leave_that_windows_refuses_keeps_the_boot_request_for_the_next_boot_run(tmp_path):
+    out, request = boot_group_run(tmp_path, faults="$global:FailLeave = $true")
+    assert out["code"] == 1 and out["admins"] == [A_SID], out["log"]
+    assert "the boot request stays: tnwks-moverh-a is still in Administrators" in out["log"] and request.exists()
+    assert any(line.startswith("fail: the group of tnwks-moverh-a:") for line in out["log"])
+
+
+@needs_pwsh
+def test_a_boot_request_that_is_not_two_booleans_or_a_group_test_with_restart_stops_with_nothing_changed(tmp_path):
+    for i, (request, config, text) in enumerate((
+            ({"group_steps": "true", "rehearsal_group_test": True}, {}, "is not read: group_steps and rehearsal_group_test are not two booleans"),
+            ("{not json", {}, "is not read"),
+            (BOOT_GROUP, {"restart": True}, "the group test runs only with the switch restart off"))):
+        out, path = boot_group_run(tmp_path / str(i), request=request, config=config)
+        assert out["code"] == 3 and out["calls"] == [] and out["markers"] == ["window-started"], out["log"]
+        assert any(line.startswith("stop: ") and text in line and line.endswith("Nothing is changed.") for line in out["log"]), out["log"]
+        assert path.exists()
+    # The scope holds the path of the request too.
+    out, _ = boot_group_run(tmp_path / "out", config={"boot_request_file": str(tmp_path / "elsewhere.json")})
+    assert out["code"] == 3 and any("is outside" in line for line in out["log"])
+
+
 @needs_pwsh
 def test_the_procedure_refuses_an_account_or_a_path_outside_its_scope(tmp_path):
     person = run_window(tmp_path / "1", FORWARD_TEST, config={"present": {
@@ -1865,10 +1997,15 @@ def test_the_procedure_refuses_a_task_outside_its_scope_and_the_session_check(tm
 
 @needs_pwsh
 def test_a_forward_run_after_a_started_window_with_no_end_stops_and_does_not_go_back(tmp_path):
-    for i, last in enumerate(("window-started", "boot-run")):
+    # The group test runs only with restart off (the procedure refuses it otherwise);
+    # a run with no group step shows the stop with restart on.
+    plain = {"mode": "forward", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
+    cases = [(last, request, restart) for last in ("window-started", "boot-run")
+             for request, restart in ((FORWARD_TEST, False), (plain, True))]
+    for i, (last, request, restart) in enumerate(cases):
         state = "t window-started\n" + ("t boot-run\n" if last == "boot-run" else "")
-        out = run_window(tmp_path / str(i), FORWARD_TEST, state=state, disk=("b",), acl_file=OLD_SDDL, marker_a=True,
-                         restart=True)
+        out = run_window(tmp_path / str(i), request, state=state, disk=("b",), acl_file=OLD_SDDL, marker_a=True,
+                         restart=restart)
         assert out["code"] == 3, out["log"]
         assert out["calls"] == [] and out["admins"] == []
         assert out["markers"] == state.replace("t ", "").split()
@@ -1953,12 +2090,15 @@ def a_run(mode: str, test: bool, events: list[str]) -> list[str]:
 
 @needs_pwsh
 def test_the_check_play_fails_on_a_moment_in_administrators_outside_the_stated_steps():
-    good = a_run("forward", True, ["joined", "left"]) + a_run("wayback", True, ["joined", "left"]) + a_run("boot", False, [])
+    # The boot run of the group test joins and leaves in its own run too.
+    good = (a_run("forward", True, ["joined", "left"]) + a_run("wayback", True, ["joined", "left"]) + a_run("boot", False, [])
+            + a_run("boot", True, ["joined", "left"]))
     assert run_group_log(good) == []
     cases = {
         "not the group test": a_run("forward", False, ["joined", "left"]),
         "the boot task": a_run("boot", False, ["joined", "left"]),
         "no leave": a_run("wayback", True, ["joined"]),
+        "no leave at boot": a_run("boot", True, ["joined"]),
         "a leave with no join": a_run("forward", True, ["left"]),
         "a join by the removal": ["t removal group: tnwks-moverh-a left Administrators"],
     }
@@ -2192,7 +2332,8 @@ def test_each_phase_sets_each_fact_before_a_task_reads_it(entry, check_mode):
 
 def test_the_walk_of_the_facts_finds_a_read_before_its_set():
     """The walk fails on the fault that it is for: after-boot without its read of the
-    accounts reads wsl_move_rehearsal_sids in read_disk.yml; and a register read before
+    accounts reads wsl_move_rehearsal_sids (in read_disk.yml, and in the read of A's batch
+    right); and a register read before
     its task, or under a condition that the walk can not prove, after its block."""
     def without_accounts(file):
         tasks = flow_load(file)
@@ -2200,7 +2341,8 @@ def test_the_walk_of_the_facts_finds_a_read_before_its_set():
             tasks = [t for t in tasks if t.get("ansible.builtin.include_tasks") != "read_accounts.yml"]
         return tasks
     problems = flow_problems("after-boot.yml", False, without_accounts)
-    assert problems and all("read_disk.yml" in p and "wsl_move_rehearsal_sids" in p for p in problems), problems
+    assert all("reads wsl_move_rehearsal_sids" in p for p in problems), problems
+    assert any("read_disk.yml" in p for p in problems), problems
     synthetic = {
         "early.yml": [{"name": "uses", "ansible.builtin.debug": {"msg": "{{ wsl_move_rehearsal_x.output }}"}},
                       {"name": "sets", "ansible.builtin.command": "true", "register": "wsl_move_rehearsal_x"}],

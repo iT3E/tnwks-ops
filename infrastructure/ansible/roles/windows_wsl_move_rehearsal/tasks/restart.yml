@@ -37,9 +37,29 @@
       phase interrupt or remove-before-restart only. Nothing is changed.
     quiet: true
 
+# The boot request (the phase interrupt writes it for the boot run of the
+# group test): printed, so the go for the restart names the case.
+- name: Read the boot request before the restart
+  ansible.windows.win_powershell:
+    parameters:
+      Path: "{{ wsl_move_rehearsal_boot_request_file }}"
+    script: |
+      param([string]$Path)
+      $Ansible.Changed = $false
+      if (Test-Path -LiteralPath $Path) { "the boot run has the boot request $((Get-Content -LiteralPath $Path -Raw).Trim())" }
+      else { 'no boot request: the boot run has the group steps of the config (off)' }
+  check_mode: false
+  register: wsl_move_rehearsal_restart_boot_request
+
+- name: The boot run after this restart
+  ansible.builtin.debug:
+    msg: "{{ wsl_move_rehearsal_restart_boot_request.output | last | default('') }}"
+
 - name: The live parts before the restart
   ansible.builtin.include_tasks: live.yml
 
+# Each account is in Users only at the restart, in each case: groups.yml
+# fails the phase before the restart otherwise.
 - name: The groups before the restart
   ansible.builtin.include_tasks: groups.yml
 

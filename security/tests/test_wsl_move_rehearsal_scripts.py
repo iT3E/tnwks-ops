@@ -35,6 +35,7 @@ from test_wsl_move_rehearsal import (
     ROLE,
     WINDOW,
     WINDOW_FAKES,
+    boot_group_run,
     run_window,
 )
 from test_wsl_start_unelevated import needs_pwsh, pwsh
@@ -397,7 +398,7 @@ def test_the_stops_run_the_procedure_on_an_empty_state_file_and_the_check_passes
     assert cfg["state_file"] == f"{test_dir}\\window.state" and cfg["version_file"] == f"{test_dir}\\wsl-version.txt"
     assert cfg["present"]["folder"] == f"{test_dir}\\a" and cfg["new"]["folder"] == f"{test_dir}\\b"
     assert cfg["present"]["account"] == "tnwks-moverh-a" and cfg["present"]["disable_tasks"] == ["tnwks-moverh-a-start"]
-    assert cfg["restart"] is False and cfg["boot"] == {"group_steps": False}
+    assert cfg["restart"] is False and cfg["boot"] == {"group_steps": False, "rehearsal_group_test": False}
     system_root = stops_shim(tmp_path)
     config = json.loads(config)
     config["service_binary"] = "__PSHOME__/System.Management.Automation.dll"
@@ -1660,6 +1661,64 @@ def test_the_interrupt_checks_pass_on_a_run_after_a_log_of_one_line(tmp_path):
     assert "The last marker is 'window-started', not one of 'wayback-done': the phase runs out of order" in error
 
 
+# --- Interrupt and restart: the boot request of the group test ------------------------------
+
+@needs_both
+def test_the_interrupt_writes_the_boot_request_only_with_its_switch_and_after_the_window(tmp_path):
+    """The window of the phase is the same in both cases (no group step, no group test).
+    The play removes a boot request of an earlier run before the window, and writes the
+    request of the group test after the checks of the window, only with the switch on,
+    as two JSON booleans."""
+    doc = yaml.safe_load((ROLE / "tasks/interrupt.yml").read_text())
+    top = [t.get("name") for t in doc]
+    outer = next(t for t in doc if t.get("name") == "The interrupted window, and the reads after it")
+    names = [t.get("name") for t in outer["block"]]
+    assert top.index("The boot run of this window") < top.index(outer["name"])
+    assert names[0] == "Remove a boot request of an earlier run" and "when" not in outer["block"][0]
+    assert names[-1] == "Write the boot request of this window, with the group steps"
+    write = outer["block"][-1]
+    assert write["when"] == "wsl_move_rehearsal_boot_group"
+    run = next(t for t in outer["block"] if t.get("ansible.builtin.include_tasks") == "run_procedure.yml")
+    assert run["vars"]["wsl_move_rehearsal_request"] == {"mode": "forward", "group_steps": False, "stop_after": 5,
+                                                         "rehearsal_group_test": False}
+    switch = next(t for t in doc if t.get("name") == "The boot run of this window")
+    cases = (None, "true", True, "false")
+    plays = [{"vars": {} if v is None else {"wsl_move_rehearsal_boot_group_steps": v},
+              "tasks": [switch, {"name": "the json", "ansible.builtin.set_fact": {
+                  "tnwks_json": write["ansible.windows.win_powershell"]["parameters"]["Json"]}},
+                  {"name": "writes", "ansible.builtin.assert": {"that": [write["when"]], "quiet": True}}],
+              "keep": ["tnwks_json"]} for v in cases]
+    results = run_plays(tmp_path, plays)
+    assert [not failed_by_assert(r, "writes") for r in results] == [False, True, True, False]
+    text = results[1]["facts"]["tnwks_json"]
+    text = text if isinstance(text, str) else json.dumps(text)
+    # The script writes it and reads it back; the boot run reads two booleans.
+    path = tmp_path / "boot-request.json"
+    out = run_script(tmp_path, "interrupt.yml", "Write the boot request of this window", {"Path": str(path), "Json": text})
+    assert json.loads(path.read_text()) == {"group_steps": True, "rehearsal_group_test": True} and out[-1]["written"] == text
+    bad = run_script(tmp_path, "interrupt.yml", "Write the boot request of this window",
+                     {"Path": str(tmp_path / "bad.json"), "Json": '{"group_steps": "true", "rehearsal_group_test": true}'}, fails=True)
+    assert "did not read back as two booleans" in bad
+    # The removal before the window: a request of an earlier run goes, none is no change.
+    _, changed = run_script(tmp_path, "interrupt.yml", "Remove a boot request of an earlier run", {"Path": str(path)}, changed=True)
+    assert changed is True and not path.exists()
+    _, changed = run_script(tmp_path, "interrupt.yml", "Remove a boot request of an earlier run", {"Path": str(path)}, changed=True)
+    assert changed is False
+
+
+def test_the_restart_reads_the_groups_and_prints_the_boot_request_before_it_restarts():
+    doc = yaml.safe_load((ROLE / "tasks/restart.yml").read_text())
+    names = [t.get("name") for t in doc]
+    reboot = next(i for i, t in enumerate(doc) if "block" in t and any("ansible.windows.win_reboot" in x for x in t["block"]))
+    groups = names.index("The groups before the restart")
+    assert doc[groups]["ansible.builtin.include_tasks"] == "groups.yml" and "when" not in doc[groups]
+    assert names.index("Read the boot request before the restart") < names.index("The boot run after this restart") < groups < reboot
+    # groups.yml fails the phase when an account of the rehearsal is in any group but Users.
+    check = yaml.safe_load((ROLE / "tasks/groups.yml").read_text())[0]
+    assert check["failed_when"] == "wsl_move_rehearsal_groups.output | length > 0"
+    assert "S-1-5-32-545" in check["ansible.windows.win_powershell"]["script"]
+
+
 # --- Restart, after-boot, removal: the boot runs in the log -------------------------------
 
 BOOT_STAND_INS = r"""
@@ -1667,12 +1726,16 @@ function Get-CimInstance { param([string]$ClassName) [pscustomobject]@{ LastBoot
 """
 
 
-def boot_log(tmp_path: Path) -> tuple[Path, Path, str]:
+def boot_log(tmp_path: Path, group: bool = False) -> tuple[Path, Path, str]:
     """A log and a state file after the first restart: a line of an earlier boot, then
-    the real run of the boot task (the way back once)."""
-    run = run_window(tmp_path / "boot", mode="boot", state="t window-started\n", disk=("b",), acl_file=OLD_SDDL,
-                     marker_a=True, tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"},
-                     disabled="tnwks-moverh-a-start")
+    the real run of the boot task (the way back once), with the boot request of the group
+    test or with none."""
+    if group:
+        run, _ = boot_group_run(tmp_path / "boot")
+    else:
+        run = run_window(tmp_path / "boot", mode="boot", state="t window-started\n", disk=("b",), acl_file=OLD_SDDL,
+                         marker_a=True, tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"},
+                         disabled="tnwks-moverh-a-start")
     assert run["code"] == 0, run["log"]
     root = Path(run["root"])
     log = tmp_path / "window.log"
@@ -1694,7 +1757,7 @@ def hand_run(tmp_path: Path, log: Path, state: Path) -> None:
 @needs_both
 def test_the_after_boot_checks_read_each_run_as_a_list_of_lines(tmp_path):
     log, state, boot = boot_log(tmp_path)
-    params = {"Log": str(log), "State": str(state)}
+    params = {"Log": str(log), "State": str(state), "BootRequest": str(tmp_path / "boot-request.json")}
     first = run_script(tmp_path, "after-boot.yml", "Read the log of the boot runs and the markers", params,
                        stand_ins=BOOT_STAND_INS + boot)
     # One run of this boot: a list of one list of lines.
@@ -1711,7 +1774,8 @@ def test_the_after_boot_checks_read_each_run_as_a_list_of_lines(tmp_path):
     disk = disk_read(tmp_path, "saved", [OLD_SDDL + VM_ACE + VM_ACE.replace("4444", "5555")], saved=OLD_SDDL)
     facts = {"wsl_move_rehearsal_boot_log": registered(first), "wsl_move_rehearsal_boot_log2": registered(second),
              "wsl_move_rehearsal_boot_hand": registered(hand), "wsl_move_rehearsal_disk": registered(disk),
-             "wsl_move_rehearsal_runs": {"check": [check_a[-1], check_b[-1]]}}
+             "wsl_move_rehearsal_runs": {"check": [check_a[-1], check_b[-1]]}, "wsl_move_rehearsal_boot_group": False,
+             "wsl_move_rehearsal_boot_batch": {"changed": False, "failed": False}}
     # With the default of two levels, each run would be one text.
     flat = {**facts,
             "wsl_move_rehearsal_boot_log": registered(run_script(
@@ -1721,8 +1785,9 @@ def test_the_after_boot_checks_read_each_run_as_a_list_of_lines(tmp_path):
                 tmp_path, "after-boot.yml", "Read the log of the boot runs again", params,
                 stand_ins=BOOT_STAND_INS + boot, depth=2))}
     assert isinstance(flat["wsl_move_rehearsal_boot_log2"]["output"][-1]["runs"][0], str)
-    ok, two_levels = run_plays(tmp_path, [{"vars": facts, "tasks": checks_of("after-boot.yml")},
-                                          {"vars": flat, "tasks": checks_of("after-boot.yml")}])
+    # The checks of the group test (a block under its switch) are not part of this case.
+    plain = [c for c in checks_of("after-boot.yml") if not c["name"].endswith(GROUP_TEST_CHECKS)]
+    ok, two_levels = run_plays(tmp_path, [{"vars": facts, "tasks": plain}, {"vars": flat, "tasks": plain}])
     assert not passed(ok), passed(ok)
     assert failed_by_assert(two_levels, "The run by hand did nothing")
 
@@ -1732,30 +1797,114 @@ def test_the_after_boot_phase_checks_the_boot_run_before_any_task_of_a_or_b():
     names = [t.get("name", "") for t in tasks]
     read = names.index("Read the log of the boot runs and the markers")
     gate = names.index("The boot task ran the way back once")
-    acting = [i for i, t in enumerate(tasks) if t.get("ansible.builtin.include_tasks") in ("run_task.yml", "read_disk.yml")
-              or t.get("name", "").startswith("Start the boot task")]
+    acting = [i for i, t in enumerate(tasks)
+              if t.get("ansible.builtin.include_tasks") in ("run_task.yml", "read_disk.yml", "icon.yml", "tokens.yml")
+              or t.get("name", "").startswith(("Start the boot task", "The start task of A"))]
     assert gate == read + 1 and gate < min(acting)
     # It reads the log of the boot runs only.
     text = yaml.safe_dump(tasks[gate])
     assert "wsl_move_rehearsal_boot_log.output" in text and "check_" not in text and "disk" not in text
 
 
+GROUP_TEST_CHECKS = ("failed_when of The start task of A, started by the play",
+                     "No WSL process of A holds a token from its time in Administrators")
+DONE_MARKERS = ["wayback-done", "window-started", "boot-run", "wayback-done"]
+STANDARD_RUN = ["start, request: {}", "the start tasks of tnwks-moverh-a run, with 1 WSL process(es)",
+                "would restart (the end of the way back); the switch restart is off", "result: done"]
+GROUP_RUN = ["start, request: {}", "group: tnwks-moverh-a joined Administrators",
+             "would restart (the end of the way back); the switch restart is off",
+             "no WSL process of tnwks-moverh-a before it leaves the group", "group: tnwks-moverh-a left Administrators",
+             "the start tasks of tnwks-moverh-a are left to the play (the group test)", "the boot request is spent: removed",
+             "result: done"]
+
+
+def boot_read(lines: list[str], group: bool, **over) -> dict:
+    """The read of the boot log of after-boot, for one run of the boot task."""
+    request = {"mode": "boot", "group_steps": group, "stop_after": 0, "rehearsal_group_test": group}
+    return {"request": request, "boot_request": False, "runs": [lines],
+            "results": [",".join(x for x in lines if x.startswith("result: "))], "markers": DONE_MARKERS, **over}
+
+
 @no_ansible
 def test_a_boot_run_that_did_not_end_the_way_back_fails_the_first_check_of_after_boot(tmp_path):
-    done = {"runs": [["start, request: {}", "would restart (the end of the way back); the switch restart is off", "result: done"]],
-            "results": ["result: done"], "markers": ["wayback-done", "window-started", "boot-run", "wayback-done"]}
-    failed = {"runs": [["start, request: {}", "fail: check failed: the import back did not pass", "result: failed"]],
-              "results": ["result: failed"], "markers": ["wayback-done", "window-started", "boot-run"]}
-    # Each part alone: the result of the run, the markers, a group step.
-    result_only = {**done, "results": ["result: failed"]}
-    markers_only = {**done, "markers": failed["markers"]}
-    joined = {**done, "runs": [["start, request: {}", "group: a joined Administrators", *done["runs"][0][1:]]]}
+    standard, group = boot_read(STANDARD_RUN, False), boot_read(GROUP_RUN, True)
+    failed = boot_read(["start, request: {}", "fail: check failed: the import back did not pass", "result: failed"], False,
+                       markers=DONE_MARKERS[:3])
+    cases = [
+        # (the switch, the read, passes)
+        (False, standard, True), (True, group, True),
+        (False, failed, False), (False, {**standard, "results": ["result: failed"]}, False),
+        (False, {**standard, "markers": DONE_MARKERS[:3]}, False),
+        (False, boot_read([*STANDARD_RUN[:1], "group: tnwks-moverh-a joined Administrators", *STANDARD_RUN[1:]], False), False),
+        (False, {**standard, "request": None}, False),
+        # The case of the run is that of the switch, both ways.
+        (False, group, False), (True, standard, False), (True, {**group, "request": standard["request"]}, False),
+        # The group test: the leave, the stop of A before it, the start of A left to the play,
+        # and a spent request.
+        (True, boot_read([x for x in GROUP_RUN if "left Administrators" not in x], True), False),
+        (True, boot_read([x for x in GROUP_RUN if not x.startswith("no WSL process")], True), False),
+        (True, boot_read([x for x in GROUP_RUN if "left to the play" not in x], True), False),
+        (True, {**group, "boot_request": True}, False),
+        (True, boot_read([*GROUP_RUN[:-1], "group: tnwks-moverh-a joined Administrators", GROUP_RUN[-1]], True), False),
+    ]
     gate = checks_of("after-boot.yml", ("The boot task ran the way back once",))
     assert len(gate) == 1
-    ok, *bad = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_boot_log": registered([log])}, "tasks": gate}
-                                    for log in (done, failed, result_only, markers_only, joined)])
+    results = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_boot_log": registered([read]), "wsl_move_rehearsal_boot_group": switch},
+                                    "tasks": gate} for switch, read, _ in cases])
+    for i, ((_, _, ok), result) in enumerate(zip(cases, results)):
+        assert (not passed(result)) if ok else failed_by_assert(result, "The boot task ran the way back once"), (i, result)
+
+
+@needs_both
+def test_the_after_boot_checks_pass_on_a_real_boot_run_of_the_group_test(tmp_path):
+    """The boot run of the group test in PowerShell, its log read as after-boot reads it,
+    and the checks of the phase: they pass with the switch on, and fail on the same run
+    with the switch off."""
+    log, state, boot = boot_log(tmp_path, group=True)
+    request = tmp_path / "boot/root/state/boot-request.json"
+    assert not request.exists()
+    first = run_script(tmp_path, "after-boot.yml", "Read the log of the boot runs and the markers",
+                       {"Log": str(log), "State": str(state), "BootRequest": str(request)}, stand_ins=BOOT_STAND_INS + boot)
+    assert first[-1]["request"]["rehearsal_group_test"] is True and first[-1]["boot_request"] is False
+    tokens = [{"processes": 1, "admin_enabled": 0, "errors": []}]
+    facts = {"wsl_move_rehearsal_boot_log": registered(first), "wsl_move_rehearsal_boot_group": True,
+             "wsl_move_rehearsal_boot_batch": {"changed": False, "failed": False},
+             "wsl_move_rehearsal_boot_a_started": registered([{"running": True, "wsl": 1}]),
+             "wsl_move_rehearsal_tokens": registered(tokens)}
+    names = ("The boot task ran the way back once", "failed_when of A holds its own batch right") + GROUP_TEST_CHECKS
+    tasks = ("The boot task ran the way back once", "A holds its own batch right", "The start task of A, started by the play",
+             "No WSL process of A holds")
+    admin = {**facts, "wsl_move_rehearsal_tokens": registered([{**tokens[0], "admin_enabled": 1}])}
+    no_right = {**facts, "wsl_move_rehearsal_boot_batch": {"changed": True, "failed": False}}
+    ok, as_standard, with_admin, without_right = run_plays(tmp_path, [
+        {"vars": v, "tasks": checks_of("after-boot.yml", tasks)}
+        for v in (facts, {**facts, "wsl_move_rehearsal_boot_group": False}, admin, no_right)])
+    assert [r["name"] for r in ok["results"]] == [*names[:1], "failed_when of A holds its own batch right after the boot",
+                                                  *GROUP_TEST_CHECKS]
     assert not passed(ok), passed(ok)
-    assert all(failed_by_assert(result, "The boot task ran the way back once") for result in bad)
+    assert failed_by_assert(as_standard, names[0])
+    assert failed_by_assert(with_admin, GROUP_TEST_CHECKS[1])
+    assert failed_by_assert(without_right, names[1])
+
+
+def test_after_boot_runs_the_reads_of_the_group_test_only_in_its_case_and_in_order():
+    doc = yaml.safe_load((ROLE / "tasks/after-boot.yml").read_text())
+    outer = next(t for t in doc if t.get("name") == "The reads after the boot")
+    names = [t.get("name") for t in outer["block"]]
+    group = next(t for t in outer["block"] if t.get("name") == "The group test of the boot run, the reads after it")
+    assert group["when"] == "wsl_move_rehearsal_boot_group"
+    assert [t.get("name") for t in group["block"]] == [
+        "The icon in the folder of A, after A left the group", "The start task of A, started by the play",
+        "The tokens of the WSL processes of A", "No WSL process of A holds a token from its time in Administrators"]
+    assert group["block"][0]["vars"] == {"wsl_move_rehearsal_icon_action": "remove"}
+    order = ["The boot task ran the way back once", "A holds its own batch right after the boot", group["name"],
+             "A reads its distro after the boot"]
+    assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
+    right = next(t for t in outer["block"] if t.get("name") == "A holds its own batch right after the boot")
+    assert right["check_mode"] is True and right["ansible.windows.win_user_right"]["action"] == "add"
+    switch = next(t for t in doc if t.get("name") == "The case of the boot run")
+    assert switch["ansible.builtin.set_fact"]["wsl_move_rehearsal_boot_group"] == (
+        "{{ wsl_move_rehearsal_boot_group_steps | default(false) | bool }}")
 
 
 @needs_pwsh

@@ -3,6 +3,16 @@
 # once (its log, mode boot, and the markers boot-run then wayback-done), A
 # owns the distro again and B lists none. Then the boot task is started by
 # hand: with the marker of a done way back last, it does nothing.
+#
+# The boot run of the group test (-e wsl_move_rehearsal_boot_group_steps=true,
+# as given to the phase interrupt): the boot run's request has the group steps
+# and the group test, its log has A's join and leave, and the boot request is
+# spent. Then, as in the phase wayback: A holds its own batch right, the play
+# removes an icon of the shortcut in A's folder that A does not own (the
+# import back ran with A in Administrators), starts A's start task (the
+# procedure leaves it to the play in the group test), and reads the token of
+# each WSL process of A: none has the Administrators group enabled. The
+# groups at the end read A in Users only.
 
 - name: The live parts at the start
   ansible.builtin.include_tasks: live.yml
@@ -22,6 +32,10 @@
   vars:
     wsl_move_rehearsal_host_files: assert
 
+- name: The case of the boot run
+  ansible.builtin.set_fact:
+    wsl_move_rehearsal_boot_group: "{{ wsl_move_rehearsal_boot_group_steps | default(false) | bool }}"
+
 - name: The reads after the boot
   when: not ansible_check_mode
   block:
@@ -30,11 +44,12 @@
         parameters:
           Log: "{{ wsl_move_rehearsal_log_file }}"
           State: "{{ wsl_move_rehearsal_state_file }}"
+          BootRequest: "{{ wsl_move_rehearsal_boot_request_file }}"
         # The runs are lists of lines: win_powershell keeps two levels of
         # output by default, and would give each run as one text.
         depth: 4
         script: &read_boot |
-          param([string]$Log, [string]$State)
+          param([string]$Log, [string]$State, [string]$BootRequest)
           $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
           # The runs of the boot task at this boot: an earlier boot of the host
@@ -52,7 +67,12 @@
               if ($line -like 'start, request:*') { $runs += , @() }
               if ($runs.Count) { $runs[-1] += $line }
           }
+          # The request of the first run of this boot, as its first line logs it.
+          $first = if ($runs.Count) { "$($runs[0][0])" } else { '' }
+          $request = if ($first -like 'start, request: *') { $first.Substring(16) | ConvertFrom-Json } else { $null }
           [pscustomobject]@{
+              request = $request
+              boot_request = [bool](Test-Path -LiteralPath $BootRequest)
               runs = @($runs | ForEach-Object { , @($_) })
               results = @($runs | ForEach-Object { @($_ | Where-Object { $_ -like 'result: *' }) -join ',' })
               markers = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() } | ForEach-Object { "$(($_ -split ' ', 2)[1])".Trim() })
@@ -65,18 +85,100 @@
 
     # The run of the boot task first: after a run that did not end the way
     # back, the phase stops here, before any task of A or B starts.
+    # The case of the run (the group test, or none) is that of the switch:
+    # its request, its group moments, and who starts A's start task.
     - name: The boot task ran the way back once
       vars:
         boot: "{{ wsl_move_rehearsal_boot_log.output | last }}"
+        group: "{{ wsl_move_rehearsal_boot_group }}"
       ansible.builtin.assert:
         that:
           - "boot.results[:1] == ['result: done']"
           - boot.markers[-3:] == ['window-started', 'boot-run', 'wayback-done']
-          - "boot.runs[0] | select('string') | select('match', '^group: ') | list | length == 0"
+          - boot.request is mapping
+          - boot.request.group_steps == group and boot.request.rehearsal_group_test == group
+          - >-
+            boot.runs[0] | select('string') | select('match', '^group: ') | list
+            == (boot.runs[0] | select('string') | select('match', '^group: \\S+ (joined|left) Administrators$') | list)
+          - >-
+            boot.runs[0] | select('string') | select('match', '^group: ') | map('regex_replace', '^group: \\S+ (\\w+) Administrators$', '\\1')
+            | list == (['joined', 'left'] if group else [])
+          - >-
+            boot.runs[0] | select('string') | select('match', '^no WSL process of .* before it leaves the group$') | list | length
+            == (1 if group else 0)
+          - >-
+            boot.runs[0] | select('string') | select('match', '^the start tasks of .* are left to the play') | list | length
+            == (1 if group else 0)
+          - >-
+            boot.runs[0] | select('string') | select('match', '^the start tasks of .* run, with [0-9]+ WSL process') | list | length
+            == (0 if group else 1)
           - boot.runs[0] | select('string') | select('match', '^would restart') | list | length == 1
           - "boot.runs[0] | select('string') | select('match', '^restart: ') | list | length == 0"
+          - not boot.boot_request
         fail_msg: "The run of the boot task did not end the way back: {{ boot }}. No task of A or B started in this phase."
         quiet: true
+
+    # A keeps its own batch right through the phase interrupt and the boot
+    # run (the removal runs A's tasks with it). A read: a check of the module.
+    - name: A holds its own batch right after the boot
+      ansible.windows.win_user_right:
+        name: SeBatchLogonRight
+        users: ["{{ wsl_move_rehearsal_sids.a }}"]
+        action: add
+      check_mode: true
+      register: wsl_move_rehearsal_boot_batch
+      failed_when: wsl_move_rehearsal_boot_batch.changed or wsl_move_rehearsal_boot_batch.failed | default(false)
+
+    - name: The group test of the boot run, the reads after it
+      when: wsl_move_rehearsal_boot_group
+      block:
+        # The import back ran with A in Administrators: an icon that it made
+        # then can be the group's (icon.yml says why).
+        - name: The icon in the folder of A, after A left the group
+          ansible.builtin.include_tasks: icon.yml
+          vars:
+            wsl_move_rehearsal_icon_action: remove
+
+        # The procedure leaves the start of A to the play in the group test.
+        - name: The start task of A, started by the play
+          ansible.windows.win_powershell:
+            parameters:
+              Task: "{{ wsl_move_rehearsal_prefix }}-a-start"
+              Sid: "{{ wsl_move_rehearsal_sids.a }}"
+            script: |
+              param([string]$Task, [string]$Sid)
+              $ErrorActionPreference = 'Stop'
+              $Ansible.Changed = $true
+              Start-ScheduledTask -TaskName $Task
+              $deadline = (Get-Date).AddMinutes(3)
+              do {
+                  Start-Sleep -Seconds 3
+                  $running = "$((Get-ScheduledTask -TaskName $Task).State)" -eq 'Running'
+                  $wsl = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('wsl.exe', 'wslhost.exe', 'wslrelay.exe') } | Where-Object {
+                      $o = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue; $o -and $o.Sid -eq $Sid })
+              } while (-not ($running -and $wsl.Count) -and (Get-Date) -lt $deadline)
+              [pscustomobject]@{ running = $running; wsl = $wsl.Count }
+          vars:
+            ansible_become: true
+            ansible_become_method: ansible.builtin.runas
+            ansible_become_user: SYSTEM
+          register: wsl_move_rehearsal_boot_a_started
+          failed_when: >-
+            not ((wsl_move_rehearsal_boot_a_started.output | last).running and (wsl_move_rehearsal_boot_a_started.output | last).wsl > 0)
+
+        - name: The tokens of the WSL processes of A
+          ansible.builtin.include_tasks: tokens.yml
+
+        - name: No WSL process of A holds a token from its time in Administrators
+          vars:
+            tokens: "{{ wsl_move_rehearsal_tokens.output | last }}"
+          ansible.builtin.assert:
+            that:
+              - tokens.processes > 0
+              - tokens.errors | length == 0
+              - tokens.admin_enabled == 0
+            fail_msg: "The tokens of the WSL processes of A: {{ tokens }}"
+            quiet: true
 
     - name: A reads its distro after the boot
       ansible.builtin.include_tasks: run_task.yml
@@ -131,6 +233,7 @@
         parameters:
           Log: "{{ wsl_move_rehearsal_log_file }}"
           State: "{{ wsl_move_rehearsal_state_file }}"
+          BootRequest: "{{ wsl_move_rehearsal_boot_request_file }}"
         depth: 4
         script: *read_boot
       vars:

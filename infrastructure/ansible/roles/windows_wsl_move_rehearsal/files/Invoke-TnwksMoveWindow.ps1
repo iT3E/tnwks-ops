@@ -14,6 +14,10 @@ Modes:
   boot     The boot task: the way back once, only when the last marker in the
            state file is that of a started window. It writes the marker of its
            run before its first action, and never restarts after a failure.
+           Its group steps and group test come from the boot part of the
+           config. In the rehearsal, a boot request (boot_request_file) sets
+           them for one boot run: the run removes it at its end, once the
+           present account is out of Administrators.
 
 Each line of the log and each marker is flushed to disk before the next step
 starts. The restart at the end is behind the switch "restart" of the config:
@@ -40,7 +44,7 @@ param(
     [ValidateSet('forward', 'wayback', 'boot')][string]$Mode,
     # The run request that the play writes: mode, group_steps, stop_after,
     # rehearsal_group_test. The boot task has none: it takes the boot part of
-    # the config.
+    # the config, and the boot request of the rehearsal when there is one.
     [string]$Request
 )
 $ErrorActionPreference = 'Stop'
@@ -49,7 +53,27 @@ if ($Request) {
     $req = Get-Content -LiteralPath $Request -Raw | ConvertFrom-Json
     if (-not $Mode) { $Mode = $req.mode }
 } else {
-    $req = [pscustomobject]@{ mode = $Mode; group_steps = [bool]$cfg.boot.group_steps; stop_after = 0; rehearsal_group_test = $false }
+    $req = [pscustomobject]@{ mode = $Mode; group_steps = [bool]$cfg.boot.group_steps; stop_after = 0
+        rehearsal_group_test = [bool]$cfg.boot.rehearsal_group_test }
+}
+# The rehearsal only: the boot request sets the group steps and the group test
+# of one boot run, each a boolean. A request that is not read stops the run
+# with nothing changed (exit 3, after the scope check). The run removes the
+# request at its end, only once the present account is out of Administrators,
+# so a run that a power loss ends leaves it for the next boot run, which then
+# takes the account out first.
+$BootRequestRead = $false
+$BootRequestError = ''
+if (-not $Request -and $Mode -eq 'boot' -and $cfg.boot_request_file -and (Test-Path -LiteralPath $cfg.boot_request_file)) {
+    try {
+        $bootRequest = Get-Content -LiteralPath $cfg.boot_request_file -Raw | ConvertFrom-Json
+        if ($bootRequest.group_steps -isnot [bool] -or $bootRequest.rehearsal_group_test -isnot [bool]) {
+            throw 'group_steps and rehearsal_group_test are not two booleans'
+        }
+        $req.group_steps = $bootRequest.group_steps
+        $req.rehearsal_group_test = $bootRequest.rehearsal_group_test
+        $BootRequestRead = $true
+    } catch { $BootRequestError = "the boot request $($cfg.boot_request_file) is not read: $($_.Exception.Message)" }
 }
 if (-not $Mode) { throw 'No mode: give -Mode or a request with a mode.' }
 $AdministratorsSid = 'S-1-5-32-544'
@@ -218,6 +242,31 @@ function Set-TnwksGroup([string]$Sid, [string]$Account, [bool]$In) {
     if (-not $In -and $now) { Remove-LocalGroupMember -SID $AdministratorsSid -Member $Sid }
     Assert-Tnwks ((Test-TnwksAdmin $Sid) -eq $In) "the group of $Account does not read $(if ($In) { 'in' } else { 'out' })"
     if ($In -ne $now) { Write-Log "group: $Account $(if ($In) { 'joined' } else { 'left' }) Administrators" }
+}
+
+# The rehearsal only: the end of a run of the group test, whatever its result.
+# The present account leaves Administrators. When the import back ran in this
+# run, its VM may run with a token from the group: the stop task of the
+# account ends it first, and the run waits for no WSL process of the account.
+# The stop runs once in a run: when the stop of the way back before the leave
+# already ran and failed, it does not run again (the time limit of the task
+# holds one stop). A stop that fails is logged, and the leave comes all the
+# same: no run ends with the account in the group.
+$script:ImportBackRan = $false
+$script:StopBeforeLeaveRan = $false
+function Exit-TnwksGroupTest {
+    $sid = Get-TnwksSid $present.account
+    if (-not (Test-TnwksAdmin $sid)) { return }
+    if ($script:ImportBackRan -and $script:StopBeforeLeaveRan) {
+        Write-Log "the stop of $($present.account) before it leaves the group ran once; it leaves all the same"
+    } elseif ($script:ImportBackRan) {
+        try {
+            Invoke-TnwksStopTask $present
+            Wait-TnwksNoWsl $sid $present.account
+            Write-Log "no WSL process of $($present.account) before it leaves the group"
+        } catch { Write-Log "fail: the stop of $($present.account) before it leaves the group: $($_.Exception.Message)" }
+    }
+    Set-TnwksGroup $sid $present.account $false
 }
 
 # --- Rights of a file, by SDDL. The account that owns its disk file may
@@ -580,7 +629,9 @@ function Add-TnwksFolderMarker([string]$Folder, [string]$Sid) {
 function Test-TnwksScope {
     $sep = [IO.Path]::DirectorySeparatorChar
     $root = [IO.Path]::GetFullPath($cfg.root).TrimEnd($sep)
-    foreach ($path in @($cfg.present.folder, $cfg.new.folder, $cfg.state_file, $cfg.log_file, $cfg.acl_file, $cfg.version_file)) {
+    $paths = @($cfg.present.folder, $cfg.new.folder, $cfg.state_file, $cfg.log_file, $cfg.acl_file, $cfg.version_file)
+    if ($cfg.boot_request_file) { $paths += $cfg.boot_request_file }
+    foreach ($path in $paths) {
         $full = [IO.Path]::GetFullPath($path)
         if (-not $full.StartsWith($root + $sep, [StringComparison]::OrdinalIgnoreCase)) { return "the path $path is outside $root" }
     }
@@ -599,6 +650,9 @@ function Test-TnwksScope {
     if ("$($cfg.disk_rule.new_mask)" -notmatch '^(0x[0-9a-fA-F]{1,8}|F[ARWX])$') { return "the mask of the new account is '$($cfg.disk_rule.new_mask)': a hex mask or FA, FR, FW, FX" }
     # The check for a session of the owner (site 1) is not in this script.
     if ($cfg.session_check) { return 'the session check is on, and this script does not have it' }
+    # The group test takes the present account out of Administrators at the end
+    # of its run: a restart in the run would keep it there.
+    if ($req.rehearsal_group_test -and $cfg.restart) { return 'the group test runs only with the switch restart off' }
     ''
 }
 
@@ -845,7 +899,9 @@ function Invoke-TnwksWayBack {
     Assert-Tnwks ((Get-Item -LiteralPath $oldPath).Length -eq $size) 'the disk file changed in the unregister'
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $new.folder $cfg.marker_name)) 'the new folder or its marker is gone'
     Write-Log 'way back 4 passed'
-    # (5) For step 5: the import back of the present account.
+    # (5) For step 5: the import back of the present account. From here a VM
+    # of the present account may run, started in this run.
+    $script:ImportBackRan = $true
     $import = Invoke-TnwksAccountTask $present.window_tasks.import (Join-Path $present.result_dir 'import.json')
     Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $oldPath, [StringComparison]::OrdinalIgnoreCase)) "the import back of $($present.account) did not pass"
     Write-Log 'way back 5 passed'
@@ -874,6 +930,7 @@ function Invoke-TnwksWayBack {
         # The import back started A's VM with that token: A's stop task ends
         # it first, and no WSL process of A is left. A has no batch right of
         # its own here: the play starts its start task after the run.
+        $script:StopBeforeLeaveRan = $true
         Invoke-TnwksStopTask $present
         Wait-TnwksNoWsl $pSid $present.account
         Write-Log "no WSL process of $($present.account) before it leaves the group"
@@ -890,6 +947,10 @@ if ($scope) {
     Write-Log "stop: $scope. Nothing is changed."
     exit 3
 }
+if ($BootRequestError) {
+    Write-Log "stop: $BootRequestError. Nothing is changed."
+    exit 3
+}
 Write-Log "start, request: $($req | ConvertTo-Json -Compress)"
 $outcome = 'failed'
 try {
@@ -897,6 +958,14 @@ try {
     # rules of the disk file come after. A privilege that is not on fails
     # the run here, with no marker and nothing changed.
     Initialize-TnwksSecurity
+    # The rehearsal only: in the group test of a boot run, the present account
+    # is in Administrators only inside the run. A run that a power loss ended
+    # can leave it there: this run takes it out first, before it reads the
+    # marker (no VM of the account runs right after a boot).
+    if ($Mode -eq 'boot' -and $req.rehearsal_group_test -and (Test-TnwksAdmin (Get-TnwksSid $present.account))) {
+        Write-Log "$($present.account) is in Administrators at the start of a boot run: an earlier run did not end"
+        Set-TnwksGroup (Get-TnwksSid $present.account) $present.account $false
+    }
     switch ($Mode) {
         'forward' {
             try {
@@ -950,7 +1019,18 @@ try {
     if ($req.rehearsal_group_test) {
         # The rehearsal only: the present account leaves Administrators at the
         # end of its run, whatever the result.
-        try { Set-TnwksGroup (Get-TnwksSid $present.account) $present.account $false } catch { Write-Log "fail: the group of $($present.account): $($_.Exception.Message)" }
+        try { Exit-TnwksGroupTest } catch { Write-Log "fail: the group of $($present.account): $($_.Exception.Message)" }
+    }
+    # The boot request is spent, once the present account is out of the group.
+    if ($BootRequestRead) {
+        try {
+            if (Test-TnwksAdmin (Get-TnwksSid $present.account)) {
+                Write-Log "the boot request stays: $($present.account) is still in Administrators"
+            } else {
+                Remove-Item -LiteralPath $cfg.boot_request_file -Force
+                Write-Log 'the boot request is spent: removed'
+            }
+        } catch { Write-Log "fail: the boot request: $($_.Exception.Message)" }
     }
 }
 Write-Log "result: $outcome"

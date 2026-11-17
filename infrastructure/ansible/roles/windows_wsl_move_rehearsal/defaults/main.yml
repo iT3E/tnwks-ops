@@ -113,6 +113,10 @@ wsl_move_rehearsal_folder_rights:
   a: '0x1200ab'
   b: '0x100002'
 wsl_move_rehearsal_request_file: '{{ wsl_move_rehearsal_state_dir }}\request.json'
+# The boot request: the group steps and the group test of the next boot run
+# only. The phase interrupt writes it with its switch for this case
+# (wsl_move_rehearsal_boot_group_steps), and the boot run removes it at its end.
+wsl_move_rehearsal_boot_request_file: '{{ wsl_move_rehearsal_state_dir }}\boot-request.json'
 wsl_move_rehearsal_baseline_file: '{{ wsl_move_rehearsal_state_dir }}\live-baseline.json'
 # The installed version of WSL is the file version of its service binary, read
 # as SYSTEM (wsl --version runs no session for SYSTEM).
