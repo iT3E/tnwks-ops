@@ -1,8 +1,7 @@
 ---
-# Not applied yet: step 2 of the cutover lists it in kustomization.yaml, after
-# step 1 made the volume on the node of the agent (a mover that came first
-# would make it on any worker). The ClusterRepository agents-finance is
-# Ready.
+# Listed by step 2 of the cutover in kustomization.yaml, after step 1 made
+# the volume on the node of the agent (a mover that came first would make it
+# on any worker). The ClusterRepository agents-finance is Ready.
 #
 # The state volume of the finance agent, with its archives, to the Kopia
 # repository of the finance trust domain (ClusterRepository agents-finance:
