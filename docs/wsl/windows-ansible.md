@@ -642,10 +642,16 @@ runs only when the lead gives it, in this order, and reads its result:
 
 ```sh
 cd infrastructure/ansible
-uv run ansible-playbook playbooks/windows-host.yml --limit WSL-02 --tags wsl-move-rehearsal \
+uv run ansible-playbook playbooks/windows-host.yml --limit 'localhost,WSL-02' --tags wsl-move-rehearsal \
   -e wsl_move_rehearsal_phase=<phase>
 uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02
 ```
+
+The limit of the phase run names `localhost` too: the first play of
+`windows-host.yml` runs on the controller and downloads the pinned root file
+system to its cache, and a limit of `WSL-02` alone skips that play. The setup
+then stops at its first step with a message that names the file and this
+limit. The check play runs on the Windows hosts only, so `WSL-02` is enough.
 
 A check run (`--check`) of any phase reads only: it starts no task, waits
 for nothing and moves no file. The registrations go through

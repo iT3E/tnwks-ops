@@ -147,11 +147,24 @@ def test_each_task_that_acts_on_a_scheduled_task_runs_as_system():
 
 def test_the_baseline_of_the_live_parts_is_read_before_the_first_account():
     names = [t["name"] for t in yaml.safe_load((ROLE / "tasks/setup.yml").read_text())]
-    order = ["The state file holds no marker", "Folder of the rehearsal", "Folders of the procedure", "The read of the live parts", "The live parts at the start",
+    order = ["The root file system is in the controller cache",
+             "The state file holds no marker", "Folder of the rehearsal", "Folders of the procedure", "The read of the live parts", "The live parts at the start",
              "The baseline of the live parts is kept, and it read the registrations", "The accounts of the rehearsal"]
     assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
-    gate = next(t for t in tasks_of("setup.yml") if t.get("name") == order[5])
+    gate = next(t for t in tasks_of("setup.yml") if t.get("name") == order[6])
     assert "(wsl_move_rehearsal_baseline.output | last).registrations is not match('not read')" in gate["ansible.builtin.assert"]["that"]
+    # The cached root file system is read on the controller first, before any
+    # change of the host, and the message names the limit that downloads it.
+    assert names[0] == order[0]
+    cached = next(t for t in tasks_of("setup.yml") if t.get("name") == order[0])["ansible.builtin.assert"]
+    assert cached["that"] == "(wsl_move_rehearsal_cache ~ '/' ~ (wsl_move_rehearsal_rootfs.url | basename)) is file"
+    assert "--limit 'localhost,{{ inventory_hostname }}'" in cached["fail_msg"]
+    controller = (ROLE / "tasks/controller.yml").read_text()
+    assert 'checksum: "sha256:{{ wsl_move_rehearsal_rootfs.sha256 }}"' in controller
+    # The phase command of the docs runs the controller play too.
+    docs = (ROOT / "docs/wsl/windows-ansible.md").read_text()
+    assert "playbooks/windows-host.yml --limit 'localhost,WSL-02' --tags wsl-move-rehearsal" in docs
+    assert "windows-host.yml --limit WSL-02" not in docs
     marker = next(t for t in tasks_of("setup.yml") if t.get("name") == "The state file holds no marker")
     assert marker["ansible.builtin.assert"]["that"] == "(wsl_move_rehearsal_setup_markers.output | last | int) == 0"
     # Each read of the rules converts an alias to its SID, as the procedure does.
