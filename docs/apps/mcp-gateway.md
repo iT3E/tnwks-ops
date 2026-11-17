@@ -60,13 +60,17 @@ The rules are `allow` rules only: a `deny` rule whose expression fails does
 not deny.
 
 The client is the one of the key, never one that a header names. After the
-key check, only the headers that MCP needs go on to the MCP server
-(`Accept`, `Content-Type`, `Mcp-Protocol-Version`, `Mcp-Session-Id`,
-`Last-Event-Id`, a `transformations` policy of the route); the gateway adds
-its own `Authorization`. Each other header of the client (a cookie, a key of
-another kind, a forwarded address, a trace) is dropped. The container test
-puts a recorder in front of the MCP server and checks the headers that
-arrive.
+key check, the route keeps only the headers that MCP names (`Accept`,
+`Content-Type`, `Mcp-Protocol-Version`, `Mcp-Session-Id`, `Last-Event-Id`,
+a `transformations` policy of the route) and drops each other header of the
+client (a cookie, a key of another kind, a forwarded address, a trace). The
+backend is stateless: for each request the gateway opens its own session
+with the MCP server (`initialize`, then the call) with its own headers and
+its own `Authorization`, so a session id of the client never reaches the
+server either. What arrives there is `Accept`, `Content-Type`, the host,
+the bearer `none`, and the method and tool name that the gateway sets
+(`Mcp-Method`, `Mcp-Name`). The container test puts a recorder in front of
+the MCP server and checks the headers that arrive.
 
 | Route | Client | May list | May call |
 | --- | --- | --- | --- |
@@ -197,7 +201,12 @@ request counter is not made (`config.metrics.remove`) and the scrape drops
 it too: its label `resource` is the tool name that the client sends, also a
 refused one, so a client could make any number of series. The tool of each
 request is in the access log. The container test calls a made-up tool and
-finds no tool name in the metrics. The alert `AgentPlatformWorkloadNotReady`
+finds no tool name in the metrics. The label `method` of the request series
+is the HTTP method that a client sends, any word, also with no key: the
+scrape keeps the series of the standard methods only and drops the others
+(one value for all of them would make two series one, which Prometheus
+refuses as duplicate samples). A container test runs Prometheus with the
+relabelings of the PodMonitor against odd methods. The alert `AgentPlatformWorkloadNotReady`
 covers the Deployment.
 
 ## The probe

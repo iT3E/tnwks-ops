@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 import yaml
 from test_firefly_proxy import TOOLS, agent_sees, mcp_groups
-from test_hand_written_rules import docker, scratch
+from test_hand_written_rules import PROMETHEUS, docker, scratch
 
 ROOT = Path(__file__).resolve().parents[2]
 GATEWAY = ROOT / "kubernetes/apps/ai/mcp-gateway"
@@ -201,8 +201,8 @@ def test_only_the_headers_of_mcp_go_on_and_no_tool_name_is_a_metric():
         assert replace == f"request.headers.filterKeys(k, k in {json.dumps(allowed)})"
     assert config()["config"]["metrics"]["remove"] == ["agentgateway_mcp_requests_total"]
     (endpoint,) = kind(GATEWAY / "app/podmonitor.yaml", "PodMonitor")["spec"]["podMetricsEndpoints"]
-    assert endpoint["metricRelabelings"] == [
-        {"sourceLabels": ["__name__"], "regex": "agentgateway_mcp_requests_total", "action": "drop"}]
+    assert endpoint["metricRelabelings"][0] == {
+        "sourceLabels": ["__name__"], "regex": "agentgateway_mcp_requests_total", "action": "drop"}
 
 
 def test_flux_finds_no_variable_in_the_config():
@@ -376,7 +376,10 @@ ThreadingHTTPServer(("0.0.0.0", 3000), H).serve_forever()
 # Headers that a client sets, which must not reach the MCP server.
 CLIENT_HEADERS = {"Cookie": "session=gateway-test-header", "X-Api-Key": "gateway-test-header",
                   "X-Client": "finance", "X-Forwarded-For": "192.0.2.1",
-                  "Traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"}
+                  "Traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+                  # Allowed, but stateless: the gateway opens its own session
+                  # with the server for each request, so it never arrives.
+                  "Mcp-Session-Id": "gateway-test-header-session"}
 # What reaches the MCP server: the headers of MCP that the gateway lets
 # through, the ones it sets itself, and the bearer of the server.
 UPSTREAM_HEADERS = {"accept", "content-type", "content-length", "host", "authorization",
@@ -609,6 +612,72 @@ def test_the_metrics_hold_no_tool_name(lab):
     assert "agentgateway_mcp_requests_total" not in metrics
     for name in ("zz_made_up_tool_name", "get_about", "delete_transaction"):
         assert name not in metrics
+
+
+def snake(rule: dict) -> dict:
+    """A relabeling of a PodMonitor, as Prometheus reads it."""
+    names = {"sourceLabels": "source_labels", "targetLabel": "target_label"}
+    return {names.get(k, k): v for k, v in rule.items()}
+
+
+def test_the_scrape_keeps_the_standard_methods_only(lab):
+    """A client sends any word as the HTTP method, also with no key or to no
+    route, and the gateway makes it a label value. Prometheus, with the
+    relabelings of the PodMonitor, keeps the standard methods only, with no
+    duplicate sample."""
+    (endpoint,) = kind(GATEWAY / "app/podmonitor.yaml", "PodMonitor")["spec"]["podMetricsEndpoints"]
+    work = scratch()
+    (work / "prometheus.yml").write_text(yaml.safe_dump({
+        "global": {"scrape_interval": "1s"},
+        "scrape_configs": [{
+            "job_name": "mcp-gateway",
+            "static_configs": [{"targets": ["mcp-gateway.ai.svc.cluster.local:15020"]}],
+            "metric_relabel_configs": [snake(r) for r in endpoint["metricRelabelings"]]}]}))
+    (work / "prometheus.yml").chmod(0o644)
+    name = f"mcpgw-prometheus-{uuid.uuid4().hex[:8]}"
+    run([lab["tool"], "run", "-d", "--quiet", "--name", name, "--network", lab["front"],
+         "--network-alias", "prometheus", "-v", f"{work}/prometheus.yml:/etc/prometheus/prometheus.yml:ro",
+         PROMETHEUS, "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/tmp"])
+    code = r'''
+import http.client, json, sys, time, urllib.parse, urllib.request
+key = sys.argv[1]
+for method in ("FOOBAR", "PROPFIND", "ZZMETHOD1", "GET", "DELETE"):
+    for path, headers in (("/finance/mcp", {"Authorization": "Bearer " + key}), ("/finance/mcp", {}),
+                          ("/nowhere", {})):
+        c = http.client.HTTPConnection("mcp-gateway.ai.svc.cluster.local", 3000, timeout=10)
+        c.request(method, path, body=b"{}", headers=headers)
+        c.getresponse().read()
+raw = urllib.request.urlopen("http://mcp-gateway.ai.svc.cluster.local:15020/metrics", timeout=10).read().decode()
+def query(q):
+    url = "http://prometheus:9090/api/v1/query?" + urllib.parse.urlencode({"query": q})
+    return json.loads(urllib.request.urlopen(url, timeout=10).read())["data"]["result"]
+for i in range(60):
+    try:
+        if query('agentgateway_requests_total{method="DELETE"}'):
+            break
+    except OSError:
+        pass
+    time.sleep(1)
+time.sleep(3)
+print(json.dumps({
+    "raw": "FOOBAR" in raw,
+    "methods": sorted({r["metric"].get("method") for r in query('{__name__=~"agentgateway_.+", method!=""}')}),
+    "tmp": len(query('{__name__=~"agentgateway_.+", __tmp_known_method!=""}')),
+    "duplicates": [line.split()[-1] for line in urllib.request.urlopen("http://prometheus:9090/metrics", timeout=10)
+                   .read().decode().splitlines()
+                   if line.startswith("prometheus_target_scrapes_sample_duplicate_timestamp_total")],
+}))
+'''
+    try:
+        result = on_front(lab["tool"], lab["front"], lab["python"], "python3", "-I", "-c", code,
+                          lab["keys"]["finance"])
+    finally:
+        subprocess.run([lab["tool"], "container", "remove", "-f", name], capture_output=True, check=False)
+    out = json.loads(result.stdout)
+    assert out["raw"]  # the gateway takes the word as it is
+    assert out["methods"] == ["DELETE", "GET", "POST"]
+    assert out["tmp"] == 0
+    assert out["duplicates"] == ["0"]
 
 
 def test_the_log_has_one_line_a_request_with_the_client_and_no_argument(lab):

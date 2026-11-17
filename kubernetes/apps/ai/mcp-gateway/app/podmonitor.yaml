@@ -4,7 +4,11 @@
 # No client key, no argument and no tool name is a label: the gateway makes
 # no agentgateway_mcp_requests_total (config.metrics.remove), whose tool
 # label a client sets, and the scrape drops it as well, in case a release
-# makes it again.
+# makes it again. The label `method` is the HTTP method that a client
+# sends, any word, also on a refused request: the scrape keeps the series of
+# the standard methods only and drops the others (mapping them to one value
+# would make two series one, which Prometheus refuses as duplicate samples);
+# the access log has each request.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
@@ -22,3 +26,12 @@ spec:
         - sourceLabels: [__name__]
           regex: agentgateway_mcp_requests_total
           action: drop
+        - sourceLabels: [method]
+          regex: GET|HEAD|POST|PUT|DELETE|OPTIONS|PATCH
+          targetLabel: __tmp_known_method
+          replacement: "yes"
+        - sourceLabels: [method, __tmp_known_method]
+          regex: .+;
+          action: drop
+        - regex: __tmp_known_method
+          action: labeldrop
