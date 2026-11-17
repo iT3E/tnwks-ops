@@ -11,12 +11,12 @@ resources:
   - ./secret-password.sops.yaml
   - ./rbac.yaml
   - ./cronjob.yaml
-  # Listed in a later change, after the first refresh wrote a real session
-  # to aws-backup-sts-agents-finance, and only when the password check of
-  # docs/operations/backups.md ("The finance repository", step 4) prints ok:
+  # Listed after the first refresh wrote a real session to
+  # aws-backup-sts-agents-finance, and after the password check of
+  # docs/operations/backups.md ("The finance repository", step 4) printed ok:
   # Kopia creates the repository with the password it finds, a placeholder
   # too.
-  # - ./clusterrepository.yaml
+  - ./clusterrepository.yaml
 labels:
   - pairs:
       app.kubernetes.io/name: kopiur-agents-finance-repository
