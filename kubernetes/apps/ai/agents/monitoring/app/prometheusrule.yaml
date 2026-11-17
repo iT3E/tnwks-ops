@@ -27,13 +27,13 @@ spec:
         - alert: AgentPlatformWorkloadNotReady
           # Fewer ready pods than wanted, for each Deployment and StatefulSet
           # of a trust domain and of the sandbox controller, and for the model
-          # gateway and the model bridge in `ai`. A workload scaled to zero by a
+          # gateway, the model bridge and the MCP gateway in `ai`. A workload scaled to zero by a
           # merge does not fire. 10m: a start of the agent pod (archive and
           # doctor) takes about 2 minutes, a rollout of the bridge less.
           expr: |
             label_replace(
-              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace=~"agents-.+|agent-sandbox-system"} or kube_deployment_spec_replicas{namespace="ai", deployment=~"litellm|model-bridge"})
-              - max by (namespace, deployment) (kube_deployment_status_replicas_ready{namespace=~"agents-.+|agent-sandbox-system"} or kube_deployment_status_replicas_ready{namespace="ai", deployment=~"litellm|model-bridge"}),
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace=~"agents-.+|agent-sandbox-system"} or kube_deployment_spec_replicas{namespace="ai", deployment=~"litellm|model-bridge|mcp-gateway"})
+              - max by (namespace, deployment) (kube_deployment_status_replicas_ready{namespace=~"agents-.+|agent-sandbox-system"} or kube_deployment_status_replicas_ready{namespace="ai", deployment=~"litellm|model-bridge|mcp-gateway"}),
               "workload", "$1", "deployment", "(.+)")
             > 0
             or

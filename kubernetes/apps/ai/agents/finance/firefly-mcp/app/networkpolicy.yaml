@@ -76,8 +76,11 @@ spec:
             dns:
               - matchName: firefly.production.svc.cluster.local
 ---
-# The MCP server of the finance app. In: the agent pod (its gateway is the MCP
-# client) and the probe of the app (it calls the server as the agent does).
+# The MCP server of the finance app. In: the MCP gateway only
+# (kubernetes/apps/ai/mcp-gateway), which checks the key of each client and
+# lets through only the tools of its rule. Not the agent pod and not a probe:
+# each of them calls the gateway, and the gateway probe checks that a direct
+# call fails (../../checks/app/mcp-gateway-probe.yaml).
 # Out: the proxy only, and DNS for the name of the proxy only. DNS would be a
 # way out too, so this pod resolves no other name.
 apiVersion: cilium.io/v2
@@ -91,13 +94,8 @@ spec:
   ingress:
     - fromEndpoints:
         - matchLabels:
-            io.kubernetes.pod.namespace: agents-finance
-            app.kubernetes.io/name: agent
-            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
-        - matchLabels:
-            io.kubernetes.pod.namespace: agents-finance
-            app.kubernetes.io/name: platform-checks
-            app.kubernetes.io/component: firefly-probe
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

@@ -1,0 +1,238 @@
+# The MCP gateway
+
+Each MCP call of an agent of the platform goes through one gateway: it
+checks the key of the agent, lets the agent see and call only the tools
+that its rule names, and sends the call on to the MCP server of the trust
+domain. It holds no credential of an app. Today it has one client domain,
+finance; the others get a route when they get a tool.
+
+| | |
+| --- | --- |
+| Product | [agentgateway](https://agentgateway.dev) v1.7.0, standalone mode, by digest |
+| Where | namespace `ai`, `kubernetes/apps/ai/mcp-gateway`, homelab-wsl only |
+| Config | `app/config/config.yaml`, one file in git; no database, no UI |
+| Address | `http://mcp-gateway.ai.svc.cluster.local:3000/<domain>/mcp` |
+| Clients | `finance` (the finance agent), `finance-probe` and `no-tools` (the gateway probe) |
+| Logs | Loki, `{namespace="ai", app="mcp-gateway"}` |
+| Metrics | Prometheus, `agentgateway_mcp_requests_total` and the request series |
+
+## Why here
+
+The gateway is shared by all trust domains, as the model gateway
+(`ai/litellm`) and the model bridge (`ai/model-bridge`) are, so it sits next
+to them in `ai`, with its own Flux Kustomization. Like the bridge, the
+cluster's app list (`kubernetes/clusters/wsl/apps/kustomization.yaml`) names
+it, and not `apps/ai/kustomization.yaml`, which MS-01 reads. A trust domain
+gets a route (`/<domain>/`), not a gateway of its own: one place holds every
+tool rule, and each route has its own keys, its own rule and its own MCP
+servers, so a key of one domain is not a key of another.
+
+## What it holds
+
+- **The config file** (a ConfigMap; the name has a hash of the file, so a
+  change rolls the pod). It holds SHA-256 hashes of the keys of the clients,
+  the tool rules, the address of each MCP server, and the bearer that the
+  gateway sends to the MCP server of finance, `none`. That bearer is no
+  secret: the MCP server of finance passes it to the proxy of the app, and
+  the proxy puts the token of the agent in its place
+  ([agent-platform.md](agent-platform.md), "The finance app").
+- **No Secret, no app token, no model key, no database.** The values of the
+  keys are in the Secrets of the clients only.
+- **No service account token** (`automountServiceAccountToken: false`).
+  The pod meets the `restricted` level: non-root, a read-only root file
+  system, no capability, the runtime's seccomp profile.
+
+The admin port (config dump, shutdown, the UI) listens on loopback only
+(`config.adminAddr: localhost:15000`, the default) and no Service and no
+network rule names it. The metrics port 15020 is for Prometheus, the
+readiness port 15021 for the kubelet, and the MCP port 3000 is the only port
+of the Service.
+
+## Clients and rules
+
+Deny by default, on each route: a request with no key or with a key that
+is not in the config gets a 401 (`apiKey.mode: strict`). A client sees in
+`tools/list` and may call only the tools that an `allow` rule names for it;
+the gateway refuses another tool with a 400 (JSON-RPC error `unknown
+resource`, the same as for a tool that does not exist) and sends nothing on.
+The rules are `allow` rules only: a `deny` rule whose expression fails does
+not deny.
+
+| Route | Client | May list | May call |
+| --- | --- | --- | --- |
+| `/finance/` | `finance` | the 73 kept tools | the 73 kept tools |
+| `/finance/` | `finance-probe` | the 73 kept tools | `get_about` only |
+| `/finance/` | `no-tools` | nothing | nothing |
+
+**The pilot and the workflow agents get no key.** No key is the safer
+default. A key with no tool still authenticates: it opens a connection,
+gets the server's name and its instructions, and becomes a key with tools
+as soon as someone writes a rule that does not name its client. With no
+key, each request of theirs ends at the 401, before any rule. The container
+test proves both: a key that is not in the config gets a 401, and the key
+`no-tools` lists nothing and is refused (`observability/tests/test_mcp_gateway.py`).
+No network rule lets their agent pods reach the gateway either.
+
+## The tool rule
+
+agentgateway has no pin of the tools of a server: no description pin and no
+schema pin. So the rule of finance names the kept tools one by one, and the
+names come from a dump of the pinned image of the MCP server, in git:
+
+- `tools/firefly.json` is the `tools/list` of
+  `ghcr.io/daften/fireflyiii-mcp:1.0.1` (by digest) with the groups of
+  `mcp.yaml`: 89 tools, each with its description and its input schema.
+- `tools/mcp_tools.py` keeps 73 of them (the reads, the two rule tests and
+  the fifteen creates and updates; never a delete, bulk change, trigger,
+  export, attachment or rule write) and writes them into the rule
+  (`mcp_tools.py write tools/firefly.json app/config/config.yaml`).
+- `observability/tests/test_mcp_gateway.py` fails when the dump is not of
+  the image of `mcp.yaml`, when the rule and the kept tools of the dump
+  differ, or when the agent's filter and deny list give other tools than
+  the rule. Its container test lists the tools of the pinned image and
+  compares each one, descriptions and schemas included, with the dump.
+
+What this covers: a new image of the server (a Renovate PR) fails the test
+until someone dumps it again, and the diff of the dump shows each new,
+changed or removed tool, with its description and its schema, for the
+review. A new tool is refused until its name is in the rule.
+
+What it does not cover: the gateway passes the descriptions of the server
+as the server sends them, at run time. A server that changes a description
+of a kept tool (an injection in the text) is not stopped by the gateway;
+the image digest is what keeps the code fixed. The gateway does not check
+the arguments of a call either; the proxy of the app limits what a call can
+do at the HTTP level.
+
+## The keys
+
+Each key is 32 random bytes, as 64 hex characters. The config holds its
+hash, `sha256:<hex>`; a hash of such a key tells nothing about it, so the
+hash can be in a public repo. A hash of the form `sha256:000...0N` is a
+placeholder: no key has it, so its client gets a 401 until the owner's
+values step.
+
+| Client | Value (SOPS) | Hash |
+| --- | --- | --- |
+| `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, route `finance` |
+| `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | the same |
+| `no-tools` | `NO_TOOLS_KEY` of the same file | the same |
+
+**The hash and the value stay in step** in two ways: the owner changes both
+in one commit (below), and a check finds a difference. The agent's start
+check calls the gateway with its key and stops the start on a 401 (the
+values check of the agent pod, in the cutover package); the gateway probe
+fails when one of its own keys gets a 401.
+
+## Network policy
+
+`app/networkpolicy.yaml`:
+
+- **In:** the MCP port from the agent pod of each domain that has a client
+  (`agents-finance`, `app.kubernetes.io/name: agent`) and from the gateway
+  probe of that domain; the metrics port from Prometheus; the readiness port
+  from the host. No sandbox: neither the workload pod nor the supervisor of
+  a sandbox carries the labels of a client, and the sandboxes of finance
+  keep their one way to the app, the read port of the proxy.
+- **Out:** the MCP server of each route (`firefly-mcp` in `agents-finance`,
+  port 3000), and DNS for those names only. The pod sets `ndots` to 1, so it
+  asks for the full name as it is.
+- **The MCP server of finance** takes the gateway only. The agent pod has no
+  way to it any more, and the gateway probe checks that a pod that is not
+  the gateway can not reach it.
+
+**A compromise of the gateway** gives the tools of each domain, inside each
+wall behind it. For finance: every tool of the MCP server (the gateway's
+rule no longer holds), but the proxy still refuses each delete, trigger,
+rule write and each call off its allow list, and the app token stays in the
+proxy. It gives no model key, no app token and no key of a client (the
+config holds hashes). It does see each tool call of each domain while the
+call passes through it, with its arguments and its result: the finance data
+of a call passes through this pod. A domain added later adds its tools and
+its data to this.
+
+## Logs and metrics
+
+One JSON line for each request, from the default fields of agentgateway
+and one field added by a CEL expression (`frontendPolicies.accessLog.add:
+client: apiKey.client`): the route, the HTTP status, the MCP method, the
+target, the tool, the client, an error and its reason, and the time. Never
+the arguments or the result of a call, and never a key: the container test
+looks for the keys and the argument values in the log and finds none. A
+refused tool:
+
+```json
+{"level":"error","scope":"request","route":"default/finance","http.status":400,"protocol":"mcp","mcp.method.name":"tools/call","mcp.target":"firefly","gen_ai.tool.name":"delete_transaction","error":"mcp: authorization denied for tool: delete_transaction","reason":"Authorization","client":"finance"}
+```
+
+The pod has the label `logs.home.arpa/ship: "true"`, so the platform log
+agent ships its lines to Loki as they are, like the lines of the model
+bridge. The PodMonitor scrapes `agentgateway_mcp_requests_total` (by route,
+method, server and tool) and the request and connection series. The alert
+`AgentPlatformWorkloadNotReady` covers the Deployment.
+
+## The probe
+
+`platform-check-mcp-gateway-probe` (`agents/finance/checks/app/`, daily at
+05:37, `platform_checks.py mcp-gateway`) calls the route of finance as the
+agent does, with two keys of its own and none of the agent's:
+
+1. A straight connection from its pod to the MCP server fails.
+2. No key, and a random key that is not in the config: a 401 each.
+3. The probe key lists exactly the tools of the rule of finance (it reads
+   the list from the same config file); its `get_about` reaches the app
+   through the MCP server and the proxy (a 401 of the app with the
+   placeholder token, an answer with the real one); `delete_transaction`,
+   `trigger_rule` and `create_tag` are refused at the gateway.
+4. The key `no-tools` lists nothing, and its `get_about` is refused.
+
+With the placeholder keys, 3 and 4 print `skipped: the key is pending` and
+pass. It can not run as the identity of the agent pod (a pod with its
+labels would be an agent pod), so the policy of the MCP server, which lets
+in the gateway only, is a test in git as well.
+
+## Updates
+
+Renovate opens an update 7 days after a release at the earliest, as for the
+MCP server behind it, and a person reviews each one (`impact/high`,
+`.github/renovate.json5` and `.github/renovate/autoMerge.json5`). The 7 days
+fit: the gateway decides which tool each agent may call, a pulled or bad
+release is usually gone in that time, and agentgateway ships a minor about
+each month, so an update waits a week at most. The review checks the
+release notes for changes of the config format and its defaults (the admin
+address, the fields of the log, the API key and authorization policies),
+and the container test runs the new image with the config of the repo.
+
+## What is left
+
+- **No tool pin and no argument check** at the gateway (above).
+- **One replica.** While it is down or rolls, the agents have no tools; they
+  keep their model and their sandboxes.
+- **Stateless MCP.** Each request opens its own session with the MCP
+  server, which costs a little time for each call.
+- **No rate limit for each client yet.** The simplest version first; a
+  limit by client (`localRateLimit`, by `apiKey.client`) is a later step.
+- **The probe key** may list the tools of finance and call `get_about`; a
+  leak of it gives that much.
+- **A person with exec into the pod** (a cluster admin) can read the config
+  through the admin port; it holds no secret.
+
+## The steps of the owner
+
+None of these values goes through an agent or a session.
+
+1. **Make the three keys** on the host, one for each client:
+   `openssl rand -hex 32`.
+2. **Put each value** with `sops`: the key of `finance` as
+   `MCP_GATEWAY_KEY` in `agents/finance/agent/app/secret.sops.yaml` (the
+   values step of the cutover of the finance agent), and the two keys of the
+   probe as `PROBE_KEY` and `NO_TOOLS_KEY` in
+   `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml`.
+3. **Put each hash** in `app/config/config.yaml`, in place of the
+   placeholder of its client: `printf %s "$KEY" | sha256sum` gives the hex
+   after `sha256:`. Commit the values and the hashes in one PR.
+4. **Check:** the next run of the gateway probe has no `skipped` line, and
+   the start of the finance agent prints `values-check result=ok`.
+
+To change a key, do the same with a new key: the old hash goes out with
+the old value.

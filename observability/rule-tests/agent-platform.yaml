@@ -16,6 +16,10 @@ tests:
         values: 0x30
       - series: kube_deployment_status_replicas_ready{namespace="ai", deployment="model-bridge"}
         values: 0x30
+      - series: kube_deployment_spec_replicas{namespace="ai", deployment="mcp-gateway"}
+        values: 1x30
+      - series: kube_deployment_status_replicas_ready{namespace="ai", deployment="mcp-gateway"}
+        values: 1x12 0x18
       - series: kube_deployment_spec_replicas{namespace="ai", deployment="other"}
         values: 1x30
       - series: kube_deployment_status_replicas_ready{namespace="ai", deployment="other"}
@@ -37,6 +41,12 @@ tests:
         exp_alerts:
           - exp_labels: {severity: warning, namespace: agents-pilot, deployment: agent, workload: agent}
           - exp_labels: {severity: warning, namespace: agents-main, statefulset: openshell, workload: openshell}
+      - alertname: AgentPlatformWorkloadNotReady
+        eval_time: 25m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot, deployment: agent, workload: agent}
+          - exp_labels: {severity: warning, namespace: agents-main, statefulset: openshell, workload: openshell}
+          - exp_labels: {severity: warning, namespace: ai, deployment: mcp-gateway, workload: mcp-gateway}
 
   - name: the last run of the providers job failed, then a good run resolves it
     interval: 1m

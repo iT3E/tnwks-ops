@@ -4,8 +4,9 @@
 # - firefly-proxy (proxy.yaml): nginx, the only holder of the token of the
 #   agent at the app. It lets through the calls of an allow list
 #   (proxy/default.conf.template) and sets the token on each.
-# - firefly-mcp (mcp.yaml): the MCP server of the app, for the gateway of the
-#   agent. It calls the app through the proxy and holds no token.
+# - firefly-mcp (mcp.yaml): the MCP server of the app, behind the MCP gateway
+#   (kubernetes/apps/ai/mcp-gateway), which the agent calls. It calls the
+#   app through the proxy and holds no token.
 # The sandboxes of the agent reach the proxy too, by one rule of their sandbox
 # policy (../../agent/config/sandbox-policy.yaml), with no credential.
 #

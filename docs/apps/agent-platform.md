@@ -616,8 +616,9 @@ from the pilot:
     seed, a change on a device does not reach the agent, and the agent
     changes nothing on a device. To bring the agent a newer vault, seed it
     again (below).
-- **The finance app,** read and write, never delete, through its MCP
-  server and its proxy ([The finance app](#the-finance-app)).
+- **The finance app,** read and write, never delete, through the MCP
+  gateway, the MCP server of the app and its proxy
+  ([The finance app](#the-finance-app)).
 
 ### The steps of the owner
 
@@ -647,16 +648,24 @@ listed with the Deployment.
 ## The finance app
 
 The finance agent reads and writes the finance app (Firefly III,
-[firefly.md](firefly.md)) through two pods of its own in `agents-finance`
+[firefly.md](firefly.md)) through the MCP gateway of the platform and two
+pods of its own in `agents-finance`
 (`kubernetes/apps/ai/agents/finance/firefly-mcp/`), and its sandboxes reach
 the app through one of them. The agent may create and update data. It may
 never delete.
 
 ```text
-agent pod (gateway, MCP client) --> firefly-mcp :3000 --> firefly-proxy :8080 (reads, writes) --+
-                                                                                                 +--> the app (production/firefly :8080)
-sandbox --> its supervisor (by the sandbox policy) ----> firefly-proxy :8081 (reads only) -------+
+agent pod (MCP client) --> mcp-gateway :3000 /finance/mcp --> firefly-mcp :3000 --> firefly-proxy :8080 (reads, writes) --+
+                                                                                                                          +--> the app
+sandbox --> its supervisor (by the sandbox policy) -------------------------------> firefly-proxy :8081 (reads only) -----+
 ```
+
+- **`mcp-gateway`** (`kubernetes/apps/ai/mcp-gateway`, in `ai`,
+  [mcp-gateway.md](mcp-gateway.md)): the MCP gateway of every trust domain.
+  It checks the key of the agent (`MCP_GATEWAY_KEY` of `agent-secret`, a
+  `Bearer` header of the `mcp.servers.firefly` entry), lets it see and call
+  only the 73 kept tools of the server, by name, and sends each call on to
+  `firefly-mcp` with the bearer `none`. It holds no credential of the app.
 
 - **`firefly-proxy`** (`app/proxy.yaml`): nginx, and the only holder of the
   token of the agent at the app. The token is the env var `FIREFLY_TOKEN`
@@ -692,10 +701,10 @@ sandbox --> its supervisor (by the sandbox policy) ----> firefly-proxy :8081 (re
   [fireflyiii-mcp](https://github.com/daften/fireflyiii-mcp) 1.0.1, in HTTP
   mode with no OAuth client. In that mode it takes the bearer of each
   request from its client and sends it on to `FIREFLY_URL`, which is the
-  proxy; it checks only that a bearer is there. The agent sends the fixed
-  value `none` (`headers` of the `mcp.servers.firefly` entry of
-  `agent/config/openclaw.json`). It is no secret, and nothing checks it:
-  the proxy replaces it. So the server never holds the token. It loads the
+  proxy; it checks only that a bearer is there. The MCP gateway, its one
+  client, sends the fixed value `none` (the `backendAuth` of the finance
+  route of its config). It is no secret, and nothing checks it: the proxy
+  replaces it. So the server never holds the token. It loads the
   tool groups `accounts`, `transactions`, `categories`, `budgets`, `bills`,
   `reports` (with the tags, the summary and the insights) and `rules`; not
   recurring, attachments, currencies, exports, object groups, piggy banks
@@ -721,8 +730,11 @@ sandbox --> its supervisor (by the sandbox policy) ----> firefly-proxy :8081 (re
 port: in from `firefly-mcp` on 8080 only, from the supervisors of the
 sandboxes of `agents-finance` (label `openshell.ai/boundary-role:
 supervisor`) on 8081 only, and from the probe of the app on both; out to
-the app's pods on port 8080. `firefly-mcp`: in from the agent pod and the
-probe, out to the proxy only. The agent pod gets one rule to `firefly-mcp`.
+the app's pods on port 8080. `firefly-mcp`: in from the MCP gateway only,
+out to the proxy only. The agent pod gets one rule to the MCP gateway and
+none to `firefly-mcp`; the gateway lets in the agent pod and its probe, and
+reaches `firefly-mcp` only ([mcp-gateway.md](mcp-gateway.md), "Network
+policy").
 
 **Who can carry the labels of a client of 8080.** The rule for 8080 trusts
 the labels of the MCP pod (`app.kubernetes.io/name: firefly-mcp`) and of the
@@ -760,29 +772,32 @@ root file system, and mount no service account token.
 **What the agent may write.** Create and update of accounts, transactions
 (split ones too), categories, budgets and their limits, bills and tags.
 Never a delete, a trigger, a bulk update, an export, an attachment or a
-setting. Three walls, each on its own:
+setting. Four walls, each on its own:
 
-1. The proxy, at the HTTP level, whatever the server or a sandbox sends: a
+1. The MCP gateway: the rule of the client `finance` names the 73 kept
+   tools one by one, so the agent sees no other tool, and a call of
+   another tool is refused before it reaches the server.
+2. The proxy, at the HTTP level, whatever the server or a sandbox sends: a
    sandbox reaches only its read port, which refuses each write.
-2. The agent: `toolFilter.include` of the MCP entry lets through the reads
+3. The agent: `toolFilter.include` of the MCP entry lets through the reads
    (`get_*`, `search_*`, `test_rule`, `test_rule_group`) and the fifteen
    writes by name; `tools.deny` removes each `firefly__delete_*`,
    `firefly__bulk_*`, `firefly__trigger_*`, export, attachment and rule
    write tool. `tools.sandbox.tools.alsoAllow` has `firefly__*`, so a
    sandboxed session has the tools.
-3. The sandbox policy, for a script: reads only, in front of the read port.
+4. The sandbox policy, for a script: reads only, in front of the read port.
 
 The limits of the walls:
 
 - **No rule writes,** though the agent's instructions name them. A rule of
   the app can have the action `delete_transaction` and fire when a
   transaction is stored or updated, so a rule write is a delete by another
-  path. The agent can read and test rules. Whether it may write them is the
-  owner's choice (below).
+  path. The agent can read and test rules. The owner decided that rule
+  writes stay refused.
 - **`bulk_update_transactions`** of the server sends one `PUT
   /transactions/{id}` for each transaction, the same call as
-  `update_transaction`. The proxy can not tell them apart; only the deny of
-  the agent stops the bulk tool. What it can do is what many single updates
+  `update_transaction`. The proxy can not tell them apart; the rule of the
+  gateway and the deny of the agent stop the bulk tool. What it can do is what many single updates
   can do.
 - **An update can remove a split.** At the app's release 6.5.9, an update
   of a transaction group that has two or more splits deletes each split
@@ -813,7 +828,7 @@ tools, and the writes among them are the fifteen above.
 things: web search, so text from outside; write access to the app; and the
 finance data. A page that the agent reads can steer it to a wrong create or
 update, or to put finance data into a search query, which goes to the search
-vendor. The controls: no delete (the three walls above), the allow list of
+vendor. The controls: no delete (the four walls above), the allow list of
 the proxy, no egress of the agent but the listed ones and none of a sandbox
 but the read port of the proxy, DNS for one name in the pods of the app, and the backup of
 the app's database. What is left: a wrong
@@ -841,12 +856,13 @@ give; it can not delete through the proxy, reach another path, resolve
 another name, or send data anywhere but the proxy. The proxy is the
 official unprivileged nginx image, pinned by digest.
 
-**The probe.** `platform-check-firefly-probe` (`finance/checks/app/`, 05:17)
-tests both clients of the proxy with the token it holds, so it works before
-the real token and after it. Through the MCP server, as the agent calls it:
-the server loads no tool of the other groups, `get_about` reaches the app
-(a 401 with the placeholder), and `delete_transaction`, `delete_tag`,
-`trigger_rule` and `update_rule` on id `0` get the proxy's 403. From a
+**The probes.** `platform-check-mcp-gateway-probe` (`finance/checks/app/`,
+05:37) tests the path of the agent's tools through the MCP gateway, with two
+keys of its own ([mcp-gateway.md](mcp-gateway.md), "The probe"): the tools
+of the rule, a read that reaches the app, refusals at the gateway, and no
+way to the MCP server but the gateway.
+`platform-check-firefly-probe` (05:17) tests both ports of the proxy with
+the token it holds, so it works before the real token and after it. From a
 sandbox made with the image of the agent's sandboxes and the agent's
 sandbox policy, widened for the probe: each method on the read port, so
 that the proxy and not the policy must refuse a write, and a rule for 8080.
@@ -871,7 +887,8 @@ and the DNS rules of the two pods are in git next to it.
 
 **After the cutover,** the lead proves one tool call in a sandboxed session
 with one real turn: the session lists the `firefly__` tools, one call (for
-example `firefly__get_summary`) answers, and the proxy logs the call with
+example `firefly__get_summary`) answers, the MCP gateway logs it with
+`"client":"finance"` and status 200, and the proxy logs the call with
 `refused=0` and a status of 200.
 
 ### The steps of the owner for the finance app
@@ -899,13 +916,11 @@ example `firefly__get_summary`) answers, and the proxy logs the call with
    program reach the proxy, and the read port lets no write through.
    When the scripts no longer use the token of the host, revoke it in the
    app.
-3. **Open: which writes the agent needs.** The owner said "it needs to
-   write as well i believe" on 2026-11-17. The instructions of the agent
-   name creates and changes of accounts, categories of transactions, rules,
-   budgets and bills, and data fixes; its documented calls and its five
-   scripts make reads only. The recommendation: keep the fifteen writes,
-   and no rule writes for now; let the agent propose a rule in the chat and
-   the owner add it. If rule writes are wanted, the proxy and the deny list
+3. **Decided: which writes the agent needs.** The owner said "it needs to
+   write as well i believe" on 2026-11-17, and then that rule writes stay
+   refused. So the agent keeps the fifteen writes and no rule write; it can
+   propose a rule in the chat, and the owner adds it. If rule writes are
+   wanted later, the rule of the gateway, the proxy and the deny list
    change together, and a rule that deletes becomes possible.
 4. **Open: writes from a sandbox.** Off for now, as the scripts only read.
    On, the sandbox policy, the read port and the network policy change
@@ -1224,7 +1239,8 @@ pod's log goes to Loki. `AgentPlatformCronJobFailed` and
 | --- | --- | --- |
 | `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
 | `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox. Before the create it removes a sandbox of its own name that an earlier run left (a `leftover sandbox` line), and at its end it fails when its Sandbox record is still there (a `sandbox removed` line), after it removes it |
-| `platform-check-firefly-probe` | 05:17 | `agents-finance` only. Through the MCP server of the finance app and from a sandbox with the agent's sandbox policy (widened to each method on the read port), an allowed read reaches the app, and each delete and each call off the allow list of the proxy is refused; a sandbox can write nothing through the read port and can not reach the write port. It removes its sandbox `firefly-probe` as the probe does |
+| `platform-check-firefly-probe` | 05:17 | `agents-finance` only. Straight to the write port of the proxy (as the MCP server calls it) and from a sandbox with the agent's sandbox policy (widened to each method on the read port), an allowed read reaches the app, and each delete and each call off the allow list of the proxy is refused; a sandbox can write nothing through the read port and can not reach the write port. It removes its sandbox `firefly-probe` as the probe does |
+| `platform-check-mcp-gateway-probe` | 05:37 | `agents-finance` only. Through the route of finance at the MCP gateway: no key and an unknown key get a 401; the probe key lists exactly the tools of the rule of finance, its `get_about` reaches the app, and a delete, a rule trigger and a write are refused at the gateway; the key with no tool lists nothing; a straight connection to the MCP server fails ([mcp-gateway.md](mcp-gateway.md), "The probe") |
 | `platform-check-firefly-dns` | 05:27 | `agents-finance` only. A pod set up as the pods of the finance app (out of the namespace's DNS rule, its own rule for one name, `ndots` 1) resolves that name and no other |
 
 - The check pods may try every trust domain's gateway on port 8080, so the

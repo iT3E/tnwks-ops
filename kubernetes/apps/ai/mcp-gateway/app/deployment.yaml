@@ -1,0 +1,116 @@
+---
+# The MCP gateway of the agent platform (docs/apps/mcp-gateway.md): each MCP
+# call of an agent goes through it. It checks the key of the client, lets a
+# client see and call only the tools that its rule names, and sends each
+# call on to the MCP server of the trust domain. It is shared by all trust
+# domains, as the model gateway is, with one route for each domain
+# (config/config.yaml). It holds no credential of an app: the keys of its
+# clients are hashes, and the bearer it sends on is no secret.
+#
+# agentgateway in standalone mode: the config file only, no database, no
+# UI, and no service account token.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-gateway
+  namespace: ai
+  labels:
+    app.kubernetes.io/name: mcp-gateway
+spec:
+  # One replica: an agent with no gateway has no tools for that time, and
+  # keeps its model and its sandboxes.
+  replicas: 1
+  revisionHistoryLimit: 2
+  # A rollout starts the new pod first and stops the old one when the new
+  # one is ready.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-gateway
+        # Its log goes to Loki: one JSON line for each request, with the
+        # client, the MCP method, the tool and the status, never the
+        # arguments or the result
+        # (kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml).
+        logs.home.arpa/ship: "true"
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The name of each MCP server is a full name with dots: looked up as
+      # it is, with no search domain, so the DNS rule of the network policy
+      # names it once (networkpolicy.yaml).
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      securityContext:
+        runAsNonRoot: true
+        # The user of the image.
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          # A release, by digest. Renovate waits 7 days after a release, and
+          # a person reviews each update (.github/renovate.json5,
+          # .github/renovate/autoMerge.json5): the config format and its
+          # defaults can change between releases.
+          image: ghcr.io/agentgateway/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
+          imagePullPolicy: IfNotPresent
+          args: ["-f", "/config/config.yaml"]
+          ports:
+            - name: mcp
+              containerPort: 3000
+              protocol: TCP
+            - name: metrics
+              containerPort: 15020
+              protocol: TCP
+            - name: health
+              containerPort: 15021
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: health
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          # About 15 MiB in a test with the finance route.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: mcp-gateway-config
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

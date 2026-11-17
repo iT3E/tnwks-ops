@@ -654,6 +654,21 @@ tests:
       source: 'assert_eq!(.message, "{\"ts\":\"2026-11-14T09:00:00Z\",\"event\":\"engine_error\",\"model\":\"litellm/x\",\"note\":\"why?\",\"domain\":\"pilot\",\"kind\":\"rate_limit\"}")
 
         '
+- name: 'MCP gateway: a JSON request line with an error field passes unchanged'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: '{"level":"error","time":"2026-11-17T03:34:54.617373Z","scope":"request","route":"default/finance","http.status":400,"protocol":"mcp","mcp.method.name":"tools/call","mcp.target":"firefly","gen_ai.tool.name":"create_tag","error":"mcp: authorization denied for tool: create_tag","reason":"Authorization","client":"finance-probe"}'
+      kubernetes.container_name: gateway
+      kubernetes.pod_namespace: ai
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "{\"level\":\"error\",\"time\":\"2026-11-17T03:34:54.617373Z\",\"scope\":\"request\",\"route\":\"default/finance\",\"http.status\":400,\"protocol\":\"mcp\",\"mcp.method.name\":\"tools/call\",\"mcp.target\":\"firefly\",\"gen_ai.tool.name\":\"create_tag\",\"error\":\"mcp: authorization denied for tool: create_tag\",\"reason\":\"Authorization\",\"client\":\"finance-probe\"}")
+
+        '
 - name: 'receiver: a preview field of another container ships by design'
   inputs:
   - insert_at: allowlist_redact

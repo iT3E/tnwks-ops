@@ -1,0 +1,18 @@
+---
+# The metrics of the MCP gateway: agentgateway_mcp_requests_total by route,
+# MCP method, server and tool, and the request and connection series
+# (docs/apps/mcp-gateway.md, "Logs and metrics"). No client key and no
+# argument is a label.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: mcp-gateway
+  namespace: ai
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-gateway
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 60s

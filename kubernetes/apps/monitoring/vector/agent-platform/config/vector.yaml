@@ -48,9 +48,9 @@ transforms:
   # argv or env, with = or :, in any case, or "[cmd:"); and the query string
   # of each word with a "/" or "." before its "?". An error= or detail=
   # field ships: the gateway writes its own error text there. The other pods on the allowlist (run
-  # receiver, model bridge, pilot agent pod) pass as they are: their code
-  # writes no content, and the bridge's lines are JSON that a text rule would
-  # break.
+  # receiver, model bridge, MCP gateway, pilot agent pod) pass as they are:
+  # their code writes no content, and the lines of the bridge and of the MCP
+  # gateway are JSON that a text rule would break.
   # No regex replacement here uses a capture group: Flux and Vector would
   # both read its dollar sign as a variable.
   allowlist_redact:
