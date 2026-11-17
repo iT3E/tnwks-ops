@@ -923,6 +923,21 @@ sandbox --> its supervisor (by the sandbox policy) -----------------------------
   from its own pod, so the supervisor is the client that the proxy lets in.
   OpenShell applies a policy when it makes a sandbox: a sandbox made before
   this policy keeps its old one until it is made again.
+- **How a script runs.** A script goes in a file of the workspace and runs
+  as one command alone: `python3 <file>.py`, with its arguments if any. The
+  exec tool of OpenClaw checks each command before it runs it (the exec
+  preflight, `src/agents/bash-tools.exec-script-preflight.ts` at release
+  2026.11.3), and it refuses a `.py` or `.js` file that runs inside a
+  compound command: after `cd <dir> &&`, before `; <next command>`, on a
+  second line, or inside `sh -c` or `bash -c`. It refuses a script that is
+  piped into an interpreter (`cat <file>.py | python3`) too. The error says
+  "complex interpreter invocation detected". A pipe out of the script
+  (`| head`) and a redirect (`> out.txt`) pass. The check also reads the
+  file and refuses a shell variable such as `$HOME` in the Python code
+  (outside a string): read the environment with `os.environ.get`. An
+  inline script (`python3 -c`, or a heredoc to `python3 -`) passes the
+  check, but keep each script in a file, so that the owner can read it and
+  run it again.
 
 **Network policy.** `firefly-proxy`, by the labels of the client and the
 port: in from `firefly-mcp` on 8080 only, from the supervisors of the
