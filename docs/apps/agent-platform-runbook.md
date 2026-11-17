@@ -521,7 +521,9 @@ the chat id and the message).
 the env, and the change starts the pod again. `job`, `list`, `connect`:
 check the agent container (`kubectl -n agents-finance logs deploy/agent -c
 agent --tail=50` shows the gateway, not chat content in its first lines);
-the next pass runs within the hour.
+the next pass runs within the hour. A failed pass leaves each job as it
+was, so to stop the jobs while the fault lasts, stop them in a chat
+([Turn off the scheduled jobs](#turn-off-the-scheduled-jobs)).
 
 ### AgentBackupMoverConfigMapDenied
 
@@ -1000,6 +1002,48 @@ limit. The step's line is `memory-index result=failed`, and the alert is
 [AgentMemoryIndexFailed](#agentmemoryindexfailed), which has the checks and
 the fix. How the step works is in [agent-platform.md](agent-platform.md),
 "The index at each start".
+
+## Turn off the scheduled jobs
+
+The scheduled jobs of an agent (finance today) come from
+`agent/config/automations.json` through the `automations-sync` container
+([agent-platform.md](agent-platform.md), "Scheduled jobs"). They live in the
+state database of the product. A revert of the sidecar, or of the list, in
+one step leaves each job on: with no list the sync prints
+`automations-sync result=none` and changes nothing, and with no sidecar
+nothing changes the jobs. So turn them off first, then take parts out.
+
+1. **One job, now, with no merge.** The owner stops it in a chat. It stays
+   off at each pass (`automations-sync key=<key> result=ok state=stopped`)
+   until git changes its `enabled` from `false` to `true`.
+2. **Each job, through git.** A pull request sets `"enabled": false` on
+   each entry of `automations.json` (the jobs stay, off), or sets the file
+   to `{"jobs": []}` (the sync removes each `flux:` job). Both keep the file
+   valid JSON: a list that does not parse changes nothing and ends
+   `automations-sync result=failed reason=bad-list`.
+3. **After the merge.** The ConfigMap gets a new name, so the pod starts
+   again (about 2 minutes), and the pass at the start applies the list.
+   **Read only:**
+   ```sh
+   kubectl -n agents-finance logs deploy/agent -c automations-sync --tail=20
+   ```
+   - With `false`: `automations-sync key=<key> result=ok state=off` for
+     each job, then `automations-sync result=ok jobs=<n>`.
+   - With `{"jobs": []}`: `automations-sync key=<key> result=removed` for
+     each job, then `automations-sync result=ok jobs=0`.
+   - `automations-sync key=<key> result=failed`, or a pass line with
+     `result=failed`: the job is not off yet. See
+     [AgentAutomationsSyncFailed](#agentautomationssyncfailed); the next
+     pass runs within the hour.
+4. **Only then,** if the goal is to take the sidecar or the list out, a
+   second pull request does it. A job that is off stays off in the state,
+   and a removed job is gone.
+
+To turn a job on again: `"enabled": true` in git, in a pull request. When
+the job was `false` in git, the next pass turns it on
+(`state=on`). With `replicas: 0` (the way back of the cutover) no job runs,
+because no gateway runs, but the jobs stay in the state as they are and run
+again at the next start of the pod: turn them off first if they must not.
 
 ## Restore the state of an agent
 
@@ -1773,7 +1817,10 @@ finance until their retention ends.
   still in. Then turn the finance bot on again on the host. Nothing of the
   host changed.
 - **After step 5:** a pull request sets `replicas: 0`; the pod stops and
-  stops the polling. Then turn the bot on again on the host, with the state
+  stops the polling. The scheduled jobs then do not run, but they stay on
+  in the state of the agent; turn them off first
+  ([Turn off the scheduled jobs](#turn-off-the-scheduled-jobs)) if the pod
+  may start again. Then turn the bot on again on the host, with the state
   of the day of the cutover. The memory written on the platform since then
   is not on the host. To keep it, copy the workspace out before the pull
   request, read only:

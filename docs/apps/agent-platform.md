@@ -760,6 +760,34 @@ pod makes the jobs of the product equal to that list.
   id, the sync changes nothing and prints the failed line again each hour,
   so the alert holds until the pod starts with them. The pass line fires
   `AgentAutomationsSyncFailed` ([Alerts](#alerts)).
+- **Turn the jobs off, and the way back.** The jobs are in the state
+  database of the product, not in git or in the pod. So a revert that
+  takes out the sidecar, or `automations.json`, in one step leaves each job
+  as it is, on: with no file the sync prints `automations-sync result=none`
+  and changes nothing, and with no sidecar nothing changes the jobs. The
+  way back is two steps:
+  1. A pull request sets `"enabled": false` on each entry (each job stays,
+     off), or sets the list to `{"jobs": []}` (the sync removes each
+     `flux:` job). A list that does not parse is not a way back: it changes
+     nothing (`reason=bad-list`).
+  2. The merge gives the ConfigMap a new name, so the pod starts again
+     ([A start of the agent pod](#a-start-of-the-agent-pod)), and the pass
+     at the start applies the list once the gateway answers (about 30
+     seconds after the gateway started, on 2026-11-17). With `false` the
+     lines are `automations-sync key=<key> result=ok state=off` for each
+     job, then `automations-sync result=ok jobs=<n>`. With `{"jobs": []}`
+     they are `automations-sync key=<key> result=removed` for each job,
+     then `automations-sync result=ok jobs=0`.
+
+  Only after those lines, a second pull request takes out the sidecar or
+  the list, if that is the goal. A job that is off stays off in the state;
+  a removed job is gone. A job that a chat turns on while git says `false`
+  goes off again at the next pass. To stop one job at once, with no merge,
+  stop it in a chat: it stays off (`state=stopped`) until git changes from
+  `false` to `true`. With `replicas: 0` no job runs, because no gateway
+  runs; the jobs stay in the state as they are, and run again when the pod
+  starts. The runbook has the steps
+  ([Turn off the scheduled jobs](agent-platform-runbook.md#turn-off-the-scheduled-jobs)).
 - **Each job:** an agent turn of the agent `main` in a new session
   (`isolated`), at the time of its cron expression in the zone of the
   cluster (the cluster variable `TIMEZONE`, the `TZ` of the container, set
