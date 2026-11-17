@@ -9,7 +9,8 @@ account only through these tasks, because WSL refuses SYSTEM.
 Each step reads its config (a JSON file that the play writes) and writes one
 JSON result, <log>\<step>.json, with a new file and one rename. Exit 0: the
 step passed, or had nothing to do. Exit 2: the step refused and changed
-nothing. Exit 1: the step failed.
+nothing. Exit 1: the step failed. An error that a step does not handle also
+ends with exit 1 and a result, with the text of the error in failed.
 
   probe          whoami /groups: the integrity level and the groups of the
                  token. The first run of a task of the account makes its
@@ -170,9 +171,37 @@ function Test-TnwksFile([string]$Path) {
     }
 }
 
+# The security of a file, read and written with .NET and the sections named
+# only. A write with a new object that has the rules section only: .NET writes
+# only the sections that changed (here the rules and their protection), so a
+# standard account needs no privilege, only the right of an owner to write
+# the rules. Not Set-Acl: when a write of all sections needs a privilege, it
+# tries again with the audit section kept when the file has protected rules,
+# and that write needs a privilege that a standard account does not hold.
+function Get-TnwksFileSecurity([string]$Path, [string]$Sections) {
+    [IO.File]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]$Sections)
+}
+
+function Set-TnwksFileRules([string]$Path, [string]$Sddl) {
+    $rules = New-Object Security.AccessControl.FileSecurity
+    $rules.SetSecurityDescriptorSddlForm($Sddl, 'Access')
+    [IO.File]::SetAccessControl($Path, $rules)
+}
+
 function Exit-Tnwks([int]$Code, [hashtable]$Data) {
     Write-Result $Data
     exit $Code
+}
+
+# An error that a step does not handle (the Stop preference makes each error
+# one): exit 1 with a result that holds its text, in the form of each other
+# failed step. With no config there is no log folder, and the error goes to
+# stderr only.
+trap {
+    $text = "$($_.Exception.Message)"
+    $where = "$($_.InvocationInfo.ScriptLineNumber)"
+    if ($cfg) { Exit-Tnwks 1 @{ failed = "the step stopped at line $($where): $text" } }
+    break
 }
 
 $distro = $cfg.distro
@@ -322,12 +351,10 @@ switch ($Step) {
         # Only the disk file of the account, in its own folder (the scope).
         if (-not (Test-TnwksFile $target)) { Exit-Tnwks 2 @{ refused = "no file at $target" } }
         $user = @(& (Join-Path $system 'whoami.exe') /user /fo csv | ConvertFrom-Csv)[0].SID
-        $acl = Get-Acl -LiteralPath $target
-        $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+        $owner = (Get-TnwksFileSecurity $target 'Owner').GetOwner([Security.Principal.SecurityIdentifier]).Value
         if ($owner -ne $user) { Exit-Tnwks 2 @{ refused = 'the account does not own its disk file'; owner_self = $false } }
-        $acl.SetSecurityDescriptorSddlForm("D:P(A;;FA;;;$user)", 'Access')
-        Set-Acl -LiteralPath $target -AclObject $acl
-        $after = (Get-Acl -LiteralPath $target).Sddl
+        Set-TnwksFileRules $target "D:P(A;;FA;;;$user)"
+        $after = (Get-TnwksFileSecurity $target 'Access').GetSecurityDescriptorSddlForm('Access')
         $aces = @([regex]::Matches(($after -replace '^.*?D:[A-Z]*', ''), '\(([^)]*)\)') | ForEach-Object { ($_.Groups[1].Value -split ';')[-1] })
         Exit-Tnwks 0 @{
             owner_self = $true

@@ -374,7 +374,7 @@ DISTRIBUTION_CONF = DEFAULTS["wsl_move_rehearsal_distribution_conf"]
 
 def run_account(tmp_path: Path, step: str, registered: str | None = None, disk_at: str | None = None,
                 distro: str = "tnwks-moverh", pattern: str = "^tnwks-moverh", folder: str | None = None,
-                config: dict | None = None, rootfs: bool = False, fakes: str = "") -> dict:
+                config: dict | None = None, rootfs: bool = False, fakes: str = "", account: Path = ACCOUNT) -> dict:
     """Runs one step of the account script. registered: the folder where the account
     lists the distro (a, b, or None). disk_at: the folder that holds a disk file.
     rootfs: a root file system with the SHA-256 of the config. The distro's files
@@ -425,7 +425,7 @@ $env:TNWKS_ARGV = '{argv}'
 $env:TNWKS_FS = '{fs}'
 $env:TNWKS_SHIMS = '{shims}'
 {reg}
-& '{ACCOUNT}' -Config '{tmp_path / "config.json"}' -Step {step} {extra}
+& '{account}' -Config '{tmp_path / "config.json"}' -Step {step} {extra}
 $code = $LASTEXITCODE
 $name = if ('{folder or ""}') {{ '{step}-elsewhere' }} else {{ '{step}' }}
 $file = Join-Path '{root / "log"}' "$name.json"
@@ -470,15 +470,30 @@ $out = @((Test-TnwksFile '{tmp_path / "there"}'), (Test-TnwksFile '{tmp_path / "
 # The rules of the disk file as the account reads and writes them (Get-Acl, Set-Acl), and
 # its SID (whoami.exe /user).
 STRIP_FAKES = r"""
-function Get-Acl {
-    param([string]$LiteralPath)
+function Get-TnwksFileSecurity {
+    param([string]$Path, [string]$Sections)
     $o = [pscustomobject]@{ Sddl = $global:Sddl }
     $o | Add-Member -MemberType ScriptMethod -Name GetOwner -Value { param($t) [pscustomobject]@{ Value = ($this.Sddl -replace '^O:(.+?)D:.*$', '$1') } }
-    $o | Add-Member -MemberType ScriptMethod -Name SetSecurityDescriptorSddlForm -Value { param($s, $p) $this.Sddl = ($this.Sddl -replace 'D:.*$', '') + $s }
+    $o | Add-Member -MemberType ScriptMethod -Name GetSecurityDescriptorSddlForm -Value { param($s) $this.Sddl -replace '^.*?(D:)', '$1' }
     $o
 }
-function Set-Acl { param([string]$LiteralPath, $AclObject) $global:Sets.Add("acl $(Split-Path -Leaf (Split-Path -Parent $LiteralPath))"); $global:Sddl = $AclObject.Sddl }
+function Set-TnwksFileRules {
+    param([string]$Path, [string]$Sddl)
+    $global:Sets.Add("acl $(Split-Path -Leaf (Split-Path -Parent $Path))")
+    $global:Sddl = ($global:Sddl -replace 'D:.*$', '') + $Sddl
+}
 """
+
+
+def account_with_fakes_for_the_rules(tmp_path: Path) -> Path:
+    """A copy of the account script without its two functions of the security of a file
+    (they call .NET methods of Windows only), so the fakes of STRIP_FAKES stand in."""
+    text = ACCOUNT.read_text()
+    copy, count = re.subn(r"\nfunction (Get-TnwksFileSecurity|Set-TnwksFileRules)\(.*?\n\}\n", "\n", text, flags=re.DOTALL)
+    assert count == 2
+    path = tmp_path / ACCOUNT.name
+    path.write_text(copy)
+    return path
 
 
 @needs_pwsh
@@ -492,7 +507,7 @@ def test_the_strip_step_leaves_only_the_rule_of_the_account_on_its_own_disk_file
         whoami = d / "win/System32/whoami.exe"
         whoami.write_text(f"#!/bin/sh\nprintf '\"User Name\",\"SID\"\\n\"host\\\\b\",\"{B_SID}\"\\n'\n")
         whoami.chmod(0o755)
-        return run_account(d, "strip-rules", disk_at=disk_at, fakes=STRIP_FAKES + (
+        return run_account(d, "strip-rules", disk_at=disk_at, account=account_with_fakes_for_the_rules(d), fakes=STRIP_FAKES + (
             f"$global:Sddl = 'O:{owner}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{B_SID})'\n"))
     own = run("own", B_SID)
     assert own["code"] == 0, own

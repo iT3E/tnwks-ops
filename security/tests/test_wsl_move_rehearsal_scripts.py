@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -555,6 +556,69 @@ def test_a_task_that_can_not_start_is_not_run_also_after_an_earlier_good_run(tmp
         assert not passed(result), (name, passed(result))
     for name, result in zip(("new run", "started"), results[3:]):
         assert failed_by_assert(result, "failed_when of Run the task"), (name, result)
+
+
+ACCOUNT_TASK = ROLE / "files/Invoke-TnwksWslAccountTask.ps1"
+
+
+def run_account_task(tmp_path: Path, step: str) -> tuple[int, dict | None]:
+    """A run of the account task script for one step, with a config in a scope under
+    tmp_path and a System32 folder with no program in it: the exit code and the result."""
+    tag = uuid.uuid4().hex[:6]
+    base = tmp_path / f"account-{tag}"
+    for d in ("root/a", "log", "sys/System32"):
+        (base / d).mkdir(parents=True)
+    (base / "root/a/ext4.vhdx").write_text("disk")
+    config = base / "config.json"
+    config.write_text(json.dumps({
+        "log_dir": str(base / "log"), "distro": "tnwks-moverh-test", "name_pattern": "^tnwks-moverh-",
+        "refused_names": ["tnwks"], "root": str(base / "root"), "folder": str(base / "root/a"), "disk_name": "ext4.vhdx"}))
+    run = pwsh(f"""$env:SystemRoot = {ps_str(base / 'sys')}
+& {ps_str(ACCOUNT_TASK)} -Config {ps_str(config)} -Step {step}
+"exit=$LASTEXITCODE"
+""")
+    code = int(run.stdout.strip().splitlines()[-1].removeprefix("exit="))
+    result = base / "log" / f"{step}.json"
+    return code, (json.loads(result.read_text()) if result.exists() else None)
+
+
+@needs_pwsh
+def test_an_error_that_a_step_does_not_handle_writes_a_failed_result_with_its_text(tmp_path):
+    """No whoami.exe in System32: the first call of the step throws. The step ends with
+    exit 1 and a result of this run, with the text of the error in failed, the key of each
+    other failed step. A refusal (a disk file outside the scope) keeps exit 2."""
+    for step in ("probe", "strip-rules"):
+        code, result = run_account_task(tmp_path, step)
+        assert code == 1, (step, code)
+        assert result is not None and result["step"] == step, (step, result)
+        assert "whoami.exe" in result["failed"] and result["failed"].startswith("the step stopped at line "), result
+    account = ACCOUNT_TASK.read_text()
+    assert account.count("trap {") == 1
+    assert "if ($cfg) { Exit-Tnwks 1 @{ failed = " in account
+
+
+def test_the_strip_step_writes_only_the_rules_and_no_provider_cmdlet_writes_rules():
+    """The account runs as a standard user, with no privilege. Set-Acl keeps the audit
+    section in its second try when the file has protected rules, and that write needs a
+    privilege; .NET writes only the sections that changed. So the step reads and writes
+    with [IO.File] and a new object that has the rules section only."""
+    account = ACCOUNT_TASK.read_text()
+    code = "\n".join(line for line in account.splitlines() if not line.lstrip().startswith("#"))
+    for cmdlet in ("Set-Acl", "Get-Acl", "icacls"):
+        assert cmdlet not in code, cmdlet
+    write = re.search(r"function Set-TnwksFileRules\(\[string\]\$Path, \[string\]\$Sddl\) \{\n(.*?)\n\}", code, re.DOTALL)[1]
+    assert [line.strip() for line in write.splitlines()] == [
+        "$rules = New-Object Security.AccessControl.FileSecurity",
+        "$rules.SetSecurityDescriptorSddlForm($Sddl, 'Access')",
+        "[IO.File]::SetAccessControl($Path, $rules)"]
+    read = re.search(r"function Get-TnwksFileSecurity\(\[string\]\$Path, \[string\]\$Sections\) \{\n(.*?)\n\}", code, re.DOTALL)[1]
+    assert read.strip() == "[IO.File]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]$Sections)"
+    strip = code[code.index("'strip-rules' {"):]
+    assert "(Get-TnwksFileSecurity $target 'Owner')" in strip and "(Get-TnwksFileSecurity $target 'Access')" in strip
+    assert 'Set-TnwksFileRules $target "D:P(A;;FA;;;$user)"' in strip
+    # The step reads and writes the security of the file through these two only.
+    for call in ("AccessControl", "New-Object Security"):
+        assert call not in strip, call
 
 
 def test_the_check_step_writes_the_repeated_keys_as_a_count_and_one_text():
