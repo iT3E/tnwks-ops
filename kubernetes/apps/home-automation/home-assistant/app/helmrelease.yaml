@@ -107,7 +107,7 @@ spec:
               # renovate: datasource=github-releases depName=christiaangoossens/hass-oidc-auth
               HASS_OIDC_AUTH_VERSION: v1.2.1
               # renovate: datasource=github-releases depName=blakeblackshear/frigate-hass-integration
-              FRIGATE_INTEGRATION_VERSION: v5.15.6
+              FRIGATE_INTEGRATION_VERSION: v5.15.7
               # renovate: datasource=github-releases depName=nkcx/ha-pacific-power
               PACIFIC_POWER_VERSION: v1.4.7
               # renovate: datasource=github-releases depName=dermotduffy/advanced-camera-card
