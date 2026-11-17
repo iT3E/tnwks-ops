@@ -611,19 +611,24 @@ FOLDER_A = "(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;CO)(A;ID;FR;;;AU)"
 
 
 @needs_pwsh
-def test_the_read_of_the_saved_rules_takes_the_inherited_rules_that_the_folder_gives(tmp_path):
+def test_the_read_of_the_saved_rules_compares_the_explicit_rules_and_reads_the_inherited_ones_apart(tmp_path):
     # A file of an older WSL: no protection, the rules of its folder (ID), one explicit rule.
     saved = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)"
     out = disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved, inherit=FOLDER_A)[-1]
     assert out["rules_ok"] is True and out["inherits_ok"] is True and out["inherited_note"] == "", out
     assert out["gives"] == "A;ID;0x120089;;;AU A;ID;0x1301bf;;;<a> A;ID;0x1f01ff;;;BA A;ID;0x1f01ff;;;SY"
-    # Not the rules that the folder gives, the inherited rule of CREATOR OWNER for
-    # another account, an explicit rule in the place of an inherited one, or protection:
-    # not a pass.
-    for sddl in (saved.replace("(A;ID;FR;;;AU)", ""), saved.replace("(A;ID;FR;;;AU)", "(A;;FR;;;AU)"),
-                 saved.replace("D:AI", "D:PAI"), saved.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")):
+    # An explicit rule in the place of an inherited one, protection, another owner or
+    # another explicit rule: not a pass.
+    for sddl in (saved.replace("(A;ID;FR;;;AU)", "(A;;FR;;;AU)"), saved.replace("D:AI", "D:PAI"),
+                 saved.replace(f"O:{A_SID}", "O:BA"), saved.replace(f"(A;;FA;;;{A_SID})", f"(A;;0x1301bf;;;{A_SID})")):
         out = disk_read(tmp_path, "saved", [sddl], saved=saved, inherit=FOLDER_A)[-1]
         assert out["rules_ok"] is False, sddl
+    # Inherited rules other than the folder gives (one gone, or the rule of CREATOR
+    # OWNER for another account): the saved owner, protection and explicit rules
+    # pass, and inherits_ok is false, with the note of the difference.
+    for sddl in (saved.replace("(A;ID;FR;;;AU)", ""), saved.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")):
+        out = disk_read(tmp_path, "saved", [sddl], saved=saved, inherit=FOLDER_A)[-1]
+        assert out["rules_ok"] is True and out["inherits_ok"] is False and out["inherited_note"], sddl
     # A saved set with the flag AI and no inherited rule, as the restore at the old path
     # leaves it: the folder gives its rules, and the difference from the saved set is a
     # note, not a failed check.
@@ -632,7 +637,11 @@ def test_the_read_of_the_saved_rules_takes_the_inherited_rules_that_the_folder_g
     assert out["rules_ok"] is True and out["inherits_ok"] is True, out
     assert out["inherited_note"] == ("the inherited rules differ from the saved set: saved '', now "
                                      "'A;ID;0x120089;;;AU A;ID;0x1301bf;;;<a> A;ID;0x1f01ff;;;BA A;ID;0x1f01ff;;;SY'")
-    # A file with no inherited rule in a folder that gives some: inherits_ok is false.
+    # A file with no inherited rule in a folder that gives some (the form of a file
+    # that moved in from a folder that gives none), against a saved set with the same
+    # owner and explicit rules: rules_ok, and inherits_ok is false.
+    out = disk_read(tmp_path, "saved", [bare], saved=saved, inherit=FOLDER_A)[-1]
+    assert out["rules_ok"] is True and out["inherits_ok"] is False, out
     assert disk_read(tmp_path, "none", [bare], inherit=FOLDER_A)[-1]["inherits_ok"] is False
 
 
@@ -699,6 +708,15 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     as_saved = disk_read(tmp_path, "saved", [saved + VM_ACE], saved=saved)
     other = disk_read(tmp_path, "saved", [saved.replace(f"O:{A_SID}", "O:BA")], saved=saved)
     no_saved = disk_read(tmp_path, "saved", [saved])
+    # A's file in the form with no inherited rule (D:AI, one explicit rule), against a
+    # saved set of an older WSL: the saved owner and explicit rules pass, whatever the
+    # inherited rules; another explicit rule or another owner does not.
+    older = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1301bf;;;{A_SID})(A;ID;FR;;;AU)"
+    bare = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})"
+    bare_ok = disk_read(tmp_path, "saved", [bare], saved=older, inherit=FOLDER_A)
+    assert bare_ok[-1]["rules_ok"] is True and bare_ok[-1]["inherits_ok"] is False, bare_ok
+    bare_rule = disk_read(tmp_path, "saved", [bare + "(A;;FR;;;AU)"], saved=older, inherit=FOLDER_A)
+    bare_owner = disk_read(tmp_path, "saved", [bare.replace(f"O:{A_SID}", "O:BA")], saved=older, inherit=FOLDER_A)
     names = ("The window starts after setup", "After a way back, A's disk file had its saved rules",
              "A owns the distro at its path")
 
@@ -711,7 +729,12 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     plays = [play(first, no_saved), play(second, as_saved), play(second, other), play(second, no_saved),
              play(first, no_saved, (check_a, runner_output(tmp_path, "b", "check", check_result(f"{DIR}\\b\\ext4.vhdx")))),
              play(first, no_saved, (no_start, check_b)),
-             *[play(w, no_saved) for w in wrong.values()]]
+             *[play(w, no_saved) for w in wrong.values()],
+             play(second, bare_ok), play(second, bare_rule), play(second, bare_owner)]
+    # After the rules of an older WSL, the file must have the inherited rules of its folder.
+    shaped = "A's disk file has the inherited rules that its folder gives, right after the rules of an older WSL"
+    plays += [{"vars": {"wsl_move_rehearsal_disk": registered([read[-1]])}, "tasks": checks_of("window.yml", (shaped,))}
+              for read in (as_saved, bare_ok)]
     results = run_plays(tmp_path, plays)
     assert not passed(results[0]), passed(results[0])
     assert not passed(results[1]), passed(results[1])
@@ -722,8 +745,14 @@ def test_the_window_starts_after_setup_or_after_a_way_back_and_on_no_other_state
     # B lists no distro; A's distro starts with the rules of an older WSL.
     for result in results[4:6]:
         assert failed_by_assert(result, names[2]) and not failed_by_assert(result, names[1])
-    for name, result in zip(wrong, results[6:], strict=True):
+    for name, result in zip(wrong, results[6:6 + len(wrong)], strict=True):
         assert failed_by_assert(result, names[0]), name
+    bare_results = results[6 + len(wrong):9 + len(wrong)]
+    assert not passed(bare_results[0]), passed(bare_results[0])
+    for result in bare_results[1:]:
+        assert failed_by_assert(result, names[1]) and not failed_by_assert(result, names[0])
+    assert not passed(results[-2]), passed(results[-2])
+    assert failed_by_assert(results[-1], shaped)
 
 
 # The rules of a file as .NET gives them (FileSecurity), kept in a JSON file between runs:

@@ -332,6 +332,16 @@
       ansible.builtin.debug:
         msg: "{{ wsl_move_rehearsal_disk.output | last }}"
 
+    # The shaping must have given the file the inherited rules of its folder.
+    - name: A's disk file has the inherited rules that its folder gives, right after the rules of an older WSL
+      vars:
+        disk_a: "{{ wsl_move_rehearsal_disk.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - disk_a.inherits_ok
+        fail_msg: "A's disk file has not the inherited rules that its folder gives after the rules of an older WSL: {{ disk_a }}"
+        quiet: true
+
     - name: A reads its distro
       ansible.builtin.include_tasks: run_task.yml
       vars:

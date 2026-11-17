@@ -10,7 +10,7 @@
 # With the functions of the procedure (wsl_move_rehearsal_procedure_lib):
 # the read with the privileges of SYSTEM, and its compare (Test-TnwksSddl):
 # the owner, whether the rules are protected, every explicit rule, and the
-# inherited rules (against the saved set, as the folder gives them), each
+# inherited rules (not against the saved set, as way back step 3), each
 # account as its SID and each mask as a number. WSL's rules (a VM, and the
 # capability SID of vmWorkerProcess while a VM runs) are allowed as the
 # procedure allows them (Get-TnwksSddlParts), and no deny rule.
@@ -61,10 +61,11 @@
       }
       # What the folder gives the file (none with protection), as at a write.
       $gives = if ($exists) { Get-TnwksFileGives $Path $have } else { '' }
-      # The compare of the procedure. Against the saved set, as after way back
-      # step 3: the inherited rules as the folder gives them, and a difference
-      # from the saved ones is a note.
-      $ok = $exists -and $want -like 'O:*' -and $(if ($Rule -eq 'saved') { Test-TnwksSddl $Path $want -FolderGives } else { Test-TnwksSddl $Path $want })
+      # The compare of the procedure. Against the saved set, as way back step 3
+      # compares: the owner, the protection and the explicit rules; the
+      # inherited rules are not part of it (inherits_ok, and inherited_note for
+      # a difference from the saved ones).
+      $ok = $exists -and $want -like 'O:*' -and $(if ($Rule -eq 'saved') { Test-TnwksSddl $Path $want -Saved } else { Test-TnwksSddl $Path $want })
       $savedInherited = if ($Rule -eq 'saved' -and $want -like 'O:*') { (Get-TnwksSddlParts $want).inherited } else { $have.inherited }
       [pscustomobject]@{
           exists = $exists

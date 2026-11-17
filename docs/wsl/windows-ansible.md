@@ -746,7 +746,7 @@ lead's read of the nodes (Ready, and the same address) covers the live VM.
 | Phase | What it does, and what it shows |
 | --- | --- |
 | `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon), and the check reads back each file by its SHA-256. A second setup over A's distro at its path imports nothing and writes the files again. A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
-| `window` | First a read of the state that the window starts from, before any task starts: the last marker, A's disk file at its path and none at B's path or in the side folder, no list of disabled tasks, A's batch right, A's start task enabled and B's disabled; and after a way back the file had the rules that step 4 saved. Only after these checks do A's disk file and folder get the rules of an older WSL, as in setup; then A reads its distro and B lists none. The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file (B the owner, as below), both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. With B's start task started, the file has the rule of step 4 and a rule of B's VM; after B's stop task (a clean stop), no rule of a VM. Then B imports, unregisters and imports again into the same folder, and the file keeps its rule |
+| `window` | First a read of the state that the window starts from, before any task starts: the last marker, A's disk file at its path and none at B's path or in the side folder, no list of disabled tasks, A's batch right, A's start task enabled and B's disabled; and after a way back the file had the owner, the protection and the explicit rules that step 4 saved (the play prints whether its inherited rules are those that its folder gives, and does not stop on it). Only after these checks do A's disk file and folder get the rules of an older WSL, as in setup; then A reads its distro and B lists none. The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file (B the owner, as below), both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. With B's start task started, the file has the rule of step 4 and a rule of B's VM; after B's stop task (a clean stop), no rule of a VM. Then B imports, unregisters and imports again into the same folder, and the file keeps its rule |
 | `wayback` | First, B removes SYSTEM and the Administrators from the rules of its disk file, and A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro, the file has the saved owner and rules (each explicit and inherited rule), and B lists none |
 | `interrupt` | The window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
 | `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task |
@@ -808,12 +808,15 @@ write of the rules before the owner would name the Administrators). A group
 step 3 moves the file back first, then restores the saved owner and rules
 at the old path, where the folder gives the inherited rules that were
 saved. The check after it compares the saved owner, protection and
-explicit rules exactly, and the inherited rules with what the folder gives
-(Windows computes them at the write); a difference from the saved inherited
-rules is a note in the log, not a failed check. A file at the old path with
-other rules (a power loss between the two) is restored only, and one that
-passes the same compare is left as it is (the state read's `old_as_saved`
-and the play's read use it too).
+explicit rules exactly. The inherited rules are not part of "as saved":
+Windows gives them from the old folder at the write, and a difference from
+the saved inherited rules is a note in the log, not a failed check. A file
+at the old path with other rules (a power loss between the two) is restored
+only, and one that passes the same compare is left as it is (the state
+read's `old_as_saved` and the play's read, its `rules_ok`, use it too).
+Whether the inherited rules of a file are those that its folder gives is a
+fact of its own: the play's read gives it as `inherits_ok`, and the guard
+of window step 1 acts on it.
 
 What a folder gives a file comes from Windows' own inheritance function,
 `CreatePrivateObjectSecurityEx`: the folder's rules as the parent, the
@@ -840,8 +843,11 @@ included, and runs only after setup or a way back). It reads and writes the
 file with the functions of the procedure, from its copy on the host: the
 take of ownership for the Administrators, then the owner and the rules in
 one write. The play prints A's rules right after it (before A's read
-starts the distro), after A's read, and the log of window step 4 holds them
-after A's stop. A
+starts the distro) and asserts that the file has the inherited rules of its
+folder then; it prints them again after A's read, and the log of window
+step 4 holds them after A's stop, with no assert on the inherited rules:
+if A's start took them away again, the guard of window step 1 stops the
+window with nothing changed, and the log shows both sets. A
 stays the owner with full control, so its start and the rule that WSL adds
 for its VM need nothing more; A's read after it starts the distro. In the
 window, the read against the saved rules of the last way back, the read of

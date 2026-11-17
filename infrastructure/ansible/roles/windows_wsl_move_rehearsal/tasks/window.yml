@@ -123,9 +123,12 @@
         fail_msg: "The state before the window is not the one that it starts from. Nothing is changed: {{ before }}"
         quiet: true
 
-    # After a way back, the file had the rules that window step 4 saved, and
-    # a rule of a VM at most for each start since. The read comes before the
-    # rules of an older WSL, and this check before any change.
+    # After a way back, the file had the owner, the protection and the
+    # explicit rules that window step 4 saved, and the rules of WSL at most
+    # (rules_ok, as way back step 3 compares). The inherited rules are not
+    # part of it: whether they are those that the folder gives (inherits_ok)
+    # prints here, and the rules of an older WSL give them next. The read
+    # comes before those rules, and this check before any change.
     - name: After a way back, A's disk file had its saved rules
       vars:
         before: "{{ wsl_move_rehearsal_before.output | last }}"
@@ -136,13 +139,21 @@
         fail_msg: "A's disk file has not the rules that the last window saved. Nothing is changed: {{ disk_a }}"
         quiet: true
 
+    - name: Whether A's disk file had the inherited rules that its folder gives, before the rules of an older WSL
+      ansible.builtin.debug:
+        msg: >-
+          inherits_ok {{ wsl_move_rehearsal_disk_last.inherits_ok }}; the folder gives '{{ wsl_move_rehearsal_disk_last.gives }}';
+          {{ wsl_move_rehearsal_disk_last.inherited_note | default('', true) or 'the inherited rules are those of the saved set' }}
+
     # The first change of the phase, after the checks of the state.
     - name: A's disk file like a file of an older WSL
       ansible.builtin.include_tasks: older_disk.yml
 
     # Right after the shaping, before A's read starts its distro: the next
     # reads (after A's read, and the log of window step 4 after A's stop)
-    # show whether WSL's grant at the start keeps the inherited rules.
+    # show whether WSL's grant at the start keeps the inherited rules. Those
+    # reads assert nothing on them: the guard of window step 1 decides, and
+    # stops the window with nothing changed when they are gone.
     - name: The rules of A's disk file right after the rules of an older WSL
       ansible.builtin.include_tasks: read_disk.yml
       vars:
@@ -151,6 +162,16 @@
     - name: The owner and the rules of A's disk file right after the rules of an older WSL, each account masked
       ansible.builtin.debug:
         msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    # The shaping must have given the file the inherited rules of its folder.
+    - name: A's disk file has the inherited rules that its folder gives, right after the rules of an older WSL
+      vars:
+        disk_a: "{{ wsl_move_rehearsal_disk.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - disk_a.inherits_ok
+        fail_msg: "A's disk file has not the inherited rules that its folder gives after the rules of an older WSL: {{ disk_a }}"
+        quiet: true
 
     - name: A reads its distro before the window
       ansible.builtin.include_tasks: run_task.yml

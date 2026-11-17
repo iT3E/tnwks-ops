@@ -1263,19 +1263,30 @@ def test_the_way_back_puts_back_a_saved_set_that_inherits_from_the_old_folder(tm
 
 
 @needs_pwsh
-def test_a_file_whose_creator_owner_rule_names_another_account_is_restored(tmp_path):
-    """The inherited rules count in the check: a file at the old path with the saved
-    explicit rules, but a CREATOR OWNER rule that names the Administrators (as a write
-    that set the rules before the owner leaves it), is not the saved set. Step 3
-    restores it, and the rule then names A."""
+def test_the_inherited_rules_are_not_part_of_as_saved_and_their_difference_is_a_note(tmp_path):
+    """Way back step 3 compares the owner, the protection and the explicit rules with the
+    saved set. A file at the old path with those, but a CREATOR OWNER rule that names
+    the Administrators, or no inherited rule at all, is as saved: no write, and a note of
+    the difference. The inherited rules are a fact for the guard of window step 1."""
     wrong = OLD_INHERITS.replace(f"(A;ID;0x1301bf;;;{A_SID})", "(A;ID;0x1301bf;;;BA)")
-    out = run_window(tmp_path, mode="boot", state=BOOT_STATE, disk=("a",), acl_file=OLD_INHERITS, marker_a=True,
-                     disabled="tnwks-moverh-a-start", acls={"a/ext4.vhdx": wrong}, inherit=INHERIT,
-                     tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
-    assert out["code"] == 0, out["log"]
-    assert '"old_as_saved":false' in next(line for line in out["log"] if line.startswith("read: "))
-    assert out["sec_calls"] == ["owner a/ext4.vhdx BA", f"rules a/ext4.vhdx O:{A_SID}D:AI(A;;FA;;;{A_SID})"]
-    assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_INHERITS
+    bare = f"O:{A_SID}D:AI(A;;FA;;;{A_SID})"
+    for i, sddl in enumerate((wrong, bare)):
+        out = run_window(tmp_path / str(i), mode="boot", state=BOOT_STATE, disk=("a",), acl_file=OLD_INHERITS, marker_a=True,
+                         disabled="tnwks-moverh-a-start", acls={"a/ext4.vhdx": sddl}, inherit=INHERIT,
+                         tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
+        assert out["code"] == 0, out["log"]
+        assert '"old_as_saved":true' in next(line for line in out["log"] if line.startswith("read: "))
+        assert out["sec_calls"] == [] and "way back 3: the file has its saved owner and rules" in out["log"]
+        assert any(line.startswith("way back 3: note: the inherited rules differ") for line in out["log"])
+    # Another owner or another explicit rule is not as saved: step 3 restores.
+    for i, sddl in enumerate((OLD_INHERITS.replace(f"O:{A_SID}", "O:BA"),
+                              OLD_INHERITS.replace(f"(A;;FA;;;{A_SID})", f"(A;;0x1301bf;;;{A_SID})"))):
+        out = run_window(tmp_path / f"r{i}", mode="boot", state=BOOT_STATE, disk=("a",), acl_file=OLD_INHERITS, marker_a=True,
+                         disabled="tnwks-moverh-a-start", acls={"a/ext4.vhdx": sddl}, inherit=INHERIT,
+                         tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Disabled"})
+        assert out["code"] == 0, out["log"]
+        assert out["sec_calls"] == ["owner a/ext4.vhdx BA", f"rules a/ext4.vhdx O:{A_SID}D:AI(A;;FA;;;{A_SID})"]
+        assert out["acls"][str(Path(out["root"]) / "a/ext4.vhdx")] == OLD_INHERITS
 
 
 @needs_pwsh

@@ -495,19 +495,21 @@ function Get-TnwksFileGives([string]$Path, [pscustomobject]$Parts) {
 }
 
 # The owner, the protection and the explicit rules as in the SDDL expected,
-# and no deny rule.
-# The inherited rules as in that SDDL, or with -FolderGives, as the folder of
-# the file gives them (Windows computes them at the write; the way back writes
-# the explicit rules of the saved set only). The rules of WSL: any number of
-# a VM, and at most one of its capability; -Exact (right after a write, which
-# replaces every rule): none.
-function Test-TnwksSddl([string]$Path, [string]$Expected, [switch]$Exact, [switch]$FolderGives) {
+# and no deny rule. The inherited rules as in that SDDL; with -Saved (against
+# a saved set: way back step 3, its restore-only condition, the state read
+# and the play's reads) they are not compared: the way back writes the
+# explicit rules of the saved set only, Windows gives the inherited ones from
+# the folder, and a difference from the saved ones is a note. Whether the
+# inherited rules are those that the folder gives is a fact of its own, for
+# the guard of window step 1. The rules of WSL: any number of a VM, and at
+# most one of its capability; -Exact (right after a write, which replaces
+# every rule): none.
+function Test-TnwksSddl([string]$Path, [string]$Expected, [switch]$Exact, [switch]$Saved) {
     $want = Get-TnwksSddlParts $Expected
     $have = Get-TnwksSddlParts (Get-TnwksSddl $Path)
-    $inherited = if ($FolderGives) { Get-TnwksFileGives $Path $have } else { $want.inherited }
     $wsl = if ($Exact) { $have.vm -eq 0 -and $have.capability -eq 0 } else { $have.capability -le 1 }
     $want.owner -eq $have.owner -and $want.protected -eq $have.protected -and $want.aces -eq $have.aces -and
-        $have.inherited -eq $inherited -and $wsl -and $have.deny -eq 0
+        ($Saved -or $have.inherited -eq $want.inherited) -and $wsl -and $have.deny -eq 0
 }
 
 # A note in the log when the inherited rules of a file differ from those of a
@@ -606,7 +608,7 @@ $newPath = Join-Path $new.folder $cfg.disk_name
 function Test-TnwksOldAsSaved {
     try {
         if (-not ((Test-Path -LiteralPath $oldPath) -and (Test-Path -LiteralPath $cfg.acl_file))) { return $false }
-        Test-TnwksSddl $oldPath ("$(Get-Content -LiteralPath $cfg.acl_file -Raw)").Trim() -FolderGives
+        Test-TnwksSddl $oldPath ("$(Get-Content -LiteralPath $cfg.acl_file -Raw)").Trim() -Saved
     } catch { "not read: $($_.Exception.Message)" }
 }
 
@@ -789,15 +791,16 @@ function Invoke-TnwksWayBack {
     # With no saved rules, step 4 did not start in this window: nothing to
     # restore.
     # The restore writes the saved owner, protection and explicit rules; the
-    # check compares those exactly, and takes the inherited rules that the
-    # old folder gives. A difference from the saved inherited rules is a note.
+    # check compares those exactly. The inherited rules are not part of "as
+    # saved": Windows gives them from the old folder, and a difference from
+    # the saved inherited rules is a note.
     if ($saved -like 'O:*' -and (Test-Path -LiteralPath $oldPath)) {
-        if (Test-TnwksSddl $oldPath $saved -FolderGives) {
+        if (Test-TnwksSddl $oldPath $saved -Saved) {
             Write-Log 'way back 3: the file has its saved owner and rules'
         } else {
             Assert-Tnwks ((Get-TnwksWslProcess $pSid).Count -eq 0 -and (Get-TnwksWslProcess $nSid).Count -eq 0) 'a WSL process runs before the restore of the rules'
             Set-TnwksSddl $oldPath $saved
-            Assert-Tnwks (Test-TnwksSddl $oldPath $saved -Exact -FolderGives) 'the file has not its saved owner and rules'
+            Assert-Tnwks (Test-TnwksSddl $oldPath $saved -Exact -Saved) 'the file has not its saved owner and rules'
             Write-Log "way back 3: restored the saved owner and rules: $(Get-TnwksMaskedSddl $oldPath)"
         }
         Write-TnwksInheritedNote $oldPath $saved 'way back 3'
