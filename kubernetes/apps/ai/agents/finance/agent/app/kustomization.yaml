@@ -1,12 +1,13 @@
 ---
-# The finance agent. Only the network policy is applied for now: it selects
-# the agent pod, and no such pod exists.
+# The finance agent. Applied now: the network policy (it selects the agent
+# pod, and no such pod exists), the config of the MCP gateway (below), and
+# step 1, the volume and the inbox.
 #
-# The other files join in the steps of the cutover, one pull request each,
-# in this order (docs/apps/agent-platform-runbook.md, "The cutover of the
+# The files join in the steps of the cutover, one pull request each, in
+# this order (docs/apps/agent-platform-runbook.md, "The cutover of the
 # finance agent"). Each step is checked before the next one.
-# 1. ./pvc.yaml and ./state-inbox.yaml: the inbox is the first pod of the
-#    volume, so the volume is made on the node of the agent. The volume is
+# 1. Listed: ./pvc.yaml and ./state-inbox.yaml. The inbox is the first pod of
+#    the volume, so the volume is made on the node of the agent. The volume is
 #    never pruned (its annotation): the way back takes out the agent and
 #    the inbox, never pvc.yaml.
 # 2. ./backup.yaml: the policy and schedule; the first snapshot runs at once,
@@ -35,6 +36,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./networkpolicy.yaml
+  # Step 1.
+  - ./pvc.yaml
+  - ./state-inbox.yaml
 # The config of the MCP gateway, the same file, for the values check of the
 # agent pod: it holds hashes and tool rules, no secret.
 configMapGenerator:
