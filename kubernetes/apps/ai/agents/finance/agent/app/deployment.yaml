@@ -1,9 +1,9 @@
 ---
 # The finance agent (docs/apps/agent-platform.md): the product (OpenClaw) in
-# the agent image, as the pilot runs it. A scaffold: replicas 0, and not in
-# kustomization.yaml until step 4 of the cutover, after the owner put the
-# values of its Secret (R4) and the copy of the state in place; replicas 1 is
-# step 5, after the host stopped the finance bot
+# the agent image, as the pilot runs it. Listed by step 4 of the cutover at
+# replicas 0 (no pod), after the owner put the values of its Secret (R4) and
+# the copy of the state in place; replicas 1 is step 5, after the host
+# stopped the finance bot
 # (docs/apps/agent-platform-runbook.md, "The cutover of the finance agent").
 # The tool set is the pilot's, with its own search key, the notes vault in
 # the state volume (docs/apps/agent-platform.md, "The finance agent"), and the

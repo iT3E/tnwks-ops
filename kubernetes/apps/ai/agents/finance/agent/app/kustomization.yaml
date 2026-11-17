@@ -1,26 +1,29 @@
 ---
 # The finance agent. Applied now: the network policy (it selects the agent
-# pod, and no such pod exists), the config of the MCP gateway (below),
-# step 1, the volume and the inbox, and step 2, its backup policy.
+# pod), the config of the MCP gateway (below), the volume (step 1) and its
+# backup policy (step 2), and step 4: the restore Job, the two Secrets and
+# the Deployment at zero replicas (no pod yet). The inbox is out again.
 #
 # The files join in the steps of the cutover, one pull request each, in
 # this order (docs/apps/agent-platform-runbook.md, "The cutover of the
 # finance agent"). Each step is checked before the next one.
-# 1. Listed: ./pvc.yaml and ./state-inbox.yaml. The inbox is the first pod of
+# 1. Done: ./pvc.yaml and ./state-inbox.yaml. The inbox is the first pod of
 #    the volume, so the volume is made on the node of the agent. The volume is
 #    never pruned (its annotation): the way back takes out the agent and
 #    the inbox, never pvc.yaml.
-# 2. Listed: ./backup.yaml, the policy and schedule; the first snapshot
-#    runs at once, of the empty volume. It needs the ClusterRepository agents-finance
-#    (Ready) and its grant of agents-finance; the grant goes last.
-# 3. The values of ./secret.sops.yaml (Secret agent-secret: five
-#    placeholders now), by the owner (R4): OPENCLAW_GATEWAY_TOKEN,
+# 2. Done: ./backup.yaml, the policy and schedule; the first snapshot
+#    runs at once, of the empty volume. It needs the ClusterRepository
+#    agents-finance (Ready) and its grant of agents-finance; the grant goes
+#    last.
+# 3. Done: the values of ./secret.sops.yaml (Secret agent-secret), by the
+#    owner (R4): OPENCLAW_GATEWAY_TOKEN,
 #    LITELLM_API_KEY (the key agents-finance of the model gateway, with the
 #    same value in its keys.json, docs/apps/litellm.md), TELEGRAM_BOT_TOKEN,
 #    TELEGRAM_ALLOW_FROM and MCP_GATEWAY_KEY (the key of the client finance
 #    of the MCP gateway, with its hash in the gateway's config,
-#    docs/apps/mcp-gateway.md). Not listed yet.
-# 4. After the owner put the copy of the state and the vault in the volume:
+#    docs/apps/mcp-gateway.md).
+# 4. Listed, after the owner put the copy of the state and the vault in the
+#    volume:
 #    out ./state-inbox.yaml; in ./restore-job.yaml (ARCHIVE and VAULT set),
 #    ./secret.sops.yaml, ./secret-search.sops.yaml (BRAVE_API_KEY, the search
 #    key of finance, with its value) and ./deployment.yaml at replicas 0.
@@ -36,11 +39,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./networkpolicy.yaml
-  # Step 1.
+  # Step 1 (the inbox is out again at step 4).
   - ./pvc.yaml
-  - ./state-inbox.yaml
   # Step 2.
   - ./backup.yaml
+  # Step 4.
+  - ./restore-job.yaml
+  - ./secret.sops.yaml
+  - ./secret-search.sops.yaml
+  - ./deployment.yaml
 # The config of the MCP gateway, the same file, for the values check of the
 # agent pod: it holds hashes and tool rules, no secret.
 configMapGenerator:
