@@ -73,6 +73,10 @@ wsl_move: true
 # the start tasks stay enabled, and the host check reads the rules of the
 # moved disk file. A way back turns it off first.
 wsl_move_done: true
+# The deletion of the tasks of the present account, after the owner took that
+# account out of windows_sshd_allow_users in secrets.sops.yml. Its apply is
+# the point of no return of the move.
+wsl_move_present_removed: true
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true

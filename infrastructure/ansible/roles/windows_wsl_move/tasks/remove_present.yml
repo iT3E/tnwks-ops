@@ -1,0 +1,35 @@
+---
+# The deletion of the tasks of the present account (Design Doc 0004, section
+# 9, step 6; wsl_move_present_removed): each WSL task of that account
+# (wsl_move_present_tasks), its three window tasks and the boot task of the
+# way back (wsl_move_removed_tasks). The main tasks stop before any change
+# unless the phase is done, the last marker is window-done, and the allow list
+# of sshd no longer names that account. No role registers a task of that
+# account in the phase done, so no apply brings one back.
+#
+# The apply of this file is the point of no return of the move: a way back
+# after it first registers those tasks again (docs/wsl/windows-ansible.md).
+
+- name: Unregister each task of the present account and the boot task of the way back
+  tnwks_win_scheduled_task:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ wsl_move_removed_tasks }}"
+
+- name: Read the deleted tasks that are still there
+  ansible.windows.win_powershell:
+    parameters:
+      Names: "{{ wsl_move_removed_tasks }}"
+    script: |
+      param([string[]]$Names)
+      $Ansible.Changed = $false
+      @($Names | Where-Object { Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue })
+  check_mode: false
+  register: wsl_move_removed_read
+
+- name: No task of the present account and no boot task of the way back is there
+  ansible.builtin.assert:
+    that: wsl_move_removed_read.output | length == 0
+    fail_msg: "The tasks {{ wsl_move_removed_read.output | join(', ') }} are still there."
+    quiet: true
+  when: not ansible_check_mode

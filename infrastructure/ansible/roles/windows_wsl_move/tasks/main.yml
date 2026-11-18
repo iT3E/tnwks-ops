@@ -60,6 +60,24 @@
     quiet: true
   no_log: true
 
+# The deletion of the tasks of the present account (wsl_move_present_removed)
+# comes after the done switch, and after the owner took that account out of
+# the allow list of sshd, which keeps the account that Ansible logs in as.
+# The apply of that list stays the explicit one of the role windows_sshd.
+- name: The deletion of the tasks of the present account comes after the done switch and the allow list without that account
+  vars:
+    wsl_move_allow_list: "{{ windows_sshd_allow_users | default([]) | map('lower') | list }}"
+  ansible.builtin.assert:
+    that:
+      - not (wsl_move_present_removed | bool) or wsl_move_phase == 'done'
+      - not (wsl_move_present_removed | bool) or (wsl_move_present_account | lower) not in wsl_move_allow_list
+      - not (wsl_move_present_removed | bool) or (ansible_user | lower) in wsl_move_allow_list
+    fail_msg: >-
+      wsl_move_present_removed needs the phase done, and windows_sshd_allow_users without the present account and with
+      the account that Ansible logs in as. Nothing is changed.
+    quiet: true
+  no_log: true
+
 - name: Each path of the procedure is in the long, normalized form
   ansible.builtin.assert:
     that: wsl_move_paths | reject('match', wsl_move_path_form) | list | length == 0
@@ -129,7 +147,7 @@
     parameters:
       Registration: "{{ wsl_move_registration_file }}"
       Wslconfig: "{{ wsl_move_wslconfig_file }}"
-      Names: "{{ wsl_move_window_tasks.present.values() | list }}"
+      Names: "{{ [] if wsl_move_present_removed | bool else wsl_move_window_tasks.present.values() | list }}"
     script: |
       param([string]$Registration, [string]$Wslconfig, [string[]]$Names)
       $ErrorActionPreference = 'Stop'
@@ -163,6 +181,16 @@
 - name: Whether a window is started
   ansible.builtin.set_fact:
     wsl_move_window_started: "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}"
+
+# The deletion of the tasks of the present account only after a forward
+# window that ended done: never in a way back, nor in a window that did not
+# end.
+- name: The deletion of the tasks of the present account comes after a window that ended done
+  ansible.builtin.assert:
+    that: (wsl_move_marker_read.output | last | default('')) == 'window-done'
+    fail_msg: The last marker of the state file is not window-done, and wsl_move_present_removed is on. Nothing is changed.
+    quiet: true
+  when: wsl_move_present_removed | bool
 
 # Only SYSTEM and the Administrators may change the scripts, the configs and
 # the state; Users may read. The folder of the disk file and the log folders
@@ -219,6 +247,10 @@
 
 - name: The scripts, the configs and the tasks of the procedure
   ansible.builtin.include_tasks: host_files.yml
+
+- name: The deletion of the tasks of the present account
+  ansible.builtin.include_tasks: remove_present.yml
+  when: wsl_move_present_removed | bool
 
 # D21: the Secondary Logon service starts only on demand.
 - name: The Secondary Logon service has a manual start

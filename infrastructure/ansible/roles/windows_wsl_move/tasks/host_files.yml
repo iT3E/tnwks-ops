@@ -71,14 +71,16 @@
       loop_control:
         loop_var: task
         label: "{{ task.key }}-{{ task.step }}"
-      when: wsl_move_as_present | bool
+      when: wsl_move_as_present | bool and not (wsl_move_present_removed | bool)
       no_log: true
 
+    # After the deletion of the tasks of the present account, the boot task of
+    # the way back is not registered again (remove_present.yml).
     - name: The window procedure and the boot task of the way back, tasks of SYSTEM
       tnwks_win_scheduled_task:
         name: "{{ wsl_move_window_task if item == 'window' else wsl_move_boot_task }}"
         xml: "{{ lookup('ansible.builtin.template', 'system-task.xml.j2') }}"
-      loop: [window, boot]
+      loop: "{{ ['window'] if wsl_move_present_removed | bool else ['window', 'boot'] }}"
 
 - name: Read the window tasks of the present account
   ansible.windows.win_powershell:
@@ -90,6 +92,7 @@
       @($Names | Where-Object { -not (Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue) })
   check_mode: false
   register: wsl_move_present_tasks_read
+  when: not (wsl_move_present_removed | bool)
 
 - name: Each window task of the present account is there
   ansible.builtin.assert:
@@ -98,7 +101,9 @@
       The window tasks {{ wsl_move_present_tasks_read.output | join(', ') }} of the present account are not there, and
       Ansible does not log in as that account, which registers them. Nothing more is changed.
     quiet: true
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - not (wsl_move_present_removed | bool)
 
 - name: Read the SHA-256 of each script and config on the host
   ansible.windows.win_powershell:

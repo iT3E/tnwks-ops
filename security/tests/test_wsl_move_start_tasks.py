@@ -41,6 +41,7 @@ def named(role: str, name: str) -> dict:
 
 def test_the_phase_is_off_on_every_host_until_wsl_move_is_on():
     assert GROUP["wsl_move_done"] is False
+    assert GROUP["wsl_move_present_removed"] is False
     assert GROUP["wsl_move_task_suffix"] == "-account"
     phase = " ".join(GROUP["wsl_move_phase"].split())
     assert phase == ("{{ 'off' if not (wsl_move | default(false) | bool) "
@@ -52,6 +53,7 @@ def test_the_phase_is_off_on_every_host_until_wsl_move_is_on():
         assert "wsl_move_phase" not in data, path
         assert data.get("wsl_move", False) is (path.parent.name == "WSL-02"), path
         assert data.get("wsl_move_done", False) is (path.parent.name == "WSL-02"), path
+        assert data.get("wsl_move_present_removed", False) is (path.parent.name == "WSL-02"), path
 
 
 # --- windows_wsl_maintenance -----------------------------------------------------------

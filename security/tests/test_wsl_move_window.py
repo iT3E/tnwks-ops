@@ -55,8 +55,10 @@ def test_the_play_runs_for_one_host_with_the_move_on():
 def test_a_start_and_its_precheck_run_only_in_the_phase_move():
     assert DEFAULTS["wsl_move_window_modes"] == ["status", "precheck", "forward", "wayback", "check"]
     phase = TASKS["The phase of the move lets this mode run"]["ansible.builtin.assert"]["that"]
-    assert phase == ("wsl_move_phase == 'move' if wsl_move_window in ['precheck', 'forward', 'wayback'] "
-                     "else wsl_move_phase in ['move', 'done']")
+    assert phase == [("wsl_move_phase == 'move' if wsl_move_window in ['precheck', 'forward', 'wayback'] "
+                      "else wsl_move_phase in ['move', 'done']"),
+                     # The check play reads the tasks of the present account: not after their deletion.
+                     "wsl_move_window != 'check' or not (wsl_move_present_removed | bool)"]
 
 
 def test_a_start_needs_the_host_again_no_check_run_and_not_the_login_of_the_present_account():
