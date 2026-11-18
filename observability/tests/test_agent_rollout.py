@@ -1,6 +1,6 @@
 """One merge gives one rollout of an agent pod, and the official plugins step
 says why it failed (docs/apps/agent-platform.md, "A start of the agent
-pod"), for the pilot and the finance agent.
+pod"), for the pilot, the finance agent and the main agent.
 
 The config and the scripts of the pod are ConfigMaps with a hash of their
 content in the name, made in the same Flux Kustomization as the Deployment:
@@ -24,7 +24,7 @@ from test_hand_written_rules import docker
 
 ROOT = Path(__file__).resolve().parents[2]
 AGENTS = ROOT / "kubernetes/apps/ai/agents"
-NAMES = ["pilot", "finance"]
+NAMES = ["pilot", "finance", "main"]
 NO_SUBSTITUTION = {"kustomize.toolkit.fluxcd.io/substitute": "disabled"}
 
 
@@ -38,7 +38,11 @@ def kustomization(agent: str) -> dict:
 
 
 def mounted(pod: dict) -> set[str]:
-    return {v["configMap"]["name"] for v in pod["volumes"] if "configMap" in v}
+    """The ConfigMaps of the pod, as a volume or as a source of a projected
+    volume (the config of the main agent joins a Secret file)."""
+    maps = {v["configMap"]["name"] for v in pod["volumes"] if "configMap" in v}
+    return maps | {s["configMap"]["name"] for v in pod["volumes"] if "projected" in v
+                   for s in v["projected"]["sources"] if "configMap" in s}
 
 
 def init(pod: dict, name: str) -> dict:
@@ -107,9 +111,12 @@ def test_the_render_puts_the_names_with_the_hash_in_the_pod(agent):
     assert result.returncode == 0, result.stderr[-4000:]
     objects = [o for o in yaml.safe_load_all(result.stdout) if o]
     maps = {o["metadata"]["name"]: o for o in objects if o["kind"] == "ConfigMap"}
-    (pod,) = [o["spec"]["template"]["spec"] for o in objects if o["kind"] == "Deployment"]
+    # The agent pod; the inbox of a cutover in its step 1 to 3 is a second
+    # Deployment, with a ConfigMap of its own.
+    (pod,) = [o["spec"]["template"]["spec"] for o in objects
+              if o["kind"] == "Deployment" and o["metadata"]["name"] == "agent"]
     names = mounted(pod)
-    assert names == set(maps)
+    assert names == {n for n in maps if n.startswith("agent-")}
     for name in names:
         assert re.fullmatch(r"agent-[a-z-]+-[a-z0-9]{10}", name), name
     for name in names:

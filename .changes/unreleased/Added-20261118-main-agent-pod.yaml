@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the agent pod of the main agent at zero replicas, in the form of the finance agent: one Telegram account with the direct chat of the owner and one group (its chat id from a Secret of the owner), web search, the message tool and the built-in tools of the product. No MCP tool, no vault and no scheduled job yet. No pod starts until the steps of the cutover (docs/apps/agent-platform-runbook.md, "The cutover of the main agent").'
+time: 2026-11-18T19:30:00.000000+00:00
