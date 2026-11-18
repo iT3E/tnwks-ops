@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.208.1 - 2026-11-18
+
+### Fixed
+
+* agents: the read-only volumes of the vault shares (vault-ro, in agents-main and agents-finance) mount read only for each pod, with the option ro. The kubelet takes the read-only flag of a PersistentVolume from the pod, not from nfs.readOnly. No pod mounts them yet, and no pod restarts (docs/apps/agent-platform.md, "The vault shares").
+
 ## v2.208.0 - 2026-11-18
 
 ### Added
