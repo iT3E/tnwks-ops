@@ -31,11 +31,13 @@ from test_wsl_move_rehearsal import (
     ANSIBLE,
     B_SID,
     DEFAULTS,
+    NOISY,
     OLD_SDDL,
     ROLE,
     WINDOW,
     WINDOW_FAKES,
     boot_group_run,
+    run_group_log,
     run_window,
 )
 from test_wsl_start_unelevated import needs_pwsh, pwsh
@@ -2266,3 +2268,45 @@ def test_a_run_of_the_procedure_starts_only_with_the_copies_of_the_role(tmp_path
                          stand_ins=stand_ins, fails=True)
         assert word in err and "Nothing is changed" in err and "started" not in err, err
         assert not (files / "request.json").exists()
+
+
+@needs_both
+def test_no_reader_of_the_log_takes_a_fail_line_for_a_group_start_or_result_line(tmp_path):
+    """A failed step whose error text holds the start of a group line and of a result line,
+    in a boot run of the group test and in a way back of the phase wayback: the check play,
+    the read of the phase after-boot with its gate, and the read of run_procedure.yml see
+    only the real group moments and the one result."""
+    failed = {"tnwks-moverh-a-import": {"failed": NOISY, "output": "a\nresult: done"}}
+    boot, _ = boot_group_run(tmp_path / "boot", results=failed, codes={"tnwks-moverh-a-import": 1})
+    assert boot["code"] == 1, boot["log"]
+    fail = next(line for line in boot["log"] if line.startswith("fail: check failed: the import back of "))
+    assert "group: tnwks-moverh-a joined Administrators" in fail and "result: done" in fail
+    root = Path(boot["root"])
+    raw = (root / "state/window.log").read_text().splitlines()
+    # The check play (check.yml): the join and the leave of the boot run of the group test, no problem.
+    assert run_group_log(raw) == [], raw
+    # The read of after-boot: the run has its two group lines and one result.
+    read = run_script(tmp_path, "after-boot.yml", "Read the log of the boot runs and the markers",
+                      {"Log": str(root / "state/window.log"), "State": str(root / "state/window.state"),
+                       "BootRequest": str(root / "state/boot-request.json")},
+                      stand_ins=BOOT_STAND_INS + "$global:Boot = (Get-Date).AddHours(-1)\n")[-1]
+    lines = [x for x in read["runs"][0] if isinstance(x, str)]
+    assert [x for x in lines if x.startswith("group: ")] == ["group: tnwks-moverh-a joined Administrators",
+                                                            "group: tnwks-moverh-a left Administrators"], lines
+    assert read["results"] == ["result: failed"], read
+    # The gate of after-boot, on a run that ended well with the same fail line and task
+    # line in it: the fail line counts as no group moment, no stop, no start and no result.
+    task = next(x for x in lines if x.startswith("task tnwks-moverh-a-import ended with 1; result: "))
+    good = boot_read([*GROUP_RUN[:2], task, fail, *GROUP_RUN[2:]], True)
+    [gate] = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_boot_log": registered([good]), "wsl_move_rehearsal_boot_group": True},
+                                   "tasks": checks_of("after-boot.yml", ("The boot task ran the way back once",))}])
+    assert not passed(gate), passed(gate)
+    # The read of run_procedure.yml, for a way back of the group test with the same fail.
+    request = {"mode": "wayback", "group_steps": True, "stop_after": 0, "rehearsal_group_test": True}
+    back = run_window(tmp_path / "w", request, state="t window-started\nt window-done\n", disk=("b",), acl_file=OLD_SDDL,
+                      marker_a=True, disabled="tnwks-moverh-a-start", results=failed, codes={"tnwks-moverh-a-import": 1},
+                      tasks={"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Ready"})
+    assert any("result: done" in line and line.startswith("fail: check failed: ") for line in back["log"]), back["log"]
+    procedure = procedure_output(tmp_path, back, "", "t window-started\nt window-done\n", request, "window-done")[-1]
+    assert procedure["groups"] == ["joined", "left"] and len(procedure["group_lines"]) == 2, procedure
+    assert procedure["result"] == "failed" and procedure["would_restart"] == 1, procedure

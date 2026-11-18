@@ -72,7 +72,7 @@
           code = [int64]$info.LastTaskResult
           markers = $markers
           groups = @($texts | Where-Object { $_ -match '^group: \S+ (joined|left) Administrators$' } | ForEach-Object { $Matches[1] })
-          group_lines = @($lines | Where-Object { $_ -match ' group: ' })
+          group_lines = @($lines | Where-Object { "$(($_ -split ' ', 3)[2])" -match '^group: ' })
           would_restart = @($texts | Where-Object { $_ -like 'would restart*' }).Count
           result = @($texts | Where-Object { $_ -like 'result: *' } | ForEach-Object { $_.Substring(8) }) -join ','
           log = $texts

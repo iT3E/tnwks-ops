@@ -134,6 +134,33 @@ function Assert-Tnwks([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw [InvalidOperationException]::new("check failed: $Message") }
 }
 
+# A text in a fail line: one line, with each control character a space, and at
+# most $Limit characters. An output of wsl.exe or an error can hold line
+# breaks and be long; the log keeps one line for each moment, and the checks
+# of the log read each line by its start.
+function Format-TnwksText([string]$Text, [int]$Limit = 300) {
+    $one = ([regex]::Replace("$Text", '[\x00-\x1F\x7F]+', ' ')).Trim()
+    if ($one.Length -gt $Limit) { $one = $one.Substring(0, $Limit) + ' [cut]' }
+    $one
+}
+
+# A fail line: "fail: " and its text, bounded.
+function Write-TnwksFail([string]$Text) { Write-Log "fail: $(Format-TnwksText $Text 1000)" }
+
+# What a run of a task of an account gave, for the fail line of its step: the
+# exit code of the task, and the error text of its command in the result of
+# this run (failed, output), or that there is no result of this run.
+function Format-TnwksResultText($Result) {
+    $text = ''
+    if ($Result.failed) { $text += ", failed: $(Format-TnwksText $Result.failed)" }
+    if ($Result.output) { $text += ", output: $(Format-TnwksText $Result.output)" }
+    $text
+}
+function Format-TnwksTaskRun([pscustomobject]$Run) {
+    if (-not $Run.result) { return "exit code $($Run.code), no result of this run" }
+    "exit code $($Run.code)$(Format-TnwksResultText $Run.result)"
+}
+
 # The installed version of WSL: the file version of its service binary.
 function Get-TnwksWslVersion {
     if (-not (Test-Path -LiteralPath $cfg.service_binary)) { return 'none' }
@@ -195,7 +222,8 @@ function Invoke-TnwksAccountTask([string]$Task, [string]$ResultFile) {
         if ([int64]$read.time -ge $start) { $result = $read }
     }
     $code = [int64]$info.LastTaskResult
-    Write-Log ('task {0} ended with {1}; result: {2}' -f $Task, $code, $(if ($result) { $result | ConvertTo-Json -Compress -Depth 4 } else { 'none' }))
+    # The result as JSON on one line, bounded: an output of wsl.exe can be long.
+    Write-Log ('task {0} ended with {1}; result: {2}' -f $Task, $code, $(if ($result) { Format-TnwksText ($result | ConvertTo-Json -Compress -Depth 4) 2000 } else { 'none' }))
     [pscustomobject]@{ code = $code; result = $result }
 }
 
@@ -205,7 +233,7 @@ function Invoke-TnwksAccountTask([string]$Task, [string]$ResultFile) {
 function Invoke-TnwksStopTask([pscustomobject]$Who) {
     $stop = Invoke-TnwksAccountTask $Who.window_tasks.stop (Join-Path $Who.result_dir 'stop.json')
     Assert-Tnwks ($stop.code -eq 0 -and $stop.result -and $stop.result.shutdown_exit -eq 0) `
-        "the stop task of $($Who.account) ended with $($stop.code), with $(if ($stop.result) { "shutdown exit $($stop.result.shutdown_exit)" } else { 'no result of this run' })"
+        "the stop task of $($Who.account) ended with $($stop.code), with $(if ($stop.result) { "shutdown exit $($stop.result.shutdown_exit)$(Format-TnwksResultText $stop.result)" } else { 'no result of this run' })"
 }
 
 # Whether a task is enabled: its flag, Settings.Enabled. Not its State: a task
@@ -268,7 +296,7 @@ function Exit-TnwksGroupTest {
             Invoke-TnwksStopTask $present
             Wait-TnwksNoWsl $sid $present.account
             Write-Log "no WSL process of $($present.account) before it leaves the group"
-        } catch { Write-Log "fail: the stop of $($present.account) before it leaves the group: $($_.Exception.Message)" }
+        } catch { Write-TnwksFail "the stop of $($present.account) before it leaves the group: $($_.Exception.Message)" }
     }
     Set-TnwksGroup $sid $present.account $false
 }
@@ -813,7 +841,7 @@ function Invoke-TnwksForward {
     Assert-Tnwks (-not (Test-Path -LiteralPath $oldPath)) 'a file is at the path of the registration of the present account'
     $size = (Get-Item -LiteralPath $newPath).Length
     $unreg = Invoke-TnwksAccountTask $present.window_tasks.unregister (Join-Path $present.result_dir 'unregister.json')
-    Assert-Tnwks ($unreg.code -eq 0 -and $unreg.result -and -not $unreg.result.registered) "the unregister of $($present.account) did not pass"
+    Assert-Tnwks ($unreg.code -eq 0 -and $unreg.result -and -not $unreg.result.registered) "the unregister of $($present.account) did not pass ($(Format-TnwksTaskRun $unreg))"
     Assert-Tnwks ((Test-Path -LiteralPath $newPath) -and (Get-Item -LiteralPath $newPath).Length -eq $size) 'the disk file changed in the unregister'
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $present.folder $cfg.marker_name)) 'the old folder or its marker is gone'
     Write-Log 'step 5 passed'
@@ -826,7 +854,7 @@ function Invoke-TnwksForward {
     # What the import and its first start of the distro left on the file (the
     # rule of a VM), whether the import passed or not.
     Write-Log "step 6: the rules of the disk file after the import: $(Get-TnwksMaskedSddl $newPath)"
-    Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $newPath, [StringComparison]::OrdinalIgnoreCase)) "the import of $($new.account) did not pass"
+    Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $newPath, [StringComparison]::OrdinalIgnoreCase)) "the import of $($new.account) did not pass ($(Format-TnwksTaskRun $import))"
     Invoke-TnwksStopTask $new
     Wait-TnwksNoWsl $nSid $new.account
     Write-Log 'step 6 passed'
@@ -912,7 +940,7 @@ function Invoke-TnwksWayBack {
     Assert-Tnwks (-not (Test-Path -LiteralPath $newPath)) 'a file is at the path of the registration of the new account'
     $size = (Get-Item -LiteralPath $oldPath).Length
     $unreg = Invoke-TnwksAccountTask $new.window_tasks.unregister (Join-Path $new.result_dir 'unregister.json')
-    Assert-Tnwks ($unreg.code -eq 0 -and $unreg.result -and -not $unreg.result.registered) "the unregister of $($new.account) did not pass"
+    Assert-Tnwks ($unreg.code -eq 0 -and $unreg.result -and -not $unreg.result.registered) "the unregister of $($new.account) did not pass ($(Format-TnwksTaskRun $unreg))"
     Assert-Tnwks ((Get-Item -LiteralPath $oldPath).Length -eq $size) 'the disk file changed in the unregister'
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $new.folder $cfg.marker_name)) 'the new folder or its marker is gone'
     Write-Log 'way back 4 passed'
@@ -920,7 +948,7 @@ function Invoke-TnwksWayBack {
     # of the present account may run, started in this run.
     $script:ImportBackRan = $true
     $import = Invoke-TnwksAccountTask $present.window_tasks.import (Join-Path $present.result_dir 'import.json')
-    Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $oldPath, [StringComparison]::OrdinalIgnoreCase)) "the import back of $($present.account) did not pass"
+    Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $oldPath, [StringComparison]::OrdinalIgnoreCase)) "the import back of $($present.account) did not pass ($(Format-TnwksTaskRun $import))"
     Write-Log 'way back 5 passed'
     # (6) For step 2: only the tasks that step 2 disabled.
     $enable = @(Get-Content -LiteralPath $DisabledFile | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -990,7 +1018,7 @@ try {
             } catch {
                 # A failed check, or any error, after the marker of a started
                 # window: the way back, from the state that it reads.
-                Write-Log "fail: $($_.Exception.Message)"
+                Write-TnwksFail $_.Exception.Message
                 if ($script:WroteMarkers -contains 'window-started' -and (Get-LastMarker) -eq 'window-started') {
                     Write-Log 'the way back starts'
                     $outcome = Invoke-TnwksWayBack
@@ -1030,13 +1058,13 @@ try {
         }
     }
 } catch {
-    Write-Log "fail: $($_.Exception.Message)"
+    Write-TnwksFail $_.Exception.Message
     $outcome = 'failed'
 } finally {
     if ($req.rehearsal_group_test) {
         # The rehearsal only: the present account leaves Administrators at the
         # end of its run, whatever the result.
-        try { Exit-TnwksGroupTest } catch { Write-Log "fail: the group of $($present.account): $($_.Exception.Message)" }
+        try { Exit-TnwksGroupTest } catch { Write-TnwksFail "the group of $($present.account): $($_.Exception.Message)" }
     }
     # The boot request is spent, once the present account is out of the group.
     if ($BootRequestRead) {
@@ -1047,7 +1075,7 @@ try {
                 Remove-Item -LiteralPath $cfg.boot_request_file -Force
                 Write-Log 'the boot request is spent: removed'
             }
-        } catch { Write-Log "fail: the boot request: $($_.Exception.Message)" }
+        } catch { Write-TnwksFail "the boot request: $($_.Exception.Message)" }
     }
 }
 Write-Log "result: $outcome"

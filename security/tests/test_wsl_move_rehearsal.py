@@ -825,9 +825,13 @@ function Stop-ScheduledTask {
         foreach ($p in @($global:Procs | Where-Object { $_.Task -eq $TaskName })) { [void]$global:Procs.Remove($p) }
     }
 }
+# $global:RefuseStart: Task Scheduler refuses the start of these tasks, with an error
+# over two lines. $global:NoRun: these tasks start with no error and never run.
 function Start-ScheduledTask {
     param([string]$TaskName)
     $global:Calls.Add("start $TaskName")
+    if (@($global:RefuseStart) -contains $TaskName) { throw "the task $TaskName can not start`r`naccess is denied" }
+    if (@($global:NoRun) -contains $TaskName) { return }
     $global:Runs[$TaskName] = 1 + [int]$global:Runs[$TaskName]
     $sid = Get-TaskSid $TaskName
     if ($TaskName -like '*-start') {
@@ -1803,6 +1807,105 @@ def test_a_stop_passes_only_with_a_shutdown_result_of_its_own_run(tmp_path):
                                                     "rehearsal_group_test": False}, results={"tnwks-moverh-a-stop": result})
         assert "step 3 passed" not in out["log"] and not any(c.startswith("move ") for c in out["calls"]), out["log"]
         assert out["disk_a"] and not out["disk_b"]
+
+
+# --- The error text of a failed step, and a result that an earlier run left -----------------
+
+# An error text over lines, with the start of a group line and of a result line in it,
+# and longer than a fail line may carry.
+NOISY = "access denied\r\ngroup: tnwks-moverh-a joined Administrators\nresult: done\n" + "x" * 2500
+# Each step of the procedure that reads the result of a task of an account (the stop has
+# its own test): the mode, the task, its account, its result file, and its fail text.
+ACCOUNT_STEPS = {
+    "window step 5": ("forward", "tnwks-moverh-a-unregister", "a", "unregister", "the unregister of tnwks-moverh-a did not pass ("),
+    "window step 6": ("forward", "tnwks-moverh-b-import", "b", "import", "the import of tnwks-moverh-b did not pass ("),
+    "way back step 4": ("wayback", "tnwks-moverh-b-unregister", "b", "unregister", "the unregister of tnwks-moverh-b did not pass ("),
+    "way back step 5": ("wayback", "tnwks-moverh-a-import", "a", "import", "the import back of tnwks-moverh-a did not pass ("),
+}
+
+
+def account_step_run(tmp_path: Path, name: str, result, code: int = 0, earlier: bool = False, **kw) -> tuple[dict, str]:
+    """A run of the procedure in which the task of one step gives result (None: no result
+    of this run), after an earlier run that left a good result of that task. Returns the
+    run and the fail line of the step (or '')."""
+    mode, task, who, step, text = ACCOUNT_STEPS[name]
+    root = tmp_path / "root"
+    (root / f"log/{who}").mkdir(parents=True, exist_ok=True)
+    if earlier:
+        good = {"registered": False} if step == "unregister" else {"disk": str(root / f"{who}/ext4.vhdx")}
+        (root / f"log/{who}/{step}.json").write_text(json.dumps({**good, "time": 1}))
+    request = {"mode": mode, "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
+    out = run_window(tmp_path, request, results={task: result}, codes={task: code},
+                     **({**BOOT_STARTED, **kw} if mode == "wayback" else kw))
+    fail = [line for line in out["log"] if line.startswith(f"fail: check failed: {text}")]
+    assert len(fail) <= 1, fail
+    return out, fail[0] if fail else ""
+
+
+@needs_pwsh
+@pytest.mark.parametrize("name", list(ACCOUNT_STEPS))
+def test_a_result_that_an_earlier_run_left_does_not_pass_a_step(tmp_path, name):
+    """A result file of an earlier run, with good values, and no result of this run: the
+    step fails, and its fail line says that there is no result of this run."""
+    _, task, _, _, text = ACCOUNT_STEPS[name]
+    out, fail = account_step_run(tmp_path, name, None, earlier=True)
+    assert out["code"] != 0 and fail == f"fail: check failed: {text}exit code 0, no result of this run)", out["log"]
+    assert any(line == f"task {task} ended with 0; result: none" for line in out["log"]), out["log"]
+
+
+@needs_pwsh
+@pytest.mark.parametrize("name", list(ACCOUNT_STEPS))
+def test_a_failed_step_writes_the_error_text_of_its_command_in_one_bounded_line(tmp_path, name):
+    out, fail = account_step_run(tmp_path, name, {"failed": NOISY, "output": "line one\r\nline two", "registered": True}, code=1)
+    assert out["code"] != 0, out["log"]
+    # The exit code, then the failed text and the output, each on one line and cut.
+    assert fail.startswith(ACCOUNT_STEPS[name][4].join(("fail: check failed: ", "exit code 1, failed: access denied group: "))), fail
+    assert "x [cut], output: line one line two)" in fail and len(fail) < 1100, fail
+    # No line of the log starts with the text inside the error: each check reads a line by its start.
+    raw = (Path(out["root"]) / "state/window.log").read_text().splitlines()
+    assert all(re.match(r"^\S+ (forward|wayback) ", line) for line in raw), raw
+    texts = [line.split(" ", 2)[2] for line in raw]
+    assert not [t for t in texts if t.startswith("group: ")], texts
+    assert len([t for t in texts if t.startswith("result: ")]) == 1, texts
+    # The line of the task holds its result as JSON on one line, bounded too.
+    task = next(t for t in texts if t.startswith(f"task {ACCOUNT_STEPS[name][1]} ended with 1; result: "))
+    assert len(task) < 2100 and task.endswith(" [cut]"), task
+
+
+@needs_pwsh
+def test_a_task_that_starts_and_never_runs_fails_its_step_with_no_result_of_this_run(tmp_path):
+    for name in ("window step 6", "way back step 5"):
+        _, task, _, _, text = ACCOUNT_STEPS[name]
+        out, fail = account_step_run(tmp_path / name.replace(" ", "-"), name, None, earlier=True, config={"task_minutes": 0},
+                                     faults=f"$global:NoRun = @('{task}')")
+        assert out["code"] != 0 and fail == f"fail: check failed: {text}exit code 0, no result of this run)", (name, out["log"])
+
+
+@needs_pwsh
+def test_a_start_that_task_scheduler_refuses_logs_its_error_text_on_one_line(tmp_path):
+    out, _ = account_step_run(tmp_path, "window step 6", {"disk": "unused"}, faults="$global:RefuseStart = @('tnwks-moverh-b-import')")
+    assert out["code"] != 0, out["log"]
+    assert "fail: the task tnwks-moverh-b-import can not start access is denied" in out["log"], out["log"]
+    raw = (Path(out["root"]) / "state/window.log").read_text().splitlines()
+    assert all(re.match(r"^\S+ forward ", line) for line in raw), raw
+
+
+@needs_pwsh
+def test_the_text_of_a_fail_line_is_one_line_and_bounded():
+    script = WINDOW.read_text()
+    start = script.index("function Format-TnwksText")
+    end = script.index("\n}\n", script.index("function Format-TnwksTaskRun")) + 3
+    run = pwsh(script[start:end] + """
+$a = Format-TnwksText "one`r`ntwo`tthree`0four"
+$b = Format-TnwksText ('y' * 400)
+$c = Format-TnwksText ('z' * 50) 10
+$d = Format-TnwksTaskRun ([pscustomobject]@{ code = 1; result = $null })
+$e = Format-TnwksTaskRun ([pscustomobject]@{ code = 2; result = [pscustomobject]@{ failed = "f`nf"; output = '' } })
+[Console]::Out.Write((@($a, $b.Length, $b.EndsWith(' [cut]'), $c, $d, $e) | ConvertTo-Json -Compress))
+""")
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == ["one two three four", 306, True, "zzzzzzzzzz [cut]", "exit code 1, no result of this run",
+                                      "exit code 2, failed: f f"]
 
 
 @needs_pwsh
