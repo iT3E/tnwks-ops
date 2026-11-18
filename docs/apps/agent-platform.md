@@ -147,6 +147,58 @@ and after the next snapshot of a trust domain,
 `kubectl -n agents-pilot get snapshots.kopiur.home-operations.com` shows the
 newest one `Succeeded`.
 
+## NFS volumes and admission
+
+The NFS server of the cluster (`kubernetes/apps/storage/nfs-server/`) checks
+only the address of a client, and a kubelet mounts from the address of its
+node. So a pod with an NFS volume in its spec, in a namespace where Pod
+Security allows one, would reach each export that its node reaches. That
+matters once a trust domain has an export of its own for its vault. Two
+admission rules
+(`kubernetes/apps/storage/nfs-server/admission/nfsvolumes.yaml`, homelab-wsl
+only) list what is allowed:
+
+| Rule | What it lets in |
+| --- | --- |
+| `nfs-pod-volumes` | A pod with an NFS volume only for a listed namespace, server and exact path: the sites (`production`) and the sites runner (`tools`) on `/export`, and the copy of the network backups (`networking`) on `/gdrive-sync`. The pseudo root, the path of a vault, a variant of a path and another name of the server are not listed |
+| `nfs-persistent-volumes` | A PersistentVolume with an NFS source only as a listed volume of a share, with its server, path, read-only flag and the one claim it binds to. Two for each share: read and write for its vault server, read only for its agent and its backup mover |
+
+For now the bindings are `Audit` and `Warn`: a pod or a volume off the list
+is let in, with an audit annotation and a warning. A later change turns them
+to `Deny`, after a read of the audit lines shows that no user of today is off
+the list. Admission sees the API only: a privileged container can still mount
+with a system call, and a userspace NFS client needs no mount. The list of
+clients of each export is the other control.
+
+A new user of an NFS export goes on the list in the same pull request:
+`observability/tests/test_nfs_admission.py` fails until it is. The rules run
+on a throwaway API server in `admission/tests/run.sh`
+(`uv run --project observability kubernetes/apps/storage/nfs-server/admission/tests/run.sh`).
+
+**Where a refusal shows.** The API server writes the annotation
+`validation.policy.admission.k8s.io/validation_failure` into the audit line
+of the request (each write is kept at `Metadata`, `talos/wsl/patches/audit-policy.yaml`),
+and counts it in `apiserver_validating_admission_policy_check_total` with
+`enforcement_action="audit"` or `"warn"`. A warning goes back to the client
+only, so a pod that a controller makes shows none. In Grafana, Loki of the
+security streams:
+
+```logql
+{security_stream="k8s-audit", k8s_cluster="homelab-wsl"}
+  |= "validation.policy.admission.k8s.io/validation_failure" |= "nfs-"
+```
+
+The scrape of the API server keeps no series of these rules, so read the
+counter on the API server itself (it starts again at zero when the API
+server restarts):
+`kubectl get --raw /metrics | grep 'policy="nfs-'`.
+
+To check: `kubectl get validatingadmissionpolicy nfs-pod-volumes
+nfs-persistent-volumes -o yaml` shows `status.observedGeneration` equal to
+`metadata.generation` and no `status.typeChecking.expressionWarnings`, and
+`kubectl get validatingadmissionpolicybinding nfs-pod-volumes
+nfs-persistent-volumes` shows both.
+
 ## Backups of the agent trust domains
 
 The snapshots of the trust domains go to a Kopia repository of their own, not
