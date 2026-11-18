@@ -1,0 +1,3 @@
+kind: Added
+body: 'Backups: the role and the prefix of the backup repository of the main trust domain (entry agents-main of rolesanywhere_backups_prefixed, prefix kopiur-main/, exclusive to its role in the bucket policy), step 1 of its repository. The certificate, the password, the session and the repository come in later steps, in the order of docs/operations/backups.md, "The main repository".'
+time: 2026-11-17T23:00:00.000000+00:00

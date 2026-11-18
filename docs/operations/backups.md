@@ -338,6 +338,26 @@ The certificate is renewed as the one of the agents repository above, with
 the CN `homelab-wsl-agents-finance-backups` and the file
 `agents-finance-repository/app/secret-certificate.sops.yaml`.
 
+### The main repository
+
+The main trust domain gets its own repository in the same steps as
+[the finance repository](#the-finance-repository), one merge for each
+step, with these names:
+
+| Part | Finance | Main |
+| --- | --- | --- |
+| Entry of `rolesanywhere_backups_prefixed` | `agents-finance` | `agents-main` |
+| Prefix | `kopiur-finance/` | `kopiur-main/` (not `kopiur-agents-main/`, for the reason above) |
+| Certificate CN | `homelab-wsl-agents-finance-backups` | `homelab-wsl-agents-main-backups` |
+| Role | `tnwks-rolesanywhere-backups-agents-finance` | `tnwks-rolesanywhere-backups-agents-main` |
+| Directory | `kopiur-system/agents-finance-repository/` | `kopiur-system/agents-main-repository/` |
+| Keys of `cluster-settings.yaml` | `RA_AGENTS_FINANCE_BACKUPS_PROFILE_ARN`, `RA_AGENTS_FINANCE_BACKUPS_ROLE_ARN` | `RA_AGENTS_MAIN_BACKUPS_PROFILE_ARN`, `RA_AGENTS_MAIN_BACKUPS_ROLE_ARN` |
+| ClusterRepository and its grant | `agents-finance`, grants `agents-finance` | `agents-main`, grants `agents-main` |
+| The policy after the repository | `finance/agent/app/backup.yaml` | `main/agent/app/backup.yaml` |
+
+Step 1, the role, is in `environments/prod/aws/main.tf`. The other steps
+follow it, in the order of the finance repository.
+
 ## Checking backups
 
 ```bash
