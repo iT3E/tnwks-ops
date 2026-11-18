@@ -823,10 +823,10 @@ function Add-TnwksFolderMarker([string]$Folder, [string]$Sid) {
 # the attribute read-only can not be written (Microsoft: CreateFile). An
 # unregister deletes the icon as its account. So a read before each import
 # checks that the entry there is a plain file that the account of the import
-# can write. The read takes the entry itself and follows no link: an entry
-# with the attribute directory, reparse point or encrypted is refused, as
-# are read-only, hidden and system, and its rules are read only for a plain
-# file. In the rules, it counts the allow rules of the SIDs given only: the
+# can write. The read of its attributes takes the entry itself and follows
+# no link: an entry with the attribute directory, reparse point or
+# encrypted is refused, as are read-only, hidden and system, and its rules
+# are read only for a plain file. In the rules, it counts the allow rules of the SIDs given only: the
 # account, and the Administrators when the account imports as a member. Any
 # deny rule is refused, and any object or conditional rule. Each import
 # also requires its own result of this run: an import that fails for any

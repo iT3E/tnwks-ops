@@ -1868,6 +1868,18 @@ def test_window_step_1_reads_the_icon_in_both_folders_before_any_change(tmp_path
 
 
 @needs_pwsh
+def test_window_step_1_counts_the_group_test_as_a_member(tmp_path):
+    """The rehearsal's group test makes the present account a member right after step 1,
+    so step 1 counts the rules of the Administrators for the icon of the old folder,
+    also when the account is not a member yet."""
+    out = run_window(tmp_path, FORWARD_TEST, **icon_kw(tmp_path, "a", "owned by the Administrators, no rule for the account"))
+    log = out["log"]
+    assert out["code"] == 0 and log[-1] == "result: done", log
+    assert log.index("step 1: no icon in either folder that the import there can not replace") < log.index(
+        "group: tnwks-moverh-a joined Administrators"), log
+
+
+@needs_pwsh
 def test_window_step_1_reads_the_old_icon_for_the_account_of_the_import_back(tmp_path):
     """Step 1 reads the membership of the present account in the group, not the request:
     with the group steps on and the account not a member, the import back would count

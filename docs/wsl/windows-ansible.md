@@ -915,8 +915,9 @@ phase `interrupt` only reads it, and stops when it is there.
 
 **The reads of the icon in the procedure.** The window procedure reads the
 icon (`shortcut.ico`) before each import, for the account of that import,
-and deletes none. It reads the entry itself and follows no link. A read
-passes with no entry, or with a plain file that has none of the attributes
+and deletes none. The read of its attributes takes the entry itself and
+follows no link: a directory or a link is refused, and its rules are not
+read. A read passes with no entry, or with a plain file that has none of the attributes
 read-only, hidden, system, directory, reparse point and encrypted, no deny
 entry, no object or conditional entry, and an allow rule that gives the
 account of the import the rights it needs (`FILE_GENERIC_WRITE`, and
