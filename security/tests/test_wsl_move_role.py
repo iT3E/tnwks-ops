@@ -12,6 +12,7 @@ import base64
 import re
 from pathlib import Path
 
+import ansible_render
 import pytest
 import yaml
 from test_wsl_start_unelevated import needs_pwsh, pwsh
@@ -435,3 +436,35 @@ def test_on_site_2_the_administrator_logs_in_and_the_distro_keeps_its_owner_and_
     for path in ("inventory/host_vars/WSL-02/main.yml", "inventory/host_vars/WSL-02-ubuntu/main.yml"):
         code = [line for line in (ANSIBLE / path).read_text().splitlines() if not line.lstrip().startswith("#")]
         assert not any("ansible_user" in line for line in code), path
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_values_of_site_2_in_each_phase_render_as_windows_paths(tmp_path):
+    """Ansible renders the disk file of the compaction and the host check, the account that owns the
+    distro and the gate of the host check of site 2, with stand-ins for its encrypted values. Each path has
+    one backslash between its names: a doubled one would make the standing check report a missing file."""
+    site2 = ansible_render.load(
+        "roles/windows_wsl_move/defaults/main.yml", "roles/windows_host_check/defaults/main.yml",
+        "inventory/group_vars/windows_hosts.yml", "inventory/host_vars/WSL-02/main.yml")
+    standins = {"wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+                "wsl_move_present_folder": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}",
+                "wsl_move_rehearsed_wsl_version": "3.0.5.0", "ansible_user": "standin-admin"}
+    distro = {"wsl_distro_ssh_host": "192.0.2.10", "ansible_host": "192.0.2.10", "ansible_port": 22,
+              "ansible_ssh_private_key_file": "/dev/null"}
+    hosts = {"WSL-02": {**site2, **standins}, "WSL-02-move": {**site2, **standins, "wsl_move_done": False},
+             "WSL-02-ubuntu": distro}
+    names = ("vhdx_compact_vhdx", "host_check_wsl_disk", "host_check_wsl_disk_account", "windows_desktop_user",
+             "wsl_move_phase")
+    out = ansible_render.render(tmp_path, hosts, ["WSL-02", "WSL-02-move"],
+                                {**{name: name for name in names}, "rules": "host_check_wsl_disk_rules | bool"})
+    assert out["WSL-02"] == {
+        "vhdx_compact_vhdx": "C:\\ProgramData\\tnwks-wsl-move\\disk\\ext4.vhdx",
+        "host_check_wsl_disk": "C:\\ProgramData\\tnwks-wsl-move\\disk\\ext4.vhdx",
+        "host_check_wsl_disk_account": "standin-wsl", "windows_desktop_user": "standin-wsl",
+        "wsl_move_phase": "done", "rules": True}
+    assert out["WSL-02-move"] == {
+        "vhdx_compact_vhdx": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}\\ext4.vhdx",
+        "host_check_wsl_disk": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}\\ext4.vhdx",
+        "host_check_wsl_disk_account": "standin1", "windows_desktop_user": "standin1",
+        "wsl_move_phase": "move", "rules": False}
