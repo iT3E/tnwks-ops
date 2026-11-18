@@ -56,15 +56,6 @@ wsl_move_rehearsal: false
 # secrets.sops.yml next to this file. The play stops before any change while
 # one of them is missing.
 wsl_move: true
-# The start tasks of the account that owns the distro, which window step 8
-# enables: the copy of each WSL task of the present account here
-# (wsl_move_present_tasks), apart from the compaction. The play stops on
-# another list.
-wsl_move_new_start_tasks:
-  - tnwks-lan-bridge-ip-account
-  - tnwks-udp-relay-syslog-account
-  - tnwks-wsl-keepalive-account
-  - tnwks-wsl-watchdog-account
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true

@@ -320,7 +320,7 @@ def test_site_2_turns_the_move_on_with_the_copies_that_its_roles_register():
     # The secrets are in the encrypted file only, never in the public one.
     assert not set(SECRET) & set(host)
     group = yaml.safe_load((ANSIBLE / "inventory/group_vars/windows_hosts.yml").read_text())
-    suffix = group["wsl_move_task_suffix"]
+    assert group["wsl_move_task_suffix"] == "-account"
     roles = ANSIBLE / "roles"
     maintenance = yaml.safe_load((roles / "windows_wsl_maintenance/defaults/main.yml").read_text())
     bridge = yaml.safe_load((roles / "windows_lan_bridge/defaults/main.yml").read_text())
@@ -328,10 +328,17 @@ def test_site_2_turns_the_move_on_with_the_copies_that_its_roles_register():
     copies = [maintenance["wsl_watchdog_task"], bridge["lan_bridge_ip_task"]]
     copies += [maintenance["wsl_keepalive_task"]] if host["wsl_keepalive_enabled"] else []
     copies += [relay["task"] for relay in host["udp_relays"]]
-    assert sorted(host["wsl_move_new_start_tasks"]) == sorted(name + suffix for name in copies)
+    # The list is derived in the group variables from the same values, with the names of the roles' defaults.
+    assert "wsl_move_new_start_tasks" not in host
+    derived = " ".join(group["wsl_move_new_start_tasks"].split())
+    assert derived == ("{{ (['tnwks-wsl-watchdog', 'tnwks-lan-bridge-ip'] + (['tnwks-wsl-keepalive'] "
+                       "if wsl_keepalive_enabled | default(false) | bool else []) + (udp_relays | default([]) "
+                       "| map(attribute='task') | list)) | map('regex_replace', '$', wsl_move_task_suffix) | list }}")
+    assert [maintenance["wsl_watchdog_task"], bridge["lan_bridge_ip_task"], maintenance["wsl_keepalive_task"]] == [
+        "tnwks-wsl-watchdog", "tnwks-lan-bridge-ip", "tnwks-wsl-keepalive"]
     # The rule of the role's assert holds for this host.
     present = [t for t in DEFAULTS["wsl_move_present_tasks"] if t != "tnwks-vhdx-compact"]
-    assert sorted(host["wsl_move_new_start_tasks"]) == sorted(name + suffix for name in present)
+    assert sorted(copies) == sorted(present)
     assert maintenance["vhdx_compact_task"] == "tnwks-vhdx-compact"
     check = next(t for t in tasks("main.yml")
                  if t.get("name") == "The start tasks of the new account are the copies of the tasks of the present account")
