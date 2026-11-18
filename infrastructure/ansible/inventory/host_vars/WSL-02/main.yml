@@ -45,8 +45,9 @@ wsl_start_unelevated: true
 # Its state is absent: the apply removes it.
 wsl_rehearsal: true
 # The rehearsal of the move of a distro to another account (role
-# windows_wsl_move_rehearsal). Each phase runs only when given by hand.
-wsl_move_rehearsal: true
+# windows_wsl_move_rehearsal) ended: its switch is off until the next
+# rehearsal, which turns it on here again.
+wsl_move_rehearsal: false
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true
