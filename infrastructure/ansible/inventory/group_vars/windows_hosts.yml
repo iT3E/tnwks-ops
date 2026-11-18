@@ -39,6 +39,30 @@ wsl_rehearsal: false
 # phase (-e wsl_move_rehearsal_phase=<phase>).
 wsl_move_rehearsal: false
 
+# The start tasks of the account that owns the distro (Design Doc 0004,
+# section 5.12; plan task 10.10). Each WSL role registers a copy of each of
+# its start tasks for that account (wsl_move_new_account, in the encrypted
+# variables of the host), with the name of the task and this suffix, so no
+# apply replaces a task of the present account. The phase of a host:
+#   off   wsl_move off (every host today): each task as before, no copy.
+#   move  wsl_move on, not done: each copy is registered disabled, and no
+#         apply changes the enabled state of a start task that exists, of
+#         either account: the window enables and disables them. Both
+#         accounts may write to the folders of the start tasks.
+#   done  wsl_move_done on: each copy is kept enabled, only the account that
+#         owns the distro may write to those folders, and the play no longer
+#         registers the start tasks of the present account. A way back
+#         turns wsl_move_done off first.
+wsl_move_done: false
+wsl_move_task_suffix: -account
+# The description of the account that owns the distro (at most 48
+# characters). The module of the tasks resets the password of an account
+# with this description only (s4u_description).
+wsl_move_new_description: 'tnwks-ops: the account that owns the WSL distro'
+wsl_move_phase: >-
+  {{ 'off' if not (wsl_move | default(false) | bool)
+     else ('done' if wsl_move_done | bool else 'move') }}
+
 # Folders under C:\ProgramData that no role owns. The play gives each the
 # rules for SYSTEM and the Administrators only (tnwks_win_dir_acl, no writer,
 # readers: none): Users get no rule, and each item takes the owner

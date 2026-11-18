@@ -136,8 +136,15 @@ def test_only_the_rehearsal_sets_the_option_that_keeps_the_enabled_state():
     the other roles compare and register as before."""
     module = TASK_MODULE.read_text()
     assert "keep_task_enabled_state = @{ type = 'bool'; default = $false }" in module
-    others = [path for path in ROLES.glob("*/tasks/*.yml") if path.parent.parent.name != ROLE.name]
+    # The WSL roles keep the state of their start tasks while the move of the distro runs only
+    # (test_wsl_move_start_tasks.py).
+    start_roles = ("windows_wsl_maintenance", "windows_lan_bridge", "windows_udp_relay")
+    others = [path for path in ROLES.glob("*/tasks/*.yml") if path.parent.parent.name not in (ROLE.name, *start_roles)]
     assert others and not any("keep_task_enabled_state" in path.read_text() for path in others)
+    for role in start_roles:
+        text = (ROLES / role / "tasks/main.yml").read_text()
+        values = re.findall(r"keep_task_enabled_state: (.*)", text)
+        assert all(value == "\"{{ wsl_move_phase == 'move' }}\"" for value in values), role
     for path in ANSIBLE.glob("playbooks/*.yml"):
         assert "keep_task_enabled_state" not in path.read_text(), path.name
     setup = next(t for t in tasks_of("host_files.yml") if t.get("name") == "Tasks of the accounts")

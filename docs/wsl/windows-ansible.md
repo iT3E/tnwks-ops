@@ -1078,6 +1078,29 @@ uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-0
 It reads no account, right, tile, task, profile or folder of the rehearsal
 left.
 
+## The start tasks of the account that owns the distro
+
+Each WSL role registers a copy of each of its start tasks for the account
+that owns the distro (`wsl_move_new_account`, in the encrypted variables of
+the host), with the name of the task and the suffix `-account`
+(`wsl_move_task_suffix`). No apply replaces a task of the present account.
+The phase of a host (`wsl_move_phase`, `group_vars/windows_hosts.yml`) sets
+what the play does:
+
+| Phase | When | The tasks | The folders of the start tasks |
+| --- | --- | --- | --- |
+| `off` | `wsl_move` off (each host today) | As before. No copy | One writer, as before |
+| `move` | `wsl_move` on, `wsl_move_done` off | Each copy is registered disabled. No apply changes the enabled state of a start task that exists, of either account (`keep_task_enabled_state`): the move window enables and disables them | Both accounts may write |
+| `done` | `wsl_move_done` on | Each copy is kept enabled. The play no longer registers the start tasks of the present account | Only the account that owns the distro may write |
+
+A way back turns `wsl_move_done` off first. The copies run with no
+elevation, so `wsl_move` needs `wsl_start_unelevated`. Each copy is
+registered as SYSTEM, which sets a new random password on the account for
+each registration (`s4u_user`). The copy of the watchdog names the copy of
+the keepalive. From `done` on, the WSL service task starts the copy of the
+keepalive. With `running`, the module does not start a task that is
+disabled while the state is the task's own.
+
 ## Check-only settings
 
 The role `windows_host_settings` (last in the play) only reads. Its single
