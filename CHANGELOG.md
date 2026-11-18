@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.202.0 - 2026-11-18
+
+### Added
+
+* nfs-server: two admission rules list which pods and PersistentVolumes may mount the NFS server of homelab-wsl (nfs-pod-volumes: a namespace, server and exact path for each user of today; nfs-persistent-volumes: the read and write and the read-only volume of each vault share, each with its one claim). They audit and warn only for now; a later change turns them to Deny. A throwaway API server tests the rules (admission/tests/run.sh), and a test checks that each NFS volume in git is on the list (docs/apps/agent-platform.md, "NFS volumes and admission").
+
 ## v2.201.0 - 2026-11-18
 
 ### Added
