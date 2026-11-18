@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: step 2 of the move of the main agent: the snapshot policy and schedule of its state volume, to the backup repository agents-main. The first snapshot runs at once, of the empty volume.'
+time: 2026-11-17T23:40:00.000000+00:00

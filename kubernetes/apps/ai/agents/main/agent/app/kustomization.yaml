@@ -1,19 +1,18 @@
 ---
-# The main agent. Applied now: step 1, the volume and its inbox. No agent
-# pod, no ConfigMap, no Secret, no channel.
+# The main agent. Applied now: step 1, the volume and its inbox, and step 2,
+# its backup policy. No agent pod, no ConfigMap, no Secret, no channel.
 #
 # The files join in the steps of the cutover, one pull request each, in
 # this order (docs/apps/agent-platform-runbook.md, "The cutover of the main
 # agent"). Each step is checked before the next one.
-# 1. Listed: ./pvc.yaml and ./state-inbox.yaml. The inbox is the first pod
+# 1. Done: ./pvc.yaml and ./state-inbox.yaml. The inbox is the first pod
 #    of the volume, so the volume is made on the node of the agent. The
 #    volume is never pruned (its annotation): the way back takes out the
 #    agent and the inbox, never pvc.yaml.
-# 2. Waits: ./backup.yaml, the policy and schedule; the first snapshot runs
+# 2. Listed: ./backup.yaml, the policy and schedule; the first snapshot runs
 #    at once, of the empty volume. It needs the ClusterRepository
-#    agents-main (Ready) and its grant of agents-main, which are not in git
-#    yet (docs/operations/backups.md, "The finance repository", has the
-#    steps for one more repository).
+#    agents-main (Ready) and its grant of agents-main
+#    (docs/operations/backups.md, "The main repository").
 # 3 to 5. Not in git yet: the network policy and the config of the agent,
 #    its Secrets, the restore Job and the Deployment. They follow the
 #    finance agent (../../finance/agent/app), with the tools and channels
@@ -24,3 +23,5 @@ resources:
   # Step 1.
   - ./pvc.yaml
   - ./state-inbox.yaml
+  # Step 2.
+  - ./backup.yaml
