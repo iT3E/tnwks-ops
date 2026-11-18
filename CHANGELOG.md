@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.207.0 - 2026-11-18
+
+### Added
+
+* windows: the address task of the LAN bridge gets a copy for the account that owns the distro, and both accounts may write the address file while the move runs (off on every host)
+
 ## v2.206.0 - 2026-11-18
 
 ### Added
