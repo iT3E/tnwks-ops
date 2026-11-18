@@ -15,11 +15,12 @@
       - wsl_move_present_account | default('') | length > 0
       - wsl_move_new_account | default('') | length > 0
       - wsl_move_present_folder | default('') | length > 0
+      - wsl_move_rehearsed_wsl_version | default('') | length > 0
       - wsl_move_present_account | lower != wsl_move_new_account | lower
       - wsl_move_new_start_tasks | length > 0
     fail_msg: >-
-      wsl_move_present_account, wsl_move_new_account and wsl_move_present_folder are set in the encrypted variables of
-      the host, the two accounts differ, and wsl_move_new_start_tasks names the start tasks of the new account.
+      wsl_move_present_account, wsl_move_new_account, wsl_move_present_folder and wsl_move_rehearsed_wsl_version are set
+      in the encrypted variables of the host, the two accounts differ, and wsl_move_new_start_tasks names the start tasks of the new account.
       Nothing is changed.
     quiet: true
   no_log: true
@@ -64,6 +65,24 @@
 - name: Ansible logs in as the present account, or its window tasks are there
   ansible.builtin.set_fact:
     wsl_move_as_present: "{{ ansible_user | lower == wsl_move_present_account | lower }}"
+  no_log: true
+
+# The procedure runs only on the version of WSL that its rehearsal ran on
+# (section 9, step 3): at every apply, before any write.
+- name: The installed WSL is the version of the rehearsal of the move
+  ansible.windows.win_powershell:
+    parameters:
+      Binary: "{{ wsl_move_service_binary }}"
+      Rehearsed: "{{ wsl_move_rehearsed_wsl_version }}"
+    script: |
+      param([string]$Binary, [string]$Rehearsed)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($Binary).FileVersion
+      if (-not $installed -or $installed.Trim() -ne $Rehearsed.Trim()) {
+          throw 'The installed WSL is not the version of the rehearsal of the move. Nothing is changed.'
+      }
+  check_mode: false
   no_log: true
 
 - name: Read the last marker of the state file
@@ -117,11 +136,17 @@
       Log: "{{ wsl_move_log_file }}"
       Version: "{{ wsl_move_version_file }}"
       Binary: "{{ wsl_move_service_binary }}"
+      Rehearsed: "{{ wsl_move_rehearsed_wsl_version }}"
     script: |
       [CmdletBinding(SupportsShouldProcess)]
-      param([string]$State, [string]$Log, [string]$Version, [string]$Binary)
+      param([string]$State, [string]$Log, [string]$Version, [string]$Binary, [string]$Rehearsed)
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $false
+      # The installed version first: no write on another one.
+      $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($Binary).FileVersion
+      if (-not $installed -or $installed.Trim() -ne $Rehearsed.Trim()) {
+          throw 'The installed WSL is not the version of the rehearsal of the move. Nothing is changed.'
+      }
       foreach ($path in @($State, $Log)) {
           if (-not (Test-Path -LiteralPath $path)) {
               $Ansible.Changed = $true
@@ -130,8 +155,6 @@
       }
       if (-not (Test-Path -LiteralPath $Version)) {
           $Ansible.Changed = $true
-          $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($Binary).FileVersion
-          if (-not $installed) { throw "no file version of $Binary. Nothing is changed." }
           if ($PSCmdlet.ShouldProcess($Version, 'save the version of WSL')) { [IO.File]::WriteAllText($Version, $installed) }
       }
 

@@ -1093,6 +1093,10 @@ window.
   `wsl_move_present_folder`. The role has no default for them, and each
   task that takes one has `no_log`. `wsl_move_new_start_tasks` names the
   start tasks of the new account.
+- **The version of WSL.** `wsl_move_rehearsed_wsl_version`, in the
+  encrypted variables of the host, is the version of WSL that the rehearsal
+  of the move ran on. At each apply, before any write, the play reads the
+  installed version and stops on another one.
 - **Paths.** The role folder is `C:\ProgramData\tnwks-wsl-move`, with
   `disk`, `state` and `log` under it. Each path is in the long, normalized
   form (a drive, then names joined by one backslash). The folder of the new
@@ -1126,6 +1130,13 @@ window.
 - **The probe.** After the tasks, the play runs the probe of the new
   account and stops unless it reads a medium token, no Administrators group
   and a profile under `C:\Users`.
+- **Off or reverted.** The role removes nothing. The account and its
+  profile, its four user rights, its UserList value,
+  `C:\ProgramData\tnwks-wsl-move` with its disk folder and marker, the nine
+  tasks (the boot task runs at each boot and acts only after
+  `window-started`) and the manual start of seclogon stay. Their removal is
+  its own change with the owner's go, and the removal of the account needs
+  a restart.
 
 ## Check-only settings
 

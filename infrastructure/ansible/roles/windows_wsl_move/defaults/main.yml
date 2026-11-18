@@ -18,6 +18,10 @@
 #   wsl_move_present_account  the account that owns the distro today
 #   wsl_move_new_account      the account that will own it (made here)
 #   wsl_move_present_folder   the folder of the disk file today
+#   wsl_move_rehearsed_wsl_version  the version of WSL that the rehearsal of
+#                             the move ran on (the file version of its service
+#                             binary): each apply stops, before any write, on
+#                             another one
 # The play stops before any change when one is not set.
 
 wsl_move_dir: 'C:\ProgramData\tnwks-wsl-move'

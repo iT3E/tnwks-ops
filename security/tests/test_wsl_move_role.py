@@ -22,7 +22,7 @@ ROLE = ANSIBLE / "roles/windows_wsl_move"
 REHEARSAL = ANSIBLE / "roles/windows_wsl_move_rehearsal"
 DEFAULTS = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
 VARS = yaml.safe_load((ROLE / "vars/main.yml").read_text())
-SECRET = ("wsl_move_present_account", "wsl_move_new_account", "wsl_move_present_folder")
+SECRET = ("wsl_move_present_account", "wsl_move_new_account", "wsl_move_present_folder", "wsl_move_rehearsed_wsl_version")
 
 
 def tasks(name: str) -> list[dict]:
@@ -233,3 +233,57 @@ def test_only_the_tasks_that_act_for_the_new_account_run_as_system():
     assert becoming == ["Run the task {{ wsl_move_run.key }}-{{ wsl_move_run.step }}", "Tasks of the new account"]
     for task in ALL:
         assert "become" not in task and "become_user" not in task, task.get("name")
+
+
+def test_each_apply_stops_before_any_write_on_a_wsl_that_is_not_the_rehearsals():
+    """Step 3 of the design: the version of WSL is the version of the rehearsal of the move."""
+    first = tasks("main.yml")[0]["ansible.builtin.assert"]["that"]
+    assert "wsl_move_rehearsed_wsl_version | default('') | length > 0" in first
+    stop = "throw 'The installed WSL is not the version of the rehearsal of the move. Nothing is changed.'"
+    changing = ("tnwks_win_dir_acl", "ansible.windows.win_file", "ansible.windows.win_copy", "tnwks_win_scheduled_task",
+                "ansible.windows.win_service", "ansible.windows.win_user_right", "ansible.windows.win_regedit",
+                "ansible.builtin.include_tasks")
+    main = tasks("main.yml")
+    names = [t.get("name") for t in main]
+    check = main[names.index("The installed WSL is the version of the rehearsal of the move")]
+    module = check["ansible.windows.win_powershell"]
+    assert module["parameters"]["Rehearsed"] == "{{ wsl_move_rehearsed_wsl_version }}"
+    assert stop in module["script"] and check["check_mode"] is False
+    # Before each task that changes something, and the first task that reads the host.
+    first_change = min(i for i, t in enumerate(main) if any(k in t for k in changing)
+                       or "SupportsShouldProcess" in str(t.get("ansible.windows.win_powershell", {}).get("script", "")))
+    first_read = min(i for i, t in enumerate(main) if "ansible.windows.win_powershell" in t)
+    assert names.index("The installed WSL is the version of the rehearsal of the move") == first_read < first_change
+    # The task that saves the version compares first, and writes nothing on another one.
+    save = main[names.index("The state file, the log and the saved version of WSL, only when absent")]["ansible.windows.win_powershell"]
+    assert save["parameters"]["Rehearsed"] == "{{ wsl_move_rehearsed_wsl_version }}"
+    script = save["script"]
+    assert script.index(stop) < script.index("WriteAllText") and script.count("WriteAllText") == 2
+    assert "[IO.File]::WriteAllText($Version, $installed)" in script
+
+
+@needs_pwsh
+def test_the_version_check_stops_on_another_version_and_writes_nothing(tmp_path):
+    main = tasks("main.yml")
+    save = next(t for t in main if t.get("name") == "The state file, the log and the saved version of WSL, only when absent")
+    script = save["ansible.windows.win_powershell"]["script"]
+    encoded = base64.b64encode(script.encode()).decode()
+    out = {}
+    for name, rehearsed in (("same", "2.0.0.0"), ("other", "2.0.1.0")):
+        folder = tmp_path / name
+        folder.mkdir()
+        body = f"""$Ansible = [pscustomobject]@{{ Changed = $false }}
+$binary = '{folder}/wslservice.exe'
+[IO.File]::WriteAllText($binary, 'x')
+$code = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))
+$code = $code.Replace('[Diagnostics.FileVersionInfo]::GetVersionInfo($Binary).FileVersion', "'2.0.0.0'")
+$block = [scriptblock]::Create($code)
+try {{ & $block -State '{folder}/s' -Log '{folder}/l' -Version '{folder}/v' -Binary $binary -Rehearsed '{rehearsed}'; 'ran' }}
+catch {{ $_.Exception.Message }}
+"""
+        result = pwsh(body)
+        out[name] = (result.stdout.strip().splitlines()[-1], sorted(p.name for p in folder.iterdir()))
+    assert out["same"] == ("ran", ["l", "s", "v", "wslservice.exe"])
+    assert out["other"] == ("The installed WSL is not the version of the rehearsal of the move. Nothing is changed.",
+                            ["wslservice.exe"])
+    assert (tmp_path / "same/v").read_text() == "2.0.0.0"
