@@ -25,6 +25,20 @@
     quiet: true
   no_log: true
 
+# Window step 8 enables the start tasks of the new account: the copy
+# (wsl_move_task_suffix) of each WSL task of the present account, apart from
+# the compaction, which has no copy.
+- name: The start tasks of the new account are the copies of the tasks of the present account
+  ansible.builtin.assert:
+    that: >-
+      wsl_move_new_start_tasks | sort
+      == wsl_move_present_tasks | reject('equalto', 'tnwks-vhdx-compact')
+         | map('regex_replace', '$', wsl_move_task_suffix) | sort
+    fail_msg: >-
+      wsl_move_new_start_tasks is not the list of the copies of the WSL tasks of the present account
+      (wsl_move_present_tasks, apart from the compaction). Nothing is changed.
+    quiet: true
+
 - name: Each path of the procedure is in the long, normalized form
   ansible.builtin.assert:
     that: wsl_move_paths | reject('match', wsl_move_path_form) | list | length == 0

@@ -312,3 +312,27 @@ catch {{ $_.Exception.Message }}
     assert out["other"] == ("The installed WSL is not the version of the rehearsal of the move. Nothing is changed.",
                             ["wslservice.exe"])
     assert (tmp_path / "same/v").read_text() == "2.0.0.0"
+
+
+def test_site_2_turns_the_move_on_with_the_copies_that_its_roles_register():
+    host = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
+    assert host["wsl_move"] is True and host["wsl_start_unelevated"] is True
+    # The secrets are in the encrypted file only, never in the public one.
+    assert not set(SECRET) & set(host)
+    group = yaml.safe_load((ANSIBLE / "inventory/group_vars/windows_hosts.yml").read_text())
+    suffix = group["wsl_move_task_suffix"]
+    roles = ANSIBLE / "roles"
+    maintenance = yaml.safe_load((roles / "windows_wsl_maintenance/defaults/main.yml").read_text())
+    bridge = yaml.safe_load((roles / "windows_lan_bridge/defaults/main.yml").read_text())
+    # The copies that the WSL roles register on this host (test_wsl_move_start_tasks.py).
+    copies = [maintenance["wsl_watchdog_task"], bridge["lan_bridge_ip_task"]]
+    copies += [maintenance["wsl_keepalive_task"]] if host["wsl_keepalive_enabled"] else []
+    copies += [relay["task"] for relay in host["udp_relays"]]
+    assert sorted(host["wsl_move_new_start_tasks"]) == sorted(name + suffix for name in copies)
+    # The rule of the role's assert holds for this host.
+    present = [t for t in DEFAULTS["wsl_move_present_tasks"] if t != "tnwks-vhdx-compact"]
+    assert sorted(host["wsl_move_new_start_tasks"]) == sorted(name + suffix for name in present)
+    assert maintenance["vhdx_compact_task"] == "tnwks-vhdx-compact"
+    check = next(t for t in tasks("main.yml")
+                 if t.get("name") == "The start tasks of the new account are the copies of the tasks of the present account")
+    assert "reject('equalto', 'tnwks-vhdx-compact')" in check["ansible.builtin.assert"]["that"]

@@ -48,6 +48,23 @@ wsl_rehearsal: true
 # windows_wsl_move_rehearsal) ended: its switch is off until the next
 # rehearsal, which turns it on here again.
 wsl_move_rehearsal: false
+# Step 3 of the account change (role windows_wsl_move, Design Doc 0004,
+# section 9, step 3), with the owner's go: the account that owns the distro,
+# its tasks, and the procedure of the move window. No apply starts the window.
+# The names of the two accounts, the folder of the disk file today and the
+# version of WSL that the rehearsal of the move ran on are in
+# secrets.sops.yml next to this file. The play stops before any change while
+# one of them is missing.
+wsl_move: true
+# The start tasks of the account that owns the distro, which window step 8
+# enables: the copy of each WSL task of the present account here
+# (wsl_move_present_tasks), apart from the compaction. The play stops on
+# another list.
+wsl_move_new_start_tasks:
+  - tnwks-lan-bridge-ip-account
+  - tnwks-udp-relay-syslog-account
+  - tnwks-wsl-keepalive-account
+  - tnwks-wsl-watchdog-account
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true
