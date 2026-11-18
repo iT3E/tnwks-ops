@@ -66,7 +66,8 @@ spec:
           env:
             # The copy of the state: start/openclaw-state-<release>-<time>.tar.gz,
             # with its .sha256 file next to it.
-            # SET AT STEP 4 from the owner's name, before the merge.
+            # SET AT STEP 4 from the owner's name, before the merge: the
+            # step order test fails while it is SET-ME.
             - name: ARCHIVE
               value: start/openclaw-state-SET-ME.tar.gz
             # The seed of the vault: vault-<time>.tar in archives/seed/.
