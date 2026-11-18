@@ -349,3 +349,52 @@ function netsh {
     assert "netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=2222 connectaddress=172.25.20.9 connectport=22" in out
     assert "netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=443 connectaddress=172.25.20.9 connectport=443" in out
     assert "172.25.20.9" in out.split("Final portproxy table:")[1]
+
+
+# --- windows_udp_relay -----------------------------------------------------------------
+
+UDP = "windows_udp_relay"
+UDP_DEFAULTS = yaml.safe_load((ROLES / UDP / "defaults/main.yml").read_text())
+
+
+def test_the_relays_of_the_present_account_keep_their_state_and_are_left_once_done():
+    task = named(UDP, "Relay tasks (desktop user, at boot and logon, restarted on exit)")
+    module = task["tnwks_win_scheduled_task"]
+    assert module["keep_task_enabled_state"] == MOVE and module["running"] is True
+    assert task["when"] == "wsl_move_phase != 'done'" and "s4u_user" not in module and "vars" not in task
+    assert named(UDP, "The move of the distro needs the start with no elevation")["ansible.builtin.assert"]["that"] == (
+        "wsl_move_phase == 'off' or wsl_start_unelevated | bool")
+
+
+def test_each_relay_has_a_copy_of_the_account_that_owns_the_distro():
+    task = named(UDP, "Relay tasks of the account that owns the distro")
+    module = task["tnwks_win_scheduled_task"]
+    assert task["when"] == "wsl_move_phase != 'off'" and task["loop"] == "{{ udp_relays }}"
+    assert module["name"] == "{{ item.task }}{{ wsl_move_task_suffix }}"
+    assert module["s4u_user"] == "{{ wsl_move_new_account }}"
+    assert module["s4u_description"] == "{{ wsl_move_new_description }}"
+    assert module["keep_task_enabled_state"] == MOVE and module["running"] is True
+    assert "lookup('ansible.builtin.template', 'udp-relay.xml.j2')" in module["xml"]
+    assert "regex_replace('<Settings>', '<Settings><Enabled>false</Enabled>' if wsl_move_phase == 'move'" in module["xml"]
+    become = {key: value for key, value in task["vars"].items() if key.startswith("ansible_become")}
+    assert become == SYSTEM_BECOME and task["vars"]["udp_relay_user"] == "{{ wsl_move_new_account }}"
+    assert task["no_log"] is True and task["notify"] == "Restart UDP relays"
+
+
+def test_both_accounts_write_the_logs_of_the_relays_while_the_move_runs():
+    writers = " ".join(UDP_DEFAULTS["udp_relay_writers"].split())
+    assert writers == ("{{ [udp_relay_user] if wsl_move_phase == 'off' else ([udp_relay_user, "
+                       "wsl_move_new_account] if wsl_move_phase == 'move' else [wsl_move_new_account]) }}")
+    folder = named(UDP, "Log directory of the relays")
+    assert folder["tnwks_win_dir_acl"] == {"path": "{{ udp_relay_log_dir }}", "writer": "{{ udp_relay_writers }}"}
+
+
+def test_the_handler_restarts_the_relays_of_the_phase_that_are_enabled():
+    names = " ".join(UDP_DEFAULTS["udp_relay_task_names"].split())
+    assert names == ("{{ (udp_relays | map(attribute='task') | list if wsl_move_phase != 'done' else []) "
+                     "+ (udp_relays | map(attribute='task') | map('regex_replace', '$', wsl_move_task_suffix) | list "
+                     "if wsl_move_phase != 'off' else []) }}")
+    handler = yaml.safe_load((ROLES / UDP / "handlers/main.yml").read_text())[0]["ansible.windows.win_powershell"]
+    assert handler["parameters"] == {"Tasks": "{{ udp_relay_task_names }}", "SkipDisabled": MOVE}
+    script = handler["script"]
+    assert script.index("if ($SkipDisabled -and $task.State -eq 'Disabled') { continue }") < script.index("Stop-ScheduledTask")
