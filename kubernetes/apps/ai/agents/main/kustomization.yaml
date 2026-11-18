@@ -3,5 +3,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./namespace.yaml
+  # The network policy of the backup movers. It selects no pod until the
+  # backup policy of agent/app is applied.
+  - ./backup-mover.yaml
   - ./sandbox-gateway/ks.yaml
   - ./checks/ks.yaml
+  # The main agent: its state volume and the inbox only, so far
+  # (agent/app/kustomization.yaml).
+  - ./agent/ks.yaml

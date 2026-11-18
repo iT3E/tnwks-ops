@@ -12,6 +12,7 @@ it back. The scenario playbooks that use these backups are in
 | App config PVCs (list below) | kopiur (Kopia) | nightly 02:00-03:00 | S3 `kopiur/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
 | Agent platform PVCs (list below) | kopiur (Kopia), repository `agents` | daily, by each policy | S3 `kopiur-agents/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
 | Finance agent PVC (list below, not yet applied) | kopiur (Kopia), repository `agents-finance` | daily | S3 `kopiur-finance/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
+| Main agent PVC (list below, no backup yet) | kopiur (Kopia), repository `agents-main` (not in git yet) | daily | Its own prefix | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
 | UniFi controller | controller auto-backup (`.unf`), `unifi-gdrive-copy` → nfs-server `/gdrive-sync` → `tnwks-gdrive-sync` | 02:00, 02:15, copied 02:30 | controller PVC + Google Drive `Backup/nfs-gdrive-sync/unifi` | 14 on the controller, 30 on the export, 30 in Drive | 24 h |
 | Aruba SW03 config | `tnwks-aruba-backup` | 02:45, saved when changed | Google Drive `Backup/aruba` | 60 versions | 24 h |
 | Everything declarative | git | every merge | GitHub | full history | 0 |
@@ -104,6 +105,7 @@ domains"):
 | Pilot agent | `agents-pilot/agent-state` | `agent-state-v2` | The state of the product (sessions, workspace) and its archives. Mover user 1000 |
 | Pilot Signal daemon | `agents-pilot/signal-state` | `signal-state` | The keys of the test Signal account and the archive of each start. Mover user 65532 |
 | Finance agent | `agents-finance/agent-state` | `agent-state`, in the repository `agents-finance` | The state of the finance agent and its archives. Mover user 1000. In git, not applied until the volume is ([the finance repository](#the-finance-repository)) |
+| Main agent | `agents-main/agent-state` | `agent-state`, in the repository `agents-main` | The state of the main agent and its archives. Mover user 1000. The volume is applied at step 1 of its cutover; the policy is in git and not applied until the repository `agents-main` is `Ready`, which comes in the steps of [the finance repository](#the-finance-repository) |
 
 The snapshots of the pilot agent from before the move (policy `agent-state`)
 stay in the shared repository until they are deleted; the runbook restores

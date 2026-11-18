@@ -3,7 +3,7 @@
 What to do when an alert of the agent platform fires, when an agent does
 not answer on its channel, a sandbox does not start, web search does not
 work or memory search finds nothing, how to restore the
-state of an agent, how the finance agent moves from the host, how to stop the workflow agent fast, how to move a trust
+state of an agent, how the finance agent moves from the host, a draft of the move of the main agent, how to stop the workflow agent fast, how to move a trust
 domain to Bedrock by hand, and what to do at a limit of the Claude plan. The
 parts and their config are in [`agent-platform.md`](agent-platform.md); this
 page is the operator's side. Each alert of the platform links to its own
@@ -1856,6 +1856,201 @@ finance until their retention ends.
 | 8 | The first message, the tool call and the vault read | Owner | The exit check |
 | 9 | The checks, the backups, the restore test, the heartbeat entry | Lead (the restore test with the owner's go) | The exit check |
 | 10 | The host cleanup, after the way back closes | Owner (host) | None |
+
+## The cutover of the main agent
+
+**Draft.** The main agent moves from the host to `agents-main` (phase 6 of
+the platform). It follows [The cutover of the finance
+agent](#the-cutover-of-the-finance-agent): the same files, the same order
+of merges, the same checks and the same rules. This section names only what
+is different. A step marked **waits for the owner** has no file in git
+until the owner decides it. Steps 1 and 2 of the merges are in
+`kubernetes/apps/ai/agents/main/agent/app/`; the files of steps 3 to 5 come
+from the finance agent, with the changes below.
+
+The differences from finance:
+
+- **Two channels, two go's.** The main agent has two Telegram bots and the
+  Signal number of the household. Telegram moves first. Signal moves later,
+  with its own go of the owner, its own steps and its own exit check
+  ([The Signal move](#the-signal-move)). Until then the host keeps the
+  Signal number, and the main agent on the platform has Telegram only.
+- **Two bots, one poller each.** The rule of finance holds for each bot:
+  the host stops both bots before the pod starts, and the pod polls both.
+- **No finance app.** The main agent does not use the finance app (D69):
+  no MCP gateway client of finance, no proxy, no read port, and no
+  `firefly__` tool.
+- **The tools are open.** The list of the tools of the main agent and the
+  trust domain of each credential is open (D3). The config, the network
+  policy and the Secrets of steps 3 and 4 wait for that list.
+- **Messages between agents stop.** On the host the main agent and the
+  finance agent can send messages to each other. On the platform they
+  can not (Design Doc, section 4.1.3, the owner's decision of 2026-11-10).
+  The owner tells the household before the cutover.
+- **Messages to a person.** If the main agent must send a message to a
+  person on its own, the hold of each such message comes back first, as a
+  plugin hook (D16). D16 is open.
+- **A repository of its own.** One repository for each trust domain: the
+  backup policy of step 2 needs the ClusterRepository `agents-main`, made
+  in the steps of [the finance repository](../operations/backups.md#the-finance-repository)
+  with the name `agents-main` and a prefix that starts with no other prefix
+  (for example `kopiur-main/`).
+
+### The order of the merges
+
+| Step | The change | What the merge applies | The check | The way back |
+| --- | --- | --- | --- | --- |
+| 1 | List `pvc.yaml` and `state-inbox.yaml` | The volume `agent-state` and the inbox pod, on the node of the agent pods. No product code, no secret, no network | `kubectl -n agents-main get pvc agent-state` is `Bound`; `kubectl get pv <its volume> -o jsonpath='{.spec.nodeAffinity}'` names `homelab-wsl-worker-2`; `kubectl -n agents-main logs deploy/agent-state-inbox` is `state-inbox result=ready` | Take the inbox out. The volume stays: it has `kustomize.toolkit.fluxcd.io/prune: disabled` |
+| Repo | The repository `agents-main`: the role, the certificate and the password, the session, the repository with its grant of `agents-main` ([the steps](../operations/backups.md#the-finance-repository), with the names of main) | Four merges, as for finance | `kubectl get clusterrepository agents-main` is `Ready` | The same steps in the reverse order |
+| 2 | List `backup.yaml` | The snapshot policy and schedule to the repository `agents-main`. The first snapshot runs at once, of the empty volume | `kubectl -n agents-main get snapshots.kopiur.home-operations.com`: one `Succeeded`. No `KopiurSnapshotFailed` | None needed: the policy stays with the volume |
+| 3 | **Waits for the owner** (the tools, D3). The owner puts the values in `secret.sops.yaml` and the entry `agents-main` in the key list of the model gateway | The key `agents-main` at the model gateway. Nothing in `agents-main` | `kubectl -n ai logs deploy/litellm -c ensure-keys` has `agents-main: created` (or `updated`) | Revert. The key stays at the model gateway until it is removed in the admin UI |
+| Host | The owner stops the two bots of the main agent on the host, makes the copy of the main agent, and puts it in the volume | Nothing in git | The checksum and the count of the copy | Turn the two bots on again on the host |
+| 4 | Out `state-inbox.yaml`; in `restore-job.yaml` (with `ARCHIVE` set), the Secrets, the config, the network policy and `deployment.yaml` (still `replicas: 0`) | The Job checks each member of the archive, then puts the copy in place as `state/`. No pod | As step 4 of finance: the Job is `1/1`, and its log has `restore result=ok` with the count of the owner | Revert step 4, then turn the two bots on again on the host |
+| 5 | Out `restore-job.yaml`; `replicas: 1` in `deployment.yaml` | The agent pod starts and polls the two bots | [The cutover](#the-cutover-on-telegram) | [The way back](#the-way-back-of-the-main-agent) |
+
+After step 5: the restore test of the state (a template
+`main/agent/restore-test/`, made from the one of finance), and
+`openclaw-agents-main` in `SERVICES` of
+`agents/monitoring/app/heartbeat-check.yaml` after its first heartbeat in
+Tempo.
+
+### Before the cutover
+
+The values are the owner's (R4), as for finance. The keys of
+`agent-secret` follow the config, so the list is open until D3 is
+decided. What is known now:
+
+| Key | The value |
+| --- | --- |
+| `OPENCLAW_GATEWAY_TOKEN` | A new random value: `openssl rand -hex 32` |
+| `LITELLM_API_KEY` | A new key: `sk-agents-main-` and `openssl rand -hex 24`. The same value goes in a new entry of `keys.json`: alias `agents-main`, models `["agents-main"]` ([litellm.md](litellm.md#keys-of-the-agent-platform)). If the main agent gets memory search, the model gateway needs an embedding entry for main first, as finance has one, and the entry lists it too |
+| The tokens of the two bots | The tokens that the host uses now, one key for each bot. The names of the keys follow the accounts of the config |
+| `TELEGRAM_ALLOW_FROM` | The numeric Telegram user ids that the main agent takes messages from, as on the host. **Waits for the owner:** who is on the list |
+| Each tool credential | **Waits for the owner** (D3): a new value of its own for each tool, never a copy of a credential of the host |
+
+The Signal keys (`SIGNAL_ACCOUNT`, `SIGNAL_ALLOW_FROM`) are not set at this
+cutover. They come with [The Signal move](#the-signal-move).
+
+Before step 5 the owner also decides: the tools and their credentials (D3),
+and the hold of messages to a person (D16), and he tells the household that
+messages between the main agent and the finance agent stop.
+
+### The copy of the main agent
+
+As [The inventory of a move](#the-inventory-of-a-move) and [The copy of the
+state](#the-copy-of-the-state) of finance, with these changes:
+
+- The copy holds the **workspace of the main agent only**: not the finance
+  agent, not the reviewer, and no other agent of the host (R6).
+- No seed of a vault, unless the inventory finds a folder that the main
+  agent reads. Then the owner decides if it comes as a seed, as for finance
+  (D71).
+- No step for the finance app. Each instruction file, script or skill that
+  names a tool that the main agent does not get on the platform changes in
+  the copy, not on the host, as in step 2 of the finance copy. The rule for
+  a script holds: one file, run as `python3 <file>.py`.
+- The scheduled jobs of the main agent are in the inventory, and they go
+  off on the host at step 1 of the cutover.
+- The Signal account state stays on the host. It is not in this copy.
+
+### The cutover on Telegram
+
+As [The cutover](#the-cutover) of finance, with these changes:
+
+1. **The host stops the two bots.** The owner turns off both Telegram
+   accounts of the main agent in the config of the host gateway, and its
+   scheduled jobs. The Signal channel of the host stays on. Check: both
+   accounts not running, and a message to each bot gets no answer.
+2. **The copy.** Check: the checksum is `OK`, and the count is written down.
+3. **Merge step 4.** Stop point: the restore Job fails.
+4. **Merge step 5.** Checks, read only: the pod is ready with no restart,
+   the start lines of the pod have no `result=failed`, and Telegram has no
+   `409 Conflict` for either bot.
+5. **The first message**, on each bot, by the owner: a question that the
+   memory answers.
+
+### The exit check on Telegram
+
+1. **One turn on each bot**, with one tool call that the decided tool list
+   has (**waits for the owner**, D3).
+2. **The scheduled checks** of `agents-main` pass on their next runs:
+   `platform-check-isolation` and `platform-check-probe`.
+3. **The backups.** The first nightly snapshot with the state is
+   `Succeeded`, and the daily archive of the backup container is in the
+   log with `instruction-check result=first`.
+4. **The restore test** with that snapshot (owner's go), as for finance,
+   with no vault count.
+5. **The heartbeat.** The first heartbeat of `openclaw-agents-main` is in
+   Tempo; then the pull request that adds it to `SERVICES`.
+
+**Pass.** Each step passed, and no alert of `agents-main` fired from step 1
+of the merges, but the ones named in a step.
+
+### The Signal move
+
+**Waits for the owner**, with its own go, after the main agent runs on
+Telegram. It needs three things first:
+
+1. **The test of the Signal copy** (Design Doc, section 11, and the Signal
+   half of pilot condition C5): with a test number, does the copy of the
+   account on the host still work after the daemon on the platform handled
+   messages? The pilot has not run it: the pilot has no test Signal number
+   yet.
+2. **The notice to the household:** a time when Signal can be down.
+3. **The Signal daemon of main:** the daemon of the pilot
+   (`pilot/signal-daemon/`) as `main/signal-daemon/`, with its volume, its
+   backup policy in the repository `agents-main`, and a network policy that
+   lets in the agent pod of main only.
+
+**No way back, unless the test says so.** The Design Doc says: the first
+message on the platform is the point of no return, unless the test showed
+that the old copy works. If the test shows that the copy on the host stops
+working, the way back after the first message is a new link of the account
+by the owner, and the members who use Signal get no message until then.
+The Telegram channel still works in that time.
+
+The steps, in short (each one waits for the test and the go):
+
+1. The host stops its Signal channel.
+2. The owner copies the account state of the host into the volume of the
+   daemon. How is open: the daemon has no inbox and no restore step yet.
+3. A merge turns on the daemon, the Signal channel of the agent, its plugin,
+   the rule to the daemon in the network policy of the agent, and the two
+   Signal keys.
+4. **The exit check on Signal:** one turn on Signal, and the evidence
+   records the result of the test of the copy.
+
+### The way back of the main agent
+
+- **Telegram, before step 5:** a pull request takes out the files of step 4
+  and the inbox, if it is still in. Then the owner turns the two bots on
+  again on the host.
+- **Telegram, after step 5:** as for finance: turn off the scheduled jobs of
+  the pod, set `replicas: 0`, then the owner turns the two bots on again on
+  the host, with the state of the day of the cutover. The memory written on
+  the platform since then is not on the host; copy it out first, read only,
+  as for finance.
+- **Signal:** see [The Signal move](#the-signal-move).
+
+The volume, its backup policy and its snapshots stay, as for finance.
+
+### Who does what, in order (main)
+
+| # | Step | Who | Blocks |
+| --- | --- | --- | --- |
+| 1 | Merge 1 (volume, inbox) and its check | Lead writes, owner merges | Step 4 |
+| 2 | The repository `agents-main`: the role (Terraform apply), the certificate and the password (SOPS values), the session, the repository | Lead writes; the owner approves the apply and makes the values, or gives them to the lead as for finance | Merge 2 |
+| 3 | Merge 2 (backup policy) and its check | Lead writes, owner merges | Step 4 |
+| 4 | The tools and their credentials (D3), and the hold of messages to a person (D16) | Owner (gate) | Merges 3 and 4 |
+| 5 | The values of `agent-secret` and the entry of `keys.json` | Owner (R4) | Merge 4 |
+| 6 | The notice to the household: messages between the agents stop | Owner | Step 7 |
+| 7 | The go of the cutover on Telegram, for a time with no other change | Owner (gate) | The host steps |
+| 8 | The host: the two bots off, the scheduled jobs off, the copy | Owner (host) | Merge 4 |
+| 9 | The pull requests of steps 4 and 5, and their checks | Lead writes, owner merges | The exit check |
+| 10 | The first messages and the tool call on each bot | Owner | The exit check |
+| 11 | The checks, the backups, the restore test, the heartbeat entry | Lead (the restore test with the owner's go) | The exit check |
+| 12 | The test of the Signal copy, the notice of a Signal down time, and the go of the Signal move | Owner (gate) | The Signal move |
+| 13 | The host cleanup, after the way back of each channel closes | Owner (host) | None |
 
 ## Stop the workflow agent fast
 

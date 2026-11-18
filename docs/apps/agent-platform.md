@@ -160,6 +160,7 @@ to the shared repository of the other apps
 | S3 session | CronJob `aws-backup-credentials-agents`: certificate CN `homelab-wsl-agent-backups` to the role `tnwks-rolesanywhere-backups-agents`, which lists, reads and writes `kopiur-agents/` and nothing else (`rolesanywhere_backups_prefixed` in `environments/prod/aws/main.tf`). Secret `aws-backup-sts-agents` |
 | Policies | `agents-pilot`: `agent-state-v2` (the agent) and `signal-state` (the Signal daemon), in `pilot/*/app/backup.yaml` |
 | Finance | Its own repository: ClusterRepository `agents-finance`, prefix `kopiur-finance/`, password `kopiur-system/kopiur-repository-agents-finance`, role `tnwks-rolesanywhere-backups-agents-finance` (certificate CN `homelab-wsl-agents-finance-backups`), Secret `aws-backup-sts-agents-finance`, policy `agent-state` in `finance/agent/app/backup.yaml`. Set up in steps, and not all applied yet ([`backups.md`](../operations/backups.md#the-finance-repository)) |
+| Main | Its own repository `agents-main`, not in git yet. The policy `agent-state` in `main/agent/app/backup.yaml` is not applied until it is `Ready` ([The cutover of the main agent](agent-platform-runbook.md#the-cutover-of-the-main-agent)) |
 
 kopiur copies this session and this password into the namespace of the trust
 domain before each mover run. So a mover there, and anything that reads the
