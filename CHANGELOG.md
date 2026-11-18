@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.205.0 - 2026-11-18
+
+### Added
+
+* windows: the watchdog and the keepalive get copies for the account that owns the distro, under their own names, with the phase of the move per host (off on every host); the folder module takes a list of writers, and a task whose state is its own is not started while it is disabled
+
 ## v2.204.0 - 2026-11-18
 
 ### Added
