@@ -11,7 +11,8 @@
 
     # Each moment in Administrators is in the log of the procedure. A join
     # passes only in a run of the rehearsal's group test (mode forward or
-    # wayback), and each join has its leave in the same run.
+    # wayback, or a boot run with the boot request of the group test), and
+    # each join has its leave in the same run.
     - name: Read the moments in Administrators from the log
       ansible.windows.win_powershell:
         parameters:
@@ -45,7 +46,7 @@
                   }
                   if ($text -match '^group: \S+ (joined|left) Administrators$') {
                       $shown += "$($f[0]) $($f[1]) $($Matches[1])"
-                      $test = $req -and $req.rehearsal_group_test -and $mode -in @('forward', 'wayback')
+                      $test = $req -and $req.rehearsal_group_test -and $mode -in @('forward', 'wayback', 'boot')
                       if (-not $test) { $problems += "a group step outside the group test: $line" }
                       if ($Matches[1] -eq 'joined') {
                           if ($inside) { $problems += "a second join: $line" }

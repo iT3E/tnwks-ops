@@ -758,9 +758,9 @@ lead's read of the nodes (Ready, and the same address) covers the live VM.
 | `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon), and the check reads back each file by its SHA-256. A second setup over A's distro at its path imports nothing and writes the files again. A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config, no WSL) |
 | `window` | First a read of the state that the window starts from, before any task starts: the last marker, A's disk file at its path and none at B's path or in the side folder, no list of disabled tasks, A's batch right, A's start task enabled and B's disabled; and after a way back the file had the owner, the protection and the explicit rules that step 4 saved (the play prints whether its inherited rules are those that its folder gives, and does not stop on it). Only after these checks do A's disk file and folder get the rules of an older WSL, as in setup; then A reads its distro and B lists none. The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file (B the owner, as below), both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. With B's start task started, the file has the rule of step 4 and a rule of B's VM; after B's stop task (a clean stop), no rule of a VM. Then B imports, unregisters and imports again into the same folder, and the file keeps its rule |
 | `wayback` | First a read that no run of the window task or the boot task goes on: the phase stops with nothing changed when one does. Then, after a done window, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). The check takes a refusal at the start, a last result that is not 0, or no new run in its wait, each with no result of this run: a task that ran well in an earlier window keeps the last result 0 of that run. Then B removes SYSTEM and the Administrators from the rules of its disk file (the stated case; `-e wsl_move_rehearsal_wayback_strip_case=false` leaves it out for one run, and the way back and each other check stay as they are). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro, the file has the saved owner, protection and explicit rules (the folder gives the inherited ones), and B lists none. After A left the group, the play removes an icon of the shortcut in A's folder that A does not own (see the icon below). `-e wsl_move_rehearsal_wayback_group_steps=false` runs the way back with no group step and no group test, as a standard A, as the boot run does: the check that the task can not start is left out, the play gives A its batch right (A holds it after `interrupt`) and removes an icon in A's folder that A does not own, both before the run; the log has no group moment, and the procedure starts A's start task itself |
-| `interrupt` | First a read of the icon of the shortcut in A's folder: the phase stops with nothing changed when A does not own it. Then the window with no group step, stopped after step 5: the file in the folder of B, no account lists the distro, and the last marker is that of a started window |
-| `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task |
-| `after-boot` | The boot task ran the way back once: its marker first, no group step, no restart. The play checks this right after its read of the log, so a boot run that did not end the way back stops the phase before any task of A or B starts. A owns the distro, B lists none. Started again by hand, the boot task does nothing and writes no marker |
+| `interrupt` | First a read of the icon of the shortcut in A's folder: the phase stops with nothing changed when A does not own it. The play removes a boot request of an earlier run. Then the window with no group step, stopped after step 5, in both cases below: the file in the folder of B, no account lists the distro, and the last marker is that of a started window. With `-e wsl_move_rehearsal_boot_group_steps=true` (the boot run of the group test, one run for each word of the owner), the play then writes the boot request: two booleans, read back |
+| `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task. Before it, the play prints the boot request (or none), and the groups check reads each account in Users only: the phase stops before the restart otherwise |
+| `after-boot` | The boot task ran the way back once: its marker first, no group step, no restart. The play checks this right after its read of the log, so a boot run that did not end the way back stops the phase before any task of A or B starts. A owns the distro, B lists none. Started again by hand, the boot task does nothing and writes no marker. With `-e wsl_move_rehearsal_boot_group_steps=true` (as given to `interrupt`): the request of the boot run has the group steps and the group test, its log has A's join, the stop of A's VM and the leave, in that order, the start of A's start task is left to the play, and the boot request is spent. A holds its own batch right; the play removes an icon in A's folder that A does not own, reads that the count of the VM processes is that of the baseline (after a restart only the count compares), starts A's start task and reads the token of each WSL process of A: none has the Administrators group enabled. The groups at the end read A in Users only |
 | `remove-before-restart` | See the removal |
 | `restart` | The second restart, with its own go and time. The boot task finds no started window and does nothing |
 | `remove` | See the removal. Then the exit check |
@@ -908,17 +908,43 @@ only when A is not its owner). The phase `wayback` removes such an icon
 after A leaves the group, or before a way back with no group step; the
 phase `interrupt` only reads it, and stops when it is there.
 
+**The boot run of the group test.** The rehearsal shows the group step at
+boot only by the owner's word, once for each word: `interrupt` with
+`-e wsl_move_rehearsal_boot_group_steps=true` writes a boot request (a file
+in the state folder, `boot-request.json`, not one of the copies) after its
+window, and the boot run takes the group steps and the group test from it.
+A joins Administrators at way back step 1, after the restart, and the end of
+the run takes it out whatever the result: when the import back ran, A's
+stop task first ends the VM that the import started in the group, the run
+waits for no WSL process of A, and then A leaves. The stop runs once in a
+run (the time limit of the task holds one): a stop that fails is logged,
+and the leave comes all the same. The run removes the request at its
+end, only once A is out of the group, so the request holds for one boot run.
+A power loss in the run leaves A in Administrators and the request in
+place: the next boot run takes A out first, before it reads the marker, and
+the check play counts that leave as a problem (A was in the group across a
+restart). With no boot run before it, the groups check of the next phase,
+or the removal, finds A in the group. The procedure refuses a group test with `restart` on (a restart
+in the run would keep A in the group). With a config of the rehearsal (the
+one with a boot request file) it also refuses, in each mode, group steps
+and a group test that are not equal (from a request or from the boot part
+of the config): the rehearsal has no join without its leave. The real
+procedure runs the group steps with no group test, and its config has no
+boot request file. A boot request that
+is not two equal booleans stops the boot run with nothing changed. Only the
+boot mode reads the boot request.
+
 **What stays unproven here.** The procedure and the boot task restart the
 host only with `restart` on in their config, and the rehearsal keeps it
 off: they log "would restart", and a unit test shows that the line runs only
 with the switch on. The restarts of the rehearsal come from the play. The
-boot run has the group steps off, so no temporary account is in
-Administrators across a restart; the group step of the way back is shown in
-the phase `wayback`, in a normal run, not at boot. So the boot run shows a
-standard A that imports back at boot, a case of its own: the real present
-account is still in Administrators at a way back that comes before window
-step 7. The check for a session
-of the owner (site 1) is not built: the procedure refuses a config with it
+boot run has the group steps off by default, so a standard A imports back
+at boot, a case of its own: the real present account is still in
+Administrators at a way back that comes before window step 7. The boot run
+of the group test (above) shows the group step at boot, once for each word
+of the owner. No temporary account is in Administrators across a restart in
+either case, a power loss in the boot run aside (above). The check for a
+session of the owner (site 1) is not built: the procedure refuses a config with it
 on. After a way back with no restart, it starts the start tasks of the
 present account (the third case of the design, a session of the owner, ends
 the same way); in the group test, A leaves Administrators first and the play

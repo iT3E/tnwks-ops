@@ -6,6 +6,16 @@
 # across the restart. The next phase is restart: the boot task runs the way
 # back once. Before the window, A's folder holds no icon of the shortcut that
 # A does not own.
+#
+# The boot run of the group test (wsl_move_rehearsal_boot_group_steps, off by
+# default; each such run needs the owner's word): the window runs as above,
+# with no group step, and leaves no account in Administrators across the
+# restart. Only the boot run differs: the play writes the boot request after
+# the window, and the boot run takes it. A then joins Administrators at way
+# back step 1, after the restart, and leaves at the end of that run, whatever
+# its result. The boot run removes the request at its end, so it holds for
+# one boot run only. With the switch off, the play removes any boot request
+# before the window.
 
 - name: The live parts at the start
   ansible.builtin.include_tasks: live.yml
@@ -32,9 +42,37 @@
   vars:
     wsl_move_rehearsal_icon_action: assert
 
+- name: The boot run of this window
+  ansible.builtin.set_fact:
+    wsl_move_rehearsal_boot_group: "{{ wsl_move_rehearsal_boot_group_steps | default(false) | bool }}"
+
+- name: The boot run of this window, as asked
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'The boot run has the group steps and the group test: A joins Administrators after the restart and leaves at the end of
+      that run (one run, as the owner asked).' if wsl_move_rehearsal_boot_group else
+      'The boot run has no group step: a standard A imports back.' }}
+
 - name: The interrupted window, and the reads after it
   when: not ansible_check_mode
   block:
+    # A boot request of an earlier run would set the group steps of this
+    # window's boot run: none is kept.
+    - name: Remove a boot request of an earlier run
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ wsl_move_rehearsal_boot_request_file }}"
+        script: |
+          param([string]$Path)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = [bool](Test-Path -LiteralPath $Path)
+          if ($Ansible.Changed) { Remove-Item -LiteralPath $Path -Force }
+          if (Test-Path -LiteralPath $Path) { throw "The boot request is still there: $Path" }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+
     - name: The window procedure, forward to its step 5 only
       ansible.builtin.include_tasks: run_procedure.yml
       vars:
@@ -57,6 +95,31 @@
           - not check_a.result.registered
         fail_msg: "The interrupted window did not read as it should: {{ check_a }} {{ wsl_move_rehearsal_procedure.log }}"
         quiet: true
+
+    # Only after the window stopped as it should: the request holds for the
+    # boot run of this window. Two booleans, read back.
+    - name: Write the boot request of this window, with the group steps
+      when: wsl_move_rehearsal_boot_group
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ wsl_move_rehearsal_boot_request_file }}"
+          Json: "{{ {'group_steps': true, 'rehearsal_group_test': true} | to_json }}"
+        script: |
+          param([string]$Path, [string]$Json)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $true
+          [IO.File]::WriteAllText($Path, $Json)
+          $read = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+          if ($read.group_steps -ne $true -or $read.rehearsal_group_test -ne $true -or
+              $read.group_steps -isnot [bool] -or $read.rehearsal_group_test -isnot [bool]) {
+              throw "The boot request did not read back as two booleans that are true: $Json"
+          }
+          [pscustomobject]@{ written = $Json }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_boot_request
 
 - name: The groups at the end
   ansible.builtin.include_tasks: groups.yml

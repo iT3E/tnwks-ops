@@ -122,9 +122,14 @@ wsl_move_rehearsal_window_config:
     window_tasks: "{{ wsl_move_rehearsal_window_tasks.b }}"
     start_tasks: ["{{ wsl_move_rehearsal_prefix }}-b-start"]
   # The boot task: no temporary account goes into Administrators across a
-  # restart, so the group steps are off at boot.
+  # restart. The group steps and the group test are off at boot, unless the
+  # boot request (boot_request_file, written by the phase interrupt) turns
+  # them on for one boot run: A then joins at way back step 1, after the
+  # restart, and leaves at the end of that run.
   boot:
     group_steps: false
+    rehearsal_group_test: false
+  boot_request_file: "{{ wsl_move_rehearsal_boot_request_file }}"
 
 wsl_move_rehearsal_configs:
   config-a: >-
