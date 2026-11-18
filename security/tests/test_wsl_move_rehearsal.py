@@ -903,10 +903,14 @@ class TnwksSecurity {
         # A file that SYSTEM made: the rules that its folder gives, owner the Administrators.
         return 'O:BA' + [TnwksSecurity]::FileGives([TnwksSecurity]::ReadSddl([IO.Path]::GetDirectoryName($Path)), 'BA', [TnwksSecurity]::ReadGroup($Path))
     }
-    # $global:Attrs: the attributes of a file (by folder/name); Archive (0x20) by default.
-    static [int] ReadAttributes([string]$Path) {
+    # The attributes of the entry itself, as GetFileAttributes reads them (a link is not
+    # followed), or -1 with no entry. $global:Attrs: the attributes of a file (by
+    # folder/name).
+    static [int] ReadEntryAttributes([string]$Path) {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+        if (-not $item) { return -1 }
         if ($global:Attrs -and $global:Attrs.ContainsKey([TnwksSecurity]::Leaf($Path))) { return $global:Attrs[[TnwksSecurity]::Leaf($Path)] }
-        return 0x20
+        return [int]$item.Attributes
     }
     # $global:Groups: the group of a file (by its path, or by folder/name); SYSTEM by default.
     static [string] ReadGroup([string]$Path) {
@@ -1733,6 +1737,9 @@ ICONS = {
     "made by the account, with generic rights": (lambda sid: f"O:{sid}D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;{sid})", 0x20),
     "the right to write, not to delete": (lambda sid: f"O:SYD:P(A;;FA;;;SY)(A;;FW;;;BA)(A;;FW;;;{sid})", 0x20),
     "rules for the children only": (lambda sid: f"O:SYD:P(A;;FA;;;SY)(A;OIIO;FA;;;BA)(A;OIIO;FA;;;{sid})", 0x20),
+    "an object rule": (lambda sid: f"O:{sid}D:AI(OD;;CR;00299570-246d-11d0-a768-00aa006e0529;;S-1-1-0)(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;{sid})", 0x20),
+    "a conditional rule": (lambda sid: f"O:{sid}D:AI(XD;;FA;;;S-1-1-0;(Member_of {{SID(S-1-5-32-545)}}))(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;{sid})", 0x20),
+    "encrypted": (lambda sid: f"O:{sid}D:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;{sid})", 0x4020),
     "owned by the Administrators, no rule for the account": (lambda sid: "O:BAD:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)", 0x20),
     "a deny entry": (lambda sid: f"O:{sid}D:AI(D;;0x40000;;;S-1-1-0)(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;{sid})", 0x20),
     "read-only": (lambda sid: f"O:{sid}D:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;{sid})", 0x21),
@@ -1741,6 +1748,10 @@ ICONS = {
 }
 ICON_PROBLEM = {"owned by the Administrators, no rule for the account": "no rule that gives the right to write",
                 "rules for the children only": "no rule that gives the right to write",
+                # A deny of either form counts as a deny rule too.
+                "an object rule": "an object or conditional rule, 1 deny rule(s)",
+                "a conditional rule": "an object or conditional rule, 1 deny rule(s)",
+                "encrypted": "the attribute encrypted",
                 "the right to write, not to delete": "no rule that gives the right to write and delete it",
                 "a deny entry": "1 deny rule(s)", "read-only": "the attribute read-only",
                 "hidden": "the attribute hidden", "system": "the attribute system"}
@@ -1775,7 +1786,8 @@ def test_window_step_1_reads_the_icon_in_both_folders_before_any_change(tmp_path
     write and delete. Each with no deny entry and none of the attributes read-only, hidden
     and system. Any other icon stops the window with nothing changed, and no step deletes
     it. An icon that passes is replaced by the import, or deleted by the unregister."""
-    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL}, **icon_kw(tmp_path, folder, name))
+    # The real present account is a member of the Administrators before the window.
+    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL}, admins=(A_SID,), **icon_kw(tmp_path, folder, name))
     icon = Path(out["root"]) / folder / "shortcut.ico"
     passes = name.startswith("made by the account") or (folder == "a" and name.startswith("owned by the Administrators"))
     if passes:
@@ -1783,8 +1795,8 @@ def test_window_step_1_reads_the_icon_in_both_folders_before_any_change(tmp_path
         # The unregister of the present account deleted the icon of its folder.
         assert ("icon deleted by tnwks-moverh-a-unregister" in out["calls"]) == (folder == "a"), out["calls"]
         return
-    assert out["code"] == 3 and out["markers"] == [] and out["sec_calls"] == [] and out["admins"] == [], out["log"]
-    assert not any(c.startswith(("join ", "disable ", "start ")) for c in out["calls"]), out["calls"]
+    assert out["code"] == 3 and out["markers"] == [] and out["sec_calls"] == [] and out["admins"] == [A_SID], out["log"]
+    assert not any(c.startswith(("join ", "leave ", "disable ", "start ")) for c in out["calls"]), out["calls"]
     stop = [line for line in out["log"] if line.startswith("stop at step 1: the icon ")]
     assert len(stop) == 1 and ICON_PROBLEM[name] in stop[0] and stop[0].endswith("Nothing is changed."), out["log"]
     assert f"{folder}/shortcut.ico has " in stop[0].replace("\\", "/") and A_SID not in stop[0] and B_SID not in stop[0], stop
@@ -1793,13 +1805,15 @@ def test_window_step_1_reads_the_icon_in_both_folders_before_any_change(tmp_path
 
 @needs_pwsh
 def test_window_step_1_reads_the_old_icon_for_the_account_of_the_import_back(tmp_path):
-    """With no group steps, the import back runs as the present account alone: an icon
-    that only the Administrators can write stops the window. Both folders are named."""
+    """Step 1 reads the membership of the present account in the group, not the request:
+    with the group steps on and the account not a member, the import back would count
+    the account alone, and an icon that only the Administrators can write stops the
+    window. Both folders are named."""
     kw = icon_kw(tmp_path, "a", "owned by the Administrators, no rule for the account")
     both = icon_kw(tmp_path, "b", "hidden")
     kw["acls"].update(both["acls"])
     kw["faults"] = "$global:Attrs = @{ 'b/shortcut.ico' = 0x22 }"
-    out = run_window(tmp_path, {"mode": "forward", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}, **kw)
+    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL}, **kw)
     assert out["code"] == 3 and out["markers"] == [], out["log"]
     stop = [line.replace("\\", "/") for line in out["log"] if line.startswith("stop at step 1: the icon ")]
     assert len(stop) == 2 and "a/shortcut.ico has no rule that gives the right to write and delete it" in stop[0], stop
@@ -1807,13 +1821,52 @@ def test_window_step_1_reads_the_old_icon_for_the_account_of_the_import_back(tmp
 
 
 @needs_pwsh
+@pytest.mark.parametrize("kind", ["a directory", "a link to a good file", "a broken link"])
+@pytest.mark.parametrize("folder", ["a", "b"])
+def test_window_step_1_refuses_an_icon_that_is_not_a_plain_file_and_follows_no_link(tmp_path, folder, kind):
+    """The read takes the entry itself: a directory, or a link (to a file with rules that
+    pass, or to nothing), stops the window at step 1 with nothing changed."""
+    root = tmp_path / "root"
+    (root / folder).mkdir(parents=True)
+    entry = root / folder / "shortcut.ico"
+    acls = {}
+    if kind == "a directory":
+        entry.mkdir()
+    else:
+        target = tmp_path / "elsewhere.ico"
+        if kind == "a link to a good file":
+            target.write_text("icon")
+            acls = {str(target): ICONS["made by the account"][0](A_SID if folder == "a" else B_SID)}
+        entry.symlink_to(target)
+    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL}, admins=(A_SID,), faults="$global:Acls += " + (
+        "@{ " + "; ".join(f"'{k}' = '{v}'" for k, v in acls.items()) + " }"))
+    stop = [line for line in out["log"] if line.startswith("stop at step 1: the icon ")]
+    want = "the attribute directory" if kind == "a directory" else "the attribute reparse point"
+    assert out["code"] == 3 and out["markers"] == [] and len(stop) == 1 and want in stop[0], out["log"]
+    assert stop[0].endswith("Nothing is changed.") and "the rules:" not in stop[0], stop
+    assert not any(c.startswith(("join ", "leave ", "disable ", "start ")) for c in out["calls"]), out["calls"]
+
+
+def test_each_read_of_the_icon_takes_the_entry_itself():
+    """Test-Path follows a link, and reads a broken one as no entry: no read of the icon
+    uses it. Each takes the attributes of the entry (GetFileAttributesW, which does not
+    follow a link)."""
+    text = WINDOW.read_text()
+    body = re.search(r"function Get-TnwksIconProblem\(.*?\n\}", text, re.DOTALL)[0]
+    assert "Test-Path" not in body and "[TnwksSecurity]::ReadEntryAttributes($path)" in body
+    assert "static extern uint GetFileAttributesW(string name);" in text
+    step5 = re.search(r"# The unregister deletes the icon of the distro as its account\.\n(.*)\n", text)[1]
+    assert step5.startswith("    Assert-Tnwks ([TnwksSecurity]::ReadEntryAttributes((Join-Path $present.folder $TnwksIconName)) -eq -1)"), step5
+
+
+@needs_pwsh
 def test_an_icon_left_in_the_old_folder_after_step_5_sends_the_window_back(tmp_path):
-    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL},
+    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL}, admins=(A_SID,),
                      **{**icon_kw(tmp_path, "a", "made by the account"), "faults": "$global:KeepIcon = $true"})
     fail = [line for line in out["log"] if line.startswith("fail: check failed: an icon is left in ")]
     assert len(fail) == 1 and fail[0].endswith(" after the unregister"), out["log"]
     assert "the way back starts" in out["log"] and out["log"][-1] == "result: went-back", out["log"]
-    assert "start tnwks-moverh-b-import" not in out["calls"] and JOIN in out["calls"], out["calls"]
+    assert "start tnwks-moverh-b-import" not in out["calls"] and out["admins"] == [A_SID] and LEAVE not in out["calls"], out["calls"]
 
 
 @needs_pwsh
@@ -1822,7 +1875,7 @@ def test_the_icon_of_the_new_folder_is_read_again_before_window_step_6(tmp_path,
     """An icon that comes into the folder of the new account after step 1: the read
     before the import of step 6 sends the window back, while the present account is
     still a member of the Administrators."""
-    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL}, faults=icon_written_at("tnwks-moverh-a-unregister", "b", name))
+    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL}, admins=(A_SID,), faults=icon_written_at("tnwks-moverh-a-unregister", "b", name))
     if name.startswith("made by the account"):
         assert out["code"] == 0 and out["log"][-1] == "result: done", out["log"]
         return

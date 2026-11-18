@@ -370,8 +370,20 @@ public static class TnwksSecurity {
             } finally { LocalFree(sd); }
         }
     }
-    // The attributes of a file (FILE_ATTRIBUTE_*), as a number.
-    public static int ReadAttributes(string path) { return (int)System.IO.File.GetAttributes(path); }
+    // The attributes of the entry at a path itself (FILE_ATTRIBUTE_*), or -1
+    // when there is none. GetFileAttributes gives the attributes of a
+    // symbolic link, not of its target, so a link reads as a reparse point
+    // and a broken link as an entry (Microsoft: GetFileAttributesW).
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern uint GetFileAttributesW(string name);
+    public static int ReadEntryAttributes(string path) {
+        uint a = GetFileAttributesW(path);
+        if (a != 0xFFFFFFFF) return (int)a;
+        int e = Marshal.GetLastWin32Error();
+        // ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND: no entry.
+        if (e == 2 || e == 3) return -1;
+        throw new Win32Exception(e, "read the attributes of " + path);
+    }
     // The group of a file (G:, as SDDL without the prefix), or '' with none.
     public static string ReadGroup(string path) {
         using (SafeFileHandle h = Open(path, READ_CONTROL)) {
@@ -639,13 +651,16 @@ function Add-TnwksFolderMarker([string]$Folder, [string]$Sid) {
 # file, and fails on a file with the attribute hidden or system; a file with
 # the attribute read-only can not be written (Microsoft: CreateFile). An
 # unregister deletes the icon as its account. So a read before each import
-# checks that the account of the import can write the icon that is there.
-# The read counts the allow rules of the SIDs given only: the account, and
-# the Administrators when the account imports as a member. A right that
-# another group gives does not count, so the read can refuse an icon that
-# the import could write, never the other way. Any deny rule is refused, as
-# are the three attributes. The read changes nothing: no step deletes an
-# icon.
+# checks that the entry there is a plain file that the account of the import
+# can write. The read takes the entry itself and follows no link: an entry
+# with the attribute directory, reparse point or encrypted is refused, as
+# are read-only, hidden and system, and its rules are read only for a plain
+# file. In the rules, it counts the allow rules of the SIDs given only: the
+# account, and the Administrators when the account imports as a member. Any
+# deny rule is refused, and any object or conditional rule. Each import
+# also requires its own result of this run: an import that fails for any
+# other cause fails its check (window step 6 then goes back, and way back
+# step 5 stops). The read changes nothing: no step deletes an icon.
 $TnwksIconName = 'shortcut.ico'
 $TnwksWrite = [int64]0x120116   # FILE_GENERIC_WRITE
 $TnwksDelete = [int64]0x10000   # DELETE
@@ -657,21 +672,31 @@ $TnwksFileGeneric = @{ [int64]0x10000000 = [int64]0x1F01FF; [int64]0x40000000 = 
 # ('' for no icon, or an icon that it can replace): each problem, in words.
 function Get-TnwksIconProblem([string]$Folder, [string[]]$Sids, [int64]$Need) {
     $path = Join-Path $Folder $TnwksIconName
-    if (-not (Test-Path -LiteralPath $path)) { return '' }
+    $read = [TnwksSecurity]::ReadEntryAttributes($path)
+    if ($read -eq -1) { return '' }
     $problems = @()
-    $attributes = [IO.FileAttributes][TnwksSecurity]::ReadAttributes($path)
-    foreach ($a in @('ReadOnly', 'Hidden', 'System')) {
-        if ($attributes.HasFlag([IO.FileAttributes]$a)) { $problems += "the attribute $(@{ ReadOnly = 'read-only'; Hidden = 'hidden'; System = 'system' }[$a])" }
+    $attributes = [IO.FileAttributes]$read
+    $names = [ordered]@{ ReadOnly = 'read-only'; Hidden = 'hidden'; System = 'system'; Directory = 'directory'
+        ReparsePoint = 'reparse point'; Encrypted = 'encrypted' }
+    foreach ($a in $names.Keys) {
+        if ($attributes.HasFlag([IO.FileAttributes]$a)) { $problems += "the attribute $($names[$a])" }
+    }
+    # A directory or a link: its rules are not read.
+    if ($attributes.HasFlag([IO.FileAttributes]::Directory) -or $attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+        return "the icon $path has $($problems -join ', ')"
     }
     $sddl = Get-TnwksSddl $path
     $dacl = if ($sddl -match 'D:[A-Z]*((\([^)]*\))*)') { $Matches[1] } else { '' }
     [int64]$mask = 0; $deny = 0
+    # An object rule (OA, OD) or a conditional rule (XA, XD): the read does not
+    # take its form.
+    if ($dacl -match '\((O|X)[A-Z]*;' -or $sddl -match '\((O|X)[A-Z]*;') { $problems += 'an object or conditional rule' }
     foreach ($ace in @([regex]::Matches($dacl, '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value })) {
         $f = $ace -split ';'
         if ($f.Count -lt 6) { continue }
         # An inherit-only rule does not apply to the file itself.
         if ($f[1] -match 'IO') { continue }
-        if ($f[0] -ne 'A') { $deny++; continue }
+        if ($f[0] -ne 'A') { if ($f[0] -match '^(D|OD|XD)$') { $deny++ }; continue }
         # SDDL writes the Administrators as BA.
         $sid = ConvertTo-TnwksSddlSid $f[5]
         if ($sid -eq 'BA') { $sid = 'S-1-5-32-544' }
@@ -827,11 +852,14 @@ function Invoke-TnwksForward {
         Write-Log 'step 1: the disk file has the inherited rules that its folder gives, and no rule that the way back refuses'
     }
     # (1) The icon in each folder, before any change. The old folder: for an
-    # import back by the present account, a member of the Administrators with
-    # the group steps (write and delete: the unregister of step 5 deletes it).
-    # The folder of the new account: for its import at step 6.
+    # import back by the present account, with the Administrators when it is
+    # a member now (write and delete: the unregister of step 5 deletes it).
+    # The group test of the rehearsal puts its account into the group just
+    # after this read, so there it counts as a member. The folder of the new
+    # account: for its import at step 6.
+    $member = (Test-TnwksAdmin $pSid) -or [bool]$req.rehearsal_group_test
     $icons = @(
-        (Get-TnwksIconProblem $present.folder (Get-TnwksImportSids $pSid ([bool]$req.group_steps)) ($TnwksWrite -bor $TnwksDelete)),
+        (Get-TnwksIconProblem $present.folder (Get-TnwksImportSids $pSid $member) ($TnwksWrite -bor $TnwksDelete)),
         (Get-TnwksIconProblem $new.folder @($nSid) ($TnwksWrite -bor $TnwksDelete)) | Where-Object { $_ })
     if ($icons.Count) {
         foreach ($i in $icons) { Write-Log "stop at step 1: $i. An import there would fail. Nothing is changed." }
@@ -893,7 +921,7 @@ function Invoke-TnwksForward {
     Assert-Tnwks ((Test-Path -LiteralPath $newPath) -and (Get-Item -LiteralPath $newPath).Length -eq $size) 'the disk file changed in the unregister'
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $present.folder $cfg.marker_name)) 'the old folder or its marker is gone'
     # The unregister deletes the icon of the distro as its account.
-    Assert-Tnwks (-not (Test-Path -LiteralPath (Join-Path $present.folder $TnwksIconName))) "an icon is left in $($present.folder) after the unregister"
+    Assert-Tnwks ([TnwksSecurity]::ReadEntryAttributes((Join-Path $present.folder $TnwksIconName)) -eq -1) "an icon is left in $($present.folder) after the unregister"
     Write-Log 'step 5 passed'
     if ([int]$req.stop_after -eq 5) {
         Write-Log 'stop after step 5 (the rehearsal): the marker of a started window stays'

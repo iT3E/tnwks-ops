@@ -915,16 +915,20 @@ phase `interrupt` only reads it, and stops when it is there.
 
 **The reads of the icon in the procedure.** The window procedure reads the
 icon (`shortcut.ico`) before each import, for the account of that import,
-and deletes none. A read passes with no icon, or with one that has none of
-the attributes read-only, hidden and system, no deny entry, and an allow
-rule that gives the account of the import the rights it needs
-(`FILE_GENERIC_WRITE`, and `DELETE` where its unregister deletes it). Only
-the rules of that account count, and of the Administrators when the account
-imports as a member (the group steps): a right from another group does not
-count, so a read can refuse an icon that the import could write, never the
-other way. Window step 1 reads both folders before any change: the old
-folder for an import back by the present account (write and delete), and
-the folder of the new account for its import (write and delete). Either
+and deletes none. It reads the entry itself and follows no link. A read
+passes with no entry, or with a plain file that has none of the attributes
+read-only, hidden, system, directory, reparse point and encrypted, no deny
+entry, no object or conditional entry, and an allow rule that gives the
+account of the import the rights it needs (`FILE_GENERIC_WRITE`, and
+`DELETE` where its unregister deletes it). Only the rules of that account
+count, and of the Administrators when the account is a member of the group
+(at step 1, the group test of the rehearsal counts as a member, as it joins
+right after). Each import also requires its own result of this run: an
+import that fails for any other cause fails its check (window step 6 then
+goes back, and way back step 5 stops). Window step 1 reads both
+folders before any change: the old folder for an import back by the
+present account (write and delete), and the folder of the new account for
+its import (write and delete). Either
 read stops the window with nothing changed. After window step 5 no icon may
 be left in the old folder, and before window step 6 the read of the folder
 of the new account runs again; a fail at either sends the window back.
