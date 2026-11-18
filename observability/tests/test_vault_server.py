@@ -215,3 +215,34 @@ def test_the_values_check_of_the_agent_finds_one_hash():
     (agent,) = [k for k in route("finance")["policies"]["apiKey"]["keys"]
                 if k["metadata"]["client"] == "finance"]
     assert found == [agent["keyHash"]]
+
+
+# The backup of the share
+
+
+BACKUP = FINANCE / "vault-backup"
+
+
+def test_the_backup_comes_after_the_share_and_the_repository_and_holds_nothing_up():
+    ks = kind(BACKUP / "ks.yaml", "Kustomization")["spec"]
+    assert ks["targetNamespace"] == "agents-finance"
+    assert ks["path"] == "./kubernetes/apps/ai/agents/finance/vault-backup/app"
+    assert ks["dependsOn"] == [{"name": "agents-finance-vault-share"},
+                               {"name": "kopiur-agents-finance-repository"}]
+    # No other Kustomization depends on it, and it does not wait.
+    assert ks["wait"] is False
+    listed = kind(FINANCE / "kustomization.yaml", "Kustomization")["resources"]
+    assert listed.index("./vault-backup/ks.yaml") > listed.index("./vault-share/ks.yaml")
+
+
+def test_the_share_goes_to_the_finance_repository_as_the_state_volume_does():
+    policy = kind(BACKUP / "app/backup.yaml", "SnapshotPolicy")["spec"]
+    state = kind(FINANCE / "agent/app/backup.yaml", "SnapshotPolicy")["spec"]
+    assert policy["repository"] == {"kind": "ClusterRepository", "name": "agents-finance"}
+    # The read-only claim: the mover never writes the share.
+    assert policy["sources"] == [{"pvc": {"name": "vault-ro"}}]
+    for key in ("copyMethod", "compression", "credentialProjection", "mover", "retention"):
+        assert policy[key] == state[key], key
+    schedule = kind(BACKUP / "app/backup.yaml", "SnapshotSchedule")["spec"]
+    assert schedule["policyRef"] == {"name": "vault"}
+    assert schedule["schedule"]["cron"] == "H 2 * * *"

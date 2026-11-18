@@ -20,3 +20,5 @@ resources:
   # The vault server of the share, behind the central MCP gateway
   # (vault-server/ks.yaml). Not yet the read-only mount of the agent.
   - ./vault-server/ks.yaml
+  # The nightly snapshot of the share (vault-backup/ks.yaml).
+  - ./vault-backup/ks.yaml

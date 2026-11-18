@@ -290,7 +290,8 @@ read only. The parts come in steps; this table says what is there now.
 | Exports | `/vault-main` (`Export_Id` 3) and `/vault-finance` (4): read and write for the three nodes of homelab-wsl only, each client squashed to uid and gid 1000, the owner of the root (mode 0700) |
 | Volumes and claims in the trust domains | Two static PersistentVolumes for each share and their two claims, `vault-rw` and `vault-ro`, in `agents-main` and `agents-finance` (`kubernetes/apps/ai/agents/<domain>/vault-share/`). Bound, and mounted by no pod |
 | The vault server of finance | `vault-server` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-server/`): one pod on `vault-rw`, behind the route `finance-vault` of the central MCP gateway (below) |
-| The vault server of main, the mount of the agent, the backup of the share | Not yet |
+| The backup of the finance share | The SnapshotPolicy `vault` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-backup/`): each night, the claim `vault-ro` to the repository `agents-finance`, with the retention of the state volume |
+| The vault server of main, the mount of the agent | Not yet |
 
 Each share has two volumes, one for each claim:
 
@@ -318,8 +319,8 @@ that does not set it would get a mount that writes.
 
 What is still not there: the vault server of main and its route, the
 mount of `vault-ro` in the agent pod with the extra path of the index, the
-backup policy of each share, the first notes of a share, and the change of
-the two admission rules to `Deny`.
+backup policy of the main share, the restore test of a share, the first
+notes of a share, and the change of the two admission rules to `Deny`.
 
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may

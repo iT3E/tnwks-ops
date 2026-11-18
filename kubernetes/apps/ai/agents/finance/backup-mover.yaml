@@ -1,7 +1,9 @@
 ---
 # The movers of kopiur (the backup operator) in this namespace: the Jobs that
-# copy the state volume of the finance agent to its Kopia repository
-# (agent/app/backup.yaml), and the restore movers. default-deny
+# copy the state volume of the finance agent and the finance share to its
+# Kopia repository (agent/app/backup.yaml, vault-backup/app/backup.yaml),
+# and the restore movers. The mover of the share reads it through the NFS
+# mount of the kubelet, so no rule names the NFS server. default-deny
 # (namespace.yaml) covers them too. Out: the S3 endpoint of the repository
 # (kopiur-system/agents-finance-repository/app/clusterrepository.yaml), and
 # the API server, where a mover writes the status of its run (ClusterRole
