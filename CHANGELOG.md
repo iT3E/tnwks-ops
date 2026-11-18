@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.194.1 - 2026-11-18
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the stops of the procedure at setup give their test config a boot request path of its own, in the test folder. Before, that path was the one in the state folder of the rehearsal, so with a boot request there the boot cases of the stops would read it, could take an account out of Administrators, and would remove it at their end. No path of the test config is now in the state folder.
+
 ## v2.194.0 - 2026-11-18
 
 ### Added
