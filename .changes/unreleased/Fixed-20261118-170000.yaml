@@ -1,3 +1,0 @@
-kind: Fixed
-body: "Windows hosts, the window procedure of the move: each read of the rules, the read of the group and the set of the owner of a file by SYSTEM open the file through one open (TnwksSecurity.Open). It opens the entry at the path itself (FILE_FLAG_OPEN_REPARSE_POINT), with identification only for a server behind the path, and takes it only when it is a file or a directory of a disk, not a reparse point, with one name, and with a final path that is the path itself. Each refusal closes the handle before any rule is read or written. Tests check the flags of the open and each refusal with stand-ins for the calls of Windows."
-time: 2026-11-18T17:00:00.000000+00:00
