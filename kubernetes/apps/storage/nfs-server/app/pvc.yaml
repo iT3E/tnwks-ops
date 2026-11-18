@@ -29,3 +29,33 @@ spec:
   resources:
     requests:
       storage: 2Gi
+---
+# The share of each trust domain with a vault (docs/apps/agent-platform.md,
+# "The vault shares"): one claim each, in the form of nfs-gdrive-sync, which
+# the server exports as /vault-main and /vault-finance (configmap.yaml).
+# The class binds at the first pod, the server, on its node.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-vault-main
+  namespace: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: "${STORAGE_CLASS_DEFAULT}"
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-vault-finance
+  namespace: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: "${STORAGE_CLASS_DEFAULT}"
+  resources:
+    requests:
+      storage: 2Gi
