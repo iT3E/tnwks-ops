@@ -1,0 +1,74 @@
+---
+# The two volumes of the share /vault-main (docs/apps/agent-platform.md,
+# "The vault shares"). Each one is on the list of the admission rule
+# nfs-persistent-volumes (kubernetes/apps/storage/nfs-server/admission), with
+# its name, server, path, read-only flag and claim, and an apply that
+# differs is refused there once that rule denies.
+#
+# - The server is the node address of the NFS server (host network): a
+#   kernel mount of a node does not reach a ClusterIP here. If the server
+#   moves to another node, these volumes change.
+# - Retain: Flux deletes a volume when its file goes out of git, and the
+#   files of the share stay. They are on the claim of the export in storage
+#   (nfs-vault-main), not on this object.
+# - The capacity is the size of that claim. NFS does not enforce it; a claim
+#   binds only to a volume at least as big as its request.
+# - The source and the claim of a volume can not change after it is made: a
+#   change of either one is a new volume.
+#
+# The vault server, the one writer, mounts it with `hard`: a write waits for
+# the NFS server and does not end half done. The values are the proposal of
+# the rehearsal, which the design leaves open.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-vault-main-rw
+spec:
+  capacity:
+    storage: 2Gi
+  # NFS does not enforce the access mode. The one writer is the one pod that
+  # names the claim vault-rw.
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+  nfs:
+    server: 10.5.0.3
+    path: /vault-main
+    readOnly: false
+  claimRef:
+    namespace: agents-main
+    name: vault-rw
+---
+# The agent pod (for the index) and the backup mover mount it read only,
+# with `soft`, a short timeout and a short attribute cache: a read fails
+# with an error about 30 seconds after the NFS server stops, and the chat
+# goes on. `soft` can damage data in a write; this mount has no write. The
+# values are the proposal of the rehearsal, which the design leaves open.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-vault-main-ro
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes: ["ReadOnlyMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions:
+    - nfsvers=4.1
+    - soft
+    - timeo=50
+    - retrans=2
+    - actimeo=3
+  nfs:
+    server: 10.5.0.3
+    path: /vault-main
+    # The kubelet mounts it read only. The export itself lets each node
+    # write: this flag and the one writer are the control.
+    readOnly: true
+  claimRef:
+    namespace: agents-main
+    name: vault-ro

@@ -3,9 +3,11 @@
 
 The rules themselves run on a throwaway API server in
 admission/tests/run.sh. These tests check what that harness can not see: that
-each NFS volume in the manifests of this repository is on the list of pods,
-that the list holds nothing else, that the volumes of the shares come in
-pairs, and that the bindings are still Audit and Warn only.
+each NFS volume of a pod in the manifests of this repository is on the list
+of pods, that the list holds nothing else, that the volumes of the shares
+come in pairs, that the PersistentVolumes in git are the ones of the list
+and each one and its claim name each other, and that the bindings are still
+Audit and Warn only.
 """
 
 import ast
@@ -23,6 +25,11 @@ USERS = {
     "kubernetes/apps/production/sites/app/deployment.yaml": "production",
     "kubernetes/apps/tools/actions-runner-controller/runner/app/helmrelease.yaml": "tools",
     "kubernetes/apps/networking/unifi/app/gdrive-copy.yaml": "networking",
+}
+# The volumes and claims of the share of each trust domain with a vault.
+SHARES = {
+    "main": ROOT / "kubernetes/apps/ai/agents/main/vault-share",
+    "finance": ROOT / "kubernetes/apps/ai/agents/finance/vault-share",
 }
 
 
@@ -52,16 +59,49 @@ def nfs_sources(node):
             yield from nfs_sources(value)
 
 
-def nfs_in_git() -> dict[str, list[dict]]:
-    found = {}
+def docs_with_nfs():
     for path in sorted((ROOT / "kubernetes").rglob("*.yaml")):
         text = path.read_text()
-        if not re.search(r"^\s*nfs:\s*$", text, re.MULTILINE):
+        if re.search(r"^\s*nfs:\s*$", text, re.MULTILINE):
+            for doc in yaml.safe_load_all(text):
+                if doc:
+                    yield str(path.relative_to(ROOT)), doc
+
+
+def nfs_in_git() -> dict[str, list[dict]]:
+    """The NFS volumes of pods, by file: each NFS source but a PersistentVolume."""
+    found = {}
+    for path, doc in docs_with_nfs():
+        if doc.get("kind") == "PersistentVolume":
             continue
-        sources = [s for d in yaml.safe_load_all(text) if d for s in nfs_sources(d)]
+        sources = list(nfs_sources(doc))
         if sources:
-            found[str(path.relative_to(ROOT))] = sources
+            found.setdefault(path, []).extend(sources)
     return found
+
+
+def volumes_in_git() -> dict[str, tuple[str, dict]]:
+    """Each PersistentVolume with an NFS source, by name, with its file."""
+    found = {}
+    for path, doc in docs_with_nfs():
+        if doc.get("kind") == "PersistentVolume" and "nfs" in doc["spec"]:
+            assert doc["metadata"]["name"] not in found, doc["metadata"]["name"]
+            found[doc["metadata"]["name"]] = (path, doc)
+    return found
+
+
+def claims_of_share(domain: str) -> dict[str, dict]:
+    """The claims of a share, by namespace and name. The namespace is the
+    targetNamespace of its Flux Kustomization, as Flux applies it."""
+    (ks,) = [d for d in yaml.safe_load_all((SHARES[domain] / "ks.yaml").read_text()) if d]
+    namespace = ks["spec"]["targetNamespace"]
+    docs = [d for d in yaml.safe_load_all((SHARES[domain] / "app/claims.yaml").read_text()) if d]
+    claims = {}
+    for doc in docs:
+        assert doc["kind"] == "PersistentVolumeClaim"
+        assert doc["metadata"].get("namespace", namespace) == namespace
+        claims[(namespace, doc["metadata"]["name"])] = doc
+    return claims
 
 
 def test_each_nfs_volume_in_git_is_on_the_list_of_pods():
@@ -132,3 +172,79 @@ def test_homelab_wsl_lists_the_policies():
     assert yaml.safe_load((ADMISSION / "kustomization.yaml").read_text())["resources"] == [
         "./nfsvolumes.yaml"
     ]
+
+
+def test_the_volumes_in_git_are_the_volumes_of_the_list():
+    found = volumes_in_git()
+    listed = allowed("nfs-persistent-volumes")
+    assert sorted(found) == sorted(entry[0] for entry in listed)
+    for name, server, path, read_only, namespace, claim in listed:
+        source, doc = found[name]
+        spec = doc["spec"]
+        assert source.startswith("kubernetes/apps/ai/agents/"), source
+        assert spec["nfs"] == {"server": server, "path": path, "readOnly": read_only == "true"}, (
+            name
+        )
+        assert spec["claimRef"] == {"namespace": namespace, "name": claim}, name
+        assert spec["persistentVolumeReclaimPolicy"] == "Retain", name
+        assert spec["storageClassName"] == "", name
+        assert "namespace" not in doc["metadata"], name
+
+
+def test_each_volume_names_its_claim_and_each_claim_its_volume():
+    volumes = volumes_in_git()
+    claims = {}
+    for domain in SHARES:
+        claims.update(claims_of_share(domain))
+    by_ref = {
+        (doc["spec"]["claimRef"]["namespace"], doc["spec"]["claimRef"]["name"]): name
+        for name, (_, doc) in volumes.items()
+    }
+    assert sorted(by_ref) == sorted(claims)
+    for key, claim in claims.items():
+        name = by_ref[key]
+        volume = volumes[name][1]["spec"]
+        spec = claim["spec"]
+        assert spec["volumeName"] == name, key
+        assert spec["storageClassName"] == "", key
+        assert spec["accessModes"] == volume["accessModes"], key
+        assert parse_size(spec["resources"]["requests"]["storage"]) <= parse_size(
+            volume["capacity"]["storage"]
+        )
+        assert "selector" not in spec and not claim["metadata"].get("labels"), key
+
+
+def test_the_writer_mounts_hard_and_the_readers_soft():
+    for name, (_, doc) in volumes_in_git().items():
+        spec = doc["spec"]
+        options = spec["mountOptions"]
+        assert options[0] == "nfsvers=4.1", name
+        if spec["nfs"]["readOnly"]:
+            assert name.endswith("-ro") and spec["accessModes"] == ["ReadOnlyMany"], name
+            assert options == ["nfsvers=4.1", "soft", "timeo=50", "retrans=2", "actimeo=3"], name
+        else:
+            assert name.endswith("-rw") and spec["accessModes"] == ["ReadWriteMany"], name
+            assert options == ["nfsvers=4.1", "hard"], name
+
+
+def test_each_share_is_applied_after_the_policies():
+    for domain, base in SHARES.items():
+        (ks,) = [d for d in yaml.safe_load_all((base / "ks.yaml").read_text()) if d]
+        spec = ks["spec"]
+        assert ks["metadata"]["name"] == f"agents-{domain}-vault-share"
+        assert spec["targetNamespace"] == f"agents-{domain}"
+        assert spec["path"] == f"./{base.relative_to(ROOT)}/app"
+        assert {"name": "nfs-admission"} in spec["dependsOn"]
+        assert spec["wait"] is True
+        parent = yaml.safe_load((base.parent / "kustomization.yaml").read_text())["resources"]
+        assert "./vault-share/ks.yaml" in parent
+        assert yaml.safe_load((base / "app/kustomization.yaml").read_text())["resources"] == [
+            "./volumes.yaml",
+            "./claims.yaml",
+        ]
+
+
+def parse_size(size: str) -> int:
+    units = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40}
+    number, unit = re.fullmatch(r"(\d+)(Ki|Mi|Gi|Ti)", size).groups()
+    return int(number) * units[unit]
