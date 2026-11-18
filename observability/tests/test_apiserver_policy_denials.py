@@ -1,11 +1,13 @@
-"""The scrape of the API server on homelab-wsl keeps the denials of one policy.
+"""The scrape of the API server on homelab-wsl keeps the checks of three policies.
 
 kubernetes/clusters/wsl/apps/kustomization.yaml patches the HelmRelease of
 kube-prometheus-stack. It replaces the regex of the first metric relabeling of
-the API server with the regex of the HelmRelease plus one name, and adds three
-rules that keep only the series of the admission policy
+the API server with the regex of the HelmRelease plus one name, and adds rules
+that keep only the series of the admission policy
 agents-backup-mover-configmaps with enforcement_action="deny" (the alert
-AgentBackupMoverConfigMapDenied). The first test checks that the regex stays
+AgentBackupMoverConfigMapDenied), and the series of the two policies of NFS
+volumes with enforcement_action "audit" or "deny" (the count of the volumes
+they would refuse, then refuse). The first test checks that the regex stays
 the one of the HelmRelease plus that name. The second runs the patched rules
 in Prometheus, in a container with no network, against a sample of the
 metrics of an API server.
@@ -26,6 +28,7 @@ WSL = ROOT / "kubernetes/clusters/wsl/apps/kustomization.yaml"
 RELABELINGS = "/spec/values/kubeApiServer/serviceMonitor/metricRelabelings"
 NAME = "apiserver_validating_admission_policy_check"
 POLICY = "agents-backup-mover-configmaps"
+NFS_POLICIES = ("nfs-pod-volumes", "nfs-persistent-volumes")
 
 
 def base_relabelings():
@@ -82,6 +85,10 @@ SAMPLE = f"""\
 apiserver_validating_admission_policy_check_total{{enforcement_action="deny",error_type="invalid_error",policy="{POLICY}",policy_binding="{POLICY}"}} 2
 apiserver_validating_admission_policy_check_total{{enforcement_action="warn",error_type="invalid_error",policy="{POLICY}",policy_binding="{POLICY}"}} 1
 apiserver_validating_admission_policy_check_total{{enforcement_action="deny",error_type="invalid_error",policy="workflow-run-jobs",policy_binding="workflow-run-jobs"}} 22
+apiserver_validating_admission_policy_check_total{{enforcement_action="audit",error_type="invalid_error",policy="nfs-pod-volumes",policy_binding="nfs-pod-volumes"}} 3
+apiserver_validating_admission_policy_check_total{{enforcement_action="warn",error_type="invalid_error",policy="nfs-pod-volumes",policy_binding="nfs-pod-volumes"}} 3
+apiserver_validating_admission_policy_check_total{{enforcement_action="deny",error_type="invalid_error",policy="nfs-persistent-volumes",policy_binding="nfs-persistent-volumes"}} 1
+apiserver_validating_admission_policy_check_total{{enforcement_action="audit",error_type="invalid_error",policy="nfs-volumes-other",policy_binding="nfs-volumes-other"}} 4
 # TYPE apiserver_validating_admission_policy_check_duration_seconds histogram
 apiserver_validating_admission_policy_check_duration_seconds_bucket{{enforcement_action="deny",error_type="invalid_error",policy="{POLICY}",policy_binding="{POLICY}",le="+Inf"}} 2
 apiserver_validating_admission_policy_check_duration_seconds_sum{{enforcement_action="deny",error_type="invalid_error",policy="{POLICY}",policy_binding="{POLICY}"}} 0.01
@@ -113,7 +120,7 @@ def snake(rule):
     return {keys.get(key, key): value for key, value in rule.items()}
 
 
-def test_prometheus_keeps_only_the_denials_of_the_policy():
+def test_prometheus_keeps_only_the_checks_of_the_three_policies():
     binary = docker()
     work = scratch()
     (work / "srv").mkdir()
@@ -146,13 +153,19 @@ def test_prometheus_keeps_only_the_denials_of_the_policy():
         for series in result
         if not series["metric"]["__name__"].startswith(("up", "scrape_"))
     )
+
+    def check(action, policy):
+        return (
+            ("__name__", "apiserver_validating_admission_policy_check_total"),
+            ("enforcement_action", action),
+            ("error_type", "invalid_error"),
+            ("policy", policy),
+            ("policy_binding", policy),
+        )
+
     assert kept == [
         (("__name__", "apiserver_request_total"), ("code", "200"), ("verb", "GET")),
-        (
-            ("__name__", "apiserver_validating_admission_policy_check_total"),
-            ("enforcement_action", "deny"),
-            ("error_type", "invalid_error"),
-            ("policy", POLICY),
-            ("policy_binding", POLICY),
-        ),
+        check("audit", NFS_POLICIES[0]),
+        check("deny", POLICY),
+        check("deny", NFS_POLICIES[1]),
     ], kept
