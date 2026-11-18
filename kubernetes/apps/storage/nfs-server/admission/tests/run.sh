@@ -4,13 +4,15 @@
 #   uv run --project observability kubernetes/apps/storage/nfs-server/admission/tests/run.sh
 #
 # It starts a throwaway control plane in containers: etcd, kube-apiserver
-# (the version of the clusters) and kube-controller-manager with the one
-# controller that type-checks a policy, on a Docker network with no route
-# out. It
-# runs test_nfs_volumes.py in a plain Python image on that network. The
-# policies and the pods of today's users of the NFS server come from git, as
-# JSON (render.py, in the Python of the repository, which has a YAML parser).
-# No kubelet runs, so no pod starts: each pod is a dry run.
+# (the version of the clusters) and kube-controller-manager with two
+# controllers, the one that type-checks a policy and the binder of volumes
+# and claims, on a Docker network with no route out. It runs
+# test_nfs_volumes.py in a plain Python image on that network. The policies,
+# the pods of today's users of the NFS server and the volumes and claims of
+# the vault shares come from git, as JSON (render.py, in the Python of the
+# repository, which has a YAML parser). No kubelet runs, so no pod starts:
+# each pod is a dry run. The API server writes its audit log to its output;
+# audit.py reads it at the end.
 #
 # Nothing touches a real cluster: no kubeconfig of the workstation goes into
 # a container, the test talks to the throwaway API server only, and the
@@ -93,6 +95,20 @@ contexts:
     context: {cluster: test, user: controllers}
 current-context: test
 EOF
+  # The audit log: the metadata of each change of a pod or a volume, which
+  # holds the audit annotations of the admission policies.
+  cat >audit-policy.yaml <<'EOF'
+apiVersion: audit.k8s.io/v1
+kind: Policy
+omitStages: ["RequestReceived"]
+rules:
+  - level: Metadata
+    verbs: ["create", "update", "patch"]
+    resources:
+      - group: ""
+        resources: ["pods", "persistentvolumes", "persistentvolumeclaims"]
+  - level: None
+EOF
   chmod 0644 ./*
 )
 
@@ -120,15 +136,17 @@ docker run -d --name "${id}-apiserver" --network "${id}" --network-alias apiserv
   --client-ca-file=/pki/ca.crt --authorization-mode=RBAC \
   --service-account-issuer=https://kubernetes.default.svc \
   --service-account-key-file=/pki/sa.pub --service-account-signing-key-file=/pki/sa.key \
-  --service-cluster-ip-range=10.96.0.0/16 >/dev/null
+  --service-cluster-ip-range=10.96.0.0/16 \
+  --audit-policy-file=/pki/audit-policy.yaml --audit-log-path=- >/dev/null
 
 # The type check of a policy fills its status (status.typeChecking): the
-# test reads it. It stops when it starts before the API server is ready:
+# test reads it. The binder binds a claim to its volume, as in the cluster,
+# with no pod. It stops when it starts before the API server is ready:
 # Docker restarts it.
 docker run -d --name "${id}-controllers" --network "${id}" --restart on-failure:30 \
   -v "${pki}:/pki:ro" "registry.k8s.io/kube-controller-manager:${version}" \
   kube-controller-manager --kubeconfig=/pki/controllers.kubeconfig \
-  --controllers=validatingadmissionpolicy-status-controller \
+  --controllers=validatingadmissionpolicy-status-controller,persistentvolume-binder-controller \
   --use-service-account-credentials=true \
   --service-account-private-key-file=/pki/sa.key --root-ca-file=/pki/ca.crt \
   --leader-elect=false >/dev/null
@@ -137,3 +155,7 @@ docker run --rm --network "${id}" --user 10001:10001 --read-only --tmpfs /tmp \
   -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1 \
   -v "${pki}:/pki:ro" -v "${work}/in:/work:ro" -v "${here}:/tests:ro" \
   --entrypoint python3 "${python_image}" /tests/test_nfs_volumes.py
+
+# The audit annotations: the volumes and claims of git have none, and a
+# volume off the list (the control of the test) has one.
+docker logs "${id}-apiserver" 2>/dev/null | "${PYTHON:-python3}" "${here}/audit.py" "${work}/in"

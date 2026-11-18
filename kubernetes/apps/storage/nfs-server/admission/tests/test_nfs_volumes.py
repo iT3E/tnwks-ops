@@ -4,7 +4,10 @@ The API server is the version of the clusters. The test talks to it with
 the client certificate of its admin, over HTTPS, with the standard library
 only. It first binds both policies with Deny, to test each rule, then with
 the bindings of git (Audit and Warn), to show that those refuse nothing and
-warn. Each pod is a dry run, so no pod is made. No kubelet runs.
+warn. Each pod is a dry run, so no pod is made. No kubelet runs. The
+volumes and claims of the vault shares of git are made for real, under both
+bindings: the binder of the controller manager binds each claim to its
+volume, with no pod, and its update of each volume passes the rule.
 """
 
 import copy
@@ -26,6 +29,10 @@ with open("/work/policies.json", encoding="utf-8") as f:
     POLICIES = json.load(f)
 with open("/work/users.json", encoding="utf-8") as f:
     USERS = json.load(f)
+with open("/work/volumes.json", encoding="utf-8") as f:
+    GIT_VOLUMES = json.load(f)
+with open("/work/claims.json", encoding="utf-8") as f:
+    GIT_CLAIMS = json.load(f)
 
 
 def call(method, path, body=None, content_type="application/json"):
@@ -118,6 +125,54 @@ def volume(name, path, read_only, claim_namespace, claim_name, server=SERVER):
 
 def create_volume(body, dry_run=True):
     return call("POST", "/api/v1/persistentvolumes" + ("?dryRun=All" if dry_run else ""), body)
+
+
+def claim_path(claim):
+    return f"/api/v1/namespaces/{claim['metadata']['namespace']}/persistentvolumeclaims"
+
+
+def make_shares():
+    """Makes the volumes and claims of git. Each status, body and warnings."""
+    results = []
+    for doc in GIT_VOLUMES:
+        results.append((doc["metadata"]["name"], *call("POST", "/api/v1/persistentvolumes", doc)))
+    for doc in GIT_CLAIMS:
+        results.append((doc["metadata"]["name"], *call("POST", claim_path(doc), doc)))
+    return results
+
+
+def wait_bound():
+    """Waits until each claim of git is Bound to its volume, and each volume
+    to its claim, with the uid of the claim (the update of the binder)."""
+
+    def bound():
+        for claim in GIT_CLAIMS:
+            status, body, _ = call("GET", f"{claim_path(claim)}/{claim['metadata']['name']}")
+            if status != 200 or body.get("status", {}).get("phase") != "Bound":
+                return False
+            if body["spec"]["volumeName"] != claim["spec"]["volumeName"]:
+                return False
+            status, volume, _ = call("GET", f"/api/v1/persistentvolumes/{claim['spec']['volumeName']}")
+            ref = volume["spec"]["claimRef"]
+            if volume.get("status", {}).get("phase") != "Bound" or ref.get("uid") != body["metadata"]["uid"]:
+                return False
+            if (ref["namespace"], ref["name"]) != (claim["metadata"]["namespace"], claim["metadata"]["name"]):
+                return False
+        return True
+
+    wait_for("binding of each claim of git", bound, 60)
+
+
+def remove_shares():
+    patch = "application/merge-patch+json"
+    paths = [f"{claim_path(d)}/{d['metadata']['name']}" for d in GIT_CLAIMS]
+    paths += [f"/api/v1/persistentvolumes/{d['metadata']['name']}" for d in GIT_VOLUMES]
+    for path in paths:
+        # No protection controller runs here to remove the finalizers.
+        call("PATCH", path, {"metadata": {"finalizers": None}}, patch)
+        call("DELETE", path)
+    for path in paths:
+        wait_for(f"delete of {path}", lambda path=path: call("GET", path)[0] == 404, 30)
 
 
 LISTED_VOLUMES = [
@@ -243,6 +298,17 @@ class Deny(unittest.TestCase):
     def test_an_nfs_volume_that_is_not_a_share_is_refused(self):
         self.assertRefused(create_volume(volume("sites", "/export", True, "production", "sites")), "nfs-persistent-volumes")
 
+    def test_the_volumes_and_claims_of_git_bind_at_once_with_no_pod(self):
+        self.assertEqual(len(GIT_VOLUMES), 4)
+        self.assertEqual(len(GIT_CLAIMS), 4)
+        try:
+            for name, status, body, _ in make_shares():
+                with self.subTest(name=name):
+                    self.assertEqual(status, 201, body)
+            wait_bound()
+        finally:
+            remove_shares()
+
     def test_a_volume_with_another_source_is_admitted(self):
         body = volume("scratch", "/x", False, "other", "scratch")
         del body["spec"]["nfs"]
@@ -289,6 +355,18 @@ class AuditAndWarn(unittest.TestCase):
         status, body, warnings = pod("other", [nfs(SERVER, "/vault-main")])
         self.assertEqual(status, 201, body)
         self.assertTrue(any("nfs-pod-volumes" in w for w in warnings), warnings)
+
+    def test_the_volumes_and_claims_of_git_have_no_warning(self):
+        try:
+            for name, status, body, warnings in make_shares():
+                with self.subTest(name=name):
+                    self.assertEqual(status, 201, body)
+                    self.assertEqual(warnings, [])
+            # The binder's updates of the volumes go through the rule too:
+            # run.sh reads the audit log after this test (audit.py).
+            wait_bound()
+        finally:
+            remove_shares()
 
     def test_a_volume_off_the_list_is_admitted_with_a_warning(self):
         status, body, warnings = create_volume(volume("sites", "/export", True, "production", "sites"))

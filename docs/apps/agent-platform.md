@@ -288,7 +288,33 @@ read only. The parts come in steps; this table says what is there now.
 | --- | --- |
 | Claims of the shares | `storage/nfs-vault-main` and `storage/nfs-vault-finance`, in the form of `nfs-gdrive-sync`, bound on the node of the server |
 | Exports | `/vault-main` (`Export_Id` 3) and `/vault-finance` (4): read and write for the three nodes of homelab-wsl only, each client squashed to uid and gid 1000, the owner of the root (mode 0700) |
-| Volumes and claims in the trust domains | Not yet |
+| Volumes and claims in the trust domains | Two static PersistentVolumes for each share and their two claims, `vault-rw` and `vault-ro`, in `agents-main` and `agents-finance` (`kubernetes/apps/ai/agents/<domain>/vault-share/`). Bound, and mounted by no pod |
+| The vault server, the mount of the agent, the backup of the share | Not yet |
+
+Each share has two volumes, one for each claim:
+
+| Volume | Claim | Mount | For |
+| --- | --- | --- | --- |
+| `nfs-vault-<domain>-rw` | `vault-rw` | `nfsvers=4.1,hard`, read and write | The vault server of the trust domain, the one writer: a write waits for the NFS server and does not end half done |
+| `nfs-vault-<domain>-ro` | `vault-ro` | `nfsvers=4.1,soft,timeo=50,retrans=2,actimeo=3`, read only | The agent pod (the index) and the backup mover: a read fails with an error about 30 seconds after the NFS server stops, and the chat goes on |
+
+The mount options are the values of the rehearsal; the design leaves them
+open. Each volume is on the list of the admission rule
+`nfs-persistent-volumes`, with its server, path, read-only flag and claim,
+and names its claim; each claim names its volume, with no storage class. So
+a claim binds at once, with no pod and no provisioner, and the Flux
+Kustomization `agents-<domain>-vault-share` (after `nfs-admission`) is
+Ready when both claims are `Bound`. The reclaim policy is `Retain`, and the
+files of a share are on its claim in `storage`, not on these objects: when
+a volume or a claim goes out of git, Flux deletes it and the files stay.
+The source and the claim of a volume can not change after it is made; a
+change of either one is a new volume. The export lets each node of the site
+write: the read-only flag of `vault-ro` is a mount of the kubelet, and the
+vault server is the one writer.
+
+What is still not there: the vault server and its route on the central MCP
+gateway, the mount of `vault-ro` in the agent pod, the backup policy of each
+share, and the change of the two admission rules to `Deny`.
 
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may
@@ -306,7 +332,13 @@ To check: `kubectl -n storage get pvc nfs-vault-main nfs-vault-finance` shows
 both `Bound`, `kubectl -n storage get pod -l app.kubernetes.io/name=nfs-server`
 shows the new pod `Running` with no restart, and
 `kubectl -n flux-system get kustomization nfs-server sites sites-runner` shows
-each `Ready`.
+each `Ready`. For the volumes and claims: `kubectl get pv nfs-vault-main-rw
+nfs-vault-main-ro nfs-vault-finance-rw nfs-vault-finance-ro` shows each
+`Bound` to its claim,
+`kubectl -n agents-main get pvc vault-rw vault-ro` (and the same in
+`agents-finance`) shows each `Bound`, and
+`kubectl -n flux-system get kustomization agents-main-vault-share
+agents-finance-vault-share` shows each `Ready`.
 
 ## The model path
 
