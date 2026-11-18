@@ -54,6 +54,13 @@ resources:
   # ClusterRepository is listed in a later step (docs/operations/backups.md,
   # "The finance repository").
   - ../../../apps/kopiur-system/agents-finance-repository/ks.yaml
+  # The kopiur repository of the main trust domain, the same way. Listed after
+  # the Terraform apply of its role, with the two keys RA_AGENTS_MAIN_BACKUPS_*
+  # in cluster-settings.yaml set to the outputs, and the two SOPS files of
+  # agents-main-repository/app in git with their values: without them each
+  # run of its refresher fails (docs/operations/backups.md, "The main
+  # repository").
+  # - ../../../apps/kopiur-system/agents-main-repository/ks.yaml
   # Fence a warm app's Postgres when its site lease names this site.
   - ../../../apps/databases/site-lease-fence/ks.yaml
   - ../../../apps/flux-system
