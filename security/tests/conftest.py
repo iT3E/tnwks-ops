@@ -11,14 +11,20 @@ pytest-xdist worker for each CPU, unless the command line gives `-n` itself
 its own `tmp_path`, and each Ansible run of them has its own ANSIBLE_HOME. No
 other run changes: no config file of pytest applies to `pytest security/tests`
 (the root of the repository has none), and a run of the other tests, or of
-both marks, stays in one process.
+both marks, stays in one process. When the switch turns the parallel run on,
+it prints one line, so the log of a run shows which way it ran.
 """
+
+import sys
 
 import pytest
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "pwsh: the test runs PowerShell")
+
+
+PARALLEL_LINE = "security/tests: the pwsh tests run in parallel, one pytest-xdist worker for each CPU (-n 0 runs them in one process)"
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -29,3 +35,4 @@ def pytest_cmdline_main(config):
     # With xdist off (-p no:xdist), there is no option to set.
     if getattr(config.option, "numprocesses", "off") is None and not config.getoption("usepdb"):
         config.option.numprocesses = "auto"
+        print(PARALLEL_LINE, file=sys.stderr, flush=True)
