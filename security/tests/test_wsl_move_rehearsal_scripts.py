@@ -380,6 +380,60 @@ exit $code
     return system_root
 
 
+def check_play_run(tmp_path: Path, switches: dict, limit: str = "", extra: tuple[str, ...] = ()) -> dict:
+    """The check play on two local hosts of windows_hosts, with the switch of each (None:
+    not set), its checks a stand-in. Per host: whether it failed, the messages it printed,
+    and whether it reached the checks."""
+    play = yaml.safe_load((ANSIBLE / "playbooks/windows-move-rehearsal-check.yml").read_text())
+    assert play[0]["tasks"][-1]["ansible.builtin.include_role"]["tasks_from"] == "check.yml"
+    tasks = [*play[0]["tasks"][:-1], {"name": "The checks", "ansible.builtin.debug": {"msg": "checked"}}]
+    root = tmp_path / f"check-{uuid.uuid4().hex[:8]}"
+    root.mkdir()
+    (root / "play.yml").write_text(yaml.safe_dump([{**play[0], "tasks": tasks}], sort_keys=False))
+    hosts = {name: {"ansible_connection": "local", "ansible_python_interpreter": "{{ ansible_playbook_python }}",
+                    **({} if on is None else {"wsl_move_rehearsal": on})} for name, on in switches.items()}
+    (root / "hosts.yml").write_text(yaml.safe_dump({"all": {"children": {"windows_hosts": {"hosts": hosts}}}}))
+    (root / "ansible.cfg").write_text("[defaults]\nretry_files_enabled = false\n")
+    env = {**os.environ, "ANSIBLE_CONFIG": str(root / "ansible.cfg"), "ANSIBLE_HOME": str(root / "home"),
+           "ANSIBLE_NOCOLOR": "1", "ANSIBLE_CALLBACK_RESULT_FORMAT": "json"}
+    argv = [UV or "uv", "run", "-q", "--project", str(ANSIBLE), "--locked", "ansible-playbook", "-i", str(root / "hosts.yml"),
+            str(root / "play.yml"), *(["--limit", limit] if limit else []), *(a for e in extra for a in ("-e", e))]
+    run = subprocess.run(argv, check=False, capture_output=True, text=True, timeout=300, env=env)
+    assert "PLAY RECAP" in run.stdout, run.stdout + run.stderr
+    hosts_out = {h: {"failed": False, "msgs": [], "checked": False} for h in (limit.split(",") if limit else switches)}
+    # The default output: a TASK line, then one result for each host (a failure on one line,
+    # an ok with a message over several).
+    for chunk in run.stdout.split("\nTASK [")[1:]:
+        name = chunk.split("]", 1)[0]
+        for host, body in re.findall(r"^fatal: \[(\S+)\]: FAILED! => (\{.*\})$", chunk, re.MULTILINE):
+            hosts_out[host]["failed"] = True
+            hosts_out[host]["msgs"].append(json.loads(body)["msg"])
+        for host, body in re.findall(r"^ok: \[(\S+)\] => (\{.*?^\})$", chunk, re.MULTILINE | re.DOTALL):
+            hosts_out[host]["msgs"].append(json.loads(body)["msg"])
+            if name == "The checks":
+                hosts_out[host]["checked"] = True
+    return hosts_out
+
+
+@no_ansible
+def test_the_check_play_says_where_it_checked_nothing_and_fails_when_it_checked_nothing(tmp_path):
+    nothing = "Nothing was checked: the switch wsl_move_rehearsal is off for every host of this run."
+    # The switch off for each host (the state after a rehearsal): each host fails, and says why.
+    off = check_play_run(tmp_path, {"site1": None, "site2": False})
+    assert all(h["failed"] and not h["checked"] and any(m.startswith(nothing) for m in h["msgs"]) for h in off.values()), off
+    # The same with a limit to the host of the rehearsal, as the docs give it.
+    limited = check_play_run(tmp_path, {"site1": None, "site2": False}, limit="site2")
+    assert limited["site2"]["failed"] and not limited["site2"]["checked"], limited
+    # The switch on for one host: it is checked; the other says that it checked nothing, and does not fail.
+    one = check_play_run(tmp_path, {"site1": False, "site2": True})
+    assert one["site2"]["checked"] and not one["site2"]["failed"], one
+    assert not one["site1"]["checked"] and not one["site1"]["failed"], one
+    assert one["site1"]["msgs"] == ["Nothing was checked on site1: the switch wsl_move_rehearsal is off for it."], one
+    # After a rehearsal, the switch given for one run: the host is checked.
+    given = check_play_run(tmp_path, {"site1": None, "site2": False}, limit="site2", extra=("wsl_move_rehearsal=true",))
+    assert given["site2"]["checked"] and not given["site2"]["failed"], given
+
+
 def stops_config(tmp_path: Path, root: Path) -> tuple[str, dict]:
     """The test config as the play renders it (the TestConfig parameter), with the
     separators of this file system."""

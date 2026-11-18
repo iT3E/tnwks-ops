@@ -19,7 +19,7 @@ run that shows drift.
 | `windows_wsl_maintenance` (`wsl-maintenance`) | `Watch-TnwksWsl.ps1` and the task `tnwks-wsl-watchdog` (every 5 min), `Compact-WslVhdx.ps1` and the on-demand task `tnwks-vhdx-compact` |
 | `windows_observability_storage` (`observability-storage`) | The 20Gi Prometheus disk `C:\WSL\observability.vhdx` and the task `tnwks-observability-mount` (site 1, [observability-implementation.md](../operations/observability-implementation.md#site-1-prometheus-volume)) |
 | `windows_wsl_rehearsal` (`wsl-rehearsal`) | hosts with `wsl_rehearsal` (WSL-02): a temporary standard account `tnwks-rehearsal` with a distro of its own and five tasks, for the rehearsal of the account change ([below](#the-rehearsal-of-the-account-change)) |
-| `windows_wsl_move_rehearsal` (`wsl-move-rehearsal`) | hosts with `wsl_move_rehearsal` (WSL-02): two temporary standard accounts, a small distro, and the scripts of the move window, run phase by phase by hand ([below](#the-rehearsal-of-the-move)) |
+| `windows_wsl_move_rehearsal` (`wsl-move-rehearsal`) | hosts with `wsl_move_rehearsal` (none until the next rehearsal, which turns it on for WSL-02 only): two temporary standard accounts, a small distro, and the scripts of the move window, run phase by phase by hand ([below](#the-rehearsal-of-the-move)) |
 | `windows_power` (`power`)                   | hosts with `power_no_sleep` (WSL-02): standby (S1-S3) not allowed on the active scheme, plugged in or on battery, and hibernation off, so neither a program nor the Start menu can sleep the host. Skipped elsewhere; how to undo it is in the role's defaults |
 | `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
 | `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
@@ -629,10 +629,11 @@ as a note.
 
 ## The rehearsal of the move
 
-Per host, `wsl_move_rehearsal` (`group_vars/windows_hosts.yml`, on in
-`host_vars/WSL-02` only) adds the role `windows_wsl_move_rehearsal`: step 0
-of the move of a distro to another account (Design Doc 0004, section 9). It
-runs the scripts of the window on a small distro of its own, with two
+Per host, `wsl_move_rehearsal` (`group_vars/windows_hosts.yml`) adds the
+role `windows_wsl_move_rehearsal`. The rehearsal ended, and the switch is
+off on every host until the next one, which turns it on in
+`host_vars/WSL-02` only. The role is step 0 of the move of a distro to
+another account (Design Doc 0004, section 9). It runs the scripts of the window on a small distro of its own, with two
 temporary accounts: A in the place of the account that owns the distro
 today, and B in the place of the new account. It does not touch the live
 distro, its registration, its VM or the account of the host's person.
@@ -646,6 +647,10 @@ uv run ansible-playbook playbooks/windows-host.yml --limit 'localhost,WSL-02' --
   -e wsl_move_rehearsal_phase=<phase>
 uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02
 ```
+
+The check play checks only a host with the switch on. With the switch off
+for every host of the run it fails, as nothing was checked. After a
+rehearsal, give the switch for that run only: `-e wsl_move_rehearsal=true`.
 
 Each script that runs in a distro goes to `wsl.exe` as base64 in one fixed
 command, and the distro decodes and runs it. Windows PowerShell 5.1 does not

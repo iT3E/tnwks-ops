@@ -3,6 +3,18 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.197.0 - 2026-11-18
+
+### Changed
+
+* Windows hosts, the rehearsal of the move: the rehearsal ended, and its switch (wsl_move_rehearsal) is off on the site 2 host until the next rehearsal. A run of the playbook no longer includes the role there. The check play of the rehearsal now says of each host with the switch off that it checked nothing there, and fails when no host of the run has the switch on; after a rehearsal, -e wsl_move_rehearsal=true gives the switch for one run.
+
+## v2.196.0 - 2026-11-18
+
+### Added
+
+* Backups: the ClusterRepository agents-main, with the grant of agents-main only. Kopia creates the repository at its first bootstrap, with the password of kopiur-repository-agents-main.
+
 ## v2.195.0 - 2026-11-18
 
 ### Added
