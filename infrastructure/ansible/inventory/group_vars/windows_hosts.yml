@@ -39,6 +39,13 @@ wsl_rehearsal: false
 # phase (-e wsl_move_rehearsal_phase=<phase>).
 wsl_move_rehearsal: false
 
+# Step 3 of the account change (role windows_wsl_move, Design Doc 0004,
+# section 9). Per host, site 2 first; it makes an account and gives it a
+# right, so the owner approves the pull request that turns it on. The names
+# of the accounts and the folder of the disk file go in the encrypted
+# variables of the host.
+wsl_move: false
+
 # The start tasks of the account that owns the distro (Design Doc 0004,
 # section 5.12; plan task 10.10). Each WSL role registers a copy of each of
 # its start tasks for that account (wsl_move_new_account, in the encrypted

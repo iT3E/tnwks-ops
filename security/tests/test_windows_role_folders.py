@@ -47,6 +47,9 @@ FOLDERS = {
     # disk and log folders the two temporary accounts write to
     # (test_wsl_move_rehearsal.py).
     "wsl_move_rehearsal_dir": "move rehearsal",
+    # The move of the distro: a role folder whose disk and log folders have
+    # rules of their own (test_wsl_move_role.py).
+    "wsl_move_dir": "move",
 }
 # The folders below a role folder that the account writes to, with their own call
 # of the module and a writer. The SYSTEM log of the watchdog has its own call too.

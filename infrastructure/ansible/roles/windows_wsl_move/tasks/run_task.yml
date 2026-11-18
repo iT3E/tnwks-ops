@@ -1,0 +1,33 @@
+---
+# Runs one task of an account as SYSTEM, waits for its end, and keeps what it
+# gave in wsl_move_runs[<step>]. It passes only for a new run of this apply:
+# a run that ended with exit 0 and wrote a result. The runner reads a result
+# file only when it is newer than the start of the run, so the result of an
+# earlier run on a host where the task ran before never passes for this one.
+- name: "Run the task {{ wsl_move_run.key }}-{{ wsl_move_run.step }}"
+  ansible.windows.win_powershell:
+    parameters:
+      Runner: '{{ wsl_move_dir }}\Invoke-TnwksStartTask.ps1'
+      Task: "{{ wsl_move_prefix }}-{{ wsl_move_run.key }}-{{ wsl_move_run.step }}"
+      Result: '{{ wsl_move_accounts[wsl_move_run.key].log_dir }}\{{ wsl_move_run.step }}.json'
+      Minutes: 20
+    script: |
+      param([string]$Runner, [string]$Task, [string]$Result, [int]$Minutes)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $true
+      & $Runner -Task $Task -Result $Result -Minutes $Minutes
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_run_out
+  failed_when: >-
+    wsl_move_run_out.failed | default(false) or not (
+      (wsl_move_run_out.output | last).ran and (wsl_move_run_out.output | last).code == 0
+      and (wsl_move_run_out.output | last).result is not none)
+  no_log: true
+
+- name: "Keep the result of {{ wsl_move_run.key }}-{{ wsl_move_run.step }}"
+  ansible.builtin.set_fact:
+    wsl_move_runs: "{{ wsl_move_runs | default({}) | combine({wsl_move_run.step: wsl_move_run_out.output | last}) }}"
+  no_log: true
