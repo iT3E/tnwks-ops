@@ -170,6 +170,31 @@ def test_the_present_tasks_are_tasks_of_the_roles():
     assert DEFAULTS["wsl_move_service_binary"] == rehearsal["wsl_move_rehearsal_service_binary"]
 
 
+# The template of each task that the procedure may disable, in its role.
+TASK_TEMPLATES = {
+    "tnwks-lan-bridge-ip": "windows_lan_bridge/templates/lan-bridge-ip.xml.j2",
+    "tnwks-udp-relay": "windows_udp_relay/templates/udp-relay.xml.j2",
+    "tnwks-udp-relay-syslog": "windows_udp_relay/templates/udp-relay.xml.j2",
+    "tnwks-vhdx-compact": "windows_wsl_maintenance/templates/vhdx-compact.xml.j2",
+    "tnwks-wsl-keepalive": "windows_wsl_maintenance/templates/wsl-keepalive.xml.j2",
+    "tnwks-wsl-watchdog": "windows_wsl_maintenance/templates/wsl-watchdog.xml.j2",
+}
+
+
+def test_the_way_back_starts_only_the_long_running_tasks_of_the_present_account():
+    """The compaction and each periodic task are disabled by the window, and never started by the way back."""
+    disable, start = DEFAULTS["wsl_move_present_tasks"], DEFAULTS["wsl_move_present_start_tasks"]
+    assert VARS["wsl_move_window_config"]["present"]["disable_tasks"] == "{{ wsl_move_present_tasks }}"
+    assert VARS["wsl_move_window_config"]["present"]["start_tasks"] == "{{ wsl_move_present_start_tasks }}"
+    assert set(start) <= set(disable) and len(start) == len(set(start)) > 0
+    for name in disable:
+        xml = (ANSIBLE / "roles" / TASK_TEMPLATES[name]).read_text()
+        long_running = "<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>" in xml and "<Repetition>" not in xml
+        assert (name in start) == long_running, name
+    assert "tnwks-vhdx-compact" in disable and "tnwks-vhdx-compact" not in start
+    assert {"tnwks-wsl-watchdog", "tnwks-lan-bridge-ip"} <= set(disable) - set(start)
+
+
 def test_the_role_is_off_until_a_host_turns_it_on():
     group = yaml.safe_load((ANSIBLE / "inventory/group_vars/windows_hosts.yml").read_text())
     assert group["wsl_move"] is False

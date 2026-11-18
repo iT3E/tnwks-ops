@@ -1093,6 +1093,11 @@ window.
   `wsl_move_present_folder`. The role has no default for them, and each
   task that takes one has `no_log`. `wsl_move_new_start_tasks` names the
   start tasks of the new account.
+- **The tasks of the present account.** Window step 2 disables each task of
+  `wsl_move_present_tasks`, the compaction among them. A way back that ends
+  with no restart starts only `wsl_move_present_start_tasks`: the
+  long-running tasks, with no time limit. The compaction and each periodic
+  task wait for their own triggers.
 - **The version of WSL.** `wsl_move_rehearsed_wsl_version`, in the
   encrypted variables of the host, is the version of WSL that the rehearsal
   of the move ran on. At each apply, before any write, the play reads the

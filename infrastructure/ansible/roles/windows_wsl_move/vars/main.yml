@@ -111,7 +111,7 @@ wsl_move_window_config:
     result_dir: "{{ wsl_move_accounts.present.log_dir }}"
     window_tasks: "{{ wsl_move_window_tasks.present }}"
     disable_tasks: "{{ wsl_move_present_tasks }}"
-    start_tasks: "{{ wsl_move_present_tasks }}"
+    start_tasks: "{{ wsl_move_present_start_tasks }}"
   new:
     account: "{{ wsl_move_new_account }}"
     folder: "{{ wsl_move_disk_dir }}"

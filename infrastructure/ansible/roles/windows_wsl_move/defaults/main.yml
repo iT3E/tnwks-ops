@@ -71,6 +71,12 @@ wsl_move_present_tasks:
   - tnwks-vhdx-compact
   - tnwks-wsl-keepalive
   - tnwks-wsl-watchdog
+# Of those, the tasks that the way back starts when it ends with no restart:
+# the long-running ones only (no time limit). Never the compaction, and never
+# a periodic task that runs once and ends: their triggers start them.
+wsl_move_present_start_tasks:
+  - tnwks-udp-relay-syslog
+  - tnwks-wsl-keepalive
 # The start tasks of the new account that window step 8 enables (plan task
 # 10.10). The play stops while this is empty.
 wsl_move_new_start_tasks: []
