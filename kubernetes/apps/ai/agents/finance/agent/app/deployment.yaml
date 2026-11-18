@@ -166,6 +166,12 @@ spec:
           imagePullPolicy: IfNotPresent
           command: ["sh", "/scripts/archive-state.sh"]
           env: &env
+            # A change from the vault server comes from another NFS client,
+            # so the share gives no file event: the watch of the index polls
+            # (Design Doc of effort 0003, section 4.2.5). The other users of
+            # this list watch no file.
+            - name: CHOKIDAR_USEPOLLING
+              value: "1"
             # The state directory of the product (with the workspace in it),
             # on the volume. The archives are next to it, outside it.
             - name: OPENCLAW_STATE_DIR
@@ -228,6 +234,9 @@ spec:
           # by the failure output of the CLI), and the step has no secret
           # to print.
           env:
+            # As the list of the gateway (env above).
+            - name: CHOKIDAR_USEPOLLING
+              value: "1"
             - name: OPENCLAW_STATE_DIR
               value: /home/node/data/state
             - name: OPENCLAW_CONFIG_PATH
@@ -303,6 +312,12 @@ spec:
           volumeMounts: &stateMounts
             - name: state
               mountPath: /home/node/data
+            # The finance share, read only (../../vault-share): the index
+            # reads it, and memory_get. The path is the one of the vault
+            # server, so a path from a search works in a vault tool call.
+            - name: vault
+              mountPath: /vault
+              readOnly: true
             - name: config
               mountPath: /home/node/config
               readOnly: true
@@ -354,6 +369,9 @@ spec:
           volumeMounts:
             - name: state
               mountPath: /home/node/data
+            - name: vault
+              mountPath: /vault
+              readOnly: true
             - name: config
               mountPath: /home/node/config
               readOnly: true
@@ -528,6 +546,16 @@ spec:
         - name: state
           persistentVolumeClaim:
             claimName: agent-state
+        # The finance share. readOnly on the claim as well as the option ro
+        # of its volume: the kubelet takes the flag from the pod, not from
+        # the volume (Design Doc of effort 0003, section 4.2.5). A soft
+        # mount: with the NFS server away a read fails after about 30 s, and
+        # the chat goes on. The pod does not start while the NFS server is
+        # away, and starts when it is back.
+        - name: vault
+          persistentVolumeClaim:
+            claimName: vault-ro
+            readOnly: true
         - name: config
           configMap:
             name: agent-config

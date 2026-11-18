@@ -19,7 +19,7 @@
     "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish",
       "firefly__delete_*", "firefly__bulk_*", "firefly__trigger_*", "firefly__*export*", "firefly__*attachment*",
       "firefly__create_rule*", "firefly__update_rule*"],
-    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search", "firefly__*"]}},
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search", "firefly__*", "vault__*"]}},
     "web": {"search": {"enabled": true, "provider": "brave"}}
   },
   "mcp": {
@@ -39,6 +39,18 @@
             "create_tag", "update_tag"
           ]
         }
+      },
+      "vault": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/finance-vault/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "read_text_file", "read_multiple_files", "list_directory", "directory_tree",
+            "search_files", "get_file_info",
+            "write_file", "edit_file", "create_directory"
+          ]
+        }
       }
     }
   },
@@ -51,7 +63,10 @@
         "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"}
       },
       "sources": ["memory"],
-      "extraPaths": [{"path": "/home/node/data/vault", "pattern": "**/*.md"}],
+      "extraPaths": [
+        {"path": "/home/node/data/vault", "pattern": "**/*.md"},
+        {"path": "/vault", "pattern": "**/*.md"}
+      ],
       "rememberAcrossConversations": false
     }
   },
