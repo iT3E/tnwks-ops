@@ -56,7 +56,14 @@ def test_the_rehearsal_of_the_move_runs_on_the_site_2_host_only_and_last():
     # The switch is set only in the group vars of the Windows hosts and in the host vars
     # of the site 2 host: not inline in hosts.yml, not in another vars file. A value in a
     # SOPS file is out of reach of this test (it reads no SOPS file).
-    setting = re.compile(r"(?<![\w-])wsl_move_rehearsal\s*:")
+    # The key plain or quoted, in block or flow form.
+    setting = re.compile(r"(?<![\w-])([\"']?)wsl_move_rehearsal\1\s*:")
+    for text in ("wsl_move_rehearsal: true", '"wsl_move_rehearsal": true', "{'wsl_move_rehearsal' : true}",
+                 "x: {wsl_move_rehearsal: true}"):
+        assert setting.search(text), text
+    for text in ("wsl_move_rehearsal_phase: none", '"wsl_move_rehearsal_phase": none', "my_wsl_move_rehearsal: true",
+                 "when: wsl_move_rehearsal | bool"):
+        assert not setting.search(text), text
     where = sorted(str(path.relative_to(INVENTORY)) for path in INVENTORY.rglob("*")
                    if path.is_file() and ".sops." not in path.name and setting.search(path.read_text(errors="replace")))
     assert where == ["group_vars/windows_hosts.yml", "host_vars/WSL-02/main.yml"], where
