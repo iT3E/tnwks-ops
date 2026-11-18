@@ -1,0 +1,3 @@
+kind: Added
+body: 'Backups: the directory of the backup repository of the main trust domain (kopiur-system/agents-main-repository: its refresher, its RBAC, its session Secret with placeholders, and its ClusterRepository agents-main with the grant of agents-main), in git and not listed for Flux, and the two settings keys RA_AGENTS_MAIN_BACKUPS_* as marked placeholders. The two SOPS files, the session, the repository and the backup policy of the main agent come in later steps, in the order of docs/operations/backups.md. A test holds each repository of a trust domain to its Terraform entry and to that order.'
+time: 2026-11-17T23:10:00.000000+00:00
