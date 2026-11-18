@@ -57,6 +57,13 @@ module "aws" {
       prefix       = "kopiur-finance/"
       exclusive    = true
     }
+    # The repository of the main trust domain only, for the same reason. Not
+    # kopiur-agents-main/, as above.
+    "agents-main" = {
+      common_names = ["homelab-wsl-agents-main-backups"]
+      prefix       = "kopiur-main/"
+      exclusive    = true
+    }
   }
   # The owner's way into an exclusive prefix: the AdministratorAccess
   # permission set of IAM Identity Center in this account.
