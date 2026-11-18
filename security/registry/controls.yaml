@@ -169,7 +169,8 @@
     terraform-cloud-organization: []
     cluster:
       - { source: trivy, check: k8s-cis-1.23/5.1.2 }
-    windows-host: []
+    windows-host:
+      - { source: host-check, check: wsl-disk-rules }
     wsl-distro:
       - { source: wazuh, check: "35512" }
       - { source: wazuh, check: "35513" }

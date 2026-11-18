@@ -510,6 +510,16 @@ host, use the name from its host_vars.
    the read does not pass, do not open that pull request: do steps 1 to 5
    again, and look harder at step 4.
 
+The done switch also turns on the check `wsl-disk-rules` of the host check
+(role windows_host_check, security/README.md). From the apply of its pull
+request, the host check reads the owner and the rules of the disk file of
+the distro each 6 hours as SYSTEM, and a file that does not have the owner
+and the rules of Design Doc 0004 (section 7, row 27), a missing file and a
+file that it can not read each fail the check. The file must then have the
+rules that the move to the account sets: the account that owns the distro
+as owner, and protected rules for SYSTEM, the Administrators and that
+account, besides the entries that WSL adds for its VM.
+
 What the done switch does not catch: between step 6 and the merge of its
 pull request, the play does not fail on the write test (the security
 result still shows it). And the play trusts the switch: a switch set to
