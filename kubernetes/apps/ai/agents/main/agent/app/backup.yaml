@@ -1,10 +1,7 @@
 ---
-# Step 2 of the cutover lists this file in kustomization.yaml, after step 1
-# made the volume on the node of the agent (a mover that came first would
-# make it on any worker). It needs the ClusterRepository agents-main
-# (Ready) and its grant of agents-main first. That repository is not in git
-# yet: it comes in the steps of docs/operations/backups.md, the same as the
-# repository of finance.
+# Listed by step 2 of the cutover in kustomization.yaml, after step 1 made
+# the volume on the node of the agent (a mover that came first would make it
+# on any worker). The ClusterRepository agents-main is Ready.
 #
 # The state volume of the main agent, with its archives, to the Kopia
 # repository of the main trust domain (ClusterRepository agents-main: its
