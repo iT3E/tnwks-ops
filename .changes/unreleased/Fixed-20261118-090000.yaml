@@ -1,3 +1,0 @@
-kind: Fixed
-body: "CI: the PowerShell tests of security/ (the pwsh mark, run alone as the powershell job runs them) take one pytest-xdist worker for each CPU, so the job stays within its time limit. A run of the other tests, or of both marks, stays in one process, and -n on the command line still decides."
-time: 2026-11-18T09:00:00.000000+00:00
