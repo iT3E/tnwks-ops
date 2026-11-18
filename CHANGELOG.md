@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.199.1 - 2026-11-18
+
+### Fixed
+
+* CI: the PowerShell tests of security/ (the pwsh mark, run alone as the powershell job runs them) take one pytest-xdist worker for each CPU, so the job stays within its time limit. A run of the other tests, or of both marks, stays in one process, and -n on the command line still decides.
+
 ## v2.199.0 - 2026-11-18
 
 ### Added
