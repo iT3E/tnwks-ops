@@ -63,11 +63,15 @@ spec:
     - timeo=50
     - retrans=2
     - actimeo=3
+    # Read only in the kernel, for each pod. The kubelet takes the read-only
+    # flag of a PersistentVolume mount from the pod (its claim or its mount),
+    # not from nfs.readOnly below (pkg/volume/nfs, Kubernetes 1.37).
+    - ro
   nfs:
     server: 10.5.0.3
     path: /vault-main
-    # The kubelet mounts it read only. The export itself lets each node
-    # write: this flag and the one writer are the control.
+    # Checked by the admission rule. The export itself lets each node write:
+    # the option ro above and the one writer are the control.
     readOnly: true
   claimRef:
     namespace: agents-main
