@@ -27,6 +27,9 @@ wsl_service_log_dir: '{{ wsl_watchdog_dir }}\service-log'
 # Extra arguments for Watch-TnwksWsl.ps1: `-SkipGateway -SkipUsb` on a host
 # without the OpenClaw gateway or the Z-Stick.
 wsl_watchdog_args: ""
+# The arguments of one watchdog task: wsl_watchdog_args, and for the copy of
+# the account that owns the distro, wsl_watchdog_args_account.
+wsl_watchdog_task_args: "{{ wsl_watchdog_args }}"
 # tnwks-wsl-keepalive: one long-running wsl.exe client, so WSL doesn't stop
 # the distro for lack of one. Per host (WSL-02); pair it with the watchdog's
 # `-KeepAliveTask tnwks-wsl-keepalive`, which restarts it after a WSL restart.
@@ -38,6 +41,24 @@ vhdx_compact_task: tnwks-vhdx-compact
 # The distro's ext4.vhdx; empty = the script's default (E:\WSL\Ubuntu, on
 # DESKTOP-HKE05KI).
 vhdx_compact_vhdx: ""
+
+# The move of the distro (group_vars/windows_hosts.yml, wsl_move_phase). The
+# accounts that may write to the log of the watchdog: the desktop user, both
+# accounts while the move runs, and the account that owns the distro once it
+# is done.
+wsl_maintenance_writers: >-
+  {{ [wsl_maintenance_user] if wsl_move_phase == 'off'
+     else ([wsl_maintenance_user, wsl_move_new_account] if wsl_move_phase == 'move' else [wsl_move_new_account]) }}
+# The copies of the watchdog and the keepalive for the account that owns the
+# distro. The copy of the watchdog names the copy of the keepalive.
+wsl_watchdog_task_account: "{{ wsl_watchdog_task }}{{ wsl_move_task_suffix }}"
+wsl_keepalive_task_account: "{{ wsl_keepalive_task }}{{ wsl_move_task_suffix }}"
+wsl_watchdog_args_account: >-
+  {{ wsl_watchdog_args | regex_replace('(-KeepAliveTask\s+)' ~ (wsl_keepalive_task | regex_escape) ~ '(?=\s|$)',
+     '\g<1>' ~ wsl_keepalive_task_account) }}
+# The keepalive that the WSL service task (SYSTEM) starts: the copy, once the
+# move is done.
+wsl_service_keepalive_task: "{{ wsl_keepalive_task_account if wsl_move_phase == 'done' else wsl_keepalive_task }}"
 
 # Superseded by this role (registration and verification one-offs, their
 # output, old backups); removed.

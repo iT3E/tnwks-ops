@@ -3,8 +3,8 @@ Windows has, so a test can run such a script in the pwsh of CI.
 
 Get-Item gives a directory (a link with $script:IsLink, nothing with $script:Exists off),
 New-Item makes it, Get-Acl gives $script:Have (New-TestAcl, New-TestRule), and Set-Acl and
-each command add to $script:Calls. New-Object fakes NTAccount (it translates to
-S-1-5-21-7-7-7-1001), SecurityIdentifier, FileSystemAccessRule, DirectorySecurity and FileSecurity.
+each command add to $script:Calls. New-Object fakes NTAccount (it translates kid1 to
+S-1-5-21-7-7-7-1002 and each other name to S-1-5-21-7-7-7-1001), SecurityIdentifier, FileSystemAccessRule, DirectorySecurity and FileSecurity.
 Get-TestKeys gives the rules of an ACL as sorted text.
 """
 
@@ -36,7 +36,7 @@ function New-Object {
     switch -Wildcard ("$TypeName") {
         '*.NTAccount' {
             $account = [pscustomobject]@{ Name = $ArgumentList }
-            $account | Add-Member ScriptMethod Translate { param($Type) [pscustomobject]@{ Value = 'S-1-5-21-7-7-7-1001' } }
+            $account | Add-Member ScriptMethod Translate { param($Type) [pscustomobject]@{ Value = $(if ($this.Name -eq 'kid1') { 'S-1-5-21-7-7-7-1002' } else { 'S-1-5-21-7-7-7-1001' }) } }
             return $account
         }
         '*.SecurityIdentifier' { return [pscustomobject]@{ Value = [string]$ArgumentList } }

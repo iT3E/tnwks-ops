@@ -1158,11 +1158,16 @@ def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unc
     assert all(task["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_rehearsal_account }}" for task in named)
     # The role passes the Description that the module checks before a reset.
     assert all(task["tnwks_win_scheduled_task"]["s4u_description"] == "{{ wsl_rehearsal_account_description }}" for task in named)
-    # The rehearsal of the move registers the tasks of its own two accounts (test_wsl_move_rehearsal.py).
+    # The rehearsal of the move registers the tasks of its own two accounts (test_wsl_move_rehearsal.py),
+    # and the WSL roles the copies of their start tasks for the account that owns the distro
+    # (test_wsl_move_start_tasks.py).
     others = [path for path in (ANSIBLE / "roles").glob("*/tasks/*.yml")
-              if path.parent.parent.name not in ("windows_wsl_rehearsal", "windows_wsl_move_rehearsal")]
+              if path.parent.parent.name not in ("windows_wsl_rehearsal", "windows_wsl_move_rehearsal", *START_ROLES)]
     assert others and not any("s4u_user" in path.read_text() for path in others)
 
+
+# The WSL roles with start tasks of the account that owns the distro (test_wsl_move_start_tasks.py).
+START_ROLES = ("windows_wsl_maintenance", "windows_lan_bridge", "windows_udp_relay")
 
 SYSTEM_BECOME = {
     "ansible_become": True,
@@ -1209,8 +1214,10 @@ def test_only_the_tasks_that_act_on_a_task_of_the_account_run_as_system():
                 assert task in becoming.get(path.relative_to(ANSIBLE).as_posix(), []), (path, task.get("name"))
     rehearsal = "roles/windows_wsl_rehearsal/tasks/main.yml"
     check = "playbooks/windows-rehearsal-check.yml"
-    # The rehearsal of the move has its own list (test_wsl_move_rehearsal.py).
-    assert sorted(path for path in becoming if "windows_wsl_move_rehearsal" not in path) == [check, rehearsal]
+    # The rehearsal of the move and the WSL roles have their own lists (test_wsl_move_rehearsal.py and
+    # test_wsl_move_start_tasks.py).
+    assert sorted(path for path in becoming if "windows_wsl_move_rehearsal" not in path
+                  and path.split("/")[1] not in START_ROLES) == [check, rehearsal]
     assert sorted(task["name"] for task in becoming[rehearsal]) == sorted([
         "Tasks of the temporary account",
         "The import of the distro",

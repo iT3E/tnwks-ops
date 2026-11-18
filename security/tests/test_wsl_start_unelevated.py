@@ -217,7 +217,7 @@ def test_the_logs_of_the_tasks_with_no_elevation_are_apart_from_their_scripts():
                 for item in task.get("loop", [task["tnwks_win_dir_acl"]]):
                     found[item["path"]] = item["writer"]
     assert found == {
-        "{{ wsl_watchdog_log_dir }}": "{{ wsl_maintenance_user }}", "{{ wsl_service_log_dir }}": "",
+        "{{ wsl_watchdog_log_dir }}": "{{ wsl_maintenance_writers }}", "{{ wsl_service_log_dir }}": [],
         "{{ udp_relay_log_dir }}": "{{ udp_relay_user }}", "{{ lan_bridge_ip_dir }}": "{{ lan_bridge_user }}"}
     defaults = yaml.safe_load((ROLES / "windows_wsl_maintenance/defaults/main.yml").read_text())
     assert defaults["wsl_service_log_dir"] != defaults["wsl_watchdog_log_dir"]
