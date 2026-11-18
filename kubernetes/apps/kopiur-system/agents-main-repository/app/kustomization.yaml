@@ -16,7 +16,7 @@ resources:
   # docs/operations/backups.md ("The finance repository", step 4, with the
   # file of main) printed ok: Kopia creates the repository with the password
   # it finds, a placeholder too.
-  # - ./clusterrepository.yaml
+  - ./clusterrepository.yaml
 labels:
   - pairs:
       app.kubernetes.io/name: kopiur-agents-main-repository
