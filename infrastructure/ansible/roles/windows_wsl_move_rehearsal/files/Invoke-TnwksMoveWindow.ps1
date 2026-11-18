@@ -659,10 +659,15 @@ function Test-TnwksScope {
     if ($req.rehearsal_group_test -and $cfg.restart) { return 'the group test runs only with the switch restart off' }
     # The rehearsal only: way back step 1 joins the present account to
     # Administrators with the group steps, and only the group test takes it out
-    # at the end of the run. The two come together, in each mode, from a
-    # request or from the boot part of the config: a join with no leave would
-    # keep a temporary account in the group across a restart.
-    if ([bool]$req.group_steps -ne [bool]$req.rehearsal_group_test) {
+    # at the end of the run. With a config of the rehearsal the two come
+    # together, in each mode, from a request or from the boot part of the
+    # config: a join with no leave would keep a temporary account in the group
+    # across a restart. The real procedure runs the group steps with no group
+    # test (the real present account stays in Administrators), so this holds
+    # only for a config of the rehearsal. The config has no key that names
+    # the rehearsal; boot_request_file stands for one, as only the config of
+    # the rehearsal has a boot request.
+    if ($cfg.boot_request_file -and [bool]$req.group_steps -ne [bool]$req.rehearsal_group_test) {
         return 'group_steps and rehearsal_group_test are not equal: the rehearsal has no join without its leave'
     }
     ''

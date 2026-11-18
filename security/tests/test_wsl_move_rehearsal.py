@@ -1992,11 +1992,32 @@ def test_a_boot_request_that_is_not_two_booleans_or_a_group_test_with_restart_st
         assert out["code"] == 3 and out["calls"] == [] and out["markers"] == ["window-started"], out["log"]
         assert any(line.startswith("stop: ") and text in line and line.endswith("Nothing is changed.") for line in out["log"]), out["log"]
         assert path.exists() == (request is not None)
-    # The same in the other modes: a request of the play with the group steps and no group test.
+    # The same in the other modes, with a config of the rehearsal (it has a boot request
+    # file): a request of the play with the group steps and no group test.
     for mode in ("forward", "wayback"):
         out = run_window(tmp_path / mode, {"mode": mode, "group_steps": True, "stop_after": 0, "rehearsal_group_test": False},
+                         config={"boot_request_file": str(tmp_path / mode / "root/state/boot-request.json")},
                          **(BOOT_STARTED if mode == "wayback" else {}))
         assert out["code"] == 3 and out["calls"] == [] and out["log"] == [f"stop: {unequal}. Nothing is changed."], out["log"]
+
+
+@needs_pwsh
+def test_a_config_that_is_not_the_rehearsals_runs_the_group_steps_with_no_group_test(tmp_path):
+    """The real procedure: the group steps with no group test, in each mode. A config with
+    no boot request file is not that of the rehearsal, and the scope check lets it run."""
+    for name, kw in (
+            ("forward", {"request": {"mode": "forward", "group_steps": True, "stop_after": 0, "rehearsal_group_test": False}}),
+            ("wayback", {"request": {"mode": "wayback", "group_steps": True, "stop_after": 0, "rehearsal_group_test": False},
+                         **BOOT_STARTED}),
+            ("boot", {"mode": "boot", "config": {"boot": {"group_steps": True, "rehearsal_group_test": False}}, **BOOT_STARTED})):
+        out = run_window(tmp_path / name, **kw)
+        assert not any(line.startswith("stop: ") for line in out["log"]), (name, out["log"])
+        request = json.loads(out["log"][0].removeprefix("start, request: "))
+        assert request["group_steps"] is True and request["rehearsal_group_test"] is False, (name, out["log"])
+        assert out["code"] == 0 and out["log"][-1] == "result: done", (name, out["log"])
+        if name != "forward":
+            # Way back step 1 joins the present account, and no group test takes it out.
+            assert JOIN in out["calls"] and LEAVE not in out["calls"], (name, out["calls"])
     # The scope holds the path of the request too.
     out, _ = boot_group_run(tmp_path / "out", config={"boot_request_file": str(tmp_path / "elsewhere.json")})
     assert out["code"] == 3 and any("is outside" in line for line in out["log"])

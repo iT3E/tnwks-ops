@@ -925,9 +925,12 @@ place: the next boot run takes A out first, before it reads the marker, and
 the check play counts that leave as a problem (A was in the group across a
 restart). With no boot run before it, the groups check of the next phase,
 or the removal, finds A in the group. The procedure refuses a group test with `restart` on (a restart
-in the run would keep A in the group), and, in each mode, group steps and a
-group test that are not equal (from a request or from the boot part of the
-config): the rehearsal has no join without its leave. A boot request that
+in the run would keep A in the group). With a config of the rehearsal (the
+one with a boot request file) it also refuses, in each mode, group steps
+and a group test that are not equal (from a request or from the boot part
+of the config): the rehearsal has no join without its leave. The real
+procedure runs the group steps with no group test, and its config has no
+boot request file. A boot request that
 is not two equal booleans stops the boot run with nothing changed. Only the
 boot mode reads the boot request.
 
