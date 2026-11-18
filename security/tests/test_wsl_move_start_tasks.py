@@ -230,3 +230,122 @@ def test_the_folder_module_takes_one_writer_or_a_list():
     assert "writer = @{ type = 'list'; elements = 'str'; default = @() }" in text
     assert "param([string]$Path, [string[]]$Writer, [bool]$Check, [string]$Readers = 'users')" in text
     assert "foreach ($writer in @($WriterSid | Where-Object { $_ } | Select-Object -Unique)) {" in text
+
+
+# --- windows_lan_bridge ----------------------------------------------------------------
+
+LAN = "windows_lan_bridge"
+LAN_DEFAULTS = yaml.safe_load((ROLES / LAN / "defaults/main.yml").read_text())
+SYNC = ROLES / LAN / "files/Sync-TnwksLanBridge.ps1"
+
+
+def test_the_address_task_of_the_present_account_keeps_its_state_and_is_left_once_done():
+    task = named(LAN, "Address task (desktop user, no elevation)")
+    assert task["tnwks_win_scheduled_task"]["keep_task_enabled_state"] == MOVE
+    assert task["when"] == "wsl_start_unelevated | bool and wsl_move_phase != 'done'"
+    assert "s4u_user" not in task["tnwks_win_scheduled_task"] and "vars" not in task
+
+
+def test_the_copy_of_the_address_task_is_a_task_of_the_account_that_owns_the_distro():
+    task = named(LAN, "Address task of the account that owns the distro")
+    module = task["tnwks_win_scheduled_task"]
+    assert task["when"] == "wsl_move_phase != 'off'"
+    assert module["name"] == "{{ lan_bridge_ip_task_account }}"
+    assert module["s4u_user"] == "{{ wsl_move_new_account }}"
+    assert module["s4u_description"] == "{{ wsl_move_new_description }}"
+    assert module["keep_task_enabled_state"] == MOVE
+    # The same template as the task of the present account: the same triggers, the same
+    # action, the same file.
+    assert "lookup('ansible.builtin.template', 'lan-bridge-ip.xml.j2')" in module["xml"]
+    assert "regex_replace('<Settings>', '<Settings><Enabled>false</Enabled>' if wsl_move_phase == 'move'" in module["xml"]
+    become = {key: value for key, value in task["vars"].items() if key.startswith("ansible_become")}
+    assert become == SYSTEM_BECOME and task["vars"]["lan_bridge_user"] == "{{ wsl_move_new_account }}"
+    assert task["no_log"] is True and task["notify"] == "Run the LAN bridge sync"
+    assert LAN_DEFAULTS["lan_bridge_ip_task_account"] == "{{ lan_bridge_ip_task }}{{ wsl_move_task_suffix }}"
+    assert named(LAN, "The move of the distro needs the start with no elevation")["ansible.builtin.assert"]["that"] == (
+        "wsl_move_phase == 'off' or wsl_start_unelevated | bool")
+
+
+def test_both_accounts_write_the_address_file_while_the_move_runs():
+    writers = " ".join(LAN_DEFAULTS["lan_bridge_writers"].split())
+    assert writers == ("{{ [lan_bridge_user] if wsl_move_phase == 'off' else ([lan_bridge_user, "
+                       "wsl_move_new_account] if wsl_move_phase == 'move' else [wsl_move_new_account]) }}")
+    folder = named(LAN, "Directory of the address file")
+    assert folder["tnwks_win_dir_acl"] == {"path": "{{ lan_bridge_ip_dir }}", "writer": "{{ lan_bridge_writers }}"}
+
+
+def test_the_handler_runs_the_address_task_that_is_enabled_before_the_sync():
+    tasks_ = " ".join(LAN_DEFAULTS["lan_bridge_ip_tasks"].split())
+    assert tasks_ == ("{{ [lan_bridge_ip_task] if wsl_move_phase == 'off' else ([lan_bridge_ip_task, "
+                      "lan_bridge_ip_task_account] if wsl_move_phase == 'move' else [lan_bridge_ip_task_account]) }}")
+    handler = yaml.safe_load((ROLES / LAN / "handlers/main.yml").read_text())[0]["ansible.windows.win_powershell"]
+    assert handler["parameters"]["Tasks"] == "{{ (lan_bridge_ip_tasks if wsl_start_unelevated | bool else []) + [lan_bridge_task] }}"
+    assert handler["parameters"]["SkipDisabled"] == MOVE
+    assert "if ($SkipDisabled -and (Get-ScheduledTask -TaskName $Task).State -eq 'Disabled') { continue }" in handler["script"]
+
+
+def test_after_the_restart_the_address_of_the_copy_reaches_the_sync_first():
+    """The copy has the triggers of the address task, and the sync waits longer after a
+    VM NIC event: at boot, with the task of the present account disabled, the copy writes
+    the file before the sync reads it."""
+    ip = (ROLES / LAN / "templates/lan-bridge-ip.xml.j2").read_text()
+    sync = (ROLES / LAN / "templates/lan-bridge-sync.xml.j2").read_text()
+    assert "<Delay>PT15S</Delay>" in ip
+    assert "<Delay>{{ 'PT45S' if wsl_start_unelevated | bool else 'PT15S' }}</Delay>" in sync
+    for trigger in ("<LogonTrigger />", "<TimeTrigger>", "EventID=232"):
+        assert trigger in ip and trigger in sync, trigger
+    assert "-WriteIpFile '{{ lan_bridge_ip_file }}'" in ip
+    assert "-IpFile '{{ lan_bridge_ip_file }}'" in sync
+
+
+def run_part(arguments: str, fakes: str) -> str:
+    """The main part of the sync script, after its functions, with fakes of the host."""
+    text = SYNC.read_text()
+    main = text[text.index("if ($Library) { return }") + len("if ($Library) { return }"):]
+    encoded = base64.b64encode(main.encode()).decode()
+    body = f""". '{SYNC}' -Library
+{fakes}
+{arguments}
+. ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))))
+"""
+    run = pwsh(body)
+    assert run.returncode == 0, run.stdout + run.stderr
+    return run.stdout
+
+
+@needs_pwsh
+def test_after_the_restart_the_copy_writes_the_address_and_the_sync_sets_the_proxy(tmp_path):
+    """The order of the window's restart: the task of the present account is disabled,
+    so only the copy runs. Its run writes the new address of the VM; the run of the
+    sync (SYSTEM) reads it and points each rule at it."""
+    address = tmp_path / "address.json"
+    (tmp_path / "ports.json").write_text(json.dumps(
+        {"ListenAddress": "0.0.0.0", "TcpPorts": [{"Port": 2222, "WslPort": 22}, {"Port": 443, "WslPort": 443}],
+         "RetiredTcpPorts": []}))
+    # The copy: its own wsl.exe answers with the address of the VM after the restart.
+    run_part(f"$WriteIpFile = '{address}'; $IpFile = ''; $WslDistro = 'Ubuntu'",
+             "function wsl.exe { '172.25.20.9 10.0.0.1' }")
+    assert json.loads(address.read_text())["address"] == "172.25.20.9"
+    # The sync: the rules still point at the address of the VM before the restart.
+    out = run_part(f"$WriteIpFile = ''; $IpFile = '{address}'; $ConfigPath = '{tmp_path / 'ports.json'}'",
+                   """function Require-Admin {}
+function Get-WslSubnet { [pscustomobject]@{ Address = '172.25.16.1'; PrefixLength = 20 } }
+function wsl.exe { throw 'the sync runs no wsl.exe' }
+$script:Rules = @{ '0.0.0.0:2222' = '172.25.20.7:22'; '0.0.0.0:443' = '172.25.20.7:443' }
+function netsh {
+    $a = @($args)
+    if ($a -contains 'show') {
+        'Address         Port        Address         Port'
+        foreach ($k in $script:Rules.Keys) { $l = $k -split ':'; $c = $script:Rules[$k] -split ':'; "$($l[0])         $($l[1])        $($c[0])     $($c[1])" }
+        return
+    }
+    $kv = @{}; foreach ($x in $a) { if ($x -match '^(\\w+)=(.*)$') { $kv[$Matches[1]] = $Matches[2] } }
+    $key = "$($kv.listenaddress):$($kv.listenport)"
+    if ($a -contains 'delete') { $script:Rules.Remove($key) }
+    if ($a -contains 'add') { $script:Rules[$key] = "$($kv.connectaddress):$($kv.connectport)" }
+    [Console]::Out.WriteLine("netsh $($a -join ' ')")
+    $global:LASTEXITCODE = 0
+}""")
+    assert "netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=2222 connectaddress=172.25.20.9 connectport=22" in out
+    assert "netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=443 connectaddress=172.25.20.9 connectport=443" in out
+    assert "172.25.20.9" in out.split("Final portproxy table:")[1]

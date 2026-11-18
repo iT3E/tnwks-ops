@@ -1111,6 +1111,13 @@ the keepalive. From `done` on, the WSL service task starts the copy of the
 keepalive. With `running`, the module does not start a task that is
 disabled while the state is the task's own.
 
+The copy of the address task of the LAN bridge (`tnwks-lan-bridge-ip-account`)
+writes the same address file. While the move runs, both accounts may write
+it, so after the restart of the window the copy writes the address of the
+VM, and the sync (SYSTEM) reads it and moves the port proxy. The sync waits
+45 seconds after a VM NIC event, and the address task 15 seconds. The
+handler of the role runs the address task that is enabled.
+
 ## Check-only settings
 
 The role `windows_host_settings` (last in the play) only reads. Its single
