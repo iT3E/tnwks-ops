@@ -225,6 +225,37 @@ To check: `kubectl get clusterrepository agents` is `Ready`, and
 `kubectl -n agents-pilot get snapshotpolicies,snapshots.kopiur.home-operations.com`
 shows the newest snapshot of `agent-state-v2` `Succeeded`.
 
+## The vault shares
+
+Each trust domain with a vault gets a share of its own: one NFSv4 export on
+the NFS server of the cluster (`kubernetes/apps/storage/nfs-server/`), on a
+claim of its own. Its vault server is the one writer, and its agent mounts it
+read only. The parts come in steps; this table says what is there now.
+
+| Part | Now |
+| --- | --- |
+| Claims of the shares | `storage/nfs-vault-main` and `storage/nfs-vault-finance`, in the form of `nfs-gdrive-sync`, bound on the node of the server |
+| Exports | `/vault-main` (`Export_Id` 3) and `/vault-finance` (4): read and write for the three nodes of homelab-wsl only, each client squashed to uid and gid 1000, the owner of the root (mode 0700) |
+| Volumes and claims in the trust domains | Not yet |
+
+The server checks the address of a client only, and a kubelet mounts from
+the address of its node. So a pod address gets no access, and which pod may
+mount which path is the work of the admission rules of NFS volumes
+(`kubernetes/apps/storage/nfs-server/admission/`).
+
+A change of the exports restarts the server (Reloader, and a new volume
+changes the pod), and with `Recreate` the sites have no NFS server until the
+new pod is up. The change of this step was rehearsed on a throwaway cluster
+first. Merge such a change outside 02:00 to 02:45 local time (the copy of the
+network backups at 02:15 and the copy of the distro at 02:30) and when no
+build of the sites runs.
+
+To check: `kubectl -n storage get pvc nfs-vault-main nfs-vault-finance` shows
+both `Bound`, `kubectl -n storage get pod -l app.kubernetes.io/name=nfs-server`
+shows the new pod `Running` with no restart, and
+`kubectl -n flux-system get kustomization nfs-server sites sites-runner` shows
+each `Ready`.
+
 ## The model path
 
 Every model call of an agent goes to the model gateway (LiteLLM,
