@@ -1958,15 +1958,45 @@ def test_a_leave_that_windows_refuses_keeps_the_boot_request_for_the_next_boot_r
 
 
 @needs_pwsh
+def test_a_boot_request_is_read_in_the_boot_mode_only(tmp_path):
+    """A forward run and a way back run of the play leave a boot request as it is: they
+    take their group steps from their own request, or from none."""
+    for name, kw in (("forward", {"request": {"mode": "forward", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}}),
+                     ("wayback", {"request": {"mode": "wayback", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False},
+                                  **BOOT_STARTED}),
+                     ("wayback, no request", {"mode": "wayback", **BOOT_STARTED})):
+        path = tmp_path / name / "root/state/boot-request.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(BOOT_GROUP))
+        out = run_window(tmp_path / name, config={"boot_request_file": str(path)}, **kw)
+        assert out["code"] == 0, (name, out["log"])
+        assert not any(c.startswith(("join ", "leave ")) for c in out["calls"]), (name, out["calls"])
+        assert not any("boot request" in line for line in out["log"]) and path.exists(), (name, out["log"])
+        assert json.loads(out["log"][0].removeprefix("start, request: "))["rehearsal_group_test"] is False
+
+
+@needs_pwsh
 def test_a_boot_request_that_is_not_two_booleans_or_a_group_test_with_restart_stops_with_nothing_changed(tmp_path):
+    unequal = "group_steps and rehearsal_group_test are not equal: the rehearsal has no join without its leave"
     for i, (request, config, text) in enumerate((
             ({"group_steps": "true", "rehearsal_group_test": True}, {}, "is not read: group_steps and rehearsal_group_test are not two booleans"),
             ("{not json", {}, "is not read"),
-            (BOOT_GROUP, {"restart": True}, "the group test runs only with the switch restart off"))):
+            (BOOT_GROUP, {"restart": True}, "the group test runs only with the switch restart off"),
+            # The join of the group steps comes only with the leave of the group test: from
+            # the request, and from the boot part of the config.
+            ({"group_steps": True, "rehearsal_group_test": False}, {}, "is not read: group_steps and rehearsal_group_test are not equal"),
+            ({"group_steps": False, "rehearsal_group_test": True}, {}, "is not read: group_steps and rehearsal_group_test are not equal"),
+            (None, {"boot": {"group_steps": True, "rehearsal_group_test": False}}, unequal),
+            (None, {"boot": {"group_steps": False, "rehearsal_group_test": True}}, unequal))):
         out, path = boot_group_run(tmp_path / str(i), request=request, config=config)
         assert out["code"] == 3 and out["calls"] == [] and out["markers"] == ["window-started"], out["log"]
         assert any(line.startswith("stop: ") and text in line and line.endswith("Nothing is changed.") for line in out["log"]), out["log"]
-        assert path.exists()
+        assert path.exists() == (request is not None)
+    # The same in the other modes: a request of the play with the group steps and no group test.
+    for mode in ("forward", "wayback"):
+        out = run_window(tmp_path / mode, {"mode": mode, "group_steps": True, "stop_after": 0, "rehearsal_group_test": False},
+                         **(BOOT_STARTED if mode == "wayback" else {}))
+        assert out["code"] == 3 and out["calls"] == [] and out["log"] == [f"stop: {unequal}. Nothing is changed."], out["log"]
     # The scope holds the path of the request too.
     out, _ = boot_group_run(tmp_path / "out", config={"boot_request_file": str(tmp_path / "elsewhere.json")})
     assert out["code"] == 3 and any("is outside" in line for line in out["log"])

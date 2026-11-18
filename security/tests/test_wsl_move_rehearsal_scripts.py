@@ -1806,7 +1806,8 @@ def test_the_after_boot_phase_checks_the_boot_run_before_any_task_of_a_or_b():
     assert "wsl_move_rehearsal_boot_log.output" in text and "check_" not in text and "disk" not in text
 
 
-GROUP_TEST_CHECKS = ("failed_when of The start task of A, started by the play",
+GROUP_TEST_CHECKS = ("failed_when of No VM of the rehearsal before the start task of A",
+                     "failed_when of The start task of A, started by the play",
                      "No WSL process of A holds a token from its time in Administrators")
 DONE_MARKERS = ["wayback-done", "window-started", "boot-run", "wayback-done"]
 STANDARD_RUN = ["start, request: {}", "the start tasks of tnwks-moverh-a run, with 1 WSL process(es)",
@@ -1846,6 +1847,9 @@ def test_a_boot_run_that_did_not_end_the_way_back_fails_the_first_check_of_after
         (True, boot_read([x for x in GROUP_RUN if "left to the play" not in x], True), False),
         (True, {**group, "boot_request": True}, False),
         (True, boot_read([*GROUP_RUN[:-1], "group: tnwks-moverh-a joined Administrators", GROUP_RUN[-1]], True), False),
+        # Each line once, in another order: the stop after the leave, the leave before the join.
+        (True, boot_read([GROUP_RUN[0], GROUP_RUN[1], GROUP_RUN[2], GROUP_RUN[4], GROUP_RUN[3], *GROUP_RUN[5:]], True), False),
+        (True, boot_read([GROUP_RUN[0], GROUP_RUN[4], GROUP_RUN[2], GROUP_RUN[3], GROUP_RUN[1], *GROUP_RUN[5:]], True), False),
     ]
     gate = checks_of("after-boot.yml", ("The boot task ran the way back once",))
     assert len(gate) == 1
@@ -1870,21 +1874,46 @@ def test_the_after_boot_checks_pass_on_a_real_boot_run_of_the_group_test(tmp_pat
     facts = {"wsl_move_rehearsal_boot_log": registered(first), "wsl_move_rehearsal_boot_group": True,
              "wsl_move_rehearsal_boot_batch": {"changed": False, "failed": False},
              "wsl_move_rehearsal_boot_a_started": registered([{"running": True, "wsl": 1}]),
+             "wsl_move_rehearsal_vm_count": registered([{"baseline": ["1"], "now": ["2"], "by": "count", "same": True}]),
              "wsl_move_rehearsal_tokens": registered(tokens)}
     names = ("The boot task ran the way back once", "failed_when of A holds its own batch right") + GROUP_TEST_CHECKS
-    tasks = ("The boot task ran the way back once", "A holds its own batch right", "The start task of A, started by the play",
-             "No WSL process of A holds")
+    tasks = ("The boot task ran the way back once", "A holds its own batch right", "No VM of the rehearsal",
+             "The start task of A, started by the play", "No WSL process of A holds")
     admin = {**facts, "wsl_move_rehearsal_tokens": registered([{**tokens[0], "admin_enabled": 1}])}
     no_right = {**facts, "wsl_move_rehearsal_boot_batch": {"changed": True, "failed": False}}
-    ok, as_standard, with_admin, without_right = run_plays(tmp_path, [
+    with_vm = {**facts, "wsl_move_rehearsal_vm_count": registered([{"baseline": ["1"], "now": ["1", "2"], "by": "count", "same": False}])}
+    ok, as_standard, with_admin, without_right, vm_left = run_plays(tmp_path, [
         {"vars": v, "tasks": checks_of("after-boot.yml", tasks)}
-        for v in (facts, {**facts, "wsl_move_rehearsal_boot_group": False}, admin, no_right)])
+        for v in (facts, {**facts, "wsl_move_rehearsal_boot_group": False}, admin, no_right, with_vm)])
     assert [r["name"] for r in ok["results"]] == [*names[:1], "failed_when of A holds its own batch right after the boot",
                                                   *GROUP_TEST_CHECKS]
+    assert failed_by_assert(vm_left, GROUP_TEST_CHECKS[0])
     assert not passed(ok), passed(ok)
     assert failed_by_assert(as_standard, names[0])
-    assert failed_by_assert(with_admin, GROUP_TEST_CHECKS[1])
+    assert failed_by_assert(with_admin, GROUP_TEST_CHECKS[2])
     assert failed_by_assert(without_right, names[1])
+
+
+@needs_both
+def test_after_boot_compares_the_count_of_the_vm_processes_after_the_restart(tmp_path):
+    _, baseline = live_and_baseline(tmp_path, VMS)
+    marked = json.loads(baseline.read_text())
+    baseline.write_text(json.dumps({**marked, "restarted": True}))
+
+    def poll(processes):
+        return run_script(tmp_path, "after-boot.yml", "No VM of the rehearsal", {"Path": str(baseline)},
+                          stand_ins=LIVE_STAND_INS + cim_stand_in(processes))
+
+    # New processes after the restart, as many as at the baseline; and one more.
+    same = poll([(5100, "vmmemWSL", "2026-03-05T05:06:07.0000000Z"), (5200, "vmmem", "2026-03-05T05:06:09.0000000Z")])
+    extra = poll([(5100, "vmmemWSL", "2026-03-05T05:06:07.0000000Z"), (5200, "vmmem", "2026-03-05T05:06:09.0000000Z"),
+                  (5300, "vmmem", "2026-03-05T06:00:00.0000000Z")])
+    assert same[-1]["same"] is True and same[-1]["by"] == "count", same
+    assert extra[-1]["same"] is False, extra
+    plays = [{"vars": {"wsl_move_rehearsal_vm_count": registered(r)}, "tasks": checks_of("after-boot.yml", ("No VM of the rehearsal",))}
+             for r in (same, extra)]
+    ok, more = run_plays(tmp_path, plays)
+    assert not passed(ok) and failed_by_assert(more, "failed_when of No VM of the rehearsal")
 
 
 def test_after_boot_runs_the_reads_of_the_group_test_only_in_its_case_and_in_order():
@@ -1894,8 +1923,12 @@ def test_after_boot_runs_the_reads_of_the_group_test_only_in_its_case_and_in_ord
     group = next(t for t in outer["block"] if t.get("name") == "The group test of the boot run, the reads after it")
     assert group["when"] == "wsl_move_rehearsal_boot_group"
     assert [t.get("name") for t in group["block"]] == [
-        "The icon in the folder of A, after A left the group", "The start task of A, started by the play",
-        "The tokens of the WSL processes of A", "No WSL process of A holds a token from its time in Administrators"]
+        "The icon in the folder of A, after A left the group", "No VM of the rehearsal before the start task of A",
+        "The start task of A, started by the play", "The tokens of the WSL processes of A",
+        "No WSL process of A holds a token from its time in Administrators"]
+    # The VM check is that of the phase wayback, with no switch of its own.
+    wayback_vm = next(t for t in tasks_in("wayback.yml") if t.get("name") == "No VM of the rehearsal before the start task of A")
+    assert {k: v for k, v in wayback_vm.items() if k != "when"} == group["block"][1]
     assert group["block"][0]["vars"] == {"wsl_move_rehearsal_icon_action": "remove"}
     order = ["The boot task ran the way back once", "A holds its own batch right after the boot", group["name"],
              "A reads its distro after the boot"]

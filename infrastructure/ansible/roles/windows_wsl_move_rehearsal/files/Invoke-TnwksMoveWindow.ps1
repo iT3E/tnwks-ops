@@ -70,6 +70,10 @@ if (-not $Request -and $Mode -eq 'boot' -and $cfg.boot_request_file -and (Test-P
         if ($bootRequest.group_steps -isnot [bool] -or $bootRequest.rehearsal_group_test -isnot [bool]) {
             throw 'group_steps and rehearsal_group_test are not two booleans'
         }
+        # The join of the group steps and the leave of the group test come together.
+        if ($bootRequest.group_steps -ne $bootRequest.rehearsal_group_test) {
+            throw 'group_steps and rehearsal_group_test are not equal'
+        }
         $req.group_steps = $bootRequest.group_steps
         $req.rehearsal_group_test = $bootRequest.rehearsal_group_test
         $BootRequestRead = $true
@@ -653,6 +657,14 @@ function Test-TnwksScope {
     # The group test takes the present account out of Administrators at the end
     # of its run: a restart in the run would keep it there.
     if ($req.rehearsal_group_test -and $cfg.restart) { return 'the group test runs only with the switch restart off' }
+    # The rehearsal only: way back step 1 joins the present account to
+    # Administrators with the group steps, and only the group test takes it out
+    # at the end of the run. The two come together, in each mode, from a
+    # request or from the boot part of the config: a join with no leave would
+    # keep a temporary account in the group across a restart.
+    if ([bool]$req.group_steps -ne [bool]$req.rehearsal_group_test) {
+        return 'group_steps and rehearsal_group_test are not equal: the rehearsal has no join without its leave'
+    }
     ''
 }
 
