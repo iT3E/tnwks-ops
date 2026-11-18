@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.198.0 - 2026-11-18
+
+### Added
+
+* agents: step 2 of the move of the main agent: the snapshot policy and schedule of its state volume, to the backup repository agents-main. The first snapshot runs at once, of the empty volume.
+
 ## v2.197.0 - 2026-11-18
 
 ### Changed

@@ -262,7 +262,9 @@ grant:
 1. **The role.** The entry `agents-finance` of
    `rolesanywhere_backups_prefixed` (`environments/prod/aws/main.tf`): the
    role, the profile, and the two deny statements of the bucket policy for
-   `kopiur-finance/`. The owner approves the apply in Terraform Cloud.
+   `kopiur-finance/`. The apply runs in the Deploy run of the merge, with
+   no stop of its own: the merge is the approval
+   (`.github/workflows/terraform.yaml`).
 2. **The certificate and the password, before the merge of step 3.** The two
    SOPS files went into git with the placeholder `pending`, encrypted to the
    age recipients of `.sops.yaml` only. Add the KMS recipient first, then
