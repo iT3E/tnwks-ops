@@ -35,6 +35,10 @@ CHECKS = ("defender-enabled", "defender-signatures", "firewall-enabled", "update
 # a held update the severity of a pending one, so each check is high.
 SEVERITY = {"defender-enabled": "high", "defender-signatures": "high",
             "firewall-enabled": "high", "updates-pending": "high", "updates-held": "high"}
+# The check of the disk file of the distro (Design Doc 0004, section 7, row 27): only
+# with -WslDisk, from the done switch of the host. High, so a fail alerts the owner.
+DISK_CHECK = "wsl-disk-rules"
+SEVERITY_DISK = {**SEVERITY, DISK_CHECK: "high"}
 RESULT = "homelab_security_check_result"
 LAST = "homelab_security_last_result_timestamp_seconds"
 FAILED = "homelab_security_host_check_failed_queries"
@@ -315,7 +319,7 @@ def test_each_check_has_a_severity_and_the_alert_reads_the_checks_that_4_1_4_nam
     """SecurityFindingNew reads severity high and critical only (observability/rules.py)."""
     text = SCRIPT.read_text()
     block = text[text.index("$script:Severity"):text.index("}", text.index("$script:Severity"))]
-    assert dict(re.findall(r"'([a-z-]+)'\s+=\s+'([a-z]+)'", block)) == SEVERITY
+    assert dict(re.findall(r"'([a-z-]+)'\s+=\s+'([a-z]+)'", block)) == SEVERITY_DISK
     rules = (ROOT / "observability/rules.py").read_text()
     assert 'SECURITY_FINDING_SEVERITY = "high|critical"' in rules
 
@@ -654,7 +658,7 @@ def test_each_windows_host_of_the_inventory_lists_the_host_check_in_the_registry
     controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
     named = {item["check"] for line in controls for item in line["checks"].get("windows-host", [])
              if item["source"] == "host-check"}
-    assert named == set(CHECKS)
+    assert named == {*CHECKS, DISK_CHECK}
     sources = {source["name"]: source for source in yaml.safe_load((REGISTRY / "sources.yaml").read_text())}
     assert (sources["host-check"]["cycle"], sources["host-check"]["late_after"]) == ("6h", "12h")
 

@@ -1,3 +1,0 @@
-kind: Added
-body: 'windows: the watchdog and the keepalive get copies for the account that owns the distro, under their own names, with the phase of the move per host (off on every host); the folder module takes a list of writers, and a task whose state is its own is not started while it is disabled'
-time: 2026-11-18T21:00:00.000000000Z
