@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.196.0 - 2026-11-18
+
+### Added
+
+* Backups: the ClusterRepository agents-main, with the grant of agents-main only. Kopia creates the repository at its first bootstrap, with the password of kopiur-repository-agents-main.
+
 ## v2.195.0 - 2026-11-18
 
 ### Added
