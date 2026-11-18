@@ -1,0 +1,126 @@
+---
+# Which NFS mounts the API server lets in (docs/apps/agent-platform.md, "NFS
+# volumes and admission"). Each trust domain with a vault gets an export of
+# its own on the NFS server of the cluster (../app), and that server checks
+# only the address of a client: a kubelet mounts from the address of its
+# node. So a pod with an NFS volume in its spec, in a namespace where Pod
+# Security allows one, would reach each export that its node reaches.
+#
+# Two rules, each a list of what is allowed, not a match on a path:
+#
+# - nfs-pod-volumes: a pod may have an NFS volume only for a listed triple
+#   of namespace, server and exact path: the users of the two exports of
+#   today. The pseudo root "/", the path of a vault, "//export",
+#   "/./export", "/export/" and another name of the server are not listed.
+# - nfs-persistent-volumes: a PersistentVolume with an NFS source must be a
+#   listed volume of a vault share, with its server, path, read-only flag and
+#   the one claim (namespace and name) it binds to. An update that moves the
+#   claim to another one is refused too.
+#
+# The bindings start with Audit and Warn only: a refusal is an audit
+# annotation and a warning, not a denial. A later change turns them to Deny,
+# after a read of the audit lines. Admission sees the API only: a privileged
+# container can still mount with a system call, and a userspace NFS client
+# needs no mount. The list of clients of each export is the other control.
+#
+# A new user of an NFS export goes on a list here in the same pull request
+# (observability/tests/test_nfs_admission.py fails until it is).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: nfs-pod-volumes
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      # The volumes of a pod can not change after it is made.
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+  matchConditions:
+    - name: has-an-nfs-volume
+      expression: object.spec.?volumes.orValue([]).exists(v, has(v.nfs))
+  variables:
+    # Namespace, server and path. The server is the node address of the NFS
+    # server (host network): a kernel mount can not reach a ClusterIP here.
+    - name: allowed
+      expression: >-
+        [
+          ['production', '10.5.0.3', '/export'],
+          ['tools', '10.5.0.3', '/export'],
+          ['networking', '10.5.0.3', '/gdrive-sync']
+        ]
+  validations:
+    - expression: >-
+        object.spec.volumes.all(v, !has(v.nfs) ||
+          variables.allowed.exists(a,
+            a[0] == request.namespace && a[1] == v.nfs.server && a[2] == v.nfs.path))
+      messageExpression: >-
+        'An NFS volume of a pod must be on the list of
+        kubernetes/apps/storage/nfs-server/admission. Not listed in ' +
+        request.namespace + ': ' +
+        object.spec.volumes.filter(v, has(v.nfs)).map(v, v.nfs.server + ':' + v.nfs.path).join(', ')
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: nfs-pod-volumes
+spec:
+  policyName: nfs-pod-volumes
+  # Each namespace: no selector.
+  validationActions: ["Audit", "Warn"]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: nfs-persistent-volumes
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      # The source of a volume can not change after it is made, its claim
+      # can.
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["persistentvolumes"]
+  matchConditions:
+    - name: has-an-nfs-source
+      expression: has(object.spec.nfs)
+  variables:
+    # Name, server, path, read only, and the namespace and name of the one
+    # claim. Two volumes for each share: read and write for its vault
+    # server, read only for its agent and its backup mover.
+    - name: allowed
+      expression: >-
+        [
+          ['nfs-vault-main-rw', '10.5.0.3', '/vault-main', 'false', 'agents-main', 'vault-rw'],
+          ['nfs-vault-main-ro', '10.5.0.3', '/vault-main', 'true', 'agents-main', 'vault-ro'],
+          ['nfs-vault-finance-rw', '10.5.0.3', '/vault-finance', 'false', 'agents-finance', 'vault-rw'],
+          ['nfs-vault-finance-ro', '10.5.0.3', '/vault-finance', 'true', 'agents-finance', 'vault-ro']
+        ]
+  validations:
+    - expression: >-
+        variables.allowed.exists(a,
+          a[0] == object.metadata.name &&
+          a[1] == object.spec.nfs.server &&
+          a[2] == object.spec.nfs.path &&
+          a[3] == string(object.spec.nfs.?readOnly.orValue(false)) &&
+          a[4] == object.spec.?claimRef.?namespace.orValue('') &&
+          a[5] == object.spec.?claimRef.?name.orValue(''))
+      messageExpression: >-
+        'A PersistentVolume with an NFS source must be on the list of
+        kubernetes/apps/storage/nfs-server/admission, with its server, path,
+        read-only flag and claim. Not listed: ' + object.metadata.name + ' ' +
+        object.spec.nfs.server + ':' + object.spec.nfs.path
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: nfs-persistent-volumes
+spec:
+  policyName: nfs-persistent-volumes
+  validationActions: ["Audit", "Warn"]
