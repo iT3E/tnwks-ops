@@ -2039,7 +2039,7 @@ The volume, its backup policy and its snapshots stay, as for finance.
 | # | Step | Who | Blocks |
 | --- | --- | --- | --- |
 | 1 | Merge 1 (volume, inbox) and its check | Lead writes, owner merges | Step 4 |
-| 2 | The repository `agents-main`: the role (Terraform apply), the certificate and the password (SOPS values), the session, the repository | Lead writes; the owner approves the apply and makes the values, or gives them to the lead as for finance | Merge 2 |
+| 2 | The repository `agents-main`: the role (Terraform apply), the certificate and the password (SOPS values), the session, the repository | Lead writes; the merge of the role is the approval of its apply; the owner makes the values, or gives them to the lead as for finance | Merge 2 |
 | 3 | Merge 2 (backup policy) and its check | Lead writes, owner merges | Step 4 |
 | 4 | The tools and their credentials (D3), and the hold of messages to a person (D16) | Owner (gate) | Merges 3 and 4 |
 | 5 | The values of `agent-secret` and the entry of `keys.json` | Owner (R4) | Merge 4 |

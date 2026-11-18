@@ -3,6 +3,18 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.198.1 - 2026-11-18
+
+### Fixed
+
+* Windows hosts, the window procedure of the move: the fail line of each step that runs a task of an account (the stop, the unregister and the import of the window, the unregister and the import back of the way back) holds the exit code of the task and the error text of its command from the result of this run, or says that there is no result of this run. A step takes the result of a task of an account only from a run that ended in this run, with a time from the start of the run to the moment of the read. Each fail line is one line and bounded, as is the line of a task with its result. The checks of the rehearsal read each line of the procedure log by its start. Tests show that a result of an earlier run, a task that starts and never runs, and a start that Task Scheduler refuses each fail their step with that text.
+
+## v2.198.0 - 2026-11-18
+
+### Added
+
+* agents: step 2 of the move of the main agent: the snapshot policy and schedule of its state volume, to the backup repository agents-main. The first snapshot runs at once, of the empty volume.
+
 ## v2.197.0 - 2026-11-18
 
 ### Changed
