@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.193.0 - 2026-11-18
+
+### Added
+
+* Backups: the role and the prefix of the backup repository of the main trust domain (entry agents-main of rolesanywhere_backups_prefixed, prefix kopiur-main/, exclusive to its role in the bucket policy), step 1 of its repository. The certificate, the password, the session and the repository come in later steps, in the order of docs/operations/backups.md, "The main repository".
+
 ## v2.192.0 - 2026-11-18
 
 ### Added
