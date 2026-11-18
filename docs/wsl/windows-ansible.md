@@ -913,6 +913,26 @@ only when A is not its owner). The phase `wayback` removes such an icon
 after A leaves the group, or before a way back with no group step; the
 phase `interrupt` only reads it, and stops when it is there.
 
+**The reads of the icon in the procedure.** The window procedure reads the
+icon (`shortcut.ico`) before each import, for the account of that import,
+and deletes none. A read passes with no icon, or with one that has none of
+the attributes read-only, hidden and system, no deny entry, and an allow
+rule that gives the account of the import the rights it needs
+(`FILE_GENERIC_WRITE`, and `DELETE` where its unregister deletes it). Only
+the rules of that account count, and of the Administrators when the account
+imports as a member (the group steps): a right from another group does not
+count, so a read can refuse an icon that the import could write, never the
+other way. Window step 1 reads both folders before any change: the old
+folder for an import back by the present account (write and delete), and
+the folder of the new account for its import (write and delete). Either
+read stops the window with nothing changed. After window step 5 no icon may
+be left in the old folder, and before window step 6 the read of the folder
+of the new account runs again; a fail at either sends the window back.
+Before way back step 5 the old folder is read for the import back (write).
+A fail there stops the way back before the import, and the procedure only
+says so: no step deletes the icon, and the way out is a reviewed change of
+the play.
+
 **The boot run of the group test.** The rehearsal shows the group step at
 boot only by the owner's word, once for each word: `interrupt` with
 `-e wsl_move_rehearsal_boot_group_steps=true` writes a boot request (a file

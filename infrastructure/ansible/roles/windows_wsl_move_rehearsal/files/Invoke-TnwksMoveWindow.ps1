@@ -370,6 +370,8 @@ public static class TnwksSecurity {
             } finally { LocalFree(sd); }
         }
     }
+    // The attributes of a file (FILE_ATTRIBUTE_*), as a number.
+    public static int ReadAttributes(string path) { return (int)System.IO.File.GetAttributes(path); }
     // The group of a file (G:, as SDDL without the prefix), or '' with none.
     public static string ReadGroup(string path) {
         using (SafeFileHandle h = Open(path, READ_CONTROL)) {
@@ -630,6 +632,68 @@ function Add-TnwksFolderMarker([string]$Folder, [string]$Sid) {
     Assert-Tnwks (Test-Path -LiteralPath $marker) "no marker file in $Folder"
 }
 
+# --- The icon of the distro -------------------------------------------------
+# An import in place writes the icon of the distro, shortcut.ico, in the
+# folder of the disk file, as the account of the import, with a create that
+# replaces a file that is there. The create needs the right to write the
+# file, and fails on a file with the attribute hidden or system; a file with
+# the attribute read-only can not be written (Microsoft: CreateFile). An
+# unregister deletes the icon as its account. So a read before each import
+# checks that the account of the import can write the icon that is there.
+# The read counts the allow rules of the SIDs given only: the account, and
+# the Administrators when the account imports as a member. A right that
+# another group gives does not count, so the read can refuse an icon that
+# the import could write, never the other way. Any deny rule is refused, as
+# are the three attributes. The read changes nothing: no step deletes an
+# icon.
+$TnwksIconName = 'shortcut.ico'
+$TnwksWrite = [int64]0x120116   # FILE_GENERIC_WRITE
+$TnwksDelete = [int64]0x10000   # DELETE
+# The rights of the generic bits on a file (Microsoft: File Security and Access Rights).
+$TnwksFileGeneric = @{ [int64]0x10000000 = [int64]0x1F01FF; [int64]0x40000000 = [int64]0x120116
+    [int64]0x20000000 = [int64]0x1200A0; [int64]2147483648 = [int64]0x120089 }
+
+# What keeps the account of an import from replacing the icon in a folder
+# ('' for no icon, or an icon that it can replace): each problem, in words.
+function Get-TnwksIconProblem([string]$Folder, [string[]]$Sids, [int64]$Need) {
+    $path = Join-Path $Folder $TnwksIconName
+    if (-not (Test-Path -LiteralPath $path)) { return '' }
+    $problems = @()
+    $attributes = [IO.FileAttributes][TnwksSecurity]::ReadAttributes($path)
+    foreach ($a in @('ReadOnly', 'Hidden', 'System')) {
+        if ($attributes.HasFlag([IO.FileAttributes]$a)) { $problems += "the attribute $(@{ ReadOnly = 'read-only'; Hidden = 'hidden'; System = 'system' }[$a])" }
+    }
+    $sddl = Get-TnwksSddl $path
+    $dacl = if ($sddl -match 'D:[A-Z]*((\([^)]*\))*)') { $Matches[1] } else { '' }
+    [int64]$mask = 0; $deny = 0
+    foreach ($ace in @([regex]::Matches($dacl, '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value })) {
+        $f = $ace -split ';'
+        if ($f.Count -lt 6) { continue }
+        # An inherit-only rule does not apply to the file itself.
+        if ($f[1] -match 'IO') { continue }
+        if ($f[0] -ne 'A') { $deny++; continue }
+        # SDDL writes the Administrators as BA.
+        $sid = ConvertTo-TnwksSddlSid $f[5]
+        if ($sid -eq 'BA') { $sid = 'S-1-5-32-544' }
+        if ($sid -notin $Sids) { continue }
+        $m = ConvertTo-TnwksSddlMask $f[2]
+        if ($m -notmatch '^0x') { $problems += "a rule with rights that the read does not know ($($f[2]))"; continue }
+        [int64]$bits = [Convert]::ToInt64($m.Substring(2), 16)
+        foreach ($g in $TnwksFileGeneric.Keys) { if ($bits -band $g) { $bits = ($bits -band (-bnot $g)) -bor $TnwksFileGeneric[$g] } }
+        $mask = $mask -bor $bits
+    }
+    if ($deny) { $problems += "$deny deny rule(s)" }
+    if (($mask -band $Need) -ne $Need) { $problems += ('no rule that gives the right to {0} it' -f $(if ($Need -band $TnwksDelete) { 'write and delete' } else { 'write' })) }
+    if (-not $problems.Count) { return '' }
+    "the icon $path has $($problems -join ', '); the rules: $(ConvertTo-TnwksMaskedText $sddl)"
+}
+
+# The SIDs whose rules count for the import of the present account: the
+# account, and the Administrators when it imports as a member.
+function Get-TnwksImportSids([string]$Sid, [bool]$Member) {
+    @($Sid) + @(if ($Member) { 'S-1-5-32-544' })
+}
+
 function Test-TnwksScope {
     $sep = [IO.Path]::DirectorySeparatorChar
     $root = [IO.Path]::GetFullPath($cfg.root).TrimEnd($sep)
@@ -762,6 +826,18 @@ function Invoke-TnwksForward {
         if ($refused.Count -or $diskParts.inherited -ne $gives) { return 'stopped' }
         Write-Log 'step 1: the disk file has the inherited rules that its folder gives, and no rule that the way back refuses'
     }
+    # (1) The icon in each folder, before any change. The old folder: for an
+    # import back by the present account, a member of the Administrators with
+    # the group steps (write and delete: the unregister of step 5 deletes it).
+    # The folder of the new account: for its import at step 6.
+    $icons = @(
+        (Get-TnwksIconProblem $present.folder (Get-TnwksImportSids $pSid ([bool]$req.group_steps)) ($TnwksWrite -bor $TnwksDelete)),
+        (Get-TnwksIconProblem $new.folder @($nSid) ($TnwksWrite -bor $TnwksDelete)) | Where-Object { $_ })
+    if ($icons.Count) {
+        foreach ($i in $icons) { Write-Log "stop at step 1: $i. An import there would fail. Nothing is changed." }
+        return 'stopped'
+    }
+    Write-Log 'step 1: no icon in either folder that the import there can not replace'
     if ($req.rehearsal_group_test) {
         # The rehearsal only: the present account is in Administrators, as
         # the real present account is. Window step 7 takes it out.
@@ -816,12 +892,17 @@ function Invoke-TnwksForward {
     Assert-Tnwks ($unreg.code -eq 0 -and $unreg.result -and -not $unreg.result.registered) "the unregister of $($present.account) did not pass"
     Assert-Tnwks ((Test-Path -LiteralPath $newPath) -and (Get-Item -LiteralPath $newPath).Length -eq $size) 'the disk file changed in the unregister'
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $present.folder $cfg.marker_name)) 'the old folder or its marker is gone'
+    # The unregister deletes the icon of the distro as its account.
+    Assert-Tnwks (-not (Test-Path -LiteralPath (Join-Path $present.folder $TnwksIconName))) "an icon is left in $($present.folder) after the unregister"
     Write-Log 'step 5 passed'
     if ([int]$req.stop_after -eq 5) {
         Write-Log 'stop after step 5 (the rehearsal): the marker of a started window stays'
         return 'stopped-after'
     }
-    # (6) The import of the new account, then its stop.
+    # (6) The import of the new account, then its stop. First the read of
+    # its icon of step 1 again.
+    $icon = Get-TnwksIconProblem $new.folder @($nSid) ($TnwksWrite -bor $TnwksDelete)
+    Assert-Tnwks (-not $icon) "before the import of $($new.account): $icon"
     $import = Invoke-TnwksAccountTask $new.window_tasks.import (Join-Path $new.result_dir 'import.json')
     # What the import and its first start of the distro left on the file (the
     # rule of a VM), whether the import passed or not.
@@ -916,8 +997,13 @@ function Invoke-TnwksWayBack {
     Assert-Tnwks ((Get-Item -LiteralPath $oldPath).Length -eq $size) 'the disk file changed in the unregister'
     Assert-Tnwks (Test-Path -LiteralPath (Join-Path $new.folder $cfg.marker_name)) 'the new folder or its marker is gone'
     Write-Log 'way back 4 passed'
-    # (5) For step 5: the import back of the present account. From here a VM
-    # of the present account may run, started in this run.
+    # (5) For step 5: the import back of the present account. First the icon
+    # in the old folder: one that the import back can not replace stops the
+    # way back here, before the import. Nothing deletes it: the way out is a
+    # reviewed change of the play.
+    $icon = Get-TnwksIconProblem $present.folder (Get-TnwksImportSids $pSid (Test-TnwksAdmin $pSid)) $TnwksWrite
+    Assert-Tnwks (-not $icon) "before the import back of $($present.account): $icon. The way back stops here, and no step deletes the icon"
+    # From here a VM of the present account may run, started in this run.
     $script:ImportBackRan = $true
     $import = Invoke-TnwksAccountTask $present.window_tasks.import (Join-Path $present.result_dir 'import.json')
     Assert-Tnwks ($import.code -eq 0 -and $import.result -and [string]::Equals("$($import.result.disk)", $oldPath, [StringComparison]::OrdinalIgnoreCase)) "the import back of $($present.account) did not pass"
