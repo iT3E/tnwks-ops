@@ -47,7 +47,19 @@ def test_the_rehearsal_of_the_move_runs_on_the_site_2_host_only_and_last():
     assert group["wsl_move_rehearsal"] is False
     on = {path.parent.name for path in INVENTORY.glob("host_vars/*/main.yml")
           if (yaml.safe_load(path.read_text()) or {}).get("wsl_move_rehearsal")}
-    assert on == {"WSL-02"}
+    # The rehearsal ended: the switch is off on every host until the next one. A
+    # rehearsal runs on the site 2 host only. The pull request of the next
+    # rehearsal, which turns the switch on for the site 2 host, removes the
+    # second assert.
+    assert on <= {"WSL-02"}
+    assert on == set()
+    # The switch is set only in the group vars of the Windows hosts and in the host vars
+    # of the site 2 host: not inline in hosts.yml, not in another vars file. A value in a
+    # SOPS file is out of reach of this test (it reads no SOPS file).
+    setting = re.compile(r"(?<![\w-])wsl_move_rehearsal\s*:")
+    where = sorted(str(path.relative_to(INVENTORY)) for path in INVENTORY.rglob("*")
+                   if path.is_file() and ".sops." not in path.name and setting.search(path.read_text(errors="replace")))
+    assert where == ["group_vars/windows_hosts.yml", "host_vars/WSL-02/main.yml"], where
     play = yaml.safe_load((ANSIBLE / "playbooks/windows-host.yml").read_text())
     hosts = next(p for p in play if p["hosts"] == "windows_hosts")
     assert hosts["roles"][-1] == {"role": "windows_wsl_move_rehearsal", "when": "wsl_move_rehearsal | bool",
