@@ -221,7 +221,9 @@ def test_the_writer_mounts_hard_and_the_readers_soft():
         assert options[0] == "nfsvers=4.1", name
         if spec["nfs"]["readOnly"]:
             assert name.endswith("-ro") and spec["accessModes"] == ["ReadOnlyMany"], name
-            assert options == ["nfsvers=4.1", "soft", "timeo=50", "retrans=2", "actimeo=3"], name
+            # ro: the kubelet takes the read-only flag from the pod, not
+            # from nfs.readOnly, so the option makes the mount read only.
+            assert options == ["nfsvers=4.1", "soft", "timeo=50", "retrans=2", "actimeo=3", "ro"], name
         else:
             assert name.endswith("-rw") and spec["accessModes"] == ["ReadWriteMany"], name
             assert options == ["nfsvers=4.1", "hard"], name
