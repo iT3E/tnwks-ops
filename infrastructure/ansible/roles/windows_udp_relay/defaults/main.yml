@@ -13,6 +13,17 @@ udp_relay_src: Start-TnwksUdpRelay.ps1
 udp_relay_log_dir: '{{ udp_relay_dir }}\log'
 # The account that owns the WSL distro.
 udp_relay_user: "{{ windows_desktop_user }}"
+# The move of the distro (group_vars/windows_hosts.yml, wsl_move_phase): the
+# accounts that may write the logs of the relays (both while the move runs),
+# and the relay tasks of the phase, which the handler restarts. Each relay
+# has a copy for the account that owns the distro, named with the suffix.
+udp_relay_writers: >-
+  {{ [udp_relay_user] if wsl_move_phase == 'off'
+     else ([udp_relay_user, wsl_move_new_account] if wsl_move_phase == 'move' else [wsl_move_new_account]) }}
+udp_relay_task_names: >-
+  {{ (udp_relays | map(attribute='task') | list if wsl_move_phase != 'done' else [])
+     + (udp_relays | map(attribute='task') | map('regex_replace', '$', wsl_move_task_suffix) | list
+        if wsl_move_phase != 'off' else []) }}
 
 #   task    Scheduled Task name
 #   port    UDP port on the Windows host and in WSL

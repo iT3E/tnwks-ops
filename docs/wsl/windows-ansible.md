@@ -1118,6 +1118,11 @@ VM, and the sync (SYSTEM) reads it and moves the port proxy. The sync waits
 45 seconds after a VM NIC event, and the address task 15 seconds. The
 handler of the role runs the address task that is enabled.
 
+Each UDP relay has a copy too (`<task>-account`). A relay and its copy
+listen on the same port, and the window runs one of them only. While the
+move runs, both accounts may write the logs of the relays, and the handler
+of the role restarts the relays that are enabled.
+
 ## Check-only settings
 
 The role `windows_host_settings` (last in the play) only reads. Its single
