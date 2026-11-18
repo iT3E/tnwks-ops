@@ -34,11 +34,15 @@ spec:
       nodeSelector:
         kubernetes.io/hostname: homelab-wsl-worker-1
       initContainers:
-        # The gdrive-sync export's root belongs to the squash uid (1000) and
-        # nobody else: every client is mapped to it (configmap.yaml).
-        - name: gdrive-sync-perms
+        # The root of each squashed export (gdrive-sync and the vault shares)
+        # belongs to the squash uid (1000) and nobody else: every client is
+        # mapped to it (configmap.yaml).
+        - name: export-perms
           image: docker.io/library/busybox:1.38@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
-          command: ["sh", "-c", "chown 1000:1000 /gdrive-sync && chmod 0700 /gdrive-sync"]
+          command:
+            - sh
+            - -c
+            - chown 1000:1000 /gdrive-sync /vault-main /vault-finance && chmod 0700 /gdrive-sync /vault-main /vault-finance
           securityContext:
             capabilities:
               drop: ["ALL"]
@@ -46,6 +50,10 @@ spec:
           volumeMounts:
             - name: gdrive-sync
               mountPath: /gdrive-sync
+            - name: vault-main
+              mountPath: /vault-main
+            - name: vault-finance
+              mountPath: /vault-finance
       containers:
         - name: nfs-server
           # Userspace NFS-Ganesha (vfs FSAL) from the kubernetes-sigs
@@ -82,6 +90,10 @@ spec:
               mountPath: /export
             - name: gdrive-sync
               mountPath: /gdrive-sync
+            - name: vault-main
+              mountPath: /vault-main
+            - name: vault-finance
+              mountPath: /vault-finance
             - name: config
               mountPath: /etc/ganesha
               readOnly: true
@@ -98,6 +110,12 @@ spec:
         - name: gdrive-sync
           persistentVolumeClaim:
             claimName: nfs-gdrive-sync
+        - name: vault-main
+          persistentVolumeClaim:
+            claimName: nfs-vault-main
+        - name: vault-finance
+          persistentVolumeClaim:
+            claimName: nfs-vault-finance
         - name: config
           configMap:
             name: nfs-ganesha-config

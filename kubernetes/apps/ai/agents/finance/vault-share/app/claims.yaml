@@ -1,0 +1,31 @@
+---
+# The claims of the share /vault-finance, one for each volume (volumes.yaml).
+# No class and a named volume: the claim binds to that volume at once, with
+# no pod and no provisioner. No label, so no selector picks them up: the
+# backup policies of the namespace name their claims.
+#
+# The read-write claim, for the vault server of the trust domain.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-rw
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: ""
+  volumeName: nfs-vault-finance-rw
+  resources:
+    requests:
+      storage: 2Gi
+---
+# The read-only claim, for the agent pod (the index) and the backup mover.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-ro
+spec:
+  accessModes: ["ReadOnlyMany"]
+  storageClassName: ""
+  volumeName: nfs-vault-finance-ro
+  resources:
+    requests:
+      storage: 2Gi
