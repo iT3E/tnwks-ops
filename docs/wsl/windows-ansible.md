@@ -20,6 +20,7 @@ run that shows drift.
 | `windows_observability_storage` (`observability-storage`) | The 20Gi Prometheus disk `C:\WSL\observability.vhdx` and the task `tnwks-observability-mount` (site 1, [observability-implementation.md](../operations/observability-implementation.md#site-1-prometheus-volume)) |
 | `windows_wsl_rehearsal` (`wsl-rehearsal`) | hosts with `wsl_rehearsal` (WSL-02): a temporary standard account `tnwks-rehearsal` with a distro of its own and five tasks, for the rehearsal of the account change ([below](#the-rehearsal-of-the-account-change)) |
 | `windows_wsl_move_rehearsal` (`wsl-move-rehearsal`) | hosts with `wsl_move_rehearsal` (none until the next rehearsal, which turns it on for WSL-02 only): two temporary standard accounts, a small distro, and the scripts of the move window, run phase by phase by hand ([below](#the-rehearsal-of-the-move)) |
+| `windows_wsl_move` (`wsl-move`) | hosts with `wsl_move` (none until the owner approves it for a host): step 3 of the account change, the account that owns the distro, its folder, and the tasks of the move window ([below](#the-move-of-the-distro)) |
 | `windows_power` (`power`)                   | hosts with `power_no_sleep` (WSL-02): standby (S1-S3) not allowed on the active scheme, plugged in or on battery, and hibernation off, so neither a program nor the Start menu can sleep the host. Skipped elsewhere; how to undo it is in the role's defaults |
 | `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
 | `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
@@ -1077,6 +1078,54 @@ uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-0
 
 It reads no account, right, tile, task, profile or folder of the rehearsal
 left.
+
+## The move of the distro
+
+Per host, `wsl_move` (`group_vars/windows_hosts.yml`, off everywhere) adds
+the role `windows_wsl_move`: step 3 of the account change (Design Doc 0004,
+section 9). It makes the account that owns the distro, gives it its rights,
+and puts the procedure of the move window on the host. No apply starts the
+window.
+
+- **Variables.** The names of the two accounts and the folder of the disk
+  file today are in the encrypted variables of the host only:
+  `wsl_move_present_account`, `wsl_move_new_account` and
+  `wsl_move_present_folder`. The role has no default for them, and each
+  task that takes one has `no_log`. `wsl_move_new_start_tasks` names the
+  start tasks of the new account.
+- **Paths.** The role folder is `C:\ProgramData\tnwks-wsl-move`, with
+  `disk`, `state` and `log` under it. Each path is in the long, normalized
+  form (a drive, then names joined by one backslash). The folder of the new
+  disk file (`wsl_move_disk_dir`) is on the volume of the disk file today,
+  as the move is a rename and never a copy. The play stops before any
+  change when either is not so.
+- **The account.** A local account, a member of Users only, with the right
+  to log on as a batch job, each other logon denied, and off the sign-in
+  screen. Its password is random and kept nowhere: each registration of
+  one of its tasks sets a new one (`s4u_user`).
+- **The folder of the disk file.** SYSTEM and the Administrators have full
+  control. The account may make files in the folder, and change or delete
+  only the files that it made. A marker file is written once, and the
+  account may only read it.
+- **What step 3 reads of today.** The values of the registration, the
+  default distro, the VM address and `.wslconfig` of the present account,
+  kept in the state folder. They are read once, while Ansible logs in as
+  the present account. The `.wslconfig` of the new account is the one
+  section `[wsl2]` of the present account, with the keys `memory`,
+  `processors`, `swap` and `kernelCommandLine` only.
+- **The procedure.** The scripts are those of the rehearsal of the move
+  (`roles/windows_wsl_move_rehearsal/files`), and each copy on the host must
+  have the SHA-256 of the role's file. The installed version of WSL is
+  saved once. The scripts, the configs and the tasks change only while no
+  window is started.
+- **The tasks.** The new account has its probe and its stop, unregister and
+  import tasks. The present account registers its own stop, unregister and
+  import tasks while Ansible logs in as it. SYSTEM has the window task and
+  the boot task of the way back. The window task reads its run request
+  (`state\request.json`), which the start of the window writes.
+- **The probe.** After the tasks, the play runs the probe of the new
+  account and stops unless it reads a medium token, no Administrators group
+  and a profile under `C:\Users`.
 
 ## Check-only settings
 

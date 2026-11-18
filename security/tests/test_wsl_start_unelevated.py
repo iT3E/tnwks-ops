@@ -74,13 +74,14 @@ def starts_distro_process(text: str, role: Path) -> bool:
     return any(re.search(r"wsl\.exe\b[^\n]*-d\b|wsl\.exe @", script.read_text()) for script in scripts_of(text, role))
 
 
-REHEARSALS = {"windows_wsl_rehearsal", "windows_wsl_move_rehearsal"}
+REHEARSALS = {"windows_wsl_rehearsal", "windows_wsl_move_rehearsal", "windows_wsl_move"}
 
 
 def templates() -> list[Path]:
     """The scheduled tasks of the Windows roles (a WinSW service file is not one). The
-    tasks of the temporary accounts of the two rehearsals have their own tests
-    (test_wsl_rehearsal.py and test_wsl_move_rehearsal.py)."""
+    tasks of the temporary accounts of the two rehearsals, and those of the move of the
+    distro, have their own tests (test_wsl_rehearsal.py, test_wsl_move_rehearsal.py and
+    test_wsl_move_role.py)."""
     return sorted(path for path in ROLES.glob("windows_*/templates/*.xml.j2")
                   if "<Task " in path.read_text() and path.parts[-3] not in REHEARSALS)
 

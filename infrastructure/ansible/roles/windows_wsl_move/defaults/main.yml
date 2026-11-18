@@ -1,0 +1,99 @@
+---
+# windows_wsl_move: step 3 of the account change of a Windows host (Design Doc
+# 0004, section 9, step 3, and section 5.12). The account that owns the
+# distro, its folder for the disk file, the tasks of both accounts that the
+# window needs, and the window procedure with the boot task of the way back.
+# It runs the procedure of the rehearsal of the move: the same scripts
+# (roles/windows_wsl_move_rehearsal/files), copied to the host and checked by
+# their SHA-256, with the config of the real move. The lead starts the window
+# itself (plan task 10.15); no apply starts it.
+#
+# On per host (wsl_move, group_vars/windows_hosts.yml), with the owner's go
+# (R4): it makes an account and gives it a right. Its way back is the revert;
+# the removal of the account then needs a restart (F3).
+#
+# The names of the two accounts and the folder of the present disk file name
+# a person, so they are in the encrypted variables of the host only, and this
+# role has no default for them:
+#   wsl_move_present_account  the account that owns the distro today
+#   wsl_move_new_account      the account that will own it (made here)
+#   wsl_move_present_folder   the folder of the disk file today
+# The play stops before any change when one is not set.
+
+wsl_move_dir: 'C:\ProgramData\tnwks-wsl-move'
+# The folder of the disk file of the new account. The move is a rename in one
+# volume and never a copy: the play stops when this is not on the volume of
+# the disk file today. Site 1 keeps its disk file on another drive, so it sets
+# its own.
+wsl_move_disk_dir: '{{ wsl_move_dir }}\disk'
+wsl_move_state_dir: '{{ wsl_move_dir }}\state'
+wsl_move_log_dir: '{{ wsl_move_dir }}\log'
+wsl_move_state_file: '{{ wsl_move_state_dir }}\window.state'
+wsl_move_log_file: '{{ wsl_move_state_dir }}\window.log'
+wsl_move_acl_file: '{{ wsl_move_state_dir }}\disk.sddl'
+wsl_move_version_file: '{{ wsl_move_state_dir }}\wsl-version.txt'
+wsl_move_request_file: '{{ wsl_move_state_dir }}\request.json'
+# What step 3 read of today: the values of the registration, the default
+# distro and the VM address of the present account, and its .wslconfig.
+# Each is written only when it is absent.
+wsl_move_registration_file: '{{ wsl_move_state_dir }}\registration.json'
+wsl_move_wslconfig_file: '{{ wsl_move_state_dir }}\present.wslconfig'
+
+wsl_move_distro: Ubuntu
+wsl_move_disk_name: ext4.vhdx
+wsl_move_marker_name: tnwks-move.marker
+# New-LocalUser of Windows PowerShell 5.1 takes a description of 48
+# characters at most. The module of the tasks resets the password of an
+# account with this description only (s4u_description).
+wsl_move_new_description: 'tnwks-ops: the account that owns the WSL distro'
+
+# The tasks of the role. Every task that the procedure starts, stops,
+# disables or enables has a name that starts with tnwks- (its task_pattern).
+wsl_move_prefix: tnwks-wsl-move
+wsl_move_window_task: '{{ wsl_move_prefix }}-window'
+wsl_move_boot_task: '{{ wsl_move_prefix }}-boot'
+# The steps of Invoke-TnwksWslAccountTask.ps1 that each account has as a task
+# with no trigger, enabled: the window runs them. The new account also has its
+# token probe.
+wsl_move_account_steps:
+  present: [stop, unregister, import]
+  new: [probe, stop, unregister, import]
+# The WSL tasks of the present account that window step 2 disables, and that
+# the way back enables again: each task of that account that runs WSL, other
+# than its three window tasks.
+wsl_move_present_tasks:
+  - tnwks-lan-bridge-ip
+  - tnwks-udp-relay-syslog
+  - tnwks-vhdx-compact
+  - tnwks-wsl-keepalive
+  - tnwks-wsl-watchdog
+# The start tasks of the new account that window step 8 enables (plan task
+# 10.10). The play stops while this is empty.
+wsl_move_new_start_tasks: []
+
+# The right of the new account on the folder of its disk file (step 3): make
+# files in this folder (FILE_ADD_FILE) with SYNCHRONIZE.
+wsl_move_new_folder_right: '0x100002'
+# The capability SID that WSL adds to the disk file while the VM runs
+# (vmWorkerProcess, DeriveCapabilitySidsFromName): the one that the checks
+# accept.
+wsl_move_vm_capability_sid: S-1-15-3-1024-2268835264-3721307629-241982045-173645152-1490879176-104643441-2915960892-1612460704
+# The installed version of WSL is the file version of its service binary, read
+# as SYSTEM, and saved once: window step 1 stops on another one.
+wsl_move_service_binary: 'C:\Program Files\WSL\wslservice.exe'
+# The procedure restarts the host at the end of the window and of the way
+# back, as section 9 says.
+wsl_move_restart: true
+# The check of a session of the person at window step 1. The shared script
+# does not have it yet, and refuses each run with it on, with nothing changed.
+wsl_move_session_check: false
+wsl_move_task_minutes: 10
+# The keys of .wslconfig that the new account takes from the present one, in
+# its one section [wsl2]. Any other key or section stops the play.
+wsl_move_wslconfig_keys: [memory, processors, swap, kernelCommandLine]
+
+wsl_move_deny_rights:
+  - SeDenyInteractiveLogonRight
+  - SeDenyRemoteInteractiveLogonRight
+  - SeDenyNetworkLogonRight
+wsl_move_userlist_key: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList'
