@@ -945,9 +945,8 @@ Task Scheduler reads it for SYSTEM (a new last run time, not `Running` or
 `Queued`, a last result that is not `0x41301`), and only with a time from
 the start of this run to the moment of the read. The result file and its
 time come from the account, so with no such run or result a step does not
-pass. Whether the distro is registered after an unregister or an import
-rests on that file and the exit code of the task; the procedure has no
-read of the registration as SYSTEM. The fail
+pass. After an unregister or an import, a step requires the result of this
+run of the account and the exit code of its task. The fail
 line of each step that reads such a result (the stop, the unregister and
 the import of the window, and the unregister and the import back of the way
 back) holds the exit code of the task and the error text of its command

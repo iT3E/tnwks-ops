@@ -214,12 +214,11 @@ function Wait-TnwksNoWsl([string]$Sid, [string]$Account) {
 # can write, with its time. So the procedure takes a result only from a run
 # that ended in this run, and only with a time from the start of this run to
 # the moment of the read; with no such run or result, a step does not pass.
-# The steps that read a result of an account and also read the real state as
-# SYSTEM: each stop (the WSL processes of the account, by the SID of their
-# owner), window step 5 and way back step 4 (the size of the disk file, the
-# marker of the folder). Whether the distro is registered, after an
-# unregister or an import, rests on the result file of the account alone:
-# the procedure has no read of the registration as SYSTEM.
+# A step that reads a result of an account requires that result of this run
+# and the exit code of its task. Each stop also requires, as SYSTEM, no WSL
+# process of the account (by the SID of their owner); window step 5 and way
+# back step 4 also require the size of the disk file and the marker of the
+# folder as before.
 function Invoke-TnwksAccountTask([string]$Task, [string]$ResultFile) {
     $start = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $before = (Get-ScheduledTaskInfo -TaskName $Task).LastRunTime
