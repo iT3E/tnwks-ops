@@ -940,15 +940,22 @@ is not two equal booleans stops the boot run with nothing changed. Only the
 boot mode reads the boot request.
 
 **The error text of a failed step.** The procedure runs a task of an
-account and takes only a run with a new last run time and a result of that
-run: a result file that an earlier run left does not pass a step. The fail
+account and takes its result only from a run that ended in this run, as
+Task Scheduler reads it for SYSTEM (a new last run time, not `Running` or
+`Queued`, a last result that is not `0x41301`), and only with a time from
+the start of this run to the moment of the read. The result file and its
+time come from the account, so with no such run or result a step does not
+pass. Whether the distro is registered after an unregister or an import
+rests on that file and the exit code of the task; the procedure has no
+read of the registration as SYSTEM. The fail
 line of each step that reads such a result (the stop, the unregister and
 the import of the window, and the unregister and the import back of the way
 back) holds the exit code of the task and the error text of its command
 from the result of this run (`failed` and `output`), or says that there is
-no result of this run. Each text in a fail line is one line, with each
-control character a space, and is cut at 300 characters, the whole line at
-1000. The line of a task holds its result as JSON on one line, cut at 2000.
+no result of this run, or that the task did not run to its end in this run.
+Each text in a fail line is one line, with each control character and each
+line or paragraph separator of Unicode a space, and is cut at 300
+characters, the whole line at 1000. The line of a task holds its result as JSON on one line, cut at 2000.
 The checks of the log read each line by its start, so the text inside an
 error is not read as a group moment, a start or a result.
 

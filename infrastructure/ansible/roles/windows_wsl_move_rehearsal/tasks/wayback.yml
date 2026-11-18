@@ -357,16 +357,16 @@
           - wsl_move_rehearsal_procedure.groups == (['joined', 'left'] if group_steps else [])
           - wsl_move_rehearsal_procedure.would_restart == 1
           - >-
-            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^the start tasks of .* are left to the play')
+            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^the start tasks of \\S+ are left to the play')
             | list | length == (1 if group_steps else 0)
           - >-
-            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^no WSL process of .* before it leaves the group$')
+            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^no WSL process of \\S+ before it leaves the group$')
             | list | length == (1 if group_steps else 0)
           - >-
-            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^the start tasks of .* run, with [0-9]+ WSL process')
+            wsl_move_rehearsal_procedure.log | select('string') | select('match', '^the start tasks of \\S+ run, with [0-9]+ WSL process')
             | list | length == (0 if group_steps else 1)
           - "wsl_move_rehearsal_procedure.log | select('string') | select('match', '^read: ') | list | length == 1"
-          - wsl_move_rehearsal_procedure.log | select('string') | select('match', '^task .*-a-import ended with 0;') | list | length == 1
+          - wsl_move_rehearsal_procedure.log | select('string') | select('match', '^task \\S+-a-import ended with 0;') | list | length == 1
         fail_msg: "After the way back, a read did not pass: {{ check_a }} {{ check_b }} {{ back }} {{ disk_a }} {{ wsl_move_rehearsal_procedure.log }}"
         quiet: true
 

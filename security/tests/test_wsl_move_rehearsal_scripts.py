@@ -1464,13 +1464,22 @@ def test_the_wayback_checks_pass_on_the_reads_after_a_way_back(tmp_path):
     kept = {**facts, "wsl_move_rehearsal_runs": {**facts["wsl_move_rehearsal_runs"], "strip-rules": [kept_rules[-1]]}}
     # The same run read as one with the group steps off: its group moments fail the checks.
     no_group = {**facts, "wsl_move_rehearsal_wayback_group": False}
-    result, not_stripped, as_no_group = run_plays(tmp_path, [
+    # An import back that ended with 1, and the line of another task whose result holds
+    # the words of a good one: the check reads the line of the task by its start.
+    log = [line.replace("task tnwks-moverh-a-import ended with 0;", "task tnwks-moverh-a-import ended with 1;")
+           for line in procedure[-1]["log"]]
+    assert log != procedure[-1]["log"]
+    inner = 'task tnwks-moverh-b-unregister ended with 0; result: {"failed":"task tnwks-moverh-a-import ended with 0;"}'
+    forged = {**facts, "wsl_move_rehearsal_procedure_run": registered([{**procedure[-1], "log": [*log, inner]}])}
+    result, not_stripped, as_no_group, as_forged = run_plays(tmp_path, [
         {"vars": facts, "tasks": checks_of("run_procedure.yml") + checks_of("wayback.yml", names)},
         {"vars": kept, "tasks": checks_of("wayback.yml", names[:1])},
-        {"vars": no_group, "tasks": checks_of("wayback.yml", names[2:3])}])
+        {"vars": no_group, "tasks": checks_of("wayback.yml", names[2:3])},
+        {"vars": forged, "tasks": checks_of("run_procedure.yml") + checks_of("wayback.yml", names[2:3])}])
     assert not passed(result), passed(result)
     assert failed_by_assert(not_stripped, names[0])
     assert failed_by_assert(as_no_group, names[2])
+    assert failed_by_assert(as_forged, names[2])
 
 
 @needs_both
@@ -2112,6 +2121,11 @@ function Get-ScheduledTaskInfo { param([string]$TaskName) $global:Calls++; if ($
                   "wsl_move_rehearsal_boot_wait": registered(wait)}, "tasks": checks_of("restart.yml")},
         {"vars": {"wsl_move_rehearsal_boot_now": registered(now)}, "tasks": checks_of("remove.yml")},
         {"vars": {"wsl_move_rehearsal_boot_now": registered([""])}, "tasks": checks_of("remove.yml")},
+        # A fail line that holds the words of a run with no action is not one: each line is
+        # read by its start.
+        {"vars": {"wsl_move_rehearsal_boot_now": registered(
+            ["start, request: {}", "fail: check failed: x no action: the last marker is 'wayback-done'", "result: failed"])},
+         "tasks": checks_of("remove.yml")},
         {"vars": {"wsl_move_rehearsal_last_marker": registered(marker)},
          "tasks": [{"name": "the tasks to remove", "ansible.builtin.set_fact": {
              "tnwks_removed": find_task("remove-before-restart.yml", "No task of the rehearsal, but the boot task")["loop"]}}],
@@ -2121,11 +2135,14 @@ function Get-ScheduledTaskInfo { param([string]$TaskName) $global:Calls++; if ($
              "tnwks_removed": find_task("remove-before-restart.yml", "No task of the rehearsal, but the boot task")["loop"]}}],
          "keep": ["tnwks_removed"]},
     ]
-    restart_ok, restart_none, remove_ok, remove_none, keeps_boot, removes_boot = run_plays(tmp_path, plays)
+    restart_ok, restart_none, remove_ok, remove_none, remove_fail_line, keeps_boot, removes_boot = run_plays(tmp_path, plays)
     assert not passed(restart_ok), passed(restart_ok)
     assert failed_by_assert(restart_none, "The restart follows")
     assert not passed(remove_ok), (now, passed(remove_ok))
     assert failed_by_assert(remove_none, "At this boot")
+    assert failed_by_assert(remove_fail_line, "At this boot")
+    # The read gives each text of a line of this boot as one item.
+    assert "no action: the last marker is 'wayback-done'" in now, now
     assert "tnwks-moverh-boot" not in keeps_boot["facts"]["tnwks_removed"]
     assert "tnwks-moverh-window" in keeps_boot["facts"]["tnwks_removed"]
     assert "tnwks-moverh-boot" in removes_boot["facts"]["tnwks_removed"]

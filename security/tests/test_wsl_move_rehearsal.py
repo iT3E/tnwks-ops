@@ -16,6 +16,7 @@ import base64
 import hashlib
 import json
 import re
+import time
 from pathlib import Path
 
 import pytest
@@ -1841,18 +1842,22 @@ ACCOUNT_STEPS = {
     "way back step 4": ("wayback", "tnwks-moverh-b-unregister", "b", "unregister", "the unregister of tnwks-moverh-b did not pass ("),
     "way back step 5": ("wayback", "tnwks-moverh-a-import", "a", "import", "the import back of tnwks-moverh-a did not pass ("),
 }
+# The stop of window step 3 goes through the same read of a result.
+STOP_STEP = {"window step 3": ("forward", "tnwks-moverh-a-stop", "a", "stop", "the stop task of tnwks-moverh-a ")}
 
 
-def account_step_run(tmp_path: Path, name: str, result, code: int = 0, earlier: bool = False, **kw) -> tuple[dict, str]:
+def account_step_run(tmp_path: Path, name: str, result, code: int = 0, earlier: bool = False, ahead: bool = False,
+                     **kw) -> tuple[dict, str]:
     """A run of the procedure in which the task of one step gives result (None: no result
-    of this run), after an earlier run that left a good result of that task. Returns the
-    run and the fail line of the step (or '')."""
-    mode, task, who, step, text = ACCOUNT_STEPS[name]
+    of this run), after an earlier run that left a good result of that task (with ahead,
+    with a time an hour after now). Returns the run and the fail line of the step (or '')."""
+    mode, task, who, step, text = {**ACCOUNT_STEPS, **STOP_STEP}[name]
     root = tmp_path / "root"
     (root / f"log/{who}").mkdir(parents=True, exist_ok=True)
-    if earlier:
-        good = {"registered": False} if step == "unregister" else {"disk": str(root / f"{who}/ext4.vhdx")}
-        (root / f"log/{who}/{step}.json").write_text(json.dumps({**good, "time": 1}))
+    if earlier or ahead:
+        good = {"registered": False} if step == "unregister" else STOPPED if step == "stop" else {"disk": str(root / f"{who}/ext4.vhdx")}
+        when = int(time.time()) + 3600 if ahead else 1
+        (root / f"log/{who}/{step}.json").write_text(json.dumps({**good, "time": when}))
     request = {"mode": mode, "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
     out = run_window(tmp_path, request, results={task: result}, codes={task: code},
                      **({**BOOT_STARTED, **kw} if mode == "wayback" else kw))
@@ -1897,7 +1902,32 @@ def test_a_task_that_starts_and_never_runs_fails_its_step_with_no_result_of_this
         _, task, _, _, text = ACCOUNT_STEPS[name]
         out, fail = account_step_run(tmp_path / name.replace(" ", "-"), name, None, earlier=True, config={"task_minutes": 0},
                                      faults=f"$global:NoRun = @('{task}')")
-        assert out["code"] != 0 and fail == f"fail: check failed: {text}exit code 0, no result of this run)", (name, out["log"])
+        assert out["code"] != 0 and fail == f"fail: check failed: {text}did not run to its end in this run (last result 0))", (name, out["log"])
+        assert f"task {task} did not run to its end in this run; last result 0; result: none" in out["log"], out["log"]
+    # A task that runs and writes its result in this run, but still reads Queued with the
+    # result 0x41301 at the end of the wait: no run ended, so its result is not taken.
+    # The first such task is the stop of window step 3.
+    out, fail = account_step_run(tmp_path / "queued", "window step 3", STOPPED, config={"task_minutes": 0}, queued_polls=100)
+    assert fail == "fail: check failed: the stop task of tnwks-moverh-a did not run to its end in this run (last result 267009)", out["log"]
+    assert "task tnwks-moverh-a-stop did not run to its end in this run; last result 267009; result: none" in out["log"], out["log"]
+
+
+@needs_pwsh
+@pytest.mark.parametrize("name", [*ACCOUNT_STEPS, *STOP_STEP])
+def test_a_result_with_a_time_after_the_read_passes_no_step(tmp_path, name):
+    """The time in a result file is the claim of the account. A result with good values and
+    a time after the moment of the read does not pass a step: not when the task never runs
+    in this run, and not when it runs and writes no result."""
+    _, task, _, _, text = {**ACCOUNT_STEPS, **STOP_STEP}[name]
+    never, fail = account_step_run(tmp_path / "never", name, None, ahead=True, config={"task_minutes": 0},
+                                   faults=f"$global:NoRun = @('{task}')")
+    assert never["code"] != 0 and fail == f"fail: check failed: {text}did not run to its end in this run (last result 0)" + (
+        ")" if name in ACCOUNT_STEPS else ""), (name, never["log"])
+    assert "result: done" not in never["log"], never["log"]
+    ran, fail = account_step_run(tmp_path / "ran", name, None, ahead=True)
+    no_result = "exit code 0, no result of this run)" if name in ACCOUNT_STEPS else "ended with 0, with no result of this run"
+    assert ran["code"] != 0 and fail == f"fail: check failed: {text}{no_result}", (name, ran["log"])
+    assert f"task {task} ended with 0; result: none" in ran["log"] and "result: done" not in ran["log"], ran["log"]
 
 
 @needs_pwsh
@@ -1915,15 +1945,15 @@ def test_the_text_of_a_fail_line_is_one_line_and_bounded():
     start = script.index("function Format-TnwksText")
     end = script.index("\n}\n", script.index("function Format-TnwksTaskRun")) + 3
     run = pwsh(script[start:end] + """
-$a = Format-TnwksText "one`r`ntwo`tthree`0four"
+$a = Format-TnwksText "one`r`ntwo`tthree`0four$([char]0x85)five$([char]0x2028)six$([char]0x2029)seven"
 $b = Format-TnwksText ('y' * 400)
 $c = Format-TnwksText ('z' * 50) 10
-$d = Format-TnwksTaskRun ([pscustomobject]@{ code = 1; result = $null })
-$e = Format-TnwksTaskRun ([pscustomobject]@{ code = 2; result = [pscustomobject]@{ failed = "f`nf"; output = '' } })
+$d = Format-TnwksTaskRun ([pscustomobject]@{ ran = $true; code = 1; result = $null })
+$e = Format-TnwksTaskRun ([pscustomobject]@{ ran = $true; code = 2; result = [pscustomobject]@{ failed = "f`nf"; output = '' } })
 [Console]::Out.Write((@($a, $b.Length, $b.EndsWith(' [cut]'), $c, $d, $e) | ConvertTo-Json -Compress))
 """)
     assert run.returncode == 0, run.stderr
-    assert json.loads(run.stdout) == ["one two three four", 306, True, "zzzzzzzzzz [cut]", "exit code 1, no result of this run",
+    assert json.loads(run.stdout) == ["one two three four five six seven", 306, True, "zzzzzzzzzz [cut]", "exit code 1, no result of this run",
                                       "exit code 2, failed: f f"]
 
 
