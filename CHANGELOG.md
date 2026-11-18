@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.203.0 - 2026-11-18
+
+### Changed
+
+* kube-prometheus-stack (homelab-wsl): the scrape of the API server keeps the checks of the two admission policies of NFS volumes (nfs-pod-volumes, nfs-persistent-volumes) with enforcement_action "audit" or "deny", beside the denials of the mover policy. So the count of the volumes they would refuse is in Prometheus while they audit.
+
 ## v2.202.0 - 2026-11-18
 
 ### Added

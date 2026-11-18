@@ -1,3 +1,0 @@
-kind: Changed
-body: 'kube-prometheus-stack (homelab-wsl): the scrape of the API server keeps the checks of the two admission policies of NFS volumes (nfs-pod-volumes, nfs-persistent-volumes) with enforcement_action "audit" or "deny", beside the denials of the mover policy. So the count of the volumes they would refuse is in Prometheus while they audit.'
-time: 2026-11-18T15:00:00.000000+00:00
