@@ -1,9 +1,10 @@
 ---
 # The stops of the procedure that change nothing, on the host, with a test
-# config of its own (a state file, a log and two empty folders under
-# test\) and no WSL: another saved version stops the window at step 1, and a
-# disk file at neither path or at both paths stops the boot run at its first
-# read. Each stop leaves the test folders as they were.
+# config of its own (a state file, a log, a boot request path and two empty
+# folders under test\) and no WSL: another saved version stops the window at
+# step 1, and a disk file at neither path or at both paths stops the boot run
+# at its first read. Each stop leaves the test folders as they were. No path
+# of the test config is in the state folder of the rehearsal.
 - name: The stops of the procedure on a test config
   ansible.windows.win_powershell:
     parameters:
@@ -79,6 +80,10 @@
       log_file: '{{ wsl_move_rehearsal_dir }}\test\window.log'
       acl_file: '{{ wsl_move_rehearsal_dir }}\test\disk.sddl'
       version_file: '{{ wsl_move_rehearsal_dir }}\test\wsl-version.txt'
+      # The boot cases read a boot request at this path, and the folder of the
+      # test holds none: a boot request in the state folder stays as it is,
+      # and so do the groups.
+      boot_request_file: '{{ wsl_move_rehearsal_dir }}\test\boot-request.json'
       restart: false
       present: {folder: '{{ wsl_move_rehearsal_dir }}\test\a'}
       new: {folder: '{{ wsl_move_rehearsal_dir }}\test\b'}

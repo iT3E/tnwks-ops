@@ -3,6 +3,24 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.195.0 - 2026-11-18
+
+### Added
+
+* Backups: the session refresher of the main repository runs (its role and profile in the wsl cluster settings, and its directory listed for Flux). The ClusterRepository comes in the next step.
+
+## v2.194.1 - 2026-11-18
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the stops of the procedure at setup give their test config a boot request path of its own, in the test folder. Before, that path was the one in the state folder of the rehearsal, so with a boot request there the boot cases of the stops would read it, could take an account out of Administrators, and would remove it at their end. No path of the test config is now in the state folder.
+
+## v2.194.0 - 2026-11-18
+
+### Added
+
+* Backups: the directory of the backup repository of the main trust domain (kopiur-system/agents-main-repository: its refresher, its RBAC, its session Secret with placeholders, and its ClusterRepository agents-main with the grant of agents-main), in git and not listed for Flux, and the two settings keys RA_AGENTS_MAIN_BACKUPS_* as marked placeholders. The two SOPS files, the session, the repository and the backup policy of the main agent come in later steps, in the order of docs/operations/backups.md. A test holds each repository of a trust domain to its Terraform entry and to that order.
+
 ## v2.193.0 - 2026-11-18
 
 ### Added

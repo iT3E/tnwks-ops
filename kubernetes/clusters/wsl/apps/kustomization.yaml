@@ -54,6 +54,11 @@ resources:
   # ClusterRepository is listed in a later step (docs/operations/backups.md,
   # "The finance repository").
   - ../../../apps/kopiur-system/agents-finance-repository/ks.yaml
+  # The kopiur repository of the main trust domain, the same way, with the
+  # two keys RA_AGENTS_MAIN_BACKUPS_* in cluster-settings.yaml. Its
+  # ClusterRepository is listed in a later step (docs/operations/backups.md,
+  # "The main repository").
+  - ../../../apps/kopiur-system/agents-main-repository/ks.yaml
   # Fence a warm app's Postgres when its site lease names this site.
   - ../../../apps/databases/site-lease-fence/ks.yaml
   - ../../../apps/flux-system

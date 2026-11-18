@@ -173,6 +173,13 @@ data:
   # finance repository").
   RA_AGENTS_FINANCE_BACKUPS_PROFILE_ARN: "arn:aws:rolesanywhere:us-west-2:654654262098:profile/f445d86f-cace-4c6a-b215-5d9dd85a1de1"
   RA_AGENTS_FINANCE_BACKUPS_ROLE_ARN: "arn:aws:iam::654654262098:role/tnwks-rolesanywhere-backups-agents-finance"
+  # The main repository (kopiur-system/agents-main-repository): the same, for
+  # the role kept to kopiur-main/. The outputs of environments/prod/aws for
+  # "agents-main" (rolesanywhere_backups_prefixed_profile_arns and
+  # rolesanywhere_backups_prefixed_role_arns; docs/operations/backups.md,
+  # "The main repository").
+  RA_AGENTS_MAIN_BACKUPS_PROFILE_ARN: "arn:aws:rolesanywhere:us-west-2:654654262098:profile/f370d2a4-40a6-4b23-946c-24ca83bd308a"
+  RA_AGENTS_MAIN_BACKUPS_ROLE_ARN: "arn:aws:iam::654654262098:role/tnwks-rolesanywhere-backups-agents-main"
   # Apps homelab-wsl-02 serves (docs/wsl/multi-site.md): off here, their names
   # resolve to WSL-02 (infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf).
   PLAYWRIGHT_MCP_REPLICAS: "0"

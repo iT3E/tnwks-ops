@@ -90,3 +90,9 @@ def test_the_steps_never_meet_in_a_wrong_order():
         assert REPOSITORY.exists()
         allowed = doc(REPOSITORY)["spec"]["allowedNamespaces"]["list"]
         assert "agents-main" in allowed
+        # The repository is applied: listed in its directory, and the
+        # directory listed for Flux.
+        repository_app = yaml.safe_load((REPOSITORY.parent / "kustomization.yaml").read_text())["resources"]
+        assert "./clusterrepository.yaml" in repository_app
+        apps = yaml.safe_load((ROOT / "kubernetes/clusters/wsl/apps/kustomization.yaml").read_text())["resources"]
+        assert "../../../apps/kopiur-system/agents-main-repository/ks.yaml" in apps

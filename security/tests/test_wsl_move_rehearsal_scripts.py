@@ -346,15 +346,18 @@ DIR = r"C:\ProgramData\tnwks-moverh"
 
 # --- Setup: the stops of the procedure ----------------------------------------------------
 
-def stops_shim(tmp_path: Path) -> Path:
+def stops_shim(tmp_path: Path, admins: tuple[str, ...] = ()) -> Path:
     """A powershell.exe for the stops task: PowerShell 7 with the fakes of the window tests,
-    which runs the procedure with the arguments that the task gives."""
+    which runs the procedure with the arguments that the task gives. The members of
+    Administrators start as admins; after each run, group.txt has a line with the group
+    calls of the run and the members."""
     system_root = tmp_path / "SystemRoot"
     bin_dir = system_root / "System32/WindowsPowerShell/v1.0"
     bin_dir.mkdir(parents=True)
     (bin_dir / "shim.ps1").write_text(WINDOW_FAKES + f"""
 $global:Sids = @{{ 'tnwks-moverh-a' = '{A_SID}'; 'tnwks-moverh-b' = '{B_SID}' }}
 $global:Results = @{{}}; $global:Codes = @{{}}; $global:Acls = @{{}}
+foreach ($sid in @({", ".join(f"'{a}'" for a in admins) or "''"})) {{ if ($sid) {{ $global:Admins.Add($sid) }} }}
 $a = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'argv.txt'))
 # As powershell.exe may: a line on stderr, which the task keeps as text.
 [Console]::Error.WriteLine('a line on stderr')
@@ -363,7 +366,10 @@ $i = [array]::IndexOf($a, '-File')
 $named = @{{}}
 for ($j = $i + 2; $j -lt $a.Count; $j += 2) {{ $named[$a[$j].TrimStart('-')] = $a[$j + 1] }}
 & $a[$i + 1] @named
-exit [int]$LASTEXITCODE
+$code = [int]$LASTEXITCODE
+$group = @($global:Calls | Where-Object {{ $_ -match '^(join|leave|refused leave) ' }}) -join ','
+Add-Content -LiteralPath (Join-Path $PSScriptRoot 'group.txt') -Value "calls=$group admins=$($global:Admins -join ',')"
+exit $code
 """)
     shim = bin_dir / "powershell.exe"
     shim.write_text('#!/bin/sh\nd=$(dirname "$0")\nprintf \'%s\\n\' "$@" > "$d/argv.txt"\n'
@@ -415,6 +421,54 @@ def test_the_stops_run_the_procedure_on_an_empty_state_file_and_the_check_passes
     assert by_case["no started window"]["last_log"].endswith("no action: the last marker is 'wayback-done'")
     # The test folder goes at the end.
     assert not (root / "test").exists()
+    [result] = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_stops": registered(output)},
+                                     "tasks": checks_of("procedure_stops.yml")}])
+    assert not passed(result), passed(result)
+
+
+@no_ansible
+def test_no_path_of_the_stops_config_is_in_the_state_folder(tmp_path):
+    root = tmp_path / "rehearsal"
+    root.mkdir()
+    _, cfg = stops_config(tmp_path, root)
+    state = DEFAULTS["wsl_move_rehearsal_state_dir"].replace("{{ wsl_move_rehearsal_dir }}", str(root))
+
+    def strings(value):
+        if isinstance(value, dict):
+            for v in value.values():
+                yield from strings(v)
+        elif isinstance(value, list):
+            for v in value:
+                yield from strings(v)
+        elif isinstance(value, str):
+            yield value
+
+    assert state == f"{root}\\state"
+    assert [v for v in strings(cfg) if v.lower().startswith(state.lower())] == []
+    assert cfg["boot_request_file"] == f"{root}\\test\\boot-request.json"
+
+
+@needs_both
+def test_the_boot_stops_leave_a_boot_request_in_the_state_folder_and_the_groups_as_they_were(tmp_path):
+    """A boot request of the rehearsal in its state folder (two true values), and A in
+    Administrators: the boot cases of the stops read no request, take no account out of
+    the group, and leave the request as it was."""
+    root = tmp_path / "rehearsal"
+    (root / "state").mkdir(parents=True)
+    request = root / "state/boot-request.json"
+    text = json.dumps({"group_steps": True, "rehearsal_group_test": True})
+    request.write_text(text)
+    config, _ = stops_config(tmp_path, root)
+    config = json.loads(config)
+    config["service_binary"] = "__PSHOME__/System.Management.Automation.dll"
+    system_root = stops_shim(tmp_path, admins=(A_SID,))
+    output = run_script(tmp_path, "procedure_stops.yml", "The stops of the procedure", {
+        "Script": str(WINDOW), "Test": str(root / "test"), "DiskName": "ext4.vhdx", "TestConfig": json.dumps(config),
+    }, stand_ins=f"$env:SystemRoot = {ps_str(system_root)}\n", edits=(PSHOME_EDIT, SLASH_EDIT))
+    assert [o["case"] for o in output] == ["another version", "neither path", "both paths", "no started window"]
+    assert request.read_text() == text
+    group = (system_root / "System32/WindowsPowerShell/v1.0/group.txt").read_text().splitlines()
+    assert group == [f"calls= admins={A_SID}"] * 4, group
     [result] = run_plays(tmp_path, [{"vars": {"wsl_move_rehearsal_stops": registered(output)},
                                      "tasks": checks_of("procedure_stops.yml")}])
     assert not passed(result), passed(result)

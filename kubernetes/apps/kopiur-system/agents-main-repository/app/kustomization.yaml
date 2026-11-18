@@ -1,0 +1,24 @@
+---
+# The main repository in steps, so that it never bootstraps with the
+# placeholder session (docs/operations/backups.md, "The main repository",
+# in the order of "The finance repository"): first the credentials and the
+# refresher, and after one good refresh the ClusterRepository.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./secret-certificate.sops.yaml
+  - ./secret-sts.yaml
+  - ./secret-password.sops.yaml
+  - ./rbac.yaml
+  - ./cronjob.yaml
+  # Listed after the first refresh wrote a real session to
+  # aws-backup-sts-agents-main, and after the password check of
+  # docs/operations/backups.md ("The finance repository", step 4, with the
+  # file of main) printed ok: Kopia creates the repository with the password
+  # it finds, a placeholder too.
+  # - ./clusterrepository.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/name: kopiur-agents-main-repository
+      app.kubernetes.io/instance: kopiur-agents-main-repository
+    includeSelectors: false
