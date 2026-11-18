@@ -192,10 +192,13 @@ def test_the_admin_steps_run_as_system_with_no_wsl_exe():
 
 
 def test_each_new_task_exists_only_with_the_switch_and_the_compaction_pauses_it():
-    for role, variable in (("windows_wsl_maintenance", "wsl_service_task"), ("windows_lan_bridge", "lan_bridge_ip_task")):
+    # Once the move of the distro is done, the play leaves the address task of the present account
+    # alone (test_wsl_move_start_tasks.py).
+    for role, variable, when in (("windows_wsl_maintenance", "wsl_service_task", ""),
+                                 ("windows_lan_bridge", "lan_bridge_ip_task", " and wsl_move_phase != 'done'")):
         tasks = yaml.safe_load((ROLES / role / "tasks/main.yml").read_text())
         named = [task for task in tasks if task.get("tnwks_win_scheduled_task", {}).get("name") == f"{{{{ {variable} }}}}"]
-        assert [task.get("when") for task in named] == ["wsl_start_unelevated | bool", "not (wsl_start_unelevated | bool)"]
+        assert [task.get("when") for task in named] == ["wsl_start_unelevated | bool" + when, "not (wsl_start_unelevated | bool)"]
         assert named[1]["tnwks_win_scheduled_task"]["state"] == "absent"
     compact = (ROLES / "windows_wsl_maintenance/files/Compact-WslVhdx.ps1").read_text()
     assert compact.count("'tnwks-lan-bridge-ip'") == 2, "paused, and started again at the end"
@@ -218,7 +221,7 @@ def test_the_logs_of_the_tasks_with_no_elevation_are_apart_from_their_scripts():
                     found[item["path"]] = item["writer"]
     assert found == {
         "{{ wsl_watchdog_log_dir }}": "{{ wsl_maintenance_writers }}", "{{ wsl_service_log_dir }}": [],
-        "{{ udp_relay_log_dir }}": "{{ udp_relay_user }}", "{{ lan_bridge_ip_dir }}": "{{ lan_bridge_user }}"}
+        "{{ udp_relay_log_dir }}": "{{ udp_relay_user }}", "{{ lan_bridge_ip_dir }}": "{{ lan_bridge_writers }}"}
     defaults = yaml.safe_load((ROLES / "windows_wsl_maintenance/defaults/main.yml").read_text())
     assert defaults["wsl_service_log_dir"] != defaults["wsl_watchdog_log_dir"]
     service = (ROLES / "windows_wsl_maintenance/templates/wsl-service.xml.j2").read_text()
