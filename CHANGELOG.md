@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.194.0 - 2026-11-18
+
+### Added
+
+* Backups: the directory of the backup repository of the main trust domain (kopiur-system/agents-main-repository: its refresher, its RBAC, its session Secret with placeholders, and its ClusterRepository agents-main with the grant of agents-main), in git and not listed for Flux, and the two settings keys RA_AGENTS_MAIN_BACKUPS_* as marked placeholders. The two SOPS files, the session, the repository and the backup policy of the main agent come in later steps, in the order of docs/operations/backups.md. A test holds each repository of a trust domain to its Terraform entry and to that order.
+
 ## v2.193.0 - 2026-11-18
 
 ### Added
