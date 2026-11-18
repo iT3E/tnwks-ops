@@ -147,6 +147,58 @@ and after the next snapshot of a trust domain,
 `kubectl -n agents-pilot get snapshots.kopiur.home-operations.com` shows the
 newest one `Succeeded`.
 
+## NFS volumes and admission
+
+The NFS server of the cluster (`kubernetes/apps/storage/nfs-server/`) checks
+only the address of a client, and a kubelet mounts from the address of its
+node. So a pod with an NFS volume in its spec, in a namespace where Pod
+Security allows one, would reach each export that its node reaches. That
+matters once a trust domain has an export of its own for its vault. Two
+admission rules
+(`kubernetes/apps/storage/nfs-server/admission/nfsvolumes.yaml`, homelab-wsl
+only) list what is allowed:
+
+| Rule | What it lets in |
+| --- | --- |
+| `nfs-pod-volumes` | A pod with an NFS volume only for a listed namespace, server and exact path: the sites (`production`) and the sites runner (`tools`) on `/export`, and the copy of the network backups (`networking`) on `/gdrive-sync`. The pseudo root, the path of a vault, a variant of a path and another name of the server are not listed |
+| `nfs-persistent-volumes` | A PersistentVolume with an NFS source only as a listed volume of a share, with its server, path, read-only flag and the one claim it binds to. Two for each share: read and write for its vault server, read only for its agent and its backup mover |
+
+For now the bindings are `Audit` and `Warn`: a pod or a volume off the list
+is let in, with an audit annotation and a warning. A later change turns them
+to `Deny`, after a read of the audit lines shows that no user of today is off
+the list. Admission sees the API only: a privileged container can still mount
+with a system call, and a userspace NFS client needs no mount. The list of
+clients of each export is the other control.
+
+A new user of an NFS export goes on the list in the same pull request:
+`observability/tests/test_nfs_admission.py` fails until it is. The rules run
+on a throwaway API server in `admission/tests/run.sh`
+(`uv run --project observability kubernetes/apps/storage/nfs-server/admission/tests/run.sh`).
+
+**Where a refusal shows.** The API server writes the annotation
+`validation.policy.admission.k8s.io/validation_failure` into the audit line
+of the request (each write is kept at `Metadata`, `talos/wsl/patches/audit-policy.yaml`),
+and counts it in `apiserver_validating_admission_policy_check_total` with
+`enforcement_action="audit"` or `"warn"`. A warning goes back to the client
+only, so a pod that a controller makes shows none. In Grafana, Loki of the
+security streams:
+
+```logql
+{security_stream="k8s-audit", k8s_cluster="homelab-wsl"}
+  |= "validation.policy.admission.k8s.io/validation_failure" |= "nfs-"
+```
+
+The scrape of the API server keeps no series of these rules, so read the
+counter on the API server itself (it starts again at zero when the API
+server restarts):
+`kubectl get --raw /metrics | grep 'policy="nfs-'`.
+
+To check: `kubectl get validatingadmissionpolicy nfs-pod-volumes
+nfs-persistent-volumes -o yaml` shows `status.observedGeneration` equal to
+`metadata.generation` and no `status.typeChecking.expressionWarnings`, and
+`kubectl get validatingadmissionpolicybinding nfs-pod-volumes
+nfs-persistent-volumes` shows both.
+
 ## Backups of the agent trust domains
 
 The snapshots of the trust domains go to a Kopia repository of their own, not
@@ -224,6 +276,69 @@ a failed first snapshot is `KopiurSnapshotFailed` and `KopiurLastBackupFailed`.
 To check: `kubectl get clusterrepository agents` is `Ready`, and
 `kubectl -n agents-pilot get snapshotpolicies,snapshots.kopiur.home-operations.com`
 shows the newest snapshot of `agent-state-v2` `Succeeded`.
+
+## The vault shares
+
+Each trust domain with a vault gets a share of its own: one NFSv4 export on
+the NFS server of the cluster (`kubernetes/apps/storage/nfs-server/`), on a
+claim of its own. Its vault server is the one writer, and its agent mounts it
+read only. The parts come in steps; this table says what is there now.
+
+| Part | Now |
+| --- | --- |
+| Claims of the shares | `storage/nfs-vault-main` and `storage/nfs-vault-finance`, in the form of `nfs-gdrive-sync`, bound on the node of the server |
+| Exports | `/vault-main` (`Export_Id` 3) and `/vault-finance` (4): read and write for the three nodes of homelab-wsl only, each client squashed to uid and gid 1000, the owner of the root (mode 0700) |
+| Volumes and claims in the trust domains | Two static PersistentVolumes for each share and their two claims, `vault-rw` and `vault-ro`, in `agents-main` and `agents-finance` (`kubernetes/apps/ai/agents/<domain>/vault-share/`). Bound, and mounted by no pod |
+| The vault server, the mount of the agent, the backup of the share | Not yet |
+
+Each share has two volumes, one for each claim:
+
+| Volume | Claim | Mount | For |
+| --- | --- | --- | --- |
+| `nfs-vault-<domain>-rw` | `vault-rw` | `nfsvers=4.1,hard`, read and write | The vault server of the trust domain, the one writer: a write waits for the NFS server and does not end half done |
+| `nfs-vault-<domain>-ro` | `vault-ro` | `nfsvers=4.1,soft,timeo=50,retrans=2,actimeo=3`, read only | The agent pod (the index) and the backup mover: a read fails with an error about 30 seconds after the NFS server stops, and the chat goes on |
+
+The mount options are the values of the rehearsal; the design leaves them
+open. Each volume is on the list of the admission rule
+`nfs-persistent-volumes`, with its server, path, read-only flag and claim,
+and names its claim; each claim names its volume, with no storage class. So
+a claim binds at once, with no pod and no provisioner, and the Flux
+Kustomization `agents-<domain>-vault-share` (after `nfs-admission`) is
+Ready when both claims are `Bound`. The reclaim policy is `Retain`, and the
+files of a share are on its claim in `storage`, not on these objects: when
+a volume or a claim goes out of git, Flux deletes it and the files stay.
+The source and the claim of a volume can not change after it is made; a
+change of either one is a new volume. The export lets each node of the site
+write: the read-only flag of `vault-ro` is a mount of the kubelet, and the
+vault server is the one writer.
+
+What is still not there: the vault server and its route on the central MCP
+gateway, the mount of `vault-ro` in the agent pod, the backup policy of each
+share, and the change of the two admission rules to `Deny`.
+
+The server checks the address of a client only, and a kubelet mounts from
+the address of its node. So a pod address gets no access, and which pod may
+mount which path is the work of the admission rules of NFS volumes
+(`kubernetes/apps/storage/nfs-server/admission/`).
+
+A change of the exports restarts the server (Reloader, and a new volume
+changes the pod), and with `Recreate` the sites have no NFS server until the
+new pod is up. The change of this step was rehearsed on a throwaway cluster
+first. Merge such a change outside 02:00 to 02:45 local time (the copy of the
+network backups at 02:15 and the copy of the distro at 02:30) and when no
+build of the sites runs.
+
+To check: `kubectl -n storage get pvc nfs-vault-main nfs-vault-finance` shows
+both `Bound`, `kubectl -n storage get pod -l app.kubernetes.io/name=nfs-server`
+shows the new pod `Running` with no restart, and
+`kubectl -n flux-system get kustomization nfs-server sites sites-runner` shows
+each `Ready`. For the volumes and claims: `kubectl get pv nfs-vault-main-rw
+nfs-vault-main-ro nfs-vault-finance-rw nfs-vault-finance-ro` shows each
+`Bound` to its claim,
+`kubectl -n agents-main get pvc vault-rw vault-ro` (and the same in
+`agents-finance`) shows each `Bound`, and
+`kubectl -n flux-system get kustomization agents-main-vault-share
+agents-finance-vault-share` shows each `Ready`.
 
 ## The model path
 

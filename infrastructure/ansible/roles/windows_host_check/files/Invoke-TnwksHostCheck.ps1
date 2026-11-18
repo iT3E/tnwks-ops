@@ -27,6 +27,26 @@ pass:
                        released more than -UpdatesMaxAgeDays ago (Design Doc
                        0004, section 5.7): a hidden update never shows in
                        updates-pending
+  wsl-disk-rules       1 when the disk file of the WSL distro of the host
+                       does not have the owner and the rules of Design Doc
+                       0004 (section 7, row 27), is missing, or can not be
+                       read; only with -WslDisk (below)
+
+The check wsl-disk-rules runs only when -WslDisk names the disk file of the
+distro: the role gives it from the done switch of the host on
+(wsl_start_unelevated_done). It opens the file once, as SYSTEM with no
+privilege enabled, through the open of the move procedure (TnwksDiskRead.Open,
+the same code as TnwksSecurity.Open in Invoke-TnwksMoveWindow.ps1), and reads
+the owner and the DACL on that handle. It passes only when the owner is
+-WslDiskAccount, the DACL is protected, and its entries are each an allow
+entry with full control and no flag: one for SYSTEM, one for the
+Administrators and one for -WslDiskAccount, zero or more for a virtual
+machine (S-1-5-83-1- and four numbers), and at most one for
+-WslCapabilitySid. Each other entry is a fail. A missing file, a file that
+can not be read, a link, a file with a second name and a directory are each a
+fail, never a failed query. The series homelab_security_host_wsl_disk_rules_reason
+names each rule that the file broke, from a fixed list, and never a value
+that the file gave.
 
 When one query fails, the file has no result and no time of the last result,
 so the rules of the registry read the source as late for this host
@@ -66,6 +86,12 @@ param(
     [string]$FileName = 'tnwks_security_host_check.prom',
     [int]$SignatureMaxAgeDays = 7,
     [int]$UpdatesMaxAgeDays = 14,
+    # The check wsl-disk-rules: the disk file of the WSL distro, the account
+    # that owns the distro, and the capability SID that WSL adds for the VM.
+    # Off when -WslDisk is empty.
+    [string]$WslDisk = '',
+    [string]$WslDiskAccount = '',
+    [string]$WslCapabilitySid = '',
     # The relay of the document of the WSL distro; -System is then the name of
     # the distro.
     [switch]$Relay,
@@ -99,6 +125,7 @@ $script:Help = [ordered]@{
     homelab_security_host_package_lists_timestamp_seconds = 'The Unix time of the oldest package list of the updates and the security fixes of the host, from the Date of its Release file.'
     homelab_security_host_write_test_result               = 'The write test of a WSL distro to the textfile directory of its host, by the uid that tried: 0 refused by Windows, 1 the write succeeded, 2 refused by Linux before Windows, 3 not done.'
     homelab_security_host_write_test_errno                = 'The errno of the write test of a WSL distro, by the uid that tried, or 0 when the try had none.'
+    homelab_security_host_wsl_disk_rules_reason           = 'One rule of the owner and the rules of the disk file of the WSL distro that the file breaks: 1 for each.'
     homelab_security_host_write_test_files                = 'The number of files of the write test of a WSL distro in the textfile directory of the host. A try removes its own file, so this is 0.'
 }
 
@@ -115,6 +142,7 @@ $script:Severity = [ordered]@{
     'firewall-enabled'    = 'high'
     'updates-pending'     = 'high'
     'updates-held'        = 'high'
+    'wsl-disk-rules'      = 'high'
 }
 $script:Profiles = @('Domain', 'Private', 'Public')
 
@@ -202,6 +230,139 @@ function Get-TnwksRebootPending {
     [bool](New-Object -ComObject Microsoft.Update.SystemInfo).RebootRequired
 }
 
+# The read of the check wsl-disk-rules. The part from FileInformation to the
+# end of Open is the open of the move procedure, TnwksSecurity.Open in
+# roles/windows_wsl_move_rehearsal/files/Invoke-TnwksMoveWindow.ps1, word for
+# word (security/tests/test_host_check_windows.py compares them). Read opens
+# the file with READ_CONTROL only, refuses a directory, and gives the owner
+# and the DACL as a self-relative security descriptor. It enables no
+# privilege.
+$script:DiskReadCode = @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+public static class TnwksDiskRead {
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern SafeFileHandle CreateFile(string name, int access, int share, IntPtr sa, int disposition, int flags, IntPtr template);
+    [DllImport("advapi32.dll")]
+    static extern int GetSecurityInfo(SafeFileHandle h, int type, int info, out IntPtr owner, out IntPtr group, out IntPtr dacl, out IntPtr sacl, out IntPtr sd);
+    [DllImport("advapi32.dll")]
+    static extern int GetSecurityDescriptorLength(IntPtr sd);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr LocalFree(IntPtr p);
+    const int OWNER = 0x1, DACL = 0x4, READ_CONTROL = 0x20000;
+    const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
+    [StructLayout(LayoutKind.Sequential)]
+    struct FileInformation {
+        public uint Attributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME Creation, LastAccess, LastWrite;
+        public uint VolumeSerialNumber, SizeHigh, SizeLow, NumberOfLinks, IndexHigh, IndexLow;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern uint GetFileType(SafeFileHandle h);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetFileInformationByHandle(SafeFileHandle h, out FileInformation information);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern uint GetFinalPathNameByHandleW(SafeFileHandle h, System.Text.StringBuilder path, uint length, uint flags);
+    // CreateFileW (Microsoft): OPEN_EXISTING (3); every share mode (7);
+    // FILE_FLAG_BACKUP_SEMANTICS (0x02000000), so the privileges of SYSTEM
+    // grant the access and a directory opens; FILE_FLAG_OPEN_REPARSE_POINT
+    // (0x00200000), so the handle is of the entry at the path, and a link
+    // is not followed. SECURITY_SQOS_PRESENT (0x00100000) with
+    // SECURITY_IDENTIFICATION (0x00010000, SecurityIdentification << 16, in
+    // winbase.h): a server behind the path may identify SYSTEM, and may
+    // not act as it. SECURITY_SQOS_PRESENT has the value of
+    // FILE_FLAG_OPEN_NO_RECALL as well: data in remote storage stays there.
+    const int OPEN_FLAGS = 0x02000000 | 0x00200000 | 0x00100000 | 0x00010000;
+    // GetFileType: FILE_TYPE_DISK (0x0001). FILE_ATTRIBUTE_REPARSE_POINT
+    // (0x400), of the entry itself, from GetFileInformationByHandle.
+    const uint FILE_TYPE_DISK = 0x0001, FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
+    // A handle of the entry at the path, which must be a file or a directory
+    // of a local disk, not a reparse point (a link or a junction), with one
+    // name only, at the path itself: FILE_FLAG_OPEN_REPARSE_POINT applies to
+    // the last part of the path, so the final path of the handle
+    // (GetFinalPathNameByHandleW, flags 0: FILE_NAME_NORMALIZED,
+    // VOLUME_NAME_DOS) must be the path, also through each folder above it.
+    // A second name (a hard link) shares the security of the file, so a
+    // write of the rules on one name would change the other
+    // (BY_HANDLE_FILE_INFORMATION: nNumberOfLinks).
+    static SafeFileHandle Open(string path, int access) {
+        SafeFileHandle h = CreateFile(path, access, 7, IntPtr.Zero, 3, OPEN_FLAGS, IntPtr.Zero);
+        if (h.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "open " + path);
+        try {
+            uint type = GetFileType(h);
+            if (type != FILE_TYPE_DISK) throw new InvalidOperationException("not a file of a disk (type " + type + "): " + path);
+            FileInformation information;
+            if (!GetFileInformationByHandle(h, out information)) throw new Win32Exception(Marshal.GetLastWin32Error(), "read " + path);
+            if ((information.Attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) throw new InvalidOperationException("a reparse point (a link or a junction): " + path);
+            if (information.NumberOfLinks != 1) throw new InvalidOperationException("a file with " + information.NumberOfLinks + " names (a hard link): " + path);
+            System.Text.StringBuilder final = new System.Text.StringBuilder(1024);
+            uint length = GetFinalPathNameByHandleW(h, final, (uint)final.Capacity, 0);
+            if (length == 0 || length >= final.Capacity) throw new Win32Exception(Marshal.GetLastWin32Error(), "the final path of " + path);
+            string at = final.ToString();
+            // \\?\C:\... for a local disk; a share gives \\?\UNC\..., which
+            // is never the path of a drive.
+            if (!at.StartsWith(@"\\?\", StringComparison.Ordinal) ||
+                !String.Equals(at.Substring(4), path.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("the path leads to another file, through a link or a junction above it: " + path);
+        } catch {
+            h.Dispose();
+            throw;
+        }
+        return h;
+    }
+    public static byte[] Read(string path) {
+        using (SafeFileHandle h = Open(path, READ_CONTROL)) {
+            FileInformation information;
+            if (!GetFileInformationByHandle(h, out information)) throw new Win32Exception(Marshal.GetLastWin32Error(), "read " + path);
+            if ((information.Attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) throw new InvalidOperationException("a directory: " + path);
+            IntPtr owner, group, dacl, sacl, sd;
+            int r = GetSecurityInfo(h, 1, OWNER | DACL, out owner, out group, out dacl, out sacl, out sd);
+            if (r != 0) throw new Win32Exception(r, "read the rules of " + path);
+            try {
+                int length = GetSecurityDescriptorLength(sd);
+                byte[] bytes = new byte[length];
+                Marshal.Copy(sd, bytes, 0, length);
+                return bytes;
+            } finally { LocalFree(sd); }
+        }
+    }
+}
+'@
+
+function Get-TnwksWslDiskSecurity([string]$Path) {
+    <#
+    .SYNOPSIS
+    The owner and the DACL of the disk file, read on one handle: the owner
+    SID, whether the DACL is there and protected, and each entry with its
+    type, flags, mask and SID. Windows only; the tests replace it.
+    #>
+    if (-not ('TnwksDiskRead' -as [type])) { Add-Type -TypeDefinition $script:DiskReadCode }
+    $sd = New-Object System.Security.AccessControl.RawSecurityDescriptor -ArgumentList ([byte[]][TnwksDiskRead]::Read($Path)), 0
+    $flags = $sd.ControlFlags
+    $dacl = $sd.DiscretionaryAcl
+    $entries = foreach ($ace in @(if ($dacl) { $dacl })) {
+        $known = $ace -is [System.Security.AccessControl.KnownAce]
+        [pscustomobject]@{
+            Type  = [string]$ace.AceType
+            Flags = [int]$ace.AceFlags
+            Mask  = $(if ($known) { [int]$ace.AccessMask } else { 0 })
+            Sid   = $(if ($known) { $ace.SecurityIdentifier.Value } else { '' })
+        }
+    }
+    [pscustomobject]@{
+        Owner     = $(if ($sd.Owner) { $sd.Owner.Value } else { '' })
+        Dacl      = ($null -ne $dacl) -and [bool]($flags -band [System.Security.AccessControl.ControlFlags]::DiscretionaryAclPresent)
+        Protected = [bool]($flags -band [System.Security.AccessControl.ControlFlags]::DiscretionaryAclProtected)
+        Entries   = @($entries)
+    }
+}
+
+function Get-TnwksAccountSid([string]$Account) {
+    # The SID of a local account by its name. Windows only; the tests replace it.
+    (New-Object System.Security.Principal.NTAccount $Account).Translate([System.Security.Principal.SecurityIdentifier]).Value
+}
+
 # --- The checks --------------------------------------------------------------
 
 function ConvertTo-TnwksUnixTime([datetime]$Moment) {
@@ -212,6 +373,86 @@ function Get-TnwksWriteTestFiles([string]$Directory) {
     # The files that the write test of a distro makes: role wsl_host_check,
     # write_test. -Force also lists a hidden file.
     @(Get-ChildItem -LiteralPath $Directory -Force -File -Filter '.tnwks-write-test-*.tmp' -ErrorAction Stop).Count
+}
+
+# The rules that the disk file of the distro can break, in the label reason
+# of homelab_security_host_wsl_disk_rules_reason: a fixed list, so no value
+# that the file gave leaves the host.
+$script:WslDiskReasons = @('missing', 'unreadable', 'not-a-plain-file', 'account', 'owner', 'not-protected',
+    'deny', 'other-entry', 'missing-entry', 'capability')
+# Full control of a file (FILE_ALL_ACCESS), and the SIDs of SYSTEM and the
+# Administrators.
+$script:FullControl = 0x1F01FF
+$script:SystemSid = 'S-1-5-18'
+$script:AdminsSid = 'S-1-5-32-544'
+
+function Test-TnwksWslDiskRules {
+    <#
+    .SYNOPSIS
+    The rules of Design Doc 0004 (section 7, row 27) that the owner and the
+    DACL of the disk file break, each once, from $script:WslDiskReasons. None
+    is a pass.
+    #>
+    param($Security, [string]$AccountSid, [string]$CapabilitySid)
+    $broken = New-Object System.Collections.Generic.List[string]
+    function Add-Reason([string]$Reason) { if (-not $broken.Contains($Reason)) { $broken.Add($Reason) } }
+    $same = { param($a, $b) [string]::Equals([string]$a, [string]$b, [StringComparison]::OrdinalIgnoreCase) }
+    if (-not (& $same $Security.Owner $AccountSid)) { Add-Reason 'owner' }
+    if (-not $Security.Dacl -or -not $Security.Protected) { Add-Reason 'not-protected' }
+    $count = @{ system = 0; admins = 0; account = 0; capability = 0 }
+    foreach ($entry in @($Security.Entries)) {
+        $type = [string]$entry.Type
+        $sid = [string]$entry.Sid
+        if ($type -ne 'AccessAllowed') {
+            if ($type -match 'Denied') { Add-Reason 'deny' } else { Add-Reason 'other-entry' }
+            continue
+        }
+        # An allow entry counts only with full control and no flag: not
+        # inherited, and not given on to anything.
+        if ([int]$entry.Flags -ne 0 -or [int]$entry.Mask -ne $script:FullControl) { Add-Reason 'other-entry'; continue }
+        if (& $same $sid $script:SystemSid) { $count.system++ }
+        elseif (& $same $sid $script:AdminsSid) { $count.admins++ }
+        elseif (& $same $sid $AccountSid) { $count.account++ }
+        elseif ($sid -cmatch '\AS-1-5-83-1-[0-9]+-[0-9]+-[0-9]+-[0-9]+\z') { }
+        elseif ($CapabilitySid -and (& $same $sid $CapabilitySid)) { $count.capability++ }
+        elseif ($sid -match '\AS-1-15-3-') { Add-Reason 'capability' }
+        else { Add-Reason 'other-entry' }
+    }
+    foreach ($name in 'system', 'admins', 'account') {
+        if ($count[$name] -eq 0) { Add-Reason 'missing-entry' }
+        elseif ($count[$name] -gt 1) { Add-Reason 'other-entry' }
+    }
+    if ($count.capability -gt 1) { Add-Reason 'capability' }
+    $broken.ToArray()
+}
+
+function Measure-TnwksWslDisk {
+    <#
+    .SYNOPSIS
+    The check wsl-disk-rules: the rules that the disk file breaks. A missing
+    file, a file that can not be read and an account with no SID are each a
+    fail, never a failed query.
+    #>
+    param([string]$Path, [string]$Account, [string]$CapabilitySid)
+    try {
+        $accountSid = Get-TnwksAccountSid $Account
+        if (-not $accountSid) { throw 'no SID' }
+    } catch {
+        return 'account'
+    }
+    try {
+        $security = Get-TnwksWslDiskSecurity $Path
+    } catch {
+        $e = $_.Exception
+        while ($e.InnerException) { $e = $e.InnerException }
+        # ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND: no file at the path.
+        if ($e -is [System.ComponentModel.Win32Exception] -and $e.NativeErrorCode -in 2, 3) { return 'missing' }
+        # Open refuses a link, a second name, a path that leads elsewhere and
+        # what is not a file of a disk; Read refuses a directory.
+        if ($e -is [System.InvalidOperationException]) { return 'not-a-plain-file' }
+        return 'unreadable'
+    }
+    Test-TnwksWslDiskRules -Security $security -AccountSid $accountSid -CapabilitySid $CapabilitySid
 }
 
 function Measure-TnwksHostCheck {
@@ -225,7 +466,11 @@ function Measure-TnwksHostCheck {
         [int]$SignatureMaxAgeDays,
         [int]$UpdatesMaxAgeDays,
         # The textfile directory, for the count of files of the write test.
-        [string]$TextfileDir
+        [string]$TextfileDir,
+        # The check wsl-disk-rules, when -WslDisk is not empty.
+        [string]$WslDisk = '',
+        [string]$WslDiskAccount = '',
+        [string]$WslCapabilitySid = ''
     )
     $results = [ordered]@{}
     $details = New-Object System.Collections.Generic.List[object]
@@ -284,6 +529,14 @@ function Measure-TnwksHostCheck {
         $details.Add(@('homelab_security_host_updates_held', [ordered]@{}, $hidden.Count))
     } catch {
         $failed.Add('updates-held')
+    }
+
+    if ($WslDisk) {
+        $broken = @(Measure-TnwksWslDisk -Path $WslDisk -Account $WslDiskAccount -CapabilitySid $WslCapabilitySid)
+        $results['wsl-disk-rules'] = [int]($broken.Count -gt 0)
+        foreach ($reason in $broken) {
+            $details.Add(@('homelab_security_host_wsl_disk_rules_reason', [ordered]@{ reason = $reason }, 1))
+        }
     }
 
     # Facts of the updates that no check reads: a fault here leaves out the
@@ -659,10 +912,12 @@ function Invoke-TnwksRelay {
 }
 
 function Invoke-TnwksHostCheck {
-    param([string]$System, [string]$TextfileDir, [string]$FileName, [int]$SignatureMaxAgeDays, [int]$UpdatesMaxAgeDays)
+    param([string]$System, [string]$TextfileDir, [string]$FileName, [int]$SignatureMaxAgeDays, [int]$UpdatesMaxAgeDays,
+        [string]$WslDisk = '', [string]$WslDiskAccount = '', [string]$WslCapabilitySid = '')
     if (-not $System) { throw 'no -System: the name of this host in security/registry/systems.yaml' }
+    if ($WslDisk -and -not $WslDiskAccount) { throw 'no -WslDiskAccount: the account that owns the distro' }
     $measure = Measure-TnwksHostCheck -Now (Get-Date) -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays `
-        -TextfileDir $TextfileDir
+        -TextfileDir $TextfileDir -WslDisk $WslDisk -WslDiskAccount $WslDiskAccount -WslCapabilitySid $WslCapabilitySid
     $now = Get-Date
     Write-TnwksTextfile $TextfileDir $FileName (Format-TnwksHostCheck -System $System -Measure $measure -Now $now)
     # The names of the queries only: no value that the host gave.
@@ -679,6 +934,7 @@ if (-not $Library) {
             -FileName $DistroFileName -Now (Get-Date) -LogPath $LogPath
     } else {
         Invoke-TnwksHostCheck -System $System -TextfileDir $TextfileDir -FileName $FileName `
-            -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays
+            -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays `
+            -WslDisk $WslDisk -WslDiskAccount $WslDiskAccount -WslCapabilitySid $WslCapabilitySid
     }
 }

@@ -34,7 +34,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
-      <Arguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{{ host_check_dir | e }}\{{ host_check_script | e }}" -System "{{ inventory_hostname | e }}" -TextfileDir "{{ host_check_textfile_dir | e }}" -FileName "{{ host_check_file | e }}" -SignatureMaxAgeDays {{ host_check_signature_max_age_days | int }} -UpdatesMaxAgeDays {{ host_check_updates_max_age_days | int }}</Arguments>
+      <Arguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{{ host_check_dir | e }}\{{ host_check_script | e }}" -System "{{ inventory_hostname | e }}" -TextfileDir "{{ host_check_textfile_dir | e }}" -FileName "{{ host_check_file | e }}" -SignatureMaxAgeDays {{ host_check_signature_max_age_days | int }} -UpdatesMaxAgeDays {{ host_check_updates_max_age_days | int }}{% if host_check_wsl_disk_rules | bool %} -WslDisk "{{ host_check_wsl_disk | e }}" -WslDiskAccount "{{ host_check_wsl_disk_account | e }}" -WslCapabilitySid "{{ host_check_wsl_capability_sid | e }}"{% endif %}</Arguments>
     </Exec>
   </Actions>
 </Task>

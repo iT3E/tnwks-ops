@@ -1,0 +1,29 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The share of the finance trust domain (docs/apps/agent-platform.md, "The
+# vault shares"): its two static PersistentVolumes on the export
+# /vault-finance, and their two claims in agents-finance. Nothing mounts them yet.
+#
+# Each volume names its claim, and each claim names its volume, so they bind
+# at once, with no pod: the Kustomization is Ready when both claims are
+# Bound. The volumes are cluster-scoped: targetNamespace sets the namespace
+# of the claims only.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-vault-share
+  namespace: flux-system
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/vault-share/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The admission rule that lists these volumes checks their first apply.
+    - name: nfs-admission
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

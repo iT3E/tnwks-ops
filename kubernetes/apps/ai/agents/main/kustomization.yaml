@@ -11,3 +11,6 @@ resources:
   # The main agent: its state volume and the inbox only, so far
   # (agent/app/kustomization.yaml).
   - ./agent/ks.yaml
+  # The share of the vault: its two volumes and two claims, mounted by no pod
+  # yet (vault-share/ks.yaml).
+  - ./vault-share/ks.yaml

@@ -1,3 +1,0 @@
-kind: Added
-body: 'windows: the address task of the LAN bridge gets a copy for the account that owns the distro, and both accounts may write the address file while the move runs (off on every host)'
-time: 2026-11-18T22:00:00.000000000Z
