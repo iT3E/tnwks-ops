@@ -117,6 +117,8 @@ resources:
   # nfs-server: WSL-specific ks with a nodeSelector pin to worker-2 (the only
   # node local-path can provision on). See nfs-server-ks.yaml.
   - ./nfs-server-ks.yaml
+  # Which pods and volumes may mount it: nfs-admission-ks.yaml.
+  - ./nfs-admission-ks.yaml
   - ../../../apps/tools/actions-runner-controller/controller/ks.yaml
   - ../../../apps/tools/actions-runner-controller/runner/ks.yaml
   # Network-device Terraform runners for this repo (docs/network/ci.md).
