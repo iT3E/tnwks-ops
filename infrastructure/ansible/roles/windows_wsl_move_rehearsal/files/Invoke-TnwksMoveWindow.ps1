@@ -174,6 +174,59 @@ function Wait-TnwksNoWsl([string]$Sid, [string]$Account) {
     Assert-Tnwks $false "$($left.Count) WSL process(es) of $Account still run"
 }
 
+# The WSL VMs that run on the host, as SYSTEM, from the Host Compute Service
+# itself (computecore.dll, Windows 10 1809 and later), so the read rests on
+# no tool that a host may not have. HcsCreateOperation, then
+# HcsEnumerateComputeSystems with no query, then HcsWaitForOperationResult:
+# its result is a JSON array of the properties of each compute system (Id,
+# SystemType, Name, Owner, State), and the caller frees it with LocalFree;
+# then HcsCloseOperation (Microsoft: the reference of the HCS API). WSL sets
+# the owner WSL on each of its VMs (WSL: WslCoreVm.cpp, c_vmOwner in
+# wslutil.h). A call that fails, or a result that is not a list, throws: the
+# check fails.
+$TnwksHcsSource = @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class TnwksHcs {
+    [DllImport("computecore.dll", ExactSpelling = true)]
+    static extern IntPtr HcsCreateOperation(IntPtr context, IntPtr callback);
+    [DllImport("computecore.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+    static extern int HcsEnumerateComputeSystems(string query, IntPtr operation);
+    [DllImport("computecore.dll", ExactSpelling = true)]
+    static extern int HcsWaitForOperationResult(IntPtr operation, uint timeoutMs, out IntPtr resultDocument);
+    [DllImport("computecore.dll", ExactSpelling = true)]
+    static extern void HcsCloseOperation(IntPtr operation);
+    [DllImport("kernel32.dll")]
+    static extern IntPtr LocalFree(IntPtr h);
+    public static string Enumerate() {
+        IntPtr op = HcsCreateOperation(IntPtr.Zero, IntPtr.Zero);
+        if (op == IntPtr.Zero) throw new InvalidOperationException("HcsCreateOperation gave no operation");
+        try {
+            int hr = HcsEnumerateComputeSystems(null, op);
+            if (hr != 0) throw new Win32Exception(hr, "HcsEnumerateComputeSystems: 0x" + hr.ToString("x8"));
+            IntPtr doc;
+            hr = HcsWaitForOperationResult(op, 60000, out doc);
+            try {
+                string text = doc == IntPtr.Zero ? null : Marshal.PtrToStringUni(doc);
+                if (hr != 0) throw new Win32Exception(hr, "HcsWaitForOperationResult: 0x" + hr.ToString("x8") + " " + text);
+                return text;
+            } finally { if (doc != IntPtr.Zero) LocalFree(doc); }
+        } finally { HcsCloseOperation(op); }
+    }
+}
+'@
+
+function Get-TnwksWslVm {
+    if (-not ('TnwksHcs' -as [type])) { Add-Type -TypeDefinition $TnwksHcsSource }
+    $text = [TnwksHcs]::Enumerate()
+    if ("$text".Trim() -notmatch '^\[') { throw 'the Host Compute Service gave no list of its compute systems' }
+    # Into a variable first: Windows PowerShell 5.1 writes a JSON array to
+    # the pipeline as one object; from a variable, the pipeline takes each.
+    $systems = ConvertFrom-Json $text
+    @($systems | Where-Object { $_ -and "$($_.Owner)" -eq 'WSL' })
+}
+
 # Runs a task of an account, waits for its end, and reads its result file.
 function Invoke-TnwksAccountTask([string]$Task, [string]$ResultFile) {
     $start = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -830,7 +883,21 @@ function Invoke-TnwksForward {
     Invoke-TnwksStopTask $new
     Wait-TnwksNoWsl $nSid $new.account
     Write-Log 'step 6 passed'
-    # (7) The present account leaves Administrators.
+    # (7) The present account leaves Administrators. Before it, as SYSTEM: no
+    # WSL VM runs on the host. A VM does not run as its account, and WSL
+    # keeps the token that made it, so this read, not a read of processes,
+    # shows that no VM keeps a token from the time in the group. No account
+    # has a reason to have a VM at this step, so any is a fail. Then no WSL
+    # process of the present account runs. A fail sends the window back while
+    # the account is still a member. The config of the rehearsal turns the
+    # read of the VMs off (vm_check): the distro of the host runs then.
+    if ($cfg.vm_check -ne $false) {
+        $vms = @(Get-TnwksWslVm)
+        Assert-Tnwks ($vms.Count -eq 0) "$($vms.Count) WSL VM(s) run on the host before step 7: $(@($vms | ForEach-Object { $_.Id }) -join ', ')"
+        Write-Log 'step 7: no WSL VM runs on the host'
+    } else { Write-Log 'step 7: the read of the WSL VMs is off in this config' }
+    $left = @(Get-TnwksWslProcess $pSid)
+    Assert-Tnwks ($left.Count -eq 0) "$($left.Count) WSL process(es) of $($present.account) run before step 7"
     if ($req.group_steps) { Set-TnwksGroup $pSid $present.account $false }
     Write-Log 'step 7 passed'
     # (8) The start tasks of the new account: an enable asks for no password.

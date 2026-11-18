@@ -939,6 +939,23 @@ boot request file. A boot request that
 is not two equal booleans stops the boot run with nothing changed. Only the
 boot mode reads the boot request.
 
+**Window step 7: no WSL VM runs.** Before the present account leaves
+Administrators, the procedure reads, as SYSTEM, the compute systems of the
+Host Compute Service through its own API (`computecore.dll`:
+`HcsCreateOperation`, `HcsEnumerateComputeSystems` with no query,
+`HcsWaitForOperationResult`, `HcsCloseOperation`), so the read needs no
+tool on the host. It passes only when no compute system has the owner
+`WSL`, which WSL sets on each of its VMs: a VM does not run as its account,
+and keeps the token that made it. A call that fails, or a result that is not
+a list, fails the check. Then the second check: no WSL process of the
+present account runs. A fail of either sends the window back while the
+account is still a member. The config of the rehearsal sets `vm_check:
+false`, as the distro of the host runs during a rehearsal; the procedure
+reads the check as on when the key is not there. Each mode of the
+procedure, the boot run and a forward run that goes back among them, runs
+the group step of way back step 1 with a config that is not the
+rehearsal's, and a test shows it.
+
 **What stays unproven here.** The procedure and the boot task restart the
 host only with `restart` on in their config, and the rehearsal keeps it
 off: they log "would restart", and a unit test shows that the line runs only

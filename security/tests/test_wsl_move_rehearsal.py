@@ -286,6 +286,8 @@ def test_a_restart_needs_the_owners_go_and_only_the_phase_restart_has_one():
     config = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_window_config"]
     assert config["restart"] == "{{ wsl_move_rehearsal_restart | bool }}"
     assert config["boot"] == {"group_steps": False, "rehearsal_group_test": False}
+    # The read of window step 7 that no WSL VM runs: off in the rehearsal only.
+    assert config["vm_check"] is False
     text = WINDOW.read_text()
     assert text.count("Restart-Computer") == 1
     assert re.search(r"if \(\$cfg\.restart\) \{\s*Write-Log \"restart: \$Why\"\s*Restart-Computer -Force", text)
@@ -791,6 +793,22 @@ $global:Calls = New-Object System.Collections.Generic.List[string]
 $global:Admins = New-Object System.Collections.Generic.List[string]
 $global:Procs = New-Object System.Collections.Generic.List[object]
 $global:Runs = @{}
+# The compute systems of the Host Compute Service: a start task or an import starts a
+# WSL VM of its account (owner WSL), and a stop task ends it. $global:HcsError: the read
+# fails; $global:HcsText: the text that the read gives instead of the list.
+$global:Vms = New-Object System.Collections.Generic.List[object]
+class TnwksHcs {
+    static [string] Enumerate() {
+        $global:Calls.Add('hcs enumerate')
+        if ($global:HcsError) { throw $global:HcsError }
+        if ($null -ne $global:HcsText) { return $global:HcsText }
+        return ConvertTo-Json -Compress -InputObject @($global:Vms | ForEach-Object {
+            [pscustomobject]@{ Id = $_.Id; SystemType = 'VirtualMachine'; Owner = $_.Owner; State = 'Running' } })
+    }
+}
+function Add-TnwksTestVm([string]$Sid, [string]$Owner = 'WSL') {
+    $global:Vms.Add([pscustomobject]@{ Id = [guid]::NewGuid().ToString(); Owner = $Owner; Sid = $Sid })
+}
 function Get-LocalUser { param([string]$Name) [pscustomobject]@{ SID = [pscustomobject]@{ Value = $global:Sids[$Name] } } }
 function Get-LocalGroupMember { param([string]$SID) @($global:Admins | ForEach-Object { [pscustomobject]@{ SID = [pscustomobject]@{ Value = $_ } } }) }
 function Add-LocalGroupMember { param([string]$SID, $Member) $global:Calls.Add("join $Member"); $global:Admins.Add($Member) }
@@ -845,10 +863,17 @@ function Start-ScheduledTask {
     if ($TaskName -like '*-start') {
         $global:Running[$TaskName] = $true
         $global:Procs.Add([pscustomobject]@{ Name = 'wsl.exe'; OwnerSid = $sid; Task = $TaskName })
+        if (-not @($global:Vms | Where-Object { $_.Sid -eq $sid }).Count) { Add-TnwksTestVm $sid }
         return
     }
+    if ($TaskName -like '*-import' -and -not @($global:Vms | Where-Object { $_.Sid -eq $sid }).Count) { Add-TnwksTestVm $sid }
     if ($global:QueuedPolls) { $global:Pending[$TaskName] = [int]$global:QueuedPolls }
-    if ($TaskName -like '*-stop') { foreach ($p in @($global:Procs | Where-Object { $_.OwnerSid -eq $sid })) { [void]$global:Procs.Remove($p) } }
+    if ($TaskName -like '*-stop') {
+        foreach ($p in @($global:Procs | Where-Object { $_.OwnerSid -eq $sid })) { [void]$global:Procs.Remove($p) }
+        foreach ($v in @($global:Vms | Where-Object { $_.Sid -eq $sid })) { [void]$global:Vms.Remove($v) }
+    }
+    # $global:OnStart: what else happens at the run of a task (a script block by task).
+    if ($global:OnStart -and $global:OnStart.ContainsKey($TaskName)) { & $global:OnStart[$TaskName] }
     # $global:VmRule: the import attaches the disk file, and WSL grants its VM access.
     if ($global:VmRule -and $TaskName -like '*-import') {
         $disk = Join-Path $(if ($TaskName -like '*-a-*') { $global:FolderA } else { $global:FolderB }) 'ext4.vhdx'
@@ -1075,7 +1100,7 @@ $global:FolderAcls = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (fo
 $global:Groups = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (groups or {}).items()})}.PSObject.Properties) {{ $global:Groups[$p.Name] = $p.Value }}
 if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false'}) {{
     foreach ($t in @($global:Running.Keys | Where-Object {{ $global:Running[$_] }})) {{
-        $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}) }}
+        $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}); Add-TnwksTestVm (Get-TaskSid $t) }}
 }}
 {faults}
 & '{window}' {args}
@@ -1116,6 +1141,8 @@ def test_the_window_moves_the_file_in_order_and_logs_each_moment_in_administrato
         "move a -> b", f"acl b/ext4.vhdx {disk_b}",
         "start tnwks-moverh-a-unregister",
         "start tnwks-moverh-b-import", "start tnwks-moverh-b-stop",
+        # Window step 7: the read of the VMs through the HCS API, then the leave.
+        "hcs enumerate",
         f"leave {A_SID}",
         "enable tnwks-moverh-b-start",
     ]
@@ -2030,9 +2057,96 @@ def test_a_config_that_is_not_the_rehearsals_runs_the_group_steps_with_no_group_
         if name != "forward":
             # Way back step 1 joins the present account, and no group test takes it out.
             assert JOIN in out["calls"] and LEAVE not in out["calls"], (name, out["calls"])
+            assert out["calls"].index(JOIN) < out["calls"].index("start tnwks-moverh-a-import"), (name, out["calls"])
+            assert out["admins"] == [A_SID] and "way back 1 passed" in out["log"], (name, out["log"])
+    # A forward run that fails after the marker of a started window goes back, and
+    # its way back runs the group step too.
+    out = run_window(tmp_path / "back", {"mode": "forward", "group_steps": True, "stop_after": 0, "rehearsal_group_test": False},
+                     results={"tnwks-moverh-b-import": None})
+    assert "the way back starts" in out["log"] and out["log"][-1] == "result: went-back", out["log"]
+    assert out["calls"].count(JOIN) == 1 and LEAVE not in out["calls"], out["calls"]
+    assert out["calls"].index(JOIN) > out["calls"].index("start tnwks-moverh-b-import"), out["calls"]
+    assert out["calls"].index(JOIN) < out["calls"].index("start tnwks-moverh-a-import"), out["calls"]
+    assert out["admins"] == [A_SID], out["admins"]
     # The scope holds the path of the request too.
     out, _ = boot_group_run(tmp_path / "out", config={"boot_request_file": str(tmp_path / "elsewhere.json")})
     assert out["code"] == 3 and any("is outside" in line for line in out["log"])
+
+
+# --- Window step 7: no WSL VM runs, then no WSL process of the present account ---------
+
+# The real procedure: the present account is a member of the Administrators before the window.
+STEP_7_REAL = {"mode": "forward", "group_steps": True, "stop_after": 0, "rehearsal_group_test": False}
+
+
+def at_stop_of_b(code: str) -> str:
+    """A fault: code runs at the run of the stop task of B, the last task before step 7."""
+    return f"$global:OnStart = @{{ 'tnwks-moverh-b-stop' = {{ {code} }} }}"
+
+
+@needs_pwsh
+def test_window_step_7_reads_that_no_wsl_vm_runs_then_no_process_of_the_present_account(tmp_path):
+    ok = run_window(tmp_path / "ok", STEP_7_REAL, admins=(A_SID,))
+    assert ok["code"] == 0 and ok["log"][-1] == "result: done", ok["log"]
+    assert ok["log"].index("step 7: no WSL VM runs on the host") < ok["log"].index("group: tnwks-moverh-a left Administrators")
+    assert ok["calls"].count("hcs enumerate") == 1
+    # A compute system of another owner (not a VM of WSL) passes.
+    other = run_window(tmp_path / "other", STEP_7_REAL, admins=(A_SID,), faults=at_stop_of_b("Add-TnwksTestVm 'S-1-5-18' 'VMMS'"))
+    assert other["code"] == 0 and other["log"][-1] == "result: done", other["log"]
+    for name, code, text in (
+            ("a WSL VM that runs", "Add-TnwksTestVm 'S-1-5-21-9-9-9-1099'",
+             "fail: check failed: 1 WSL VM(s) run on the host before step 7: "),
+            ("a WSL process of the present account", f"$global:Procs.Add([pscustomobject]@{{ Name = 'wslhost.exe'; OwnerSid = '{A_SID}' }})",
+             "fail: check failed: 1 WSL process(es) of tnwks-moverh-a run before step 7"),
+            ("a read that fails", "$global:HcsError = 'HcsEnumerateComputeSystems: 0x80370100'",
+             "fail: HcsEnumerateComputeSystems: 0x80370100"),
+            ("a read with no list", "$global:HcsText = ''",
+             "fail: the Host Compute Service gave no list of its compute systems")):
+        out = run_window(tmp_path / name.replace(" ", "-"), STEP_7_REAL, admins=(A_SID,), faults=at_stop_of_b(code))
+        fail = [line for line in out["log"] if line.startswith(text)]
+        assert len(fail) == 1, (name, out["log"])
+        # The window goes back while the present account is still a member.
+        assert "the way back starts" in out["log"], (name, out["log"])
+        assert LEAVE not in out["calls"] and out["admins"] == [A_SID] and "step 7 passed" not in out["log"], (name, out["calls"])
+        if name == "a WSL process of the present account":
+            # The read of the VMs comes first, and passes. The process still runs, so the
+            # way back stops at its own check before the move back.
+            assert out["log"].index("step 7: no WSL VM runs on the host") < out["log"].index(fail[0])
+            assert "fail: check failed: a WSL process runs before the move back" in out["log"], out["log"]
+        else:
+            assert "result: went-back" in out["log"], (name, out["log"])
+
+
+@needs_pwsh
+def test_the_config_of_the_rehearsal_turns_the_read_of_the_vms_off_and_keeps_the_process_check(tmp_path):
+    off = run_window(tmp_path / "off", STEP_7_REAL, admins=(A_SID,), config={"vm_check": False}, faults=at_stop_of_b("Add-TnwksTestVm 'S-1-5-21-9-9-9-1099'"))
+    assert off["code"] == 0 and "step 7: the read of the WSL VMs is off in this config" in off["log"], off["log"]
+    assert "hcs enumerate" not in off["calls"]
+    proc = run_window(tmp_path / "proc", STEP_7_REAL, admins=(A_SID,), config={"vm_check": False},
+                      faults=at_stop_of_b(f"$global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = '{A_SID}' }})"))
+    assert "fail: check failed: 1 WSL process(es) of tnwks-moverh-a run before step 7" in proc["log"], proc["log"]
+    assert "the way back starts" in proc["log"] and LEAVE not in proc["calls"] and proc["admins"] == [A_SID]
+
+
+def test_the_read_of_the_vms_calls_the_hcs_api_as_microsoft_documents_it():
+    """The signatures of the reference of the HCS API (computecore.dll): HcsCreateOperation
+    (context, callback) gives a handle; HcsEnumerateComputeSystems (query, operation) and
+    HcsWaitForOperationResult (operation, timeoutMs, resultDocument) give an HRESULT; the
+    result document is freed with LocalFree, and the operation closed."""
+    text = WINDOW.read_text()
+    source = text[text.index("$TnwksHcsSource = @'"):text.index("'@", text.index("$TnwksHcsSource = @'"))]
+    for line in ('static extern IntPtr HcsCreateOperation(IntPtr context, IntPtr callback);',
+                 'static extern int HcsEnumerateComputeSystems(string query, IntPtr operation);',
+                 'static extern int HcsWaitForOperationResult(IntPtr operation, uint timeoutMs, out IntPtr resultDocument);',
+                 'static extern void HcsCloseOperation(IntPtr operation);',
+                 'int hr = HcsEnumerateComputeSystems(null, op);',
+                 'finally { if (doc != IntPtr.Zero) LocalFree(doc); }', 'finally { HcsCloseOperation(op); }'):
+        assert line in source, line
+    assert source.count('[DllImport("computecore.dll", ExactSpelling = true') == 4
+    assert 'CharSet = CharSet.Unicode)]\n    static extern int HcsEnumerateComputeSystems' in source
+    # The owner that WSL sets on each of its VMs, and no tool: no process is started for the read.
+    body = re.search(r"function Get-TnwksWslVm \{.*?\n\}", text, re.DOTALL)[0]
+    assert "\"$($_.Owner)\" -eq 'WSL'" in body and "Start-Process" not in body and ".exe" not in body
 
 
 @needs_pwsh
