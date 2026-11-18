@@ -7,8 +7,8 @@
 #
 # The directory inherits no rule, the Administrators own it, SYSTEM and the
 # Administrators have full control, and Users may read it (with `readers:
-# none`, Users get no rule: only SYSTEM and the Administrators). With `writer`, that
-# account has two rules: on the directory itself it may list it and make
+# none`, Users get no rule: only SYSTEM and the Administrators). With `writer`
+# (one account, or a list), each of those accounts has two rules: on the directory itself it may list it and make
 # files (no delete, no subdirectory), so it can not remove the directory or
 # put a link or a junction in its place; on the files it may change, replace
 # and delete them (a new file, then a rename over the old one).
@@ -28,7 +28,7 @@
 #AnsibleRequires -CSharpUtil Ansible.Basic
 
 # --- BEGIN logic (security/tests/test_wsl_start_unelevated.py runs this part with fakes)
-function Get-TnwksDirAclWant([string]$WriterSid, [string]$Readers = 'users') {
+function Get-TnwksDirAclWant([string[]]$WriterSid, [string]$Readers = 'users') {
     # Who, which rights, to which children, how far.
     $all = 'ContainerInherit, ObjectInherit'
     $want = @(
@@ -38,9 +38,9 @@ function Get-TnwksDirAclWant([string]$WriterSid, [string]$Readers = 'users') {
     if ($Readers -ne 'none') {
         $want += , @('S-1-5-32-545', 'ReadAndExecute, Synchronize', $all, 'None')
     }
-    if ($WriterSid) {
-        $want += , @($WriterSid, 'ReadAndExecute, CreateFiles, Synchronize', 'None', 'None')
-        $want += , @($WriterSid, 'Modify, Synchronize', 'ObjectInherit', 'InheritOnly')
+    foreach ($writer in @($WriterSid | Where-Object { $_ } | Select-Object -Unique)) {
+        $want += , @($writer, 'ReadAndExecute, CreateFiles, Synchronize', 'None', 'None')
+        $want += , @($writer, 'Modify, Synchronize', 'ObjectInherit', 'InheritOnly')
     }
     , $want
 }
@@ -58,7 +58,7 @@ function Invoke-TnwksDirAcl {
     Makes the directory and sets its rules; gives whether it changed anything.
     With -Check, it changes nothing and gives whether it would.
     #>
-    param([string]$Path, [string]$Writer, [bool]$Check, [string]$Readers = 'users')
+    param([string]$Path, [string[]]$Writer, [bool]$Check, [string]$Readers = 'users')
     $sid = [System.Security.Principal.SecurityIdentifier]
     $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if ($null -eq $item) {
@@ -69,8 +69,9 @@ function Invoke-TnwksDirAcl {
     if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
         throw "$Path is not a plain directory (a link or a junction?). Nothing is changed."
     }
-    $writerSid = ''
-    if ($Writer) { $writerSid = (New-Object System.Security.Principal.NTAccount $Writer).Translate($sid).Value }
+    $writerSid = @(@($Writer) | Where-Object { $_ } | ForEach-Object {
+        (New-Object System.Security.Principal.NTAccount $_).Translate($sid).Value
+    })
     $want = Get-TnwksDirAclWant $writerSid $Readers
     $wantKey = @($want | ForEach-Object {
         '{0}|{1}|{2}|{3}|Allow' -f $_[0], [int][System.Security.AccessControl.FileSystemRights]$_[1],
@@ -168,8 +169,9 @@ function Invoke-TnwksDirAclModule([hashtable]$Params, [bool]$Check) {
 $spec = @{
     options = @{
         path = @{ type = 'path'; required = $true }
-        # The account that writes files here with no elevation; none: read only.
-        writer = @{ type = 'str'; default = '' }
+        # The accounts that write files here with no elevation (one, or a
+        # list); none: read only.
+        writer = @{ type = 'list'; elements = 'str'; default = @() }
         # none: Users get no rule, so only SYSTEM and the Administrators may open it.
         readers = @{ type = 'str'; default = 'users'; choices = @('users', 'none') }
         # reset: each item below takes the owner and the rules of the directory.

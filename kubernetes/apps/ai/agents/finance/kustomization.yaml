@@ -14,3 +14,6 @@ resources:
   # The finance app as a tool of the agent: the proxy that holds the token of
   # the agent at the app, and the MCP server of the app.
   - ./firefly-mcp/ks.yaml
+  # The share of the vault: its two volumes and two claims, mounted by no pod
+  # yet (vault-share/ks.yaml).
+  - ./vault-share/ks.yaml

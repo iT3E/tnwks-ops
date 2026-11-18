@@ -510,6 +510,16 @@ host, use the name from its host_vars.
    the read does not pass, do not open that pull request: do steps 1 to 5
    again, and look harder at step 4.
 
+The done switch also turns on the check `wsl-disk-rules` of the host check
+(role windows_host_check, security/README.md). From the apply of its pull
+request, the host check reads the owner and the rules of the disk file of
+the distro each 6 hours as SYSTEM, and a file that does not have the owner
+and the rules of Design Doc 0004 (section 7, row 27), a missing file and a
+file that it can not read each fail the check. The file must then have the
+rules that the move to the account sets: the account that owns the distro
+as owner, and protected rules for SYSTEM, the Administrators and that
+account, besides the entries that WSL adds for its VM.
+
 What the done switch does not catch: between step 6 and the merge of its
 pull request, the play does not fail on the write test (the security
 result still shows it). And the play trusts the switch: a switch set to
@@ -1142,6 +1152,41 @@ window.
   `window-started`) and the manual start of seclogon stay. Their removal is
   its own change with the owner's go, and the removal of the account needs
   a restart.
+
+## The start tasks of the account that owns the distro
+
+Each WSL role registers a copy of each of its start tasks for the account
+that owns the distro (`wsl_move_new_account`, in the encrypted variables of
+the host), with the name of the task and the suffix `-account`
+(`wsl_move_task_suffix`). No apply replaces a task of the present account.
+The phase of a host (`wsl_move_phase`, `group_vars/windows_hosts.yml`) sets
+what the play does:
+
+| Phase | When | The tasks | The folders of the start tasks |
+| --- | --- | --- | --- |
+| `off` | `wsl_move` off (each host today) | As before. No copy | One writer, as before |
+| `move` | `wsl_move` on, `wsl_move_done` off | Each copy is registered disabled. No apply changes the enabled state of a start task that exists, of either account (`keep_task_enabled_state`): the move window enables and disables them | Both accounts may write |
+| `done` | `wsl_move_done` on | Each copy is kept enabled. The play no longer registers the start tasks of the present account | Only the account that owns the distro may write |
+
+A way back turns `wsl_move_done` off first. The copies run with no
+elevation, so `wsl_move` needs `wsl_start_unelevated`. Each copy is
+registered as SYSTEM, which sets a new random password on the account for
+each registration (`s4u_user`). The copy of the watchdog names the copy of
+the keepalive. From `done` on, the WSL service task starts the copy of the
+keepalive. With `running`, the module does not start a task that is
+disabled while the state is the task's own.
+
+The copy of the address task of the LAN bridge (`tnwks-lan-bridge-ip-account`)
+writes the same address file. While the move runs, both accounts may write
+it, so after the restart of the window the copy writes the address of the
+VM, and the sync (SYSTEM) reads it and moves the port proxy. The sync waits
+45 seconds after a VM NIC event, and the address task 15 seconds. The
+handler of the role runs the address task that is enabled.
+
+Each UDP relay has a copy too (`<task>-account`). A relay and its copy
+listen on the same port, and the window runs one of them only. While the
+move runs, both accounts may write the logs of the relays, and the handler
+of the role restarts the relays that are enabled.
 
 ## Check-only settings
 

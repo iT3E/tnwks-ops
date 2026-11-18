@@ -449,8 +449,10 @@ function Exit-TnwksGroupTest {
 # reads and writes them with its privileges, not with the rules of the file:
 # each handle opens with backup semantics (CreateFile: with the flag, the
 # privileges override the checks of the file), with SeBackupPrivilege,
-# SeRestorePrivilege and SeTakeOwnershipPrivilege enabled. The read asks
-# for READ_CONTROL only, and either privilege grants it: SeBackupPrivilege
+# SeRestorePrivilege and SeTakeOwnershipPrivilege enabled. Each handle is of
+# the file or folder of a local disk at the path itself, with one name, and
+# SYSTEM only identifies itself to a server behind the path (Open says how).
+# The read asks for READ_CONTROL only, and either privilege grants it: SeBackupPrivilege
 # directly, SeRestorePrivilege through FILE_GENERIC_WRITE, which holds
 # STANDARD_RIGHTS_WRITE, that is READ_CONTROL (Microsoft: Privilege
 # Constants; File Security and Access Rights; Standard Access Rights). A write
@@ -523,10 +525,63 @@ public static class TnwksSecurity {
         for (int i = 0; i < names.Length; i++) parts[i] = names[i] + " " + EnableOne(names[i]);
         return String.Join(", ", parts);
     }
+    [StructLayout(LayoutKind.Sequential)]
+    struct FileInformation {
+        public uint Attributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME Creation, LastAccess, LastWrite;
+        public uint VolumeSerialNumber, SizeHigh, SizeLow, NumberOfLinks, IndexHigh, IndexLow;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern uint GetFileType(SafeFileHandle h);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetFileInformationByHandle(SafeFileHandle h, out FileInformation information);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern uint GetFinalPathNameByHandleW(SafeFileHandle h, System.Text.StringBuilder path, uint length, uint flags);
+    // CreateFileW (Microsoft): OPEN_EXISTING (3); every share mode (7);
+    // FILE_FLAG_BACKUP_SEMANTICS (0x02000000), so the privileges of SYSTEM
+    // grant the access and a directory opens; FILE_FLAG_OPEN_REPARSE_POINT
+    // (0x00200000), so the handle is of the entry at the path, and a link
+    // is not followed. SECURITY_SQOS_PRESENT (0x00100000) with
+    // SECURITY_IDENTIFICATION (0x00010000, SecurityIdentification << 16, in
+    // winbase.h): a server behind the path may identify SYSTEM, and may
+    // not act as it. SECURITY_SQOS_PRESENT has the value of
+    // FILE_FLAG_OPEN_NO_RECALL as well: data in remote storage stays there.
+    const int OPEN_FLAGS = 0x02000000 | 0x00200000 | 0x00100000 | 0x00010000;
+    // GetFileType: FILE_TYPE_DISK (0x0001). FILE_ATTRIBUTE_REPARSE_POINT
+    // (0x400), of the entry itself, from GetFileInformationByHandle.
+    const uint FILE_TYPE_DISK = 0x0001, FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
+    // A handle of the entry at the path, which must be a file or a directory
+    // of a local disk, not a reparse point (a link or a junction), with one
+    // name only, at the path itself: FILE_FLAG_OPEN_REPARSE_POINT applies to
+    // the last part of the path, so the final path of the handle
+    // (GetFinalPathNameByHandleW, flags 0: FILE_NAME_NORMALIZED,
+    // VOLUME_NAME_DOS) must be the path, also through each folder above it.
+    // A second name (a hard link) shares the security of the file, so a
+    // write of the rules on one name would change the other
+    // (BY_HANDLE_FILE_INFORMATION: nNumberOfLinks).
     static SafeFileHandle Open(string path, int access) {
-        // OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS; every share mode.
-        SafeFileHandle h = CreateFile(path, access, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero);
+        SafeFileHandle h = CreateFile(path, access, 7, IntPtr.Zero, 3, OPEN_FLAGS, IntPtr.Zero);
         if (h.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "open " + path);
+        try {
+            uint type = GetFileType(h);
+            if (type != FILE_TYPE_DISK) throw new InvalidOperationException("not a file of a disk (type " + type + "): " + path);
+            FileInformation information;
+            if (!GetFileInformationByHandle(h, out information)) throw new Win32Exception(Marshal.GetLastWin32Error(), "read " + path);
+            if ((information.Attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) throw new InvalidOperationException("a reparse point (a link or a junction): " + path);
+            if (information.NumberOfLinks != 1) throw new InvalidOperationException("a file with " + information.NumberOfLinks + " names (a hard link): " + path);
+            System.Text.StringBuilder final = new System.Text.StringBuilder(1024);
+            uint length = GetFinalPathNameByHandleW(h, final, (uint)final.Capacity, 0);
+            if (length == 0 || length >= final.Capacity) throw new Win32Exception(Marshal.GetLastWin32Error(), "the final path of " + path);
+            string at = final.ToString();
+            // \\?\C:\... for a local disk; a share gives \\?\UNC\..., which
+            // is never the path of a drive.
+            if (!at.StartsWith(@"\\?\", StringComparison.Ordinal) ||
+                !String.Equals(at.Substring(4), path.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("the path leads to another file, through a link or a junction above it: " + path);
+        } catch {
+            h.Dispose();
+            throw;
+        }
         return h;
     }
     public static string ReadSddl(string path) {

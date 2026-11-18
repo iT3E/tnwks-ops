@@ -3,6 +3,54 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.207.0 - 2026-11-18
+
+### Added
+
+* windows: the address task of the LAN bridge gets a copy for the account that owns the distro, and both accounts may write the address file while the move runs (off on every host)
+
+## v2.206.0 - 2026-11-18
+
+### Added
+
+* agents: the volumes and claims of the vault shares, step d of the vault shares. Two static PersistentVolumes for each share (read and write with a hard mount, read only with a soft mount) and their two claims, vault-rw and vault-ro, in agents-main and agents-finance. Each claim binds to its volume at once; no pod mounts them yet, and no pod restarts (docs/apps/agent-platform.md, "The vault shares").
+
+## v2.205.0 - 2026-11-18
+
+### Added
+
+* windows: the watchdog and the keepalive get copies for the account that owns the distro, under their own names, with the phase of the move per host (off on every host); the folder module takes a list of writers, and a task whose state is its own is not started while it is disabled
+
+## v2.204.0 - 2026-11-18
+
+### Added
+
+* nfs-server: the vault share of each trust domain with a vault, step b of the vault shares. Two claims (nfs-vault-main, nfs-vault-finance) and two exports (/vault-main, /vault-finance): read and write for the three nodes of homelab-wsl only, each client squashed to uid 1000. The exports of today keep their ids and settings. The server restarts once (docs/apps/agent-platform.md, "The vault shares").
+
+## v2.203.0 - 2026-11-18
+
+### Changed
+
+* kube-prometheus-stack (homelab-wsl): the scrape of the API server keeps the checks of the two admission policies of NFS volumes (nfs-pod-volumes, nfs-persistent-volumes) with enforcement_action "audit" or "deny", beside the denials of the mover policy. So the count of the volumes they would refuse is in Prometheus while they audit.
+
+## v2.202.0 - 2026-11-18
+
+### Added
+
+* nfs-server: two admission rules list which pods and PersistentVolumes may mount the NFS server of homelab-wsl (nfs-pod-volumes: a namespace, server and exact path for each user of today; nfs-persistent-volumes: the read and write and the read-only volume of each vault share, each with its one claim). They audit and warn only for now; a later change turns them to Deny. A throwaway API server tests the rules (admission/tests/run.sh), and a test checks that each NFS volume in git is on the list (docs/apps/agent-platform.md, "NFS volumes and admission").
+
+## v2.201.0 - 2026-11-18
+
+### Added
+
+* Security, the Windows host check: the check wsl-disk-rules (Design Doc 0004, section 7, row 27), with the severity high, in line 3.3 of the registry for the Windows host type. Each 6 hours as SYSTEM, with no privilege, it opens the disk file of the WSL distro through the open of the move procedure and reads its owner and DACL on that handle. It passes only when the owner is the account that owns the distro, the DACL is protected, and each entry is an allow entry with full control and no flag: one each for SYSTEM, the Administrators and that account, any number for a VM, and at most one for the capability SID of WSL. A missing file and a file that can not be read are each a fail. The check is on for a host from its done switch (wsl_start_unelevated_done), and gives no result before it. The series homelab_security_host_wsl_disk_rules_reason names each rule that the file breaks, from a fixed list. A fail starts SecurityFindingNew.
+
+## v2.200.1 - 2026-11-18
+
+### Fixed
+
+* Windows hosts, the window procedure of the move: each read of the rules, the read of the group and the set of the owner of a file by SYSTEM open the file through one open (TnwksSecurity.Open). It opens the entry at the path itself (FILE_FLAG_OPEN_REPARSE_POINT), with identification only for a server behind the path, and takes it only when it is a file or a directory of a disk, not a reparse point, with one name, and with a final path that is the path itself. Each refusal closes the handle before any rule is read or written. Tests check the flags of the open and each refusal with stand-ins for the calls of Windows.
+
 ## v2.200.0 - 2026-11-18
 
 ### Added

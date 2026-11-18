@@ -131,6 +131,17 @@ function Set-TnwksEnabled([string]$text, [bool]$Enabled) {
     $doc.OuterXml
 }
 
+# Whether the Settings of a task definition leave it enabled (no Enabled
+# element means enabled).
+function Test-TnwksEnabled([string]$text) {
+    $doc = New-Object Xml.XmlDocument
+    $doc.LoadXml(($text -replace '^\s*<\?xml[^>]*\?>', ''))
+    $ns = New-Object Xml.XmlNamespaceManager($doc.NameTable)
+    $ns.AddNamespace('t', 'http://schemas.microsoft.com/windows/2004/02/mit/task')
+    $node = $doc.SelectSingleNode('/t:Task/t:Settings/t:Enabled', $ns)
+    -not $node -or $node.InnerText.Trim() -ne 'false'
+}
+
 # Each exception of the chain, outer first: its type, its HResult and its
 # message. A CimException of the provider of ScheduledTasks also gives its
 # status and the fields of its error data that hold a code or a message.
@@ -282,7 +293,11 @@ if ($before -ne $after) {
 
 if ($module.Params.running) {
     $state = if ($task) { "$((Get-ScheduledTask -TaskPath $path -TaskName $name -ErrorAction SilentlyContinue).State)" } else { '' }
-    if ($state -ne 'Running') {
+    # With keep_task_enabled_state, the enabled state is the task's own: a
+    # task that is disabled stays as it is, and is not started. A new task in
+    # a check run has the state of its xml.
+    $off = if ($task) { $state -eq 'Disabled' } else { -not (Test-TnwksEnabled $xml) }
+    if ($state -ne 'Running' -and -not ($keep -and $off)) {
         $module.Result.changed = $true
         $module.Result.started = $true
         if (-not $check) { Start-ScheduledTask -TaskPath $path -TaskName $name }

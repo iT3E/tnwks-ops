@@ -3,12 +3,17 @@
 - name: Restart UDP relays
   ansible.windows.win_powershell:
     parameters:
-      Tasks: "{{ udp_relays | map(attribute='task') | list }}"
+      Tasks: "{{ udp_relay_task_names }}"
+      # While the move of the distro runs, the window disables the relays of
+      # one account: the handler restarts the ones that are enabled.
+      SkipDisabled: "{{ wsl_move_phase == 'move' }}"
     script: |
       [CmdletBinding(SupportsShouldProcess)]
-      param([string[]]$Tasks)
+      param([string[]]$Tasks, [bool]$SkipDisabled)
       foreach ($t in $Tasks) {
-          if (-not (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue)) { continue }
+          $task = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+          if (-not $task) { continue }
+          if ($SkipDisabled -and $task.State -eq 'Disabled') { continue }
           if ($PSCmdlet.ShouldProcess($t, 'restart')) {
               Stop-ScheduledTask -TaskName $t
               # Start only once the old relay has let go of its port.
