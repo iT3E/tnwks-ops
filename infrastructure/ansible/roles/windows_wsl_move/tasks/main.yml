@@ -99,6 +99,30 @@
   check_mode: false
   no_log: true
 
+# Step 4 makes the administrator account the SSH user. From then on, only an
+# apply as the present account (step 3) reads the registry and the profile of
+# that account and registers its window tasks: an apply as another account
+# needs both kept, and stops before any write without them.
+- name: An apply as another account than the present one comes after step 3 ran as the present account
+  ansible.windows.win_powershell:
+    parameters:
+      Registration: "{{ wsl_move_registration_file }}"
+      Wslconfig: "{{ wsl_move_wslconfig_file }}"
+      Names: "{{ wsl_move_window_tasks.present.values() | list }}"
+    script: |
+      param([string]$Registration, [string]$Wslconfig, [string[]]$Names)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $kept = (Test-Path -LiteralPath $Registration) -and (Test-Path -LiteralPath $Wslconfig)
+      $tasks = @($Names | Where-Object { Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue }).Count -eq $Names.Count
+      if (-not ($kept -and $tasks)) {
+          throw ('Ansible does not log in as the present account, and step 3 has not run as that account: ' +
+              'the reads of today or the window tasks of the present account are not there. Nothing is changed.')
+      }
+  check_mode: false
+  when: not wsl_move_as_present | bool
+  no_log: true
+
 - name: Read the last marker of the state file
   ansible.windows.win_powershell:
     parameters:

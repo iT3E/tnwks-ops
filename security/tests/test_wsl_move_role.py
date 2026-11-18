@@ -343,3 +343,73 @@ def test_site_2_turns_the_move_on_with_the_copies_that_its_roles_register():
     check = next(t for t in tasks("main.yml")
                  if t.get("name") == "The start tasks of the new account are the copies of the tasks of the present account")
     assert "reject('equalto', 'tnwks-vhdx-compact')" in check["ansible.builtin.assert"]["that"]
+
+
+GUARD = "An apply as another account than the present one comes after step 3 ran as the present account"
+
+
+def test_an_apply_as_the_administrator_stops_before_any_write_until_step_3_ran_as_the_present_account():
+    """Step 4 (the SSH user is the administrator account) can not apply before step 3 kept the reads of today."""
+    main = tasks("main.yml")
+    names = [t.get("name") for t in main]
+    guard = main[names.index(GUARD)]
+    module = guard["ansible.windows.win_powershell"]
+    assert guard["when"] == "not wsl_move_as_present | bool" and guard["check_mode"] is False
+    assert module["parameters"] == {"Registration": "{{ wsl_move_registration_file }}",
+                                    "Wslconfig": "{{ wsl_move_wslconfig_file }}",
+                                    "Names": "{{ wsl_move_window_tasks.present.values() | list }}"}
+    assert "SupportsShouldProcess" not in module["script"] and "$Ansible.Changed = $false" in module["script"]
+    changing = ("tnwks_win_dir_acl", "ansible.windows.win_file", "ansible.windows.win_copy", "tnwks_win_scheduled_task",
+                "ansible.windows.win_service", "ansible.builtin.include_tasks")
+    first_change = min(i for i, t in enumerate(main) if any(k in t for k in changing)
+                       or "SupportsShouldProcess" in str(t.get("ansible.windows.win_powershell", {}).get("script", "")))
+    assert names.index("Ansible logs in as the present account, or its window tasks are there") < names.index(GUARD)
+    assert names.index(GUARD) < first_change
+
+
+@needs_pwsh
+def test_the_guard_of_step_4_needs_the_kept_reads_and_the_window_tasks(tmp_path):
+    script = next(t for t in tasks("main.yml") if t.get("name") == GUARD)["ansible.windows.win_powershell"]["script"]
+    encoded = base64.b64encode(script.encode()).decode()
+    out = {}
+    for case, files, registered in (("kept", ["r", "w"], 3), ("no reads", [], 3), ("one read", ["r"], 3),
+                                    ("no tasks", ["r", "w"], 2)):
+        folder = tmp_path / case.replace(" ", "-")
+        folder.mkdir()
+        for name in files:
+            (folder / name).write_text("{}")
+        body = f"""$Ansible = [pscustomobject]@{{ Changed = $false }}
+$registered = @('tnwks-wsl-move-present-stop', 'tnwks-wsl-move-present-unregister', 'tnwks-wsl-move-present-import')[0..({registered} - 1)]
+function Get-ScheduledTask([string]$TaskName, $ErrorAction) {{ if ($registered -contains $TaskName) {{ [pscustomobject]@{{ TaskName = $TaskName }} }} }}
+$code = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))
+try {{
+  & ([scriptblock]::Create($code)) -Registration '{folder}/r' -Wslconfig '{folder}/w' -Names @('tnwks-wsl-move-present-stop', 'tnwks-wsl-move-present-unregister', 'tnwks-wsl-move-present-import')
+  'passed'
+}} catch {{ $_.Exception.Message }}
+"""
+        out[case] = pwsh(body).stdout.strip().splitlines()[-1]
+    assert out["kept"] == "passed"
+    stop = ("Ansible does not log in as the present account, and step 3 has not run as that account: the reads of "
+            "today or the window tasks of the present account are not there. Nothing is changed.")
+    assert out["no reads"] == out["one read"] == out["no tasks"] == stop
+
+
+def test_on_site_2_the_administrator_logs_in_and_the_distro_keeps_its_owner_and_user():
+    """Step 4 (plan task 10.14): the inventory of site 2."""
+    host = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
+    distro = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02-ubuntu/main.yml").read_text())
+    # The account that owns the distro follows the phase of the move, from the move's own values.
+    assert " ".join(host["windows_desktop_user"].split()) == (
+        "{{ wsl_move_new_account if wsl_move_phase == 'done' else wsl_move_present_account }}")
+    # The user of the distro is the user of today, and the jump logs in to the distro as that user.
+    assert distro["wsl_distro_user"] == "{{ hostvars['WSL-02'].wsl_move_present_account }}"
+    # The jump takes the same value: a value of the distro host that takes hostvars can not be read through hostvars.
+    assert "{{ wsl_move_present_account }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}" in (
+        host["ansible_ssh_common_args"])
+    assert "wsl_distro_user" not in host["ansible_ssh_common_args"]
+    # The disk file of today is in the folder of the present account, not of the SSH user.
+    assert host["vhdx_compact_vhdx"] == "{{ wsl_move_present_folder }}\\ext4.vhdx"
+    # No public value of site 2 takes the owner or the user of the distro from the SSH user.
+    for path in ("inventory/host_vars/WSL-02/main.yml", "inventory/host_vars/WSL-02-ubuntu/main.yml"):
+        code = [line for line in (ANSIBLE / path).read_text().splitlines() if not line.lstrip().startswith("#")]
+        assert not any("ansible_user" in line for line in code), path
