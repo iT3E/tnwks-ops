@@ -294,6 +294,8 @@ def test_a_restart_needs_the_owners_go_and_only_the_phase_restart_has_one():
     config = yaml.safe_load((ROLE / "vars/main.yml").read_text())["wsl_move_rehearsal_window_config"]
     assert config["restart"] == "{{ wsl_move_rehearsal_restart | bool }}"
     assert config["boot"] == {"group_steps": False, "rehearsal_group_test": False}
+    # The read of window step 7 that no compute system runs: off in the rehearsal only.
+    assert config["vm_check"] is False
     text = WINDOW.read_text()
     assert text.count("Restart-Computer") == 1
     assert re.search(r"if \(\$cfg\.restart\) \{\s*Write-Log \"restart: \$Why\"\s*Restart-Computer -Force", text)
@@ -799,14 +801,55 @@ $global:Calls = New-Object System.Collections.Generic.List[string]
 $global:Admins = New-Object System.Collections.Generic.List[string]
 $global:Procs = New-Object System.Collections.Generic.List[object]
 $global:Runs = @{}
+# The compute systems of the Host Compute Service: a start task or an import starts a
+# WSL VM of its account (owner WSL), and a stop task ends it. $global:HcsError: the read
+# fails; $global:HcsText: the text that the read gives instead of the list.
+# Add-TnwksTestSystem: a system with these properties, in the next $Reads reads only
+# (-1: in each read).
+$global:Vms = New-Object System.Collections.Generic.List[object]
+$global:Systems = New-Object System.Collections.Generic.List[object]
+class TnwksHcs {
+    static [string] Enumerate() {
+        $global:Calls.Add('hcs enumerate')
+        if ($global:HcsError) { throw $global:HcsError }
+        if ($null -ne $global:HcsText) { return $global:HcsText }
+        return (& $global:HcsList)
+    }
+}
+$global:HcsList = {
+    $list = @($global:Vms | ForEach-Object {
+        [pscustomobject]@{ Id = $_.Id; SystemType = 'VirtualMachine'; Owner = $_.Owner; State = 'Running' } })
+    foreach ($x in $global:Systems.ToArray()) {
+        if ($x.Reads -eq 0) { continue }
+        $list += $x.System
+        if ($x.Reads -gt 0) { $x.Reads = $x.Reads - 1 }
+    }
+    ConvertTo-Json -Compress -InputObject $list
+}
+function Add-TnwksTestVm([string]$Sid, [string]$Owner = 'WSL') {
+    $global:Vms.Add([pscustomobject]@{ Id = [guid]::NewGuid().ToString(); Owner = $Owner; Sid = $Sid })
+}
+function Add-TnwksTestSystem([hashtable]$Properties, [int]$Reads = -1) {
+    $global:Systems.Add([pscustomobject]@{ System = [pscustomobject]$Properties; Reads = $Reads })
+}
+# The key of the WSL installer: its install folder. $env:SystemRoot: the folder of Windows.
+$global:WslInstall = 'C:\Program Files\WSL\'
+$env:SystemRoot = 'C:\Windows'
+function Get-ItemProperty {
+    param([string]$LiteralPath, [string]$Name)
+    if ($LiteralPath -ne 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lxss\MSI' -or -not $global:WslInstall) { throw 'no such key' }
+    [pscustomobject]@{ InstallLocation = $global:WslInstall }
+}
 function Get-LocalUser { param([string]$Name) [pscustomobject]@{ SID = [pscustomobject]@{ Value = $global:Sids[$Name] } } }
 function Get-LocalGroupMember { param([string]$SID) @($global:Admins | ForEach-Object { [pscustomobject]@{ SID = [pscustomobject]@{ Value = $_ } } }) }
 function Add-LocalGroupMember { param([string]$SID, $Member) $global:Calls.Add("join $Member"); $global:Admins.Add($Member) }
 # $global:FailLeave: Windows refuses the leave.
+# $global:OnLeave: what else happens at a leave (a script block).
 function Remove-LocalGroupMember {
     param([string]$SID, $Member)
     if ($global:FailLeave) { $global:Calls.Add("refused leave $Member"); throw 'the leave is refused' }
     $global:Calls.Add("leave $Member"); [void]$global:Admins.Remove($Member)
+    if ($global:OnLeave) { & $global:OnLeave }
 }
 # As Task Scheduler reads it (TASK_STATE): a task with a running instance is Running,
 # also when it is disabled; Disabled only with no instance. Settings.Enabled is the flag.
@@ -857,10 +900,15 @@ function Start-ScheduledTask {
     if ($TaskName -like '*-start') {
         $global:Running[$TaskName] = $true
         $global:Procs.Add([pscustomobject]@{ Name = 'wsl.exe'; OwnerSid = $sid; Task = $TaskName })
+        if (-not @($global:Vms | Where-Object { $_.Sid -eq $sid }).Count) { Add-TnwksTestVm $sid }
         return
     }
+    if ($TaskName -like '*-import' -and -not @($global:Vms | Where-Object { $_.Sid -eq $sid }).Count) { Add-TnwksTestVm $sid }
     if ($global:QueuedPolls) { $global:Pending[$TaskName] = [int]$global:QueuedPolls }
-    if ($TaskName -like '*-stop') { foreach ($p in @($global:Procs | Where-Object { $_.OwnerSid -eq $sid })) { [void]$global:Procs.Remove($p) } }
+    if ($TaskName -like '*-stop') {
+        foreach ($p in @($global:Procs | Where-Object { $_.OwnerSid -eq $sid })) { [void]$global:Procs.Remove($p) }
+        foreach ($v in @($global:Vms | Where-Object { $_.Sid -eq $sid })) { [void]$global:Vms.Remove($v) }
+    }
     # An unregister deletes the icon of the distro in the folder of its account, unless
     # $global:KeepIcon (WSL only logs a failed delete).
     if ($TaskName -like '*-unregister' -and -not $global:KeepIcon) {
@@ -1104,7 +1152,7 @@ $global:FolderAcls = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (fo
 $global:Groups = @{{}}; foreach ($p in {ps({str(root / k): v for k, v in (groups or {}).items()})}.PSObject.Properties) {{ $global:Groups[$p.Name] = $p.Value }}
 if ({'$true' if any(state_of.get(t) == "Running" for t in state_of) else '$false'}) {{
     foreach ($t in @($global:Running.Keys | Where-Object {{ $global:Running[$_] }})) {{
-        $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}) }}
+        $global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = (Get-TaskSid $t); Task = $t }}); Add-TnwksTestVm (Get-TaskSid $t) }}
 }}
 {faults}
 & '{window}' {args}
@@ -1145,7 +1193,11 @@ def test_the_window_moves_the_file_in_order_and_logs_each_moment_in_administrato
         "move a -> b", f"acl b/ext4.vhdx {disk_b}",
         "start tnwks-moverh-a-unregister",
         "start tnwks-moverh-b-import", "start tnwks-moverh-b-stop",
+        # Window step 7: the read of the compute systems through the HCS API, the
+        # leave, then the read again.
+        "hcs enumerate",
         f"leave {A_SID}",
+        "hcs enumerate",
         "enable tnwks-moverh-b-start",
     ]
     assert out["markers"] == ["window-started", "window-done"]
@@ -2382,9 +2434,218 @@ def test_a_config_that_is_not_the_rehearsals_runs_the_group_steps_with_no_group_
         if name != "forward":
             # Way back step 1 joins the present account, and no group test takes it out.
             assert JOIN in out["calls"] and LEAVE not in out["calls"], (name, out["calls"])
+            assert out["calls"].index(JOIN) < out["calls"].index("start tnwks-moverh-a-import"), (name, out["calls"])
+            assert out["admins"] == [A_SID] and "way back 1 passed" in out["log"], (name, out["log"])
+    # A forward run that fails after the marker of a started window goes back, and
+    # its way back runs the group step too.
+    out = run_window(tmp_path / "back", {"mode": "forward", "group_steps": True, "stop_after": 0, "rehearsal_group_test": False},
+                     results={"tnwks-moverh-b-import": None})
+    assert "the way back starts" in out["log"] and out["log"][-1] == "result: went-back", out["log"]
+    assert out["calls"].count(JOIN) == 1 and LEAVE not in out["calls"], out["calls"]
+    assert out["calls"].index(JOIN) > out["calls"].index("start tnwks-moverh-b-import"), out["calls"]
+    assert out["calls"].index(JOIN) < out["calls"].index("start tnwks-moverh-a-import"), out["calls"]
+    assert out["admins"] == [A_SID], out["admins"]
     # The scope holds the path of the request too.
     out, _ = boot_group_run(tmp_path / "out", config={"boot_request_file": str(tmp_path / "elsewhere.json")})
     assert out["code"] == 3 and any("is outside" in line for line in out["log"])
+
+
+# --- Window step 7: no compute system runs, then no process of the WSL package ---------
+
+# The real procedure: the present account is a member of the Administrators before the window.
+STEP_7_REAL = {"mode": "forward", "group_steps": True, "stop_after": 0, "rehearsal_group_test": False}
+BEFORE = "step 7 before the leave: no compute system runs on the host"
+AFTER = "step 7 after the leave: no compute system runs on the host"
+
+
+def at_stop_of_b(code: str) -> str:
+    """A fault: code runs at the run of the stop task of B, the last task before step 7."""
+    return f"$global:OnStart = @{{ 'tnwks-moverh-b-stop' = {{ {code} }} }}"
+
+
+def proc(path: str, name: str = "", sid: str = A_SID) -> str:
+    """A process of the account sid with the image path (none when empty)."""
+    name = name or path.rsplit("\\", 1)[-1]
+    return f"$global:Procs.Add([pscustomobject]@{{ Name = '{name}'; ExecutablePath = '{path}'; OwnerSid = '{sid}' }})"
+
+
+def system(props: str, reads: int = -1) -> str:
+    return f"Add-TnwksTestSystem @{{ {props} }} {reads}"
+
+
+@needs_pwsh
+def test_window_step_7_reads_no_compute_system_and_no_process_of_the_package_before_and_after_the_leave(tmp_path):
+    ok = run_window(tmp_path / "ok", STEP_7_REAL, admins=(A_SID,))
+    assert ok["code"] == 0 and ok["log"][-1] == "result: done", ok["log"]
+    log = ok["log"]
+    assert log.index(BEFORE) < log.index("group: tnwks-moverh-a left Administrators") < log.index(AFTER) < log.index("step 7 passed")
+    assert ok["calls"].count("hcs enumerate") == 2 and ok["admins"] == []
+    # Any compute system fails, whatever its owner or type: the WSL VM of a distro, a WSLC VM
+    # (default owner, or a name its caller chose), one with no owner, one of another type.
+    for name, props, text in (
+            ("a WSL VM", "Id = 'id-1'; SystemType = 'VirtualMachine'; Owner = 'WSL'; State = 'Running'",
+             "type VirtualMachine, owner WSL, state Running"),
+            ("a WSLC VM", "Id = 'id-2'; SystemType = 'VirtualMachine'; Owner = 'WSLC'; State = 'Running'",
+             "type VirtualMachine, owner WSLC, state Running"),
+            ("a chosen owner", "Id = 'id-3'; SystemType = 'VirtualMachine'; Owner = 'my-session'; State = 'Running'",
+             "type VirtualMachine, owner my-session, state Running"),
+            ("no owner", "Id = 'id-4'; SystemType = 'VirtualMachine'; State = 'Running'",
+             "type VirtualMachine, owner none, state Running"),
+            ("another type", "Id = 'id-5'; SystemType = 'Container'; Owner = 'VMMS'; State = 'Created'",
+             "type Container, owner VMMS, state Created"),
+            ("a long owner over lines", "Id = 'id-6'; SystemType = 'VirtualMachine'; Owner = ('x' * 90) + \"`r`nresult: done\"; State = 'Running'",
+             "type VirtualMachine, owner " + "x" * 64 + " [cut], state Running")):
+        out = run_window(tmp_path / name.replace(" ", "-"), STEP_7_REAL, admins=(A_SID,), faults=at_stop_of_b(system(props)))
+        fail = [line for line in out["log"] if line.startswith("fail: check failed: 1 compute system(s) run on the host before the leave, after 10 reads: ")]
+        assert len(fail) == 1 and fail[0].endswith(text), (name, out["log"])
+        assert "id-" not in " ".join(out["log"]) and out["log"].count("result: done") == 0, (name, out["log"])
+        assert out["calls"].count("hcs enumerate") == 10, (name, out["calls"])
+        assert "step 7 before the leave: 1 compute system(s) listed; read again, 2 seconds apart, at most 10 reads" in out["log"]
+        # The window goes back while the present account is still a member.
+        assert "the way back starts" in out["log"] and "result: went-back" in out["log"], (name, out["log"])
+        assert LEAVE not in out["calls"] and out["admins"] == [A_SID] and "step 7 passed" not in out["log"], (name, out["calls"])
+    for name, code, text in (
+            ("a read that fails", "$global:HcsError = 'HcsEnumerateComputeSystems: 0x80370100'",
+             "fail: HcsEnumerateComputeSystems: 0x80370100"),
+            ("a read with no list", "$global:HcsText = ''",
+             "fail: the Host Compute Service gave no list of its compute systems")):
+        out = run_window(tmp_path / name.replace(" ", "-"), STEP_7_REAL, admins=(A_SID,), faults=at_stop_of_b(code))
+        assert [line for line in out["log"] if line.startswith(text)] and "result: went-back" in out["log"], (name, out["log"])
+        assert LEAVE not in out["calls"] and out["admins"] == [A_SID], (name, out["calls"])
+
+
+@needs_pwsh
+def test_window_step_7_reads_a_list_again_and_passes_only_on_a_read_with_no_system(tmp_path):
+    """A VM that a stop ended can stay in the list for a moment: the read is taken again,
+    at most 10 reads, and only a read with no system passes."""
+    gone = run_window(tmp_path / "gone", STEP_7_REAL, admins=(A_SID,), faults=at_stop_of_b(system(
+        "Id = 'id-1'; SystemType = 'VirtualMachine'; Owner = 'WSL'; State = 'Running'", 2)))
+    assert gone["code"] == 0 and gone["log"][-1] == "result: done", gone["log"]
+    assert "step 7 before the leave: 1 compute system(s) listed; read again, 2 seconds apart, at most 10 reads" in gone["log"]
+    # Three reads before the leave (the last with no system), one after it.
+    assert gone["calls"].count("hcs enumerate") == 4, gone["calls"]
+    # In the list at the tenth read: a fail.
+    late = run_window(tmp_path / "late", STEP_7_REAL, admins=(A_SID,), faults=at_stop_of_b(system(
+        "Id = 'id-1'; SystemType = 'VirtualMachine'; Owner = 'WSL'; State = 'Running'", 10)))
+    assert any(line.startswith("fail: check failed: 1 compute system(s) run on the host before the leave") for line in late["log"]), late["log"]
+    assert LEAVE not in late["calls"]
+
+
+@needs_pwsh
+def test_window_step_7_counts_each_process_of_the_wsl_package_of_the_present_account(tmp_path):
+    """A process counts by its image path: in the install folder of the package (from the key
+    of its installer), or a WSL command of Windows in System32. With no path, by the name
+    of a named executable of the installer."""
+    fails = {
+        "a named file": proc("C:\\Program Files\\WSL\\wslc.exe"),
+        "a file the installer takes by a pattern": proc("C:\\Program Files\\WSL\\tools\\some-tool.exe"),
+        "the settings app": proc("C:\\Program Files\\WSL\\wslsettings\\wslsettings.exe"),
+        "the command of Windows": proc("C:\\Windows\\System32\\wsl.exe"),
+        "an old command of Windows": proc("C:\\Windows\\System32\\wslconfig.exe"),
+        "no path, a named file": proc("", "container.exe"),
+        "another install folder": "$global:WslInstall = 'D:\\Apps\\WSL'; " + proc("D:\\Apps\\WSL\\wslg.exe"),
+    }
+    passes = {
+        "a name of the installer in another folder": proc("C:\\Program Files\\Remote\\msrdc.exe"),
+        "a bash of another program": proc("C:\\Program Files\\Git\\bin\\bash.exe"),
+        "a process of the package of another account": proc("C:\\Program Files\\WSL\\wslg.exe", sid="S-1-5-21-9-9-9-1099"),
+        "the old folder after a move of the install": "$global:WslInstall = 'D:\\Apps\\WSL'; " + proc("C:\\Program Files\\WSL\\wslg.exe"),
+    }
+    for name, code in {**fails, **passes}.items():
+        out = run_window(tmp_path / name.replace(" ", "-"), STEP_7_REAL, admins=(A_SID,), faults=at_stop_of_b(code))
+        if name in passes:
+            assert out["code"] == 0 and out["log"][-1] == "result: done", (name, out["log"])
+            continue
+        assert "fail: check failed: 1 process(es) of the WSL package of tnwks-moverh-a run before the leave" in out["log"], (name, out["log"])
+        # The read of the compute systems comes first, and passes.
+        assert out["log"].index(BEFORE) < out["log"].index("fail: check failed: 1 process(es) of the WSL package of tnwks-moverh-a run before the leave")
+        assert LEAVE not in out["calls"] and out["admins"] == [A_SID], (name, out["calls"])
+
+
+@needs_pwsh
+def test_a_fail_of_step_7_after_the_leave_goes_back_and_puts_the_account_back(tmp_path):
+    for name, code, text in (
+            ("a compute system", system("Id = 'id-1'; SystemType = 'VirtualMachine'; Owner = 'WSLC'; State = 'Running'"),
+             "fail: check failed: 1 compute system(s) run on the host after the leave, after 10 reads: type VirtualMachine, owner WSLC, state Running"),
+            ("a process", proc("C:\\Program Files\\WSL\\wslc.exe"),
+             "fail: check failed: 1 process(es) of the WSL package of tnwks-moverh-a run after the leave")):
+        out = run_window(tmp_path / name.replace(" ", "-"), STEP_7_REAL, admins=(A_SID,), faults="$global:OnLeave = { " + code + " }")
+        log = out["log"]
+        assert text in log and BEFORE in log and "step 7 passed" not in log, (name, log)
+        assert log.index(BEFORE) < log.index("group: tnwks-moverh-a left Administrators") < log.index(text) < log.index("the way back starts"), (name, log)
+        # Way back step 1 puts the account back.
+        assert out["calls"].index(LEAVE) < out["calls"].index(JOIN) and out["admins"] == [A_SID], (name, out["calls"])
+        assert "enable tnwks-moverh-b-start" not in out["calls"], (name, out["calls"])
+
+
+def test_the_process_read_names_each_named_executable_of_the_wsl_installer():
+    """The named executables of the installer of the package (WSL: msipackage/package.wix.in,
+    at the tag 3.0.5), and the WSL commands of Windows in System32."""
+    text = WINDOW.read_text()
+    names = re.search(r"\$TnwksWslPackageNames = @\(([^)]*)\)", text)[1]
+    package = {"wsl.exe", "wslg.exe", "wslc.exe", "container.exe", "wslhost.exe", "wslrelay.exe", "wslservice.exe",
+               "wslcsession.exe", "msrdc.exe", "msal.wsl.proxy.exe", "wslsettings.exe"}
+    assert set(re.findall(r"'([^']+)'", names)) == package
+    assert re.search(r"\$TnwksWslSystemNames = @\('wsl.exe', 'wslconfig.exe', 'bash.exe'\)", text)
+    assert "msipackage/package.wix.in, at the tag 3.0.5" in text
+    assert "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Lxss\\MSI' -Name InstallLocation" in text
+
+
+@needs_pwsh
+def test_the_config_of_the_rehearsal_turns_the_read_of_the_vms_off_and_keeps_the_process_check(tmp_path):
+    """Only a config of the rehearsal (it has a boot request file) may turn the read of the
+    VMs off. The process check stays."""
+    plain = {"mode": "forward", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
+
+    def rehearsal(name: str) -> dict:
+        return {"vm_check": False, "boot_request_file": str(tmp_path / name / "root/state/boot-request.json")}
+
+    off = run_window(tmp_path / "off", plain, admins=(A_SID,), config=rehearsal("off"),
+                     faults=at_stop_of_b("Add-TnwksTestVm 'S-1-5-21-9-9-9-1099'"))
+    assert off["code"] == 0 and "step 7 before the leave: the read of the compute systems is off in this config" in off["log"], off["log"]
+    assert "hcs enumerate" not in off["calls"]
+    one = run_window(tmp_path / "proc", plain, admins=(A_SID,), config=rehearsal("proc"),
+                     faults=at_stop_of_b(proc("C:\\Program Files\\WSL\\wsl.exe")))
+    assert "fail: check failed: 1 process(es) of the WSL package of tnwks-moverh-a run before the leave" in one["log"], one["log"]
+    assert "the way back starts" in one["log"] and LEAVE not in one["calls"] and one["admins"] == [A_SID]
+
+
+@needs_pwsh
+def test_a_config_that_is_not_the_rehearsals_can_not_turn_the_read_of_the_vms_off(tmp_path):
+    for name, value, text in (
+            ("off", False, "stop: vm_check is off, and only a config of the rehearsal may turn it off. Nothing is changed."),
+            ("text", "false", "stop: vm_check is 'false': true or false. Nothing is changed."),
+            ("number", 0, "stop: vm_check is '0': true or false. Nothing is changed.")):
+        out = run_window(tmp_path / name, STEP_7_REAL, admins=(A_SID,), config={"vm_check": value})
+        assert out["code"] == 3 and out["calls"] == [] and out["markers"] == [] and out["log"] == [text], (name, out["log"])
+    # On, by the key or with no key: the read runs.
+    for name, config in (("on", {"vm_check": True}), ("none", {})):
+        out = run_window(tmp_path / name, STEP_7_REAL, admins=(A_SID,), config=config)
+        assert out["code"] == 0 and BEFORE in out["log"] and AFTER in out["log"], (name, out["log"])
+
+
+def test_the_read_of_the_vms_calls_the_hcs_api_as_microsoft_documents_it():
+    """The signatures of the reference of the HCS API (computecore.dll): HcsCreateOperation
+    (context, callback) gives a handle; HcsEnumerateComputeSystems (query, operation) and
+    HcsWaitForOperationResult (operation, timeoutMs, resultDocument) give an HRESULT; the
+    result document is freed with LocalFree, and the operation closed."""
+    text = WINDOW.read_text()
+    source = text[text.index("$TnwksHcsSource = @'"):text.index("'@", text.index("$TnwksHcsSource = @'"))]
+    for line in ('static extern IntPtr HcsCreateOperation(IntPtr context, IntPtr callback);',
+                 'static extern int HcsEnumerateComputeSystems(string query, IntPtr operation);',
+                 'static extern int HcsWaitForOperationResult(IntPtr operation, uint timeoutMs, out IntPtr resultDocument);',
+                 'static extern void HcsCloseOperation(IntPtr operation);',
+                 'int hr = HcsEnumerateComputeSystems(null, op);',
+                 'finally { if (doc != IntPtr.Zero) LocalFree(doc); }', 'finally { HcsCloseOperation(op); }'):
+        assert line in source, line
+    assert source.count('[DllImport("computecore.dll", ExactSpelling = true') == 4
+    assert 'CharSet = CharSet.Unicode)]\n    static extern int HcsEnumerateComputeSystems' in source
+    # Every compute system counts, whatever its owner, and no tool: no process is started for the read.
+    body = re.search(r"function Get-TnwksComputeSystem \{.*?\n\}", text, re.DOTALL)[0]
+    assert "Owner" not in body and "Start-Process" not in body and ".exe" not in body
+    # The log names a system by its type, owner and state, never its id.
+    fmt = re.search(r"function Format-TnwksComputeSystem\(.*?\n\}", text, re.DOTALL)[0]
+    assert "Id" not in fmt and "Format-TnwksText" in fmt
 
 
 @needs_pwsh

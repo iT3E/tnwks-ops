@@ -3,6 +3,18 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.199.0 - 2026-11-18
+
+### Added
+
+* Windows hosts, the window procedure of the move: before the present account leaves Administrators at window step 7, and again after it, a read as SYSTEM through the API of the Host Compute Service (computecore.dll, HcsEnumerateComputeSystems) that no compute system runs, of any owner or type, read again for a VM that a stop ended (at most 10 reads, 2 seconds apart); then the check that no process of the WSL package of the present account runs, by its image path in the install folder of the package or a WSL command of Windows in System32. A fail before the leave sends the window back while the account is still a member; a fail after it sends the window back, and way back step 1 puts the account back. The check is on with no key; only a config of the rehearsal may turn it off (vm_check: false), as the host's own distro runs during a rehearsal. A test shows that each mode of the procedure, the boot run and a forward run that goes back among them, runs the group step of the way back with a config that is not the rehearsal's.
+
+## v2.198.1 - 2026-11-18
+
+### Fixed
+
+* Windows hosts, the window procedure of the move: the fail line of each step that runs a task of an account (the stop, the unregister and the import of the window, the unregister and the import back of the way back) holds the exit code of the task and the error text of its command from the result of this run, or says that there is no result of this run. A step takes the result of a task of an account only from a run that ended in this run, with a time from the start of the run to the moment of the read. Each fail line is one line and bounded, as is the line of a task with its result. The checks of the rehearsal read each line of the procedure log by its start. Tests show that a result of an earlier run, a task that starts and never runs, and a start that Task Scheduler refuses each fail their step with that text.
+
 ## v2.198.0 - 2026-11-18
 
 ### Added

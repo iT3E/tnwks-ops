@@ -983,6 +983,40 @@ characters, the whole line at 1000. The line of a task holds its result as JSON 
 The checks of the log read each line by its start, so the text inside an
 error is not read as a group moment, a start or a result.
 
+**Window step 7: no compute system runs.** Before the present account
+leaves Administrators, and again after it leaves, the procedure reads, as
+SYSTEM, the compute systems of the Host Compute Service through its own API
+(`computecore.dll`: `HcsCreateOperation`, `HcsEnumerateComputeSystems` with
+no query, `HcsWaitForOperationResult`, `HcsCloseOperation`), so the read
+needs no tool on the host. Step 7 requires that the service lists no
+compute system at all, of any owner or type. A VM does not run as its
+account, and keeps the token that made it. WSL makes VMs of more than one
+kind: the VM of a distro has the owner `WSL`, and a WSLC VM has a display
+name that its caller chooses, or `WSLC` (WSL: `HcsVirtualMachine.cpp`), so
+no owner name marks a VM of WSL. No account has a reason to have a compute
+system at this step. A list that is not empty is read again, 2 seconds
+apart, at most 10 reads; only a read with no system passes. A call that
+fails, or a result that is not a list, fails the check. The fail line names
+each system by its type, owner and state, in one bounded line, and never by
+its id. Then the second check: no process of the WSL package of the present
+account runs. A process counts by its image path: any file in the install
+folder of the package (from the key that its installer writes,
+`Lxss\MSI`, `InstallLocation`), or a WSL command of Windows in System32
+(`wsl.exe`, `wslconfig.exe`, `bash.exe`). A process with no path that
+SYSTEM can read counts by the name of a named executable of the installer.
+The path, not a list of names, is the rule: the installer takes some of its
+executables by a pattern, and some of its names are not only WSL's. A fail
+before the leave sends the window back while the account is still a
+member; a fail after it sends the window back, and way back step 1 puts
+the account back. The check is on when the config has no key
+`vm_check`. Only a config of the rehearsal (the one with a boot request
+file) may set `vm_check: false`, and it does, because the host's own distro
+runs during a rehearsal; the scope check of the procedure refuses that
+value in any other config, and a value that is not true or false. Each mode of the
+procedure, the boot run and a forward run that goes back among them, runs
+the group step of way back step 1 with a config that is not the
+rehearsal's, and a test shows it.
+
 **What stays unproven here.** The procedure and the boot task restart the
 host only with `restart` on in their config, and the rehearsal keeps it
 off: they log "would restart", and a unit test shows that the line runs only
