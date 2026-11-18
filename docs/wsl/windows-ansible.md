@@ -1119,9 +1119,12 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   check read the moved file (`vhdx_compact_vhdx`, in `wsl_move_disk_dir`),
   the host check reads the rules of that file (`host_check_wsl_disk_rules`
   follows the phase on a host with the move on), and the write test can fail
-  the distro play (`wsl_host_check_write_test_fails_play` follows it too). The role stops the play
-  when the account or the file is not the one of the phase. A way back turns
-  the switch off first.
+  the distro play (`wsl_host_check_write_test_fails_play` follows it too),
+  and `windows_host_settings` alone writes the `.wslconfig` of the new
+  account, from its template. The role stops the play for the host, before
+  the WSL roles and with any tags, unless the last marker of the window is
+  `window-done`. It also stops it when the account or the file is not the
+  one of the phase. A way back turns the switch off first.
 
 - **Variables.** The names of the two accounts and the folder of the disk
   file today are in the encrypted variables of the host only:
