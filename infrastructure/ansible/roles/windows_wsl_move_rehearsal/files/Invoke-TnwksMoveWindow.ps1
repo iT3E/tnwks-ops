@@ -723,6 +723,11 @@ function Test-TnwksScope {
     if ($cfg.boot_request_file -and [bool]$req.group_steps -ne [bool]$req.rehearsal_group_test) {
         return 'group_steps and rehearsal_group_test are not equal: the rehearsal has no join without its leave'
     }
+    # The read of window step 7 that no WSL VM runs on the host: on when the
+    # key is not there, and off (vm_check false) only in a config of the
+    # rehearsal, as the distro of the host runs while the rehearsal does.
+    if ($null -ne $cfg.vm_check -and $cfg.vm_check -isnot [bool]) { return "vm_check is '$($cfg.vm_check)': true or false" }
+    if ($cfg.vm_check -eq $false -and -not $cfg.boot_request_file) { return 'vm_check is off, and only a config of the rehearsal may turn it off' }
     ''
 }
 
@@ -889,8 +894,9 @@ function Invoke-TnwksForward {
     # shows that no VM keeps a token from the time in the group. No account
     # has a reason to have a VM at this step, so any is a fail. Then no WSL
     # process of the present account runs. A fail sends the window back while
-    # the account is still a member. The config of the rehearsal turns the
-    # read of the VMs off (vm_check): the distro of the host runs then.
+    # the account is still a member. Only a config of the rehearsal may turn
+    # the read of the VMs off (vm_check, Test-TnwksScope): the distro of the
+    # host runs while the rehearsal does.
     if ($cfg.vm_check -ne $false) {
         $vms = @(Get-TnwksWslVm)
         Assert-Tnwks ($vms.Count -eq 0) "$($vms.Count) WSL VM(s) run on the host before step 7: $(@($vms | ForEach-Object { $_.Id }) -join ', ')"

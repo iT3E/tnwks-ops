@@ -2119,13 +2119,35 @@ def test_window_step_7_reads_that_no_wsl_vm_runs_then_no_process_of_the_present_
 
 @needs_pwsh
 def test_the_config_of_the_rehearsal_turns_the_read_of_the_vms_off_and_keeps_the_process_check(tmp_path):
-    off = run_window(tmp_path / "off", STEP_7_REAL, admins=(A_SID,), config={"vm_check": False}, faults=at_stop_of_b("Add-TnwksTestVm 'S-1-5-21-9-9-9-1099'"))
+    """Only a config of the rehearsal (it has a boot request file) may turn the read of the
+    VMs off. The process check stays."""
+    plain = {"mode": "forward", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
+
+    def rehearsal(name: str) -> dict:
+        return {"vm_check": False, "boot_request_file": str(tmp_path / name / "root/state/boot-request.json")}
+
+    off = run_window(tmp_path / "off", plain, admins=(A_SID,), config=rehearsal("off"),
+                     faults=at_stop_of_b("Add-TnwksTestVm 'S-1-5-21-9-9-9-1099'"))
     assert off["code"] == 0 and "step 7: the read of the WSL VMs is off in this config" in off["log"], off["log"]
     assert "hcs enumerate" not in off["calls"]
-    proc = run_window(tmp_path / "proc", STEP_7_REAL, admins=(A_SID,), config={"vm_check": False},
+    proc = run_window(tmp_path / "proc", plain, admins=(A_SID,), config=rehearsal("proc"),
                       faults=at_stop_of_b(f"$global:Procs.Add([pscustomobject]@{{ Name = 'wsl.exe'; OwnerSid = '{A_SID}' }})"))
     assert "fail: check failed: 1 WSL process(es) of tnwks-moverh-a run before step 7" in proc["log"], proc["log"]
     assert "the way back starts" in proc["log"] and LEAVE not in proc["calls"] and proc["admins"] == [A_SID]
+
+
+@needs_pwsh
+def test_a_config_that_is_not_the_rehearsals_can_not_turn_the_read_of_the_vms_off(tmp_path):
+    for name, value, text in (
+            ("off", False, "stop: vm_check is off, and only a config of the rehearsal may turn it off. Nothing is changed."),
+            ("text", "false", "stop: vm_check is 'false': true or false. Nothing is changed."),
+            ("number", 0, "stop: vm_check is '0': true or false. Nothing is changed.")):
+        out = run_window(tmp_path / name, STEP_7_REAL, admins=(A_SID,), config={"vm_check": value})
+        assert out["code"] == 3 and out["calls"] == [] and out["markers"] == [] and out["log"] == [text], (name, out["log"])
+    # On, by the key or with no key: the read runs.
+    for name, config in (("on", {"vm_check": True}), ("none", {})):
+        out = run_window(tmp_path / name, STEP_7_REAL, admins=(A_SID,), config=config)
+        assert out["code"] == 0 and "step 7: no WSL VM runs on the host" in out["log"], (name, out["log"])
 
 
 def test_the_read_of_the_vms_calls_the_hcs_api_as_microsoft_documents_it():

@@ -109,7 +109,8 @@ wsl_move_rehearsal_window_config:
   session_check: false
   # The read of window step 7 that no WSL VM runs on the host: off in the
   # rehearsal, as the distro of the host runs while the rehearsal does. The
-  # procedure reads it as on when the key is not there.
+  # procedure reads it as on when the key is not there, and refuses it off
+  # in a config with no boot request file (not the rehearsal's).
   vm_check: false
   task_minutes: 10
   present:
