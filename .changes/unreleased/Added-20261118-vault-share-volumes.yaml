@@ -1,3 +1,0 @@
-kind: Added
-body: 'agents: the volumes and claims of the vault shares, step d of the vault shares. Two static PersistentVolumes for each share (read and write with a hard mount, read only with a soft mount) and their two claims, vault-rw and vault-ro, in agents-main and agents-finance. Each claim binds to its volume at once; no pod mounts them yet, and no pod restarts (docs/apps/agent-platform.md, "The vault shares").'
-time: 2026-11-18T16:30:00.000000+00:00

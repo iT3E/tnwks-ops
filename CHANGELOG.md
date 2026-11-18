@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.206.0 - 2026-11-18
+
+### Added
+
+* agents: the volumes and claims of the vault shares, step d of the vault shares. Two static PersistentVolumes for each share (read and write with a hard mount, read only with a soft mount) and their two claims, vault-rw and vault-ro, in agents-main and agents-finance. Each claim binds to its volume at once; no pod mounts them yet, and no pod restarts (docs/apps/agent-platform.md, "The vault shares").
+
 ## v2.205.0 - 2026-11-18
 
 ### Added
