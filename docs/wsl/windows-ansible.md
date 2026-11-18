@@ -1193,6 +1193,21 @@ listen on the same port, and the window runs one of them only. While the
 move runs, both accounts may write the logs of the relays, and the handler
 of the role restarts the relays that are enabled.
 
+The compaction changes with the move. From `move` on, the account that owns
+the distro has a stop task (`tnwks-wsl-stop-account`, no trigger), which runs
+`wsl --shutdown` and nothing else. From `done` on, the compaction is a task
+of SYSTEM, run on demand: `Start-ScheduledTask tnwks-vhdx-compact-system`.
+Its script, `Compact-WslVhdxSystem.ps1`, reads the owner and the rules of the
+disk file with the read of the host check (`wsl-disk-rules`), from the copy
+of `Invoke-TnwksHostCheck.ps1` in the folder of the host check, and only
+when that copy has the SHA-256 of the role's file. A fail stops the run
+before it pauses a task. Then it pauses the start tasks of the account
+(`wsl_move_new_start_tasks`), runs the stop task, and waits until the Host
+Compute Service lists no compute system. It reads the disk file again, and
+on a fail starts the tasks again and stops. Then diskpart compacts the file,
+and the tasks start again. It enables no privilege and sets no owner and no
+rules. Its log is `C:\ProgramData\tnwks-vhdx-compact\compact-system.log`.
+
 ## Check-only settings
 
 The role `windows_host_settings` (last in the play) only reads. Its single

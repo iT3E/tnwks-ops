@@ -1,0 +1,3 @@
+kind: Added
+body: 'windows: once the move of the distro is done, the compaction runs as SYSTEM, reads the owner and the rules of the disk file before the pause and before diskpart, and stops WSL with a stop task of the account that owns the distro'
+time: 2026-11-19T00:00:00.000000000Z

@@ -41,6 +41,20 @@ vhdx_compact_task: tnwks-vhdx-compact
 # The distro's ext4.vhdx; empty = the script's default (E:\WSL\Ubuntu, on
 # DESKTOP-HKE05KI).
 vhdx_compact_vhdx: ""
+# Once the move of the distro is done (Design Doc 0004, section 5.10): the
+# compaction runs as SYSTEM (Compact-WslVhdxSystem.ps1), and the stop of WSL
+# is a task of the account that owns the distro. The compaction reads the
+# owner and the rules of the disk file with the read of the host check, from
+# the host check's own copy, only when it has the SHA-256 of the role's file.
+# It pauses the start tasks of that account (wsl_move_new_start_tasks).
+vhdx_compact_system_task: '{{ vhdx_compact_task }}-system'
+wsl_stop_task_account: 'tnwks-wsl-stop{{ wsl_move_task_suffix }}'
+vhdx_compact_host_check: 'C:\ProgramData\tnwks-host-check\Invoke-TnwksHostCheck.ps1'
+vhdx_compact_host_check_sha256: >-
+  {{ (lookup('ansible.builtin.file', role_path ~ '/../windows_host_check/files/Invoke-TnwksHostCheck.ps1', rstrip=false)
+      | hash('sha256')) | upper }}
+vhdx_compact_capability_sid: S-1-15-3-1024-2268835264-3721307629-241982045-173645152-1490879176-104643441-2915960892-1612460704
+vhdx_compact_paused: "{{ wsl_move_new_start_tasks }}"
 
 # The move of the distro (group_vars/windows_hosts.yml, wsl_move_phase). The
 # accounts that may write to the log of the watchdog: the desktop user, both

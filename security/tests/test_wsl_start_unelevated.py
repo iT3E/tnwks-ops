@@ -153,7 +153,8 @@ $r = Invoke-Native -FilePath 'wsl.exe' -Arguments @('-d', $Distro, '--exec', 'tr
 
 
 def test_with_the_switch_on_each_task_that_starts_the_distro_runs_with_no_elevation():
-    expected = {"wsl-keepalive.xml.j2", "wsl-watchdog.xml.j2", "udp-relay.xml.j2", "lan-bridge-ip.xml.j2"}
+    # And the stop task of the account that owns the distro (test_wsl_move_compaction.py).
+    expected = {"wsl-keepalive.xml.j2", "wsl-watchdog.xml.j2", "udp-relay.xml.j2", "lan-bridge-ip.xml.j2", "wsl-stop.xml.j2"}
     unelevated = set()
     for path in templates():
         text = render(path, on=True)
@@ -166,8 +167,8 @@ def test_with_the_switch_on_each_task_that_starts_the_distro_runs_with_no_elevat
 
 def test_with_the_switch_off_each_task_is_as_before():
     for path in templates():
-        if path.name == "lan-bridge-ip.xml.j2":
-            continue  # the role registers it only with the switch on
+        if path.name in ("lan-bridge-ip.xml.j2", "wsl-stop.xml.j2"):
+            continue  # the role registers it only with the switch on, or the move of the distro
         text = render(path, on=False)
         _, level = principal(text)
         assert level == "HighestAvailable", path.name
