@@ -125,6 +125,13 @@
       tags: [coral-detector]
     - role: windows_monitoring
       tags: [monitoring]
+    # Step 3 of the account change (Design Doc 0004, section 9): the account
+    # that owns the distro, its folder and the tasks of the window. On per
+    # host, with the owner's go (R4). No apply starts the window. Before the
+    # WSL roles, which register the start tasks of that account.
+    - role: windows_wsl_move
+      when: wsl_move | bool
+      tags: [wsl-move]
     - role: windows_udp_relay
       when: udp_relays | length > 0
       tags: [udp-relay]
@@ -156,13 +163,6 @@
     # Check-only settings; last, so a failed assertion stops nothing else.
     - role: windows_host_settings
       tags: [host-settings]
-    # Step 3 of the account change (Design Doc 0004, section 9): the account
-    # that owns the distro, its folder and the tasks of the window. On per
-    # host, with the owner's go (R4). No apply starts the window. After every
-    # other role but the rehearsals, so a failed step of it stops no other role.
-    - role: windows_wsl_move
-      when: wsl_move | bool
-      tags: [wsl-move]
     # The rehearsal of the account change (Design Doc 0004, section 9, step
     # 0). After every other role, so a failed step of it stops no other role.
     - role: windows_wsl_rehearsal

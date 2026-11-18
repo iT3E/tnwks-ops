@@ -177,6 +177,10 @@ def test_the_role_is_off_until_a_host_turns_it_on():
     roles = [r for p in play for r in p.get("roles", []) if isinstance(r, dict)]
     entry = next(r for r in roles if r.get("role") == "windows_wsl_move")
     assert entry["when"] == "wsl_move | bool"
+    # Before the WSL roles, which register the start tasks of the account that it makes.
+    names = [r.get("role") for r in roles]
+    for role in ("windows_udp_relay", "windows_lan_bridge", "windows_usb_attach", "windows_wsl_maintenance"):
+        assert names.index("windows_wsl_move") < names.index(role), role
 
 
 def test_a_script_that_changes_something_takes_what_if():
