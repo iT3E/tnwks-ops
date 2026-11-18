@@ -1,0 +1,110 @@
+---
+# The vault server of finance (docs/apps/agent-platform.md, "The vault
+# shares"). The image (iT3E/tnwks-vault-mcp) serves the reference file
+# server of the MCP project for /vault on port 8080: MCP on /mcp, a health
+# path on /healthz that reads no file, 404 on any other path, a body limit
+# of 2 MiB, and a 403 for a request with an Origin header. It has no delete
+# tool; the gateway lets the agent call nine tools only
+# (kubernetes/apps/ai/mcp-gateway/app/config/config.yaml, route
+# finance-vault). Its log holds no file name and no file text.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault-server
+  labels:
+    app.kubernetes.io/name: vault-server
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  # The one writer of the share: in a rollout the old pod stops before the
+  # new one starts. A delete or an eviction of the pod is not a rollout: the
+  # ReplicaSet starts the new pod at once (the rehearsal of task 3.36).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vault-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vault-server
+        # No DNS at all: the server calls nothing (networkpolicy.yaml), and
+        # this label keeps it out of the namespace's rule for any name
+        # (../../namespace.yaml).
+        agents.home.arpa/dns: none
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The user of the image, and the uid that the export squashes each
+        # client to (kubernetes/apps/storage/nfs-server/app/configmap.yaml).
+        # No fsGroup: the kubelet does not change the owner of an NFS volume.
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          # A release by digest. PENDING: the first release of
+          # iT3E/tnwks-vault-mcp does not exist yet. The tag and the digest
+          # of that release go here, in place of the zeros (a test of
+          # observability/tests/test_vault_server.py fails until they do).
+          image: ghcr.io/it3e/tnwks-vault-mcp:0.1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # The health path reads no file. While the NFS server is away, a
+          # call on a note in the cache of the node holds the whole process
+          # (the file server opens files with blocking calls), so the health
+          # path stops too and the pod is not ready: the gateway then answers
+          # each new call with an error at once. When the NFS server is back,
+          # the process goes on by itself and the write lands. PROPOSAL: no
+          # liveness probe. A restart does not bring the share back, and a
+          # restart of a waiting process drops its write (the rehearsal of
+          # task 3.36).
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+          # The design: a request of 128Mi and a limit of 256Mi. The peak at
+          # 5 rounds of 20 calls at one time was 77 MiB with small notes and
+          # 184 MiB with notes of 1 MiB (the rehearsal of task 3.36).
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: vault
+              mountPath: /vault
+      volumes:
+        # The share, read and write, with a hard mount (../../vault-share).
+        - name: vault
+          persistentVolumeClaim:
+            claimName: vault-rw
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-server
+  labels:
+    app.kubernetes.io/name: vault-server
+spec:
+  selector:
+    app.kubernetes.io/name: vault-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

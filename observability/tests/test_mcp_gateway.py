@@ -137,14 +137,16 @@ def test_each_key_is_a_hash_and_each_placeholder_matches_no_value():
     """Before the owner's values step a key is a placeholder, after it the
     hash of a real key: either passes. No value is in the file, and no hash
     is the hash of a placeholder value."""
-    seen = set()
+    seen = {}
     for r in config()["routes"]:
         keys = r["policies"]["apiKey"]["keys"]
         for k in keys:
             assert set(k) == {"keyHash", "metadata"}, "no key value in the config"
             assert PLACEHOLDER.match(k["keyHash"]) or HASH.match(k["keyHash"]), k["keyHash"]
-            assert k["keyHash"] not in seen, "each client has a hash of its own"
-            seen.add(k["keyHash"])
+            # One client may have its key on two routes (the finance agent on
+            # finance and finance-vault); two clients never share a hash.
+            client = k["metadata"]["client"]
+            assert seen.setdefault(k["keyHash"], client) == client, "each client has a hash of its own"
             for value in ("", "pending", "none", "SET-ME", "changeme"):
                 assert k["keyHash"] != "sha256:" + hashlib.sha256(value.encode()).hexdigest()
         clients = [k["metadata"]["client"] for k in keys]
@@ -289,7 +291,9 @@ def test_the_gateway_takes_the_agent_and_its_probe_and_reaches_the_mcp_server_on
     for rule in policy["egress"]:
         for p in peers(rule):
             out[who(p)] = ports(rule)
-    assert out == {("agents-finance", "firefly-mcp"): ["3000"], ("kube-system", "kube-dns"): ["53"]}
+    assert out == {("agents-finance", "firefly-mcp"): ["3000"],
+                   ("agents-finance", "vault-server"): ["8080"],
+                   ("kube-system", "kube-dns"): ["53"]}
     (dns,) = [r for r in policy["egress"] if peers(r)[0].get("k8s-app") == "kube-dns"]
     names = [d for tp in dns["toPorts"] for d in tp["rules"]["dns"]]
     targets = [t["mcp"]["host"].split("//")[1].split(":")[0]
@@ -437,7 +441,8 @@ def lab():
     # The hash of each client, a placeholder or a real one, becomes the hash
     # of its test key.
     for client, old in key_hashes(text).items():
-        assert text.count(old) == 1
+        # The finance key is on the vault route too: each copy changes.
+        assert text.count(old) == (2 if client == "finance" else 1)
         text = text.replace(old, "sha256:" + hashlib.sha256(keys[client].encode()).hexdigest())
     (work / "config.yaml").write_text(text)
     for path in work.iterdir():

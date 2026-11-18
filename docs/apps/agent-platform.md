@@ -289,7 +289,8 @@ read only. The parts come in steps; this table says what is there now.
 | Claims of the shares | `storage/nfs-vault-main` and `storage/nfs-vault-finance`, in the form of `nfs-gdrive-sync`, bound on the node of the server |
 | Exports | `/vault-main` (`Export_Id` 3) and `/vault-finance` (4): read and write for the three nodes of homelab-wsl only, each client squashed to uid and gid 1000, the owner of the root (mode 0700) |
 | Volumes and claims in the trust domains | Two static PersistentVolumes for each share and their two claims, `vault-rw` and `vault-ro`, in `agents-main` and `agents-finance` (`kubernetes/apps/ai/agents/<domain>/vault-share/`). Bound, and mounted by no pod |
-| The vault server, the mount of the agent, the backup of the share | Not yet |
+| The vault server of finance | `vault-server` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-server/`): one pod on `vault-rw`, behind the route `finance-vault` of the central MCP gateway (below) |
+| The vault server of main, the mount of the agent, the backup of the share | Not yet |
 
 Each share has two volumes, one for each claim:
 
@@ -315,9 +316,57 @@ read only, and the vault server is the one writer. The flag
 takes the read-only flag from the pod (its claim or its mount), so a pod
 that does not set it would get a mount that writes.
 
-What is still not there: the vault server and its route on the central MCP
-gateway, the mount of `vault-ro` in the agent pod, the backup policy of each
-share, and the change of the two admission rules to `Deny`.
+What is still not there: the vault server of main and its route, the
+mount of `vault-ro` in the agent pod with the extra path of the index, the
+backup policy of each share, the first notes of a share, and the change of
+the two admission rules to `Deny`.
+
+### The vault server
+
+The vault server of a trust domain is the one writer of its share. It is
+the image `ghcr.io/it3e/tnwks-vault-mcp` (the reference file server of the
+MCP project, for the one directory `/vault`, over Streamable HTTP), in the
+namespace of its trust domain:
+
+| Part | Value |
+| --- | --- |
+| Pod | One replica, `Recreate`, uid and gid 1000 (the uid that the export squashes each client to), the `restricted` level, a read-only root, no service account token, no Secret, no DNS and no egress |
+| Share | The claim `vault-rw` at `/vault`, a hard mount: a call waits while the NFS server is away |
+| Memory | A request of 128Mi and a limit of 256Mi. The peak at 5 rounds of 20 calls at one time was 77 MiB with small notes and 184 MiB with notes of 1 MiB, with 12 processes |
+| In | The central MCP gateway on port 8080, and the kubelet for the probe of `/healthz` |
+| Route | `/finance-vault/mcp` on the central MCP gateway, with the key of the finance agent ([mcp-gateway.md](mcp-gateway.md)) |
+| Tools | Nine: `read_text_file`, `read_multiple_files`, `list_directory`, `directory_tree`, `search_files`, `get_file_info`, `write_file`, `edit_file`, `create_directory`. The server has no delete tool, and the gateway refuses each other tool |
+
+The server refuses a path outside `/vault`: `..`, an absolute path, and a
+symlink that leads out, for a read and for a write. A body over 2 MiB gets
+a 413 at the gateway, a bad JSON body a 400, and the server answers a
+request with an `Origin` header with a 403 and any path but `/mcp` and
+`/healthz` with a 404.
+
+**With the NFS server away**, what a call gets depends on where it waits:
+
+- A path that the node does not have in its cache waits in a file call that
+  the server bounds: the call ends with the tool error `Filesystem call
+  timed out after 15000 ms`, and the server stays ready.
+- A note that the node has in its cache (a note read or written a short
+  time before) waits in a file call that holds the whole process: the
+  health path stops too, the pod is not ready, and the gateway answers the
+  call with `504 request timeout` after 60 s and each new call with an
+  error at once. When the NFS server is back, the process goes on by itself
+  and the write lands, after the client got its error.
+
+So a client that gets an error for a write reads the note again before it
+tries again, and an edit with the old text fails on a note that changed.
+The pod has a readiness probe and no liveness probe: a restart does not
+bring the share back, and a restart while the process waits drops that
+write. A server that is not ready shows in the alert
+`AgentPlatformWorkloadNotReady`, as each Deployment of an `agents-`
+namespace does. A delete of the pod is not a rollout: the
+ReplicaSet makes the new pod at once, so `Recreate` keeps two pods apart in
+a rollout only. With the NFS server away, the new pod waits in
+`ContainerCreating`, the old one stops after its grace time and drops the
+write that waits, and both settle a few seconds after the NFS server is
+back.
 
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may

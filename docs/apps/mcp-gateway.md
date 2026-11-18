@@ -77,6 +77,19 @@ the MCP server and checks the headers that arrive.
 | `/finance/` | `finance` | the 73 kept tools | the 73 kept tools |
 | `/finance/` | `finance-probe` | the 73 kept tools | `get_about` only |
 | `/finance/` | `no-tools` | nothing | nothing |
+| `/finance-vault/` | `finance` | the nine tools of the vault | the nine tools of the vault |
+
+**The vault of finance** has a route of its own, `/finance-vault/`, so the
+tool names of the finance app do not change. Its target is the vault server
+of finance ([agent-platform.md](agent-platform.md), "The vault server"),
+with no credential. Its rule names nine tools of the file server (six reads
+and `write_file`, `edit_file`, `create_directory`); the server has no delete
+tool, and the gateway refuses its move, copy, append and the other tools.
+The gateway waits 10 s for an MCP target unless the target sets a time
+(agentgateway 1.7.0), so the target sets the 60 s of the route
+(`policies.http.requestTimeout`): a write that waits for the NFS server
+gets a `504` after 60 s, not an error after 10 s for a write that lands
+later. No probe calls this route yet.
 
 **The pilot and the workflow agents get no key.** No key is the safer
 default. A key with no tool still authenticates: it opens a connection,
@@ -131,7 +144,7 @@ its place for the container tests.
 
 | Client | Value (SOPS) | Hash |
 | --- | --- | --- |
-| `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, route `finance` |
+| `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | the same |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | the same |
 
@@ -141,6 +154,11 @@ the finance agent pod (its first start step) mounts this same config file
 and stops the start with `values-check result=failed key=MCP_GATEWAY_KEY
 reason=hash` when the SHA-256 of its key is not the hash of the client
 `finance`; the gateway probe fails when one of its own keys gets a 401.
+The check reads the line `metadata: {client: finance}` with awk, so the key
+of the route `finance-vault` has a second field
+(`metadata: {client: finance, route: finance-vault}`): one hash for the
+check, and a test checks that both routes have the same one. A new value of
+the key changes the hash on both routes in the same commit.
 
 ## Network policy
 
@@ -153,7 +171,8 @@ reason=hash` when the SHA-256 of its key is not the hash of the client
   a sandbox carries the labels of a client, and the sandboxes of finance
   keep their one way to the app, the read port of the proxy.
 - **Out:** the MCP server of each route (`firefly-mcp` in `agents-finance`,
-  port 3000), and DNS for those names only. The pod sets `ndots` to 1, so it
+  port 3000, and `vault-server` in `agents-finance`, port 8080), and DNS
+  for those names only. The pod sets `ndots` to 1, so it
   asks for the full name as it is.
 - **The MCP server of finance** takes the gateway only. The agent pod has no
   way to it any more, and the gateway probe checks that a pod that is not
@@ -280,6 +299,8 @@ and the container test runs the new image with the config of the repo.
   limit by client (`localRateLimit`, by `apiKey.client`) is a later step.
 - **The probe key** may list the tools of finance and call `get_about`; a
   leak of it gives that much.
+- **No probe of the vault route yet.** The probe calls the route `finance`
+  only.
 - **A person with exec into the pod** (a cluster admin) can read the config
   through the admin port; it holds no secret.
 
