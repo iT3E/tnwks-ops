@@ -1859,6 +1859,20 @@ def test_window_step_1_refuses_an_icon_that_is_not_a_plain_file_and_follows_no_l
     assert not any(c.startswith(("join ", "leave ", "disable ", "start ")) for c in out["calls"]), out["calls"]
 
 
+@needs_pwsh
+def test_the_stop_line_of_step_1_is_one_bounded_line(tmp_path):
+    """The text of an icon read holds the rules of the file, which can be long: the stop
+    line of step 1 holds it in one line, cut at its limit, and still ends the same way."""
+    kw = icon_kw(tmp_path, "b", "a deny entry")
+    many = "".join(f"(D;;0x40000;;;S-1-5-32-{600 + n})" for n in range(80))
+    kw["acls"] = {"b/shortcut.ico": f"O:{B_SID}D:AI{many}(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;{B_SID})"}
+    out = run_window(tmp_path, {"mode": "forward", **GROUP_REAL}, admins=(A_SID,), **kw)
+    stop = [line for line in out["log"] if line.startswith("stop at step 1: ")]
+    assert out["code"] == 3 and out["markers"] == [] and len(stop) == 1, out["log"]
+    assert "80 deny rule(s)" in stop[0] and " [cut]. An import there would fail. Nothing is changed." in stop[0], stop
+    assert len(stop[0]) <= len("stop at step 1: ") + 1000 + len(" [cut]. An import there would fail. Nothing is changed."), len(stop[0])
+
+
 def test_each_read_of_the_icon_takes_the_entry_itself():
     """Test-Path follows a link, and reads a broken one as no entry: no read of the icon
     uses it. Each takes the attributes of the entry (GetFileAttributesW, which does not

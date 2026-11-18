@@ -929,7 +929,8 @@ goes back, and way back step 5 stops). Window step 1 reads both
 folders before any change: the old folder for an import back by the
 present account (write and delete), and the folder of the new account for
 its import (write and delete). Either
-read stops the window with nothing changed. After window step 5 no icon may
+read stops the window with nothing changed, with a stop line that holds
+the text of the read in one line of bounded length. After window step 5 no icon may
 be left in the old folder, and before window step 6 the read of the folder
 of the new account runs again; a fail at either sends the window back.
 Before way back step 5 the old folder is read for the import back (write).

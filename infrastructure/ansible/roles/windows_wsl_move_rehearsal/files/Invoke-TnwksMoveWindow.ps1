@@ -912,7 +912,8 @@ function Invoke-TnwksForward {
         (Get-TnwksIconProblem $present.folder (Get-TnwksImportSids $pSid $member) ($TnwksWrite -bor $TnwksDelete)),
         (Get-TnwksIconProblem $new.folder @($nSid) ($TnwksWrite -bor $TnwksDelete)) | Where-Object { $_ })
     if ($icons.Count) {
-        foreach ($i in $icons) { Write-Log "stop at step 1: $i. An import there would fail. Nothing is changed." }
+        # The text of a read holds the rules of the file: one line, bounded.
+        foreach ($i in $icons) { Write-Log "stop at step 1: $(Format-TnwksText $i 1000). An import there would fail. Nothing is changed." }
         return 'stopped'
     }
     Write-Log 'step 1: no icon in either folder that the import there can not replace'
