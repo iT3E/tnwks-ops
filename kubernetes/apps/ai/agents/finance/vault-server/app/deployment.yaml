@@ -61,10 +61,12 @@ spec:
           # (the file server opens files with blocking calls), so the health
           # path stops too and the pod is not ready: the gateway then answers
           # each new call with an error at once. When the NFS server is back,
-          # the process goes on by itself and the write lands. PROPOSAL: no
-          # liveness probe. A restart does not bring the share back, and a
-          # restart of a waiting process drops its write (the rehearsal of
-          # task 3.36).
+          # the process goes on by itself and the write lands. No liveness
+          # probe, by the choice of the owner at the gate of Design Doc
+          # v3.42: a restart does not bring the share back, and a restart of
+          # a waiting process drops its write. Its cost: a process that stops
+          # for another reason never restarts by itself, and only the alert
+          # AgentPlatformWorkloadNotReady tells.
           readinessProbe:
             httpGet:
               path: /healthz

@@ -187,6 +187,12 @@ routes:
               policies:
                 backendAuth:
                   key: none
+                # The gateway waits 10 s for an MCP target unless the target
+                # sets a time (agentgateway 1.7.0). The 60 s of the route, by
+                # the choice of the owner at the gate of Design Doc v3.42: a
+                # hung call holds a turn of the finance agent up to 60 s.
+                http:
+                  requestTimeout: 60s
 
   # The vault of the finance trust domain (agents-finance/vault-server,
   # docs/apps/agent-platform.md, "The vault shares"): a route of its own, so
@@ -250,9 +256,9 @@ routes:
               mcp:
                 host: http://vault-server.agents-finance.svc.cluster.local:8080/mcp
               # The gateway waits 10 s for an MCP target unless the target
-              # says more (agentgateway 1.7.0). PROPOSAL: the 60 s of the
-              # route, so a short stop of the NFS server ends in the true
-              # answer, not an error for a write that lands later.
+              # says more (agentgateway 1.7.0). The 60 s of the route, so a
+              # short stop of the NFS server ends in the true answer, not an
+              # error for a write that lands later.
               policies:
                 http:
                   requestTimeout: 60s

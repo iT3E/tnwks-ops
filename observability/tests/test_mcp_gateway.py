@@ -179,7 +179,11 @@ def test_the_target_is_the_mcp_server_with_a_bearer_that_is_no_secret():
     assert backend["mcp"]["prefixMode"] == "conditional"
     (target,) = backend["mcp"]["targets"]
     assert target["mcp"]["host"] == "http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp"
-    assert target["policies"] == {"backendAuth": {"key": "none"}}
+    # The 60 s of the route: an MCP target of the gateway waits 10 s unless
+    # it sets a time of its own.
+    assert target["policies"] == {"backendAuth": {"key": "none"},
+                                  "http": {"requestTimeout": route("finance")["policies"]["timeout"]["requestTimeout"]}}
+    assert route("finance")["policies"]["timeout"]["requestTimeout"] == "60s"
     assert route("finance")["matches"] == [{"path": {"pathPrefix": "/finance/"}}]
 
 

@@ -321,53 +321,6 @@ mount of `vault-ro` in the agent pod with the extra path of the index, the
 backup policy of each share, the first notes of a share, and the change of
 the two admission rules to `Deny`.
 
-### The vault server
-
-The vault server of a trust domain is the one writer of its share. It is
-the image `ghcr.io/it3e/tnwks-vault-mcp` (the reference file server of the
-MCP project, for the one directory `/vault`, over Streamable HTTP), in the
-namespace of its trust domain:
-
-| Part | Value |
-| --- | --- |
-| Pod | One replica, `Recreate`, uid and gid 1000 (the uid that the export squashes each client to), the `restricted` level, a read-only root, no service account token, no Secret, no DNS and no egress |
-| Share | The claim `vault-rw` at `/vault`, a hard mount: a call waits while the NFS server is away |
-| Memory | A request of 128Mi and a limit of 256Mi. The peak at 5 rounds of 20 calls at one time was 77 MiB with small notes and 184 MiB with notes of 1 MiB, with 12 processes |
-| In | The central MCP gateway on port 8080, and the kubelet for the probe of `/healthz` |
-| Route | `/finance-vault/mcp` on the central MCP gateway, with the key of the finance agent ([mcp-gateway.md](mcp-gateway.md)) |
-| Tools | Nine: `read_text_file`, `read_multiple_files`, `list_directory`, `directory_tree`, `search_files`, `get_file_info`, `write_file`, `edit_file`, `create_directory`. The server has no delete tool, and the gateway refuses each other tool |
-
-The server refuses a path outside `/vault`: `..`, an absolute path, and a
-symlink that leads out, for a read and for a write. A body over 2 MiB gets
-a 413 at the gateway, a bad JSON body a 400, and the server answers a
-request with an `Origin` header with a 403 and any path but `/mcp` and
-`/healthz` with a 404.
-
-**With the NFS server away**, what a call gets depends on where it waits:
-
-- A path that the node does not have in its cache waits in a file call that
-  the server bounds: the call ends with the tool error `Filesystem call
-  timed out after 15000 ms`, and the server stays ready.
-- A note that the node has in its cache (a note read or written a short
-  time before) waits in a file call that holds the whole process: the
-  health path stops too, the pod is not ready, and the gateway answers the
-  call with `504 request timeout` after 60 s and each new call with an
-  error at once. When the NFS server is back, the process goes on by itself
-  and the write lands, after the client got its error.
-
-So a client that gets an error for a write reads the note again before it
-tries again, and an edit with the old text fails on a note that changed.
-The pod has a readiness probe and no liveness probe: a restart does not
-bring the share back, and a restart while the process waits drops that
-write. A server that is not ready shows in the alert
-`AgentPlatformWorkloadNotReady`, as each Deployment of an `agents-`
-namespace does. A delete of the pod is not a rollout: the
-ReplicaSet makes the new pod at once, so `Recreate` keeps two pods apart in
-a rollout only. With the NFS server away, the new pod waits in
-`ContainerCreating`, the old one stops after its grace time and drops the
-write that waits, and both settle a few seconds after the NFS server is
-back.
-
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may
 mount which path is the work of the admission rules of NFS volumes
@@ -391,6 +344,76 @@ nfs-vault-main-ro nfs-vault-finance-rw nfs-vault-finance-ro` shows each
 `agents-finance`) shows each `Bound`, and
 `kubectl -n flux-system get kustomization agents-main-vault-share
 agents-finance-vault-share` shows each `Ready`.
+
+### The vault server
+
+The vault server of a trust domain is the one writer of its share. It is
+the image `ghcr.io/it3e/tnwks-vault-mcp` (the reference file server of the
+MCP project, for the one directory `/vault`, over Streamable HTTP), in the
+namespace of its trust domain. The owner chose its form at the gate of
+Design Doc v3.42 (section 4.2.5 and section 11 of effort 0003).
+
+| Part | Value |
+| --- | --- |
+| Pod | A Deployment of one replica, `Recreate`, uid and gid 1000 (the uid that the export squashes each client to), the `restricted` level, a read-only root, no service account token, no Secret, no DNS and no egress |
+| Share | The claim `vault-rw` at `/vault`, a hard mount: a call waits while the NFS server is away |
+| Probes | A readiness probe of `/healthz`, and no liveness probe |
+| Memory | A request of 128Mi and a limit of 256Mi. The peak at 5 rounds of 20 calls at one time was 76.5 MiB with small notes and 184 MiB with notes of 1 MiB, with 12 processes |
+| In | The central MCP gateway on port 8080, and the kubelet for the probe of `/healthz` |
+| Route | `/finance-vault/mcp` on the central MCP gateway, with the key of the finance agent, and a time of 60 s for each call ([mcp-gateway.md](mcp-gateway.md)) |
+| Tools | Nine: `read_text_file`, `read_multiple_files`, `list_directory`, `directory_tree`, `search_files`, `get_file_info`, `write_file`, `edit_file`, `create_directory`. The server has no delete tool, and the gateway refuses each other tool |
+
+The server refuses a path outside `/vault`: `..`, an absolute path, and a
+symlink that leads out, for a read and for a write. Through the gateway, a
+body over 2 MiB gets a 413 and a bad JSON body a 400 from the gateway, and
+the gateway drops an `Origin` header. Straight, the server answers an
+`Origin` header with a 403 and any path but `/mcp` and `/healthz` with a
+404; only the gateway and the kubelet reach it.
+
+**With the NFS server away**, what a call gets depends on where it waits:
+
+- A path that the node does not have in its cache waits in a file call that
+  the server bounds: the call ends with the tool error `Filesystem call
+  timed out after 15000 ms`, its write does not land, and the server stays
+  ready.
+- A note that the node has in its cache (a note read or written a short
+  time before) waits in a file call that holds the whole process: the
+  health path stops too, and the pod is not ready. The gateway answers that
+  call with `504 request timeout` after 60 s, and each new call with an
+  error at once. When the NFS server is back, the process goes on by itself
+  with no restart, and the write lands, after the client got its error.
+
+So a client that gets an error for a write reads the note again before it
+tries again, and an edit with the old text fails on a note that changed.
+
+**The costs that the owner accepted at the gate**, in plain words:
+
+- **The stop with the NFS server away.** Each vault call and the health
+  path of the server wait until the NFS server is back, for a note in the
+  cache. An operator sees it as: the pod `vault-server` in `agents-finance`
+  is `Running` and not ready, with no restart; the alert
+  `AgentPlatformWorkloadNotReady` names `vault-server`; the gateway log has
+  `"route":"default/finance-vault"` lines with status 504 or 500; and the
+  NFS server in `storage` is not ready. Bring the NFS server back; do not
+  restart the vault server, which drops the write that waits.
+- **No liveness probe.** A process that stops for another reason (a fault
+  of the server itself) never restarts by itself. Only the readiness alert
+  tells, and a person deletes the pod.
+- **Two writers for a short time.** A delete or an eviction of the pod is
+  not a rollout: the ReplicaSet starts the new pod at once, while the old
+  one still runs (`Recreate` keeps them apart in a rollout only). For that
+  time two processes write the share: an edit on changed text fails, and a
+  write of a whole file wins over the one before it. With the NFS server
+  away, the new pod waits in `ContainerCreating`, and the old one stops
+  after its grace time and drops the write that waits.
+- **A leaked agent key also writes the vault.** The route takes the key of
+  the finance agent, the same key as the finance app route. Whoever has
+  that key can call the nine tools, writes included, from a pod that the
+  network policy of the gateway lets in. A key of its own for the route is
+  the stricter option, and only the owner makes it.
+- **60 s.** The gateway waits 60 s for the vault server and for the finance
+  app, not its default of 10 s. A hung call holds a turn of the finance
+  agent up to 60 s.
 
 ## The model path
 
