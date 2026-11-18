@@ -189,6 +189,12 @@ patches:
               # cluster adds one name to that rule, then keeps the series of
               # this policy with enforcement_action="deny" only: one series
               # for each API server and error type, none before a denial.
+              # It keeps the series of the two policies of NFS volumes
+              # (kubernetes/apps/storage/nfs-server/admission) too, with
+              # enforcement_action "audit" or "deny": the count of the volumes
+              # they would refuse while they audit, then the count of the ones
+              # they refuse. The "warn" series counts the same checks as
+              # "audit", so it is dropped.
               # The regex is the one of the HelmRelease plus that name;
               # observability/tests/test_apiserver_policy_denials.py checks
               # that the two stay the same, and runs the rules in Prometheus.
@@ -200,6 +206,14 @@ patches:
                 value:
                   sourceLabels: [__name__, policy, enforcement_action]
                   regex: apiserver_validating_admission_policy_check_total;agents-backup-mover-configmaps;deny
+                  targetLabel: __tmp_keep
+                  replacement: "true"
+                  action: replace
+              - op: add
+                path: /spec/values/kubeApiServer/serviceMonitor/metricRelabelings/-
+                value:
+                  sourceLabels: [__name__, policy, enforcement_action]
+                  regex: apiserver_validating_admission_policy_check_total;nfs-(pod|persistent)-volumes;(audit|deny)
                   targetLabel: __tmp_keep
                   replacement: "true"
                   action: replace
