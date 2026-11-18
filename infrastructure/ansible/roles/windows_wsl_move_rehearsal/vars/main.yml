@@ -107,6 +107,11 @@ wsl_move_rehearsal_window_config:
   restart: "{{ wsl_move_rehearsal_restart | bool }}"
   # The check for a session of the owner (site 1 only) is not built here.
   session_check: false
+  # The read of window step 7 that no compute system runs on the host: off in the
+  # rehearsal, as the distro of the host runs while the rehearsal does. The
+  # procedure reads it as on when the key is not there, and refuses it off
+  # in a config with no boot request file (not the rehearsal's).
+  vm_check: false
   task_minutes: 10
   present:
     account: "{{ wsl_move_rehearsal_accounts.a.name }}"

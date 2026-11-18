@@ -189,9 +189,40 @@ function Get-TnwksAdminSids {
 
 function Test-TnwksAdmin([string]$Sid) { @(Get-TnwksAdminSids) -contains $Sid }
 
-# The WSL processes of one account, by the SID of their owner.
+# The processes of the WSL package of one account, by the SID of their owner.
+# A process counts by its image path: any file in the install folder of the
+# package, and the WSL commands of Windows in System32. The installer of the
+# package (WSL: msipackage/package.wix.in, at the tag 3.0.5) names some of
+# its executables, and takes others by a pattern (the tools and wslsettings
+# folders), so no list of names is complete; and some of its names are not
+# only WSL's (msrdc.exe, container.exe), so a name alone could count another
+# program. The folder comes from the key that the installer writes
+# (Lxss\MSI, InstallLocation), or the folder of its default. A process with
+# no path that SYSTEM can read counts by name, from the named executables of
+# that installer.
+$TnwksWslPackageNames = @('wsl.exe', 'wslg.exe', 'wslc.exe', 'container.exe', 'wslhost.exe', 'wslrelay.exe',
+    'wslservice.exe', 'wslcsession.exe', 'msrdc.exe', 'msal.wsl.proxy.exe', 'wslsettings.exe')
+$TnwksWslSystemNames = @('wsl.exe', 'wslconfig.exe', 'bash.exe')
+function Get-TnwksWslInstallFolder {
+    $folder = try {
+        "$((Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lxss\MSI' -Name InstallLocation -ErrorAction Stop).InstallLocation)"
+    } catch { '' }
+    if (-not $folder.Trim()) { $folder = "$env:ProgramFiles\WSL" }
+    $folder.Trim().TrimEnd('\') + '\'
+}
+function Test-TnwksWslImage($Process, [string]$Folder) {
+    $path = "$($Process.ExecutablePath)"
+    if (-not $path) { return "$($Process.Name)" -in $TnwksWslPackageNames }
+    if ($path.StartsWith($Folder, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    $system = "$env:SystemRoot\System32\"
+    foreach ($name in $TnwksWslSystemNames) {
+        if ([string]::Equals($path, $system + $name, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    }
+    $false
+}
 function Get-TnwksWslProcess([string]$Sid) {
-    @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('wsl.exe', 'wslhost.exe', 'wslrelay.exe') } | Where-Object {
+    $folder = Get-TnwksWslInstallFolder
+    @(Get-CimInstance Win32_Process | Where-Object { Test-TnwksWslImage $_ $folder } | Where-Object {
         $owner = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue
         $owner -and $owner.Sid -eq $Sid })
 }
@@ -204,6 +235,96 @@ function Wait-TnwksNoWsl([string]$Sid, [string]$Account) {
         Start-Sleep -Seconds 3
     } while ((Get-Date) -lt $deadline)
     Assert-Tnwks $false "$($left.Count) WSL process(es) of $Account still run"
+}
+
+# The compute systems that run on the host, as SYSTEM, from the Host Compute
+# Service itself (computecore.dll, Windows 10 1809 and later), so the read
+# rests on no tool that a host may not have. HcsCreateOperation, then
+# HcsEnumerateComputeSystems with no query, then HcsWaitForOperationResult:
+# its result is a JSON array of the properties of each compute system (Id,
+# SystemType, Name, Owner, State), and the caller frees it with LocalFree;
+# then HcsCloseOperation (Microsoft: the reference of the HCS API). WSL makes
+# VMs of more than one kind, and the owner is not a mark of WSL: the VM of a
+# distro has the owner WSL (WslCoreVm.cpp, c_vmOwner in wslutil.h), and a
+# WSLC VM has a display name that its caller chooses, or WSLC (WSL:
+# HcsVirtualMachine.cpp, at the tag 3.0.5). So step 7 requires that the
+# service lists no compute system at all, of any owner or type. A call that
+# fails, or a result that is not a list, throws: the check fails.
+$TnwksHcsSource = @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class TnwksHcs {
+    [DllImport("computecore.dll", ExactSpelling = true)]
+    static extern IntPtr HcsCreateOperation(IntPtr context, IntPtr callback);
+    [DllImport("computecore.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+    static extern int HcsEnumerateComputeSystems(string query, IntPtr operation);
+    [DllImport("computecore.dll", ExactSpelling = true)]
+    static extern int HcsWaitForOperationResult(IntPtr operation, uint timeoutMs, out IntPtr resultDocument);
+    [DllImport("computecore.dll", ExactSpelling = true)]
+    static extern void HcsCloseOperation(IntPtr operation);
+    [DllImport("kernel32.dll")]
+    static extern IntPtr LocalFree(IntPtr h);
+    public static string Enumerate() {
+        IntPtr op = HcsCreateOperation(IntPtr.Zero, IntPtr.Zero);
+        if (op == IntPtr.Zero) throw new InvalidOperationException("HcsCreateOperation gave no operation");
+        try {
+            int hr = HcsEnumerateComputeSystems(null, op);
+            if (hr != 0) throw new Win32Exception(hr, "HcsEnumerateComputeSystems: 0x" + hr.ToString("x8"));
+            IntPtr doc;
+            hr = HcsWaitForOperationResult(op, 60000, out doc);
+            try {
+                string text = doc == IntPtr.Zero ? null : Marshal.PtrToStringUni(doc);
+                if (hr != 0) throw new Win32Exception(hr, "HcsWaitForOperationResult: 0x" + hr.ToString("x8") + " " + text);
+                return text;
+            } finally { if (doc != IntPtr.Zero) LocalFree(doc); }
+        } finally { HcsCloseOperation(op); }
+    }
+}
+'@
+
+function Get-TnwksComputeSystem {
+    if (-not ('TnwksHcs' -as [type])) { Add-Type -TypeDefinition $TnwksHcsSource }
+    $text = [TnwksHcs]::Enumerate()
+    if ("$text".Trim() -notmatch '^\[') { throw 'the Host Compute Service gave no list of its compute systems' }
+    # Into a variable first: Windows PowerShell 5.1 writes a JSON array to
+    # the pipeline as one object; from a variable, the pipeline takes each.
+    $systems = ConvertFrom-Json $text
+    @($systems | Where-Object { $null -ne $_ })
+}
+
+# A compute system in a log line: its type, owner and state, each one line
+# and bounded, never its id.
+function Format-TnwksComputeSystem($System) {
+    $field = { param($name) $v = $System.PSObject.Properties[$name]; if ($v -and "$($v.Value)") { Format-TnwksText "$($v.Value)" 64 } else { 'none' } }
+    'type {0}, owner {1}, state {2}' -f (& $field 'SystemType'), (& $field 'Owner'), (& $field 'State')
+}
+
+# Step 7 requires that the Host Compute Service lists no compute system. A
+# VM that a stop ended can stay in the list for a moment, so a list that is
+# not empty is read again, 2 seconds apart, at most $TnwksSystemReads reads
+# in all; only a read with no system passes.
+$TnwksSystemReads = 10
+function Assert-TnwksNoComputeSystem([string]$When) {
+    for ($read = 1; $true; $read++) {
+        $systems = @(Get-TnwksComputeSystem)
+        if ($systems.Count -eq 0) { return }
+        if ($read -ge $TnwksSystemReads) { break }
+        if ($read -eq 1) { Write-Log "step 7 ${When}: $($systems.Count) compute system(s) listed; read again, 2 seconds apart, at most $TnwksSystemReads reads" }
+        Start-Sleep -Seconds 2
+    }
+    Assert-Tnwks $false "$($systems.Count) compute system(s) run on the host $When, after $TnwksSystemReads reads: $(@($systems | ForEach-Object { Format-TnwksComputeSystem $_ }) -join '; ')"
+}
+
+# The two reads of step 7, as SYSTEM: no compute system runs on the host,
+# then no process of the WSL package of the present account runs.
+function Assert-TnwksStep7([string]$Sid, [string]$When) {
+    if ($cfg.vm_check -ne $false) {
+        Assert-TnwksNoComputeSystem $When
+        Write-Log "step 7 ${When}: no compute system runs on the host"
+    } else { Write-Log "step 7 ${When}: the read of the compute systems is off in this config" }
+    $left = @(Get-TnwksWslProcess $Sid)
+    Assert-Tnwks ($left.Count -eq 0) "$($left.Count) process(es) of the WSL package of $($present.account) run $When"
 }
 
 # Runs a task of an account, waits for its end, and reads its result file.
@@ -720,6 +841,11 @@ function Test-TnwksScope {
     if ($cfg.boot_request_file -and [bool]$req.group_steps -ne [bool]$req.rehearsal_group_test) {
         return 'group_steps and rehearsal_group_test are not equal: the rehearsal has no join without its leave'
     }
+    # The read of window step 7 that no compute system runs on the host: on when the
+    # key is not there, and off (vm_check false) only in a config of the
+    # rehearsal, as the distro of the host runs while the rehearsal does.
+    if ($null -ne $cfg.vm_check -and $cfg.vm_check -isnot [bool]) { return "vm_check is '$($cfg.vm_check)': true or false" }
+    if ($cfg.vm_check -eq $false -and -not $cfg.boot_request_file) { return 'vm_check is off, and only a config of the rehearsal may turn it off' }
     ''
 }
 
@@ -880,8 +1006,22 @@ function Invoke-TnwksForward {
     Invoke-TnwksStopTask $new
     Wait-TnwksNoWsl $nSid $new.account
     Write-Log 'step 6 passed'
-    # (7) The present account leaves Administrators.
-    if ($req.group_steps) { Set-TnwksGroup $pSid $present.account $false }
+    # (7) The present account leaves Administrators. Before it and after it,
+    # as SYSTEM: no compute system runs on the host. A VM does not run as its
+    # account, and WSL keeps the token that made it, so this read, not a read
+    # of processes, shows that no VM keeps a token from the time in the
+    # group. No account has a reason to have a compute system at this step,
+    # so any is a fail. Then no process of the WSL package of the present
+    # account runs. A fail before the leave sends the window back while the
+    # account is still a member; a fail after it sends the window back, and
+    # way back step 1 puts the account back. Only a config of the rehearsal
+    # may turn the read of the compute systems off (vm_check,
+    # Test-TnwksScope): the distro of the host runs while the rehearsal does.
+    Assert-TnwksStep7 $pSid 'before the leave'
+    if ($req.group_steps) {
+        Set-TnwksGroup $pSid $present.account $false
+        Assert-TnwksStep7 $pSid 'after the leave'
+    }
     Write-Log 'step 7 passed'
     # (8) The start tasks of the new account: an enable asks for no password.
     foreach ($t in @($new.start_tasks)) { Enable-TnwksTask $t }
