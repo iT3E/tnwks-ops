@@ -2706,8 +2706,42 @@ def test_a_forward_run_after_a_started_window_with_no_end_stops_and_does_not_go_
         assert out["code"] == 3, out["log"]
         assert out["calls"] == [] and out["admins"] == []
         assert out["markers"] == state.replace("t ", "").split()
-        assert f"stop: the last marker is '{last}': a window started and did not end. Nothing is changed." in out["log"]
+        assert (f"stop: the last marker is '{last}': a window started and did not end, or a done window needs its way "
+                "back first. Nothing is changed.") in out["log"]
         assert not out["disk_a"] and out["disk_b"]
+
+
+@needs_pwsh
+def test_a_forward_run_after_a_done_window_stops_and_changes_nothing(tmp_path):
+    """A hand run of the window task after a done window: the request still says forward. The run stops before
+    step 1, writes no marker, and leaves the saved rules and the list of the disabled tasks as they are."""
+    plain = {"mode": "forward", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
+    for i, (request, restart) in enumerate(((FORWARD_TEST, False), (plain, True))):
+        state = "t window-started\nt window-done\n"
+        out = run_window(tmp_path / str(i), request, state=state, disk=("a",), acl_file=OLD_SDDL, marker_a=True,
+                         disabled="tnwks-moverh-a-start", restart=restart)
+        root = tmp_path / str(i) / "root"
+        assert out["code"] == 3, out["log"]
+        assert out["calls"] == [] and out["admins"] == []
+        assert out["markers"] == ["window-started", "window-done"]
+        assert ("stop: the last marker is 'window-done': a window started and did not end, or a done window needs its "
+                "way back first. Nothing is changed.") in out["log"]
+        assert (root / "state/disk.sddl").read_text() == OLD_SDDL
+        assert (root / "state/window.state.disabled").read_text() == "tnwks-moverh-a-start"
+        assert out["disk_a"] and not out["disk_b"]
+
+
+@needs_pwsh
+def test_a_way_back_with_no_window_stops_and_changes_nothing(tmp_path):
+    """A hand run of the way back with no window, or after its way back: no marker, no move, no restart."""
+    for i, state in enumerate(("", "t window-started\nt wayback-done\n")):
+        out = run_window(tmp_path / str(i), mode="wayback", state=state, disk=("a",), acl_file=OLD_SDDL, marker_a=True)
+        assert out["code"] == 3, out["log"]
+        assert out["calls"] == [] and out["admins"] == []
+        assert out["markers"] == state.replace("t ", "").split()
+        last = state.replace("t ", "").split()[-1] if state else ""
+        assert f"stop: the last marker is '{last}': no window to go back from. Nothing is changed." in out["log"]
+        assert out["disk_a"] and not out["disk_b"]
 
 
 @needs_pwsh

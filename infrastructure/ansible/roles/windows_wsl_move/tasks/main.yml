@@ -162,7 +162,11 @@
   when: not wsl_move_as_present | bool
   no_log: true
 
+# Tagged always, with the guard of the done switch below: a run with the tags
+# of a WSL role only (they come after this role in the play) still stops
+# there.
 - name: Read the last marker of the state file
+  tags: [always]
   ansible.windows.win_powershell:
     parameters:
       State: "{{ wsl_move_state_file }}"
@@ -181,6 +185,18 @@
 - name: Whether a window is started
   ansible.builtin.set_fact:
     wsl_move_window_started: "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}"
+
+# The done switch turns each WSL role to the start tasks of the new account:
+# merged before a window ended done, the first apply would leave the host
+# with no working start task. The role stops the play for the host here,
+# before the WSL roles that come after it.
+- name: The done switch comes after a done window
+  tags: [always]
+  ansible.builtin.assert:
+    that: (wsl_move_marker_read.output | last | default('')) == 'window-done'
+    fail_msg: wsl_move_done is on, and the last marker of the state file is not window-done. Nothing is changed.
+    quiet: true
+  when: wsl_move_phase == 'done'
 
 # The deletion of the tasks of the present account only after a forward
 # window that ended done: never in a way back, nor in a window that did not
@@ -281,9 +297,12 @@
 
     # Only after the probe made the profile: no folder of a profile is made in
     # advance. The keys and values of the .wslconfig of the present account,
-    # as step 3 read it.
+    # as step 3 read it. From the done switch, the new account owns the
+    # distro, and the role windows_host_settings writes its .wslconfig from
+    # its template and checks it byte for byte: one writer.
     - name: .wslconfig of the new account
       ansible.windows.win_copy:
         dest: '{{ wsl_move_runs.probe.result.profile }}\.wslconfig'
         content: "{{ wsl_move_wslconfig }}"
+      when: wsl_move_phase != 'done'
       no_log: true

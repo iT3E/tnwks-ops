@@ -471,6 +471,41 @@ def test_the_values_of_site_2_in_each_phase_render_as_windows_paths(tmp_path):
         "wsl_move_phase": "move", "rules": False}
 
 
+def test_the_done_switch_stops_the_host_before_the_wsl_roles_until_a_window_ended_done():
+    """Merged before a done window, the done switch would turn each WSL role to the tasks of the new account.
+    The guard runs after the read of the marker and before the first change, with each tag, and the role runs
+    before the WSL roles in a play with no rescue: its failure ends the play for the host."""
+    main = tasks("main.yml")
+    names = [t.get("name") for t in main]
+    guard = main[names.index("The done switch comes after a done window")]
+    assert guard["ansible.builtin.assert"]["that"] == "(wsl_move_marker_read.output | last | default('')) == 'window-done'"
+    assert guard["when"] == "wsl_move_phase == 'done'" and guard["tags"] == ["always"]
+    read = main[names.index("Read the last marker of the state file")]
+    assert read["check_mode"] is False and read["tags"] == ["always"]
+    assert names.index("Whether a window is started") < names.index("The done switch comes after a done window") < (
+        names.index("Folder of the procedure"))
+    play = next(p for p in yaml.safe_load((ANSIBLE / "playbooks/windows-host.yml").read_text())
+                if p["hosts"] == "windows_hosts")
+    assert not any(key in play for key in ("ignore_errors", "max_fail_percentage", "ignore_unreachable"))
+    roles = [role["role"] for role in play["roles"]]
+    for wsl_role in ("windows_udp_relay", "windows_lan_bridge", "windows_wsl_maintenance", "windows_host_check",
+                     "windows_host_settings"):
+        assert roles.index("windows_wsl_move") < roles.index(wsl_role), wsl_role
+    for role in play["roles"]:
+        assert "ignore_errors" not in role, role["role"]
+
+
+def test_only_windows_host_settings_writes_the_wslconfig_of_the_new_account_once_done():
+    """The role writes the .wslconfig of the new account in its own form while the move runs; from the done
+    switch, windows_host_settings writes and checks it from its template, at the profile of the new account."""
+    write = next(t for t in ALL if t.get("name") == ".wslconfig of the new account")
+    assert write["when"] == "wsl_move_phase != 'done'"
+    settings = yaml.safe_load((ANSIBLE / "roles/windows_host_settings/defaults/main.yml").read_text())
+    assert settings["wslconfig_path"] == "C:\\Users\\{{ windows_desktop_user }}\\.wslconfig"
+    site2 = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
+    assert site2["wslconfig_write"] is True
+
+
 # --- The deletion of the tasks of the present account (section 9, step 6) ------------------
 
 REMOVAL = "The deletion of the tasks of the present account comes after the done switch and the allow list without that account"
