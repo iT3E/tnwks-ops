@@ -39,6 +39,27 @@
       (wsl_move_present_tasks, apart from the compaction). Nothing is changed.
     quiet: true
 
+# The account that owns the distro and the disk file of the compaction and the
+# host check follow the phase (host_vars): the present account and the file in
+# its folder in the phase move, the new account and the moved file from the
+# done switch.
+- name: The account that owns the distro and the disk file follow the phase of the move
+  ansible.builtin.assert:
+    that:
+      - >-
+        (windows_desktop_user | default('') | lower)
+        == ((wsl_move_new_account if wsl_move_phase == 'done' else wsl_move_present_account) | lower)
+      - >-
+        (vhdx_compact_vhdx | default('') | ansible.builtin.win_dirname | lower)
+        == ((wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder) | lower)
+      - (vhdx_compact_vhdx | default('') | ansible.builtin.win_basename | lower) == (wsl_move_disk_name | lower)
+    fail_msg: >-
+      In the phase {{ wsl_move_phase }}, windows_desktop_user is not the {{ 'new' if wsl_move_phase == 'done' else 'present' }}
+      account, or vhdx_compact_vhdx is not the disk file in {{ 'the folder of the move' if wsl_move_phase == 'done'
+      else 'the folder of today' }}. Nothing is changed.
+    quiet: true
+  no_log: true
+
 - name: Each path of the procedure is in the long, normalized form
   ansible.builtin.assert:
     that: wsl_move_paths | reject('match', wsl_move_path_form) | list | length == 0

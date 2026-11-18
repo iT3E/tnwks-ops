@@ -177,7 +177,10 @@ def test_the_task_passes_the_disk_file_only_from_the_done_switch():
                   ' -WslCapabilitySid "{{ host_check_wsl_capability_sid | e }}"')
     assert arguments.count("-WslDisk ") == 1
     defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
-    assert defaults["host_check_wsl_disk_rules"] == "{{ wsl_start_unelevated_done | default(false) | bool }}"
+    # From the phase done on a host with the move of the distro on, and from its own switch on another host.
+    assert " ".join(defaults["host_check_wsl_disk_rules"].split()) == (
+        "{{ (wsl_move_phase | default('off') == 'done') if (wsl_move | default(false) | bool) "
+        "else (wsl_start_unelevated_done | default(false) | bool) }}")
     # The disk of the compaction, so both read one file.
     assert defaults["host_check_wsl_disk"].startswith("{{ vhdx_compact_vhdx ")
     assert defaults["host_check_wsl_disk_account"] == "{{ host_check_distro_account }}"

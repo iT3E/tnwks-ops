@@ -398,6 +398,21 @@ try {{
     assert out["no reads"] == out["one read"] == out["no tasks"] == stop
 
 
+def test_the_account_and_the_disk_file_follow_the_phase_before_any_change():
+    """The done change: the owner of the distro and the file of the compaction and the host check."""
+    names = [t.get("name") for t in tasks("main.yml")]
+    gate = "The account that owns the distro and the disk file follow the phase of the move"
+    assert names.index(gate) < names.index("Folder of the procedure")
+    that = [" ".join(line.split()) for line in next(t for t in tasks("main.yml") if t.get("name") == gate)[
+        "ansible.builtin.assert"]["that"]]
+    desktop = ("(windows_desktop_user | default('') | lower) == ((wsl_move_new_account if wsl_move_phase == 'done' "
+               "else wsl_move_present_account) | lower)")
+    folder = ("(vhdx_compact_vhdx | default('') | ansible.builtin.win_dirname | lower) == ((wsl_move_disk_dir "
+              "if wsl_move_phase == 'done' else wsl_move_present_folder) | lower)")
+    name = "(vhdx_compact_vhdx | default('') | ansible.builtin.win_basename | lower) == (wsl_move_disk_name | lower)"
+    assert that == [desktop, folder, name]
+
+
 def test_on_site_2_the_administrator_logs_in_and_the_distro_keeps_its_owner_and_user():
     """Step 4 (plan task 10.14): the inventory of site 2."""
     host = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
@@ -411,8 +426,11 @@ def test_on_site_2_the_administrator_logs_in_and_the_distro_keeps_its_owner_and_
     assert "{{ wsl_move_present_account }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}" in (
         host["ansible_ssh_common_args"])
     assert "wsl_distro_user" not in host["ansible_ssh_common_args"]
-    # The disk file of today is in the folder of the present account, not of the SSH user.
-    assert host["vhdx_compact_vhdx"] == "{{ wsl_move_present_folder }}\\ext4.vhdx"
+    # The disk file is the moved file from the done switch, and before it the file in the folder of the
+    # present account, not of the SSH user. The folder of the move is the role's own.
+    assert host["wsl_move_disk_dir"] == DEFAULTS["wsl_move_disk_dir"].replace("{{ wsl_move_dir }}", DEFAULTS["wsl_move_dir"])
+    assert host["vhdx_compact_vhdx"] == (
+        "{{ wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder }}\\" + DEFAULTS["wsl_move_disk_name"])
     # No public value of site 2 takes the owner or the user of the distro from the SSH user.
     for path in ("inventory/host_vars/WSL-02/main.yml", "inventory/host_vars/WSL-02-ubuntu/main.yml"):
         code = [line for line in (ANSIBLE / path).read_text().splitlines() if not line.lstrip().startswith("#")]

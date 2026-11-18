@@ -1111,6 +1111,14 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   An apply as an account other than the present one stops before any write
   until an apply as the present account kept the reads of today and
   registered its window tasks.
+- **The done switch.** `wsl_move_done` of the host, only after the check
+  play of step 6, the write test from the distro and the relay passed. From
+  it, `windows_desktop_user` is the new account, the compaction and the host
+  check read the moved file (`vhdx_compact_vhdx`, in `wsl_move_disk_dir`),
+  and the host check reads the rules of that file (`host_check_wsl_disk_rules`
+  follows the phase on a host with the move on). The role stops the play
+  when the account or the file is not the one of the phase. A way back turns
+  the switch off first.
 
 - **Variables.** The names of the two accounts and the folder of the disk
   file today are in the encrypted variables of the host only:
