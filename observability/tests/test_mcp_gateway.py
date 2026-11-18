@@ -445,8 +445,9 @@ def lab():
     # The hash of each client, a placeholder or a real one, becomes the hash
     # of its test key.
     for client, old in key_hashes(text).items():
-        # The finance key is on the vault route too: each copy changes.
-        assert text.count(old) == (2 if client == "finance" else 1)
+        # The finance key and the probe key are on the vault route too: each
+        # copy changes.
+        assert text.count(old) == (1 if client == "no-tools" else 2)
         text = text.replace(old, "sha256:" + hashlib.sha256(keys[client].encode()).hexdigest())
     (work / "config.yaml").write_text(text)
     for path in work.iterdir():
@@ -533,6 +534,9 @@ def probe_env_for(lab: dict, probe_key: str, no_tools_key: str) -> dict:
     env = probe_env()
     env.update({"OWN_NAMESPACE": "agents-finance", "PROBE_KEY": probe_key,
                 "NO_TOOLS_KEY": no_tools_key})
+    # The lab has no vault server (its image has no release yet), so the
+    # probe checks no vault here; test_vault_server.py reads its part.
+    env.pop("VAULT_GATEWAY_URL")
     return env
 
 

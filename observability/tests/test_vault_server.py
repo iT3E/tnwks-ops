@@ -161,15 +161,33 @@ def test_the_vault_route_lets_the_finance_agent_call_the_nine_tools_only():
     (rule,) = r["policies"]["mcpAuthorization"]["rules"]
     names = re.findall(r'"([a-z_]+)"', rule["allow"].split("]")[0])
     assert names == NINE
-    assert set(re.findall(r'apiKey\.client == "([^"]+)"', rule["allow"])) == {"finance"}
+    assert set(re.findall(r'apiKey\.client == "([^"]+)"', rule["allow"])) == {"finance", "finance-probe"}
+    # The probe key may list, and read the facts of a path only.
+    assert '(apiKey.client == "finance-probe" &&\n' in rule["allow"]
+    assert '(mcp.methodName == "tools/list" || mcp.tool.name == "get_file_info")' in rule["allow"]
 
 
-def test_the_vault_route_takes_the_key_of_the_finance_agent_only():
-    (key,) = route("finance-vault")["policies"]["apiKey"]["keys"]
-    (agent,) = [k for k in route("finance")["policies"]["apiKey"]["keys"]
-                if k["metadata"]["client"] == "finance"]
-    assert key["keyHash"] == agent["keyHash"]
-    assert key["metadata"] == {"client": "finance", "route": "finance-vault"}
+def test_the_vault_route_takes_the_keys_of_the_finance_agent_and_its_probe_only():
+    keys = route("finance-vault")["policies"]["apiKey"]["keys"]
+    assert [k["metadata"] for k in keys] == [{"client": "finance", "route": "finance-vault"},
+                                             {"client": "finance-probe", "route": "finance-vault"}]
+    finance = {k["metadata"]["client"]: k["keyHash"] for k in route("finance")["policies"]["apiKey"]["keys"]}
+    for k in keys:
+        assert k["keyHash"] == finance[k["metadata"]["client"]]
+
+
+def test_the_probe_checks_the_vault_route_and_tries_the_server_straight():
+    probe = FINANCE / "checks/app/mcp-gateway-probe.yaml"
+    (cron,) = [d for d in docs(probe) if d["kind"] == "CronJob"]
+    (container,) = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"]
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env["VAULT_GATEWAY_URL"] == "http://mcp-gateway.ai.svc.cluster.local:3000/finance-vault/mcp"
+    assert "http://" + env["VAULT_SERVER"] + "/mcp" == HOST
+    (policy,) = [d for d in docs(probe) if d["kind"] == "CiliumNetworkPolicy"]
+    out = [(p["matchLabels"]["io.kubernetes.pod.namespace"], p["matchLabels"]["app.kubernetes.io/name"],
+            [x["port"] for tp in r["toPorts"] for x in tp["ports"]])
+           for r in policy["spec"]["egress"] for p in r.get("toEndpoints", [])]
+    assert ("agents-finance", "vault-server", ["8080"]) in out
 
 
 def test_the_target_is_the_vault_server_with_no_credential():

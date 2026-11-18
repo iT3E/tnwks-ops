@@ -77,6 +77,12 @@ spec:
                   value: firefly-mcp.agents-finance.svc.cluster.local:3000
                 - name: GATEWAY_CONFIG
                   value: /gateway/config.yaml
+                # The vault route of finance and the vault server behind it
+                # (../../vault-server).
+                - name: VAULT_GATEWAY_URL
+                  value: http://mcp-gateway.ai.svc.cluster.local:3000/finance-vault/mcp
+                - name: VAULT_SERVER
+                  value: vault-server.agents-finance.svc.cluster.local:8080
               # PROBE_KEY and NO_TOOLS_KEY.
               envFrom:
                 - secretRef:
@@ -134,4 +140,14 @@ spec:
       toPorts:
         - ports:
             - port: "3000"
+              protocol: TCP
+    # The vault server, straight: its own policy must stop that.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: vault-server
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
               protocol: TCP
