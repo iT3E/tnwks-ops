@@ -1003,7 +1003,8 @@ account runs. A process counts by its image path: any file in the install
 folder of the package (from the key that its installer writes,
 `Lxss\MSI`, `InstallLocation`), or a WSL command of Windows in System32
 (`wsl.exe`, `wslconfig.exe`, `bash.exe`). A process with no path that
-SYSTEM can read counts by the name of a named executable of the installer.
+SYSTEM can read counts by name: a named executable of the installer, or a
+WSL command of Windows.
 The path, not a list of names, is the rule: the installer takes some of its
 executables by a pattern, and some of its names are not only WSL's. A fail
 before the leave sends the window back while the account is still a

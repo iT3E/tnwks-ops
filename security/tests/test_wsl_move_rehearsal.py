@@ -2543,6 +2543,8 @@ def test_window_step_7_counts_each_process_of_the_wsl_package_of_the_present_acc
         "the command of Windows": proc("C:\\Windows\\System32\\wsl.exe"),
         "an old command of Windows": proc("C:\\Windows\\System32\\wslconfig.exe"),
         "no path, a named file": proc("", "container.exe"),
+        "no path, a command of Windows": proc("", "wslconfig.exe"),
+        "no path, bash": proc("", "bash.exe"),
         "another install folder": "$global:WslInstall = 'D:\\Apps\\WSL'; " + proc("D:\\Apps\\WSL\\wslg.exe"),
     }
     passes = {

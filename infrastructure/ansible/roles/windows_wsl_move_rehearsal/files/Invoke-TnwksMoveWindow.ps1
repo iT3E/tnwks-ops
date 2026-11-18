@@ -198,8 +198,8 @@ function Test-TnwksAdmin([string]$Sid) { @(Get-TnwksAdminSids) -contains $Sid }
 # only WSL's (msrdc.exe, container.exe), so a name alone could count another
 # program. The folder comes from the key that the installer writes
 # (Lxss\MSI, InstallLocation), or the folder of its default. A process with
-# no path that SYSTEM can read counts by name, from the named executables of
-# that installer.
+# no path that SYSTEM can read counts by name: the named executables of that
+# installer, and the names of the WSL commands of Windows.
 $TnwksWslPackageNames = @('wsl.exe', 'wslg.exe', 'wslc.exe', 'container.exe', 'wslhost.exe', 'wslrelay.exe',
     'wslservice.exe', 'wslcsession.exe', 'msrdc.exe', 'msal.wsl.proxy.exe', 'wslsettings.exe')
 $TnwksWslSystemNames = @('wsl.exe', 'wslconfig.exe', 'bash.exe')
@@ -212,7 +212,7 @@ function Get-TnwksWslInstallFolder {
 }
 function Test-TnwksWslImage($Process, [string]$Folder) {
     $path = "$($Process.ExecutablePath)"
-    if (-not $path) { return "$($Process.Name)" -in $TnwksWslPackageNames }
+    if (-not $path) { return "$($Process.Name)" -in ($TnwksWslPackageNames + $TnwksWslSystemNames) }
     if ($path.StartsWith($Folder, [StringComparison]::OrdinalIgnoreCase)) { return $true }
     $system = "$env:SystemRoot\System32\"
     foreach ($name in $TnwksWslSystemNames) {
