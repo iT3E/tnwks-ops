@@ -113,7 +113,7 @@ def test_the_image_is_a_release_by_digest():
 
 
 def test_the_image_is_not_the_placeholder():
-    """Fails until the first release of the image is in the Deployment."""
+    """The image is a real release, not the zeros of the draft."""
     (container,) = pod()["containers"]
     assert not container["image"].endswith("@sha256:" + "0" * 64)
 

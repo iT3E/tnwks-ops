@@ -46,11 +46,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: server
-          # A release by digest. PENDING: the first release of
-          # iT3E/tnwks-vault-mcp does not exist yet. The tag and the digest
-          # of that release go here, in place of the zeros (a test of
-          # observability/tests/test_vault_server.py fails until they do).
-          image: ghcr.io/it3e/tnwks-vault-mcp:0.1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          # A release by digest: the first release of iT3E/tnwks-vault-mcp.
+          image: ghcr.io/it3e/tnwks-vault-mcp:0.1.0@sha256:c5ff25c2c9a22d5643ffd4e5ae87189e46efe0210eab527eab49f686791b935d
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
