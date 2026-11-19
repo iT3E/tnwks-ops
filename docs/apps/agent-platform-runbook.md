@@ -2004,8 +2004,11 @@ The differences from finance:
 The owner's decision of 2026-11-19: before any cutover, the main agent on
 the platform runs beside the main agent on the host for a time. Telegram
 gives the updates of a bot to one poller, so the two can not share a bot:
-the pod gets a **second bot**, made by the owner, and the host keeps its
-bot, its Signal number and its scheduled jobs. Nothing changes on the host.
+the pod gets the **test bot of the pilot**, by the owner's decision of
+2026-11-19 ("move it"), and the host keeps its bot, its Signal number and
+its scheduled jobs. Nothing changes on the host. The pilot's Telegram
+channel goes off in the same change ([The pilot
+agent](agent-platform.md#the-pilot-agent)), so the bot has one poller.
 
 What is different from the steps below in the test run:
 
@@ -2020,8 +2023,10 @@ What is different from the steps below in the test run:
   blank in the copy only. The copy of `AGENTS.md` has one more section,
   which says that this is a test copy and what it does not have yet. The
   run of 2026-11-19: 1300 files, about 100 MB.
-- **Step 5 waits for the token of the second bot.** The values check
-  refuses the placeholder, so no pod starts before it.
+- **Step 4b moves the test bot** (below): its token goes into the Secret
+  of main, in place of the placeholder, and the channel of the pilot goes
+  off. Main stays at zero replicas in that change. Step 5 comes after the
+  lead saw that the pilot polls no more.
 - **The two workspaces go apart** from the time of the copy. Before the
   real cutover the owner decides what moves: a new copy of the host
   workspace in place of the one of the test run, or the one of the test
@@ -2042,6 +2047,7 @@ What is different from the steps below in the test run:
 | 3c | The fetch proxy, after 3a and before 5: `main/fetch-proxy/`, the rule to it in the agent's network policy, the ConfigMap `agent-fetch-proxy` and `tools.web.fetch` in the config | The proxy pod, its Service and its policy. The agent's policy, its config and a new pod template. At zero replicas no agent pod starts, and step 5 starts it with the proxy env; at one, the agent pod rolls once. The restore Job of step 4 does not change | `kubectl -n agents-main get deploy fetch-proxy` is `1/1`; `kubectl -n agents-main get cnp fetch-proxy agent` exist; `kubectl -n agents-main logs deploy/fetch-proxy` has no `[error]` line | Revert. The agent then has no web fetch |
 | Host | The owner stops the Telegram account of the main agent on the host and its scheduled jobs, makes the copy of the main agent, and puts it in the volume | Nothing in git | The checksum and the count of the copy | Turn the account and the jobs on again on the host |
 | 4 | Out `state-inbox.yaml`; in the three Secrets and `restore-job.yaml` (with `ARCHIVE` set; `VAULT` empty) | The Job checks each member of the archive, then puts the copy in place as `state/`. The Secrets. No pod | `kubectl -n agents-main get job agent-restore` is `1/1`; in Loki, `{namespace="agents-main", app="agent-restore"}` has `restore result=ok archive=start/<name> files=<n> vault-notes=0`, with the count of the owner | Revert step 4, then turn the account on again on the host. The copy stays in `archives/start/` |
+| 4b | The move of the test bot: `TELEGRAM_BOT_TOKEN` in `main/agent/app/secret.sops.yaml` holds the token of the pilot's test bot, and `channels.telegram.enabled: false` in `pilot/agent/config/openclaw.json` | The Secret `agent-secret` of main (no pod reads it: main is at `0/0`). The pilot pod starts again once, with no Telegram account | `kubectl -n agents-pilot get deploy agent` is `1/1` with the new pod; `kubectl -n agents-pilot logs deploy/agent -c agent \| grep -c '\[telegram\]'` is `0`, and its line `http server listening` names no `telegram`; `kubectl -n agents-main get deploy agent` stays `0/0` | Main at `0/0` first, then revert: the pilot polls the bot again |
 | 5 | Out `restore-job.yaml`; `replicas: 1` in `deployment.yaml` | The agent pod starts and polls the bot | [The cutover](#the-cutover-on-telegram) | [The way back](#the-way-back-of-the-main-agent) |
 
 After step 5: the restore test of the state (a template
@@ -2066,9 +2072,11 @@ config of the host by their key paths. No value was printed, and none is in
 another file. Two values are not as the table says, for [the test run
 beside the host](#the-test-run-beside-the-host):
 
-- `TELEGRAM_BOT_TOKEN` is the placeholder `pending` until the owner puts in
-  the token of a second bot. The token of the host never goes to the pod
-  while the host uses it.
+- `TELEGRAM_BOT_TOKEN` was the placeholder `pending` until step 4b, which
+  put in the token of the pilot's test bot (a script copied it from the
+  Secret of the pilot, with no value printed; the user id was the same in
+  both files already). The token of the host never goes to the pod while
+  the host uses it.
 - `BRAVE_API_KEY` is the search key of the host, by the owner's decision. The
   pilot uses the same key, so it is not a key of main alone. A key of main
   alone is a later step.
@@ -2357,8 +2365,8 @@ at the same time, until the limit resets. Nothing moves to Bedrock by itself.
    one time (`1e7d81c2`); the Anthropic SDK of the caller tries 2 more times
    and the reviewer's framework up to 6 attempts. So one model call reaches
    the bridge 18 times at most in one run, and up to 54 times for one review
-   when the caller makes its 3 attempts. The pilot answers the chat with an
-   error.
+   when the caller makes its 3 attempts. A personal agent answers the chat
+   with an error.
 3. **Decide.** The owner: wait for the reset, use less of the plan (the
    build sessions too), or [move a trust domain to Bedrock](#move-a-trust-domain-to-bedrock-by-hand).
    Nothing here is a fix in git.

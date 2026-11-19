@@ -1,3 +1,0 @@
-kind: Changed
-body: 'windows: on site 2, Ansible logs in as the administrator account, the account that owns the distro comes from the values of the move, and the jump logs in to the distro as its user (step 4 of the account change)'
-time: 2026-11-18T23:50:00.000000000Z
