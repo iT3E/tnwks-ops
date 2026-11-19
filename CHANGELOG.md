@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.218.0 - 2026-11-19
+
+### Added
+
+* agents: the seed of the finance share, a one-time Job: the secret scanner of CI on the copy of the vault on the state volume (read only), one line for each finding with an id for the owner, and a copy into the empty share only when the owner decided each finding (no link, no config folder of the notes app, no trash, no .git; files 0600); one result line with counts
+
 ## v2.217.0 - 2026-11-19
 
 ### Added
