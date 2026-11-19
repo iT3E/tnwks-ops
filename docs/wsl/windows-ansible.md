@@ -1207,6 +1207,71 @@ listen on the same port, and the window runs one of them only. While the
 move runs, both accounts may write the logs of the relays, and the handler
 of the role restarts the relays that are enabled.
 
+## The window of the move
+
+The lead runs the window play by hand, for one host where the move is on,
+from the workstation:
+
+```sh
+cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-move-window.yml --limit WSL-02 \
+  -e wsl_move_window=<mode>
+```
+
+| Mode | What it does | When |
+| --- | --- | --- |
+| `precheck` | Reads only. Each guard of a forward start, and the readiness reads | Before the day, and again right before the start |
+| `forward` | The guards, then the request of a forward window, and one start of the window task. Needs `-e wsl_move_window_host=WSL-02` | The window, with the owner's go and time |
+| `wayback` | The same for the way back mode of the procedure. Needs `-e wsl_move_window_host=WSL-02` | Only on a decision to go back, before the done switch |
+| `status` | Reads only. The markers of the state file, the request, the window task and the boot task, and the tail of the window log | At any time; after the restart of the window |
+| `check` | Reads only. The check play of step 6 | After the restart of the window, before the done switch |
+
+The reads run as SYSTEM, from `roles/windows_wsl_move/files/Read-TnwksMoveWindow.ps1`,
+and their output masks each account, SID and folder of the move. The
+precheck and the check print one line for each read, pass or fail, and fail
+the run when a line fails.
+
+- **The guards of a start.** The move is on and not done (`wsl_move_phase`
+  is `move`). Ansible logs in as the administrator account, not as the
+  present account (step 4 is done). The copies of the scripts and the configs
+  on the host are the role's. The last marker lets the way start: none or
+  `wayback-done` for a forward window, `window-started`, `boot-run` or
+  `window-done` for a way back. The log, the window task, the boot task and
+  the window tasks of both accounts are there, and the window task does not
+  run. Each WSL task of the present account is there. Each start task of the
+  new account is there, and disabled for a forward window. The installed WSL
+  is the version of the rehearsal and the version that step 3 saved. No
+  restart is pending for updates. No session of the present account is on
+  the host (the session API of Windows), unless
+  `-e wsl_move_window_force_session=true`.
+- **The readiness.** No other enabled task of the present account runs WSL.
+  The present account registers the distro by its name, once, at the folder
+  of the config. Both folders are on one drive, which is not a `subst`
+  drive. The distro of the present account runs, and the hardened open of
+  the procedure reads the disk file and both folders as SYSTEM. The read of
+  the host check finds the disk file and reads it as a plain file. Each
+  batch logon of the present account in the Security log had an elevated
+  token, and it is in Administrators. The login of Ansible reads a High
+  token with the Administrators group enabled.
+- **The start.** The play writes `state\request.json` (the mode, the group
+  steps on, no stop, no group test), starts the window task once, and
+  returns. It does not wait: its path to the host ends when WSL stops. After
+  the restart, run `status`, then `check`.
+- **The check play of step 6.** The last marker is a done window, written
+  before the boot. The last forward run passed steps 5, 7 and 8 and ended
+  done. Each WSL process of the new account reads Medium Mandatory Level and
+  no Administrators group, and one runs. No WSL process of the present
+  account runs. Each WSL task of the present account is disabled, and no
+  other enabled task of it runs WSL. Each start task of the new account is
+  enabled, and ran after the boot with result 0 or still runs. The new
+  account registers the distro at the new disk file, with the default user,
+  the flags, the default environment and the kernel command line that
+  step 3 read. The port proxy points to the address that the new VM wrote
+  after the boot. The `.wslconfig` of the new account holds each setting of
+  today. The read of the host check of the moved file passes. The old path
+  is empty. Neither account is in Administrators. The write test from the
+  distro and the memory of the VM against the limit of its `.wslconfig` are
+  reads over SSH, in the distro.
+
 ## Check-only settings
 
 The role `windows_host_settings` (last in the play) only reads. Its single

@@ -1,0 +1,37 @@
+---
+# The window of the move of the distro (role windows_wsl_move, Design Doc
+# 0004, section 9, steps 5 and 6): its start, its status, the precheck before
+# it and the check play after it. Run it by hand, for one host where the move
+# is on (wsl_move):
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-move-window.yml --limit WSL-02 \
+#     -e wsl_move_window=<status|precheck|forward|wayback|check>
+#
+# status, precheck and check only read. forward and wayback write the request
+# of the window and start the window task once, and need the name of the host
+# again (-e wsl_move_window_host=WSL-02). The modes are in
+# roles/windows_wsl_move/tasks/window.yml, and docs/wsl/windows-ansible.md has
+# the order of the day.
+
+- name: The window of the move of the distro
+  hosts: windows_hosts
+  gather_facts: false
+  become: false
+  tasks:
+    - name: One host in this run
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: The window play runs for one host only (--limit). Nothing is read or changed.
+        quiet: true
+      run_once: true
+
+    - name: The move of the distro is on for the host
+      ansible.builtin.assert:
+        that: wsl_move | default(false) | bool
+        fail_msg: "The move of the distro is off for {{ inventory_hostname }} (wsl_move). Nothing is read or changed."
+        quiet: true
+
+    - name: The window
+      ansible.builtin.include_role:
+        name: windows_wsl_move
+        tasks_from: window.yml

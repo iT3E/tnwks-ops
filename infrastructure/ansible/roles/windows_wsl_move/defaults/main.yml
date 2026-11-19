@@ -107,3 +107,19 @@ wsl_move_deny_rights:
   - SeDenyRemoteInteractiveLogonRight
   - SeDenyNetworkLogonRight
 wsl_move_userlist_key: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList'
+
+# The window play (playbooks/windows-move-window.yml, tasks/window.yml): the
+# lead runs it by hand for one host, with -e wsl_move_window=<mode>.
+wsl_move_window_modes: [status, precheck, forward, wayback, check]
+# The status prints the last lines of the window log, each cut at the bound of
+# the fail lines of the procedure.
+wsl_move_window_log_lines: 60
+wsl_move_window_line_limit: 300
+# The precheck reads the last batch logons of the present account.
+wsl_move_window_batch_logons: 10
+# The copy of the host check on the host (role windows_host_check:
+# host_check_dir and host_check_script), whose read of the disk file the
+# window play makes, and the address file of the LAN bridge (role
+# windows_lan_bridge: lan_bridge_ip_file). Tests keep both equal to the roles'.
+wsl_move_host_check: 'C:\ProgramData\tnwks-host-check\Invoke-TnwksHostCheck.ps1'
+wsl_move_bridge_address_file: 'C:\ProgramData\tnwks-lan-bridge\wsl-ip\address.json'
