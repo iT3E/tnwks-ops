@@ -72,7 +72,7 @@
   },
   "channels": {
     "telegram": {
-      "enabled": true,
+      "enabled": false,
       "dmPolicy": "allowlist",
       "allowFrom": ["${TELEGRAM_ALLOW_FROM}"],
       "groupPolicy": "disabled",
