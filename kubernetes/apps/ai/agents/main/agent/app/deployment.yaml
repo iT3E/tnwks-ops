@@ -31,9 +31,10 @@ metadata:
     # a second one.
     secret.reloader.stakater.com/auto: "true"
 spec:
-  # Zero at step 4 of the cutover; one at step 5, after the host stopped the
-  # Telegram account of the main agent (one poller for each bot token).
-  replicas: 0
+  # One since step 5. In the test run beside the host the pod polls the test
+  # bot, which moved here from the pilot, and the host keeps its bot (one
+  # poller for each bot token).
+  replicas: 1
   revisionHistoryLimit: 2
   # The old pod stops before the new one starts: one process holds the state,
   # and the archive step reads it with no writer.
