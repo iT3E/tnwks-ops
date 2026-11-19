@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.211.0 - 2026-11-19
+
+### Changed
+
+* Site 2, Windows host: the encrypted host variables get the values of the account change (Design Doc 0004, section 9): the list of accounts for AllowUsers, the present account, the new account, the folder of the disk file of today, the WSL version of the rehearsal and the password of the administrator account. No role reads a new value yet.
+
 ## v2.210.0 - 2026-11-19
 
 ### Added
