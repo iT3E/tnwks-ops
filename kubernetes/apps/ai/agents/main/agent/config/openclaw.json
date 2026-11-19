@@ -17,7 +17,8 @@
   "tools": {
     "elevated": {"enabled": false},
     "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
-    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search", "message"]}},
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search", "message", "progress_card"]}},
+    "sessions": {"visibility": "all"},
     "web": {"search": {"enabled": true, "provider": "brave"}}
   },
   "memory": {
@@ -38,7 +39,7 @@
       "model": {"primary": "litellm/agents-main"},
       "thinkingDefault": "off",
       "modelPolicy": {"allow": ["litellm/agents-main"]},
-      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw"},
+      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw", "sessionToolsVisibility": "all"},
       "heartbeat": {
         "every": "24h",
         "target": "none",

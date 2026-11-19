@@ -102,7 +102,12 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     assert c["memory"]["search"]["model"] == "agents-main-embeddings"
     assert "extraPaths" not in c["memory"]["search"]
     # D16: the agent keeps the message tool, in its sandboxed sessions too.
-    assert c["tools"]["sandbox"]["tools"]["alsoAllow"] == ["memory_search", "memory_get", "web_search", "message"]
+    # The owner's decisions of 2026-11-19: the progress card, and each session
+    # of main sees the other sessions of main, as on the host.
+    assert c["tools"]["sandbox"]["tools"]["alsoAllow"] == ["memory_search", "memory_get", "web_search", "message",
+                                                           "progress_card"]
+    assert c["tools"]["sessions"] == {"visibility": "all"}
+    assert c["agents"]["defaults"]["sandbox"]["sessionToolsVisibility"] == "all"
     telegram = c["channels"]["telegram"]
     assert telegram["dmPolicy"] == "allowlist" and telegram["allowFrom"] == ["${TELEGRAM_ALLOW_FROM}"]
     # D108: one group, from the file of the owner, and no chat id in git.

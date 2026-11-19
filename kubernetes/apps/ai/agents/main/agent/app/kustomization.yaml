@@ -23,8 +23,9 @@
 #    the search key of main) and ./secret-telegram-groups.sops.yaml (Secret
 #    agent-telegram-groups: telegram-groups.json, the one group of the
 #    Telegram account), and the entry agents-main in the key list of the
-#    model gateway. The search key is still the placeholder "pending": the
-#    owner makes that key at the vendor before step 5.
+#    model gateway. For the test run beside the host (the runbook): the
+#    bot token is the placeholder "pending" until the owner puts in the
+#    token of a second bot, and the search key is the key of the host.
 # 4. After the owner stopped the Telegram account of main on the host and
 #    put the copy of the state in the volume: out ./state-inbox.yaml; in
 #    the three Secrets and ./restore-job.yaml (ARCHIVE set, VAULT empty).

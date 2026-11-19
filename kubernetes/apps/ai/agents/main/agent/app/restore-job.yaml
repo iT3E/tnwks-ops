@@ -69,7 +69,7 @@ spec:
             # SET AT STEP 4 from the owner's name, before the merge: the
             # step order test fails while it is SET-ME.
             - name: ARCHIVE
-              value: start/openclaw-state-SET-ME.tar.gz
+              value: start/openclaw-state-2026.9.6-20261119T040937Z.tar.gz
             # The seed of the vault: vault-<time>.tar in archives/seed/.
             # Empty for main: no vault in this copy (task 3.37).
             - name: VAULT
