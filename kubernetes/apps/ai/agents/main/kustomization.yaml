@@ -11,6 +11,9 @@ resources:
   # The main agent: its state volume and the inbox only, so far
   # (agent/app/kustomization.yaml).
   - ./agent/ks.yaml
+  # The fetch proxy of the main agent: its one way to a web site that the
+  # agent picks (fetch-proxy/ks.yaml).
+  - ./fetch-proxy/ks.yaml
   # The share of the vault: its two volumes and two claims, mounted by no pod
   # yet (vault-share/ks.yaml).
   - ./vault-share/ks.yaml

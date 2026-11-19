@@ -2,7 +2,8 @@
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
 # The share of the finance trust domain (docs/apps/agent-platform.md, "The
 # vault shares"): its two static PersistentVolumes on the export
-# /vault-finance, and their two claims in agents-finance. Nothing mounts them yet.
+# /vault-finance, and their two claims in agents-finance. The vault server
+# mounts vault-rw (../vault-server); nothing mounts vault-ro yet.
 #
 # Each volume names its claim, and each claim names its volume, so they bind
 # at once, with no pod: the Kustomization is Ready when both claims are

@@ -11,6 +11,7 @@ these parts.
 | --- | --- | --- |
 | Sandbox controller (Agent Sandbox) | `agent-sandbox-system` | `sandbox-controller/` |
 | Trust domain of the main personal agent | `agents-main` | `main/` |
+| The fetch proxy of the main agent ([Web fetch of the main agent](#web-fetch-of-the-main-agent)) | `agents-main` | `main/fetch-proxy/` |
 | Trust domain of the finance agent | `agents-finance` | `finance/` |
 | Trust domain of the workflow agents, and their run receiver | `agents-workflows` | `workflows/` |
 | Pilot of a personal agent, on test accounts | `agents-pilot` | `pilot/` |
@@ -289,7 +290,11 @@ read only. The parts come in steps; this table says what is there now.
 | Claims of the shares | `storage/nfs-vault-main` and `storage/nfs-vault-finance`, in the form of `nfs-gdrive-sync`, bound on the node of the server |
 | Exports | `/vault-main` (`Export_Id` 3) and `/vault-finance` (4): read and write for the three nodes of homelab-wsl only, each client squashed to uid and gid 1000, the owner of the root (mode 0700) |
 | Volumes and claims in the trust domains | Two static PersistentVolumes for each share and their two claims, `vault-rw` and `vault-ro`, in `agents-main` and `agents-finance` (`kubernetes/apps/ai/agents/<domain>/vault-share/`). Bound, and mounted by no pod |
-| The vault server, the mount of the agent, the backup of the share | Not yet |
+| The vault server of finance | `vault-server` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-server/`): one pod on `vault-rw`, behind the route `finance-vault` of the central MCP gateway (below) |
+| The backup of the finance share | The SnapshotPolicy `vault` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-backup/`): each night, the claim `vault-ro` to the repository `agents-finance`, with the retention of the state volume |
+| The seed of the finance share | A one-time Job `vault-seed` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-seed/`), which ran once on 2026-11-19 with `result=ok` and is not listed now ([The seed of the finance share](#the-seed-of-the-finance-share)) |
+| The mount of the finance agent | The claim `vault-ro` at `/vault` in the agent pod (the product, its repair step and the index step), with `readOnly: true` on the claim and on each mount. `/vault` is the path of the vault server too, so a path from a memory search works in a vault tool call. The index reads `/vault` (`memory.search.extraPaths`, Markdown only) and polls (`CHOKIDAR_USEPOLLING`), because a write of the vault server gives no file event on this mount. The agent calls the nine tools as `vault__*` through the route `finance-vault`, with its key. Until the seed, the index also reads the copy on the state volume |
+| The vault server of main, the mount of the main agent | Not yet |
 
 Each share has two volumes, one for each claim:
 
@@ -315,9 +320,10 @@ read only, and the vault server is the one writer. The flag
 takes the read-only flag from the pod (its claim or its mount), so a pod
 that does not set it would get a mount that writes.
 
-What is still not there: the vault server and its route on the central MCP
-gateway, the mount of `vault-ro` in the agent pod, the backup policy of each
-share, and the change of the two admission rules to `Deny`.
+What is still not there: the vault server of main and its route, the
+mount of the main agent, the backup policy of the main share, the restore
+test of a share, the seed of the main share, and the change of the two
+admission rules to `Deny`.
 
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may
@@ -342,6 +348,150 @@ nfs-vault-main-ro nfs-vault-finance-rw nfs-vault-finance-ro` shows each
 `agents-finance`) shows each `Bound`, and
 `kubectl -n flux-system get kustomization agents-main-vault-share
 agents-finance-vault-share` shows each `Ready`.
+
+### The vault server
+
+The vault server of a trust domain is the one writer of its share. It is
+the image `ghcr.io/it3e/tnwks-vault-mcp` (the reference file server of the
+MCP project, for the one directory `/vault`, over Streamable HTTP), in the
+namespace of its trust domain. The owner chose its form at the gate of
+Design Doc v3.42 (section 4.2.5 and section 11 of effort 0003).
+
+| Part | Value |
+| --- | --- |
+| Pod | A Deployment of one replica, `Recreate`, uid and gid 1000 (the uid that the export squashes each client to), the `restricted` level, a read-only root, no service account token, no Secret, no DNS and no egress |
+| Share | The claim `vault-rw` at `/vault`, a hard mount: a call waits while the NFS server is away |
+| Probes | A readiness probe of `/healthz`, and no liveness probe |
+| Memory | A request of 128Mi and a limit of 256Mi. The peak at 5 rounds of 20 calls at one time was 76.5 MiB with small notes and 184 MiB with notes of 1 MiB, with 12 processes |
+| In | The central MCP gateway on port 8080, and the kubelet for the probe of `/healthz` |
+| Route | `/finance-vault/mcp` on the central MCP gateway, with the key of the finance agent, and a time of 60 s for each call ([mcp-gateway.md](mcp-gateway.md)) |
+| Tools | Nine: `read_text_file`, `read_multiple_files`, `list_directory`, `directory_tree`, `search_files`, `get_file_info`, `write_file`, `edit_file`, `create_directory`. The server has no delete tool, and the gateway refuses each other tool |
+
+The server refuses a path outside `/vault`: `..`, an absolute path, and a
+symlink that leads out, for a read and for a write. Through the gateway, a
+body over 2 MiB gets a 413 and a bad JSON body a 400 from the gateway, and
+the gateway drops an `Origin` header. Straight, the server answers an
+`Origin` header with a 403 and any path but `/mcp` and `/healthz` with a
+404; only the gateway and the kubelet reach it.
+
+**With the NFS server away**, what a call gets depends on where it waits:
+
+- A path that the node does not have in its cache waits in a file call that
+  the server bounds: the call ends with the tool error `Filesystem call
+  timed out after 15000 ms`, its write does not land, and the server stays
+  ready.
+- A note that the node has in its cache (a note read or written a short
+  time before) waits in a file call that holds the whole process: the
+  health path stops too, and the pod is not ready. The gateway answers that
+  call with `504 request timeout` after 60 s, and each new call with an
+  error at once. When the NFS server is back, the process goes on by itself
+  with no restart, and the write lands, after the client got its error.
+
+So a client that gets an error for a write reads the note again before it
+tries again, and an edit with the old text fails on a note that changed.
+
+**The costs that the owner accepted at the gate**, in plain words:
+
+- **The stop with the NFS server away.** Each vault call and the health
+  path of the server wait until the NFS server is back, for a note in the
+  cache. An operator sees it as: the pod `vault-server` in `agents-finance`
+  is `Running` and not ready, with no restart; the alert
+  `AgentPlatformWorkloadNotReady` names `vault-server`; the gateway log has
+  `"route":"default/finance-vault"` lines with status 504 or 500; and the
+  NFS server in `storage` is not ready. Bring the NFS server back; do not
+  restart the vault server, which drops the write that waits.
+- **No liveness probe.** A process that stops for another reason (a fault
+  of the server itself) never restarts by itself. Only the readiness alert
+  tells, and a person deletes the pod.
+- **Two writers for a short time.** A delete or an eviction of the pod is
+  not a rollout: the ReplicaSet starts the new pod at once, while the old
+  one still runs (`Recreate` keeps them apart in a rollout only). For that
+  time two processes write the share: an edit on changed text fails, and a
+  write of a whole file wins over the one before it. With the NFS server
+  away, the new pod waits in `ContainerCreating`, and the old one stops
+  after its grace time and drops the write that waits.
+- **A leaked agent key also writes the vault.** The route takes the key of
+  the finance agent, the same key as the finance app route. Whoever has
+  that key can call the nine tools, writes included, from a pod that the
+  network policy of the gateway lets in. A key of its own for the route is
+  the stricter option, and only the owner makes it.
+- **60 s.** The gateway waits 60 s for the vault server and for the finance
+  app, not its default of 10 s. A hung call holds a turn of the finance
+  agent up to 60 s.
+
+### The seed of the finance share
+
+The first notes of the finance share come from the copy of the vault on
+the state volume of the finance agent (the folder `vault/` of the claim
+`agent-state`, which the restore Job of the cutover made). One Job copies
+them, one time, with the go of the owner (section 4.2.5 of the design). The
+copy on the state volume stays as it is. The steps are in the runbook
+([The seed of the finance share](agent-platform-runbook.md#the-seed-of-the-finance-share)).
+
+| Part | Value |
+| --- | --- |
+| Where | `kubernetes/apps/ai/agents/finance/vault-seed/`: the Flux Kustomization `agents-finance-vault-seed` (after the share and the agent), the Job `vault-seed`, and the ConfigMap of its script `seed.mjs` and of the config of the secret scan |
+| Pod | On the node of the agent pod, where the state volume is. uid and gid 1000, the `restricted` level, a read-only root in each container, no service account token, no Secret, no network (out of the DNS rule; only the default deny selects it) |
+| From | The folder `vault/` of the claim `agent-state`. Each container mounts the claim read only at its root (`/state`), with no `subPath`: on this cluster a `subPath` of a `local-path` volume is an empty directory that the kubelet makes (below). Each step reads only `/state/vault` (the scan path and `SOURCE`). The volume is `ReadWriteOnce`, and pods of one node can share it: the Job runs beside the running agent, as the backup mover does |
+| To | The claim `vault-rw` (the hard mount), which must be empty |
+| Scan | The init container `scan`: the secret scanner of CI, the upstream image of betterleaks (MIT license) at the version of `.pre-commit-config.yaml`, by digest, with the config of this repository (`.betterleaks.toml`), on the whole source. With `--redact`, no value is in its report or its log, and it validates nothing against a vendor |
+| Findings | The init container `report` gives each finding an id and logs one line for it (below). The id is the start of a SHA-256 of the rule, the line, the column and the whole file: it stays the same while the file does not change, and it says nothing of the file |
+| Copy | The container `copy` copies only when each finding has a decision of the owner, and only into an empty share |
+
+**A finding.** The line is `vault-seed finding id=<id> rule=<rule>
+line=<n> decision=<decision> file="<relative path>"`, with the decision
+`none`, `skip`, `take`, or `left-out-config` (or `-trash`, `-git`) for a
+file that never goes to the share. The form is the one the design sets for
+the scheduled scan of a share: the file name, never the content. The pod is
+gone about 20 seconds after it ends, so the lines are in Loki, for its 14
+days: `{namespace="agents-finance", app="vault-seed"} |= "finding"`. That is
+the cost for R1: the names of the notes with a finding are in Loki for 14
+days. The owner reads them; the decisions go to git as ids only, in the
+lists `SKIP` (the file stays out of the share) and `TAKE` (it goes as it
+is) of `job.yaml`. A file with one finding in `SKIP` stays out, whatever its
+other findings say.
+
+**The copy.** Plain files and folders only: a link and any other kind of
+file stay out, and are counted. The config folder of the notes app
+(`.obsidian`), the trash (`.trash`) and `.git` stay out at any depth. Files
+get mode 0600 and folders 0700, owned by uid 1000 (the export squashes each
+client to 1000, and the vault server and the agent read as 1000); each file
+keeps its time. The copy goes to `.seed-incoming-<time>/` in the share,
+is counted there, and then each top entry is renamed into place; a failure
+before the renames removes that folder. A run that finds such a folder of
+a stopped run removes it first.
+
+**What the pod can read.** With the claim at its root, each step can read
+the whole state volume: the workspace, the sessions and the config of the
+agent too, not only the vault. That is the form of the restore Job and of
+the backup mover. The steps read only `/state/vault`: the scan has that one
+path, the report hashes only the files the scan names under it (and fails
+on any other path), and the copy walks only that folder. The pod has no
+network, no service account token and no Secret, and its only output is
+its log lines and the files in the share, so nothing else of the volume
+can leave it.
+
+**One line at the end.** `vault-seed result=ok source-files=<n>
+source-notes=<n> files=<n> notes=<n> bytes=<n> left-out-config=<n>
+left-out-trash=<n> left-out-git=<n> left-out-findings=<n> taken-findings=<n>
+links=<n> other=<n>`, or `vault-seed result=failed reason=<kind>`: `findings
+undecided=<n>`, `share-not-empty`, `stale-decision count=<n>` (an id that is
+not a finding of this run), `decision-form`, `decision-twice count=<n>`,
+`source-missing` (no folder `vault/`), `source-empty` (no file in it),
+`nothing-to-copy` (each file stays out), `copy`, `verify` or `rename`.
+Counts only; no name. A seed of nothing is never `result=ok`. The
+count `source-notes` is the one to compare with `vault-notes` of the restore
+Job of the cutover.
+
+**One run only.** A Job can not run again, so each run has its own name
+(`vault-seed`, then `vault-seed-2`), as the restore Job does. The Job is in
+git for its run: a pull request lists `vault-seed/ks.yaml` in
+`kubernetes/apps/ai/agents/finance/kustomization.yaml`, and the next one
+takes it out of that list, so Flux deletes the Kustomization, the Job and
+its ConfigMap. The files stay in git for the seed of the main share. A run
+on a share that has any file or folder (but a folder of a stopped run)
+copies nothing and fails with `share-not-empty`, so a second run never
+writes over a note.
 
 ## The model path
 
@@ -1265,6 +1415,117 @@ example `firefly__get_summary`) answers, the MCP gateway logs it with
    instructions of the agent that an update of a split transaction goes
    through `update_transaction` with its `transaction_journal_id`, one
    split at a time.
+
+## Web fetch of the main agent
+
+The main agent fetches web pages with the `web_fetch` tool of the product,
+through a proxy of its own trust domain: the fetch proxy, in `agents-main`
+(`kubernetes/apps/ai/agents/main/fetch-proxy/`). The agent pod has no route
+to a web site; the proxy has no secret. The owner chose this on 2026-11-19,
+over any site from the agent pod, an allow list of sites, or no web fetch
+in the first step. While the agent pod is at zero replicas, the proxy runs
+and nothing calls it.
+
+**The way of a fetch.**
+
+1. The model calls `web_fetch` with a URL. The gateway process makes the
+   call, not a sandbox.
+2. The product checks the host name before it sends anything: no IP
+   address in a private, loopback, link-local or special range, no
+   `localhost`, and no name that ends in `.local` or `.internal`. It checks
+   each redirect again, at each hop.
+3. `tools.web.fetch.useTrustedEnvProxy: true` (`main/agent/config/openclaw.json`)
+   makes the product send the request to the proxy in `HTTPS_PROXY`, and
+   leave the DNS lookup to the proxy. The env comes from the ConfigMap
+   `agent-fetch-proxy` (`main/agent/app/kustomization.yaml`), on the whole
+   `agent` container (below).
+4. The product sends `CONNECT <host>:443` to the proxy. The proxy (Envoy,
+   `fetch-proxy/app/envoy.yaml`) takes it only for a host name on port 443.
+   Any other request gets a 403: an IP address, a name with no dot, another
+   port, or a request that is not CONNECT (so a plain `http://` URL fails).
+5. The proxy looks up the name itself, with no search domain of the
+   cluster, and drops each address in a private, shared (CGNAT), loopback,
+   link-local, multicast or special range, and each IPv6 address. With no
+   address left, the answer is a 503, and nothing goes out.
+6. The proxy opens the TCP connection, and the TLS session goes through it
+   from the product to the site. The proxy sees the host and the port, never
+   the path, a header or the body.
+7. The network policy of the proxy (`fetch-proxy/app/networkpolicy.yaml`)
+   lets in the agent pod only (and the kubelet for the probes), and lets
+   out port 443 of an address outside the cluster that is not in the same
+   ranges. A CIDR rule of Cilium never selects a pod or a node of the
+   cluster. That is the second wall, under the proxy.
+
+**What goes through the proxy.** The proxy env is on the whole `agent`
+container, and the gateway process makes it the default of its own HTTP
+client at its start. So each HTTP call of that container to a host outside
+`NO_PROXY` goes through the proxy, not `web_fetch` alone: a plugin, a
+dependency and a tool call of the model too. The process with the keys of
+main can now reach each public host on port 443 through the proxy; before,
+it reached only the API hosts that its network policy names. The proxy
+adds the filter of inside addresses and a log line with the host of each
+of these calls. The design accepts this reach (threat row 34 of the
+design).
+
+**What stays direct.** `NO_PROXY` names the services of the cluster
+(`.svc.cluster.local`: the model gateway, the sandbox gateway, the trace
+collector), loopback, and the two host names of the agent's network policy
+(`api.telegram.org`, `api.search.brave.com`). The chat API is polled about
+each 30 seconds, so through the proxy each poll would be a log line, and
+the chat would stop when the proxy stops. A miss in `NO_PROXY` fails
+closed: the proxy refuses a name that resolves inside. A `web_fetch` of a
+name on the list does not use the proxy and is not in its log: a URL on
+one of the two API hosts goes direct, and a name in the cluster is refused
+by the product (`.local`).
+
+**The log.** One JSON line for each request on the standard output of the
+proxy: the time, the method, the host and port, the answer, the Envoy
+flags (`DF`: no address left after the lookup), the address of the site,
+the bytes in and out, and the time it took. No path, query, header or
+body. Read it with `kubectl -n agents-main logs deploy/fetch-proxy`. The
+host names show the sites that the household visits, so the log is
+household-private (R1). By the owner's decision of 2026-11-19 it stays on
+the pod and does not go to Loki: the pod has no label
+`logs.home.arpa/ship`, so the platform log agent does not take it, and the
+shared log agent of this cluster takes Job pods only ([Logs](#logs)). The
+node keeps it in the log file of the container, which the kubelet rotates,
+and it is gone when the pod goes. A test fails if the pod gets the label,
+if the proxy becomes a Job, or if either log agent changes the selector
+that keeps it out.
+
+**What the proxy does not stop.**
+
+- **Data in a URL.** The model can put words of a chat in the path or the
+  query of a URL to any public site, and the site gets them. The proxy
+  logs the host only, so its log does not show it either. The session
+  store of the agent holds the URL, like each tool call.
+- **What a site sends back** is text for the model, which a page can use
+  to give it instructions. The product marks the answer of `web_fetch` as
+  content from the network (`resultContentSource: "network"`), and the
+  proxy does not read it.
+- **The site sees the public address of the home connection,** as for a
+  browser at home.
+- **The public address of the site.** A public name that resolves to the
+  public address of the site passes both walls, and the router of the site
+  answers it from inside. `web_fetch` sends a GET only, so its reach there
+  is small. The design accepts this; a later step adds that address to the
+  inside ranges of both walls, if it stays the same.
+
+**Limits.** `http://` sites, sites on a port other than 443, and sites with
+IPv6 only fail. The address filter of Envoy (`resolved_address_filter`)
+uses a type that Envoy marks as work in progress, outside its threat model
+(Envoy warns at the start): one more reason for the same ranges in the
+network policy. The tests check that both lists are the same.
+
+**The image** is the upstream distroless image of Envoy, pinned by digest,
+as user 65532 with a read-only root file system and no capability. It has
+no volume that it can write (only its config, read only) and no admin
+interface. Renovate merges a patch
+or a new digest when the checks pass (`kubernetes/apps/ai/**`), and the
+checks run the proxy with the new image in Docker
+(`observability/tests/test_main_fetch_proxy.py`, the lab test: each request
+inside is refused, and the same config with no address filter connects
+inside).
 
 ## The run receiver
 

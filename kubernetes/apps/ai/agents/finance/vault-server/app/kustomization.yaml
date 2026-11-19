@@ -1,0 +1,10 @@
+---
+# The vault server of finance: the reference MCP file server for the one
+# directory /vault, over Streamable HTTP (image tnwks-vault-mcp). No Secret
+# and no config: the gateway checks the key of each caller, and the server
+# takes no credential.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml
