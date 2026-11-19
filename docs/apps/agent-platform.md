@@ -11,6 +11,7 @@ these parts.
 | --- | --- | --- |
 | Sandbox controller (Agent Sandbox) | `agent-sandbox-system` | `sandbox-controller/` |
 | Trust domain of the main personal agent | `agents-main` | `main/` |
+| The fetch proxy of the main agent ([Web fetch of the main agent](#web-fetch-of-the-main-agent)) | `agents-main` | `main/fetch-proxy/` |
 | Trust domain of the finance agent | `agents-finance` | `finance/` |
 | Trust domain of the workflow agents, and their run receiver | `agents-workflows` | `workflows/` |
 | Pilot of a personal agent, on test accounts | `agents-pilot` | `pilot/` |
@@ -1414,6 +1415,117 @@ example `firefly__get_summary`) answers, the MCP gateway logs it with
    instructions of the agent that an update of a split transaction goes
    through `update_transaction` with its `transaction_journal_id`, one
    split at a time.
+
+## Web fetch of the main agent
+
+The main agent fetches web pages with the `web_fetch` tool of the product,
+through a proxy of its own trust domain: the fetch proxy, in `agents-main`
+(`kubernetes/apps/ai/agents/main/fetch-proxy/`). The agent pod has no route
+to a web site; the proxy has no secret. The owner chose this on 2026-11-19,
+over any site from the agent pod, an allow list of sites, or no web fetch
+in the first step. While the agent pod is at zero replicas, the proxy runs
+and nothing calls it.
+
+**The way of a fetch.**
+
+1. The model calls `web_fetch` with a URL. The gateway process makes the
+   call, not a sandbox.
+2. The product checks the host name before it sends anything: no IP
+   address in a private, loopback, link-local or special range, no
+   `localhost`, and no name that ends in `.local` or `.internal`. It checks
+   each redirect again, at each hop.
+3. `tools.web.fetch.useTrustedEnvProxy: true` (`main/agent/config/openclaw.json`)
+   makes the product send the request to the proxy in `HTTPS_PROXY`, and
+   leave the DNS lookup to the proxy. The env comes from the ConfigMap
+   `agent-fetch-proxy` (`main/agent/app/kustomization.yaml`), on the whole
+   `agent` container (below).
+4. The product sends `CONNECT <host>:443` to the proxy. The proxy (Envoy,
+   `fetch-proxy/app/envoy.yaml`) takes it only for a host name on port 443.
+   Any other request gets a 403: an IP address, a name with no dot, another
+   port, or a request that is not CONNECT (so a plain `http://` URL fails).
+5. The proxy looks up the name itself, with no search domain of the
+   cluster, and drops each address in a private, shared (CGNAT), loopback,
+   link-local, multicast or special range, and each IPv6 address. With no
+   address left, the answer is a 503, and nothing goes out.
+6. The proxy opens the TCP connection, and the TLS session goes through it
+   from the product to the site. The proxy sees the host and the port, never
+   the path, a header or the body.
+7. The network policy of the proxy (`fetch-proxy/app/networkpolicy.yaml`)
+   lets in the agent pod only (and the kubelet for the probes), and lets
+   out port 443 of an address outside the cluster that is not in the same
+   ranges. A CIDR rule of Cilium never selects a pod or a node of the
+   cluster. That is the second wall, under the proxy.
+
+**What goes through the proxy.** The proxy env is on the whole `agent`
+container, and the gateway process makes it the default of its own HTTP
+client at its start. So each HTTP call of that container to a host outside
+`NO_PROXY` goes through the proxy, not `web_fetch` alone: a plugin, a
+dependency and a tool call of the model too. The process with the keys of
+main can now reach each public host on port 443 through the proxy; before,
+it reached only the API hosts that its network policy names. The proxy
+adds the filter of inside addresses and a log line with the host of each
+of these calls. The design accepts this reach (threat row 34 of the
+design).
+
+**What stays direct.** `NO_PROXY` names the services of the cluster
+(`.svc.cluster.local`: the model gateway, the sandbox gateway, the trace
+collector), loopback, and the two host names of the agent's network policy
+(`api.telegram.org`, `api.search.brave.com`). The chat API is polled about
+each 30 seconds, so through the proxy each poll would be a log line, and
+the chat would stop when the proxy stops. A miss in `NO_PROXY` fails
+closed: the proxy refuses a name that resolves inside. A `web_fetch` of a
+name on the list does not use the proxy and is not in its log: a URL on
+one of the two API hosts goes direct, and a name in the cluster is refused
+by the product (`.local`).
+
+**The log.** One JSON line for each request on the standard output of the
+proxy: the time, the method, the host and port, the answer, the Envoy
+flags (`DF`: no address left after the lookup), the address of the site,
+the bytes in and out, and the time it took. No path, query, header or
+body. Read it with `kubectl -n agents-main logs deploy/fetch-proxy`. The
+host names show the sites that the household visits, so the log is
+household-private (R1). By the owner's decision of 2026-11-19 it stays on
+the pod and does not go to Loki: the pod has no label
+`logs.home.arpa/ship`, so the platform log agent does not take it, and the
+shared log agent of this cluster takes Job pods only ([Logs](#logs)). The
+node keeps it in the log file of the container, which the kubelet rotates,
+and it is gone when the pod goes. A test fails if the pod gets the label,
+if the proxy becomes a Job, or if either log agent changes the selector
+that keeps it out.
+
+**What the proxy does not stop.**
+
+- **Data in a URL.** The model can put words of a chat in the path or the
+  query of a URL to any public site, and the site gets them. The proxy
+  logs the host only, so its log does not show it either. The session
+  store of the agent holds the URL, like each tool call.
+- **What a site sends back** is text for the model, which a page can use
+  to give it instructions. The product marks the answer of `web_fetch` as
+  content from the network (`resultContentSource: "network"`), and the
+  proxy does not read it.
+- **The site sees the public address of the home connection,** as for a
+  browser at home.
+- **The public address of the site.** A public name that resolves to the
+  public address of the site passes both walls, and the router of the site
+  answers it from inside. `web_fetch` sends a GET only, so its reach there
+  is small. The design accepts this; a later step adds that address to the
+  inside ranges of both walls, if it stays the same.
+
+**Limits.** `http://` sites, sites on a port other than 443, and sites with
+IPv6 only fail. The address filter of Envoy (`resolved_address_filter`)
+uses a type that Envoy marks as work in progress, outside its threat model
+(Envoy warns at the start): one more reason for the same ranges in the
+network policy. The tests check that both lists are the same.
+
+**The image** is the upstream distroless image of Envoy, pinned by digest,
+as user 65532 with a read-only root file system and no capability. It has
+no volume that it can write (only its config, read only) and no admin
+interface. Renovate merges a patch
+or a new digest when the checks pass (`kubernetes/apps/ai/**`), and the
+checks run the proxy with the new image in Docker
+(`observability/tests/test_main_fetch_proxy.py`, the lab test: each request
+inside is refused, and the same config with no address filter connects
+inside).
 
 ## The run receiver
 

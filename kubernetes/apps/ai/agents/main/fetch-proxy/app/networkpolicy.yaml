@@ -1,0 +1,56 @@
+---
+# The fetch proxy. In: the agent pod of main only, and the kubelet for the
+# probes. Out: port 443 of an address outside the cluster that is not in a
+# private, shared, link-local, loopback or special range, and DNS (allow-dns
+# in ../../namespace.yaml). A CIDR rule never selects a pod or a node of the
+# cluster, and the except list blocks the rest of the home network and the
+# tailnet. Envoy drops the same ranges after its DNS lookup (envoy.yaml):
+# two walls, one in the proxy and one in the network.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: fetch-proxy
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: fetch-proxy
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: agent
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 0.0.0.0/8
+            - 10.0.0.0/8
+            - 100.64.0.0/10
+            - 127.0.0.0/8
+            - 169.254.0.0/16
+            - 172.16.0.0/12
+            - 192.0.0.0/24
+            - 192.0.2.0/24
+            - 192.88.99.0/24
+            - 192.168.0.0/16
+            - 198.18.0.0/15
+            - 198.51.100.0/24
+            - 203.0.113.0/24
+            - 224.0.0.0/4
+            - 240.0.0.0/4
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

@@ -38,11 +38,14 @@ def kustomization(agent: str) -> dict:
 
 
 def mounted(pod: dict) -> set[str]:
-    """The ConfigMaps of the pod, as a volume or as a source of a projected
-    volume (the config of the main agent joins a Secret file)."""
+    """The ConfigMaps of the pod, as a volume, as a source of a projected
+    volume (the config of the main agent joins a Secret file), or as the env
+    of a container (the proxy env of the main agent)."""
     maps = {v["configMap"]["name"] for v in pod["volumes"] if "configMap" in v}
-    return maps | {s["configMap"]["name"] for v in pod["volumes"] if "projected" in v
-                   for s in v["projected"]["sources"] if "configMap" in s}
+    maps |= {s["configMap"]["name"] for v in pod["volumes"] if "projected" in v
+             for s in v["projected"]["sources"] if "configMap" in s}
+    return maps | {e["configMapRef"]["name"] for c in pod.get("initContainers", []) + pod["containers"]
+                   for e in c.get("envFrom", []) if "configMapRef" in e}
 
 
 def init(pod: dict, name: str) -> dict:
