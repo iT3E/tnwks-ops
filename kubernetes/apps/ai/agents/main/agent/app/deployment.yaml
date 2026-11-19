@@ -225,7 +225,25 @@ spec:
         - name: official-plugins
           image: *image
           imagePullPolicy: IfNotPresent
-          command: ["install-official-plugins"]
+          # The step of the image copies only openclaw.json to its work
+          # directory, and the config of main includes the group file of the
+          # owner (./telegram-groups.json), which the copy then can not read.
+          # So the step gets one file with the include filled in, in a
+          # directory of its own in /tmp that goes away at the end.
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              d="$(mktemp -d /tmp/plugins-config.XXXXXX)"
+              trap 'rm -rf "$d"' EXIT
+              node -e '
+                const fs = require("fs");
+                const c = JSON.parse(fs.readFileSync("/home/node/config/openclaw.json", "utf8"));
+                c.channels.telegram.groups = JSON.parse(fs.readFileSync("/home/node/config/telegram-groups.json", "utf8"));
+                fs.writeFileSync(process.argv[1], JSON.stringify(c));
+              ' "$d/openclaw.json"
+              OPENCLAW_CONFIG_PATH="$d/openclaw.json" install-official-plugins
           # The env of the gateway, and OPENCLAW_DEBUG: on a failure the CLI
           # of the product then prints the reason and the stack
           # (`[openclaw] Reason: ...`), not only "The CLI command failed".

@@ -222,6 +222,32 @@ def run_values(env, group=GROUP):
     return result.returncode, (result.stdout + result.stderr).strip()
 
 
+def test_the_official_plugins_step_reads_the_config_with_the_group_file():
+    """The step of the image copies only openclaw.json to its work directory, so
+    the include of the group file broke the first start of main. The pod fills
+    the include in first; the step then installs the plugin, with no network."""
+    (step,) = [c for c in MAIN["initContainers"] if c["name"] == "official-plugins"]
+    assert step["command"][:2] == ["sh", "-c"] and "install-official-plugins" in step["command"][2]
+    assert '"$include": "./telegram-groups.json"' in CONFIG.read_text()
+    tmp = scratch()
+    (tmp / "openclaw.json").write_text(CONFIG.read_text())
+    (tmp / "telegram-groups.json").write_text(GROUP)
+    for path in tmp.iterdir():
+        path.chmod(0o644)
+    image = os.environ.get("RESTORE_TEST_IMAGE", step["image"])
+    args = [docker(), "run", "--rm", "--quiet", "--network", "none", "--user", "1000:1000",
+            "-v", f"{tmp}:/home/node/config:ro",
+            "--tmpfs", "/home/node/data:uid=1000,gid=1000,mode=0700", "--tmpfs", "/tmp:mode=1777"]
+    for e in step["env"]:
+        args += ["-e", f"{e['name']}={e['value']}"]
+    result = subprocess.run([*args, "--entrypoint", "sh", image, "-c", step["command"][2]],
+                            capture_output=True, text=True, timeout=600, check=False)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output[-4000:]
+    assert "Failed to read include file" not in output
+    assert re.search(r"official-plugins id=brave version=\S+ result=installed", output), output[-4000:]
+
+
 def test_the_values_check_is_the_first_step_and_reads_each_secret():
     first = MAIN["initContainers"][0]
     assert first["name"] == "values-check"
