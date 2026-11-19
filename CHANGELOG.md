@@ -3,6 +3,13 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.210.0 - 2026-11-19
+
+### Added
+
+* agents: the agent pod of the main agent at zero replicas, in the form of the finance agent: one Telegram account with the direct chat of the owner and one group (its chat id from a Secret of the owner), web search, the message tool and the built-in tools of the product. No MCP tool, no vault and no scheduled job yet. No pod starts until the steps of the cutover (docs/apps/agent-platform-runbook.md, "The cutover of the main agent").
+* agents: the three Secret files of the main agent, not listed until step 4 of its cutover, and the key agents-main at the model gateway (models agents-main and agents-main-embeddings). The search key is a placeholder until the owner makes it at the vendor.
+
 ## v2.209.0 - 2026-11-19
 
 ### Added
