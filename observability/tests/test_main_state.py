@@ -3,9 +3,9 @@
 the state volume, its inbox and its backup policy, in the order of the
 runbook, and the same shape as the finance agent.
 
-The main agent has no Deployment yet, so the inbox is held to the finance
-agent: the same image, user and node, as the two agent pods run on one
-worker.
+The inbox is held to the finance agent: the same image, user and node, as
+the two agent pods run on one worker. The pod of the main agent and the
+later steps are in test_main_agent.py.
 """
 
 from pathlib import Path
@@ -70,13 +70,6 @@ def test_the_backup_policy_is_the_one_of_finance_in_the_repository_of_main():
     assert main[0]["spec"]["repository"] == {"kind": "ClusterRepository", "name": "agents-main"}
     main[0]["spec"]["repository"] = finance[0]["spec"]["repository"]
     assert [d["spec"] for d in main] == [d["spec"] for d in finance]
-
-
-def test_no_agent_pod_secret_or_config_yet():
-    now = listed()
-    assert now <= {"pvc.yaml", "state-inbox.yaml", "backup.yaml"}
-    assert not list(APP.glob("*.sops.yaml"))
-    assert not (APP / "deployment.yaml").exists()
 
 
 def test_the_steps_never_meet_in_a_wrong_order():

@@ -296,7 +296,7 @@ Each share has two volumes, one for each claim:
 | Volume | Claim | Mount | For |
 | --- | --- | --- | --- |
 | `nfs-vault-<domain>-rw` | `vault-rw` | `nfsvers=4.1,hard`, read and write | The vault server of the trust domain, the one writer: a write waits for the NFS server and does not end half done |
-| `nfs-vault-<domain>-ro` | `vault-ro` | `nfsvers=4.1,soft,timeo=50,retrans=2,actimeo=3`, read only | The agent pod (the index) and the backup mover: a read fails with an error about 30 seconds after the NFS server stops, and the chat goes on |
+| `nfs-vault-<domain>-ro` | `vault-ro` | `nfsvers=4.1,soft,timeo=50,retrans=2,actimeo=3,ro`, read only | The agent pod (the index) and the backup mover: a read fails with an error about 30 seconds after the NFS server stops, and the chat goes on |
 
 The mount options are the values of the rehearsal; the design leaves them
 open. Each volume is on the list of the admission rule
@@ -309,8 +309,11 @@ files of a share are on its claim in `storage`, not on these objects: when
 a volume or a claim goes out of git, Flux deletes it and the files stay.
 The source and the claim of a volume can not change after it is made; a
 change of either one is a new volume. The export lets each node of the site
-write: the read-only flag of `vault-ro` is a mount of the kubelet, and the
-vault server is the one writer.
+write: the option `ro` of the volume of `vault-ro` makes each mount of it
+read only, and the vault server is the one writer. The flag
+`nfs.readOnly` of the volume does not: for a PersistentVolume the kubelet
+takes the read-only flag from the pod (its claim or its mount), so a pod
+that does not set it would get a mount that writes.
 
 What is still not there: the vault server and its route on the central MCP
 gateway, the mount of `vault-ro` in the agent pod, the backup policy of each
