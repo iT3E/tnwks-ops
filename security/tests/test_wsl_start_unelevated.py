@@ -244,7 +244,8 @@ WRITER_RULES = sorted(DIR_RULES + [
 ])
 
 
-def run_dir_acl(have: str, writer: str = "adult1", check: bool = False, exists: bool = True, link: bool = False) -> dict:
+def run_dir_acl(have: str, writer: str = "adult1", check: bool = False, exists: bool = True, link: bool = False,
+                writers: list[str] | None = None) -> dict:
     """Run the logic of the module tnwks_win_dir_acl with the fakes of winacl.py."""
     text = MODULE.read_text()
     logic = text[text.index("# --- BEGIN logic"):text.index("# --- END logic")]
@@ -255,7 +256,8 @@ $script:Have = {have}
 $script:Exists = ${str(exists).lower()}
 $script:IsLink = ${str(link).lower()}
 $thrown = $null; $changed = $null
-try {{ $changed = Invoke-TnwksDirAcl -Path 'C:\\ProgramData\\x\\log' -Writer '{writer}' -Check ${str(check).lower()} }}
+$writer = @({", ".join(f"'{w}'" for w in (writers if writers is not None else [writer]))})
+try {{ $changed = Invoke-TnwksDirAcl -Path 'C:\\ProgramData\\x\\log' -Writer $writer -Check ${str(check).lower()} }}
 catch {{ $thrown = $_.Exception.Message }}
 $sets = @($script:Calls | Where-Object {{ $_ -is [hashtable] }} | ForEach-Object {{
     @{{ owner = $_.Acl.Owner; protected = $_.Acl.Protected; rules = @(Get-TestKeys $_.Acl.Rules) }} }})
@@ -288,6 +290,21 @@ def test_the_directory_module_sets_the_split_rule_and_changes_nothing_in_place()
         checked = run_dir_acl(have, check=True)
         assert checked["changed"] is True and checked["sets"] == [], "a check run changes nothing"
     assert run_dir_acl(an_acl(WRITER_RULES), writer="")["sets"][0]["rules"] == DIR_RULES
+
+
+@needs_pwsh
+def test_a_check_run_reads_a_writer_that_does_not_exist_yet_as_a_change_and_an_apply_still_fails():
+    """An account that a task earlier in the play makes (the move of the distro) does not exist in a check run.
+    The check run gives changed and writes nothing; an apply with that name still fails, and writes nothing."""
+    for writers in (["missing-new"], ["adult1", "missing-new"]):
+        for have in (an_acl(WRITER_RULES), an_acl(DIR_RULES)):
+            checked = run_dir_acl(have, check=True, writers=writers)
+            assert checked["changed"] is True and checked["thrown"] is None and checked["sets"] == [], writers
+            applied = run_dir_acl(have, writers=writers)
+            assert applied["thrown"] and "could not be translated" in applied["thrown"], writers
+            assert applied["sets"] == [] and applied["changed"] is None, writers
+    # A writer that resolves is as before, in both runs.
+    assert run_dir_acl(an_acl(WRITER_RULES), check=True, writers=["adult1"])["changed"] is False
 
 
 @needs_pwsh
