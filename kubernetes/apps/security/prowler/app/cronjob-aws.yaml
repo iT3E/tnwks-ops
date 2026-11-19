@@ -42,7 +42,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: prowler
-              image: docker.io/prowlercloud/prowler:5.49.0@sha256:0113d8ee9d42674d1b1baf3b64505835fd2f14b0bb0ab2bbe5d4a52f49ff3d22
+              image: docker.io/prowlercloud/prowler:5.51.0@sha256:5231a5f55a62cf64ca7087abd157c43ab27d93075cceac2c70b28bbbf423d55b
               command: ["/home/prowler/.venv/bin/python", "/app/run.py"]
               args:
                 - --provider=aws
@@ -150,7 +150,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: prowler
-              image: docker.io/prowlercloud/prowler:5.49.0@sha256:0113d8ee9d42674d1b1baf3b64505835fd2f14b0bb0ab2bbe5d4a52f49ff3d22
+              image: docker.io/prowlercloud/prowler:5.51.0@sha256:5231a5f55a62cf64ca7087abd157c43ab27d93075cceac2c70b28bbbf423d55b
               command: ["/home/prowler/.venv/bin/python", "/app/run.py"]
               args:
                 - --provider=aws
