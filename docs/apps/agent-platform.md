@@ -291,6 +291,7 @@ read only. The parts come in steps; this table says what is there now.
 | Volumes and claims in the trust domains | Two static PersistentVolumes for each share and their two claims, `vault-rw` and `vault-ro`, in `agents-main` and `agents-finance` (`kubernetes/apps/ai/agents/<domain>/vault-share/`). Bound, and mounted by no pod |
 | The vault server of finance | `vault-server` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-server/`): one pod on `vault-rw`, behind the route `finance-vault` of the central MCP gateway (below) |
 | The backup of the finance share | The SnapshotPolicy `vault` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-backup/`): each night, the claim `vault-ro` to the repository `agents-finance`, with the retention of the state volume |
+| The seed of the finance share | A one-time Job `vault-seed` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-seed/`), in git for its run only ([The seed of the finance share](#the-seed-of-the-finance-share)) |
 | The vault server of main, the mount of the agent | Not yet |
 
 Each share has two volumes, one for each claim:
@@ -319,8 +320,8 @@ that does not set it would get a mount that writes.
 
 What is still not there: the vault server of main and its route, the
 mount of `vault-ro` in the agent pod with the extra path of the index, the
-backup policy of the main share, the restore test of a share, the first
-notes of a share, and the change of the two admission rules to `Deny`.
+backup policy of the main share, the restore test of a share, the seed of
+the main share, and the change of the two admission rules to `Deny`.
 
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may
@@ -415,6 +416,80 @@ tries again, and an edit with the old text fails on a note that changed.
 - **60 s.** The gateway waits 60 s for the vault server and for the finance
   app, not its default of 10 s. A hung call holds a turn of the finance
   agent up to 60 s.
+
+### The seed of the finance share
+
+The first notes of the finance share come from the copy of the vault on
+the state volume of the finance agent (the folder `vault/` of the claim
+`agent-state`, which the restore Job of the cutover made). One Job copies
+them, one time, with the go of the owner (section 4.2.5 of the design). The
+copy on the state volume stays as it is. The steps are in the runbook
+([The seed of the finance share](agent-platform-runbook.md#the-seed-of-the-finance-share)).
+
+| Part | Value |
+| --- | --- |
+| Where | `kubernetes/apps/ai/agents/finance/vault-seed/`: the Flux Kustomization `agents-finance-vault-seed` (after the share and the agent), the Job `vault-seed`, and the ConfigMap of its script `seed.mjs` and of the config of the secret scan |
+| Pod | On the node of the agent pod, where the state volume is. uid and gid 1000, the `restricted` level, a read-only root in each container, no service account token, no Secret, no network (out of the DNS rule; only the default deny selects it) |
+| From | The folder `vault/` of the claim `agent-state`. Each container mounts the claim read only at its root (`/state`), with no `subPath`: on this cluster a `subPath` of a `local-path` volume is an empty directory that the kubelet makes (below). Each step reads only `/state/vault` (the scan path and `SOURCE`). The volume is `ReadWriteOnce`, and pods of one node can share it: the Job runs beside the running agent, as the backup mover does |
+| To | The claim `vault-rw` (the hard mount), which must be empty |
+| Scan | The init container `scan`: the secret scanner of CI, the upstream image of betterleaks (MIT license) at the version of `.pre-commit-config.yaml`, by digest, with the config of this repository (`.betterleaks.toml`), on the whole source. With `--redact`, no value is in its report or its log, and it validates nothing against a vendor |
+| Findings | The init container `report` gives each finding an id and logs one line for it (below). The id is the start of a SHA-256 of the rule, the line, the column and the whole file: it stays the same while the file does not change, and it says nothing of the file |
+| Copy | The container `copy` copies only when each finding has a decision of the owner, and only into an empty share |
+
+**A finding.** The line is `vault-seed finding id=<id> rule=<rule>
+line=<n> decision=<decision> file="<relative path>"`, with the decision
+`none`, `skip`, `take`, or `left-out-config` (or `-trash`, `-git`) for a
+file that never goes to the share. The form is the one the design sets for
+the scheduled scan of a share: the file name, never the content. The pod is
+gone about 20 seconds after it ends, so the lines are in Loki, for its 14
+days: `{namespace="agents-finance", app="vault-seed"} |= "finding"`. That is
+the cost for R1: the names of the notes with a finding are in Loki for 14
+days. The owner reads them; the decisions go to git as ids only, in the
+lists `SKIP` (the file stays out of the share) and `TAKE` (it goes as it
+is) of `job.yaml`. A file with one finding in `SKIP` stays out, whatever its
+other findings say.
+
+**The copy.** Plain files and folders only: a link and any other kind of
+file stay out, and are counted. The config folder of the notes app
+(`.obsidian`), the trash (`.trash`) and `.git` stay out at any depth. Files
+get mode 0600 and folders 0700, owned by uid 1000 (the export squashes each
+client to 1000, and the vault server and the agent read as 1000); each file
+keeps its time. The copy goes to `.seed-incoming-<time>/` in the share,
+is counted there, and then each top entry is renamed into place; a failure
+before the renames removes that folder. A run that finds such a folder of
+a stopped run removes it first.
+
+**What the pod can read.** With the claim at its root, each step can read
+the whole state volume: the workspace, the sessions and the config of the
+agent too, not only the vault. That is the form of the restore Job and of
+the backup mover. The steps read only `/state/vault`: the scan has that one
+path, the report hashes only the files the scan names under it (and fails
+on any other path), and the copy walks only that folder. The pod has no
+network, no service account token and no Secret, and its only output is
+its log lines and the files in the share, so nothing else of the volume
+can leave it.
+
+**One line at the end.** `vault-seed result=ok source-files=<n>
+source-notes=<n> files=<n> notes=<n> bytes=<n> left-out-config=<n>
+left-out-trash=<n> left-out-git=<n> left-out-findings=<n> taken-findings=<n>
+links=<n> other=<n>`, or `vault-seed result=failed reason=<kind>`: `findings
+undecided=<n>`, `share-not-empty`, `stale-decision count=<n>` (an id that is
+not a finding of this run), `decision-form`, `decision-twice count=<n>`,
+`source-missing` (no folder `vault/`), `source-empty` (no file in it),
+`nothing-to-copy` (each file stays out), `copy`, `verify` or `rename`.
+Counts only; no name. A seed of nothing is never `result=ok`. The
+count `source-notes` is the one to compare with `vault-notes` of the restore
+Job of the cutover.
+
+**One run only.** A Job can not run again, so each run has its own name
+(`vault-seed`, then `vault-seed-2`), as the restore Job does. The Job is in
+git for its run: a pull request lists `vault-seed/ks.yaml` in
+`kubernetes/apps/ai/agents/finance/kustomization.yaml`, and the next one
+takes it out of that list, so Flux deletes the Kustomization, the Job and
+its ConfigMap. The files stay in git for the seed of the main share. A run
+on a share that has any file or folder (but a folder of a stopped run)
+copies nothing and fails with `share-not-empty`, so a second run never
+writes over a note.
 
 ## The model path
 

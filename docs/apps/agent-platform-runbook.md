@@ -1857,6 +1857,77 @@ finance until their retention ends.
 | 9 | The checks, the backups, the restore test, the heartbeat entry | Lead (the restore test with the owner's go) | The exit check |
 | 10 | The host cleanup, after the way back closes | Owner (host) | None |
 
+## The seed of the finance share
+
+The first notes of the finance share, from the copy of the vault on the
+state volume of the finance agent, with the go of the owner. What the Job
+does and its lines are in
+[agent-platform.md](agent-platform.md#the-seed-of-the-finance-share). The
+copy on the state volume stays as it is, and nothing reads the share before
+the agent mounts it (step D of task 3.36), so a seed that goes wrong costs
+no note.
+
+Before: the claims `vault-rw` and `vault-ro` of `agents-finance` are
+`Bound`, `kubectl -n flux-system get kustomization agents-finance-agent
+agents-finance-vault-share` shows each `Ready`, and the agent pod runs.
+Ask the owner not to make a note through the vault route while the seed
+runs: a note in the share stops the Job (`share-not-empty`, or `rename` if
+it lands in the minutes of the copy).
+
+| Step | Change | What it does | Check | Way back |
+| --- | --- | --- | --- | --- |
+| 1 | In: the folder `kubernetes/apps/ai/agents/finance/vault-seed/` and its line `./vault-seed/ks.yaml` in the `kustomization.yaml` of `finance`, with `SKIP` and `TAKE` empty | The scan, the finding lines, and the copy if there is no finding | `kubectl -n agents-finance get job vault-seed`; in Loki, `{namespace="agents-finance", app="vault-seed"} \|= "result="` | Revert step 1. Flux deletes the Job; a folder `.seed-incoming-*` of a stopped copy goes at the next run |
+| 2 | Only with `reason=findings`: the ids of the owner in `SKIP` or `TAKE`, and the name `vault-seed-2` (then `-3`) | The same, with his decisions | The same, with the new name | Revert step 2 |
+| 3 | Out: `./vault-seed/ks.yaml` from that list | Flux deletes the Kustomization, the Job and its ConfigMap. The notes stay in the share | `kubectl -n flux-system get kustomization agents-finance-vault-seed` is not found | n/a: the Job did its one run |
+
+**The findings, step 2.** Only the owner reads the finding lines:
+`{namespace="agents-finance", app="vault-seed"} |= "finding"` in Grafana.
+Each line has the id, the rule, the line and the relative path of the file,
+and never the value. The lead reads only the line `report=ok findings=<n>
+undecided=<n>` and the result line. For each finding the owner says one of:
+
+- **skip**: the file stays out of the share. Its id goes in `SKIP`.
+- **take**: the file goes as it is (a false hit, or a value he accepts in
+  the vault). Its id goes in `TAKE`.
+- **change it first**: he takes the value out of the note through the
+  finance agent, which writes its copy. The file changes, so its id
+  changes, and the next run shows the new state.
+
+The owner gives the ids, never a name, and the pull request holds the ids
+only. A finding in `.obsidian`, `.trash` or `.git` shows
+`decision=left-out-...` and needs no decision, since that file never moves.
+An id that is not a finding of the run (the note changed) fails the run
+with `stale-decision`: read the lines of that run, and decide again.
+
+**The pass rule, step 1 or 2.** The Job is `1/1`, and the result line is
+`vault-seed result=ok` with:
+
+- `source-notes` the same as `vault-notes` in the result line of the restore
+  Job of the cutover, or more by the notes that the agent made since (the
+  owner says so);
+- `files` plus the four `left-out-*` counts the same as `source-files` (the
+  Job checks this too, and fails with `verify` if not);
+- `left-out-findings` the count of the ids in `SKIP`, and `taken-findings`
+  the count in `TAKE`;
+- `links=0 other=0`: the restore Job let no link in, so another count means
+  the copy on the state volume changed in a way to look at.
+
+With `reason=source-missing`, `source-empty` or `nothing-to-copy`, the Job
+found no notes in `vault/` of the state volume (it mounts the volume at its
+root and reads that folder only). Do not change the path to make it pass:
+check with the owner where the restore Job of the cutover put the vault
+(`vault-notes` in its result line), then fix the Job.
+
+Then step 3, and then the mount of the agent (step D).
+
+**The way back.** Before step D nothing reads the share, so a wrong seed
+harms no note: the copy on the state volume is the original. To empty the
+share again, its files must go on the claim of the share in `storage`; the
+vault server has no delete tool. That is a cleanup Job in the same form, or
+the owner on the NFS server, and it is not in git today. A failure with
+`rename` leaves a part of the copy in the share: empty it the same way
+before a second run.
+
 ## The cutover of the main agent
 
 **Draft.** The main agent moves from the host to `agents-main` (phase 6 of

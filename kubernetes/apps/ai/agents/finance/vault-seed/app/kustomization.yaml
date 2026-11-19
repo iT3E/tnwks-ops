@@ -1,0 +1,19 @@
+---
+# The seed of the finance share (../ks.yaml). One Job (job.yaml) and the
+# ConfigMap of its two files: the script of the report and the copy
+# (seed.mjs), and the config of the secret scan of the repositories
+# (.betterleaks.toml at the root of this repository), so the seed and CI
+# find the same things.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./job.yaml
+configMapGenerator:
+  - name: vault-seed
+    files:
+      - seed.mjs=./seed.mjs
+      - betterleaks.toml=../../../../../../../.betterleaks.toml
+    options:
+      annotations:
+        # The script holds ${...} for node, not for Flux.
+        kustomize.toolkit.fluxcd.io/substitute: disabled
