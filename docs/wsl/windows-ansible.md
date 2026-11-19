@@ -78,7 +78,11 @@ capability and sets:
 - `sshd_config`: `ListenAddress` = the vEthernet (WSL) address, read from the
   adapter at run time (172.26.80.1); `PasswordAuthentication no`,
   `KbdInteractiveAuthentication no`, `PubkeyAuthentication yes`,
-  `AllowUsers <admin>`, no agent or TCP forwarding.
+  `AllowUsers <admin>`, no agent or TCP forwarding. `AllowUsers` names each
+  account of `windows_sshd_allow_users` (default: `ansible_user`). While a host
+  moves its distro to another account (Design Doc 0004, section 9, step 2), the
+  variables of that host list both accounts. The list must hold `ansible_user`:
+  the role and `task wsl-host:sshd` refuse it otherwise.
 - `administrators_authorized_keys` = the controllers' Ansible keys
   (`windows_sshd_authorized_keys` in `group_vars/windows_hosts.yml`; the
   bootstrap writes the one in `~/.ssh/id_ed25519_winhost.pub`), ACL

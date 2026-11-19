@@ -109,6 +109,10 @@ tasks:
     vars: &sshd_vars
       ADMIN_USER:
         sh: "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r .ansible_user"
+      # AllowUsers: windows_sshd_allow_users of the host when it sets one
+      # (both accounts while the host moves its distro), else the user above.
+      ALLOW_USERS:
+        sh: "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r '(.windows_sshd_allow_users // [.ansible_user]) | join(\",\")'"
       WINDOWS_ADDR:
         sh: "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r .ansible_host"
     cmds:
@@ -118,7 +122,9 @@ tasks:
       - "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r '.windows_sshd_authorized_keys[]' > {{.SSHD_KEYS}}"
       # Refuse to lock this workstation out.
       - grep -qxF "$(cat "{{.WINDOWS_SSH_KEY}}.pub")" {{.SSHD_KEYS}} || { echo "{{.WINDOWS_SSH_KEY}}.pub is not in windows_sshd_authorized_keys"; exit 1; }
-      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ADMIN_USER}}'
+      # And AllowUsers keeps the account that Ansible logs in as.
+      - echo "{{.ALLOW_USERS}}" | tr ',' '\n' | grep -qixF "{{.ADMIN_USER}}" || { echo "windows_sshd_allow_users does not hold ansible_user"; exit 1; }
+      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ALLOW_USERS}}'
       # Key login works (password logins are refused by sshd_config), against
       # the host key pinned in inventory/known_hosts.
       - ssh -o BatchMode=yes -o UserKnownHostsFile={{.ANSIBLE_DIR}}/inventory/known_hosts -i "{{.WINDOWS_SSH_KEY}}" "{{.ADMIN_USER}}@{{.WINDOWS_ADDR}}" whoami
@@ -129,7 +135,7 @@ tasks:
     cmds:
       # The script exits 2 when something differs.
       - "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r '.windows_sshd_authorized_keys[]' > {{.SSHD_KEYS}}"
-      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ADMIN_USER}} -Check || [ $? -eq 2 ]'
+      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ALLOW_USERS}} -Check || [ $? -eq 2 ]'
 
   ci-check:
     desc: Run the Ansible Hosts workflow's --check on the sites' runners now (what the nightly drift check runs); changes nothing
