@@ -3,6 +3,36 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.225.1 - 2026-11-19
+
+### Fixed
+
+* agents: the first start of the main agent stopped at the official plugins step, because the step of the image copies only openclaw.json and the config of main includes the group file. The pod now gives the step one file with the include filled in.
+
+## v2.225.0 - 2026-11-19
+
+### Changed
+
+* windows: on site 2, Ansible logs in as the administrator account, the account that owns the distro comes from the values of the move, and the jump logs in to the distro as its user (step 4 of the account change)
+
+## v2.224.0 - 2026-11-19
+
+### Added
+
+* agents: step 5 of the main agent: the agent pod starts for its test run beside the host, on the test bot that moved from the pilot, and the restore Job is out again (docs/apps/agent-platform-runbook.md, "The test run beside the host").
+
+## v2.223.0 - 2026-11-19
+
+### Changed
+
+* agents: the test bot of the pilot moves to the main agent, for its test run beside the host: its token in the Secret of main, and the Telegram channel of the pilot off (one bot has one poller); the pilot runs on for the platform checks with no chat channel
+
+## v2.222.0 - 2026-11-19
+
+### Added
+
+* agents: the finance agent runs the plugin active-memory, with the settings of the host (direct and group chats, query mode recent, prompt style recall-heavy, a limit of 25 s), on the model of its session through LiteLLM until the model gateway has a recall model for finance. The finance agent pod restarts once. The config of the main agent gets the same settings for its first run; it has no pod yet.
+
 ## v2.221.0 - 2026-11-19
 
 ### Added
