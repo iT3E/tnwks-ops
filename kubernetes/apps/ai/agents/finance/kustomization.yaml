@@ -22,3 +22,6 @@ resources:
   - ./vault-server/ks.yaml
   # The nightly snapshot of the share (vault-backup/ks.yaml).
   - ./vault-backup/ks.yaml
+  # The seed of the share: a one-time Job, listed for its run only, and out
+  # of this list again after it (vault-seed/ks.yaml).
+  - ./vault-seed/ks.yaml
