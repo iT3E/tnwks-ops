@@ -1,8 +1,7 @@
 ---
-# The main agent. Applied now: the volume and its inbox (step 1), its
-# backup policy (step 2), and the pod with no replica: the network policy,
-# the config and the Deployment at zero replicas. No Secret, no restore Job
-# and no pod yet.
+# The main agent. Applied now: the volume (step 1), its backup policy (step
+# 2), the pod with no replica (step 3a), and step 4: the three Secrets of
+# the owner and the restore Job. The inbox is out again. No pod yet.
 #
 # The files join in the steps of the cutover, one pull request each, in
 # this order (docs/apps/agent-platform-runbook.md, "The cutover of the main
@@ -24,8 +23,9 @@
 #    the search key of main) and ./secret-telegram-groups.sops.yaml (Secret
 #    agent-telegram-groups: telegram-groups.json, the one group of the
 #    Telegram account), and the entry agents-main in the key list of the
-#    model gateway. The search key is still the placeholder "pending": the
-#    owner makes that key at the vendor before step 5.
+#    model gateway. For the test run beside the host (the runbook): the
+#    bot token is the placeholder "pending" until the owner puts in the
+#    token of a second bot, and the search key is the key of the host.
 # 4. After the owner stopped the Telegram account of main on the host and
 #    put the copy of the state in the volume: out ./state-inbox.yaml; in
 #    the three Secrets and ./restore-job.yaml (ARCHIVE set, VAULT empty).
@@ -39,14 +39,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Step 1 (the inbox is out again at step 4).
+  # Step 1.
   - ./pvc.yaml
-  - ./state-inbox.yaml
   # Step 2.
   - ./backup.yaml
   # Step 3a (replicas 1 at step 5).
   - ./networkpolicy.yaml
   - ./deployment.yaml
+  # Step 4 (the restore Job is out again at step 5).
+  - ./secret.sops.yaml
+  - ./secret-search.sops.yaml
+  - ./secret-telegram-groups.sops.yaml
+  - ./restore-job.yaml
 # The ConfigMaps of the pod. Each name gets a hash of its content, and
 # Kustomize puts that name in the Deployment, so a change of a file is a
 # change of the pod template: Flux applies both at once, and one merge gives
