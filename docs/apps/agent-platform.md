@@ -294,6 +294,8 @@ read only. The parts come in steps; this table says what is there now.
 | The backup of the finance share | The SnapshotPolicy `vault` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-backup/`): each night, the claim `vault-ro` to the repository `agents-finance`, with the retention of the state volume |
 | The seed of the finance share | A one-time Job `vault-seed` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-seed/`), which ran once on 2026-11-19 with `result=ok` and is not listed now ([The seed of the finance share](#the-seed-of-the-finance-share)) |
 | The mount of the finance agent | The claim `vault-ro` at `/vault` in the agent pod (the product, its repair step and the index step), with `readOnly: true` on the claim and on each mount. `/vault` is the path of the vault server too, so a path from a memory search works in a vault tool call. The index reads `/vault` (`memory.search.extraPaths`, Markdown only) and polls (`CHOKIDAR_USEPOLLING`), because a write of the vault server gives no file event on this mount. The agent calls the nine tools as `vault__*` through the route `finance-vault`, with its key. Until the seed, the index also reads the copy on the state volume |
+| Active memory of finance | The stock plugin `active-memory` of the product, with the settings of the host: the agent `main`, direct and group chats, query mode `recent`, prompt style `recall-heavy`, a limit of 25 s, summaries of 220 characters, its log on, the default mode `escalate`. Two settings of the host are not here. Its own model (a small model on Bedrock on the host) needs an entry of the model gateway for this trust domain, an open point; until then a recall runs on the model of the session (`litellm/agents-finance`, through LiteLLM) and counts in the budget of that key. Its list of chat ids is not in git; the finance bot takes the direct chat of the owner only. An eligible reply waits for the recall, up to 25 s |
+| Active memory of main | The same plugin with the same settings in the config of the main agent, on the model of the session (the decision of the owner for the first run). It takes effect at the start of the agent, which has no pod yet |
 | The vault server of main, the mount of the main agent | Not yet |
 
 Each share has two volumes, one for each claim:
@@ -582,14 +584,37 @@ homelab-wsl lists it next to `agents/`.
 
 ## The pilot agent
 
-One personal agent in `agents-pilot`, on a test Telegram bot and a test
-Signal number (`pilot/agent/`, `pilot/signal-daemon/`). The product is
+One personal agent in `agents-pilot` (`pilot/agent/`,
+`pilot/signal-daemon/`), with no chat channel now: its test Telegram bot
+moved to the main agent (below). The product is
 OpenClaw, in the agent image
 ([iT3E/tnwks-agent-image](https://github.com/iT3E/tnwks-agent-image)), whose
 README has the contract of the pod.
 
-**Signal is off for now.** The pilot starts on Telegram only. The Signal
-daemon stays in the repository but out of `pilot/kustomization.yaml`, and
+**Telegram is off since 2026-11-19.** The owner moved the test bot of the
+pilot to the main agent, for the test run of main beside the host
+([the runbook](agent-platform-runbook.md#the-test-run-beside-the-host)).
+Telegram gives the updates of a bot to one poller, so the change that put
+the token in the Secret of main also set `channels.telegram.enabled` to
+`false` in the pilot's `openclaw.json`. With it off, the gateway does not
+load the Telegram plugin and starts no account
+(`observability/tests/test_pilot_channel.py` starts the gateway of the
+image with this config and checks it). The rest stays, so the way back is
+one revert: the block of the channel, `telegram` in `plugins.allow`,
+`commands.ownerAllowFrom`, the token in the pilot's Secret, and the rule to
+the Telegram API in its network policy.
+
+The pilot runs on for the platform: the daily heartbeat (it sends no
+message to a channel), the backups and the nightly snapshot, the sandbox
+gateway, the restore drills and the scheduled checks of `agents-pilot`,
+none of which uses the channel. What it gives up: nobody can chat with it,
+so a test of a chat turn, a tool call from a chat or an answer in a chat
+runs on the main agent now, and the pilot answers no chat at a limit of
+the Claude plan. A later step can take the token out of the pilot's Secret
+and the Telegram rule out of its network policy (with the rule of the
+policy test of main), once the main agent has its own bot.
+
+**Signal is off for now.** The Signal daemon stays in the repository but out of `pilot/kustomization.yaml`, and
 the config of the agent has no Signal channel. When the test Signal number
 exists, one change turns it on: the daemon in the kustomization, the
 `dependsOn` of the agent, the channel, its plugin and its id in
@@ -639,7 +664,7 @@ the sandbox plugin copies the workspace only.
   **Plugins.** `plugins.allow` names the plugins that the agent loads:
   `brave` (web search), `diagnostics-otel` (the traces), `memory-core`
   (memory search), `openshell` (the sandbox backend) and `telegram` (the
-  channel). Without the list, the product enables each plugin that it finds
+  channel; with the channel off, the plugin does not load). Without the list, the product enables each plugin that it finds
   by default: the bundled ones, and any plugin in the state directory
   (`state/extensions`, or an install record in the state database)
   (`src/plugins/config-activation-shared.ts:138` and `:170` at 2026.11.3). With it, a plugin that is not in the list does not
