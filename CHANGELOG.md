@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.217.0 - 2026-11-19
+
+### Added
+
+* agents: a nightly snapshot of the finance share to the Kopia repository of the finance trust domain, read through the claim vault-ro, with the retention of the state volume (docs/operations/backups.md).
+
 ## v2.216.0 - 2026-11-19
 
 ### Added
