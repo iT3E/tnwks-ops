@@ -24,8 +24,9 @@
 #    agent-telegram-groups: telegram-groups.json, the one group of the
 #    Telegram account), and the entry agents-main in the key list of the
 #    model gateway. For the test run beside the host (the runbook): the
-#    bot token is the placeholder "pending" until the owner puts in the
-#    token of a second bot, and the search key is the key of the host.
+#    bot token is the one of the pilot's test bot (step 4b, which also
+#    turned the pilot's Telegram channel off), and the search key is the
+#    key of the host.
 # 4. After the owner stopped the Telegram account of main on the host and
 #    put the copy of the state in the volume: out ./state-inbox.yaml; in
 #    the three Secrets and ./restore-job.yaml (ARCHIVE set, VAULT empty).

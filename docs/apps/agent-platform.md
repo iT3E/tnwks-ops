@@ -584,14 +584,37 @@ homelab-wsl lists it next to `agents/`.
 
 ## The pilot agent
 
-One personal agent in `agents-pilot`, on a test Telegram bot and a test
-Signal number (`pilot/agent/`, `pilot/signal-daemon/`). The product is
+One personal agent in `agents-pilot` (`pilot/agent/`,
+`pilot/signal-daemon/`), with no chat channel now: its test Telegram bot
+moved to the main agent (below). The product is
 OpenClaw, in the agent image
 ([iT3E/tnwks-agent-image](https://github.com/iT3E/tnwks-agent-image)), whose
 README has the contract of the pod.
 
-**Signal is off for now.** The pilot starts on Telegram only. The Signal
-daemon stays in the repository but out of `pilot/kustomization.yaml`, and
+**Telegram is off since 2026-11-19.** The owner moved the test bot of the
+pilot to the main agent, for the test run of main beside the host
+([the runbook](agent-platform-runbook.md#the-test-run-beside-the-host)).
+Telegram gives the updates of a bot to one poller, so the change that put
+the token in the Secret of main also set `channels.telegram.enabled` to
+`false` in the pilot's `openclaw.json`. With it off, the gateway does not
+load the Telegram plugin and starts no account
+(`observability/tests/test_pilot_channel.py` starts the gateway of the
+image with this config and checks it). The rest stays, so the way back is
+one revert: the block of the channel, `telegram` in `plugins.allow`,
+`commands.ownerAllowFrom`, the token in the pilot's Secret, and the rule to
+the Telegram API in its network policy.
+
+The pilot runs on for the platform: the daily heartbeat (it sends no
+message to a channel), the backups and the nightly snapshot, the sandbox
+gateway, the restore drills and the scheduled checks of `agents-pilot`,
+none of which uses the channel. What it gives up: nobody can chat with it,
+so a test of a chat turn, a tool call from a chat or an answer in a chat
+runs on the main agent now, and the pilot answers no chat at a limit of
+the Claude plan. A later step can take the token out of the pilot's Secret
+and the Telegram rule out of its network policy (with the rule of the
+policy test of main), once the main agent has its own bot.
+
+**Signal is off for now.** The Signal daemon stays in the repository but out of `pilot/kustomization.yaml`, and
 the config of the agent has no Signal channel. When the test Signal number
 exists, one change turns it on: the daemon in the kustomization, the
 `dependsOn` of the agent, the channel, its plugin and its id in
@@ -641,7 +664,7 @@ the sandbox plugin copies the workspace only.
   **Plugins.** `plugins.allow` names the plugins that the agent loads:
   `brave` (web search), `diagnostics-otel` (the traces), `memory-core`
   (memory search), `openshell` (the sandbox backend) and `telegram` (the
-  channel). Without the list, the product enables each plugin that it finds
+  channel; with the channel off, the plugin does not load). Without the list, the product enables each plugin that it finds
   by default: the bundled ones, and any plugin in the state directory
   (`state/extensions`, or an install record in the state database)
   (`src/plugins/config-activation-shared.ts:138` and `:170` at 2026.11.3). With it, a plugin that is not in the list does not
