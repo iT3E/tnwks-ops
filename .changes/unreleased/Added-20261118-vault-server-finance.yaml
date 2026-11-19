@@ -1,3 +1,0 @@
-kind: Added
-body: 'agents: the vault server of finance, the one writer of the finance share, on the claim vault-rw in agents-finance, and its route finance-vault on the central MCP gateway with the key of the finance agent and nine file tools. Only the gateway reaches the server, and the server reaches nothing. The gateway now waits 60 s, not 10 s, for the finance app too. The finance agent does not use it yet (docs/apps/agent-platform.md, "The vault server").'
-time: 2026-11-18T13:30:00.000000+00:00

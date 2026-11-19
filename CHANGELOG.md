@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.215.0 - 2026-11-19
+
+### Added
+
+* agents: the vault server of finance, the one writer of the finance share, on the claim vault-rw in agents-finance, and its route finance-vault on the central MCP gateway with the key of the finance agent and nine file tools. Only the gateway reaches the server, and the server reaches nothing. The gateway now waits 60 s, not 10 s, for the finance app too. The finance agent does not use it yet (docs/apps/agent-platform.md, "The vault server").
+
 ## v2.214.0 - 2026-11-19
 
 ### Added
