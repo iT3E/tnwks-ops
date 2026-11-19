@@ -3,6 +3,43 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.213.0 - 2026-11-19
+
+### Added
+
+* windows: the role windows_wsl_move, step 3 of the account change: the account that owns the distro, its folder, and the tasks of the move window, off on every host
+
+## v2.212.0 - 2026-11-19
+
+### Changed
+
+* Windows hosts, sshd: AllowUsers names each account of windows_sshd_allow_users (default: the account that Ansible logs in as), so a host can allow both accounts while it moves its distro to another account (Design Doc 0004, section 9, step 2). The bootstrap script takes one account or more in -AdminUser, in order, each once, and refuses a name that sshd reads as a pattern or a host. The role and task wsl-host:sshd pass the list, and each refuses a list that does not hold the account that Ansible logs in as. With no list, the config is the same as before.
+
+## v2.211.0 - 2026-11-19
+
+### Changed
+
+* Site 2, Windows host: the encrypted host variables get the values of the account change (Design Doc 0004, section 9): the list of accounts for AllowUsers, the present account, the new account, the folder of the disk file of today, the WSL version of the rehearsal and the password of the administrator account. No role reads a new value yet.
+
+## v2.210.0 - 2026-11-19
+
+### Added
+
+* agents: the agent pod of the main agent at zero replicas, in the form of the finance agent: one Telegram account with the direct chat of the owner and one group (its chat id from a Secret of the owner), web search, the message tool and the built-in tools of the product. No MCP tool, no vault and no scheduled job yet. No pod starts until the steps of the cutover (docs/apps/agent-platform-runbook.md, "The cutover of the main agent").
+* agents: the three Secret files of the main agent, not listed until step 4 of its cutover, and the key agents-main at the model gateway (models agents-main and agents-main-embeddings). The search key is a placeholder until the owner makes it at the vendor.
+
+## v2.209.0 - 2026-11-19
+
+### Added
+
+* litellm: the entry agents-main-embeddings, the embeddings of the memory search of the main agent on the model of the host, so no vendor gets that text. No key lists it until the owner adds the key agents-main.
+
+## v2.208.1 - 2026-11-18
+
+### Fixed
+
+* agents: the read-only volumes of the vault shares (vault-ro, in agents-main and agents-finance) mount read only for each pod, with the option ro. The kubelet takes the read-only flag of a PersistentVolume from the pod, not from nfs.readOnly. No pod mounts them yet, and no pod restarts (docs/apps/agent-platform.md, "The vault shares").
+
 ## v2.208.0 - 2026-11-18
 
 ### Added
