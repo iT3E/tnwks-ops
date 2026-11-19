@@ -17,14 +17,15 @@
 # 3a. Listed: ./networkpolicy.yaml, the config (../config) and
 #    ./deployment.yaml at replicas 0. No value of the owner: the Deployment
 #    names its Secrets, and with no replica nothing reads them.
-# 3b. The owner's values (R4), in three files that are not listed yet:
+# 3b. In git: the owner's values (R4), in three files that are not listed yet:
 #    ./secret.sops.yaml (Secret agent-secret: OPENCLAW_GATEWAY_TOKEN,
 #    LITELLM_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM),
 #    ./secret-search.sops.yaml (Secret agent-search-secret: BRAVE_API_KEY,
 #    the search key of main) and ./secret-telegram-groups.sops.yaml (Secret
 #    agent-telegram-groups: telegram-groups.json, the one group of the
 #    Telegram account), and the entry agents-main in the key list of the
-#    model gateway.
+#    model gateway. The search key is still the placeholder "pending": the
+#    owner makes that key at the vendor before step 5.
 # 4. After the owner stopped the Telegram account of main on the host and
 #    put the copy of the state in the volume: out ./state-inbox.yaml; in
 #    the three Secrets and ./restore-job.yaml (ARCHIVE set, VAULT empty).

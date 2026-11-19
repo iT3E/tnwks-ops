@@ -1948,6 +1948,16 @@ the path below, then `sops -e -i <file>` (the rule of `kubernetes/` in
 file that exists. The files are not listed until step 4, so the merge
 starts nothing. The pod checks each value at its start (`values-check`).
 
+**The run of 2026-11-19.** The owner gave the making of the three files and
+of the key entry to the lead. One script made them: two new random values,
+and the token, the user id and the group id of the Telegram account, read
+from the config of the host by their key paths. No value was printed, and
+none is in another file. The search key is still the placeholder `pending`:
+the search key of the host is also the key of the pilot, so it is not a key
+of main alone. The owner makes a key at the vendor and puts it in with
+`sops kubernetes/apps/ai/agents/main/agent/app/secret-search.sops.yaml`,
+before step 5.
+
 | File, Secret | Key | The value |
 | --- | --- | --- |
 | `secret.sops.yaml`, `agent-secret` | `OPENCLAW_GATEWAY_TOKEN` | A new random value: `openssl rand -hex 32` |

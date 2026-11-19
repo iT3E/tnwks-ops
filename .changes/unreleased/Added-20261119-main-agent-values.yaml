@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the three Secret files of the main agent, not listed until step 4 of its cutover, and the key agents-main at the model gateway (models agents-main and agents-main-embeddings). The search key is a placeholder until the owner makes it at the vendor.'
+time: 2026-11-19T03:20:00.000000+00:00

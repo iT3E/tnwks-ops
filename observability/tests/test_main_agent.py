@@ -6,8 +6,9 @@ pilot's, the restore Job is the one of finance with no vault, the values
 check refuses a placeholder and a wrong group file, and the steps of
 kustomization.yaml never meet in a wrong order.
 
-One test fails on purpose until the owner puts his three Secret files in
-git (R4): test_the_secrets_of_the_owner_hold_each_value_the_pod_names.
+The three Secret files of the owner's values are in git, not listed until
+step 4: test_the_secrets_of_the_owner_hold_each_value_the_pod_names holds
+their names and keys.
 
 The container tests need Docker. Without it a test is skipped, except in
 CI, where it fails.
@@ -164,7 +165,7 @@ def test_the_steps_never_meet_in_a_wrong_order():
 
 
 def test_the_secrets_of_the_owner_hold_each_value_the_pod_names():
-    """Fails on purpose until the owner puts his three files in git (R4)."""
+    """The three files are in git with the name and the keys the pod reads."""
     for name, (secret, keys) in SECRETS.items():
         assert (APP / name).exists(), f"{name}: the owner's file is not in git yet"
         d = doc(APP / name)
