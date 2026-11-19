@@ -1,7 +1,8 @@
 ---
 # The main agent. Applied now: the volume (step 1), its backup policy (step
-# 2), the pod with no replica (step 3a), and step 4: the three Secrets of
-# the owner and the restore Job. The inbox is out again. No pod yet.
+# 2), the network policy and the config (step 3a), the three Secrets of the
+# owner (step 4), and step 5: the Deployment at one replica. The inbox and
+# the restore Job are out again.
 #
 # The files join in the steps of the cutover, one pull request each, in
 # this order (docs/apps/agent-platform-runbook.md, "The cutover of the main
@@ -24,8 +25,9 @@
 #    agent-telegram-groups: telegram-groups.json, the one group of the
 #    Telegram account), and the entry agents-main in the key list of the
 #    model gateway. For the test run beside the host (the runbook): the
-#    bot token is the placeholder "pending" until the owner puts in the
-#    token of a second bot, and the search key is the key of the host.
+#    bot token is the one of the pilot's test bot (step 4b, which also
+#    turned the pilot's Telegram channel off), and the search key is the
+#    key of the host.
 # 4. After the owner stopped the Telegram account of main on the host and
 #    put the copy of the state in the volume: out ./state-inbox.yaml; in
 #    the three Secrets and ./restore-job.yaml (ARCHIVE set, VAULT empty).
@@ -44,14 +46,13 @@ resources:
   - ./pvc.yaml
   # Step 2.
   - ./backup.yaml
-  # Step 3a (replicas 1 at step 5).
+  # Step 3a, replicas 1 since step 5.
   - ./networkpolicy.yaml
   - ./deployment.yaml
-  # Step 4 (the restore Job is out again at step 5).
+  # Step 4.
   - ./secret.sops.yaml
   - ./secret-search.sops.yaml
   - ./secret-telegram-groups.sops.yaml
-  - ./restore-job.yaml
 # The ConfigMaps of the pod. Each name gets a hash of its content, and
 # Kustomize puts that name in the Deployment, so a change of a file is a
 # change of the pod template: Flux applies both at once, and one merge gives

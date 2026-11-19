@@ -89,6 +89,7 @@
   },
   "plugins": {
     "allow": [
+      "active-memory",
       "brave",
       "diagnostics-otel",
       "memory-core",
@@ -112,7 +113,20 @@
         }
       },
       "brave": {"enabled": true},
-      "diagnostics-otel": {"enabled": true}
+      "diagnostics-otel": {"enabled": true},
+      "active-memory": {
+        "enabled": true,
+        "config": {
+          "enabled": true,
+          "agents": ["main"],
+          "allowedChatTypes": ["direct", "group"],
+          "queryMode": "recent",
+          "promptStyle": "recall-heavy",
+          "timeoutMs": 25000,
+          "maxSummaryChars": 220,
+          "logging": true
+        }
+      }
     }
   },
   "diagnostics": {
