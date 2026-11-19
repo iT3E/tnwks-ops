@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.223.0 - 2026-11-19
+
+### Changed
+
+* agents: the test bot of the pilot moves to the main agent, for its test run beside the host: its token in the Secret of main, and the Telegram channel of the pilot off (one bot has one poller); the pilot runs on for the platform checks with no chat channel
+
 ## v2.222.0 - 2026-11-19
 
 ### Added
