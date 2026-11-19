@@ -34,7 +34,8 @@
 # The restore test (a template made from ../../../finance/agent/restore-test)
 # follows the first nightly snapshot with the state in it.
 # The tool set of M7a, first step: built-in tools of the product, web search
-# with its own key, images through the model. No MCP tool, no finance app,
+# with its own key, web fetch through the fetch proxy (../../fetch-proxy),
+# images through the model. No MCP tool, no finance app,
 # no vault (task 3.37), no Signal and no scheduled job yet.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -68,6 +69,20 @@ configMapGenerator:
     options:
       annotations:
         kustomize.toolkit.fluxcd.io/substitute: disabled
+  # The env of the gateway for web fetch (docs/apps/agent-platform.md, "Web
+  # fetch of the main agent"). web_fetch sends each fetch as a CONNECT to
+  # the fetch proxy of this trust domain (../../fetch-proxy), as
+  # tools.web.fetch.useTrustedEnvProxy in ../config/openclaw.json asks.
+  # Each other call of the gateway stays direct: NO_PROXY holds the services
+  # of the cluster (the model gateway, the sandbox gateway, the trace
+  # collector), loopback, and the two host names of the network policy. A
+  # call to any other name goes to the proxy, which refuses each address
+  # inside and any port but 443.
+  - name: agent-fetch-proxy
+    literals:
+      - HTTPS_PROXY=http://fetch-proxy.agents-main.svc.cluster.local:8080
+      - HTTP_PROXY=http://fetch-proxy.agents-main.svc.cluster.local:8080
+      - NO_PROXY=localhost,127.0.0.1,.svc.cluster.local,api.telegram.org,api.search.brave.com
   # The scripts of the pod, with no ${VAR} substitution. They are the files
   # of the pilot, so a fix there reaches each trust domain. No
   # automations-sync.sh: no scheduled job in this step.
