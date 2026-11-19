@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.213.0 - 2026-11-19
+
+### Added
+
+* windows: the role windows_wsl_move, step 3 of the account change: the account that owns the distro, its folder, and the tasks of the move window, off on every host
+
 ## v2.212.0 - 2026-11-19
 
 ### Changed
