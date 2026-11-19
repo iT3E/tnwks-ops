@@ -746,11 +746,13 @@ def called(key: str, name: str, arguments: dict, extra: dict | None = None) -> s
 
 
 def rule_tools() -> list[str]:
-    """The tool list of the rule in the config of the gateway (the one
-    `mcp.tool.name in [...]` list, as mcp-gateway/tools/mcp_tools.py reads
-    it)."""
+    """The tool list of the rule of the route finance in the config of the
+    gateway (its one `mcp.tool.name in [...]` list, as
+    mcp-gateway/tools/mcp_tools.py reads it). The route finance-vault has a
+    list of its own."""
     with open(GATEWAY_CONFIG) as f:
-        (names,) = re.findall(r"mcp\.tool\.name in \[(.*?)\]", f.read(), re.DOTALL)
+        route = re.search(r"(?ms)^  - name: finance\n.*?(?=^  - name: |\Z)", f.read())
+    (names,) = re.findall(r"mcp\.tool\.name in \[(.*?)\]", route.group(0), re.DOTALL)
     return sorted(re.findall(r'"([^"]+)"', names))
 
 

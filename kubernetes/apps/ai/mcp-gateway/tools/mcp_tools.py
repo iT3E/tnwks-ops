@@ -45,8 +45,10 @@ KEEP = [
 DROP = ["delete_*", "bulk_*", "trigger_*", "*export*", "*attachment*",
         "create_rule*", "update_rule*"]
 # The list of the rule: `mcp.tool.name in [ ... ]`, the only such list in
-# the config.
+# the route finance. The route finance-vault has a list of its own, of the
+# tools of the vault server, which this script does not write.
 RULE_LIST = re.compile(r"(mcp\.tool\.name in \[)(.*?)(\])", re.DOTALL)
+FINANCE_ROUTE = re.compile(r"(?ms)^  - name: finance\n.*?(?=^  - name: |\Z)")
 
 
 def kept(names: list[str]) -> list[str]:
@@ -70,8 +72,15 @@ def tools_list(url: str) -> list[dict]:
     return sorted(tools, key=lambda t: t["name"])
 
 
+def finance_route(config_text: str) -> re.Match:
+    route = FINANCE_ROUTE.search(config_text)
+    if route is None:
+        raise SystemExit("no route finance in the config")
+    return route
+
+
 def rule_names(config_text: str) -> list[str]:
-    found = RULE_LIST.findall(config_text)
+    found = RULE_LIST.findall(finance_route(config_text).group(0))
     if len(found) != 1:
         raise SystemExit(f"want one tool list in the config, found {len(found)}")
     return re.findall(r'"([^"]+)"', found[0][1])
@@ -97,7 +106,9 @@ def main() -> None:
         with open(sys.argv[3]) as f:
             text = f.read()
         rule_names(text)
-        text = RULE_LIST.sub(lambda m: m.group(1) + rule_lines(names) + m.group(3), text)
+        route = finance_route(text)
+        written = RULE_LIST.sub(lambda m: m.group(1) + rule_lines(names) + m.group(3), route.group(0))
+        text = text[:route.start()] + written + text[route.end():]
         with open(sys.argv[3], "w") as f:
             f.write(text)
     else:
