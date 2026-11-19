@@ -1,0 +1,101 @@
+---
+# The fetch proxy (envoy.yaml): Envoy, from its upstream image, pinned by
+# digest. It runs as the user of the image (65532), with a read-only root
+# file system and no capability, and has no volume that it can write. It
+# holds no secret, so the agent pod is the only holder of the keys of main.
+#
+# Its log (one line for each request, with the host) stays on the pod, by
+# the owner's decision of 2026-11-19: the host names show the sites that the
+# household visits. So the pod has no label logs.home.arpa/ship, and no log
+# agent of this cluster takes it (test_main_fetch_proxy.py checks this).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fetch-proxy
+  labels:
+    app.kubernetes.io/name: fetch-proxy
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fetch-proxy
+  template:
+    metadata:
+      # No logs.home.arpa/ship: the log stays on the pod (above).
+      labels:
+        app.kubernetes.io/name: fetch-proxy
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: envoy
+          image: docker.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded
+          imagePullPolicy: IfNotPresent
+          args:
+            - -c
+            - /etc/envoy/envoy.yaml
+            # One process: no shared memory for a hot restart.
+            - --disable-hot-restart
+            - --concurrency
+            - "2"
+            # Warnings and errors only; the access log is separate and
+            # always on (envoy.yaml).
+            - --log-level
+            - warn
+          ports:
+            - name: proxy
+              containerPort: 8080
+              protocol: TCP
+          # Envoy opens its port after it loaded the config. The image has
+          # no shell, so the probes open a TCP connection.
+          readinessProbe:
+            tcpSocket:
+              port: proxy
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: proxy
+            periodSeconds: 30
+          # The lab used 16 MiB.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/envoy
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: fetch-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fetch-proxy
+  labels:
+    app.kubernetes.io/name: fetch-proxy
+spec:
+  selector:
+    app.kubernetes.io/name: fetch-proxy
+  ports:
+    - name: proxy
+      port: 8080
+      targetPort: proxy
+      protocol: TCP

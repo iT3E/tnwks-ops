@@ -3,6 +3,48 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.221.0 - 2026-11-19
+
+### Added
+
+* agents: web fetch for the main agent through a fetch proxy in agents-main (Envoy, no secret): CONNECT to a host name on port 443 only, no address inside after its own lookup, a log line with the host for each request, kept on the pod and out of Loki; the agent pod reaches the proxy and no web site directly
+
+## v2.220.0 - 2026-11-19
+
+### Added
+
+* windows: site 2 turns on the move of the distro (step 3 of the account change), with the start tasks of the account that owns the distro, and the play stops before any change while a value of the move is missing
+
+## v2.219.0 - 2026-11-19
+
+### Added
+
+* agents: the finance agent reads its share: the claim vault-ro at /vault, read only on the claim and on each mount, in its memory index with polling, and the nine vault tools through the route finance-vault with its key. The finance agent pod restarts once (docs/apps/agent-platform.md, "The vault shares").
+
+## v2.218.0 - 2026-11-19
+
+### Added
+
+* agents: the seed of the finance share, a one-time Job: the secret scanner of CI on the copy of the vault on the state volume (read only), one line for each finding with an id for the owner, and a copy into the empty share only when the owner decided each finding (no link, no config folder of the notes app, no trash, no .git; files 0600); one result line with counts
+
+## v2.217.0 - 2026-11-19
+
+### Added
+
+* agents: a nightly snapshot of the finance share to the Kopia repository of the finance trust domain, read through the claim vault-ro, with the retention of the state volume (docs/operations/backups.md).
+
+## v2.216.0 - 2026-11-19
+
+### Added
+
+* agents: the daily gateway probe of finance also checks the vault route: no key and a random key get a 401, the probe key lists the nine tools and reads the facts of the root of the share only, a write and a move are refused, and a pod that is not the gateway can not reach the vault server (docs/apps/mcp-gateway.md, "The probe").
+
+## v2.215.0 - 2026-11-19
+
+### Added
+
+* agents: the vault server of finance, the one writer of the finance share, on the claim vault-rw in agents-finance, and its route finance-vault on the central MCP gateway with the key of the finance agent and nine file tools. Only the gateway reaches the server, and the server reaches nothing. The gateway now waits 60 s, not 10 s, for the finance app too. The finance agent does not use it yet (docs/apps/agent-platform.md, "The vault server").
+
 ## v2.214.0 - 2026-11-19
 
 ### Added

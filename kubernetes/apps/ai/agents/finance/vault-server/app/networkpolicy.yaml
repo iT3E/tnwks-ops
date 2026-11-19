@@ -1,0 +1,35 @@
+---
+# The vault server of finance. In: the MCP gateway only
+# (kubernetes/apps/ai/mcp-gateway), which checks the key of each client and
+# lets through only the nine tools of its rule; and the kubelet on the node,
+# for the probes of the health path. Not the agent pod and not a sandbox: the
+# agent calls the gateway. Out: nothing, DNS included. The mount of the share
+# is a mount of the kubelet on the node, not a connection of this pod, so no
+# rule names the NFS server. The namespace's default deny holds the egress
+# (../../namespace.yaml); this pod has no DNS rule (its label
+# agents.home.arpa/dns).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: vault-server
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault-server
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
