@@ -353,7 +353,13 @@ backup command.
 **Seen so far.** The first daily backup failed with
 `GatewayLockNamespaceError`: the command must see the gateway process, so the
 pod shares one PID namespace (`f19083dc`). The first full run passed on
-2026-11-12.
+2026-11-12. The first backup of the main agent (2026-11-19) failed with
+`Cannot capture required config file /home/node/config/telegram-groups.json:
+file identity could not be pinned`: the command refuses an include file
+that is a link, and each file of a projected volume is one. The backup
+container of main now runs on a copy of the config with regular files. A
+new include in the config of an agent needs its file in that copy too
+(`observability/tests/test_main_agent_backup.py` checks it).
 
 **Fix.** Fix the cause in git. The container tries again when it starts; a
 day with no archive leaves the archives of the 6 days before and the
