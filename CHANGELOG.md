@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.220.0 - 2026-11-19
+
+### Added
+
+* windows: site 2 turns on the move of the distro (step 3 of the account change), with the start tasks of the account that owns the distro, and the play stops before any change while a value of the move is missing
+
 ## v2.219.0 - 2026-11-19
 
 ### Added
