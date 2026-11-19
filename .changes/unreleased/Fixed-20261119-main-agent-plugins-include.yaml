@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'agents: the first start of the main agent stopped at the official plugins step, because the step of the image copies only openclaw.json and the config of main includes the group file. The pod now gives the step one file with the include filled in.'
-time: 2026-11-19T07:20:00.000000+00:00

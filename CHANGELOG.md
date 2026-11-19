@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.225.1 - 2026-11-19
+
+### Fixed
+
+* agents: the first start of the main agent stopped at the official plugins step, because the step of the image copies only openclaw.json and the config of main includes the group file. The pod now gives the step one file with the include filled in.
+
 ## v2.225.0 - 2026-11-19
 
 ### Changed
