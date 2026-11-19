@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.219.0 - 2026-11-19
+
+### Added
+
+* agents: the finance agent reads its share: the claim vault-ro at /vault, read only on the claim and on each mount, in its memory index with polling, and the nine vault tools through the route finance-vault with its key. The finance agent pod restarts once (docs/apps/agent-platform.md, "The vault shares").
+
 ## v2.218.0 - 2026-11-19
 
 ### Added
