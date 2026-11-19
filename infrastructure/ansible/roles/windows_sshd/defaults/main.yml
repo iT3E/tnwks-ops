@@ -11,8 +11,14 @@
 # losing the session halfway is acceptable.
 windows_sshd_apply: false
 
-# The account in AllowUsers (also the one that owns the WSL distro).
+# The account that Ansible logs in as (also the one that owns the WSL distro).
 windows_sshd_admin_user: "{{ ansible_user }}"
+# The accounts in AllowUsers: the account above by default. While a host
+# moves its distro to another account (Design Doc 0004, section 9, step 2),
+# the variables of that host list both accounts. The list must hold the
+# account that Ansible logs in as: the role fails before any change when it
+# does not.
+windows_sshd_allow_users: "{{ [windows_sshd_admin_user] }}"
 
 # administrators_authorized_keys, in this order. The public halves of the
 # controllers' Ansible keys; set for windows_hosts in group_vars.
