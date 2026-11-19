@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.222.0 - 2026-11-19
+
+### Added
+
+* agents: the finance agent runs the plugin active-memory, with the settings of the host (direct and group chats, query mode recent, prompt style recall-heavy, a limit of 25 s), on the model of its session through LiteLLM until the model gateway has a recall model for finance. The finance agent pod restarts once. The config of the main agent gets the same settings for its first run; it has no pod yet.
+
 ## v2.221.0 - 2026-11-19
 
 ### Added
