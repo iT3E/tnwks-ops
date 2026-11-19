@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.225.0 - 2026-11-19
+
+### Changed
+
+* windows: on site 2, Ansible logs in as the administrator account, the account that owns the distro comes from the values of the move, and the jump logs in to the distro as its user (step 4 of the account change)
+
 ## v2.224.0 - 2026-11-19
 
 ### Added
