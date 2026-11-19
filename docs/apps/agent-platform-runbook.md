@@ -1857,6 +1857,77 @@ finance until their retention ends.
 | 9 | The checks, the backups, the restore test, the heartbeat entry | Lead (the restore test with the owner's go) | The exit check |
 | 10 | The host cleanup, after the way back closes | Owner (host) | None |
 
+## The seed of the finance share
+
+The first notes of the finance share, from the copy of the vault on the
+state volume of the finance agent, with the go of the owner. What the Job
+does and its lines are in
+[agent-platform.md](agent-platform.md#the-seed-of-the-finance-share). The
+copy on the state volume stays as it is, and nothing reads the share before
+the agent mounts it (step D of task 3.36), so a seed that goes wrong costs
+no note.
+
+Before: the claims `vault-rw` and `vault-ro` of `agents-finance` are
+`Bound`, `kubectl -n flux-system get kustomization agents-finance-agent
+agents-finance-vault-share` shows each `Ready`, and the agent pod runs.
+Ask the owner not to make a note through the vault route while the seed
+runs: a note in the share stops the Job (`share-not-empty`, or `rename` if
+it lands in the minutes of the copy).
+
+| Step | Change | What it does | Check | Way back |
+| --- | --- | --- | --- | --- |
+| 1 | In: the folder `kubernetes/apps/ai/agents/finance/vault-seed/` and its line `./vault-seed/ks.yaml` in the `kustomization.yaml` of `finance`, with `SKIP` and `TAKE` empty | The scan, the finding lines, and the copy if there is no finding | `kubectl -n agents-finance get job vault-seed`; in Loki, `{namespace="agents-finance", app="vault-seed"} \|= "result="` | Revert step 1. Flux deletes the Job; a folder `.seed-incoming-*` of a stopped copy goes at the next run |
+| 2 | Only with `reason=findings`: the ids of the owner in `SKIP` or `TAKE`, and the name `vault-seed-2` (then `-3`) | The same, with his decisions | The same, with the new name | Revert step 2 |
+| 3 | Out: `./vault-seed/ks.yaml` from that list | Flux deletes the Kustomization, the Job and its ConfigMap. The notes stay in the share | `kubectl -n flux-system get kustomization agents-finance-vault-seed` is not found | n/a: the Job did its one run |
+
+**The findings, step 2.** Only the owner reads the finding lines:
+`{namespace="agents-finance", app="vault-seed"} |= "finding"` in Grafana.
+Each line has the id, the rule, the line and the relative path of the file,
+and never the value. The lead reads only the line `report=ok findings=<n>
+undecided=<n>` and the result line. For each finding the owner says one of:
+
+- **skip**: the file stays out of the share. Its id goes in `SKIP`.
+- **take**: the file goes as it is (a false hit, or a value he accepts in
+  the vault). Its id goes in `TAKE`.
+- **change it first**: he takes the value out of the note through the
+  finance agent, which writes its copy. The file changes, so its id
+  changes, and the next run shows the new state.
+
+The owner gives the ids, never a name, and the pull request holds the ids
+only. A finding in `.obsidian`, `.trash` or `.git` shows
+`decision=left-out-...` and needs no decision, since that file never moves.
+An id that is not a finding of the run (the note changed) fails the run
+with `stale-decision`: read the lines of that run, and decide again.
+
+**The pass rule, step 1 or 2.** The Job is `1/1`, and the result line is
+`vault-seed result=ok` with:
+
+- `source-notes` the same as `vault-notes` in the result line of the restore
+  Job of the cutover, or more by the notes that the agent made since (the
+  owner says so);
+- `files` plus the four `left-out-*` counts the same as `source-files` (the
+  Job checks this too, and fails with `verify` if not);
+- `left-out-findings` the count of the ids in `SKIP`, and `taken-findings`
+  the count in `TAKE`;
+- `links=0 other=0`: the restore Job let no link in, so another count means
+  the copy on the state volume changed in a way to look at.
+
+With `reason=source-missing`, `source-empty` or `nothing-to-copy`, the Job
+found no notes in `vault/` of the state volume (it mounts the volume at its
+root and reads that folder only). Do not change the path to make it pass:
+check with the owner where the restore Job of the cutover put the vault
+(`vault-notes` in its result line), then fix the Job.
+
+Then step 3, and then the mount of the agent (step D).
+
+**The way back.** Before step D nothing reads the share, so a wrong seed
+harms no note: the copy on the state volume is the original. To empty the
+share again, its files must go on the claim of the share in `storage`; the
+vault server has no delete tool. That is a cleanup Job in the same form, or
+the owner on the NFS server, and it is not in git today. A failure with
+`rename` leaves a part of the copy in the share: empty it the same way
+before a second run.
+
 ## The cutover of the main agent
 
 **Draft.** The main agent moves from the host to `agents-main` (phase 6 of
@@ -1896,7 +1967,9 @@ The differences from finance:
   heartbeat check of the platform reads).
 - **The tools of the first step of M7a.** Built-in tools of the product
   only (the plan of the platform, the proposal of task 6.14): files, code
-  and the shell in the sandbox, web search with the key of main, a look at
+  and the shell in the sandbox, web search with the key of main, web fetch
+  through the fetch proxy of main ([Web fetch of the main
+  agent](agent-platform.md#web-fetch-of-the-main-agent)), a look at
   an image (the model reads it), memory search on the workspace, and the
   `message` tool (D16), which can reach only the chats of the bot: the
   direct chat of the owner and the group. No MCP gateway, no finance app
@@ -1966,6 +2039,7 @@ What is different from the steps below in the test run:
 | 2b | The entry `agents-main-embeddings` of the model gateway | The model gateway pod rolls. No key lists the entry yet | `kubectl -n ai get deploy litellm` is ready; its log has no config error | Revert |
 | 3a | List `networkpolicy.yaml` and `deployment.yaml` at `replicas: 0`, with the config | The network policy, the two ConfigMaps and the Deployment at zero: no pod, so nothing reads a Secret | `kubectl -n agents-main get deploy agent` is `0/0`; `kubectl -n agents-main get cnp agent` exists | Revert |
 | 3b | The owner's values: the three Secret files, not listed yet, and the entry `agents-main` in the key list of the model gateway ([Before the cutover](#before-the-cutover-main)) | The key `agents-main` at the model gateway. Nothing in `agents-main` | `kubectl -n ai logs deploy/litellm -c ensure-keys` has `agents-main: created` (or `updated`) `(models: agents-main, agents-main-embeddings)` | Revert. The key stays at the model gateway until it is removed in the admin UI |
+| 3c | The fetch proxy, after 3a and before 5: `main/fetch-proxy/`, the rule to it in the agent's network policy, the ConfigMap `agent-fetch-proxy` and `tools.web.fetch` in the config | The proxy pod, its Service and its policy. The agent's policy, its config and a new pod template. At zero replicas no agent pod starts, and step 5 starts it with the proxy env; at one, the agent pod rolls once. The restore Job of step 4 does not change | `kubectl -n agents-main get deploy fetch-proxy` is `1/1`; `kubectl -n agents-main get cnp fetch-proxy agent` exist; `kubectl -n agents-main logs deploy/fetch-proxy` has no `[error]` line | Revert. The agent then has no web fetch |
 | Host | The owner stops the Telegram account of the main agent on the host and its scheduled jobs, makes the copy of the main agent, and puts it in the volume | Nothing in git | The checksum and the count of the copy | Turn the account and the jobs on again on the host |
 | 4 | Out `state-inbox.yaml`; in the three Secrets and `restore-job.yaml` (with `ARCHIVE` set; `VAULT` empty) | The Job checks each member of the archive, then puts the copy in place as `state/`. The Secrets. No pod | `kubectl -n agents-main get job agent-restore` is `1/1`; in Loki, `{namespace="agents-main", app="agent-restore"}` has `restore result=ok archive=start/<name> files=<n> vault-notes=0`, with the count of the owner | Revert step 4, then turn the account on again on the host. The copy stays in `archives/start/` |
 | 5 | Out `restore-job.yaml`; `replicas: 1` in `deployment.yaml` | The agent pod starts and polls the bot | [The cutover](#the-cutover-on-telegram) | [The way back](#the-way-back-of-the-main-agent) |
@@ -2061,9 +2135,11 @@ As [The cutover](#the-cutover) of finance, with these changes:
 
 ### The exit check on Telegram
 
-1. **One turn in each chat** with a tool call: a web search in the direct
-   chat, and in the group a `message` sent to the direct chat of the owner
-   (D16).
+1. **One turn in each chat** with a tool call: a web search and a web
+   fetch of a public page in the direct chat, and in the group a `message`
+   sent to the direct chat of the owner (D16). The log of the fetch proxy
+   has one line for the fetch, with the host and `"code":200`
+   ([The fetch proxy](#the-fetch-proxy-main)).
 2. **The scheduled checks** of `agents-main` pass on their next runs:
    `platform-check-isolation` and `platform-check-probe`.
 3. **The backups.** The first nightly snapshot with the state is
@@ -2111,6 +2187,44 @@ The steps, in short (each one waits for the test and the go):
 4. **The exit check on Signal:** one turn on Signal, and the evidence
    records the result of the test of the copy.
 
+### The fetch proxy (main)
+
+The way of a web fetch and its walls are in [Web fetch of the main
+agent](agent-platform.md#web-fetch-of-the-main-agent). When a fetch fails,
+read the log of the proxy:
+`kubectl -n agents-main logs deploy/fetch-proxy --since=1h`. Each line is
+one request, as JSON.
+
+| The line | What it means | What to do |
+| --- | --- | --- |
+| `"code":200` | The proxy connected to the site. A failure after that is the site's answer, or TLS | Nothing on the proxy |
+| `"code":403` with an IP address, another port, a name with no dot, or a method that is not `CONNECT` | The proxy refused it by design: only a host name on port 443, over HTTPS | None. A `http://` URL fails; the agent can try `https://` |
+| `"code":503` with `"flags":"DF"` | The name has no public IPv4 address: it resolves inside (a private, shared, link-local or loopback range), has IPv6 only, or does not resolve | None, when it resolves inside. Check the name with a public DNS tool |
+| `"code":503` with `"flags":"UF"` or `"UT"` | The site did not answer on port 443 | None on the proxy |
+| No line | The request did not reach the proxy: the product refused the URL first (its log has `blocked URL fetch`), the host is in `NO_PROXY`, or the proxy pod is down | `kubectl -n agents-main get pods -l app.kubernetes.io/name=fetch-proxy` |
+
+**The rehearsal on the cluster** (the rows of section 4.2.7 of the design).
+The lab test covers the config in Docker; these rows cover the network
+policies of Cilium, the DNS of the cluster, the restricted level and a turn
+of the model. Each one runs after step 5, and none changes the live proxy.
+
+| Rehearsal | Pass rule |
+| --- | --- |
+| A public page through the agent | In a chat turn, `web_fetch` of a public page answers. The log of the proxy has one line with its host, and no line has its path or query |
+| A name that resolves inside | A fetch of a public name that resolves to a pod, node or LAN address fails. The target gets no connection |
+| A redirect to an inside address | A public page that redirects to an inside name fails at the second hop. The target gets no connection |
+| A port but 443, and plain HTTP | A fetch of a site on port 8443 and of an `http://` page each fail. The log of the proxy has a 403 for each that reaches it |
+| The agent pod has no other path out | A direct connection from the agent pod to a public address on 443 that its policy does not name gets no answer |
+| The second wall | A separate test pod runs the proxy config with no address filter, under a copy of the egress rules of the proxy's network policy that selects the test pod only. The test pod has a label of its own, never `app.kubernetes.io/name: fetch-proxy` (the Service and the agent would then reach it), and no agent pod reaches it. A fetch through it of a name that resolves inside gets no connection. The live proxy does not change: never edit or restart it for this row. Remove the test pod and its policy after |
+| The direct paths | A chat turn, a web search and a model call each answer, and none of them is a line in the log of the proxy |
+| The pod | The proxy pod is ready at the restricted level, with no restart for one day |
+
+The proxy holds no state. A restart loses only its log
+(`kubectl -n agents-main rollout restart deploy/fetch-proxy`, an owner
+approval, as each live change). To stop web fetch fast, a pull request sets
+`replicas: 0` in `main/fetch-proxy/app/deployment.yaml`: each fetch then
+fails, and the rest of the agent works.
+
 ### The way back of the main agent
 
 - **Telegram, before step 5:** a pull request takes out the files of step 4
@@ -2131,7 +2245,7 @@ The volume, its backup policy and its snapshots stay, as for finance.
 | 1 | Merge 1 (volume, inbox) and its check | Lead writes, owner merges | Step 4 |
 | 2 | The repository `agents-main`: the role (Terraform apply), the certificate and the password (SOPS values), the session, the repository | Lead writes; the merge of the role is the approval of its apply; the owner makes the values, or gives them to the lead as for finance | Merge 2 |
 | 3 | Merge 2 (backup policy) and its check | Lead writes, owner merges | Step 4 |
-| 4 | Merges 2b (the embeddings entry) and 3a (the pod at zero), and their checks | Lead writes, owner merges | Step 4 of the merges |
+| 4 | Merges 2b (the embeddings entry), 3a (the pod at zero) and 3c (the fetch proxy), and their checks | Lead writes, owner merges | Step 4 of the merges |
 | 5 | The rows of D3 for main and D112; then the values of the three Secrets and the entry of `keys.json` (step 3b) | Owner (gate, then R4) | Step 4 of the merges |
 | 6 | The notice to the household: messages between the agents stop | Owner | Step 7 |
 | 7 | The go of the cutover on Telegram, for a time with no other change | Owner (gate) | The host steps |

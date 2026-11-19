@@ -2,7 +2,7 @@
 (docs/apps/agent-platform-runbook.md, "The cutover of the main agent"):
 the pod is the finance pod with no MCP client and no scheduled job, the
 config has the tools of the first step of M7a, the network policy is the
-pilot's, the restore Job is the one of finance with no vault, the values
+pilot's with the fetch proxy, the restore Job is the one of finance with no vault, the values
 check refuses a placeholder and a wrong group file, and the steps of
 kustomization.yaml never meet in a wrong order.
 
@@ -66,7 +66,9 @@ FIN = pod(FINANCE / "deployment.yaml")
 def test_the_pod_is_the_finance_pod_with_no_mcp_client_and_no_scheduled_job():
     assert names(MAIN["initContainers"]) == names(FIN["initContainers"])
     assert names(MAIN["containers"]) == [n for n in names(FIN["containers"]) if n != "automations-sync"]
-    assert {v["name"] for v in MAIN["volumes"]} == {v["name"] for v in FIN["volumes"]} - {"mcp-gateway-config"}
+    # The finance pod mounts its share. The main pod gets the mount of its
+    # share with the vault server of main, in a later step.
+    assert {v["name"] for v in MAIN["volumes"]} == {v["name"] for v in FIN["volumes"]} - {"mcp-gateway-config", "vault"}
     assert MAIN["nodeSelector"] == FIN["nodeSelector"]
     assert MAIN["securityContext"] == FIN["securityContext"]
     for a, b in zip(MAIN["containers"], FIN["containers"], strict=False):
@@ -103,9 +105,10 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     assert "extraPaths" not in c["memory"]["search"]
     # D16: the agent keeps the message tool, in its sandboxed sessions too.
     # The owner's decisions of 2026-11-19: the progress card, and each session
-    # of main sees the other sessions of main, as on the host.
-    assert c["tools"]["sandbox"]["tools"]["alsoAllow"] == ["memory_search", "memory_get", "web_search", "message",
-                                                           "progress_card"]
+    # of main sees the other sessions of main, as on the host. Web fetch goes
+    # through the fetch proxy (test_main_fetch_proxy.py).
+    assert c["tools"]["sandbox"]["tools"]["alsoAllow"] == ["memory_search", "memory_get", "web_search", "web_fetch",
+                                                           "message", "progress_card"]
     assert c["tools"]["sessions"] == {"visibility": "all"}
     assert c["agents"]["defaults"]["sandbox"]["sessionToolsVisibility"] == "all"
     telegram = c["channels"]["telegram"]
@@ -130,9 +133,14 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     assert c["plugins"]["allow"] == f["plugins"]["allow"]
 
 
-def test_the_network_policy_is_the_pilots_in_agents_main():
+def test_the_network_policy_is_the_pilots_in_agents_main_and_the_fetch_proxy():
     main = doc(APP / "networkpolicy.yaml")
     pilot = doc(AGENTS / "pilot/agent/app/networkpolicy.yaml")
+    # The one rule more: the fetch proxy of main (test_main_fetch_proxy.py).
+    proxy = [r for r in main["spec"]["egress"]
+             if r.get("toEndpoints", [{}])[0].get("matchLabels", {}).get("app.kubernetes.io/name") == "fetch-proxy"]
+    assert len(proxy) == 1
+    main["spec"]["egress"].remove(proxy[0])
     text = json.dumps(main["spec"]).replace("agents-main", "agents-pilot")
     assert json.loads(text) == pilot["spec"]
     # No route to the MCP gateway in this step.

@@ -1,0 +1,27 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The backup of the finance share (docs/apps/agent-platform.md, "The vault
+# shares"): a nightly snapshot of the claim vault-ro to the Kopia repository
+# of the finance trust domain. A Kustomization of its own, so a backup that
+# is not Ready does not hold the share or its vault server.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-vault-backup
+  namespace: flux-system
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/vault-backup/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The claim vault-ro, Bound to its volume.
+    - name: agents-finance-vault-share
+    # The repository of the finance trust domain.
+    - name: kopiur-agents-finance-repository
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

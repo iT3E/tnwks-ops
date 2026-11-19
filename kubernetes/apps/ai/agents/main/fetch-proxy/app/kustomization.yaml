@@ -1,0 +1,21 @@
+---
+# The fetch proxy of the main agent (docs/apps/agent-platform.md, "Web fetch
+# of the main agent"). One pod with Envoy as a forward proxy (envoy.yaml),
+# its Service, and its network policy. The agent pod sends each web fetch to
+# it as a CONNECT (HTTPS_PROXY in ../../agent/app/deployment.yaml). No
+# Secret, no service account token, no volume but its config.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml
+# The config gets a hash of its content in its name, so a change of the
+# file is a change of the pod template, and one merge gives one rollout.
+configMapGenerator:
+  - name: fetch-proxy-config
+    files:
+      - envoy.yaml=./envoy.yaml
+    options:
+      annotations:
+        # The config has no ${NAME} for Flux.
+        kustomize.toolkit.fluxcd.io/substitute: disabled

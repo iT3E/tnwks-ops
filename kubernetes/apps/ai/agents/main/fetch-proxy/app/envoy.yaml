@@ -1,0 +1,135 @@
+# The config of the fetch proxy (Envoy, a forward proxy with its dynamic
+# forward proxy filter). Read docs/apps/agent-platform.md, "Web fetch of the
+# main agent". The agent sends each web fetch as an HTTP CONNECT to this
+# proxy, and the proxy opens the TCP connection to the site. The rules:
+# - Only CONNECT, and only to a host name on port 443. A request that is
+#   not CONNECT, a CONNECT to an IP address, to a name with no dot or to
+#   another port gets a 403 from the proxy, with no connection out.
+# - The proxy resolves the name itself, with no search domain of the
+#   cluster. It drops each address in the private, link-local, shared,
+#   loopback and special ranges below, and all IPv6 addresses. A name with
+#   no address left gets a 503, with no connection out. Each redirect of a
+#   site is a new CONNECT from the agent, with the same checks.
+# - One log line for each request: the time, the method, the host and
+#   port, the answer and the bytes. Never a path, a query, a header or a
+#   body: the proxy sees only the CONNECT line, and the rest goes through
+#   TLS that it does not open.
+# The network policy of the pod (networkpolicy.yaml) blocks the same
+# ranges again, and allows only port 443 out.
+# No admin interface: nothing in the pod listens but the proxy port.
+# A limit on open connections, so a loop in the agent can not use up the
+# memory of the pod (Envoy warns at the start when there is none).
+overload_manager:
+  resource_monitors:
+    - name: envoy.resource_monitors.global_downstream_max_connections
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.resource_monitors.downstream_connections.v3.DownstreamConnectionsConfig
+        max_active_downstream_connections: 256
+static_resources:
+  listeners:
+    - name: fetch
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8080
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: fetch
+                # CONNECT is off in Envoy by default; this turns it on.
+                upgrade_configs:
+                  - upgrade_type: CONNECT
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          time: "%START_TIME%"
+                          method: "%REQ(:METHOD)%"
+                          host: "%REQ(:AUTHORITY)%"
+                          code: "%RESPONSE_CODE%"
+                          flags: "%RESPONSE_FLAGS%"
+                          upstream: "%UPSTREAM_HOST%"
+                          bytes_in: "%BYTES_RECEIVED%"
+                          bytes_out: "%BYTES_SENT%"
+                          ms: "%DURATION%"
+                route_config:
+                  name: fetch
+                  virtual_hosts:
+                    - name: any
+                      domains: ["*"]
+                      routes:
+                        # A CONNECT to a host name (labels of letters, digits
+                        # and dashes, at least one dot, the last label not a
+                        # number) on port 443.
+                        - match:
+                            connect_matcher: {}
+                            headers:
+                              - name: ":authority"
+                                string_match:
+                                  safe_regex:
+                                    regex: "^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]([a-z0-9-]*[a-z0-9])?:443$"
+                          route:
+                            cluster: fetch
+                            upgrade_configs:
+                              - upgrade_type: CONNECT
+                                connect_config: {}
+                        # Any other CONNECT.
+                        - match:
+                            connect_matcher: {}
+                          direct_response:
+                            status: 403
+                        # Any request that is not CONNECT.
+                        - match:
+                            prefix: "/"
+                          direct_response:
+                            status: 403
+                http_filters:
+                  - name: envoy.filters.http.dynamic_forward_proxy
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.dynamic_forward_proxy.v3.FilterConfig
+                      dns_cache_config: &dns
+                        name: fetch
+                        dns_lookup_family: V4_ONLY
+                        typed_dns_resolver_config:
+                          name: envoy.network.dns_resolver.cares
+                          typed_config:
+                            "@type": type.googleapis.com/envoy.extensions.network.dns_resolver.cares.v3.CaresDnsResolverConfig
+                            dns_resolver_options:
+                              # A name is looked up as it is: never with a
+                              # search domain of the cluster.
+                              no_default_search_domain: true
+                        # The addresses the proxy never connects to.
+                        resolved_address_filter:
+                          ranges:
+                            - {address_prefix: 0.0.0.0, prefix_len: 8}
+                            - {address_prefix: 10.0.0.0, prefix_len: 8}
+                            - {address_prefix: 100.64.0.0, prefix_len: 10}
+                            - {address_prefix: 127.0.0.0, prefix_len: 8}
+                            - {address_prefix: 169.254.0.0, prefix_len: 16}
+                            - {address_prefix: 172.16.0.0, prefix_len: 12}
+                            - {address_prefix: 192.0.0.0, prefix_len: 24}
+                            - {address_prefix: 192.0.2.0, prefix_len: 24}
+                            - {address_prefix: 192.88.99.0, prefix_len: 24}
+                            - {address_prefix: 192.168.0.0, prefix_len: 16}
+                            - {address_prefix: 198.18.0.0, prefix_len: 15}
+                            - {address_prefix: 198.51.100.0, prefix_len: 24}
+                            - {address_prefix: 203.0.113.0, prefix_len: 24}
+                            - {address_prefix: 224.0.0.0, prefix_len: 4}
+                            - {address_prefix: 240.0.0.0, prefix_len: 4}
+                            - {address_prefix: "::", prefix_len: 0}
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+  clusters:
+    - name: fetch
+      connect_timeout: 10s
+      lb_policy: CLUSTER_PROVIDED
+      cluster_type:
+        name: envoy.clusters.dynamic_forward_proxy
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.clusters.dynamic_forward_proxy.v3.ClusterConfig
+          dns_cache_config: *dns
