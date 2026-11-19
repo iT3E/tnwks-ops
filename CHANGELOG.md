@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.221.0 - 2026-11-19
+
+### Added
+
+* agents: web fetch for the main agent through a fetch proxy in agents-main (Envoy, no secret): CONNECT to a host name on port 443 only, no address inside after its own lookup, a log line with the host for each request, kept on the pod and out of Loki; the agent pod reaches the proxy and no web site directly
+
 ## v2.220.0 - 2026-11-19
 
 ### Added
