@@ -1,6 +1,13 @@
 ---
-# The second WSL host (site_wsl02). ansible_user is in secrets.sops.yml next
-# to this file; it owns the WSL distro too.
+# The second WSL host (site_wsl02). ansible_user, in secrets.sops.yml next
+# to this file, is the administrator account (step 4 of the account change,
+# Design Doc 0004, section 9). It does not own the WSL distro.
+
+# The account that owns the WSL distro: the present account until the done
+# switch of the move, then the account that the move made. Both names are in
+# secrets.sops.yml (wsl_move_present_account, wsl_move_new_account).
+windows_desktop_user: >-
+  {{ wsl_move_new_account if wsl_move_phase == 'done' else wsl_move_present_account }}
 
 # The vEthernet (WSL) address, where Install-TnwksWindowsSshd.ps1 binds sshd.
 # Only the distro can reach it, so other controllers jump through the
@@ -9,14 +16,17 @@
 # another subnet.
 ansible_host: 172.25.16.1
 # Replaces group_vars/all/connection.yml for this host: the same pinned host
-# keys, plus the jump. The jump logs in with the distro's key.
+# keys, plus the jump. The jump logs in with the distro's key, as the user
+# of the distro (wsl_distro_user of WSL-02-ubuntu, from the same value: a
+# value of that host that takes hostvars can not be read through hostvars
+# here).
 ansible_ssh_common_args: >-
   -o UserKnownHostsFile={{ inventory_dir }}/known_hosts
   -o StrictHostKeyChecking=yes
   -o ProxyCommand="ssh -W %h:%p -p {{ hostvars['WSL-02-ubuntu'].ansible_port }}
   -o UserKnownHostsFile={{ inventory_dir }}/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes
   -i {{ hostvars['WSL-02-ubuntu'].ansible_ssh_private_key_file }}
-  {{ ansible_user }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}"
+  {{ wsl_move_present_account }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}"
 
 # Not on this host (yet): no Coral, no Z-Stick. An empty list skips the role
 # (playbooks/windows-host.yml).
@@ -59,9 +69,9 @@ wsl_move: true
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true
-# The distro's disk (on C:, where `wsl --install` put it), for the
-# on-demand compaction task.
-vhdx_compact_vhdx: 'C:\Users\{{ ansible_user }}\AppData\Local\wsl\{d3e1f4cf-83d5-47be-8d7a-64fb9e7ebb25}\ext4.vhdx'
+# The distro's disk (on C:, where `wsl --install` put it, in the folder of
+# the present account), for the on-demand compaction task and the host check.
+vhdx_compact_vhdx: '{{ wsl_move_present_folder }}\ext4.vhdx'
 
 # homelab-wsl's Prometheus scrapes both exporters over the LAN (from
 # DESKTOP-HKE05KI's address, where its pods' traffic leaves).

@@ -1107,6 +1107,14 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   keepalive where it is on, and each UDP relay. It must be the copy of each
   task of `wsl_move_present_tasks` apart from the compaction, which has no
   copy. The play stops before any change on another list.
+- **Step 4: the SSH user.** On site 2, `ansible_user` is the administrator
+  account. `windows_desktop_user`, the account that owns the distro, is
+  `wsl_move_present_account` until the done switch and
+  `wsl_move_new_account` from it. The jump logs in to the distro as the
+  user of the distro (`wsl_distro_user`, from `wsl_move_present_account`).
+  An apply as an account other than the present one stops before any write
+  until an apply as the present account kept the reads of today and
+  registered its window tasks.
 
 - **Variables.** The names of the two accounts and the folder of the disk
   file today are in the encrypted variables of the host only:
