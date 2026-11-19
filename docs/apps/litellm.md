@@ -15,6 +15,7 @@ Manifests: `kubernetes/apps/ai/litellm/`. Its state (keys, spend) is the cnpg
 | `claude-opus-bedrock` | Bedrock, `us.anthropic.claude-opus-5-5` (Invoke API, us-east-1) |
 | `agents-pilot-embeddings` | Ollama on the WSL host (`embeddinggemma-300m-q8`, `/api/embed`): the embeddings of the pilot agent's memory search |
 | `agents-finance-embeddings` | The same model, for the finance agent's memory search |
+| `agents-main-embeddings` | The same model, for the main agent's memory search |
 | `agents-main`, `agents-finance`, `agents-workflows`, `agents-pilot` | Names, not entries: each points at one `claude-opus-*` entry ([The agent platform](#the-agent-platform)) |
 
 ## Prompt caching
@@ -58,6 +59,7 @@ name from one to the other, by one line in git.
 | `claude-opus-bedrock` | Bedrock, `bedrock/invoke/us.anthropic.claude-opus-5-5` (cross-region inference profile, us-east-1) | The Bedrock credentials of the pod |
 | `agents-pilot-embeddings` | Ollama on the WSL host, `ollama/embeddinggemma-300m-q8` with `api_base` `OLLAMA_BASE_URL` | None |
 | `agents-finance-embeddings` | The same | None |
+| `agents-main-embeddings` | The same | None |
 
 - **The bridge entries.** The model bridge
   (`http://model-bridge.ai.svc.cluster.local:8080`, `POST /v1/messages`)
@@ -84,8 +86,8 @@ name from one to the other, by one line in git.
 - Agent keys can't call an entry by its own name; only the master key can.
   The exceptions are the embedding entries, each listed by the key of its
   own trust domain only: `agents-pilot-embeddings` by `agents-pilot`, and
-  `agents-finance-embeddings` by `agents-finance` once the owner adds it
-  (below).
+  `agents-finance-embeddings` by `agents-finance`, and
+  `agents-main-embeddings` by `agents-main` once the owner adds it (below).
 
 ### The names
 
@@ -233,7 +235,7 @@ names the Service `litellm-app`).
 
 | Alias | Models | Trust domain (namespace) | The agent's copy |
 | --- | --- | --- | --- |
-| `agents-main` | `["agents-main"]` | `agents-main` | Secret `agent-secret`, key `LITELLM_API_KEY` |
+| `agents-main` | `["agents-main", "agents-main-embeddings"]`, when the owner adds the key | `agents-main` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 | `agents-finance` | `["agents-finance"]`, then `["agents-finance", "agents-finance-embeddings"]` | `agents-finance` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 | `agents-workflows` | `["agents-workflows"]` | `agents-workflows` | Secret `workflow-providers-secret`, key `MODEL_GATEWAY_KEY`: the provider `model-gateway` of the sandbox gateway holds it, and a sandbox gets a placeholder ([agent-platform.md](agent-platform.md#the-run-receiver)) |
 | `agents-pilot` | `["agents-pilot", "agents-pilot-embeddings"]` | `agents-pilot` | Secret `agent-secret`, key `LITELLM_API_KEY` |
@@ -244,6 +246,9 @@ names the Service `litellm-app`).
 - No spend limit for now: the entries set no `max_budget` until the pilot
   has measured the use. LiteLLM counts spend at the API list price, also on
   the plan, so the spend logs show use and not money paid.
+- The entry `agents-main-embeddings` is the same: the owner lists it in
+  the models of the key `agents-main` when he adds that key, before the
+  main agent starts.
 - The config change adds the entry `agents-finance-embeddings` only. The
   owner adds it to the models of `agents-finance` in `keys.json`, the
   encrypted key list (`secret-keys.sops.yaml`), before the finance agent
