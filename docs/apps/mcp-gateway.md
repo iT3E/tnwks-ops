@@ -78,6 +78,7 @@ the MCP server and checks the headers that arrive.
 | `/finance/` | `finance-probe` | the 73 kept tools | `get_about` only |
 | `/finance/` | `no-tools` | nothing | nothing |
 | `/finance-vault/` | `finance` | the nine tools of the vault | the nine tools of the vault |
+| `/finance-vault/` | `finance-probe` | the nine tools of the vault | `get_file_info` only |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -94,7 +95,6 @@ hung call of the vault or of the finance app holds a turn of the finance
 agent up to 60 s. The vault route takes the key of the finance agent, so a
 leak of that key also gives the writes of the vault
 ([agent-platform.md](agent-platform.md), "The vault server").
-No probe calls this route yet.
 
 **The pilot and the workflow agents get no key.** No key is the safer
 default. A key with no tool still authenticates: it opens a connection,
@@ -150,8 +150,8 @@ its place for the container tests.
 | Client | Value (SOPS) | Hash |
 | --- | --- | --- |
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
-| `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | the same |
-| `no-tools` | `NO_TOOLS_KEY` of the same file | the same |
+| `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
+| `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
 
 **The hash and the value stay in step** in two ways: the owner changes both
 in one commit (below), and a check finds a difference. The values check of
@@ -273,6 +273,14 @@ agent does, with two keys of its own and none of the agent's:
    `trigger_rule` and `create_tag` are refused at the gateway, and
    `create_tag` is refused also with headers that name the client `finance`.
 4. The key `no-tools` lists nothing, and its `get_about` is refused.
+5. The vault route (`VAULT_GATEWAY_URL`): a straight connection from its
+   pod to the vault server fails; no key and a random key get a 401; the
+   probe key lists exactly the nine tools of the vault rule, and its
+   `get_file_info` of `/vault` (the facts of the root of the share, no note
+   name and no note text) reaches the server through the NFS mount;
+   `write_file` and `move_file` are refused at the gateway; the key
+   `no-tools` gets a 401. The container test has no vault server until the
+   image has a release, so it runs the probe with no vault route.
 
 With the placeholder keys, 3 and 4 print `skipped: the key is pending` and
 pass, for as long as the keys are placeholders. The owner's values step
@@ -306,8 +314,9 @@ and the container test runs the new image with the config of the repo.
   limit by client (`localRateLimit`, by `apiKey.client`) is a later step.
 - **The probe key** may list the tools of finance and call `get_about`; a
   leak of it gives that much.
-- **No probe of the vault route yet.** The probe calls the route `finance`
-  only.
+- **The vault part of the probe** has no container test until the image
+  of the vault server has a release; its first real run is the daily run
+  after the merge.
 - **A person with exec into the pod** (a cluster admin) can read the config
   through the admin port; it holds no secret.
 

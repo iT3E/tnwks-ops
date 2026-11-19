@@ -198,7 +198,8 @@ routes:
   # docs/apps/agent-platform.md, "The vault shares"): a route of its own, so
   # the tool names of the finance app do not change. Its client is the
   # finance agent, with the key of the route finance (the same client and
-  # hash: a key of the finance agent, not a new key). Its metadata has a
+  # hash: a key of the finance agent, not a new key), and the gateway probe
+  # of finance, with its key. The metadata of the agent key has a
   # second field, so the values check of the agent pod, which finds the hash
   # of the finance agent by the metadata line of the route finance, finds
   # one hash only (agents/finance/agent/app/deployment.yaml). No comment of
@@ -218,6 +219,10 @@ routes:
         keys:
           - keyHash: "sha256:2999b940b101d4e6e12bf6892ed64e893e084afc69022e6cf2307c94e70aa842"
             metadata: {client: finance, route: finance-vault}
+          # The gateway probe of finance (its key of the route finance): it
+          # lists the tools and reads the facts of the root of the share.
+          - keyHash: "sha256:f90e324c19915593f3c590ff7f13b0228b3a6f4a2f7c5f96ddfb8c95b3aea3ae"
+            metadata: {client: finance-probe, route: finance-vault}
       # A write on the hard mount waits while the NFS server is away: the
       # gateway answers with its timeout error, and the write can still land
       # later. The caller reads the note again before it tries again.
@@ -243,7 +248,11 @@ routes:
                 "read_text_file",
                 "search_files",
                 "write_file"
-              ] && apiKey.client == "finance"
+              ] && (
+                apiKey.client == "finance" ||
+                (apiKey.client == "finance-probe" &&
+                  (mcp.methodName == "tools/list" || mcp.tool.name == "get_file_info"))
+              )
     backends:
       - mcp:
           statefulMode: stateless

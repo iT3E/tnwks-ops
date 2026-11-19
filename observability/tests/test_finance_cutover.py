@@ -316,9 +316,10 @@ def with_hash(client, key):
     text = GATEWAY_CONFIG.read_text()
     (finance,) = [r for r in yaml.safe_load(text)["routes"] if r["name"] == "finance"]
     (old,) = [k["keyHash"] for k in finance["policies"]["apiKey"]["keys"] if k["metadata"]["client"] == client]
-    # The finance key is on the vault route too (finance-vault): each copy
-    # changes, as the owner's values step changes both.
-    assert text.count(old) == (2 if client == "finance" else 1)
+    # The finance key and the probe key are on the vault route too
+    # (finance-vault): each copy changes, as the owner's values step changes
+    # both.
+    assert text.count(old) == (1 if client == "no-tools" else 2)
     return text.replace(old, "sha256:" + hashlib.sha256(key.encode()).hexdigest())
 
 

@@ -659,16 +659,22 @@ def firefly_probe() -> None:
 # list the probe key must see. PROBE_KEY may list the tools of the domain
 # and call get_about only; NO_TOOLS_KEY has no tool. Each is a placeholder
 # ("pending") until the owner's values step, and a check that needs it says
-# so and passes. The probe holds no key of an agent.
+# so and passes. The probe holds no key of an agent. VAULT_GATEWAY_URL and
+# VAULT_SERVER are the vault route of the domain and its vault server; with
+# no VAULT_GATEWAY_URL the probe checks no vault. On the vault route,
+# PROBE_KEY may list the tools and call get_file_info only, and NO_TOOLS_KEY
+# is not a key at all.
 MCP_GATEWAY_URL = os.environ.get("MCP_GATEWAY_URL", "")
 MCP_SERVER = os.environ.get("MCP_SERVER", "")
 GATEWAY_CONFIG = os.environ.get("GATEWAY_CONFIG", "")
+VAULT_GATEWAY_URL = os.environ.get("VAULT_GATEWAY_URL", "")
+VAULT_SERVER = os.environ.get("VAULT_SERVER", "")
 PENDING = "pending"
 SKIPPED = "skipped: the key is pending"
 
 
 def mcp_request(key: str | None, method: str, params: dict,
-                extra: dict | None = None) -> tuple[int, object]:
+                extra: dict | None = None, url: str = "") -> tuple[int, object]:
     """One JSON-RPC request to the gateway (streamable HTTP, stateless: no
     session), with the key as a bearer or with no key, and other headers of
     the client if given. The status and the answer (JSON, or the last
@@ -678,7 +684,7 @@ def mcp_request(key: str | None, method: str, params: dict,
     if key is not None:
         headers["Authorization"] = f"Bearer {key}"
     request = urllib.request.Request(
-        MCP_GATEWAY_URL, method="POST", headers=headers,
+        url or MCP_GATEWAY_URL, method="POST", headers=headers,
         data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode())
     try:
         with urllib.request.urlopen(request, timeout=30) as r:
@@ -692,10 +698,10 @@ def mcp_request(key: str | None, method: str, params: dict,
         return status, raw[:200]
 
 
-def listed(key: str | None) -> str:
+def listed(key: str | None, url: str = "") -> str:
     """The tools that a key sees: "tools: <n>", or the refusal."""
     try:
-        status, body = mcp_request(key, "tools/list", {})
+        status, body = mcp_request(key, "tools/list", {}, url=url)
     except OSError as e:
         return f"failed: {type(e).__name__}"
     if status == 401:
@@ -706,15 +712,16 @@ def listed(key: str | None) -> str:
         return f"other: HTTP {status}"
 
 
-def listed_names(key: str) -> list[str] | None:
+def listed_names(key: str, url: str = "") -> list[str] | None:
     try:
-        status, body = mcp_request(key, "tools/list", {})
+        status, body = mcp_request(key, "tools/list", {}, url=url)
         return sorted(t["name"] for t in body["result"]["tools"]) if status == 200 else None
     except (OSError, TypeError, KeyError):
         return None
 
 
-def called(key: str, name: str, arguments: dict, extra: dict | None = None) -> str:
+def called(key: str, name: str, arguments: dict, extra: dict | None = None,
+           url: str = "") -> str:
     """The outcome of a tool call through the gateway. The gateway refuses a
     tool that its rule does not name for the key with a 400 and the JSON-RPC
     error "unknown resource" (agentgateway 1.7.0), and sends nothing on. A
@@ -722,7 +729,8 @@ def called(key: str, name: str, arguments: dict, extra: dict | None = None) -> s
     (fireflyiii-mcp 1.0.1, formatError): the app's 401 with the placeholder
     token, and an answer with the real one."""
     try:
-        status, body = mcp_request(key, "tools/call", {"name": name, "arguments": arguments}, extra)
+        status, body = mcp_request(key, "tools/call", {"name": name, "arguments": arguments}, extra,
+                                   url=url)
     except OSError as e:
         return f"failed: {type(e).__name__}"
     if status == 401:
@@ -745,13 +753,13 @@ def called(key: str, name: str, arguments: dict, extra: dict | None = None) -> s
     return f"other: {text[:120]}"
 
 
-def rule_tools() -> list[str]:
-    """The tool list of the rule of the route finance in the config of the
-    gateway (its one `mcp.tool.name in [...]` list, as
-    mcp-gateway/tools/mcp_tools.py reads it). The route finance-vault has a
-    list of its own."""
+def rule_tools(name: str = "finance") -> list[str]:
+    """The tool list of the rule of a route in the config of the gateway
+    (its one `mcp.tool.name in [...]` list, as mcp-gateway/tools/mcp_tools.py
+    reads it for the route finance). The route finance-vault has a list of
+    its own."""
     with open(GATEWAY_CONFIG) as f:
-        route = re.search(r"(?ms)^  - name: finance\n.*?(?=^  - name: |\Z)", f.read())
+        route = re.search(rf"(?ms)^  - name: {re.escape(name)}\n.*?(?=^  - name: |\Z)", f.read())
     (names,) = re.findall(r"mcp\.tool\.name in \[(.*?)\]", route.group(0), re.DOTALL)
     return sorted(re.findall(r'"([^"]+)"', names))
 
@@ -796,6 +804,42 @@ def mcp_gateway() -> None:
         report(check, "key with no tool: tools/list", "tools: 0", listed(no_tools_key))
         report(check, "key with no tool: read (get_about)", "refused: gateway",
                called(no_tools_key, "get_about", {}))
+    if VAULT_GATEWAY_URL:
+        vault(check, probe_key, no_tools_key)
+
+
+def vault(check: str, probe_key: str, no_tools_key: str) -> None:
+    """The vault route of the domain and its vault server. The probe reads
+    the facts of the root of the share only (get_file_info /vault): no note
+    name and no note text."""
+    host, port = VAULT_SERVER.rsplit(":", 1)
+    report(check, "vault server, direct from a pod that is not the gateway", "blocked",
+           tcp(host, int(port)))
+    report(check, "vault: no key: tools/list", "refused: HTTP 401", listed(None, VAULT_GATEWAY_URL))
+    report(check, "vault: a key that is not in the config: tools/list", "refused: HTTP 401",
+           listed(secrets.token_hex(32), VAULT_GATEWAY_URL))
+    if probe_key == PENDING:
+        report(check, "vault: probe key", SKIPPED, SKIPPED)
+    else:
+        want = rule_tools("finance-vault")
+        got = listed_names(probe_key, VAULT_GATEWAY_URL)
+        report(check, f"vault: probe key: lists the {len(want)} tools of the rule", "same",
+               "same" if got == want else
+               f"differs: {'failed' if got is None else sorted(set(got) ^ set(want))[:10]}")
+        for target, tool, arguments, expected in (
+                ("vault: probe key: the facts of the root (get_file_info /vault)",
+                 "get_file_info", {"path": "/vault"}, "reached: ok"),
+                ("vault: probe key: a write (write_file), not the probe's",
+                 "write_file", {"path": "/vault/probe.md", "content": "probe"}, "refused: gateway"),
+                ("vault: probe key: a move (move_file), off every rule",
+                 "move_file", {"source": "/vault/a", "destination": "/vault/b"},
+                 "refused: gateway")):
+            report(check, target, expected, called(probe_key, tool, arguments, url=VAULT_GATEWAY_URL))
+    if no_tools_key == PENDING:
+        report(check, "vault: key with no tool", SKIPPED, SKIPPED)
+    else:
+        report(check, "vault: key with no tool: tools/list", "refused: HTTP 401",
+               listed(no_tools_key, VAULT_GATEWAY_URL))
 
 
 if __name__ == "__main__":
