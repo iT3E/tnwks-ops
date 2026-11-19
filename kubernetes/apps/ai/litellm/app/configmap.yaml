@@ -91,6 +91,12 @@ data:
         litellm_params:
           model: ollama/embeddinggemma-300m-q8
           api_base: ${OLLAMA_BASE_URL}
+      # The same for the main agent, on its own name: only the key
+      # agents-main lists it, once the owner adds it to that key.
+      - model_name: agents-main-embeddings
+        litellm_params:
+          model: ollama/embeddinggemma-300m-q8
+          api_base: ${OLLAMA_BASE_URL}
 
     router_settings:
       # The name of each trust domain of the agent platform, and the one
