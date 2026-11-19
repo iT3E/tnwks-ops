@@ -235,7 +235,7 @@ names the Service `litellm-app`).
 
 | Alias | Models | Trust domain (namespace) | The agent's copy |
 | --- | --- | --- | --- |
-| `agents-main` | `["agents-main", "agents-main-embeddings"]`, when the owner adds the key | `agents-main` | Secret `agent-secret`, key `LITELLM_API_KEY` |
+| `agents-main` | `["agents-main", "agents-main-embeddings"]` | `agents-main` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 | `agents-finance` | `["agents-finance"]`, then `["agents-finance", "agents-finance-embeddings"]` | `agents-finance` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 | `agents-workflows` | `["agents-workflows"]` | `agents-workflows` | Secret `workflow-providers-secret`, key `MODEL_GATEWAY_KEY`: the provider `model-gateway` of the sandbox gateway holds it, and a sandbox gets a placeholder ([agent-platform.md](agent-platform.md#the-run-receiver)) |
 | `agents-pilot` | `["agents-pilot", "agents-pilot-embeddings"]` | `agents-pilot` | Secret `agent-secret`, key `LITELLM_API_KEY` |
@@ -246,9 +246,8 @@ names the Service `litellm-app`).
 - No spend limit for now: the entries set no `max_budget` until the pilot
   has measured the use. LiteLLM counts spend at the API list price, also on
   the plan, so the spend logs show use and not money paid.
-- The entry `agents-main-embeddings` is the same: the owner lists it in
-  the models of the key `agents-main` when he adds that key, before the
-  main agent starts.
+- The entry `agents-main-embeddings` is the same: the key `agents-main`
+  lists it from the start.
 - The config change adds the entry `agents-finance-embeddings` only. The
   owner adds it to the models of `agents-finance` in `keys.json`, the
   encrypted key list (`secret-keys.sops.yaml`), before the finance agent
