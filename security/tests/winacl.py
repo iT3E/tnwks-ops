@@ -4,7 +4,8 @@ Windows has, so a test can run such a script in the pwsh of CI.
 Get-Item gives a directory (a link with $script:IsLink, nothing with $script:Exists off),
 New-Item makes it, Get-Acl gives $script:Have (New-TestAcl, New-TestRule), and Set-Acl and
 each command add to $script:Calls. New-Object fakes NTAccount (it translates kid1 to
-S-1-5-21-7-7-7-1002 and each other name to S-1-5-21-7-7-7-1001), SecurityIdentifier, FileSystemAccessRule, DirectorySecurity and FileSecurity.
+S-1-5-21-7-7-7-1002, throws IdentityNotMappedException on a name that starts with missing, as
+for an account that does not exist, and translates each other name to S-1-5-21-7-7-7-1001), SecurityIdentifier, FileSystemAccessRule, DirectorySecurity and FileSecurity.
 Get-TestKeys gives the rules of an ACL as sorted text.
 """
 
@@ -31,12 +32,21 @@ function New-TestRule($Sid, $Rights, $Inheritance, $Propagation, $Inherited = $f
         IsInherited       = $Inherited
     }
 }
+# IdentityNotMappedException is Windows only: a stand-in of the same name.
+if (-not ('TnwksFake.IdentityNotMappedException' -as [type])) {
+    Add-Type -TypeDefinition 'namespace TnwksFake { public class IdentityNotMappedException : System.Exception { public IdentityNotMappedException(string m) : base(m) {} } }'
+}
+function New-TestNotMapped([string]$Message) { [TnwksFake.IdentityNotMappedException]::new($Message) }
 function New-Object {
     param([Parameter(Position = 0)]$TypeName, [Parameter(Position = 1)]$ArgumentList)
     switch -Wildcard ("$TypeName") {
         '*.NTAccount' {
             $account = [pscustomobject]@{ Name = $ArgumentList }
-            $account | Add-Member ScriptMethod Translate { param($Type) [pscustomobject]@{ Value = $(if ($this.Name -eq 'kid1') { 'S-1-5-21-7-7-7-1002' } else { 'S-1-5-21-7-7-7-1001' }) } }
+            $account | Add-Member ScriptMethod Translate { param($Type)
+                if ($this.Name -like 'missing*') {
+                    throw (New-TestNotMapped 'Some or all identity references could not be translated.')
+                }
+                [pscustomobject]@{ Value = $(if ($this.Name -eq 'kid1') { 'S-1-5-21-7-7-7-1002' } else { 'S-1-5-21-7-7-7-1001' }) } }
             return $account
         }
         '*.SecurityIdentifier' { return [pscustomobject]@{ Value = [string]$ArgumentList } }
