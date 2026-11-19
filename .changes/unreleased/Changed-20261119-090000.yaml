@@ -1,3 +1,0 @@
-kind: Changed
-body: "Site 2, Windows host: Ansible logs in as the administrator account (Design Doc 0004, section 9, step 4). The encrypted `ansible_user` of the host changes; the jump, the distro and the paths keep the present account by its own variable, so no role changes a thing on the host."
-time: 2026-11-19T09:00:00.000000+00:00
