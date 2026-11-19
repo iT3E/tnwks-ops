@@ -8,6 +8,7 @@ of the finance agent and lets through the nine tools of the design only;
 and the values check of the agent pod still finds one hash for its key.
 """
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -246,3 +247,46 @@ def test_the_share_goes_to_the_finance_repository_as_the_state_volume_does():
     schedule = kind(BACKUP / "app/backup.yaml", "SnapshotSchedule")["spec"]
     assert schedule["policyRef"] == {"name": "vault"}
     assert schedule["schedule"]["cron"] == "H 2 * * *"
+
+
+# The agent of finance
+
+
+AGENT = FINANCE / "agent/app/deployment.yaml"
+OPENCLAW = FINANCE / "agent/config/openclaw.json"
+
+
+def agent_pod() -> dict:
+    return kind(AGENT, "Deployment")["spec"]["template"]["spec"]
+
+
+def test_the_agent_mounts_the_share_read_only_on_the_claim_and_the_mount():
+    spec = agent_pod()
+    (volume,) = [v for v in spec["volumes"] if v["name"] == "vault"]
+    # The kubelet takes the flag from the pod; the volume has the option ro.
+    assert volume["persistentVolumeClaim"] == {"claimName": "vault-ro", "readOnly": True}
+    users = {c["name"]: [m for m in c.get("volumeMounts", []) if m["name"] == "vault"]
+             for c in spec["initContainers"] + spec["containers"]}
+    # The product, its repair step and the index step at the start read it;
+    # no other container mounts it.
+    assert {n for n, m in users.items() if m} == {"doctor", "memory-index", "agent"}
+    for name in ("doctor", "memory-index", "agent"):
+        assert users[name] == [{"name": "vault", "mountPath": "/vault", "readOnly": True}], name
+
+
+def test_the_index_of_the_agent_polls_and_reads_the_share():
+    (agent,) = [c for c in agent_pod()["containers"] if c["name"] == "agent"]
+    env = {e["name"]: e.get("value") for e in agent["env"]}
+    assert env["CHOKIDAR_USEPOLLING"] == "1"
+    search = json.loads(OPENCLAW.read_text())["memory"]["search"]
+    assert {"path": "/vault", "pattern": "**/*.md"} in search["extraPaths"]
+
+
+def test_the_agent_calls_the_vault_route_with_its_key_and_the_nine_tools():
+    cfg = json.loads(OPENCLAW.read_text())
+    entry = cfg["mcp"]["servers"]["vault"]
+    assert entry["url"] == "http://mcp-gateway.ai.svc.cluster.local:3000/finance-vault/mcp"
+    assert entry["url"].split(":3000")[1].startswith(route("finance-vault")["matches"][0]["path"]["pathPrefix"])
+    assert entry["headers"] == cfg["mcp"]["servers"]["firefly"]["headers"]
+    assert sorted(entry["toolFilter"]["include"]) == NINE
+    assert "vault__*" in cfg["tools"]["sandbox"]["tools"]["alsoAllow"]

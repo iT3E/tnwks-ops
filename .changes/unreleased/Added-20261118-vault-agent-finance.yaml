@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the finance agent reads its share: the claim vault-ro at /vault, read only on the claim and on each mount, in its memory index with polling, and the nine vault tools through the route finance-vault with its key. The finance agent pod restarts once (docs/apps/agent-platform.md, "The vault shares").'
+time: 2026-11-18T18:00:00.000000+00:00

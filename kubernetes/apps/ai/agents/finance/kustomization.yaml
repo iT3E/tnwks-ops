@@ -18,10 +18,9 @@ resources:
   # yet (vault-share/ks.yaml).
   - ./vault-share/ks.yaml
   # The vault server of the share, behind the central MCP gateway
-  # (vault-server/ks.yaml). Not yet the read-only mount of the agent.
+  # (vault-server/ks.yaml). The agent pod mounts the share read only.
   - ./vault-server/ks.yaml
   # The nightly snapshot of the share (vault-backup/ks.yaml).
   - ./vault-backup/ks.yaml
-  # The seed of the share: a one-time Job, listed for its run only, and out
-  # of this list again after it (vault-seed/ks.yaml).
-  - ./vault-seed/ks.yaml
+  # The seed of the share ran once on 2026-11-19 (vault-seed/). It is not
+  # listed: its files stay in git for the seed of the main share.

@@ -66,7 +66,9 @@ FIN = pod(FINANCE / "deployment.yaml")
 def test_the_pod_is_the_finance_pod_with_no_mcp_client_and_no_scheduled_job():
     assert names(MAIN["initContainers"]) == names(FIN["initContainers"])
     assert names(MAIN["containers"]) == [n for n in names(FIN["containers"]) if n != "automations-sync"]
-    assert {v["name"] for v in MAIN["volumes"]} == {v["name"] for v in FIN["volumes"]} - {"mcp-gateway-config"}
+    # The finance pod mounts its share. The main pod gets the mount of its
+    # share with the vault server of main, in a later step.
+    assert {v["name"] for v in MAIN["volumes"]} == {v["name"] for v in FIN["volumes"]} - {"mcp-gateway-config", "vault"}
     assert MAIN["nodeSelector"] == FIN["nodeSelector"]
     assert MAIN["securityContext"] == FIN["securityContext"]
     for a, b in zip(MAIN["containers"], FIN["containers"], strict=False):

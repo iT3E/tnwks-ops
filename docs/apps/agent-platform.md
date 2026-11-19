@@ -291,8 +291,9 @@ read only. The parts come in steps; this table says what is there now.
 | Volumes and claims in the trust domains | Two static PersistentVolumes for each share and their two claims, `vault-rw` and `vault-ro`, in `agents-main` and `agents-finance` (`kubernetes/apps/ai/agents/<domain>/vault-share/`). Bound, and mounted by no pod |
 | The vault server of finance | `vault-server` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-server/`): one pod on `vault-rw`, behind the route `finance-vault` of the central MCP gateway (below) |
 | The backup of the finance share | The SnapshotPolicy `vault` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-backup/`): each night, the claim `vault-ro` to the repository `agents-finance`, with the retention of the state volume |
-| The seed of the finance share | A one-time Job `vault-seed` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-seed/`), in git for its run only ([The seed of the finance share](#the-seed-of-the-finance-share)) |
-| The vault server of main, the mount of the agent | Not yet |
+| The seed of the finance share | A one-time Job `vault-seed` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-seed/`), which ran once on 2026-11-19 with `result=ok` and is not listed now ([The seed of the finance share](#the-seed-of-the-finance-share)) |
+| The mount of the finance agent | The claim `vault-ro` at `/vault` in the agent pod (the product, its repair step and the index step), with `readOnly: true` on the claim and on each mount. `/vault` is the path of the vault server too, so a path from a memory search works in a vault tool call. The index reads `/vault` (`memory.search.extraPaths`, Markdown only) and polls (`CHOKIDAR_USEPOLLING`), because a write of the vault server gives no file event on this mount. The agent calls the nine tools as `vault__*` through the route `finance-vault`, with its key. Until the seed, the index also reads the copy on the state volume |
+| The vault server of main, the mount of the main agent | Not yet |
 
 Each share has two volumes, one for each claim:
 
@@ -319,9 +320,9 @@ takes the read-only flag from the pod (its claim or its mount), so a pod
 that does not set it would get a mount that writes.
 
 What is still not there: the vault server of main and its route, the
-mount of `vault-ro` in the agent pod with the extra path of the index, the
-backup policy of the main share, the restore test of a share, the seed of
-the main share, and the change of the two admission rules to `Deny`.
+mount of the main agent, the backup policy of the main share, the restore
+test of a share, the seed of the main share, and the change of the two
+admission rules to `Deny`.
 
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may
