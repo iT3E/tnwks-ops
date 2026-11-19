@@ -1903,6 +1903,13 @@ The differences from finance:
   (D69), no vault (task 3.37), no new image (the model gateway has no image
   route), and no scheduled job: the Monday job moves with its skill at the
   Signal step (D110).
+- **The owner's decisions of 2026-11-19 for the first step:** the
+  `progress_card` tool is in the sandbox list, and each session of main
+  sees the other sessions of main, as on the host (`tools.sessions.visibility`
+  and `agents.defaults.sandbox.sessionToolsVisibility`, both `all`): text of
+  the direct chat can show in an answer in the group. Web fetch comes
+  through an egress proxy pod of its own, a later change. The tool that
+  writes skills is a later step.
 - **Gaps of the first step**, each a later step: voice notes (the host has
   a speech to text command that the image does not have); messages to the
   other agents of the host (`tools.agentToAgent`; on the platform each
@@ -1918,6 +1925,36 @@ The differences from finance:
   ClusterRepository `agents-main` ([the finance
   repository](../operations/backups.md#the-finance-repository), with the
   names of main).
+
+### The test run beside the host
+
+The owner's decision of 2026-11-19: before any cutover, the main agent on
+the platform runs beside the main agent on the host for a time. Telegram
+gives the updates of a bot to one poller, so the two can not share a bot:
+the pod gets a **second bot**, made by the owner, and the host keeps its
+bot, its Signal number and its scheduled jobs. Nothing changes on the host.
+
+What is different from the steps below in the test run:
+
+- **No host step.** The host agent is not stopped. The copy of the
+  workspace was made while it ran, with a check that no file of the copy
+  changed in that time (the run of 2026-11-19: none did).
+- **The copy** leaves out more than the copy of finance: the scratch folder
+  `tmp/` of the workspace (about 1.1 GB; the pod keeps an archive of the
+  state for each start and seven daily archives, so a copy with it fills the
+  10 GiB volume in about a week), files over 50 MB, the Python
+  environments, and each link. Each finding of the secret scan was made
+  blank in the copy only. The copy of `AGENTS.md` has one more section,
+  which says that this is a test copy and what it does not have yet. The
+  run of 2026-11-19: 1300 files, about 100 MB.
+- **Step 5 waits for the token of the second bot.** The values check
+  refuses the placeholder, so no pod starts before it.
+- **The two workspaces go apart** from the time of the copy. Before the
+  real cutover the owner decides what moves: a new copy of the host
+  workspace in place of the one of the test run, or the one of the test
+  run.
+- **The real cutover** follows the steps below, later, with its own go of
+  the owner.
 
 ### The order of the merges
 
@@ -1950,13 +1987,17 @@ starts nothing. The pod checks each value at its start (`values-check`).
 
 **The run of 2026-11-19.** The owner gave the making of the three files and
 of the key entry to the lead. One script made them: two new random values,
-and the token, the user id and the group id of the Telegram account, read
-from the config of the host by their key paths. No value was printed, and
-none is in another file. The search key is still the placeholder `pending`:
-the search key of the host is also the key of the pilot, so it is not a key
-of main alone. The owner makes a key at the vendor and puts it in with
-`sops kubernetes/apps/ai/agents/main/agent/app/secret-search.sops.yaml`,
-before step 5.
+and the user id and the group id of the Telegram account, read from the
+config of the host by their key paths. No value was printed, and none is in
+another file. Two values are not as the table says, for [the test run
+beside the host](#the-test-run-beside-the-host):
+
+- `TELEGRAM_BOT_TOKEN` is the placeholder `pending` until the owner puts in
+  the token of a second bot. The token of the host never goes to the pod
+  while the host uses it.
+- `BRAVE_API_KEY` is the search key of the host, by the owner's decision. The
+  pilot uses the same key, so it is not a key of main alone. A key of main
+  alone is a later step.
 
 | File, Secret | Key | The value |
 | --- | --- | --- |

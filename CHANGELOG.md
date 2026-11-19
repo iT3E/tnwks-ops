@@ -3,6 +3,13 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.214.0 - 2026-11-19
+
+### Added
+
+* agents: step 4 of the cutover of the main agent: the three Secrets of the owner and the restore Job of the copy of the state, with no vault. The inbox is out again, and no pod starts.
+* agents: the main agent gets the progress card tool, and its sessions see each other as on the host. It first runs beside the host agent as a test, with a second bot: the bot token is a placeholder until the owner puts that token in, so no pod starts before it (docs/apps/agent-platform-runbook.md, "The test run beside the host").
+
 ## v2.213.0 - 2026-11-19
 
 ### Added
