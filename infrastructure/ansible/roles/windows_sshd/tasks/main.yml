@@ -1,11 +1,21 @@
 ---
+# AllowUsers must keep the account of this session, or the next login fails.
+- name: AllowUsers holds the account that Ansible logs in as
+  ansible.builtin.assert:
+    that:
+      - windows_sshd_allow_users is not string
+      - windows_sshd_allow_users | length > 0
+      - (ansible_user | lower) in (windows_sshd_allow_users | map('lower') | list)
+    fail_msg: windows_sshd_allow_users must be a list that holds ansible_user.
+    quiet: true
+
 # The script changes nothing with -Check, so it runs in check mode too.
 - name: sshd matches Install-TnwksWindowsSshd.ps1 (applied only with windows_sshd_apply=true)
   ansible.windows.win_powershell:
     script: "{{ lookup('ansible.builtin.file', 'Install-TnwksWindowsSshd.ps1') }}"
     parameters:
       PublicKey: "{{ windows_sshd_authorized_keys }}"
-      AdminUser: "{{ windows_sshd_admin_user }}"
+      AdminUser: "{{ windows_sshd_allow_users }}"
       Check: "{{ ansible_check_mode or not (windows_sshd_apply | bool) }}"
   check_mode: false
   register: windows_sshd_result

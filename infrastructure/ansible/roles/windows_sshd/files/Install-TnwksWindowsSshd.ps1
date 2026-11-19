@@ -1,5 +1,5 @@
 # Install-TnwksWindowsSshd.ps1 -PublicKeyFile <path> | -PublicKey <key>[,<key>...]
-#                              [-AdminUser <name>] [-Check]
+#                              [-AdminUser <name>[,<name>...]] [-Check]
 #
 # Bootstrap for managing this Windows host with Ansible (docs/wsl/windows-ansible.md):
 # the built-in OpenSSH server, reachable only from WSL. The role windows_sshd
@@ -10,7 +10,8 @@
 #     restarted by the service manager when it fails
 #   - DefaultShell = Windows PowerShell (what Ansible's powershell shell expects)
 #   - sshd_config: ListenAddress = the vEthernet (WSL) host IP, keys only,
-#     AllowUsers = the admin user
+#     AllowUsers = the admin user, or each account in -AdminUser (both
+#     accounts while a host moves its distro to another account)
 #   - administrators_authorized_keys = the key(s) in -PublicKeyFile or
 #     -PublicKey, ACL Administrators + SYSTEM only (sshd ignores the file
 #     otherwise)
@@ -32,7 +33,8 @@
 param(
     [string]$PublicKeyFile,
     [string[]]$PublicKey,
-    [string]$AdminUser,
+    # One account or more for AllowUsers; the account that runs this when empty.
+    [string[]]$AdminUser,
     [switch]$Check,
     # Default: the address of the vEthernet (WSL) adapter, e.g. 172.26.80.1.
     [string]$ListenAddress
@@ -72,8 +74,26 @@ $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Install-TnwksWindowsSshd.ps1 must be run as Administrator.'
 }
-if (-not $AdminUser) { $AdminUser = $env:USERNAME }
-$AdminUser = $AdminUser.ToLower()
+# --- BEGIN allow users (security/tests/test_windows_sshd.py runs this part)
+# The accounts of AllowUsers: in the order given, each once, in lower case.
+# One value may hold several, separated by commas, as `task wsl-host:sshd`
+# passes them. A name with a space, a quote, or a character that sshd reads
+# as a pattern, a host or a comment (* ? ! @ [ ] { } #) is refused, so the
+# line allows these accounts and no other.
+function Get-TnwksAllowUsers([string[]]$Names, [string]$Default) {
+    $users = New-Object System.Collections.Generic.List[string]
+    foreach ($name in @(@($Names) | ForEach-Object { "$_" -split ',' })) {
+        $user = $name.Trim().ToLower()
+        if (-not $user) { continue }
+        if ($user -match '[\s"''*?!@\[\]{}#]') { throw "not an account name for AllowUsers: '$user'" }
+        if (-not $users.Contains($user)) { $users.Add($user) }
+    }
+    if ($users.Count -eq 0) { $users.Add($Default.ToLower()) }
+    , $users.ToArray()
+}
+# --- END allow users
+$AllowUsers = Get-TnwksAllowUsers $AdminUser $env:USERNAME
+$AllowUsersLine = $AllowUsers -join ' '
 # Under Ansible (win_powershell) there is an $Ansible object, and `exit` would
 # end the module instead of reporting.
 $UnderAnsible = [bool](Get-Variable -Name Ansible -ErrorAction SilentlyContinue)
@@ -139,7 +159,7 @@ PubkeyAuthentication yes
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitEmptyPasswords no
-AllowUsers $AdminUser
+AllowUsers $AllowUsersLine
 AllowAgentForwarding no
 AllowTcpForwarding no
 GatewayPorts no
@@ -156,7 +176,7 @@ $configWanted += "`n"
 $configNow = if (Test-Path $SshdConfig) { (Get-Content -Raw $SshdConfig) -replace "`r", '' } else { '' }
 $configChanged = $false
 if ($configNow -ne $configWanted) {
-    Drift "$SshdConfig (ListenAddress $ListenAddress, keys only, AllowUsers $AdminUser)"
+    Drift "$SshdConfig (ListenAddress $ListenAddress, keys only, AllowUsers $AllowUsersLine)"
     if (-not $Check) {
         New-Item -ItemType Directory -Force -Path $SshDir | Out-Null
         $tmp = Join-Path $SshDir 'sshd_config.tnwks-new'
