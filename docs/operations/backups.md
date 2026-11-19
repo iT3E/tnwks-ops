@@ -105,6 +105,7 @@ domains"):
 | Pilot agent | `agents-pilot/agent-state` | `agent-state-v2` | The state of the product (sessions, workspace) and its archives. Mover user 1000 |
 | Pilot Signal daemon | `agents-pilot/signal-state` | `signal-state` | The keys of the test Signal account and the archive of each start. Mover user 65532 |
 | Finance agent | `agents-finance/agent-state` | `agent-state`, in the repository `agents-finance` | The state of the finance agent and its archives. Mover user 1000. In git, not applied until the volume is ([the finance repository](#the-finance-repository)) |
+| Finance share | `agents-finance/vault-ro` | `vault`, in the repository `agents-finance` | The notes of the finance share, read through its read-only claim (an NFS volume, `copyMethod: Direct`). Mover user 1000, the uid of the share ([agent-platform.md](../apps/agent-platform.md), "The vault shares") |
 | Main agent | `agents-main/agent-state` | `agent-state`, in the repository `agents-main` | The state of the main agent and its archives. Mover user 1000. The volume is applied at step 1 of its cutover; the policy is in git and not applied until the repository `agents-main` is `Ready`, which comes in the steps of [the finance repository](#the-finance-repository) |
 
 The snapshots of the pilot agent from before the move (policy `agent-state`)

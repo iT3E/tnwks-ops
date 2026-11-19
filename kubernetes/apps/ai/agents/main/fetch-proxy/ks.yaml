@@ -1,0 +1,21 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The fetch proxy of the main agent (docs/apps/agent-platform.md, "Web fetch
+# of the main agent"): the one way from the agent pod to a web site that the
+# agent picks. It holds no secret.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-main-fetch-proxy
+  namespace: flux-system
+spec:
+  targetNamespace: agents-main
+  path: ./kubernetes/apps/ai/agents/main/fetch-proxy/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

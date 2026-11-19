@@ -2,11 +2,13 @@
 # The agent pod. No pod comes in: the gateway of the product listens on
 # loopback, the probes run in the pod, and default-deny (../../namespace.yaml)
 # denies ingress. Out, it reaches the model gateway, the sandbox gateway of
-# this trust domain, the trace collector and two host
-# names, the Telegram Bot API and the Brave Search API (and DNS, through
-# allow-dns). Nothing else: no model vendor, no update or telemetry service,
-# no other trust domain, and no MCP gateway (no MCP tool in this step; the
-# vault route comes with task 3.37). The pilot's policy, for agents-main.
+# this trust domain, the trace collector, the fetch proxy of this trust
+# domain and two host names, the Telegram Bot API and the Brave Search API
+# (and DNS, through allow-dns). Nothing else: no model vendor, no update or
+# telemetry service, no other trust domain, no web site but through the
+# fetch proxy, and no MCP gateway (no MCP tool in this step; the vault route
+# comes with task 3.37). The pilot's policy, for agents-main, and the fetch
+# proxy.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -49,6 +51,18 @@ spec:
       toPorts:
         - ports:
             - port: "4318"
+              protocol: TCP
+    # The fetch proxy (../../fetch-proxy): the web fetch of the gateway,
+    # to any public site on port 443, as a CONNECT. The proxy checks the
+    # name and the address, and logs the host.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: fetch-proxy
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
               protocol: TCP
     # The Telegram channel.
     - toFQDNs:

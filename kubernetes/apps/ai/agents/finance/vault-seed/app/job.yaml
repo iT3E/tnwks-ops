@@ -1,0 +1,176 @@
+---
+# The seed of the finance share (docs/apps/agent-platform.md, "The seed of
+# the finance share"; the steps are in docs/apps/agent-platform-runbook.md,
+# "The seed of the finance share").
+#
+# From: the copy of the vault on the state volume of the finance agent
+# (agent-state, folder vault/), mounted read only. The volume is
+# ReadWriteOnce on the node of the agent pod, and pods of one node can
+# share it: the Job runs on that node, beside the running agent, as the
+# backup mover does each night. Each container mounts the volume at its
+# root (/state), with no subPath: on this cluster the kubelet can't reach
+# the local-path directory, so a subPath would be an empty directory that
+# the kubelet makes in its own file system (talos/wsl/README.md). So each
+# step can read the whole state volume; each one reads only /state/vault
+# (the scan path, SOURCE), and the pod has no network, no token and no
+# Secret, so nothing it reads can leave but its own log lines.
+# To: the share (the claim vault-rw), which must be empty.
+#
+# Three steps, each a container, in order:
+# 1. scan: the secret scanner of CI (betterleaks, the version of
+#    .pre-commit-config.yaml), with the config of this repository, on the
+#    whole source. --redact: the report holds no value, and the scan prints
+#    only its counts. No validation against a vendor, and the pod has no
+#    network.
+# 2. report: one line for each finding, with an id, the rule, the line, the
+#    decision, and the relative path of the file (the form the design sets
+#    for the scheduled scan of a share: the file name, never the content).
+# 3. copy: copies only when each finding has a decision of the owner in
+#    SKIP or TAKE, then prints one line with counts only.
+#
+# The pod is gone about 20 s after it ends (terminated-pod-gc-threshold),
+# and the log of each Job pod of this cluster goes to Loki, for 14 days:
+# {namespace="agents-finance", app="vault-seed"}. So the names of the files
+# with a finding are in Loki; the result line has counts only.
+#
+# With a finding that has no decision, the Job copies nothing and fails
+# with reason=findings. The owner reads the finding lines, decides each one
+# on his own, and the next pull request puts the ids (never a name) in SKIP
+# or TAKE and gives the Job its next name.
+#
+# The script uses no variable in braces here, because Flux substitutes
+# those in this directory.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # One name for each run: vault-seed, then vault-seed-2. The pod template
+  # of a Job can not change, and a second run needs a new Job.
+  name: vault-seed
+spec:
+  backoffLimit: 0
+  # The hard mount of the share waits while the NFS server is away.
+  activeDeadlineSeconds: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vault-seed
+        # Out of the DNS rule of the namespace (../../namespace.yaml): no
+        # policy selects this pod for any egress, so it has no network.
+        agents.home.arpa/dns: none
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The node of the agent pod (../../agent/app/deployment.yaml), where
+      # the state volume is.
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-2
+      # The uid that the export squashes each client to, and the owner of
+      # the files of the state volume. No fsGroup: nothing on the state
+      # volume changes owner.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: scan
+          image: ghcr.io/betterleaks/betterleaks:v1.10.1@sha256:f345c1ac502abc51ec334c3d815ad18a79fb1509555fc4496b2cb88e760681b3
+          imagePullPolicy: IfNotPresent
+          args:
+            - dir
+            - /state/vault
+            - --config
+            - /seed/betterleaks.toml
+            - --report-format
+            - json
+            - --report-path
+            - /work/report.json
+            # A finding is not a failure of this step: the copy step decides.
+            # A failed scan still stops the Job.
+            - --exit-code
+            - "0"
+            - --redact
+            - --no-banner
+            - --no-color
+          env:
+            - name: HOME
+              value: /work
+          securityContext: &containerSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts: &mounts
+            - name: source
+              mountPath: /state
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+        - name: report
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          imagePullPolicy: IfNotPresent
+          command: ["node", "/seed/seed.mjs", "report"]
+          env: &decisions
+            # The folder of the vault on the state volume: the scan path.
+            - name: SOURCE
+              value: /state/vault
+            # The owner's decisions: ids of the report, separated by spaces.
+            # SKIP: the file stays out of the share. TAKE: it goes as it is.
+            - name: SKIP
+              value: ""
+            - name: TAKE
+              value: ""
+          securityContext: *containerSecurity
+          resources: &small
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          volumeMounts: *mounts
+      containers:
+        - name: copy
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["node", "/seed/seed.mjs", "copy"]
+          env: *decisions
+          securityContext: *containerSecurity
+          resources: *small
+          volumeMounts:
+            - name: source
+              mountPath: /state
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+            - name: share
+              mountPath: /share
+      volumes:
+        - name: source
+          persistentVolumeClaim:
+            claimName: agent-state
+            readOnly: true
+        - name: share
+          persistentVolumeClaim:
+            claimName: vault-rw
+        # The report of the scan and the list of findings, in memory only.
+        - name: work
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+        - name: seed
+          configMap:
+            name: vault-seed

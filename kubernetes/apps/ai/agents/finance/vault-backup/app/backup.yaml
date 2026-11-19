@@ -1,0 +1,63 @@
+---
+# The finance share to the Kopia repository of the finance trust domain
+# (ClusterRepository agents-finance: its own prefix, password and role;
+# docs/operations/backups.md), as the state volume of the finance agent
+# (../../agent/app/backup.yaml). The mover reads the claim vault-ro: the read
+# only volume of the share, with a soft mount, so a run with the NFS server
+# away fails and does not hang. The copy is encrypted on the client.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: vault
+spec:
+  repository:
+    kind: ClusterRepository
+    name: agents-finance
+  # An NFS volume has no CSI snapshots: the mover reads the live share. The
+  # vault server writes each file with an atomic rename, so a file is whole
+  # in the copy; two files of one change can be from two moments.
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    # The uid that the export squashes each client to, and the owner of the
+    # root of the share (mode 0700); the restricted level of the namespace.
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      seccompProfile:
+        type: RuntimeDefault
+  # The retention of the design: 3 latest, 7 daily, 4 weekly and 6 monthly,
+  # as for the state volume. A blanked note comes back from a snapshot.
+  retention:
+    keepLatest: 3
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
+  sources:
+    - pvc:
+        name: vault-ro
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: vault
+spec:
+  policyRef:
+    name: vault
+  schedule:
+    # Nightly, spread across 02:00-03:00 (H), as the other volumes.
+    cron: "H 2 * * *"
+    runOnCreate: true
