@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!-- Managed by tnwks-ops (role windows_wsl_move). A step of the move of the
+     distro, as the account by S4U, with no elevation. No trigger: the play or
+     the window procedure starts it. -->
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>The move of the distro, the {{ task.key }} account, step {{ task.step }} (Design Doc 0004, section 9, step 3).</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{{ wsl_move_accounts[task.key].name | e }}</UserId>
+      <LogonType>S4U</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers />
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
+      <Arguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ wsl_move_dir | e }}\Invoke-TnwksWslAccountTask.ps1" -Config "{{ wsl_move_dir | e }}\config-{{ task.key }}.json" -Step {{ task.step }}</Arguments>
+    </Exec>
+  </Actions>
+</Task>

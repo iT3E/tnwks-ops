@@ -1,0 +1,198 @@
+---
+# Step 3 of the account change (defaults/main.yml). Each part can run again
+# on a host where it ran before, and where a window ran: the state file, the
+# log, the saved version, the marker and the reads of today are written only
+# when they are absent, and the scripts, the configs and the tasks change
+# only while no window is started (host_files.yml).
+#
+# The names of the accounts and the folder of the disk file are in the
+# encrypted variables of the host: each task that takes one has no_log, so no
+# log of a run (the runners' logs among them) shows it.
+
+- name: The variables of the move are set
+  ansible.builtin.assert:
+    that:
+      - wsl_move_present_account | default('') | length > 0
+      - wsl_move_new_account | default('') | length > 0
+      - wsl_move_present_folder | default('') | length > 0
+      - wsl_move_rehearsed_wsl_version | default('') | length > 0
+      - wsl_move_present_account | lower != wsl_move_new_account | lower
+      - wsl_move_new_start_tasks | length > 0
+    fail_msg: >-
+      wsl_move_present_account, wsl_move_new_account, wsl_move_present_folder and wsl_move_rehearsed_wsl_version are set
+      in the encrypted variables of the host, the two accounts differ, and wsl_move_new_start_tasks names the start tasks of the new account.
+      Nothing is changed.
+    quiet: true
+  no_log: true
+
+- name: Each path of the procedure is in the long, normalized form
+  ansible.builtin.assert:
+    that: wsl_move_paths | reject('match', wsl_move_path_form) | list | length == 0
+    fail_msg: >-
+      A path of the procedure is not in the long, normalized form (vars/main.yml, wsl_move_paths). Nothing is changed.
+    quiet: true
+  no_log: true
+
+# The move is a rename in one volume, never a copy (section 4.1.6): the folder
+# of the new disk file is on the volume of the disk file today, and each path
+# of the procedure is on it too (the scope of the scripts).
+- name: The folder of the new disk file is on the volume of the disk file today
+  ansible.builtin.assert:
+    that:
+      - wsl_move_root is match('^[A-Za-z]:\\\\$')
+      - (wsl_move_present_folder | lower).startswith(wsl_move_root | lower)
+      - >-
+        [wsl_move_state_dir, wsl_move_log_dir, wsl_move_dir]
+        | reject('match', '(?i)^' ~ (wsl_move_root | regex_escape)) | list | length == 0
+      - (wsl_move_present_folder | lower).rstrip('\\') != (wsl_move_disk_dir | lower).rstrip('\\')
+    fail_msg: >-
+      The folder of the new disk file, {{ wsl_move_disk_dir }}, is not on the volume of the disk file today, or a folder
+      of the procedure is not on it, or it is the folder of today. Nothing is changed.
+    quiet: true
+  no_log: true
+
+- name: The task names of the procedure start with tnwks-
+  ansible.builtin.assert:
+    that: >-
+      (wsl_move_present_tasks + wsl_move_new_start_tasks + wsl_move_window_tasks.present.values() | list
+      + wsl_move_window_tasks.new.values() | list) | reject('match', '^tnwks-') | list | length == 0
+    fail_msg: Each task that the procedure starts, stops, disables or enables has a name that starts with tnwks-.
+    quiet: true
+
+# The way back of the procedure needs the session of the present account for
+# none of its steps, but this play registers the three window tasks of that
+# account as that account (no password): only while Ansible logs in as it.
+- name: Ansible logs in as the present account, or its window tasks are there
+  ansible.builtin.set_fact:
+    wsl_move_as_present: "{{ ansible_user | lower == wsl_move_present_account | lower }}"
+  no_log: true
+
+# The procedure runs only on the version of WSL that its rehearsal ran on
+# (section 9, step 3): at every apply, before any write.
+- name: The installed WSL is the version of the rehearsal of the move
+  ansible.windows.win_powershell:
+    parameters:
+      Binary: "{{ wsl_move_service_binary }}"
+      Rehearsed: "{{ wsl_move_rehearsed_wsl_version }}"
+    script: |
+      param([string]$Binary, [string]$Rehearsed)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($Binary).FileVersion
+      if (-not $installed -or $installed.Trim() -ne $Rehearsed.Trim()) {
+          throw 'The installed WSL is not the version of the rehearsal of the move. Nothing is changed.'
+      }
+  check_mode: false
+  no_log: true
+
+- name: Read the last marker of the state file
+  ansible.windows.win_powershell:
+    parameters:
+      State: "{{ wsl_move_state_file }}"
+    script: |
+      param([string]$State)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      if (-not (Test-Path -LiteralPath $State)) { return '' }
+      $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
+      if ($lines.Count) { "$(($lines[-1] -split ' ', 2)[1])".Trim() } else { '' }
+  check_mode: false
+  register: wsl_move_marker_read
+
+# A window is started from its marker until the marker of the end of its way
+# back: no apply in between changes what the window runs.
+- name: Whether a window is started
+  ansible.builtin.set_fact:
+    wsl_move_window_started: "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}"
+
+# Only SYSTEM and the Administrators may change the scripts, the configs and
+# the state; Users may read. The folder of the disk file and the log folders
+# keep their own rules.
+- name: Folder of the procedure
+  tnwks_win_dir_acl:
+    path: "{{ wsl_move_dir }}"
+    items: reset
+    keep: "{{ [wsl_move_disk_dir, wsl_move_accounts.present.log_dir, wsl_move_accounts.new.log_dir] }}"
+  no_log: true
+
+- name: Folders of the state and the logs
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - "{{ wsl_move_state_dir }}"
+    - "{{ wsl_move_log_dir }}"
+
+- name: The account that owns the distro
+  ansible.builtin.include_tasks: account.yml
+
+- name: What step 3 reads of today
+  ansible.builtin.include_tasks: read_today.yml
+
+- name: The state file, the log and the saved version of WSL, only when absent
+  ansible.windows.win_powershell:
+    parameters:
+      State: "{{ wsl_move_state_file }}"
+      Log: "{{ wsl_move_log_file }}"
+      Version: "{{ wsl_move_version_file }}"
+      Binary: "{{ wsl_move_service_binary }}"
+      Rehearsed: "{{ wsl_move_rehearsed_wsl_version }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$State, [string]$Log, [string]$Version, [string]$Binary, [string]$Rehearsed)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      # The installed version first: no write on another one.
+      $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($Binary).FileVersion
+      if (-not $installed -or $installed.Trim() -ne $Rehearsed.Trim()) {
+          throw 'The installed WSL is not the version of the rehearsal of the move. Nothing is changed.'
+      }
+      foreach ($path in @($State, $Log)) {
+          if (-not (Test-Path -LiteralPath $path)) {
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess($path, 'make the file')) { [IO.File]::WriteAllText($path, '') }
+          }
+      }
+      if (-not (Test-Path -LiteralPath $Version)) {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Version, 'save the version of WSL')) { [IO.File]::WriteAllText($Version, $installed) }
+      }
+
+- name: The scripts, the configs and the tasks of the procedure
+  ansible.builtin.include_tasks: host_files.yml
+
+# D21: the Secondary Logon service starts only on demand.
+- name: The Secondary Logon service has a manual start
+  ansible.windows.win_service:
+    name: seclogon
+    start_mode: manual
+
+- name: The probe and .wslconfig run tasks, so a check run stops here
+  when: not ansible_check_mode
+  block:
+    - name: The token probe of the new account, which also makes its profile
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_run: {key: new, step: probe}
+
+    - name: The probe reads a medium token, no Administrators group, and a profile under Users
+      ansible.builtin.assert:
+        that:
+          - wsl_move_probe.medium
+          - not wsl_move_probe.administrators
+          - wsl_move_probe.hive
+          - wsl_move_probe.profile is match('^[A-Za-z]:\\\\Users\\\\[^\\\\]+$')
+        fail_msg: The probe of the new account did not read a medium token with no Administrators group and a profile under Users.
+        quiet: true
+      vars:
+        wsl_move_probe: "{{ wsl_move_runs.probe.result }}"
+      no_log: true
+
+    # Only after the probe made the profile: no folder of a profile is made in
+    # advance. The keys and values of the .wslconfig of the present account,
+    # as step 3 read it.
+    - name: .wslconfig of the new account
+      ansible.windows.win_copy:
+        dest: '{{ wsl_move_runs.probe.result.profile }}\.wslconfig'
+        content: "{{ wsl_move_wslconfig }}"
+      no_log: true

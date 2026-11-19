@@ -1,0 +1,174 @@
+---
+# The account that owns the distro (section 5.12): a local account, a member
+# of Users only, with the right to log on as a batch job, each other logon
+# denied, and off the sign-in screen. Its password is random, made here, and
+# kept nowhere: each registration of one of its tasks sets a new one
+# (tnwks_win_scheduled_task, s4u_user).
+- name: The account that owns the distro, a member of Users only
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ wsl_move_new_account }}"
+      Description: "{{ wsl_move_new_description }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Name, [string]$Description)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
+      if ($user -and $user.Description -ne $Description) {
+          throw 'An account of this name exists with another description: it is not the account of this role. Nothing is changed.'
+      }
+      if (-not $user) {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess('the account that owns the distro', 'make the local account')) {
+              $bytes = New-Object byte[] 48
+              [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+              # No cmdlet takes the plain value: module logging would record it.
+              $secret = [Net.NetworkCredential]::new('', [Convert]::ToBase64String($bytes) + 'aA1!').SecurePassword
+              $user = New-LocalUser -Name $Name -Password $secret -PasswordNeverExpires -AccountNeverExpires `
+                  -UserMayNotChangePassword -Description $Description
+              $secret.Dispose()
+          }
+      }
+      if ($user) {
+          $admins = @(Get-LocalGroupMember -SID 'S-1-5-32-544' | ForEach-Object { $_.SID.Value })
+          if ($admins -contains $user.SID.Value) { throw 'The account that owns the distro is a member of Administrators. Nothing more is changed.' }
+          $users = @(Get-LocalGroupMember -SID 'S-1-5-32-545' | ForEach-Object { $_.SID.Value })
+          if ($users -notcontains $user.SID.Value) {
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess('the account that owns the distro', 'add to Users')) { Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $user }
+          }
+      }
+  no_log: true
+
+# The SID of each account that exists (a read, also in a check run).
+- name: Read the SIDs of the two accounts
+  ansible.windows.win_powershell:
+    parameters:
+      Present: "{{ wsl_move_present_account }}"
+      New: "{{ wsl_move_new_account }}"
+    script: |
+      param([string]$Present, [string]$New)
+      $Ansible.Changed = $false
+      $out = @{}
+      foreach ($pair in @(@('present', $Present), @('new', $New))) {
+          $user = Get-LocalUser -Name $pair[1] -ErrorAction SilentlyContinue
+          if ($user) { $out[$pair[0]] = $user.SID.Value }
+      }
+      $out
+  check_mode: false
+  register: wsl_move_accounts_read
+  no_log: true
+
+- name: The SIDs of the accounts
+  ansible.builtin.set_fact:
+    wsl_move_sids: "{{ wsl_move_accounts_read.output | last | default({}, true) }}"
+  no_log: true
+
+- name: The present account exists
+  ansible.builtin.assert:
+    that: "'present' in wsl_move_sids"
+    fail_msg: The present account is not a local account of this host. Nothing more is changed.
+    quiet: true
+
+- name: The rights and the folders of the new account
+  when: "'new' in wsl_move_sids"
+  block:
+    - name: The new account may log on as a batch job
+      ansible.windows.win_user_right:
+        name: SeBatchLogonRight
+        users: ["{{ wsl_move_sids.new }}"]
+        action: add
+      no_log: true
+
+    - name: The new account may not log on at the keyboard, by Remote Desktop or from the network
+      ansible.windows.win_user_right:
+        name: "{{ item }}"
+        users: ["{{ wsl_move_sids.new }}"]
+        action: add
+      loop: "{{ wsl_move_deny_rights }}"
+      no_log: true
+
+    - name: The new account is not on the sign-in screen
+      ansible.windows.win_regedit:
+        path: '{{ wsl_move_userlist_key }}'
+        name: "{{ wsl_move_new_account }}"
+        data: 0
+        type: dword
+      no_log: true
+
+    - name: Log folders of the accounts
+      tnwks_win_dir_acl:
+        path: "{{ wsl_move_accounts[item].log_dir }}"
+        writer: "{{ wsl_move_accounts[item].name }}"
+      loop: [present, new]
+      no_log: true
+
+    # The folder of the disk file, with the rights of step 3: the account may
+    # make files in this folder only (no delete of a child, no change of
+    # rules), and CREATOR OWNER on files lets it replace or delete a file that
+    # it made, and no other file. SYSTEM and the Administrators have full
+    # control. No inheritance.
+    - name: The folder of the disk file, with the rights of step 3
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ wsl_move_disk_dir }}"
+          Sid: "{{ wsl_move_sids.new }}"
+          Right: "{{ wsl_move_new_folder_right }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path, [string]$Sid, [string]$Right)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $want = 'O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;{1};;;{0})(A;OIIO;0x1301bf;;;CO)' -f $Sid, $Right
+          if (-not (Test-Path -LiteralPath $Path)) {
+              $Ansible.Changed = $true
+              if (-not $PSCmdlet.ShouldProcess($Path, 'make the folder')) { return }
+              New-Item -ItemType Directory -Path $Path | Out-Null
+          }
+          $item = Get-Item -LiteralPath $Path -Force
+          if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+              throw "$Path is not a plain folder. Nothing is changed."
+          }
+          # The owner, the protection, and the explicit rules, as Windows writes them.
+          function Get-Parts([string]$Sddl) {
+              $owner = if ($Sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { $Matches[1] } else { '' }
+              $dacl = if ($Sddl -match 'D:([A-Z]*)((\([^)]*\))*)') { $Matches } else { @{ 1 = ''; 2 = '' } }
+              $aces = @([regex]::Matches($dacl[2], '\(([^)]*)\)') | ForEach-Object { $_.Groups[1].Value } |
+                  Where-Object { ($_ -split ';')[1] -notmatch 'ID' } | Sort-Object) -join ' '
+              "$owner|$($dacl[1] -match 'P')|$aces"
+          }
+          $acl = Get-Acl -LiteralPath $Path
+          $norm = New-Object Security.AccessControl.DirectorySecurity
+          $norm.SetSecurityDescriptorSddlForm($want, 'Owner, Access')
+          if ((Get-Parts $acl.Sddl) -eq (Get-Parts $norm.Sddl)) { return }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Path, 'set the rules of step 3')) {
+              $acl.SetSecurityDescriptorSddlForm($want, 'Owner, Access')
+              Set-Acl -LiteralPath $Path -AclObject $acl
+          }
+      no_log: true
+
+    # The marker of the procedure in the folder of the new account (window
+    # step 4 writes the one in the old folder). Its own rules: SYSTEM and the
+    # Administrators full, the account read only, so the account can not
+    # remove it. Written only when absent: no apply resets it.
+    - name: The marker file in the folder of the new disk file, only when absent
+      ansible.windows.win_powershell:
+        parameters:
+          Path: '{{ wsl_move_disk_dir }}\{{ wsl_move_marker_name }}'
+          Sid: "{{ wsl_move_sids.new }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path, [string]$Sid)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          if (Test-Path -LiteralPath $Path) { return }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Path, 'write the marker')) {
+              [IO.File]::WriteAllText($Path, "tnwks-ops: the marker of the move window. No step removes it.`r`n")
+              $acl = Get-Acl -LiteralPath $Path
+              $acl.SetSecurityDescriptorSddlForm(('O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;{0})' -f $Sid), 'Owner, Access')
+              Set-Acl -LiteralPath $Path -AclObject $acl
+          }
+      no_log: true
