@@ -1,0 +1,31 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The seed of the finance share, step F of task 3.36 (docs/apps/agent-platform.md,
+# "The seed of the finance share"): a one-time Job that scans the copy of the
+# vault on the state volume of the agent, then copies it to the share.
+#
+# Listed in ../kustomization.yaml for the run only. A later pull request
+# takes it out of that list: Flux then deletes this Kustomization and, with
+# prune, the Job and its ConfigMap. The files stay in git for the seed of
+# the main share (task 3.37).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-vault-seed
+  namespace: flux-system
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/vault-seed/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The claim of the share (vault-rw), Bound.
+    - name: agents-finance-vault-share
+    # The state volume (agent-state), with the copy of the vault in it.
+    - name: agents-finance-agent
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

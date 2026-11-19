@@ -385,6 +385,11 @@ spec:
             # (autoProviders is off).
             - secretRef:
                 name: agent-search-secret
+            # HTTPS_PROXY, HTTP_PROXY and NO_PROXY: the fetch proxy for
+            # web_fetch (agent-fetch-proxy in kustomization.yaml). This
+            # container only: the other steps of the pod make no call out.
+            - configMapRef:
+                name: agent-fetch-proxy
           ports:
             - name: gateway
               containerPort: 18789
