@@ -290,3 +290,20 @@ def test_the_agent_calls_the_vault_route_with_its_key_and_the_nine_tools():
     assert entry["headers"] == cfg["mcp"]["servers"]["firefly"]["headers"]
     assert sorted(entry["toolFilter"]["include"]) == NINE
     assert "vault__*" in cfg["tools"]["sandbox"]["tools"]["alsoAllow"]
+
+
+def test_active_memory_is_on_as_on_the_host_but_its_model_and_chat_list():
+    plugins = json.loads(OPENCLAW.read_text())["plugins"]
+    assert "active-memory" in plugins["allow"]
+    entry = plugins["entries"]["active-memory"]
+    assert entry["enabled"] is True
+    # The settings of the host. Not yet: its model of its own (a Haiku model
+    # on Bedrock there; here it needs an entry of the model gateway, an
+    # open point) and its list of chat ids (no chat id in git). So the
+    # recall runs on the model of the session, through LiteLLM, and on each
+    # chat of the agent: the direct chat of the owner only.
+    assert entry["config"] == {"enabled": True, "agents": ["main"],
+                               "allowedChatTypes": ["direct", "group"], "queryMode": "recent",
+                               "promptStyle": "recall-heavy", "timeoutMs": 25000,
+                               "maxSummaryChars": 220, "logging": True}
+    assert "model" not in entry["config"] and "allowedChatIds" not in entry["config"]

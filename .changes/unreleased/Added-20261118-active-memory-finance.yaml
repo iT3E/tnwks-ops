@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the finance agent runs the plugin active-memory, with the settings of the host (direct and group chats, query mode recent, prompt style recall-heavy, a limit of 25 s), on the model of its session through LiteLLM until the model gateway has a recall model for finance. The finance agent pod restarts once. The config of the main agent gets the same settings for its first run; it has no pod yet.'
+time: 2026-11-18T18:20:00.000000+00:00

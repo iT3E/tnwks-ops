@@ -131,6 +131,9 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     for key in ("gateway", "update", "telemetry", "acp", "commands", "session"):
         assert c[key] == f[key], key
     assert c["plugins"]["allow"] == f["plugins"]["allow"]
+    # Active memory as finance has it, on the model of the session (the
+    # decision of the owner for the first run).
+    assert c["plugins"]["entries"]["active-memory"] == f["plugins"]["entries"]["active-memory"]
 
 
 def test_the_network_policy_is_the_pilots_in_agents_main_and_the_fetch_proxy():
