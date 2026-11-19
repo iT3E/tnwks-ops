@@ -1,3 +1,0 @@
-kind: Changed
-body: "Windows hosts, sshd: AllowUsers names each account of windows_sshd_allow_users (default: the account that Ansible logs in as), so a host can allow both accounts while it moves its distro to another account (Design Doc 0004, section 9, step 2). The bootstrap script takes one account or more in -AdminUser, in order, each once, and refuses a name that sshd reads as a pattern or a host. The role and task wsl-host:sshd pass the list, and each refuses a list that does not hold the account that Ansible logs in as. With no list, the config is the same as before."
-time: 2026-11-18T19:00:00.000000+00:00

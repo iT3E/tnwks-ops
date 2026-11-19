@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.212.0 - 2026-11-19
+
+### Changed
+
+* Windows hosts, sshd: AllowUsers names each account of windows_sshd_allow_users (default: the account that Ansible logs in as), so a host can allow both accounts while it moves its distro to another account (Design Doc 0004, section 9, step 2). The bootstrap script takes one account or more in -AdminUser, in order, each once, and refuses a name that sshd reads as a pattern or a host. The role and task wsl-host:sshd pass the list, and each refuses a list that does not hold the account that Ansible logs in as. With no list, the config is the same as before.
+
 ## v2.211.0 - 2026-11-19
 
 ### Changed
