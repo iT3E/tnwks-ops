@@ -1,3 +1,0 @@
-kind: Added
-body: 'agents: the main agent gets the progress card tool, and its sessions see each other as on the host. It first runs beside the host agent as a test, with a second bot: the bot token is a placeholder until the owner puts that token in, so no pod starts before it (docs/apps/agent-platform-runbook.md, "The test run beside the host").'
-time: 2026-11-19T04:20:00.000000+00:00
