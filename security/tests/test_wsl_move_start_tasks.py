@@ -46,10 +46,11 @@ def test_the_phase_is_off_on_every_host_until_wsl_move_is_on():
     assert phase == ("{{ 'off' if not (wsl_move | default(false) | bool) "
                      "else ('done' if wsl_move_done | bool else 'move') }}")
     assert len(GROUP["wsl_move_new_description"]) <= 48
-    # No host sets wsl_move or wsl_move_done in a public file: both are off everywhere.
+    # Only site 2 turns wsl_move on, and no host is done or sets the phase itself.
     for path in (ANSIBLE / "inventory/host_vars").glob("*/main.yml"):
         data = yaml.safe_load(path.read_text()) or {}
-        assert not {"wsl_move", "wsl_move_done", "wsl_move_phase"} & set(data), path
+        assert not {"wsl_move_done", "wsl_move_phase"} & set(data), path
+        assert data.get("wsl_move", False) is (path.parent.name == "WSL-02"), path
 
 
 # --- windows_wsl_maintenance -----------------------------------------------------------

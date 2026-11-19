@@ -69,9 +69,22 @@ function Invoke-TnwksDirAcl {
     if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
         throw "$Path is not a plain directory (a link or a junction?). Nothing is changed."
     }
-    $writerSid = @(@($Writer) | Where-Object { $_ } | ForEach-Object {
-        (New-Object System.Security.Principal.NTAccount $_).Translate($sid).Value
-    })
+    $writerSid = @()
+    foreach ($name in @(@($Writer) | Where-Object { $_ })) {
+        try {
+            $writerSid += (New-Object System.Security.Principal.NTAccount $name).Translate($sid).Value
+        } catch {
+            # A check run before the apply that makes the account (an account
+            # made earlier in the same play): the rules would change. An apply
+            # still fails on a name that does not resolve.
+            # IdentityNotMappedException, by its name: the type itself is
+            # Windows only, and the tests run in the pwsh of CI.
+            $e = $_.Exception
+            while ($e -and $e.GetType().Name -ne 'IdentityNotMappedException') { $e = $e.InnerException }
+            if ($Check -and $e) { return $true }
+            throw
+        }
+    }
     $want = Get-TnwksDirAclWant $writerSid $Readers
     $wantKey = @($want | ForEach-Object {
         '{0}|{1}|{2}|{3}|Allow' -f $_[0], [int][System.Security.AccessControl.FileSystemRights]$_[1],

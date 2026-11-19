@@ -69,6 +69,16 @@ wsl_move_new_description: 'tnwks-ops: the account that owns the WSL distro'
 wsl_move_phase: >-
   {{ 'off' if not (wsl_move | default(false) | bool)
      else ('done' if wsl_move_done | bool else 'move') }}
+# The start tasks of the account that owns the distro, which window step 8
+# enables (role windows_wsl_move): the copy of each start task that the WSL
+# roles register on the host. The watchdog and the address task of the LAN
+# bridge (windows_wsl_maintenance, windows_lan_bridge), the keepalive where it
+# is on, and each UDP relay. The names are those of the roles' defaults.
+wsl_move_new_start_tasks: >-
+  {{ (['tnwks-wsl-watchdog', 'tnwks-lan-bridge-ip']
+      + (['tnwks-wsl-keepalive'] if wsl_keepalive_enabled | default(false) | bool else [])
+      + (udp_relays | default([]) | map(attribute='task') | list))
+     | map('regex_replace', '$', wsl_move_task_suffix) | list }}
 
 # Folders under C:\ProgramData that no role owns. The play gives each the
 # rules for SYSTEM and the Administrators only (tnwks_win_dir_acl, no writer,
