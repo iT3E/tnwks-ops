@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.209.0 - 2026-11-19
+
+### Added
+
+* litellm: the entry agents-main-embeddings, the embeddings of the memory search of the main agent on the model of the host, so no vendor gets that text. No key lists it until the owner adds the key agents-main.
+
 ## v2.208.1 - 2026-11-18
 
 ### Fixed
