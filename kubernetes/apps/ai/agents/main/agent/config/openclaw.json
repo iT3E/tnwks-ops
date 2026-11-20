@@ -40,7 +40,7 @@
     "defaults": {
       "workspace": "/home/node/data/state/workspace",
       "model": {"primary": "litellm/agents-main"},
-      "thinkingDefault": "off",
+      "thinkingDefault": "high",
       "modelPolicy": {"allow": ["litellm/agents-main"]},
       "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw", "sessionToolsVisibility": "all"},
       "heartbeat": {
