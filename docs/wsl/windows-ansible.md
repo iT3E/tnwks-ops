@@ -1129,6 +1129,29 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   the WSL roles and with any tags, unless the last marker of the window is
   `window-done`. It also stops it when the account or the file is not the
   one of the phase. A way back turns the switch off first.
+- **The deletion of the tasks of the present account.**
+  `wsl_move_present_removed` of the host, only in the phase `done`, with the
+  owner's go. The apply unregisters each task of `wsl_move_present_tasks`, the
+  three window tasks of the present account and the boot task of the way back.
+  In the phase `done` no role registers a task of the present account, and the
+  role no longer registers the boot task. The play stops before any change
+  unless the last marker of the window is `window-done`, and
+  `windows_sshd_allow_users` holds the account that Ansible logs in as and not
+  the present account. The order: the owner's edit of that list in the
+  encrypted variables of the host, then the merge and the apply of the switch,
+  then the explicit apply of the role `windows_sshd`. The check play of the
+  window does not run after it; status does. **That apply is the point of no
+  return of the move.** A way back after it needs, in order: the present
+  account back in Administrators and in the allow list, with the apply of
+  sshd; this switch and the done switch off, as the roles register the WSL
+  tasks of the present account only before the phase `done`; the revert of
+  step 4, so that an apply as the present account registers its window tasks
+  and the boot task again as at step 3, and its WSL tasks, which come back
+  enabled; that apply starts its keepalive and relays, which fail and retry
+  until way back step 2 stops the copies; step 4 again, as the window play
+  starts no window while Ansible logs in as the present account; the window in
+  its way back mode; then the revert of step 3. On site 2 that needs a working
+  path to the host, or someone at the keyboard.
 
 - **Variables.** The names of the two accounts and the folder of the disk
   file today are in the encrypted variables of the host only:

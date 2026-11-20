@@ -61,6 +61,13 @@ wsl_move: false
 #         registers the start tasks of the present account. A way back
 #         turns wsl_move_done off first.
 wsl_move_done: false
+# The deletion of the tasks of the present account (section 9, step 6), only
+# in the phase done: the role unregisters each WSL task and each window task
+# of that account and the boot task of the way back, and stops before any
+# change while the allow list of sshd (windows_sshd_allow_users) names that
+# account. Its apply is the point of no return of the move: a way back after
+# it registers those tasks again first (docs/wsl/windows-ansible.md).
+wsl_move_present_removed: false
 wsl_move_task_suffix: -account
 # The description of the account that owns the distro (at most 48
 # characters). The module of the tasks resets the password of an account

@@ -131,7 +131,7 @@ def test_the_present_account_registers_its_own_tasks_and_no_password_is_reset():
     present = next(t for t in host if t.get("name") == "Tasks of the present account, while Ansible logs in as it")
     module = present["tnwks_win_scheduled_task"]
     assert "s4u_user" not in module and "ansible_become" not in present.get("vars", {})
-    assert present["when"] == "wsl_move_as_present | bool"
+    assert present["when"] == "wsl_move_as_present | bool and not (wsl_move_present_removed | bool)"
     new = next(t for t in host if t.get("name") == "Tasks of the new account")
     assert new["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_move_new_account }}"
     assert new["vars"]["ansible_become_user"] == "SYSTEM"
@@ -362,7 +362,8 @@ def test_an_apply_as_the_administrator_stops_before_any_write_until_step_3_ran_a
     assert guard["when"] == "not wsl_move_as_present | bool" and guard["check_mode"] is False
     assert module["parameters"] == {"Registration": "{{ wsl_move_registration_file }}",
                                     "Wslconfig": "{{ wsl_move_wslconfig_file }}",
-                                    "Names": "{{ wsl_move_window_tasks.present.values() | list }}"}
+                                    "Names": ("{{ [] if wsl_move_present_removed | bool "
+                                              "else wsl_move_window_tasks.present.values() | list }}")}
     assert "SupportsShouldProcess" not in module["script"] and "$Ansible.Changed = $false" in module["script"]
     changing = ("tnwks_win_dir_acl", "ansible.windows.win_file", "ansible.windows.win_copy", "tnwks_win_scheduled_task",
                 "ansible.windows.win_service", "ansible.builtin.include_tasks")
@@ -503,3 +504,107 @@ def test_only_windows_host_settings_writes_the_wslconfig_of_the_new_account_once
     assert settings["wslconfig_path"] == "C:\\Users\\{{ windows_desktop_user }}\\.wslconfig"
     site2 = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
     assert site2["wslconfig_write"] is True
+
+
+# --- The deletion of the tasks of the present account (section 9, step 6) ------------------
+
+REMOVAL = "The deletion of the tasks of the present account comes after the done switch and the allow list without that account"
+REMOVAL_MARKER = "The deletion of the tasks of the present account comes after a window that ended done"
+
+
+def test_the_deletion_needs_the_phase_done_and_the_allow_list_without_the_present_account_before_any_change():
+    main = tasks("main.yml")
+    names = [t.get("name") for t in main]
+    guard = main[names.index(REMOVAL)]
+    assert guard["ansible.builtin.assert"]["that"] == [
+        "not (wsl_move_present_removed | bool) or wsl_move_phase == 'done'",
+        "not (wsl_move_present_removed | bool) or (wsl_move_present_account | lower) not in wsl_move_allow_list",
+        "not (wsl_move_present_removed | bool) or (ansible_user | lower) in wsl_move_allow_list"]
+    assert guard["vars"] == {"wsl_move_allow_list": "{{ windows_sshd_allow_users | default([]) | map('lower') | list }}"}
+    assert guard["no_log"] is True and "when" not in guard
+    marker = main[names.index(REMOVAL_MARKER)]
+    assert marker["ansible.builtin.assert"]["that"] == "(wsl_move_marker_read.output | last | default('')) == 'window-done'"
+    assert marker["when"] == "wsl_move_present_removed | bool"
+    changing = ("tnwks_win_dir_acl", "ansible.windows.win_file", "ansible.windows.win_copy", "tnwks_win_scheduled_task",
+                "ansible.windows.win_service", "ansible.builtin.include_tasks")
+    first_change = min(i for i, t in enumerate(main) if any(k in t for k in changing)
+                       or "SupportsShouldProcess" in str(t.get("ansible.windows.win_powershell", {}).get("script", "")))
+    assert names.index(REMOVAL) < first_change and names.index(REMOVAL_MARKER) < first_change
+    assert names.index("Read the last marker of the state file") < names.index(REMOVAL_MARKER)
+    removal = main[names.index("The deletion of the tasks of the present account")]
+    assert removal == {"name": "The deletion of the tasks of the present account",
+                       "ansible.builtin.include_tasks": "remove_present.yml", "when": "wsl_move_present_removed | bool"}
+    assert names.index("The scripts, the configs and the tasks of the procedure") < names.index(
+        "The deletion of the tasks of the present account")
+
+
+def test_the_deletion_unregisters_each_task_of_the_present_account_and_the_boot_task_and_none_comes_back():
+    assert VARS["wsl_move_removed_tasks"].strip() == (
+        "{{ wsl_move_present_tasks + (wsl_move_window_tasks.present.values() | list) + [wsl_move_boot_task] }}")
+    remove = tasks("remove_present.yml")
+    assert remove[0]["tnwks_win_scheduled_task"] == {"name": "{{ item }}", "state": "absent"}
+    assert remove[0]["loop"] == "{{ wsl_move_removed_tasks }}"
+    assert remove[1]["ansible.windows.win_powershell"]["parameters"] == {"Names": "{{ wsl_move_removed_tasks }}"}
+    assert remove[1]["check_mode"] is False
+    assert remove[2]["ansible.builtin.assert"]["that"] == "wsl_move_removed_read.output | length == 0"
+    host = {t.get("name"): t for t in tasks("host_files.yml")}
+    assert host["The window procedure and the boot task of the way back, tasks of SYSTEM"]["loop"] == (
+        "{{ ['window'] if wsl_move_present_removed | bool else ['window', 'boot'] }}")
+    assert host["Read the window tasks of the present account"]["when"] == "not (wsl_move_present_removed | bool)"
+    assert host["Each window task of the present account is there"]["when"] == [
+        "not ansible_check_mode", "not (wsl_move_present_removed | bool)"]
+    # Each WSL role that registers a task of the present account skips it in the phase done, which the
+    # deletion needs: no apply registers a deleted task again.
+    roles = ANSIBLE / "roles"
+    present = set(DEFAULTS["wsl_move_present_tasks"])
+    seen = set()
+    for role in ("windows_wsl_maintenance", "windows_lan_bridge", "windows_udp_relay"):
+        defaults = yaml.safe_load((roles / role / "defaults/main.yml").read_text())
+        for task in yaml.safe_load((roles / role / "tasks/main.yml").read_text()):
+            module = task.get("tnwks_win_scheduled_task")
+            if not module or module.get("state") == "absent" or "s4u_user" in module:
+                continue
+            name = module["name"]
+            if name == "{{ item.task }}":
+                names = {relay["task"] for relay in defaults["udp_relays"]}
+            else:
+                names = {defaults.get(name.strip("{} "), name)}
+            if names & present:
+                seen |= names & present
+                assert "wsl_move_phase != 'done'" in str(task.get("when")), (role, task["name"])
+    assert seen == present
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_deletion_renders_its_tasks_and_stops_on_each_allow_list_that_names_the_present_account(tmp_path):
+    """Ansible renders the guard of the deletion on stand-ins, for each allow list and phase, and the names that
+    the deletion unregisters."""
+    guard = next(t for t in tasks("main.yml") if t.get("name") == REMOVAL)
+    base = {**ansible_render.load("roles/windows_wsl_move/defaults/main.yml", "roles/windows_wsl_move/vars/main.yml",
+                                  "inventory/group_vars/windows_hosts.yml"),
+            "wsl_move": True, "wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+            "ansible_user": "standin-admin", "wsl_move_allow_list": guard["vars"]["wsl_move_allow_list"]}
+    cases = {
+        "removed": ({"wsl_move_done": True, "wsl_move_present_removed": True,
+                     "windows_sshd_allow_users": ["standin-admin"]}, True),
+        "removed, the present account in the list": ({"wsl_move_done": True, "wsl_move_present_removed": True,
+                                                      "windows_sshd_allow_users": ["standin-admin", "Standin1"]}, False),
+        "removed, no list": ({"wsl_move_done": True, "wsl_move_present_removed": True}, False),
+        "removed, without the account of Ansible": ({"wsl_move_done": True, "wsl_move_present_removed": True,
+                                                     "windows_sshd_allow_users": ["standin-wsl"]}, False),
+        "removed in the phase move": ({"wsl_move_done": False, "wsl_move_present_removed": True,
+                                       "windows_sshd_allow_users": ["standin-admin"]}, False),
+        "kept, both accounts in the list": ({"wsl_move_done": True, "wsl_move_present_removed": False,
+                                             "windows_sshd_allow_users": ["standin-admin", "standin1"]}, True),
+    }
+    hosts = {f"case{i}": {**base, **values} for i, (values, _) in enumerate(cases.values())}
+    out = ansible_render.render(tmp_path, hosts, list(hosts), {
+        "passes": "[" + ", ".join(f"({c})" for c in guard["ansible.builtin.assert"]["that"]) + "] is all",
+        "removed": "wsl_move_removed_tasks"})
+    assert {case: out[f"case{i}"]["passes"] for i, case in enumerate(cases)} == {
+        case: want for case, (_, want) in cases.items()}
+    assert out["case0"]["removed"] == [
+        "tnwks-lan-bridge-ip", "tnwks-udp-relay-syslog", "tnwks-vhdx-compact", "tnwks-wsl-keepalive", "tnwks-wsl-watchdog",
+        "tnwks-wsl-move-present-stop", "tnwks-wsl-move-present-unregister", "tnwks-wsl-move-present-import",
+        "tnwks-wsl-move-boot"]

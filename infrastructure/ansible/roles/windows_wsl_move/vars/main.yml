@@ -50,6 +50,11 @@ wsl_move_task_list: >-
   {%- endfor -%}
   {%- endfor -%}
   {{ out }}
+# The tasks that the deletion of the tasks of the present account unregisters
+# (wsl_move_present_removed): each WSL task and each window task of that
+# account, and the boot task of the way back.
+wsl_move_removed_tasks: >-
+  {{ wsl_move_present_tasks + (wsl_move_window_tasks.present.values() | list) + [wsl_move_boot_task] }}
 wsl_move_window_tasks:
   present:
     stop: "{{ wsl_move_prefix }}-present-stop"
