@@ -41,16 +41,19 @@ def named(role: str, name: str) -> dict:
 
 def test_the_phase_is_off_on_every_host_until_wsl_move_is_on():
     assert GROUP["wsl_move_done"] is False
+    assert GROUP["wsl_move_present_removed"] is False
     assert GROUP["wsl_move_task_suffix"] == "-account"
     phase = " ".join(GROUP["wsl_move_phase"].split())
     assert phase == ("{{ 'off' if not (wsl_move | default(false) | bool) "
                      "else ('done' if wsl_move_done | bool else 'move') }}")
     assert len(GROUP["wsl_move_new_description"]) <= 48
-    # Only site 2 turns wsl_move on, and no host is done or sets the phase itself.
+    # Only site 2 turns wsl_move on, and its done switch; no host sets the phase itself.
     for path in (ANSIBLE / "inventory/host_vars").glob("*/main.yml"):
         data = yaml.safe_load(path.read_text()) or {}
-        assert not {"wsl_move_done", "wsl_move_phase"} & set(data), path
+        assert "wsl_move_phase" not in data, path
         assert data.get("wsl_move", False) is (path.parent.name == "WSL-02"), path
+        assert data.get("wsl_move_done", False) is (path.parent.name == "WSL-02"), path
+        assert data.get("wsl_move_present_removed", False) is (path.parent.name == "WSL-02"), path
 
 
 # --- windows_wsl_maintenance -----------------------------------------------------------

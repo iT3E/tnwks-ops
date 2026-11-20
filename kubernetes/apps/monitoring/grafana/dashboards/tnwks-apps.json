@@ -876,7 +876,20 @@
                         "system_type": "Type",
                         "site": "Site of the system",
                         "domain": "Domain",
-                        "source": "Source"
+                        "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status"
                       }
                     }
                   }
@@ -1053,6 +1066,19 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Name certificate remaining"
                       }
                     }
@@ -1242,6 +1268,19 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Health"
                       }
                     }
@@ -1766,6 +1805,19 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Certificate validity remaining"
                       }
                     }

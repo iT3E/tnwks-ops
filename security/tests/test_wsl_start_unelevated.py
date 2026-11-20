@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import ansible_render
 import pytest
 import yaml
 from winacl import ACL_FAKES
@@ -362,40 +363,53 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
     assert not passes({**site1, "wsl_start_unelevated": True}), "site 1 needs the split of its two roles first"
 
 
-HOST_SWITCH = re.compile(r"\(hostvars\[wsl_distro_windows_host\]\.(\w+) \| default\(false\) \| bool\)")
+# Stand-ins for the encrypted values of a Windows host with the move of the distro on.
+MOVE_STANDINS = {"wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+                 "wsl_move_present_folder": "C:\\Users\\standin1\\wsl", "ansible_user": "standin-admin"}
 
 
-def fails_play(expression: str, host: dict) -> bool:
-    """Reads the default of wsl_host_check_write_test_fails_play for the given Windows
-    host: switches of that host, each with default(false) and bool, joined by "and".
-    Any other form stops the test, so a change of the form needs a change here."""
-    body = re.fullmatch(r"\{\{ (.*) \}\}", expression.strip())
-    assert body, expression
-    terms = body.group(1).split(" and ")
-    names = [HOST_SWITCH.fullmatch(term) for term in terms]
-    assert all(names), expression
-    return all(bool(host.get(name.group(1), False)) for name in names)
-
-
-def test_the_write_test_fails_the_play_only_where_the_start_step_is_done():
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_write_test_fails_the_play_only_where_the_done_switch_is_on(tmp_path):
     """The holding test: the write test fails the play of a distro whose Windows host
-    starts WSL with no elevation and has done the start step, and only there. A merge
-    of the switch alone leaves the plays green; a host with both on gets a play that
-    can fail."""
+    starts WSL with no elevation and has its done switch on, and only there. The done
+    switch is the phase done of the move of the distro on a host with the move on, and
+    the start step (wsl_start_unelevated_done) on another host. A merge of the switch
+    alone leaves the plays green; a host with both on gets a play that can fail.
+    Ansible itself renders the default, for each case and for each distro of the
+    inventory."""
     defaults = yaml.safe_load((ROLES / "wsl_host_check/defaults/main.yml").read_text())
+    group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
     expression = defaults["wsl_host_check_write_test_fails_play"]
+    hosts, want = {}, {}
     for switch in (False, True):
         for done in (False, True):
-            host = {"wsl_start_unelevated": switch, "wsl_start_unelevated_done": done}
-            assert fails_play(expression, host) == (switch and done), host
-    assert fails_play(expression, {}) is False
-    hosts = windows_hosts()
+            for move in (False, True):
+                for move_done in (False, True):
+                    name = f"case-{int(switch)}{int(done)}{int(move)}{int(move_done)}"
+                    hosts[name] = {"wsl_start_unelevated": switch, "wsl_start_unelevated_done": done, "wsl_move": move,
+                                   "wsl_move_done": move_done, "wsl_move_phase": group["wsl_move_phase"]}
+                    hosts[f"{name}-distro"] = {"wsl_distro_windows_host": name, "wsl_host_check_write_test_fails_play": expression}
+                    want[f"{name}-distro"] = switch and (move_done if move else done)
+    hosts["empty"] = {}
+    hosts["empty-distro"] = {"wsl_distro_windows_host": "empty", "wsl_host_check_write_test_fails_play": expression}
+    want["empty-distro"] = False
+    windows = windows_hosts()
     distros = yaml.safe_load((INVENTORY / "hosts.yml").read_text())["all"]["children"]["wsl_distros"]["hosts"]
     for distro in distros:
         own = yaml.safe_load((INVENTORY / f"host_vars/{distro}/main.yml").read_text())
         assert "wsl_host_check_write_test_fails_play" not in own, distro
-        host = hosts[own["wsl_distro_windows_host"]]
-        assert fails_play(expression, host) == bool(host["wsl_start_unelevated"] and host["wsl_start_unelevated_done"])
+        windows_host = own["wsl_distro_windows_host"]
+        host = windows[windows_host]
+        # Only the switches: the other values of a real host take values of hosts that are not here.
+        hosts[f"real-{windows_host}"] = {key: host[key] for key in (
+            "wsl_start_unelevated", "wsl_start_unelevated_done", "wsl_move", "wsl_move_done", "wsl_move_phase") if key in host}
+        hosts[f"real-{distro}"] = {"wsl_distro_windows_host": f"real-{windows_host}",
+                                   "wsl_host_check_write_test_fails_play": expression}
+        want[f"real-{distro}"] = bool(host["wsl_start_unelevated"]) and (
+            bool(host.get("wsl_move_done")) if host.get("wsl_move") else bool(host["wsl_start_unelevated_done"]))
+    out = ansible_render.render(tmp_path, hosts, list(want), {"fails": "wsl_host_check_write_test_fails_play | bool"})
+    assert {name: values["fails"] for name, values in out.items()} == want
 
 
 # --- The scripts, in PowerShell ------------------------------------------------------------

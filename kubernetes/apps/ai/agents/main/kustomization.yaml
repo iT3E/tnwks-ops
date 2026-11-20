@@ -21,3 +21,6 @@ resources:
   # (vault-server/ks.yaml). No pod of main mounts the share or calls the
   # route yet.
   - ./vault-server/ks.yaml
+  # The nightly snapshot of the share (vault-backup/ks.yaml), to the
+  # repository of main.
+  - ./vault-backup/ks.yaml

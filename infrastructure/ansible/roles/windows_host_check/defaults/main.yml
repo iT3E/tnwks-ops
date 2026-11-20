@@ -66,11 +66,15 @@ host_check_updates_max_age_days: 14
 
 # The check wsl-disk-rules (Design Doc 0004, section 7, row 27): the owner and
 # the rules of the disk file of the WSL distro of the host. On from the done
-# switch of the host (wsl_start_unelevated_done): before it, the account that
-# starts the distro owns its file as WSL made it, so the check gives no
-# result. The file is the disk of the compaction (role windows_wsl_maintenance,
-# vhdx_compact_vhdx), or the default of its script when that is empty.
-host_check_wsl_disk_rules: "{{ wsl_start_unelevated_done | default(false) | bool }}"
+# switch of the host: the phase done of the move of the distro on a host with
+# the move on (wsl_move, wsl_move_phase), and wsl_start_unelevated_done on
+# another host. Before it, the account that starts the distro owns its file as
+# WSL made it, so the check gives no result. The file is the disk of the
+# compaction (role windows_wsl_maintenance, vhdx_compact_vhdx), or the
+# default of its script when that is empty.
+host_check_wsl_disk_rules: >-
+  {{ (wsl_move_phase | default('off') == 'done') if (wsl_move | default(false) | bool)
+     else (wsl_start_unelevated_done | default(false) | bool) }}
 host_check_wsl_disk: "{{ vhdx_compact_vhdx | default('', true) or host_check_wsl_disk_default }}"
 host_check_wsl_disk_default: 'E:\WSL\Ubuntu\ext4.vhdx'
 # The account that owns the distro: the owner of the disk file, and one of

@@ -4,11 +4,15 @@
 # (the last marker is '' or wayback-done), an apply copies each script and
 # writes each config that differs, and registers each task whose definition
 # differs. While a window is started, it changes none of them: a window never
-# runs another procedure than the one it started with. Then each copy on the
-# host must have the SHA-256 of the role's: a copy that differs stops the
-# play.
-- name: The copies of the role, while no window is started
-  when: not wsl_move_window_started | bool
+# runs another procedure than the one it started with. After the deletion of
+# the tasks of the present account (wsl_move_present_removed), the copies of
+# the scripts and the configs follow the role again: no window of that start
+# runs any more, and a way back after the deletion first registers the
+# deleted tasks again (docs/wsl/windows-ansible.md). The tasks stay as they
+# are. Then each copy on the host must have the SHA-256 of the role's: a copy
+# that differs stops the play.
+- name: The copies of the role, while no window is started or after the deletion
+  when: not wsl_move_copies_frozen | bool
   block:
     - name: The scripts of the procedure, from the role of the rehearsal of the move
       ansible.windows.win_copy:
@@ -56,7 +60,9 @@
       loop_control:
         loop_var: task
         label: "{{ task.key }}-{{ task.step }}"
-      when: "'new' in wsl_move_sids"
+      when:
+        - not wsl_move_window_started | bool
+        - "'new' in wsl_move_sids"
       no_log: true
 
     # The present account registers its own tasks: no password, and the
@@ -71,14 +77,19 @@
       loop_control:
         loop_var: task
         label: "{{ task.key }}-{{ task.step }}"
-      when: wsl_move_as_present | bool
+      when:
+        - not wsl_move_window_started | bool
+        - wsl_move_as_present | bool and not (wsl_move_present_removed | bool)
       no_log: true
 
+    # After the deletion of the tasks of the present account, the boot task of
+    # the way back is not registered again (remove_present.yml).
     - name: The window procedure and the boot task of the way back, tasks of SYSTEM
       tnwks_win_scheduled_task:
         name: "{{ wsl_move_window_task if item == 'window' else wsl_move_boot_task }}"
         xml: "{{ lookup('ansible.builtin.template', 'system-task.xml.j2') }}"
-      loop: [window, boot]
+      loop: "{{ ['window'] if wsl_move_present_removed | bool else ['window', 'boot'] }}"
+      when: not wsl_move_window_started | bool
 
 - name: Read the window tasks of the present account
   ansible.windows.win_powershell:
@@ -90,6 +101,7 @@
       @($Names | Where-Object { -not (Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue) })
   check_mode: false
   register: wsl_move_present_tasks_read
+  when: not (wsl_move_present_removed | bool)
 
 - name: Each window task of the present account is there
   ansible.builtin.assert:
@@ -98,7 +110,9 @@
       The window tasks {{ wsl_move_present_tasks_read.output | join(', ') }} of the present account are not there, and
       Ansible does not log in as that account, which registers them. Nothing more is changed.
     quiet: true
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - not (wsl_move_present_removed | bool)
 
 - name: Read the SHA-256 of each script and config on the host
   ansible.windows.win_powershell:
@@ -129,14 +143,14 @@
       {%- endfor -%}
       {{ out }}
 
-# A check run copied nothing, so it reports the copies that an apply would
-# change, and stops on none of them.
+# A check run copied nothing, so where the apply writes the copies it reports
+# the copies that an apply would change, and stops on none of them.
 - name: Each copy on the host is the role's
   ansible.builtin.assert:
     that: wsl_move_files_differ | length == 0
     fail_msg: >-
       The copies {{ wsl_move_files_differ | join(', ') }} on the host are not the role's (SHA-256).
       {{ 'A window is started with them, and no apply swaps them: end that window with the release that started it.'
-      if wsl_move_window_started | bool else '' }} Nothing more is changed.
+      if wsl_move_copies_frozen | bool else '' }} Nothing more is changed.
     quiet: true
-  when: wsl_move_window_started | bool or not ansible_check_mode
+  when: wsl_move_copies_frozen | bool or not ansible_check_mode

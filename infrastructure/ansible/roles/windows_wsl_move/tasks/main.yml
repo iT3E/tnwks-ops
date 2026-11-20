@@ -39,6 +39,45 @@
       (wsl_move_present_tasks, apart from the compaction). Nothing is changed.
     quiet: true
 
+# The account that owns the distro and the disk file of the compaction and the
+# host check follow the phase (host_vars): the present account and the file in
+# its folder in the phase move, the new account and the moved file from the
+# done switch.
+- name: The account that owns the distro and the disk file follow the phase of the move
+  ansible.builtin.assert:
+    that:
+      - >-
+        (windows_desktop_user | default('') | lower)
+        == ((wsl_move_new_account if wsl_move_phase == 'done' else wsl_move_present_account) | lower)
+      - >-
+        (vhdx_compact_vhdx | default('') | ansible.builtin.win_dirname | lower)
+        == ((wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder) | lower)
+      - (vhdx_compact_vhdx | default('') | ansible.builtin.win_basename | lower) == (wsl_move_disk_name | lower)
+    fail_msg: >-
+      In the phase {{ wsl_move_phase }}, windows_desktop_user is not the {{ 'new' if wsl_move_phase == 'done' else 'present' }}
+      account, or vhdx_compact_vhdx is not the disk file in {{ 'the folder of the move' if wsl_move_phase == 'done'
+      else 'the folder of today' }}. Nothing is changed.
+    quiet: true
+  no_log: true
+
+# The deletion of the tasks of the present account (wsl_move_present_removed)
+# comes after the done switch, and after the owner took that account out of
+# the allow list of sshd, which keeps the account that Ansible logs in as.
+# The apply of that list stays the explicit one of the role windows_sshd.
+- name: The deletion of the tasks of the present account comes after the done switch and the allow list without that account
+  vars:
+    wsl_move_allow_list: "{{ windows_sshd_allow_users | default([]) | map('lower') | list }}"
+  ansible.builtin.assert:
+    that:
+      - not (wsl_move_present_removed | bool) or wsl_move_phase == 'done'
+      - not (wsl_move_present_removed | bool) or (wsl_move_present_account | lower) not in wsl_move_allow_list
+      - not (wsl_move_present_removed | bool) or (ansible_user | lower) in wsl_move_allow_list
+    fail_msg: >-
+      wsl_move_present_removed needs the phase done, and windows_sshd_allow_users without the present account and with
+      the account that Ansible logs in as. Nothing is changed.
+    quiet: true
+  no_log: true
+
 - name: Each path of the procedure is in the long, normalized form
   ansible.builtin.assert:
     that: wsl_move_paths | reject('match', wsl_move_path_form) | list | length == 0
@@ -108,7 +147,7 @@
     parameters:
       Registration: "{{ wsl_move_registration_file }}"
       Wslconfig: "{{ wsl_move_wslconfig_file }}"
-      Names: "{{ wsl_move_window_tasks.present.values() | list }}"
+      Names: "{{ [] if wsl_move_present_removed | bool else wsl_move_window_tasks.present.values() | list }}"
     script: |
       param([string]$Registration, [string]$Wslconfig, [string[]]$Names)
       $ErrorActionPreference = 'Stop'
@@ -123,7 +162,11 @@
   when: not wsl_move_as_present | bool
   no_log: true
 
+# Tagged always, with the guard of the done switch below: a run with the tags
+# of a WSL role only (they come after this role in the play) still stops
+# there.
 - name: Read the last marker of the state file
+  tags: [always]
   ansible.windows.win_powershell:
     parameters:
       State: "{{ wsl_move_state_file }}"
@@ -139,9 +182,37 @@
 
 # A window is started from its marker until the marker of the end of its way
 # back: no apply in between changes what the window runs.
+# The copies of the scripts and the configs of the procedure stay as the
+# window found them from its start until the deletion of the tasks of the
+# present account (host_files.yml).
 - name: Whether a window is started
   ansible.builtin.set_fact:
     wsl_move_window_started: "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}"
+    wsl_move_copies_frozen: >-
+      {{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done']
+         and not (wsl_move_present_removed | bool) }}
+
+# The done switch turns each WSL role to the start tasks of the new account:
+# merged before a window ended done, the first apply would leave the host
+# with no working start task. The role stops the play for the host here,
+# before the WSL roles that come after it.
+- name: The done switch comes after a done window
+  tags: [always]
+  ansible.builtin.assert:
+    that: (wsl_move_marker_read.output | last | default('')) == 'window-done'
+    fail_msg: wsl_move_done is on, and the last marker of the state file is not window-done. Nothing is changed.
+    quiet: true
+  when: wsl_move_phase == 'done'
+
+# The deletion of the tasks of the present account only after a forward
+# window that ended done: never in a way back, nor in a window that did not
+# end.
+- name: The deletion of the tasks of the present account comes after a window that ended done
+  ansible.builtin.assert:
+    that: (wsl_move_marker_read.output | last | default('')) == 'window-done'
+    fail_msg: The last marker of the state file is not window-done, and wsl_move_present_removed is on. Nothing is changed.
+    quiet: true
+  when: wsl_move_present_removed | bool
 
 # Only SYSTEM and the Administrators may change the scripts, the configs and
 # the state; Users may read. The folder of the disk file and the log folders
@@ -166,6 +237,54 @@
 
 - name: What step 3 reads of today
   ansible.builtin.include_tasks: read_today.yml
+
+# The repair of a registration that an import with the values as text makes:
+# the import task of the account writes one DWORD named Length (the length of
+# the text) and none of the saved values, so the registration keeps the
+# DefaultUid 0 (root) that wsl --import-in-place writes. After a window that
+# ended done, SYSTEM writes each saved value of step 3 into the registration
+# of the new account, in its loaded hive, and removes the value Length, which
+# WSL never writes. A registration that has them already is no change. WSL
+# reads the registration at the next start of the distro.
+- name: The registration of the new account holds the values of step 3, and no value Length
+  ansible.windows.win_powershell:
+    parameters:
+      Sid: "{{ wsl_move_sids.new }}"
+      Distro: "{{ wsl_move_distro }}"
+      Values: "{{ wsl_move_registration_values | to_json }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Sid, [string]$Distro, [string]$Values)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $want = $Values | ConvertFrom-Json
+      if (-not (Test-Path -LiteralPath "Registry::HKEY_USERS\$Sid")) {
+          throw 'The hive of the new account is not loaded: no task of that account runs. Nothing is changed.'
+      }
+      $lxss = "Registry::HKEY_USERS\$Sid\Software\Microsoft\Windows\CurrentVersion\Lxss"
+      $found = @(Get-ChildItem -LiteralPath $lxss | Where-Object { $_.GetValue('DistributionName') -eq $Distro })
+      if ($found.Count -ne 1) { throw "The new account lists $($found.Count) distros of the name $Distro. Nothing is changed." }
+      $key = $found[0]
+      foreach ($p in @($want.PSObject.Properties)) {
+          $have = $key.GetValue($p.Name)
+          if ($null -ne $have -and [int64]$have -eq [int64]$p.Value -and $key.GetValueKind($p.Name) -eq 'DWord') { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($p.Name, 'write the value of step 3')) {
+              Set-ItemProperty -LiteralPath $key.PSPath -Name $p.Name -Value ([int]$p.Value) -Type DWord
+          }
+      }
+      if ($key.GetValueNames() -contains 'Length') {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess('Length', 'remove the value')) { Remove-ItemProperty -LiteralPath $key.PSPath -Name 'Length' }
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  when:
+    - (wsl_move_marker_read.output | last | default('')) == 'window-done'
+    - "'new' in wsl_move_sids"
+  no_log: true
 
 - name: The state file, the log and the saved version of WSL, only when absent
   ansible.windows.win_powershell:
@@ -199,6 +318,10 @@
 - name: The scripts, the configs and the tasks of the procedure
   ansible.builtin.include_tasks: host_files.yml
 
+- name: The deletion of the tasks of the present account
+  ansible.builtin.include_tasks: remove_present.yml
+  when: wsl_move_present_removed | bool
+
 # D21: the Secondary Logon service starts only on demand.
 - name: The Secondary Logon service has a manual start
   ansible.windows.win_service:
@@ -228,9 +351,12 @@
 
     # Only after the probe made the profile: no folder of a profile is made in
     # advance. The keys and values of the .wslconfig of the present account,
-    # as step 3 read it.
+    # as step 3 read it. From the done switch, the new account owns the
+    # distro, and the role windows_host_settings writes its .wslconfig from
+    # its template and checks it byte for byte: one writer.
     - name: .wslconfig of the new account
       ansible.windows.win_copy:
         dest: '{{ wsl_move_runs.probe.result.profile }}\.wslconfig'
         content: "{{ wsl_move_wslconfig }}"
+      when: wsl_move_phase != 'done'
       no_log: true

@@ -36,6 +36,9 @@ DOMAINS = [
      "each warm app's readiness on its standby and its restore time", "tnwks-sites"),
     ("Apps", worst(metric("homelab:service_state"), metric("homelab:ingress_state")),
      "every app's probe and every shared name", "tnwks-apps"),
+    ("AI", worst(metric("homelab:ai_part_state"), metric("homelab:ai_schedule_state"),
+                 metric("homelab:ai_result_state"), metric("homelab:ai_backup_state")),
+     "each declared part of the agent platform, its scheduled checks, its result lines and its backups", "tnwks-ai"),
     ("Home", worst(metric("homelab:service_state", 'app="home-assistant"'), metric("homelab:mqtt_state"),
                    house("cameras")),
      "Home Assistant, MQTT and the cameras", "tnwks-home"),
@@ -57,6 +60,7 @@ AREAS = [
     ("Backups", metric("homelab:app_rpo_state"), "!= 1", "tnwks-data"),
     ("Database backup", metric("homelab:database_backup_state"), "!= 1", "tnwks-data"),
     ("Database", metric("homelab:other_database_state"), "!= 1 != 4", "tnwks-data"),
+    ("AI part", metric("homelab:ai_part_state"), "!= 1 != 4 != 5", "tnwks-ai"),
 ]
 ATTENTION = "sort_desc(" + " or ".join(
     f'label_replace(label_replace(({query}) {healthy}, "area", "{area}", "", ""), "board", "{uid}", "", "")'
@@ -71,7 +75,7 @@ def board() -> Board:
               "What is affected, which evidence is available, and where should I look next?", {
             "Now": wall + [
                 p("Needs attention", ATTENTION, "state",
-                  "Everything not healthy right now, by area: sites, workloads, services, names, network paths, Flux resources, hosts, recovery, restore time, backups and databases. Standby and Not applicable are left out. Empty means nothing needs you. A row opens its area's board.",
+                  "Everything not healthy right now, by area: sites, workloads, services, names, network paths, Flux resources, hosts, recovery, restore time, backups, databases and the parts of the AI platform. Standby and Not applicable are left out. Empty means nothing needs you. A row opens its area's board.",
                   "table", ROW_BOARD, empty="Nothing needs attention"),
                 p("Current firing alerts", alerts("firing"), "short",
                   "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state.",

@@ -39,12 +39,16 @@ section here (`runbook_url`).
 
 ## The alerts
 
-20 alerts cover the platform: the 15 rules of
-`kubernetes/apps/ai/agents/monitoring/app/` (13 in `prometheusrule.yaml`, 2
-in `heartbeat-prometheusrule.yaml`), and the 5 rules of the backup operator
-(the kopiur chart) that match the snapshot policy, the snapshots and the
-restores of a state volume. The other rules of the backup operator are about
-its repository and its controller, and `backups.md` covers them. No alert of the platform has
+24 alerts cover the platform: the 17 rules of
+`kubernetes/apps/ai/agents/monitoring/app/` (15 in `prometheusrule.yaml`, 2
+in `heartbeat-prometheusrule.yaml`), the 2 rules of the model gateway in
+`kubernetes/apps/ai/litellm/app/prometheusrule.yaml`, and the 5 rules of the
+backup operator (the kopiur chart) that match the snapshot policy, the
+snapshots and the restores of a state volume. The other rules of the backup
+operator are about its repository and its controller, and `backups.md`
+covers them. Each of the 19 rules in `kubernetes/apps/ai/` opens the AI
+board in Grafana (`tnwks-ai`), for the site whose Prometheus raised it
+(`observability/tests/test_alert_links.py`). No alert of the platform has
 fired live yet; the rule tests (`observability/tests/test_hand_written_rules.py`)
 are the proof of each expression.
 
@@ -177,6 +181,12 @@ before the create, and fails a run that leaves its own record.
   the straight connection to the MCP server, always run. A
   `connected` for the straight connection: the policy of the MCP server
   lets in more than the gateway; fix it before the next run.
+  `agents-main` has the same probe for its vault route only, with the key
+  `main-probe` (no Secret yet, so its key checks print `skipped`). In each
+  namespace, `other vault server` with `connected`, or `other vault: probe
+  key` with anything but a 401, is a path across the two trust domains
+  (R6): the policy of that vault server or the keys of that route are
+  wrong; fix it before the next run.
 
 ### WorkflowProvidersStale
 
@@ -691,6 +701,71 @@ kubectl -n flux-system get kustomization agents-monitoring
 
 **Fix.** A suspended CronJob, or one that Flux did not apply: fix it in
 git.
+
+### ModelGatewayCallsFailing
+
+**What it means.** More than half of the model calls of the key of a trust
+domain failed in the last 15 minutes, at least 3 of them, and this went on
+for 20 minutes. It reads the series of the model gateway
+([`litellm.md`](litellm.md#metrics)): the calls and the failed calls of the
+key `agents-<name>`. The hold is longer than the window, so one turn with
+its retries (about 3 minutes) does not fire it. The failures must go on
+for about 5 minutes or more. The key of the metrics scrape and the key of
+the transcriber are not a trust domain, and do not fire it.
+
+**First checks.** The Model calls tab of the AI board, "Failed model calls
+by status", for the key of the alert:
+
+- 429: the limit of the Claude plan, if the name goes to the plan. The model
+  bridge logs it too, and `ModelBridgeRateLimited` fires.
+- 401 or 403: a key or a model list. Is the key of the agent the one in
+  `keys.json`, and does its entry list the name? The `ensure-keys` sidecar
+  logs each key it made or changed (`kubectl -n ai logs deploy/litellm -c
+  ensure-keys --tail=20`).
+- 5xx: the model bridge, Bedrock or the vendor. The log of the gateway is in
+  Loki, `{namespace="ai", app="litellm"}`, and the bridge has its own
+  (`{namespace="ai", app="model-bridge"}`).
+
+**Seen so far.** Not fired. The promtool cases in
+`observability/rule-tests/litellm.yaml` prove that one turn with its retries
+does not fire it, that failures for 20 minutes fire it, and that a quiet
+trust domain, a domain whose failures are a quarter and the scrape key do
+not.
+
+**Fix.** By the status. [At a limit of the Claude
+plan](#at-a-limit-of-the-claude-plan) for a 429. A wrong key or model list:
+fix the entry of `keys.json` by a pull request. The bridge or Bedrock down:
+their own sections, or [move the trust domain](#move-a-trust-domain-to-bedrock-by-hand)
+when the plan is the fault and the owner says so.
+
+### LiteLLMBedrockCertificateExpiring
+
+**What it means.** The client certificate of IAM Roles Anywhere, which
+gives the model gateway (`litellm`) its Bedrock credentials, expires on
+2027-03-28. The rule fires from 2027-02-26, 30 days before. It does not read
+the certificate: its expression is a fixed date
+(`vector(time()) > 1803600000`). Without the certificate, each name of the
+model gateway that goes to Bedrock fails: the summaries of the transcriber,
+and each trust domain that was moved to Bedrock
+([by hand](#move-a-trust-domain-to-bedrock-by-hand)).
+
+**First checks.** The date is in [`litellm.md`](litellm.md#bedrock-credentials).
+Do not decrypt the Secret to read it. The sidecar that exchanges the
+certificate for credentials logs each refresh:
+
+```sh
+kubectl -n ai logs deploy/litellm -c aws-credentials --tail=20
+```
+
+**Seen so far.** Never. The promtool cases in
+`observability/rule-tests/litellm.yaml` prove that it is quiet before the
+date and fires from it.
+
+**Fix.** The owner renews the certificate, as
+[`litellm.md`](litellm.md#bedrock-credentials) says: new PEM files in
+`app/secret-roles-anywhere.sops.yaml`. In the same change, move the date
+in `app/prometheusrule.yaml` to 30 days before the new end, and the dates of
+the cases in `observability/rule-tests/litellm.yaml` with it.
 
 ### KopiurLastBackupFailed
 
@@ -1794,10 +1869,16 @@ of the vault work. The lead reads; the owner makes the turns.
 
    A failed check Job fires `KubeJobFailed` (`agents-finance`,
    `agent-restore-check`); a failed or stuck Restore fires
-   `KopiurRestoreFailed`. The cleanup is a pull request that takes
-   `./agent/restore-test/ks.yaml` out of the list again and sets the name
-   of the snapshot back to its placeholder; Flux then removes the Restore,
-   the check Job and the scratch volume.
+   `KopiurRestoreFailed`. The cleanup is two pull requests. The first
+   takes `./agent/restore-test/ks.yaml` out of the list again, with no
+   other edit; Flux then removes the Restore, the check Job and the
+   scratch volume. Check: `kubectl -n agents-finance get restore,job,pvc`
+   shows no `agent-state-restore-test` and no `agent-restore-check`. The
+   second sets the name of the snapshot back to its placeholder. Not both
+   in one: Flux applies the placeholder to the Restore of the child
+   Kustomization while the parent prunes it, and the deletion then waits
+   for the health check of the child (60 minutes), with the copy on the
+   scratch volume until then.
 6. **The heartbeat.** The first heartbeat of `openclaw-agents-finance` is
    in Tempo; then the pull request that adds it to `SERVICES`.
 
@@ -1939,8 +2020,8 @@ before a second run.
 
 The proof that a nightly snapshot of the finance share comes back whole:
 the template `kubernetes/apps/ai/agents/finance/vault-backup/restore-test/`,
-in the form of the restore test of the state volume. Two pull requests,
-each with the owner's go.
+in the form of the restore test of the state volume. Three pull
+requests: the run and the cleanup with the owner's go, then the placeholder.
 
 **The first change** lists `./vault-backup/restore-test/ks.yaml` in
 `finance/kustomization.yaml`, with the name of the newest `Succeeded`
@@ -1990,13 +2071,22 @@ A failed Job fires `KubeJobFailed` (`agents-finance`,
 `KopiurRestoreFailed`.
 
 **The second change**, after the result is read and recorded, takes the
-line `./vault-backup/restore-test/ks.yaml` out of `finance/kustomization.yaml`
-and sets the name back to `vault-SET-ME` in both files. Flux prunes the two
-Kustomizations, and with them the Restore (and its copy of the
-credentials), the Job and the scratch claim; the reclaim policy `Delete`
-of the class wipes its folder on the node. The restored notes must not stay
-behind. Check: `kubectl -n agents-finance get restore,job,pvc` shows no
-`vault-restore-test` and no `vault-restore-check`.
+line `./vault-backup/restore-test/ks.yaml` out of `finance/kustomization.yaml`,
+with no other edit. Flux prunes the two Kustomizations, and with them the
+Restore (and its copy of the credentials), the Job and the scratch claim;
+the reclaim policy `Delete` of the class wipes its folder on the node. The
+restored notes must not stay behind. Check: `kubectl -n agents-finance get
+restore,job,pvc` shows no `vault-restore-test` and no
+`vault-restore-check`, and `kubectl -n flux-system get kustomization
+agents-finance-vault-restore-test` is not found.
+
+**The third change**, only after that check, sets the name back to
+`vault-SET-ME` in both files, so the directory is a template again. Not in
+the second change: Flux then applies the placeholder to the Restore of the
+child Kustomization while the parent prunes it. The Restore waits for a
+snapshot that is not there, and the deletion waits for the health check of
+the child (45 minutes), with the copy on the scratch claim until then. The
+cleanup of the run of 2026-11-20 did both in one change and met this.
 
 **The run of 2026-11-20.** The Restore of the nightly snapshot of
 2026-11-19 was `Completed` at 04:51 UTC, and the Job printed `result=ok`

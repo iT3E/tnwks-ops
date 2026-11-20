@@ -3,6 +3,66 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.241.0 - 2026-11-20
+
+### Added
+
+* observability: the network rule of Prometheus, first form (step 3 of task 5.23). The CiliumNetworkPolicy prometheus sends each request to the query port through the proxy of Cilium and lets each one pass, with default deny off, so Hubble shows the method, the path and the source of each request before the next form names the readers.
+
+## v2.240.1 - 2026-11-20
+
+### Fixed
+
+* windows: the configs of the move take the values of the registration of today as a mapping, not as the text that win_powershell gives for an object below its output depth, and an apply after a done window writes those values into the registration of the new account and removes the value Length that an import with that text writes; after the deletion of the tasks of the present account, the copies of the scripts and the configs of the procedure follow the role again
+
+## v2.240.0 - 2026-11-20
+
+### Changed
+
+* windows: site 2 deletes the tasks of the present account after the move of the distro: each WSL task and window task of that account and the boot task of the way back, only in the phase done, after a window that ended done, and while the allow list of sshd no longer names that account
+
+## v2.239.0 - 2026-11-20
+
+### Added
+
+* litellm, observability: the series of the model gateway (step 2 of task 5.23). The Prometheus callback with a keep list (5 metrics; the key name, the name asked for, the provider and the status) and a cap of 100 label sets for each metric; a scrape with a key of its own (metrics-scrape: no model, the route /metrics only, pinned in ensure_keys.py), which writes undeclared for a key name that is not declared; the daily CronJob litellm-key-check, which fails when that key can call a model name; the Model calls tab of the AI board (calls, the share that failed, the time of a call, tokens by key, name and day); and the alert ModelGatewayCallsFailing with its runbook section and promtool cases.
+
+## v2.238.0 - 2026-11-20
+
+### Added
+
+* observability: the AI board in Grafana (tnwks-ai, step 1 of task 5.23), from the data of today. A declared list of the AI parts, scheduled checks, result lines and snapshot policies, with a state for each (a part that is gone stays a row, as Unknown; site 2 declares each part it does not run as Not applicable); the AI tile on the Homelab wall and its row in Needs attention; tool calls of the MCP gateway without the GET with 405 of a client start; the plan limit, instruction file changes and mover denials; the time of the newest restore test result. Each of the 18 AI alerts opens the AI board, and the certificate alert of the model gateway has its runbook section and promtool cases.
+
+## v2.237.0 - 2026-11-20
+
+### Changed
+
+* Site 2, Windows host: the allow list of sshd names only the account that Ansible logs in as (Design Doc 0004, section 9, step 6). The encrypted `windows_sshd_allow_users` of the host loses the present account of the move; the apply on the host stays the explicit one of the role windows_sshd.
+
+## v2.236.0 - 2026-11-20
+
+### Changed
+
+* windows: site 2 turns on the done switch of the move of the distro: the account that owns the distro, the disk file of the compaction and the host check, and the read of its rules follow the phase, and the play stops when they do not
+
+## v2.235.0 - 2026-11-20
+
+### Added
+
+* agents: the gateway probe of main has its key (PROBE_KEY, client main-probe of the route main-vault), and the gateway config has its hash in place of the placeholder. The key checks of the probe run from the next scheduled run.
+
+## v2.234.0 - 2026-11-20
+
+### Added
+
+* agents: the nightly snapshot of the main share (task 3.37, step C): the SnapshotPolicy and SnapshotSchedule vault in agents-main, the form of finance, from the read-only claim vault-ro to the repository agents-main, with the retention of the state volume.
+
+## v2.233.0 - 2026-11-20
+
+### Added
+
+* agents: the gateway probe covers the vault route of main (task 3.37, step B): platform-check-mcp-gateway-probe in agents-main (05:47) checks the route main-vault with its key main-probe (a placeholder until the values step, read from an optional Secret), and the probes of finance and main each check that their key gets a 401 on the vault route of the other trust domain and that the other vault server is out of reach. The probe script runs for a vault route only when a domain has no other route.
+
 ## v2.232.0 - 2026-11-20
 
 ### Changed

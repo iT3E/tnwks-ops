@@ -12,6 +12,7 @@ import base64
 import re
 from pathlib import Path
 
+import ansible_render
 import pytest
 import yaml
 from test_wsl_start_unelevated import needs_pwsh, pwsh
@@ -105,11 +106,20 @@ def test_the_scripts_are_the_rehearsals_and_each_copy_is_checked():
     assert "wsl_move_configs.items()" in hashes
 
 
-def test_the_copies_change_only_while_no_window_is_started():
+def test_the_copies_change_only_while_no_window_is_started_or_after_the_deletion():
+    """The scripts and the configs follow the role while no window is started and after the
+    deletion of the tasks of the present account; the tasks only while no window is started."""
     host = yaml.safe_load((ROLE / "tasks/host_files.yml").read_text())
     block = host[0]
-    assert block["when"] == "not wsl_move_window_started | bool"
+    assert block["when"] == "not wsl_move_copies_frozen | bool"
     changing = block["block"]
+    for task in changing:
+        module = next(k for k in task if k not in ("name", "vars", "loop", "loop_control", "when", "no_log"))
+        if module == "tnwks_win_scheduled_task":
+            when = task["when"] if isinstance(task["when"], list) else [task["when"]]
+            assert when[0] == "not wsl_move_window_started | bool", task["name"]
+        else:
+            assert "when" not in task, task["name"]
     assert {next(k for k in t if k not in ("name", "vars", "loop", "loop_control", "when", "no_log")) for t in changing} == {
         "ansible.windows.win_copy", "ansible.windows.win_powershell", "tnwks_win_scheduled_task"}
     # Outside the block, the play only reads.
@@ -121,8 +131,36 @@ def test_the_copies_change_only_while_no_window_is_started():
     started = next(t for t in ALL if t.get("name") == "Whether a window is started")
     assert started["ansible.builtin.set_fact"]["wsl_move_window_started"] == (
         "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}")
+    assert " ".join(started["ansible.builtin.set_fact"]["wsl_move_copies_frozen"].split()) == (
+        "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] "
+        "and not (wsl_move_present_removed | bool) }}")
     final = host[-1]
-    assert final["when"] == "wsl_move_window_started | bool or not ansible_check_mode"
+    assert final["when"] == "wsl_move_copies_frozen | bool or not ansible_check_mode"
+    assert "if wsl_move_copies_frozen | bool" in final["ansible.builtin.assert"]["fail_msg"]
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_copies_are_frozen_from_the_start_of_a_window_until_the_deletion(tmp_path):
+    """Both sides of the switch, as Ansible renders them: frozen for each marker of a started
+    window while the tasks of the present account exist, and not after their deletion."""
+    fact = next(t for t in ALL if t.get("name") == "Whether a window is started")["ansible.builtin.set_fact"]
+    block = yaml.safe_load((ROLE / "tasks/host_files.yml").read_text())[0]
+    hosts, want = {}, {}
+    for marker in ("", "wayback-done", "window-started", "boot-run", "window-done"):
+        for removed in (False, True):
+            name = f"m-{marker or 'none'}-{int(removed)}"
+            hosts[name] = {"wsl_move_marker_read": {"output": [marker]}, "wsl_move_present_removed": removed, **fact}
+            started = marker not in ("", "wayback-done")
+            want[name] = {"frozen": started and not removed, "copies": not started or removed,
+                          "tasks": not started, "check": started and not removed}
+    out = ansible_render.render(tmp_path, hosts, list(hosts), {
+        "frozen": "wsl_move_copies_frozen | bool",
+        "copies": block["when"],
+        "tasks": "not wsl_move_window_started | bool",
+        # The compare of a check run (host_files.yml, the last task).
+        "check": "wsl_move_copies_frozen | bool or not true"})
+    assert out == want
 
 
 def test_the_present_account_registers_its_own_tasks_and_no_password_is_reset():
@@ -130,7 +168,8 @@ def test_the_present_account_registers_its_own_tasks_and_no_password_is_reset():
     present = next(t for t in host if t.get("name") == "Tasks of the present account, while Ansible logs in as it")
     module = present["tnwks_win_scheduled_task"]
     assert "s4u_user" not in module and "ansible_become" not in present.get("vars", {})
-    assert present["when"] == "wsl_move_as_present | bool"
+    assert present["when"] == ["not wsl_move_window_started | bool",
+                               "wsl_move_as_present | bool and not (wsl_move_present_removed | bool)"]
     new = next(t for t in host if t.get("name") == "Tasks of the new account")
     assert new["tnwks_win_scheduled_task"]["s4u_user"] == "{{ wsl_move_new_account }}"
     assert new["vars"]["ansible_become_user"] == "SYSTEM"
@@ -253,12 +292,14 @@ def test_the_paths_are_in_the_long_normalized_form(path, ok):
 
 
 def test_only_the_tasks_that_act_for_the_new_account_run_as_system():
-    """The registration of its tasks (its password is reset) and the run of its probe.
+    """The registration of its tasks (its password is reset), the run of its probe, and the
+    repair of its registration in its loaded hive.
 
     And the reads of the window play (window_read.yml), which read the state of both accounts as SYSTEM.
     """
     becoming = sorted(t["name"] for t in ALL if (t.get("vars") or {}).get("ansible_become_user") == "SYSTEM")
     assert becoming == ["Run the task {{ wsl_move_run.key }}-{{ wsl_move_run.step }}", "Tasks of the new account",
+                        "The registration of the new account holds the values of step 3, and no value Length",
                         "The window play, {{ wsl_move_window_read_mode }}"]
     for task in ALL:
         assert "become" not in task and "become_user" not in task, task.get("name")
@@ -361,7 +402,8 @@ def test_an_apply_as_the_administrator_stops_before_any_write_until_step_3_ran_a
     assert guard["when"] == "not wsl_move_as_present | bool" and guard["check_mode"] is False
     assert module["parameters"] == {"Registration": "{{ wsl_move_registration_file }}",
                                     "Wslconfig": "{{ wsl_move_wslconfig_file }}",
-                                    "Names": "{{ wsl_move_window_tasks.present.values() | list }}"}
+                                    "Names": ("{{ [] if wsl_move_present_removed | bool "
+                                              "else wsl_move_window_tasks.present.values() | list }}")}
     assert "SupportsShouldProcess" not in module["script"] and "$Ansible.Changed = $false" in module["script"]
     changing = ("tnwks_win_dir_acl", "ansible.windows.win_file", "ansible.windows.win_copy", "tnwks_win_scheduled_task",
                 "ansible.windows.win_service", "ansible.builtin.include_tasks")
@@ -398,6 +440,21 @@ try {{
     assert out["no reads"] == out["one read"] == out["no tasks"] == stop
 
 
+def test_the_account_and_the_disk_file_follow_the_phase_before_any_change():
+    """The done change: the owner of the distro and the file of the compaction and the host check."""
+    names = [t.get("name") for t in tasks("main.yml")]
+    gate = "The account that owns the distro and the disk file follow the phase of the move"
+    assert names.index(gate) < names.index("Folder of the procedure")
+    that = [" ".join(line.split()) for line in next(t for t in tasks("main.yml") if t.get("name") == gate)[
+        "ansible.builtin.assert"]["that"]]
+    desktop = ("(windows_desktop_user | default('') | lower) == ((wsl_move_new_account if wsl_move_phase == 'done' "
+               "else wsl_move_present_account) | lower)")
+    folder = ("(vhdx_compact_vhdx | default('') | ansible.builtin.win_dirname | lower) == ((wsl_move_disk_dir "
+              "if wsl_move_phase == 'done' else wsl_move_present_folder) | lower)")
+    name = "(vhdx_compact_vhdx | default('') | ansible.builtin.win_basename | lower) == (wsl_move_disk_name | lower)"
+    assert that == [desktop, folder, name]
+
+
 def test_on_site_2_the_administrator_logs_in_and_the_distro_keeps_its_owner_and_user():
     """Step 4 (plan task 10.14): the inventory of site 2."""
     host = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
@@ -411,9 +468,183 @@ def test_on_site_2_the_administrator_logs_in_and_the_distro_keeps_its_owner_and_
     assert "{{ wsl_move_present_account }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}" in (
         host["ansible_ssh_common_args"])
     assert "wsl_distro_user" not in host["ansible_ssh_common_args"]
-    # The disk file of today is in the folder of the present account, not of the SSH user.
-    assert host["vhdx_compact_vhdx"] == "{{ wsl_move_present_folder }}\\ext4.vhdx"
+    # The disk file is the moved file from the done switch, and before it the file in the folder of the
+    # present account, not of the SSH user. The folder of the move is the role's own.
+    assert host["wsl_move_disk_dir"] == DEFAULTS["wsl_move_disk_dir"].replace("{{ wsl_move_dir }}", DEFAULTS["wsl_move_dir"])
+    assert host["vhdx_compact_vhdx"] == (
+        "{{ wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder }}\\" + DEFAULTS["wsl_move_disk_name"])
     # No public value of site 2 takes the owner or the user of the distro from the SSH user.
     for path in ("inventory/host_vars/WSL-02/main.yml", "inventory/host_vars/WSL-02-ubuntu/main.yml"):
         code = [line for line in (ANSIBLE / path).read_text().splitlines() if not line.lstrip().startswith("#")]
         assert not any("ansible_user" in line for line in code), path
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_values_of_site_2_in_each_phase_render_as_windows_paths(tmp_path):
+    """Ansible renders the disk file of the compaction and the host check, the account that owns the
+    distro and the gate of the host check of site 2, with stand-ins for its encrypted values. Each path has
+    one backslash between its names: a doubled one would make the standing check report a missing file."""
+    site2 = ansible_render.load(
+        "roles/windows_wsl_move/defaults/main.yml", "roles/windows_host_check/defaults/main.yml",
+        "inventory/group_vars/windows_hosts.yml", "inventory/host_vars/WSL-02/main.yml")
+    standins = {"wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+                "wsl_move_present_folder": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}",
+                "wsl_move_rehearsed_wsl_version": "3.0.5.0", "ansible_user": "standin-admin"}
+    distro = {"wsl_distro_ssh_host": "192.0.2.10", "ansible_host": "192.0.2.10", "ansible_port": 22,
+              "ansible_ssh_private_key_file": "/dev/null"}
+    hosts = {"WSL-02": {**site2, **standins}, "WSL-02-move": {**site2, **standins, "wsl_move_done": False},
+             "WSL-02-ubuntu": distro}
+    names = ("vhdx_compact_vhdx", "host_check_wsl_disk", "host_check_wsl_disk_account", "windows_desktop_user",
+             "wsl_move_phase")
+    out = ansible_render.render(tmp_path, hosts, ["WSL-02", "WSL-02-move"],
+                                {**{name: name for name in names}, "rules": "host_check_wsl_disk_rules | bool"})
+    assert out["WSL-02"] == {
+        "vhdx_compact_vhdx": "C:\\ProgramData\\tnwks-wsl-move\\disk\\ext4.vhdx",
+        "host_check_wsl_disk": "C:\\ProgramData\\tnwks-wsl-move\\disk\\ext4.vhdx",
+        "host_check_wsl_disk_account": "standin-wsl", "windows_desktop_user": "standin-wsl",
+        "wsl_move_phase": "done", "rules": True}
+    assert out["WSL-02-move"] == {
+        "vhdx_compact_vhdx": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}\\ext4.vhdx",
+        "host_check_wsl_disk": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}\\ext4.vhdx",
+        "host_check_wsl_disk_account": "standin1", "windows_desktop_user": "standin1",
+        "wsl_move_phase": "move", "rules": False}
+
+
+def test_the_done_switch_stops_the_host_before_the_wsl_roles_until_a_window_ended_done():
+    """Merged before a done window, the done switch would turn each WSL role to the tasks of the new account.
+    The guard runs after the read of the marker and before the first change, with each tag, and the role runs
+    before the WSL roles in a play with no rescue: its failure ends the play for the host."""
+    main = tasks("main.yml")
+    names = [t.get("name") for t in main]
+    guard = main[names.index("The done switch comes after a done window")]
+    assert guard["ansible.builtin.assert"]["that"] == "(wsl_move_marker_read.output | last | default('')) == 'window-done'"
+    assert guard["when"] == "wsl_move_phase == 'done'" and guard["tags"] == ["always"]
+    read = main[names.index("Read the last marker of the state file")]
+    assert read["check_mode"] is False and read["tags"] == ["always"]
+    assert names.index("Whether a window is started") < names.index("The done switch comes after a done window") < (
+        names.index("Folder of the procedure"))
+    play = next(p for p in yaml.safe_load((ANSIBLE / "playbooks/windows-host.yml").read_text())
+                if p["hosts"] == "windows_hosts")
+    assert not any(key in play for key in ("ignore_errors", "max_fail_percentage", "ignore_unreachable"))
+    roles = [role["role"] for role in play["roles"]]
+    for wsl_role in ("windows_udp_relay", "windows_lan_bridge", "windows_wsl_maintenance", "windows_host_check",
+                     "windows_host_settings"):
+        assert roles.index("windows_wsl_move") < roles.index(wsl_role), wsl_role
+    for role in play["roles"]:
+        assert "ignore_errors" not in role, role["role"]
+
+
+def test_only_windows_host_settings_writes_the_wslconfig_of_the_new_account_once_done():
+    """The role writes the .wslconfig of the new account in its own form while the move runs; from the done
+    switch, windows_host_settings writes and checks it from its template, at the profile of the new account."""
+    write = next(t for t in ALL if t.get("name") == ".wslconfig of the new account")
+    assert write["when"] == "wsl_move_phase != 'done'"
+    settings = yaml.safe_load((ANSIBLE / "roles/windows_host_settings/defaults/main.yml").read_text())
+    assert settings["wslconfig_path"] == "C:\\Users\\{{ windows_desktop_user }}\\.wslconfig"
+    site2 = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
+    assert site2["wslconfig_write"] is True
+
+
+# --- The deletion of the tasks of the present account (section 9, step 6) ------------------
+
+REMOVAL = "The deletion of the tasks of the present account comes after the done switch and the allow list without that account"
+REMOVAL_MARKER = "The deletion of the tasks of the present account comes after a window that ended done"
+
+
+def test_the_deletion_needs_the_phase_done_and_the_allow_list_without_the_present_account_before_any_change():
+    main = tasks("main.yml")
+    names = [t.get("name") for t in main]
+    guard = main[names.index(REMOVAL)]
+    assert guard["ansible.builtin.assert"]["that"] == [
+        "not (wsl_move_present_removed | bool) or wsl_move_phase == 'done'",
+        "not (wsl_move_present_removed | bool) or (wsl_move_present_account | lower) not in wsl_move_allow_list",
+        "not (wsl_move_present_removed | bool) or (ansible_user | lower) in wsl_move_allow_list"]
+    assert guard["vars"] == {"wsl_move_allow_list": "{{ windows_sshd_allow_users | default([]) | map('lower') | list }}"}
+    assert guard["no_log"] is True and "when" not in guard
+    marker = main[names.index(REMOVAL_MARKER)]
+    assert marker["ansible.builtin.assert"]["that"] == "(wsl_move_marker_read.output | last | default('')) == 'window-done'"
+    assert marker["when"] == "wsl_move_present_removed | bool"
+    changing = ("tnwks_win_dir_acl", "ansible.windows.win_file", "ansible.windows.win_copy", "tnwks_win_scheduled_task",
+                "ansible.windows.win_service", "ansible.builtin.include_tasks")
+    first_change = min(i for i, t in enumerate(main) if any(k in t for k in changing)
+                       or "SupportsShouldProcess" in str(t.get("ansible.windows.win_powershell", {}).get("script", "")))
+    assert names.index(REMOVAL) < first_change and names.index(REMOVAL_MARKER) < first_change
+    assert names.index("Read the last marker of the state file") < names.index(REMOVAL_MARKER)
+    removal = main[names.index("The deletion of the tasks of the present account")]
+    assert removal == {"name": "The deletion of the tasks of the present account",
+                       "ansible.builtin.include_tasks": "remove_present.yml", "when": "wsl_move_present_removed | bool"}
+    assert names.index("The scripts, the configs and the tasks of the procedure") < names.index(
+        "The deletion of the tasks of the present account")
+
+
+def test_the_deletion_unregisters_each_task_of_the_present_account_and_the_boot_task_and_none_comes_back():
+    assert VARS["wsl_move_removed_tasks"].strip() == (
+        "{{ wsl_move_present_tasks + (wsl_move_window_tasks.present.values() | list) + [wsl_move_boot_task] }}")
+    remove = tasks("remove_present.yml")
+    assert remove[0]["tnwks_win_scheduled_task"] == {"name": "{{ item }}", "state": "absent"}
+    assert remove[0]["loop"] == "{{ wsl_move_removed_tasks }}"
+    assert remove[1]["ansible.windows.win_powershell"]["parameters"] == {"Names": "{{ wsl_move_removed_tasks }}"}
+    assert remove[1]["check_mode"] is False
+    assert remove[2]["ansible.builtin.assert"]["that"] == "wsl_move_removed_read.output | length == 0"
+    host = {t.get("name"): t for t in tasks("host_files.yml")}
+    assert host["The window procedure and the boot task of the way back, tasks of SYSTEM"]["loop"] == (
+        "{{ ['window'] if wsl_move_present_removed | bool else ['window', 'boot'] }}")
+    assert host["Read the window tasks of the present account"]["when"] == "not (wsl_move_present_removed | bool)"
+    assert host["Each window task of the present account is there"]["when"] == [
+        "not ansible_check_mode", "not (wsl_move_present_removed | bool)"]
+    # Each WSL role that registers a task of the present account skips it in the phase done, which the
+    # deletion needs: no apply registers a deleted task again.
+    roles = ANSIBLE / "roles"
+    present = set(DEFAULTS["wsl_move_present_tasks"])
+    seen = set()
+    for role in ("windows_wsl_maintenance", "windows_lan_bridge", "windows_udp_relay"):
+        defaults = yaml.safe_load((roles / role / "defaults/main.yml").read_text())
+        for task in yaml.safe_load((roles / role / "tasks/main.yml").read_text()):
+            module = task.get("tnwks_win_scheduled_task")
+            if not module or module.get("state") == "absent" or "s4u_user" in module:
+                continue
+            name = module["name"]
+            if name == "{{ item.task }}":
+                names = {relay["task"] for relay in defaults["udp_relays"]}
+            else:
+                names = {defaults.get(name.strip("{} "), name)}
+            if names & present:
+                seen |= names & present
+                assert "wsl_move_phase != 'done'" in str(task.get("when")), (role, task["name"])
+    assert seen == present
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_deletion_renders_its_tasks_and_stops_on_each_allow_list_that_names_the_present_account(tmp_path):
+    """Ansible renders the guard of the deletion on stand-ins, for each allow list and phase, and the names that
+    the deletion unregisters."""
+    guard = next(t for t in tasks("main.yml") if t.get("name") == REMOVAL)
+    base = {**ansible_render.load("roles/windows_wsl_move/defaults/main.yml", "roles/windows_wsl_move/vars/main.yml",
+                                  "inventory/group_vars/windows_hosts.yml"),
+            "wsl_move": True, "wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+            "ansible_user": "standin-admin", "wsl_move_allow_list": guard["vars"]["wsl_move_allow_list"]}
+    cases = {
+        "removed": ({"wsl_move_done": True, "wsl_move_present_removed": True,
+                     "windows_sshd_allow_users": ["standin-admin"]}, True),
+        "removed, the present account in the list": ({"wsl_move_done": True, "wsl_move_present_removed": True,
+                                                      "windows_sshd_allow_users": ["standin-admin", "Standin1"]}, False),
+        "removed, no list": ({"wsl_move_done": True, "wsl_move_present_removed": True}, False),
+        "removed, without the account of Ansible": ({"wsl_move_done": True, "wsl_move_present_removed": True,
+                                                     "windows_sshd_allow_users": ["standin-wsl"]}, False),
+        "removed in the phase move": ({"wsl_move_done": False, "wsl_move_present_removed": True,
+                                       "windows_sshd_allow_users": ["standin-admin"]}, False),
+        "kept, both accounts in the list": ({"wsl_move_done": True, "wsl_move_present_removed": False,
+                                             "windows_sshd_allow_users": ["standin-admin", "standin1"]}, True),
+    }
+    hosts = {f"case{i}": {**base, **values} for i, (values, _) in enumerate(cases.values())}
+    out = ansible_render.render(tmp_path, hosts, list(hosts), {
+        "passes": "[" + ", ".join(f"({c})" for c in guard["ansible.builtin.assert"]["that"]) + "] is all",
+        "removed": "wsl_move_removed_tasks"})
+    assert {case: out[f"case{i}"]["passes"] for i, case in enumerate(cases)} == {
+        case: want for case, (_, want) in cases.items()}
+    assert out["case0"]["removed"] == [
+        "tnwks-lan-bridge-ip", "tnwks-udp-relay-syslog", "tnwks-vhdx-compact", "tnwks-wsl-keepalive", "tnwks-wsl-watchdog",
+        "tnwks-wsl-move-present-stop", "tnwks-wsl-move-present-unregister", "tnwks-wsl-move-present-import",
+        "tnwks-wsl-move-boot"]

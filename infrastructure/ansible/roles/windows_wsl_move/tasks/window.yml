@@ -45,11 +45,17 @@
   no_log: true
 
 # A start, and its precheck, only while the move is on and not done. After
-# the done switch, the way back is its revert first (section 9, step 6).
+# the done switch, the way back is its revert first (section 9, step 6). The
+# check play reads the tasks of the present account, so it does not run after
+# their deletion (wsl_move_present_removed); status does.
 - name: The phase of the move lets this mode run
   ansible.builtin.assert:
-    that: wsl_move_phase == 'move' if wsl_move_window in ['precheck', 'forward', 'wayback'] else wsl_move_phase in ['move', 'done']
-    fail_msg: "The phase of the move is {{ wsl_move_phase }}: the mode {{ wsl_move_window }} does not run in it."
+    that:
+      - wsl_move_phase == 'move' if wsl_move_window in ['precheck', 'forward', 'wayback'] else wsl_move_phase in ['move', 'done']
+      - wsl_move_window != 'check' or not (wsl_move_present_removed | bool)
+    fail_msg: >-
+      The phase of the move is {{ wsl_move_phase }}{{ ', after the deletion of the tasks of the present account'
+      if wsl_move_present_removed | bool else '' }}: the mode {{ wsl_move_window }} does not run in it.
     quiet: true
 
 - name: Whether Ansible logs in as the present account

@@ -66,12 +66,30 @@ wsl_move_rehearsal: false
 # secrets.sops.yml next to this file. The play stops before any change while
 # one of them is missing.
 wsl_move: true
+# The done switch of the move (section 9, step 6), only after the check play
+# of step 6 passed (playbooks/windows-move-window.yml, -e
+# wsl_move_window=check), with the write test from the distro and the relay.
+# From it, the account that owns the distro is the new account, the copies of
+# the start tasks stay enabled, and the host check reads the rules of the
+# moved disk file. A way back turns it off first.
+wsl_move_done: true
+# The deletion of the tasks of the present account, after the owner took that
+# account out of windows_sshd_allow_users in secrets.sops.yml. Its apply is
+# the point of no return of the move.
+wsl_move_present_removed: true
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true
-# The distro's disk (on C:, where `wsl --install` put it, in the folder of
-# the present account), for the on-demand compaction task and the host check.
-vhdx_compact_vhdx: '{{ wsl_move_present_folder }}\ext4.vhdx'
+# The distro's disk, for the on-demand compaction task and the host check:
+# the moved file in the folder of the move from the done switch, and before
+# it the file where `wsl --install` put it, on C: in the folder of the
+# present account. The folder of the move is the default of the role
+# windows_wsl_move, here so that the compaction and the host check read it
+# too. The role windows_wsl_move stops the play when this is not the file of
+# the phase.
+wsl_move_disk_dir: 'C:\ProgramData\tnwks-wsl-move\disk'
+vhdx_compact_vhdx: >-
+  {{ wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder }}\ext4.vhdx
 
 # homelab-wsl's Prometheus scrapes both exporters over the LAN (from
 # DESKTOP-HKE05KI's address, where its pods' traffic leaves).

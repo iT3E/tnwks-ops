@@ -222,8 +222,10 @@ each folder, and which task writes where.
 **The services take the change at the next start of WSL**, the start step
 below. The merge and the apply of the switch leave the plays green: the last
 task of `wsl_host_check` (the write test) can fail the distro play only when
-`wsl_start_unelevated_done` is on too. The security result of the check
-shows the write test from the first run, with or without it.
+the done switch of the host is on too: the phase `done` of the move of the
+distro on a host with the move on (`wsl_move_done`), and
+`wsl_start_unelevated_done` on another host. The security result of the
+check shows the write test from the first run, with or without it.
 
 ### Before the merge of the switch for a host
 
@@ -1115,6 +1117,41 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   An apply as an account other than the present one stops before any write
   until an apply as the present account kept the reads of today and
   registered its window tasks.
+- **The done switch.** `wsl_move_done` of the host, only after the check
+  play of step 6, the write test from the distro and the relay passed. From
+  it, `windows_desktop_user` is the new account, the compaction and the host
+  check read the moved file (`vhdx_compact_vhdx`, in `wsl_move_disk_dir`),
+  the host check reads the rules of that file (`host_check_wsl_disk_rules`
+  follows the phase on a host with the move on), and the write test can fail
+  the distro play (`wsl_host_check_write_test_fails_play` follows it too),
+  and `windows_host_settings` alone writes the `.wslconfig` of the new
+  account, from its template. The role stops the play for the host, before
+  the WSL roles and with any tags, unless the last marker of the window is
+  `window-done`. It also stops it when the account or the file is not the
+  one of the phase. A way back turns the switch off first.
+- **The deletion of the tasks of the present account.**
+  `wsl_move_present_removed` of the host, only in the phase `done`, with the
+  owner's go. The apply unregisters each task of `wsl_move_present_tasks`, the
+  three window tasks of the present account and the boot task of the way back.
+  In the phase `done` no role registers a task of the present account, and the
+  role no longer registers the boot task. The play stops before any change
+  unless the last marker of the window is `window-done`, and
+  `windows_sshd_allow_users` holds the account that Ansible logs in as and not
+  the present account. The order: the owner's edit of that list in the
+  encrypted variables of the host, then the merge and the apply of the switch,
+  then the explicit apply of the role `windows_sshd`. The check play of the
+  window does not run after it; status does. **That apply is the point of no
+  return of the move.** A way back after it needs, in order: the present
+  account back in Administrators and in the allow list, with the apply of
+  sshd; this switch and the done switch off, as the roles register the WSL
+  tasks of the present account only before the phase `done`; the revert of
+  step 4, so that an apply as the present account registers its window tasks
+  and the boot task again as at step 3, and its WSL tasks, which come back
+  enabled; that apply starts its keepalive and relays, which fail and retry
+  until way back step 2 stops the copies; step 4 again, as the window play
+  starts no window while Ansible logs in as the present account; the window in
+  its way back mode; then the revert of step 3. On site 2 that needs a working
+  path to the host, or someone at the keyboard.
 
 - **Variables.** The names of the two accounts and the folder of the disk
   file today are in the encrypted variables of the host only:
@@ -1155,7 +1192,12 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   (`roles/windows_wsl_move_rehearsal/files`), and each copy on the host must
   have the SHA-256 of the role's file. The installed version of WSL is
   saved once. The scripts, the configs and the tasks change only while no
-  window is started.
+  window is started. After the deletion of the tasks of the present account
+  (`wsl_move_present_removed`), the scripts and the configs follow the role
+  again, and the tasks stay as they are. The values of the registration of
+  today reach the configs as a mapping of whole numbers, or the play stops.
+  After a window that ended done, the play writes them into the
+  registration of the new account, and removes a value `Length` there.
 - **The tasks.** The new account has its probe and its stop, unregister and
   import tasks. The present account registers its own stop, unregister and
   import tasks while Ansible logs in as it. SYSTEM has the window task and
