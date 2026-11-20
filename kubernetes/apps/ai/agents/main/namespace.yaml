@@ -33,6 +33,13 @@ spec:
 # Not for the pods of a sandbox: the workload pod (openshell.ai/boundary-role)
 # gets no DNS egress, since its names resolve through its supervisor, and the
 # supervisor pod (openshell.ai/managed-by) has its own egress policy.
+#
+# Nor for a pod with the label agents.home.arpa/dns: such a pod gets its own
+# DNS rule for the names it needs only, or none (the vault server,
+# vault-server/app/deployment.yaml). Cilium adds up the allows of every
+# policy that selects a pod, the name patterns of DNS rules too, so a narrow
+# rule next to this one would change nothing: the pod has to be out of this
+# selector.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -44,6 +51,8 @@ spec:
       - key: openshell.ai/managed-by
         operator: DoesNotExist
       - key: openshell.ai/boundary-role
+        operator: DoesNotExist
+      - key: agents.home.arpa/dns
         operator: DoesNotExist
   egress:
     - toEndpoints:
