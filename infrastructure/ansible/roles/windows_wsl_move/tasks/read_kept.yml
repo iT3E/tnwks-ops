@@ -13,7 +13,12 @@
       $ErrorActionPreference = 'Stop'
       $Ansible.Changed = $false
       if (-not (Test-Path -LiteralPath $Registration) -or -not (Test-Path -LiteralPath $Wslconfig)) { return $null }
-      @{ registration = (Get-Content -LiteralPath $Registration -Raw | ConvertFrom-Json); wslconfig = [IO.File]::ReadAllText($Wslconfig) }
+      # Both as text: win_powershell writes its output to the depth of its
+      # option depth (2), and gives each object below that depth as its
+      # PowerShell text. The dwords of the registration are at depth 3 of
+      # this output, so an object here would reach the play as the text
+      # "@{DefaultUid=...; Flags=...}". The play reads the JSON itself.
+      @{ registration = [IO.File]::ReadAllText($Registration); wslconfig = [IO.File]::ReadAllText($Wslconfig) }
   check_mode: false
   register: wsl_move_today_read
   no_log: true
@@ -22,6 +27,16 @@
 # configs then take no values, and the run reports them as a change.
 - name: The reads of today
   ansible.builtin.set_fact:
-    wsl_move_registration: "{{ (wsl_move_today_read.output | last | default({}, true) or {}).registration | default({}) }}"
+    wsl_move_registration: "{{ (wsl_move_today_read.output | last | default({}, true) or {}).registration | default('{}', true) | from_json }}"
     wsl_move_wslconfig_present: "{{ (wsl_move_today_read.output | last | default({}, true) or {}).wslconfig | default('') }}"
   no_log: true
+
+# The import task of each account writes each of these values as a DWORD
+# into its registration: a mapping of names to whole numbers, never text.
+- name: The values of the registration of today are a mapping of whole numbers
+  ansible.builtin.assert:
+    that:
+      - wsl_move_registration_values is mapping
+      - wsl_move_registration_values.values() | reject('integer') | list | length == 0
+    fail_msg: The kept values of the registration of today are not a mapping of whole numbers. Nothing more is changed.
+    quiet: true

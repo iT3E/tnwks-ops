@@ -254,12 +254,14 @@ def test_the_paths_are_in_the_long_normalized_form(path, ok):
 
 
 def test_only_the_tasks_that_act_for_the_new_account_run_as_system():
-    """The registration of its tasks (its password is reset) and the run of its probe.
+    """The registration of its tasks (its password is reset), the run of its probe, and the
+    repair of its registration in its loaded hive.
 
     And the reads of the window play (window_read.yml), which read the state of both accounts as SYSTEM.
     """
     becoming = sorted(t["name"] for t in ALL if (t.get("vars") or {}).get("ansible_become_user") == "SYSTEM")
     assert becoming == ["Run the task {{ wsl_move_run.key }}-{{ wsl_move_run.step }}", "Tasks of the new account",
+                        "The registration of the new account holds the values of step 3, and no value Length",
                         "The window play, {{ wsl_move_window_read_mode }}"]
     for task in ALL:
         assert "become" not in task and "become_user" not in task, task.get("name")
