@@ -222,8 +222,10 @@ each folder, and which task writes where.
 **The services take the change at the next start of WSL**, the start step
 below. The merge and the apply of the switch leave the plays green: the last
 task of `wsl_host_check` (the write test) can fail the distro play only when
-`wsl_start_unelevated_done` is on too. The security result of the check
-shows the write test from the first run, with or without it.
+the done switch of the host is on too: the phase `done` of the move of the
+distro on a host with the move on (`wsl_move_done`), and
+`wsl_start_unelevated_done` on another host. The security result of the
+check shows the write test from the first run, with or without it.
 
 ### Before the merge of the switch for a host
 
@@ -1115,6 +1117,18 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   An apply as an account other than the present one stops before any write
   until an apply as the present account kept the reads of today and
   registered its window tasks.
+- **The done switch.** `wsl_move_done` of the host, only after the check
+  play of step 6, the write test from the distro and the relay passed. From
+  it, `windows_desktop_user` is the new account, the compaction and the host
+  check read the moved file (`vhdx_compact_vhdx`, in `wsl_move_disk_dir`),
+  the host check reads the rules of that file (`host_check_wsl_disk_rules`
+  follows the phase on a host with the move on), and the write test can fail
+  the distro play (`wsl_host_check_write_test_fails_play` follows it too),
+  and `windows_host_settings` alone writes the `.wslconfig` of the new
+  account, from its template. The role stops the play for the host, before
+  the WSL roles and with any tags, unless the last marker of the window is
+  `window-done`. It also stops it when the account or the file is not the
+  one of the phase. A way back turns the switch off first.
 
 - **Variables.** The names of the two accounts and the folder of the disk
   file today are in the encrypted variables of the host only:

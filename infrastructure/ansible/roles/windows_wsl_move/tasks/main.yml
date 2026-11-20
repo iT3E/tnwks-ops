@@ -39,6 +39,27 @@
       (wsl_move_present_tasks, apart from the compaction). Nothing is changed.
     quiet: true
 
+# The account that owns the distro and the disk file of the compaction and the
+# host check follow the phase (host_vars): the present account and the file in
+# its folder in the phase move, the new account and the moved file from the
+# done switch.
+- name: The account that owns the distro and the disk file follow the phase of the move
+  ansible.builtin.assert:
+    that:
+      - >-
+        (windows_desktop_user | default('') | lower)
+        == ((wsl_move_new_account if wsl_move_phase == 'done' else wsl_move_present_account) | lower)
+      - >-
+        (vhdx_compact_vhdx | default('') | ansible.builtin.win_dirname | lower)
+        == ((wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder) | lower)
+      - (vhdx_compact_vhdx | default('') | ansible.builtin.win_basename | lower) == (wsl_move_disk_name | lower)
+    fail_msg: >-
+      In the phase {{ wsl_move_phase }}, windows_desktop_user is not the {{ 'new' if wsl_move_phase == 'done' else 'present' }}
+      account, or vhdx_compact_vhdx is not the disk file in {{ 'the folder of the move' if wsl_move_phase == 'done'
+      else 'the folder of today' }}. Nothing is changed.
+    quiet: true
+  no_log: true
+
 - name: Each path of the procedure is in the long, normalized form
   ansible.builtin.assert:
     that: wsl_move_paths | reject('match', wsl_move_path_form) | list | length == 0
@@ -123,7 +144,11 @@
   when: not wsl_move_as_present | bool
   no_log: true
 
+# Tagged always, with the guard of the done switch below: a run with the tags
+# of a WSL role only (they come after this role in the play) still stops
+# there.
 - name: Read the last marker of the state file
+  tags: [always]
   ansible.windows.win_powershell:
     parameters:
       State: "{{ wsl_move_state_file }}"
@@ -142,6 +167,18 @@
 - name: Whether a window is started
   ansible.builtin.set_fact:
     wsl_move_window_started: "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}"
+
+# The done switch turns each WSL role to the start tasks of the new account:
+# merged before a window ended done, the first apply would leave the host
+# with no working start task. The role stops the play for the host here,
+# before the WSL roles that come after it.
+- name: The done switch comes after a done window
+  tags: [always]
+  ansible.builtin.assert:
+    that: (wsl_move_marker_read.output | last | default('')) == 'window-done'
+    fail_msg: wsl_move_done is on, and the last marker of the state file is not window-done. Nothing is changed.
+    quiet: true
+  when: wsl_move_phase == 'done'
 
 # Only SYSTEM and the Administrators may change the scripts, the configs and
 # the state; Users may read. The folder of the disk file and the log folders
@@ -228,9 +265,12 @@
 
     # Only after the probe made the profile: no folder of a profile is made in
     # advance. The keys and values of the .wslconfig of the present account,
-    # as step 3 read it.
+    # as step 3 read it. From the done switch, the new account owns the
+    # distro, and the role windows_host_settings writes its .wslconfig from
+    # its template and checks it byte for byte: one writer.
     - name: .wslconfig of the new account
       ansible.windows.win_copy:
         dest: '{{ wsl_move_runs.probe.result.profile }}\.wslconfig'
         content: "{{ wsl_move_wslconfig }}"
+      when: wsl_move_phase != 'done'
       no_log: true
