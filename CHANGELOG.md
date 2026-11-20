@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.240.1 - 2026-11-20
+
+### Fixed
+
+* windows: the configs of the move take the values of the registration of today as a mapping, not as the text that win_powershell gives for an object below its output depth, and an apply after a done window writes those values into the registration of the new account and removes the value Length that an import with that text writes; after the deletion of the tasks of the present account, the copies of the scripts and the configs of the procedure follow the role again
+
 ## v2.240.0 - 2026-11-20
 
 ### Changed
