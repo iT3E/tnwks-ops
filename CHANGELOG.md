@@ -3,6 +3,24 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.240.0 - 2026-11-20
+
+### Changed
+
+* windows: site 2 deletes the tasks of the present account after the move of the distro: each WSL task and window task of that account and the boot task of the way back, only in the phase done, after a window that ended done, and while the allow list of sshd no longer names that account
+
+## v2.239.0 - 2026-11-20
+
+### Added
+
+* litellm, observability: the series of the model gateway (step 2 of task 5.23). The Prometheus callback with a keep list (5 metrics; the key name, the name asked for, the provider and the status) and a cap of 100 label sets for each metric; a scrape with a key of its own (metrics-scrape: no model, the route /metrics only, pinned in ensure_keys.py), which writes undeclared for a key name that is not declared; the daily CronJob litellm-key-check, which fails when that key can call a model name; the Model calls tab of the AI board (calls, the share that failed, the time of a call, tokens by key, name and day); and the alert ModelGatewayCallsFailing with its runbook section and promtool cases.
+
+## v2.238.0 - 2026-11-20
+
+### Added
+
+* observability: the AI board in Grafana (tnwks-ai, step 1 of task 5.23), from the data of today. A declared list of the AI parts, scheduled checks, result lines and snapshot policies, with a state for each (a part that is gone stays a row, as Unknown; site 2 declares each part it does not run as Not applicable); the AI tile on the Homelab wall and its row in Needs attention; tool calls of the MCP gateway without the GET with 405 of a client start; the plan limit, instruction file changes and mover denials; the time of the newest restore test result. Each of the 18 AI alerts opens the AI board, and the certificate alert of the model gateway has its runbook section and promtool cases.
+
 ## v2.237.0 - 2026-11-20
 
 ### Changed

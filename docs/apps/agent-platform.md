@@ -1907,6 +1907,17 @@ and each rule's `runbook_url` links to it. It also has the restore of the
 state of an agent, the fast stop of the workflow agent, the move to Bedrock
 by hand, and the steps at a limit of the Claude plan.
 
+The model gateway has 2 rules of its own, in
+`kubernetes/apps/ai/litellm/app/prometheusrule.yaml`: the certificate alert,
+and `ModelGatewayCallsFailing`, which reads the series of the gateway
+([`litellm.md`](litellm.md#metrics)).
+
+Each alert, and each alert of the model gateway, opens the AI board in
+Grafana (`tnwks-ai`) for the site whose Prometheus raised it. The
+board has a state for each part, scheduled check, result line and snapshot
+policy that `observability/inventory.py` declares
+([the AI board](../operations/observability-implementation.md#the-ai-board)).
+
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |
 | `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive`, `official-plugins` or `doctor` init container, or a lock on the state volume. Revert the last image if it came with an update |
@@ -1926,6 +1937,7 @@ by hand, and the steps at a limit of the Claude plan.
 | `AgentBackupMoverConfigMapDenied` | The admission rule `agents-backup-mover-configmaps` refused a ConfigMap write of a backup mover in a trust domain ([The backup mover and ConfigMaps](#the-backup-mover-and-configmaps)). It fires for one to two hours after each denial (`keep_firing_for: 1h`) | none | The audit lines of that hour in Loki name the namespace, the ConfigMap and the ServiceAccount, and the events of the namespace name the mover Job. Suspend the snapshots of that namespace |
 | `AgentBackupRepositoryNotReady` | The backup repository of the trust domains (`agents`) is `Pending` or `Initializing`: it never got `Ready`, so no snapshot of a trust domain runs. `Failed` and `Degraded` are the chart rule `KopiurRepositoryNotReady` | 1h | `kubectl get clusterrepository agents -o yaml`, then the refresher of its session ([Backups of the agent trust domains](#backups-of-the-agent-trust-domains)) |
 | `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |
+| `ModelGatewayCallsFailing` | At least 3 model calls of the key of a trust domain failed in 15 minutes, and more than half of its calls. One turn with its retries does not fire it | 20m | "Failed model calls by status" on the Model calls tab of the AI board: 429 the limit of the plan, 401 or 403 a key or a model list, 5xx the bridge, Bedrock or the vendor |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,
   `{namespace="agents-workflows", app="workflow-run"}`, and

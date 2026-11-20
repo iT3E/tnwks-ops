@@ -217,6 +217,51 @@ spec:
         ports:
           http:
             port: 4000
+    # The scrape of the gateway's metrics (docs/apps/litellm.md, "Metrics";
+    # the keep list is in configmap.yaml). /metrics asks for a key, so the
+    # scrape sends the key `metrics-scrape` (Secret litellm-metrics-scrape):
+    # its model list is no-default-models and its routes /metrics only
+    # (scripts/ensure_keys.py pins both). The service litellm-app only, so
+    # the peer service is not a second target.
+    # Each series keeps the name (alias) of the caller's key. A key made by
+    # hand in the admin UI can carry any name, so each name that is not in
+    # the list below reads `undeclared`. "None" (a call with no valid key)
+    # and "other" (the cap of the keep list) stay as they are. Two undeclared
+    # keys that call the same name with the same status make the same
+    # series: Prometheus keeps the sample of the first one only, so the
+    # count of `undeclared` is a sign, not a number. Add the alias of a new
+    # key here in the pull request that adds the key
+    # (tests/test_model_gateway_metrics.py names the list).
+    serviceMonitor:
+      app:
+        serviceName: litellm-app
+        endpoints:
+          - port: http
+            path: /metrics
+            interval: 1m
+            scrapeTimeout: 20s
+            authorization:
+              type: Bearer
+              credentials:
+                name: litellm-metrics-scrape
+                key: token
+            metricRelabelings:
+              # The series of the keep list, without the _created series of
+              # each counter. The process and Python series of the client
+              # library and the in-flight gauge are not kept.
+              - sourceLabels: [__name__]
+                regex: litellm_(proxy_total_requests_metric_total|proxy_failed_requests_metric_total|request_total_latency_metric_(bucket|sum|count)|input_tokens_metric_total|output_tokens_metric_total)
+                action: keep
+              - sourceLabels: [api_key_alias]
+                regex: agents-main|agents-finance|agents-workflows|agents-pilot|transcriber|metrics-scrape|None|other
+                targetLabel: __tmp_declared
+                replacement: "yes"
+              - sourceLabels: [api_key_alias, __tmp_declared]
+                regex: .+;
+                targetLabel: api_key_alias
+                replacement: undeclared
+              - regex: __tmp_declared
+                action: labeldrop
     persistence:
       signing-helper:
         type: emptyDir

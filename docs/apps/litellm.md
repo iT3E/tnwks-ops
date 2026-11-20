@@ -208,7 +208,8 @@ Keys are declared, not created by hand:
   `{"alias", "key", "models"}`. An entry may also set a spend limit:
   `"max_budget"` (US dollars) and `"budget_duration"` (when the spend
   resets, such as `"30d"`). LiteLLM refuses the key's calls once it has spent
-  the limit, and counts the spend in its database.
+  the limit, and counts the spend in its database. An entry may also set
+  `"allowed_routes"`, the only routes that its key may call.
 - The `ensure-keys` sidecar (`app/scripts/ensure_keys.py`) creates each key
   with that exact value, or updates its models (and its limit, when the entry
   sets one) if it exists, then re-checks every 6 hours. Keys not in the list
@@ -220,9 +221,12 @@ Keys are declared, not created by hand:
 | Alias | Models | Used by |
 | --- | --- | --- |
 | `transcriber` | `claude-sonnet` | the transcriber's daily summaries (`docs/apps/transcriber.md`) |
+| `metrics-scrape` | `["no-default-models"]`, routes `["/metrics"]` | the scrape of the metrics by Prometheus, and its daily check ([Metrics](#metrics)) |
 
 To add one: generate a value (`sk-<app>-` and random hex), add the entry to
-`keys.json`, and put the value in the app's Secret.
+`keys.json`, and put the value in the app's Secret. Add its alias to the
+declared names of the scrape too ([Metrics](#metrics)), or its calls read
+`undeclared` on the AI board.
 
 ### Keys of the agent platform
 
@@ -256,3 +260,59 @@ names the Service `litellm-app`).
 - Never leave `models` empty: a key with an empty list can call every model,
   each embedding entry and each `claude-opus-*` entry too, so the text of one
   trust domain could go to the entry of another.
+
+## Metrics
+
+The gateway serves Prometheus metrics on `/metrics` (its `prometheus`
+callback), and Prometheus scrapes them each minute. The AI board shows them
+on its Model calls tab: calls, failed calls, the time of a call and tokens,
+by key ([the AI board](../operations/observability-implementation.md#the-ai-board)).
+`ModelGatewayCallsFailing` reads them
+([runbook](agent-platform-runbook.md#modelgatewaycallsfailing)).
+
+- **A keep list, not a drop list.** `litellm_settings.prometheus_metrics_config`
+  in `app/configmap.yaml` names 5 metrics: all calls, failed calls, the time
+  of a call (a histogram), input tokens and output tokens. Each keeps 4
+  labels: the name of the key (`api_key_alias`), the name it asked for
+  (`requested_model`), the provider (`api_provider`) and the status
+  (`status_code`, or `exception_status` on a failed call). Each other metric
+  is not made, and each other label is dropped, also a new one of a later
+  release. Never add `end_user`, `user`, `user_email`, `client_ip`,
+  `user_agent` or `hashed_api_key`, and no spend metric:
+  `observability/tests/test_model_gateway_metrics.py` fails on any label not
+  in its list.
+- **A cap.** `prometheus_metrics_max_series_per_metric: 100`: each label set
+  after the first 100 of a metric goes to one series whose labels all read
+  `other`. The worst case is about 2,400 series, under the gate of 5,000 of
+  the design. A name that the gateway does not know reads `other` too.
+- **A key of its own.** `/metrics` asks for a key, and a key that is not an
+  admin key may read it only when its `allowed_routes` list `/metrics`. The
+  key `metrics-scrape` has the model list `["no-default-models"]` (a name
+  that is no model: an empty list would give the key each model) and the
+  routes `["/metrics"]`. `ensure_keys.py` pins both in plain text (`PINNED`)
+  and refuses an entry with any other value, so git shows what the key can
+  do without a decrypt. Prometheus reads the same value from the Secret
+  `litellm-metrics-scrape` (`app/secret-metrics-scrape.sops.yaml`, key
+  `token`), as the `serviceMonitor` of `app/helmrelease.yaml` says.
+- **Declared names.** A key made by hand in the admin UI can have any name.
+  The scrape keeps the names of the keys in `keys.json` (`agents-main`,
+  `agents-finance`, `agents-workflows`, `agents-pilot`, `transcriber`,
+  `metrics-scrape`), `None` (a call with no valid key) and `other` (the cap),
+  and writes `undeclared` for each other name. Two undeclared keys that call
+  the same name with the same status make one series: Prometheus keeps the
+  sample of the first one only, so the count of `undeclared` is a sign that
+  such a key is in use, not a number.
+- **The daily check.** The CronJob `litellm-key-check` (`app/key-check.yaml`,
+  `app/scripts/key_check.py`, 05:41 UTC) calls each model name of the config
+  with the key of the scrape, and one name that is no model, with a prompt
+  of one word. Each call must get 403. A 200 (the key can call that name),
+  a 401 (the gateway does not know the key) or any other answer fails the
+  Job, and `KubeJobFailed` fires. It prints one line for each name, never
+  the key. The AI board shows the CronJob on its Checks tab. These refused
+  calls show on the metrics as the key `metrics-scrape` with status 403, and
+  the board and the alert leave them out.
+- **What it costs.** A few hundred series with the use of today, and the memory
+  of Prometheus for them. `count by (__name__) ({__name__=~"litellm_.+"})`
+  counts them.
+- **The way back.** Revert the change: the callback is off, and the scrape
+  and the check go with it.

@@ -74,6 +74,14 @@
   {
     "dashboard": "home",
     "tab": "Now",
+    "title": "AI",
+    "expr": "((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
     "title": "Home",
     "expr": "((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 1)",
     "unit": "state",
@@ -91,7 +99,7 @@
     "dashboard": "home",
     "tab": "Now",
     "title": "Needs attention",
-    "expr": "sort_desc(label_replace(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\"), \"board\", \"tnwks-network\", \"\", \"\") or label_replace(label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\"), \"board\", \"tnwks-kubernetes\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, instance, resource) (homelab:host_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Host\", \"\", \"\"), \"board\", \"tnwks-hosts\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\"))",
+    "expr": "sort_desc(label_replace(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\"), \"board\", \"tnwks-network\", \"\", \"\") or label_replace(label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\"), \"board\", \"tnwks-kubernetes\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, instance, resource) (homelab:host_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Host\", \"\", \"\"), \"board\", \"tnwks-hosts\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 1 != 4 != 5, \"area\", \"AI part\", \"\", \"\"), \"board\", \"tnwks-ai\", \"\", \"\"))",
     "unit": "state",
     "kiosk": false
   },
@@ -1228,6 +1236,198 @@
     "tab": "Dependencies",
     "title": "Tunnel connections",
     "expr": "cloudflared_tunnel_ha_connections{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "title": "Parts",
+    "expr": "((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "title": "Checks",
+    "expr": "((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "title": "Backups",
+    "expr": "((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "title": "Part state",
+    "expr": "max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "title": "AI alerts firing",
+    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Model calls by key",
+    "expr": "sum by (k8s_cluster, api_key_alias, requested_model, status_code) (increase(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Failed model calls by status",
+    "expr": "sum by (k8s_cluster, api_key_alias, requested_model, exception_status) (increase(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Model calls",
+    "expr": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+    "unit": "reqps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Share of model calls that failed",
+    "expr": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])) / sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Time of a model call (p95)",
+    "expr": "histogram_quantile(0.95, sum by (k8s_cluster, api_key_alias, le) (rate(litellm_request_total_latency_metric_bucket{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Tokens per day",
+    "expr": "sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d])) + sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Tokens in the range",
+    "expr": "sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) + sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Tool calls",
+    "title": "MCP requests by route",
+    "expr": "sum by (k8s_cluster, route, method, status) (increase(agentgateway_requests_total{k8s_cluster=~\"$cluster\"}[$__range]) unless increase(agentgateway_requests_total{k8s_cluster=~\"$cluster\",method=\"GET\",status=\"405\"}[$__range]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Tool calls",
+    "title": "MCP failed requests",
+    "expr": "sum by (k8s_cluster, route, status) (rate(agentgateway_requests_total{k8s_cluster=~\"$cluster\",status=~\"[45]..\"}[$__rate_interval]) unless rate(agentgateway_requests_total{k8s_cluster=~\"$cluster\",status=~\"[45]..\",method=\"GET\",status=\"405\"}[$__rate_interval]))",
+    "unit": "reqps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Checks",
+    "title": "Scheduled check state",
+    "expr": "max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Checks",
+    "title": "Time since the last good run",
+    "expr": "max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds{k8s_cluster=~\"$cluster\"}) * 0 + on (k8s_cluster, namespace, cronjob) group_left () (time() - max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{k8s_cluster=~\"$cluster\"}))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Checks",
+    "title": "Result line state",
+    "expr": "max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Checks",
+    "title": "Workflow run Jobs",
+    "expr": "label_replace(count by (k8s_cluster) (kube_job_status_succeeded{k8s_cluster=~\"$cluster\",namespace=\"agents-workflows\",job_name=~\"run-.+\"} > 0), \"result\", \"succeeded\", \"\", \"\") or label_replace(count by (k8s_cluster) (kube_job_status_failed{k8s_cluster=~\"$cluster\",namespace=\"agents-workflows\",job_name=~\"run-.+\",reason!=\"\"} > 0), \"result\", \"failed\", \"\", \"\")",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Backups",
+    "title": "Backup state",
+    "expr": "max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Backups",
+    "title": "Backup age",
+    "expr": "max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_age_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Backups",
+    "title": "Last restore test",
+    "expr": "max by (k8s_cluster, trust_domain, check, result) (homelab:ai_restore_result_timestamp_seconds{k8s_cluster=~\"$cluster\"}) * 1000",
+    "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Plan limit reached",
+    "expr": "max by (k8s_cluster, trust_domain) (label_replace(max_over_time(homelab_model_bridge_engine_error_timestamp_seconds{k8s_cluster=~\"$cluster\",kind=\"rate_limit\"}[$__range]), \"trust_domain\", \"$1\", \"domain\", \"(.+)\")) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Instruction file changes",
+    "expr": "max by (k8s_cluster, trust_domain, result) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{k8s_cluster=~\"$cluster\",check=\"instruction-file\"}[$__range]), \"trust_domain\", \"$1\", \"pod_namespace\", \"agents-(.+)\")) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Mover denials",
+    "expr": "max by (k8s_cluster, policy) (max_over_time(apiserver_validating_admission_policy_check_total{k8s_cluster=~\"$cluster\",policy=\"agents-backup-mover-configmaps\",enforcement_action=\"deny\"}[$__range])) > 0",
     "unit": "short",
     "kiosk": false
   },
