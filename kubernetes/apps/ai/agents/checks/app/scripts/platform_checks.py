@@ -651,24 +651,31 @@ def firefly_probe() -> None:
         cleanup()
 
 
-# The gateway probe of a trust domain (finance only:
-# kubernetes/apps/ai/agents/finance/checks/app/mcp-gateway-probe.yaml).
+# The gateway probe of a trust domain (finance and main:
+# kubernetes/apps/ai/agents/<domain>/checks/app/mcp-gateway-probe.yaml).
 # MCP_GATEWAY_URL is the route of the domain at the MCP gateway, as its agent
-# calls it; MCP_SERVER the MCP server behind it (host:port), which no pod but
+# calls it, or empty for a domain with a vault route only (main); MCP_SERVER the MCP server behind it (host:port), which no pod but
 # the gateway may reach; GATEWAY_CONFIG the config of the gateway, whose tool
 # list the probe key must see. PROBE_KEY may list the tools of the domain
 # and call get_about only; NO_TOOLS_KEY has no tool. Each is a placeholder
 # ("pending") until the owner's values step, and a check that needs it says
 # so and passes. The probe holds no key of an agent. VAULT_GATEWAY_URL and
 # VAULT_SERVER are the vault route of the domain and its vault server; with
-# no VAULT_GATEWAY_URL the probe checks no vault. On the vault route,
-# PROBE_KEY may list the tools and call get_file_info only, and NO_TOOLS_KEY
-# is not a key at all.
+# no VAULT_GATEWAY_URL the probe checks no vault. VAULT_ROUTE is the name of
+# the vault route in the config. On the vault route, PROBE_KEY may list the
+# tools and call get_file_info only, and NO_TOOLS_KEY is not a key at all; a
+# domain with no NO_TOOLS_KEY in its env has no such checks.
+# OTHER_VAULT_GATEWAY_URL and OTHER_VAULT_SERVER are the vault route and the
+# vault server of the other trust domain: the probe key gets a 401 there, and
+# a straight connection is blocked (R6).
 MCP_GATEWAY_URL = os.environ.get("MCP_GATEWAY_URL", "")
 MCP_SERVER = os.environ.get("MCP_SERVER", "")
 GATEWAY_CONFIG = os.environ.get("GATEWAY_CONFIG", "")
 VAULT_GATEWAY_URL = os.environ.get("VAULT_GATEWAY_URL", "")
 VAULT_SERVER = os.environ.get("VAULT_SERVER", "")
+VAULT_ROUTE = os.environ.get("VAULT_ROUTE", "finance-vault")
+OTHER_VAULT_GATEWAY_URL = os.environ.get("OTHER_VAULT_GATEWAY_URL", "")
+OTHER_VAULT_SERVER = os.environ.get("OTHER_VAULT_SERVER", "")
 PENDING = "pending"
 SKIPPED = "skipped: the key is pending"
 
@@ -766,13 +773,24 @@ def rule_tools(name: str = "finance") -> list[str]:
 
 def mcp_gateway() -> None:
     check = "mcp-gateway"
+    probe_key = os.environ.get("PROBE_KEY", PENDING)
+    no_tools_key = os.environ.get("NO_TOOLS_KEY")
+    if MCP_GATEWAY_URL:
+        domain(check, probe_key, no_tools_key or PENDING)
+    if VAULT_GATEWAY_URL:
+        vault(check, probe_key, no_tools_key)
+    if OTHER_VAULT_GATEWAY_URL:
+        other_vault(check, probe_key)
+
+
+def domain(check: str, probe_key: str, no_tools_key: str) -> None:
+    """The route of the domain and its MCP server."""
     host, port = MCP_SERVER.rsplit(":", 1)
     report(check, "MCP server, direct from a pod that is not the gateway", "blocked",
            tcp(host, int(port)))
     report(check, "no key: tools/list", "refused: HTTP 401", listed(None))
     report(check, "a key that is not in the config: tools/list", "refused: HTTP 401",
            listed(secrets.token_hex(32)))
-    probe_key = os.environ.get("PROBE_KEY", PENDING)
     if probe_key == PENDING:
         report(check, "probe key", SKIPPED, SKIPPED)
     else:
@@ -797,18 +815,15 @@ def mcp_gateway() -> None:
                called(probe_key, "create_tag", {"tag": "probe"},
                       {"X-Client": "finance", "X-Api-Key": "finance", "Cookie": "client=finance",
                        "X-Forwarded-For": "127.0.0.1"}))
-    no_tools_key = os.environ.get("NO_TOOLS_KEY", PENDING)
     if no_tools_key == PENDING:
         report(check, "key with no tool", SKIPPED, SKIPPED)
     else:
         report(check, "key with no tool: tools/list", "tools: 0", listed(no_tools_key))
         report(check, "key with no tool: read (get_about)", "refused: gateway",
                called(no_tools_key, "get_about", {}))
-    if VAULT_GATEWAY_URL:
-        vault(check, probe_key, no_tools_key)
 
 
-def vault(check: str, probe_key: str, no_tools_key: str) -> None:
+def vault(check: str, probe_key: str, no_tools_key: str | None) -> None:
     """The vault route of the domain and its vault server. The probe reads
     the facts of the root of the share only (get_file_info /vault): no note
     name and no note text."""
@@ -821,7 +836,7 @@ def vault(check: str, probe_key: str, no_tools_key: str) -> None:
     if probe_key == PENDING:
         report(check, "vault: probe key", SKIPPED, SKIPPED)
     else:
-        want = rule_tools("finance-vault")
+        want = rule_tools(VAULT_ROUTE)
         got = listed_names(probe_key, VAULT_GATEWAY_URL)
         report(check, f"vault: probe key: lists the {len(want)} tools of the rule", "same",
                "same" if got == want else
@@ -835,11 +850,28 @@ def vault(check: str, probe_key: str, no_tools_key: str) -> None:
                  "move_file", {"source": "/vault/a", "destination": "/vault/b"},
                  "refused: gateway")):
             report(check, target, expected, called(probe_key, tool, arguments, url=VAULT_GATEWAY_URL))
+    if no_tools_key is None:
+        return
     if no_tools_key == PENDING:
         report(check, "vault: key with no tool", SKIPPED, SKIPPED)
     else:
         report(check, "vault: key with no tool: tools/list", "refused: HTTP 401",
                listed(no_tools_key, VAULT_GATEWAY_URL))
+
+
+def other_vault(check: str, probe_key: str) -> None:
+    """The vault of the other trust domain: a key of this domain gets a 401
+    on its route, and no pod of this domain reaches its server straight
+    (Design Doc, section 4.2.5, "One trust domain can not reach the
+    other")."""
+    host, port = OTHER_VAULT_SERVER.rsplit(":", 1)
+    report(check, "other vault server, direct from this trust domain", "blocked",
+           tcp(host, int(port)))
+    if probe_key == PENDING:
+        report(check, "other vault: probe key", SKIPPED, SKIPPED)
+    else:
+        report(check, "other vault: probe key: tools/list", "refused: HTTP 401",
+               listed(probe_key, OTHER_VAULT_GATEWAY_URL))
 
 
 if __name__ == "__main__":
