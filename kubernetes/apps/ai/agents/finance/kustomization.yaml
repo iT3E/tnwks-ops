@@ -22,9 +22,8 @@ resources:
   - ./vault-server/ks.yaml
   # The nightly snapshot of the share (vault-backup/ks.yaml).
   - ./vault-backup/ks.yaml
-  # LISTED for one run: the restore test of the share, from its newest
-  # Succeeded snapshot to a scratch volume (vault-backup/restore-test/). The
-  # next pull request takes this line out again.
-  - ./vault-backup/restore-test/ks.yaml
+  # The restore test of the share ran once on 2026-11-20 and passed
+  # (vault-backup/restore-test/). It is not listed: its files stay in git
+  # for the next run, with the name of the snapshot as a placeholder.
   # The seed of the share ran once on 2026-11-19 (vault-seed/). It is not
   # listed: its files stay in git for the seed of the main share.
