@@ -3,6 +3,28 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.228.0 - 2026-11-20
+
+### Changed
+
+* agents: the daily heartbeat check (06:33 UTC) checks the main agent too, after its first completed heartbeat in Tempo (2026-11-19 15:05 UTC): SERVICES is openclaw-agents-pilot,openclaw-agents-finance,openclaw-agents-main, and a test holds the list to the running agents with a heartbeat. The runbook shows vault-notes=none for a restore with no vault archive.
+
+## v2.227.0 - 2026-11-19
+
+### Changed
+
+* Site 2, Windows host: Ansible logs in as the administrator account (Design Doc 0004, section 9, step 4). The encrypted `ansible_user` of the host changes; the jump, the distro and the paths keep the present account by its own variable, so no role changes a thing on the host.
+
+## v2.226.0 - 2026-11-19
+
+### Added
+
+* windows: the window play of the move of the distro, with its precheck, its start of a window or a way back, its status, and the check play of step 6
+
+### Fixed
+
+* agents: the daily backup of the main agent runs on a copy of its config with regular files, since the backup command of the product refuses an include file that is a link, as each file of the projected config volume is
+
 ## v2.225.1 - 2026-11-19
 
 ### Fixed

@@ -450,10 +450,30 @@ spec:
         # The backup container (scripts/daily-backup.sh in ../config): once a
         # day, the backup command of the product with its check, then the
         # check of the instruction files.
+        #
+        # It runs on a copy of the config, as the doctor step does. The
+        # backup command captures each file of the config, and it refuses an
+        # include file that is a link ("include alias cannot be represented
+        # in this archive", src/infra/backup-config-capture.ts at 2026.11.3);
+        # in the projected volume each file is a link (..data/), so the group
+        # file failed each backup. The copy holds regular files, in a private
+        # directory of /tmp, and is made at each start of the container. A
+        # change of the config gives the pod a new template, and a change of
+        # the group Secret starts the pod again (Reloader), so the copy is
+        # never older than the files of the gateway.
         - name: backup
           image: *image
           imagePullPolicy: IfNotPresent
-          command: ["sh", "/scripts/daily-backup.sh"]
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              d=/tmp/backup-config
+              if [ -e "$d" ]; then find "$d" -mindepth 1 -delete; else mkdir "$d"; fi
+              chmod 0700 "$d"
+              cp /home/node/config/openclaw.json /home/node/config/telegram-groups.json "$d/"
+              OPENCLAW_CONFIG_PATH="$d/openclaw.json" exec sh /scripts/daily-backup.sh
           env: *env
           envFrom: *secrets
           resources:
