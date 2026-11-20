@@ -182,9 +182,15 @@
 
 # A window is started from its marker until the marker of the end of its way
 # back: no apply in between changes what the window runs.
+# The copies of the scripts and the configs of the procedure stay as the
+# window found them from its start until the deletion of the tasks of the
+# present account (host_files.yml).
 - name: Whether a window is started
   ansible.builtin.set_fact:
     wsl_move_window_started: "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}"
+    wsl_move_copies_frozen: >-
+      {{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done']
+         and not (wsl_move_present_removed | bool) }}
 
 # The done switch turns each WSL role to the start tasks of the new account:
 # merged before a window ended done, the first apply would leave the host
@@ -231,6 +237,54 @@
 
 - name: What step 3 reads of today
   ansible.builtin.include_tasks: read_today.yml
+
+# The repair of a registration that an import with the values as text makes:
+# the import task of the account writes one DWORD named Length (the length of
+# the text) and none of the saved values, so the registration keeps the
+# DefaultUid 0 (root) that wsl --import-in-place writes. After a window that
+# ended done, SYSTEM writes each saved value of step 3 into the registration
+# of the new account, in its loaded hive, and removes the value Length, which
+# WSL never writes. A registration that has them already is no change. WSL
+# reads the registration at the next start of the distro.
+- name: The registration of the new account holds the values of step 3, and no value Length
+  ansible.windows.win_powershell:
+    parameters:
+      Sid: "{{ wsl_move_sids.new }}"
+      Distro: "{{ wsl_move_distro }}"
+      Values: "{{ wsl_move_registration_values | to_json }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Sid, [string]$Distro, [string]$Values)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $want = $Values | ConvertFrom-Json
+      if (-not (Test-Path -LiteralPath "Registry::HKEY_USERS\$Sid")) {
+          throw 'The hive of the new account is not loaded: no task of that account runs. Nothing is changed.'
+      }
+      $lxss = "Registry::HKEY_USERS\$Sid\Software\Microsoft\Windows\CurrentVersion\Lxss"
+      $found = @(Get-ChildItem -LiteralPath $lxss | Where-Object { $_.GetValue('DistributionName') -eq $Distro })
+      if ($found.Count -ne 1) { throw "The new account lists $($found.Count) distros of the name $Distro. Nothing is changed." }
+      $key = $found[0]
+      foreach ($p in @($want.PSObject.Properties)) {
+          $have = $key.GetValue($p.Name)
+          if ($null -ne $have -and [int64]$have -eq [int64]$p.Value -and $key.GetValueKind($p.Name) -eq 'DWord') { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($p.Name, 'write the value of step 3')) {
+              Set-ItemProperty -LiteralPath $key.PSPath -Name $p.Name -Value ([int]$p.Value) -Type DWord
+          }
+      }
+      if ($key.GetValueNames() -contains 'Length') {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess('Length', 'remove the value')) { Remove-ItemProperty -LiteralPath $key.PSPath -Name 'Length' }
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  when:
+    - (wsl_move_marker_read.output | last | default('')) == 'window-done'
+    - "'new' in wsl_move_sids"
+  no_log: true
 
 - name: The state file, the log and the saved version of WSL, only when absent
   ansible.windows.win_powershell:
