@@ -7,9 +7,11 @@
 # (docs/apps/agent-platform-runbook.md, "The cutover of the main agent").
 # M7a, the first step: one Telegram account with the direct chat of the
 # owner and one group, web search, images through the model, and the
-# built-in tools of the product. No MCP tool, no finance app, no vault (task
-# 3.37), no Signal and no scheduled job (the Monday job comes with the
-# Signal step). Each command it runs goes to a sandbox of this trust domain,
+# built-in tools of the product, and the vault of the main trust domain
+# (task 3.37): its share, read only at /vault for the index, and its vault
+# tools through the central MCP gateway, with the key of this agent
+# (MCP_GATEWAY_KEY). No finance app, no Signal and no scheduled job (the
+# Monday job comes with the Signal step). Each command it runs goes to a sandbox of this trust domain,
 # through the sandbox gateway; each model call goes to the model gateway,
 # with the key of this trust domain.
 #
@@ -82,12 +84,14 @@ spec:
           type: RuntimeDefault
       initContainers:
         # The values check: the pod does not start while a value of its
-        # Secrets is empty or still the placeholder `pending` of git, or while
-        # the file of the Telegram group is not one group: a JSON object
-        # with one key, a negative chat id. It prints `values-check
-        # result=ok` or `values-check result=failed key=<name>
-        # reason=empty|placeholder|form`, the name of the key only, never a
-        # value, and fails the start. The pod then stays in
+        # Secrets is empty or still the placeholder `pending` of git, while
+        # the SHA-256 of MCP_GATEWAY_KEY is not the hash of the client main
+        # on the route main-vault in the config of the MCP gateway (the same
+        # file, mounted here), or while the file of the Telegram group is not
+        # one group: a JSON object with one key, a negative chat id. It
+        # prints `values-check result=ok` or `values-check result=failed
+        # key=<name> reason=empty|placeholder|hash|form`, the name of the key
+        # only, never a value or a hash, and fails the start. The pod then stays in
         # Init:CrashLoopBackOff, not ready, and AgentPlatformWorkloadNotReady
         # fires after 10 minutes.
         - name: values-check
@@ -98,11 +102,14 @@ spec:
             - -c
             - |
               set -eu
-              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM BRAVE_API_KEY; do
+              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM MCP_GATEWAY_KEY BRAVE_API_KEY; do
                 v=$(printenv "$k" || true)
                 if [ -z "$v" ]; then echo "values-check result=failed key=$k reason=empty"; exit 1; fi
                 if [ "$v" = pending ]; then echo "values-check result=failed key=$k reason=placeholder"; exit 1; fi
               done
+              have=$(printf %s "$MCP_GATEWAY_KEY" | sha256sum | cut -d " " -f 1)
+              want=$(awk '/keyHash:/ { k = $NF; gsub(/"/, "", k) } /metadata: \{client: main, route: main-vault\}/ { print k }' /gateway/config.yaml)
+              if [ "$want" != "sha256:$have" ]; then echo "values-check result=failed key=MCP_GATEWAY_KEY reason=hash"; exit 1; fi
               k=telegram-groups.json
               g=/home/node/config/telegram-groups.json
               if [ ! -s "$g" ]; then echo "values-check result=failed key=$k reason=empty"; exit 1; fi
@@ -119,6 +126,9 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /home/node/config
+              readOnly: true
+            - name: mcp-gateway-config
+              mountPath: /gateway
               readOnly: true
           securityContext: &containerSecurity
             allowPrivilegeEscalation: false
@@ -171,6 +181,12 @@ spec:
           imagePullPolicy: IfNotPresent
           command: ["sh", "/scripts/archive-state.sh"]
           env: &env
+            # A change from the vault server comes from another NFS client,
+            # so the share gives no file event: the watch of the index polls
+            # (Design Doc of effort 0003, section 4.2.5). The other users of
+            # this list watch no file.
+            - name: CHOKIDAR_USEPOLLING
+              value: "1"
             # The state directory of the product (with the workspace in it),
             # on the volume. The archives are next to it, outside it.
             - name: OPENCLAW_STATE_DIR
@@ -251,6 +267,9 @@ spec:
           # by the failure output of the CLI), and the step has no secret
           # to print.
           env:
+            # As the list of the gateway (env above).
+            - name: CHOKIDAR_USEPOLLING
+              value: "1"
             - name: OPENCLAW_STATE_DIR
               value: /home/node/data/state
             - name: OPENCLAW_CONFIG_PATH
@@ -312,8 +331,9 @@ spec:
               value: "1"
           envFrom: &secrets
             # OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY, TELEGRAM_BOT_TOKEN,
-            # TELEGRAM_ALLOW_FROM (docs/apps/agent-platform-runbook.md, "The
-            # cutover of the main agent").
+            # TELEGRAM_ALLOW_FROM, MCP_GATEWAY_KEY
+            # (docs/apps/agent-platform-runbook.md, "The cutover of the main
+            # agent").
             - secretRef:
                 name: agent-secret
           securityContext: *containerSecurity
@@ -326,6 +346,13 @@ spec:
           volumeMounts: &stateMounts
             - name: state
               mountPath: /home/node/data
+            # The share of main, read only (../../vault-share), at its root
+            # (no subPath): the index reads it, and memory_get. The path is
+            # the one of the vault server, so a path from a search works in
+            # a vault tool call.
+            - name: vault
+              mountPath: /vault
+              readOnly: true
             - name: config
               mountPath: /home/node/config
               readOnly: true
@@ -377,6 +404,9 @@ spec:
           volumeMounts:
             - name: state
               mountPath: /home/node/data
+            - name: vault
+              mountPath: /vault
+              readOnly: true
             - name: config
               mountPath: /home/node/config
               readOnly: true
@@ -522,6 +552,16 @@ spec:
         - name: state
           persistentVolumeClaim:
             claimName: agent-state
+        # The share of main. readOnly on the claim as well as the option ro
+        # of its volume: the kubelet takes the flag from the pod, not from
+        # the volume (Design Doc of effort 0003, section 4.2.5). A soft
+        # mount: with the NFS server away a read fails after about 30 s, and
+        # the chat goes on. The pod does not start while the NFS server is
+        # away, and starts when it is back.
+        - name: vault
+          persistentVolumeClaim:
+            claimName: vault-ro
+            readOnly: true
         # The config: the ConfigMap of git and, beside it, the file of the
         # Telegram group from the Secret of the owner (openclaw.json
         # includes it: a chat id is a key there, and the product puts an env
@@ -539,6 +579,11 @@ spec:
         - name: scripts
           configMap:
             name: agent-scripts
+        # The config of the MCP gateway, for the hash of the client main
+        # (kustomization.yaml): hashes and tool rules, no secret.
+        - name: mcp-gateway-config
+          configMap:
+            name: agent-mcp-gateway-config
         - name: tmp
           emptyDir:
             sizeLimit: 2Gi

@@ -102,8 +102,8 @@ leak of that key also gives the writes of the vault
 nine tools, the 60 s, and the vault server of main as its target. Its one
 client is the main agent, which has no other route, so its key is a key
 of its own and no key of finance is on it (a test holds the two routes
-apart). Until the values step its hash is a placeholder, so each call
-gets a 401.
+apart). The main agent calls it from its gateway process (`mcp.servers.vault`
+of its config, with `MCP_GATEWAY_KEY`), as the finance agent calls its own.
 
 **The pilot and the workflow agents get no key.** No key is the safer
 default. A key with no tool still authenticates: it opens a connection,
@@ -161,7 +161,7 @@ its place for the container tests.
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
-| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only), not made yet | `config.yaml`, route `main-vault` (`metadata: {client: main, route: main-vault}`) |
+| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, route `main-vault` (`metadata: {client: main, route: main-vault}`) |
 | `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, route `main-vault` |
 
 **The hash and the value stay in step** in two ways: the owner changes both
@@ -176,24 +176,27 @@ of the route `finance-vault` has a second field
 check, and a test checks that both routes have the same one. A new value of
 the key changes the hash on both routes in the same commit.
 
-The key of main is new: the main agent had no key at the gateway before
-its vault. The lead makes the value and its hash in one commit, at the
-step that gives the agent its vault tools; until then the hash is the
-placeholder `sha256:000...01`.
+The keys of main are new: the main agent had no key at the gateway before
+its vault. The lead makes each value and its hash in one commit (D121 for
+the key of the agent; the go of task 3.37 for the probe key, as D120 for
+the probe of finance). The values check of the main agent reads the line
+`metadata: {client: main, route: main-vault}`, and two tests keep each
+value and its hash together: a key that the Secret names must be in git
+with it, and a real hash of `main-probe` needs its Secret listed.
 
 ## Network policy
 
 `app/networkpolicy.yaml`:
 
 - **In:** the MCP port from the agent pod of each domain that has a client
-  (`agents-finance`, `app.kubernetes.io/name: agent`) and from the gateway
-  probe of that domain; the metrics port from Prometheus; the readiness port
+  (`agents-finance` and `agents-main`, `app.kubernetes.io/name: agent`) and
+  from the gateway probe of each of those domains; the metrics port from Prometheus; the readiness port
   from the host. No sandbox: neither the workload pod nor the supervisor of
   a sandbox carries the labels of a client, and the sandboxes of finance
   keep their one way to the app, the read port of the proxy.
 - **Out:** the MCP server of each route (`firefly-mcp` in `agents-finance`,
-  port 3000, and `vault-server` in `agents-finance`, port 8080), and DNS
-  for those names only. The pod sets `ndots` to 1, so it
+  port 3000, and `vault-server` in `agents-finance` and in `agents-main`,
+  port 8080), and DNS for those names only. The pod sets `ndots` to 1, so it
   asks for the full name as it is.
 - **The MCP server of finance** takes the gateway only. The agent pod has no
   way to it any more, and the gateway probe checks that a pod that is not
@@ -205,7 +208,8 @@ rule no longer holds), but the proxy still refuses each delete, trigger,
 rule write and each call off its allow list, and the app token stays in the
 proxy. For the vault of finance: each tool of the vault server, so
 each read and write of the finance share, but no delete (the server has no
-such tool) and no path outside the share. It gives no model key and no app token. The config holds only hashes
+such tool) and no path outside the share; the same for the vault of main.
+It gives no model key and no app token. The config holds only hashes
 of the client keys, but each client sends its key in each request, so a
 compromised gateway sees each key that arrives while it is compromised, and
 can call the gateway as that client. It also sees each tool call of each
@@ -305,9 +309,9 @@ agent does, with two keys of its own and none of the agent's:
 **The probe of main** (`agents/main/checks/app/`, daily at 05:47) is the
 same probe for the route `main-vault` only, since main has no other route:
 items 5 and 6, with its key `main-probe`, and no key with no tool. Its
-Secret `mcp-gateway-probe-secret` (`PROBE_KEY`) is not made yet, and the
-CronJob reads it with `optional: true`, so until the values step the checks
-of its key print `skipped: the key is pending` and pass. A container test
+Secret `mcp-gateway-probe-secret` (`PROBE_KEY`) is read with
+`optional: true`: with no Secret, the checks of its key print `skipped: the
+key is pending` and pass. A container test
 runs it against the gateway of the cluster with this config and the vault
 server of main on an empty share
 (`observability/tests/test_main_vault.py`).

@@ -1,10 +1,12 @@
 """The agent pod of the main agent, in the form of the finance agent
 (docs/apps/agent-platform-runbook.md, "The cutover of the main agent"):
-the pod is the finance pod with no MCP client and no scheduled job, the
-config has the tools of the first step of M7a, the network policy is the
-pilot's with the fetch proxy, the restore Job is the one of finance with no vault, the values
-check refuses a placeholder and a wrong group file, and the steps of
-kustomization.yaml never meet in a wrong order.
+the pod is the finance pod with no scheduled job, the config has the tools
+of the first step of M7a and the vault of main (task 3.37), the network
+policy is the pilot's with the fetch proxy and the MCP gateway, the restore
+Job is the one of finance with no vault, the values check refuses a
+placeholder, a key whose hash is not the one of the client main and a wrong
+group file, and the steps of kustomization.yaml never meet in a wrong
+order.
 
 The three Secret files of the owner's values are in git, not listed until
 step 4: test_the_secrets_of_the_owner_hold_each_value_the_pod_names holds
@@ -14,6 +16,7 @@ The container tests need Docker. Without it a test is skipped, except in
 CI, where it fails.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -29,9 +32,10 @@ AGENTS = ROOT / "kubernetes/apps/ai/agents"
 APP = AGENTS / "main/agent/app"
 FINANCE = AGENTS / "finance/agent/app"
 CONFIG = AGENTS / "main/agent/config/openclaw.json"
+GATEWAY_CONFIG = ROOT / "kubernetes/apps/ai/mcp-gateway/app/config/config.yaml"
 SECRETS = {
     "secret.sops.yaml": ("agent-secret", {"OPENCLAW_GATEWAY_TOKEN", "LITELLM_API_KEY", "TELEGRAM_BOT_TOKEN",
-                                          "TELEGRAM_ALLOW_FROM"}),
+                                          "TELEGRAM_ALLOW_FROM", "MCP_GATEWAY_KEY"}),
     "secret-search.sops.yaml": ("agent-search-secret", {"BRAVE_API_KEY"}),
     "secret-telegram-groups.sops.yaml": ("agent-telegram-groups", {"telegram-groups.json"}),
 }
@@ -63,12 +67,12 @@ MAIN = pod(APP / "deployment.yaml")
 FIN = pod(FINANCE / "deployment.yaml")
 
 
-def test_the_pod_is_the_finance_pod_with_no_mcp_client_and_no_scheduled_job():
+def test_the_pod_is_the_finance_pod_with_no_scheduled_job():
     assert names(MAIN["initContainers"]) == names(FIN["initContainers"])
     assert names(MAIN["containers"]) == [n for n in names(FIN["containers"]) if n != "automations-sync"]
-    # The finance pod mounts its share. The main pod gets the mount of its
-    # share with the vault server of main, in a later step.
-    assert {v["name"] for v in MAIN["volumes"]} == {v["name"] for v in FIN["volumes"]} - {"mcp-gateway-config", "vault"}
+    # Each pod mounts the share of its own trust domain (task 3.37), and
+    # has the config of the MCP gateway for its values check.
+    assert {v["name"] for v in MAIN["volumes"]} == {v["name"] for v in FIN["volumes"]}
     assert MAIN["nodeSelector"] == FIN["nodeSelector"]
     assert MAIN["securityContext"] == FIN["securityContext"]
     for a, b in zip(MAIN["containers"], FIN["containers"], strict=False):
@@ -76,7 +80,7 @@ def test_the_pod_is_the_finance_pod_with_no_mcp_client_and_no_scheduled_job():
         assert a["securityContext"] == b["securityContext"], a["name"]
     text = (APP / "deployment.yaml").read_text()
     body = text[text.index("apiVersion:"):]
-    assert "finance" not in body and "mcp" not in body.lower()
+    assert "finance" not in body
     assert "openshell.agents-main.svc.cluster.local" in body
 
 
@@ -96,19 +100,28 @@ def test_the_config_volume_joins_the_group_file_of_the_owner():
 
 def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     c = json.loads(CONFIG.read_text())
-    assert "mcp" not in c
+    f = json.loads((FINANCE.parent / "config/openclaw.json").read_text())
+    # One MCP server, the vault of main, as finance calls its own vault
+    # (task 3.37). No finance app.
+    assert list(c["mcp"]["servers"]) == ["vault"]
+    vault = dict(c["mcp"]["servers"]["vault"])
+    assert vault.pop("url") == "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp"
+    other = dict(f["mcp"]["servers"]["vault"])
+    other.pop("url")
+    assert vault == other
     assert "firefly" not in CONFIG.read_text() and "finance" not in CONFIG.read_text()
     assert c["agents"]["defaults"]["model"]["primary"] == "litellm/agents-main"
     assert c["agents"]["defaults"]["modelPolicy"]["allow"] == ["litellm/agents-main"]
     assert [m["id"] for m in c["models"]["providers"]["litellm"]["models"]] == ["agents-main"]
     assert c["memory"]["search"]["model"] == "agents-main-embeddings"
-    assert "extraPaths" not in c["memory"]["search"]
+    # The index reads the share of main, Markdown only.
+    assert c["memory"]["search"]["extraPaths"] == [{"path": "/vault", "pattern": "**/*.md"}]
     # D16: the agent keeps the message tool, in its sandboxed sessions too.
     # The owner's decisions of 2026-11-19: the progress card, and each session
     # of main sees the other sessions of main, as on the host. Web fetch goes
     # through the fetch proxy (test_main_fetch_proxy.py).
     assert c["tools"]["sandbox"]["tools"]["alsoAllow"] == ["memory_search", "memory_get", "web_search", "web_fetch",
-                                                           "message", "progress_card"]
+                                                           "message", "progress_card", "vault__*"]
     assert c["tools"]["sessions"] == {"visibility": "all"}
     assert c["agents"]["defaults"]["sandbox"]["sessionToolsVisibility"] == "all"
     telegram = c["channels"]["telegram"]
@@ -130,7 +143,6 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     assert "policy" not in c["plugins"]["entries"]["openshell"]["config"]
     assert c["diagnostics"]["otel"]["serviceName"] == "openclaw-agents-main"
     # Every other setting is the one of finance.
-    f = json.loads((FINANCE.parent / "config/openclaw.json").read_text())
     for key in ("gateway", "update", "telemetry", "acp", "commands", "session"):
         assert c[key] == f[key], key
     assert c["plugins"]["allow"] == f["plugins"]["allow"]
@@ -139,18 +151,26 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     assert c["plugins"]["entries"]["active-memory"] == f["plugins"]["entries"]["active-memory"]
 
 
-def test_the_network_policy_is_the_pilots_in_agents_main_and_the_fetch_proxy():
+def test_the_network_policy_is_the_pilots_in_agents_main_the_fetch_proxy_and_the_mcp_gateway():
     main = doc(APP / "networkpolicy.yaml")
     pilot = doc(AGENTS / "pilot/agent/app/networkpolicy.yaml")
-    # The one rule more: the fetch proxy of main (test_main_fetch_proxy.py).
-    proxy = [r for r in main["spec"]["egress"]
-             if r.get("toEndpoints", [{}])[0].get("matchLabels", {}).get("app.kubernetes.io/name") == "fetch-proxy"]
-    assert len(proxy) == 1
-    main["spec"]["egress"].remove(proxy[0])
+    finance = doc(FINANCE / "networkpolicy.yaml")
+
+    def rule(policy, name):
+        found = [r for r in policy["spec"]["egress"]
+                 if r.get("toEndpoints", [{}])[0].get("matchLabels", {}).get("app.kubernetes.io/name") == name]
+        assert len(found) == 1, name
+        return found[0]
+
+    # The two rules more: the fetch proxy of main (test_main_fetch_proxy.py),
+    # and the MCP gateway for the vault route, the rule of finance.
+    assert rule(main, "mcp-gateway") == rule(finance, "mcp-gateway")
+    main["spec"]["egress"].remove(rule(main, "fetch-proxy"))
+    main["spec"]["egress"].remove(rule(main, "mcp-gateway"))
     text = json.dumps(main["spec"]).replace("agents-main", "agents-pilot")
     assert json.loads(text) == pilot["spec"]
-    # No route to the MCP gateway in this step.
-    assert "mcp-gateway" not in json.dumps(main)
+    # Not the vault server straight: the gateway stands between.
+    assert "vault-server" not in json.dumps(main)
 
 
 def test_the_restore_job_is_the_one_of_finance_with_no_vault():
@@ -209,15 +229,30 @@ VALUE = "a-real-looking-value"
 GROUP = '{"-1000000000001": {"requireMention": false}}'
 
 
-def run_values(env, group=GROUP):
+def with_hash(client, key):
+    """The config of the gateway with the hash of key for client on the route
+    main-vault, in place of the hash in git (a placeholder or a real one)."""
+    text = GATEWAY_CONFIG.read_text()
+    (route,) = [r for r in yaml.safe_load(text)["routes"] if r["name"] == "main-vault"]
+    (old,) = [k["keyHash"] for k in route["policies"]["apiKey"]["keys"] if k["metadata"]["client"] == client]
+    assert text.count(old) == 1
+    return text.replace(old, "sha256:" + hashlib.sha256(key.encode()).hexdigest())
+
+
+def run_values(env, group=GROUP, config=None):
     (check,) = [c for c in MAIN["initContainers"] if c["name"] == "values-check"]
     tmp = scratch()
     if group is not None:
         (tmp / "telegram-groups.json").write_text(group)
         (tmp / "telegram-groups.json").chmod(0o644)
-    tmp.chmod(0o755)
+    gateway = scratch()
+    (gateway / "config.yaml").write_text(with_hash("main", VALUE) if config is None else config)
+    (gateway / "config.yaml").chmod(0o644)
+    for path in (tmp, gateway):
+        path.chmod(0o755)
     image = os.environ.get("RESTORE_TEST_IMAGE", check["image"])
-    args = [docker(), "run", "--rm", "--quiet", "--network", "none", "-v", f"{tmp}:/home/node/config:ro"]
+    args = [docker(), "run", "--rm", "--quiet", "--network", "none", "-v", f"{tmp}:/home/node/config:ro",
+            "-v", f"{gateway}:/gateway:ro"]
     for key, value in env.items():
         args += ["-e", f"{key}={value}"]
     result = subprocess.run([*args, "--entrypoint", "sh", image, "-c", check["command"][2]],
@@ -256,7 +291,32 @@ def test_the_values_check_is_the_first_step_and_reads_each_secret():
     assert first["name"] == "values-check"
     assert {s["secretRef"]["name"] for s in first["envFrom"]} == {"agent-secret", "agent-search-secret"}
     assert all(key in first["command"][2] for key in VALUES)
-    assert first["volumeMounts"] == [{"name": "config", "mountPath": "/home/node/config", "readOnly": True}]
+    assert first["volumeMounts"] == [{"name": "config", "mountPath": "/home/node/config", "readOnly": True},
+                                     {"name": "mcp-gateway-config", "mountPath": "/gateway", "readOnly": True}]
+    (volume,) = [v for v in MAIN["volumes"] if v["name"] == "mcp-gateway-config"]
+    generated = yaml.safe_load((APP / "kustomization.yaml").read_text())["configMapGenerator"]
+    (config,) = [g for g in generated if g["name"] == volume["configMap"]["name"]]
+    (source,) = config["files"]
+    name, path = source.split("=")
+    assert name == "config.yaml"
+    assert (APP / path).resolve() == GATEWAY_CONFIG
+
+
+@pytest.mark.parametrize("config", ["git", "other key", "probe key"])
+def test_the_values_check_refuses_a_key_whose_hash_is_not_the_one_of_main(config):
+    """The key and its hash in the gateway's config stay in step: the hash in
+    git (a placeholder, or the hash of the real key, never of the test
+    value), the hash of another key, and the right hash on another client
+    each stop the start."""
+    text = {
+        "git": GATEWAY_CONFIG.read_text(),
+        "other key": with_hash("main", "another-value"),
+        "probe key": with_hash("main-probe", VALUE),
+    }[config]
+    code, out = run_values(dict.fromkeys(VALUES, VALUE), config=text)
+    assert code != 0
+    assert out == "values-check result=failed key=MCP_GATEWAY_KEY reason=hash"
+    assert hashlib.sha256(VALUE.encode()).hexdigest() not in out
 
 
 def test_the_values_check_passes_with_every_value():
