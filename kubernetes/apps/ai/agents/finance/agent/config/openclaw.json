@@ -167,7 +167,7 @@
       "protocol": "http/protobuf",
       "serviceName": "openclaw-agents-finance",
       "traces": true,
-      "metrics": false,
+      "metrics": true,
       "logs": false,
       "sampleRate": 1.0
     }
