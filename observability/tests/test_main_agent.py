@@ -120,7 +120,10 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     # context, and the reply streamed as it is written.
     assert telegram["historyLimit"] == 15 and telegram["streaming"] == {"mode": "partial"}
     assert "groupAllowFrom" not in telegram  # the senders of the group: allowFrom
-    assert c["agents"]["defaults"]["thinkingDefault"] == "off"
+    # The owner set "high" on 2026-11-20. The host has "off", and the model of
+    # the platform does not take "off": the product then used "low" and said
+    # so in each run.
+    assert c["agents"]["defaults"]["thinkingDefault"] == "high"
     assert not re.search(r"-100\d{6,}", CONFIG.read_text())
     assert c["plugins"]["entries"]["openshell"]["config"]["gatewayEndpoint"] == \
         "https://openshell.agents-main.svc.cluster.local:8080"

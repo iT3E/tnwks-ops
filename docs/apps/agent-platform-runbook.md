@@ -1968,7 +1968,13 @@ The differences from finance:
   owner. In the group, the senders are the same list: the config sets no
   `groupAllowFrom`, so the product uses `allowFrom`.
 - **Settings as on the host:** `historyLimit: 15` and `streaming.mode:
-  partial` on the account, and `thinkingDefault: off` for the model.
+  partial` on the account.
+- **Thinking level:** `thinkingDefault: high`, by the owner's word of
+  2026-11-20. The host has `off`. The model of the platform does not take
+  `off`, so the product used `low` and wrote `Thinking level "off" is not
+  supported` in each run. Proof after a change: the start line `agent
+  model: litellm/agents-main (thinking=high, ...)`, and no such line in the
+  next scheduled run.
 - **Not as on the host:** the heartbeat is off on the host, and the pod
   has the daily heartbeat of the platform (one short turn a day, which the
   heartbeat check of the platform reads).
