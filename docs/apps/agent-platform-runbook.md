@@ -1935,6 +1935,69 @@ the owner on the NFS server, and it is not in git today. A failure with
 `rename` leaves a part of the copy in the share: empty it the same way
 before a second run.
 
+## The restore test of the finance share
+
+The proof that a nightly snapshot of the finance share comes back whole:
+the template `kubernetes/apps/ai/agents/finance/vault-backup/restore-test/`,
+in the form of the restore test of the state volume. Two pull requests,
+each with the owner's go.
+
+**The first change** lists `./vault-backup/restore-test/ks.yaml` in
+`finance/kustomization.yaml`, with the name of the newest `Succeeded`
+snapshot of the policy `vault` in `restore/restore.yaml` and as `SNAPSHOT`
+in `check/job.yaml` (the same name; a test holds the two equal):
+
+```sh
+kubectl -n agents-finance get snapshots.kopiur.home-operations.com | grep '^vault-'
+```
+
+Then Flux:
+
+1. Makes the scratch claim `vault-restore-test` (the default class,
+   `local-path`, 2 GiB, on the node of the restore mover), and the
+   Restore `vault-restore-test` fills it from the snapshot. It reads the
+   repository `agents-finance` only. The share, its claims `vault-rw` and
+   `vault-ro`, the vault server and the agent keep running and do not
+   change.
+2. When the Restore is `Completed`, runs the Job `vault-restore-check`. It
+   mounts the scratch claim and the live share (`vault-ro`), both read
+   only, and compares them by relative path and SHA-256 of each file. It
+   has no network, no token and no Secret, and keeps its lists in memory.
+
+**Pass.** `kubectl -n agents-finance get job vault-restore-check` is `1/1`,
+and in Loki, `{namespace="agents-finance", app="vault-restore-check"}` has
+`vault-restore-check result=ok files=<n> notes=<m> bytes=<b>`. The line
+`side=restored` and the line `side=live` have the same counts, and the
+line `compare` has `only-live=0 only-restored=0 same-dirs=yes
+same-links=yes`. The lines hold flags and counts only, never a name. The
+count of the share is not in git: the Job reads it from the share at run
+time.
+
+**A failure** is `result=failed reason=<list>`:
+
+| Reason | Meaning |
+| --- | --- |
+| `snapshot-name` | `SNAPSHOT` is not `vault-` and 14 digits of a real time. Nothing was read |
+| `empty`, `no-notes` | The restore holds no file, or no note |
+| `files`, `notes`, `bytes` | A count of the restore is not the count of the share |
+| `content` | A file of one side is not in the other with the same path and the same SHA-256 |
+| `dirs`, `links` | The folders or the links are not the same |
+| `unreadable`, `live-unreadable` | uid 1000 can not read a path of the restore, or of the share |
+| `share-changed` | Added to the others when a file of the share changed after the time in the name of the snapshot (`live-newer=<n>`): a write through the vault route, not a fault of the restore. Run the test again after the next nightly snapshot: the second change, then a new first change with the new name |
+
+A failed Job fires `KubeJobFailed` (`agents-finance`,
+`vault-restore-check`); a failed or stuck Restore fires
+`KopiurRestoreFailed`.
+
+**The second change**, after the result is read and recorded, takes the
+line `./vault-backup/restore-test/ks.yaml` out of `finance/kustomization.yaml`
+and sets the name back to `vault-SET-ME` in both files. Flux prunes the two
+Kustomizations, and with them the Restore (and its copy of the
+credentials), the Job and the scratch claim; the reclaim policy `Delete`
+of the class wipes its folder on the node. The restored notes must not stay
+behind. Check: `kubectl -n agents-finance get restore,job,pvc` shows no
+`vault-restore-test` and no `vault-restore-check`.
+
 ## The cutover of the main agent
 
 **Draft.** The main agent moves from the host to `agents-main` (phase 6 of
