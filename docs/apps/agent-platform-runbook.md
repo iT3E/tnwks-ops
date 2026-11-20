@@ -1800,10 +1800,16 @@ of the vault work. The lead reads; the owner makes the turns.
 
    A failed check Job fires `KubeJobFailed` (`agents-finance`,
    `agent-restore-check`); a failed or stuck Restore fires
-   `KopiurRestoreFailed`. The cleanup is a pull request that takes
-   `./agent/restore-test/ks.yaml` out of the list again and sets the name
-   of the snapshot back to its placeholder; Flux then removes the Restore,
-   the check Job and the scratch volume.
+   `KopiurRestoreFailed`. The cleanup is two pull requests. The first
+   takes `./agent/restore-test/ks.yaml` out of the list again, with no
+   other edit; Flux then removes the Restore, the check Job and the
+   scratch volume. Check: `kubectl -n agents-finance get restore,job,pvc`
+   shows no `agent-state-restore-test` and no `agent-restore-check`. The
+   second sets the name of the snapshot back to its placeholder. Not both
+   in one: Flux applies the placeholder to the Restore of the child
+   Kustomization while the parent prunes it, and the deletion then waits
+   for the health check of the child (60 minutes), with the copy on the
+   scratch volume until then.
 6. **The heartbeat.** The first heartbeat of `openclaw-agents-finance` is
    in Tempo; then the pull request that adds it to `SERVICES`.
 
@@ -1945,8 +1951,8 @@ before a second run.
 
 The proof that a nightly snapshot of the finance share comes back whole:
 the template `kubernetes/apps/ai/agents/finance/vault-backup/restore-test/`,
-in the form of the restore test of the state volume. Two pull requests,
-each with the owner's go.
+in the form of the restore test of the state volume. Three pull
+requests: the run and the cleanup with the owner's go, then the placeholder.
 
 **The first change** lists `./vault-backup/restore-test/ks.yaml` in
 `finance/kustomization.yaml`, with the name of the newest `Succeeded`
@@ -1996,13 +2002,22 @@ A failed Job fires `KubeJobFailed` (`agents-finance`,
 `KopiurRestoreFailed`.
 
 **The second change**, after the result is read and recorded, takes the
-line `./vault-backup/restore-test/ks.yaml` out of `finance/kustomization.yaml`
-and sets the name back to `vault-SET-ME` in both files. Flux prunes the two
-Kustomizations, and with them the Restore (and its copy of the
-credentials), the Job and the scratch claim; the reclaim policy `Delete`
-of the class wipes its folder on the node. The restored notes must not stay
-behind. Check: `kubectl -n agents-finance get restore,job,pvc` shows no
-`vault-restore-test` and no `vault-restore-check`.
+line `./vault-backup/restore-test/ks.yaml` out of `finance/kustomization.yaml`,
+with no other edit. Flux prunes the two Kustomizations, and with them the
+Restore (and its copy of the credentials), the Job and the scratch claim;
+the reclaim policy `Delete` of the class wipes its folder on the node. The
+restored notes must not stay behind. Check: `kubectl -n agents-finance get
+restore,job,pvc` shows no `vault-restore-test` and no
+`vault-restore-check`, and `kubectl -n flux-system get kustomization
+agents-finance-vault-restore-test` is not found.
+
+**The third change**, only after that check, sets the name back to
+`vault-SET-ME` in both files, so the directory is a template again. Not in
+the second change: Flux then applies the placeholder to the Restore of the
+child Kustomization while the parent prunes it. The Restore waits for a
+snapshot that is not there, and the deletion waits for the health check of
+the child (45 minutes), with the copy on the scratch claim until then. The
+cleanup of the run of 2026-11-20 did both in one change and met this.
 
 **The run of 2026-11-20.** The Restore of the nightly snapshot of
 2026-11-19 was `Completed` at 04:51 UTC, and the Job printed `result=ok`

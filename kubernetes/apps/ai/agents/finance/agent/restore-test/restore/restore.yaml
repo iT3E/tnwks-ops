@@ -1,10 +1,14 @@
 ---
 # LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
 # lists ./agent/restore-test/ks.yaml, for the restore test of the first nightly
-# snapshot with the state (the owner's go of 2026-11-17). The next pull
-# request reverts this one: it takes the line out, so Flux deletes the
-# Restore, the scratch volume and the check Job, and this directory is a
-# template again.
+# snapshot with the state (the owner's go of 2026-11-17). The cleanup is two
+# changes, not one revert. First the line out of that list, with no other
+# edit: Flux deletes the Restore, the scratch volume and the check Job.
+# Then, when they are gone, the name of the snapshot back to its
+# placeholder (agent-state-SET-ME, in restore/restore.yaml), and this
+# directory is a template again. Not both in one change: Flux applies the
+# placeholder to the Restore while it prunes, and the deletion then waits
+# for the health check (60 minutes).
 # Restore one snapshot of the finance policy into the scratch volume. The form of step 4 of "After the loss of the
 # volume" in docs/apps/agent-platform-runbook.md: the snapshot by name,
 # credentialProjection, and the mover identity of agent/app/backup.yaml.
