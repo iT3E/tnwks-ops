@@ -7,12 +7,20 @@ resources:
   - ./secret.sops.yaml
   - ./secret-roles-anywhere.sops.yaml
   - ./secret-keys.sops.yaml
+  # The key of the metrics scrape (Secret litellm-metrics-scrape, key token):
+  # the same value as the entry `metrics-scrape` of keys.json.
+  - ./secret-metrics-scrape.sops.yaml
   - ./helmrelease.yaml
   - ./prometheusrule.yaml
+  - ./key-check.yaml
 configMapGenerator:
   # The ensure-keys sidecar's script (scripts/ensure_keys.py).
   - name: litellm-ensure-keys
     files:
       - ensure_keys.py=./scripts/ensure_keys.py
+  # The daily check that the key of the metrics scrape calls no model.
+  - name: litellm-key-check
+    files:
+      - key_check.py=./scripts/key_check.py
 generatorOptions:
   disableNameSuffixHash: true

@@ -114,6 +114,8 @@ AI_SCHEDULES = [
     {"trust_domain": "workflows", "namespace": "agents-workflows", "cronjob": "workflow-sweep", "within": 35 * 60},
     {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "agent-heartbeat-check", "within": DAILY},
     {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "trace-filter-check", "within": DAILY},
+    # The key of the metrics scrape of the model gateway calls no model.
+    {"trust_domain": "shared", "namespace": "ai", "cronjob": "litellm-key-check", "within": DAILY},
 ]
 # The `<check> result=<result>` lines of the agent pods, which the Vector
 # aggregator turns into homelab_agent_platform_result_timestamp_seconds, and

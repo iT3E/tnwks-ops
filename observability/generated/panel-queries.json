@@ -1275,7 +1275,63 @@
     "dashboard": "tnwks-ai",
     "tab": "Parts",
     "title": "AI alerts firing",
-    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Model calls by key",
+    "expr": "sum by (k8s_cluster, api_key_alias, requested_model, status_code) (increase(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Failed model calls by status",
+    "expr": "sum by (k8s_cluster, api_key_alias, requested_model, exception_status) (increase(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Model calls",
+    "expr": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+    "unit": "reqps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Share of model calls that failed",
+    "expr": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])) / sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Time of a model call (p95)",
+    "expr": "histogram_quantile(0.95, sum by (k8s_cluster, api_key_alias, le) (rate(litellm_request_total_latency_metric_bucket{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Tokens per day",
+    "expr": "sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d])) + sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "title": "Tokens in the range",
+    "expr": "sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) + sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
     "unit": "short",
     "kiosk": false
   },

@@ -706,10 +706,10 @@ not the boards, so it stays off.
 ## The AI board
 
 The AI board (`tnwks-ai`, `observability/dashboards/boards/ai.py`) answers:
-is each part of the agent platform there and ready, do its checks, tool
-calls and backups work, and did a limit or a security signal fire? It is
-step 1 of the board: the data of today, with no product metrics and no
-spend.
+is each part of the agent platform there and ready, do its model calls,
+checks, tool calls and backups work, and did a limit or a security signal
+fire? Step 1 of the board is the data of today. Step 2 adds the series of
+the model gateway. It shows no product metrics and no money.
 
 - **A declared list.** `observability/inventory.py` declares the parts
   (`AI_PARTS`), the CronJobs (`AI_SCHEDULES`), the `<check> result=` lines
@@ -733,6 +733,14 @@ spend.
 - **Restore tests.** A restore test runs by hand, and its result line lives 5
   minutes as a series. `homelab:ai_restore_result_timestamp_seconds` keeps
   the time of the newest line of each result for the local history (15 days).
+- **Model calls** come from the series of the model gateway, by the name of
+  the key of the caller: the key of a trust domain has the name of its
+  domain. Calls and failed calls by name and status, the share that failed,
+  the time of a call (95th percentile) and tokens by day and by range. The
+  keep list of the gateway keeps 4 labels, and the scrape writes
+  `undeclared` for a key that is not declared
+  ([`litellm.md`](../apps/litellm.md#metrics)). The daily refused calls of
+  the key of the scrape (`litellm-key-check`) are left out.
 - **Tool calls** come from the request series of the MCP gateway, in the
   board only: no rule reads them (`tests/test_mcp_gateway.py`). The panels
   leave out the GET with 405 that each start of a client makes
@@ -740,7 +748,7 @@ spend.
 - **Homelab.** The AI tile is the worst of the parts, the checks, the result
   lines and the backups. Needs attention has a row for each part that is not
   Healthy, Standby or Not applicable.
-- **Alerts.** Each of the 18 rules in `kubernetes/apps/ai/` opens this board
+- **Alerts.** Each of the 19 rules in `kubernetes/apps/ai/` opens this board
   (`tests/test_alert_links.py`). Its runbook is
   [`agent-platform-runbook.md`](../apps/agent-platform-runbook.md).
 - **No picker of the trust domain yet.** Each table has the trust domain as

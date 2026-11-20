@@ -37,6 +37,8 @@ LABELS = {
     # The AI board (boards/ai.py).
     "trust_domain": "Trust domain", "part": "Part", "check": "Check", "policy": "Policy",
     "result": "Result", "route": "Route", "method": "Method", "status": "Status",
+    "api_key_alias": "Key", "requested_model": "Name asked for", "api_provider": "Provider",
+    "status_code": "Status", "exception_status": "Status",
 }
 
 

@@ -500,6 +500,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "State"
                       }
                     }
@@ -763,6 +768,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "State"
                       }
                     }
@@ -1001,6 +1011,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Safeguards with a result"
                       }
                     }
@@ -1198,7 +1213,12 @@
                         "result": "Result",
                         "route": "Route",
                         "method": "Method",
-                        "status": "Status"
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status"
                       }
                     }
                   }
@@ -1383,6 +1403,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Age of the last result"
                       }
                     }
@@ -1594,7 +1619,12 @@
                         "result": "Result",
                         "route": "Route",
                         "method": "Method",
-                        "status": "Status"
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status"
                       }
                     }
                   }
@@ -1779,6 +1809,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Failing checks"
                       }
                     }
@@ -2226,6 +2261,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Accepted findings by system"
                       }
                     }

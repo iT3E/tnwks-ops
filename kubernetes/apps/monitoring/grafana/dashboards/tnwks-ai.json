@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Is each part of the agent platform there and ready, do its checks, tool calls and backups work, and did a limit or a security signal fire?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md)"
+                "content": "Is each part of the agent platform there and ready, do its model calls, checks, tool calls and backups work, and did a limit or a security signal fire?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -528,6 +528,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "State"
                       }
                     }
@@ -679,7 +684,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{cluster}} {{alertname}} {{severity}}",
@@ -786,7 +791,12 @@
                         "result": "Result",
                         "route": "Route",
                         "method": "Method",
-                        "status": "Status"
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status"
                       }
                     }
                   }
@@ -862,6 +872,929 @@
         "kind": "Panel",
         "spec": {
           "id": 7,
+          "title": "Model calls by key",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, api_key_alias, requested_model, status_code) (increase(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{api_key_alias}} {{requested_model}} {{status_code}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "Value": "Calls"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Calls"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Calls to the model gateway in the selected range, by the key of the caller, the name it asked for and the status. The key of a trust domain has the name of its domain (agents-main); a key that is not declared in the scrape reads undeclared, and None is a call with no valid key. The daily refused calls of the key of the metrics scrape are left out (Checks tab, litellm-key-check).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "Failed model calls by status",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, api_key_alias, requested_model, exception_status) (increase(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) > 0",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{api_key_alias}} {{requested_model}} {{exception_status}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "Value": "Failed calls"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "None in range",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Failed calls"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Calls that failed in the selected range, by key, name and status: 429 is the limit of the plan, 401 or 403 a key or a model list, 5xx the bridge, Bedrock or the vendor. ModelGatewayCallsFailing fires when more than half of the calls of a trust domain fail for 20 minutes.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Model calls",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{api_key_alias}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Calls to the model gateway each second, by the key of the caller.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 10,
+          "title": "Share of model calls that failed",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])) / sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{api_key_alias}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The failed calls as a share of all calls, by key. A gap is a time with no call.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "id": 11,
+          "title": "Time of a model call (p95)",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "histogram_quantile(0.95, sum by (k8s_cluster, api_key_alias, le) (rate(litellm_request_total_latency_metric_bucket{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{api_key_alias}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The 95th percentile of the time of a call that passed, from the request to the end of the answer, by key. A turn of an agent with tools makes many calls.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "id": 12,
+          "title": "Tokens per day",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d])) + sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d]))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{api_key_alias}} {{requested_model}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The input and output tokens of the 24 hours before each point, by key and the name it asked for. The plan is one budget that only the owner sees, so no panel shows a share of the limit or money.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "id": 13,
+          "title": "Tokens in the range",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) + sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{api_key_alias}} {{requested_model}} {{api_provider}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "Value": "Tokens"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Tokens"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "The input and output tokens in the selected range, by key, name and provider.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-13": {
+        "kind": "Panel",
+        "spec": {
+          "id": 14,
           "title": "MCP requests by route",
           "links": [
             {
@@ -989,6 +1922,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Requests"
                       }
                     }
@@ -1055,10 +1993,10 @@
           "description": "Requests to the MCP gateway in the selected range, by route, HTTP method and status. The GET with 405 that each start of a client makes is left out: the gateway offers no stream on a stateless route, and that is not a failure. A route is the tools of one trust domain (default/finance, default/finance-vault).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-7": {
+      "panel-14": {
         "kind": "Panel",
         "spec": {
-          "id": 8,
+          "id": 15,
           "title": "MCP failed requests",
           "links": [
             {
@@ -1134,10 +2072,10 @@
           "description": "Requests to the MCP gateway with a 4xx or 5xx status, by route, less the GET with 405 of a client start. A 401 is a client with no key or a wrong key, a 400 a tool that the route does not allow.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-8": {
+      "panel-15": {
         "kind": "Panel",
         "spec": {
-          "id": 9,
+          "id": 16,
           "title": "Scheduled check state",
           "links": [
             {
@@ -1265,6 +2203,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "State"
                       }
                     }
@@ -1392,10 +2335,10 @@
           "description": "Each declared CronJob of the platform: Healthy when its last good run is within its window (26 hours for a daily check, 35 minutes for the workflow jobs), Degraded when it is older, Failed when the newest run failed after the last good one, Standby when the CronJob is suspended, Unknown with no evidence.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-9": {
+      "panel-16": {
         "kind": "Panel",
         "spec": {
-          "id": 10,
+          "id": 17,
           "title": "Time since the last good run",
           "links": [
             {
@@ -1523,6 +2466,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Time since the last good run"
                       }
                     }
@@ -1589,10 +2537,10 @@
           "description": "The time since the last good run of each declared CronJob, from kube-state-metrics.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-10": {
+      "panel-17": {
         "kind": "Panel",
         "spec": {
-          "id": 11,
+          "id": 18,
           "title": "Result line state",
           "links": [
             {
@@ -1720,6 +2668,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "State"
                       }
                     }
@@ -1847,10 +2800,10 @@
           "description": "The newest `<check> result=` line of each declared check of an agent pod in its window (26 hours for the instruction check and the daily archive, 15 days for the memory index, which runs at each start of the pod, 3 hours for the sync of the automations, 30 minutes for the drift of the app of the reviewer): Healthy when it is a good result, Failed when it is not, Unknown when no line came.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-11": {
+      "panel-18": {
         "kind": "Panel",
         "spec": {
-          "id": 12,
+          "id": 19,
           "title": "Workflow run Jobs",
           "links": [
             {
@@ -1978,6 +2931,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Jobs"
                       }
                     }
@@ -2044,10 +3002,10 @@
           "description": "The run Jobs of the workflow agents that Kubernetes still keeps, by result. A failed run alerts for 2 hours (AgentWorkflowRunFailed).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-12": {
+      "panel-19": {
         "kind": "Panel",
         "spec": {
-          "id": 13,
+          "id": 20,
           "title": "Backup state",
           "links": [
             {
@@ -2175,6 +3133,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "State"
                       }
                     }
@@ -2302,10 +3265,10 @@
           "description": "Each declared snapshot policy of a trust domain: Healthy when its last good snapshot is within the recovery point objective (30 hours), Failed when it is older, Unknown with no evidence from Kopiur.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-13": {
+      "panel-20": {
         "kind": "Panel",
         "spec": {
-          "id": 14,
+          "id": 21,
           "title": "Backup age",
           "links": [
             {
@@ -2433,6 +3396,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Backup age"
                       }
                     }
@@ -2499,10 +3467,10 @@
           "description": "The time since the last good snapshot of each declared policy, from Kopiur.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-14": {
+      "panel-21": {
         "kind": "Panel",
         "spec": {
-          "id": 15,
+          "id": 22,
           "title": "Last restore test",
           "links": [
             {
@@ -2630,6 +3598,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "When"
                       }
                     }
@@ -2696,10 +3669,10 @@
           "description": "The time of the newest result line of each restore test, by result. A restore test runs by hand, and its line lives 5 minutes as a series, so a recording rule keeps its time for the local history of Prometheus (15 days). An older test is not shown here, and no test reads Unknown.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-15": {
+      "panel-22": {
         "kind": "Panel",
         "spec": {
-          "id": 16,
+          "id": 23,
           "title": "Plan limit reached",
           "links": [
             {
@@ -2827,6 +3800,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "When"
                       }
                     }
@@ -2893,10 +3871,10 @@
           "description": "The newest time in the range that the model bridge logged a call of a trust domain stopped by the limit of the Claude plan. The calls of that domain fail until the limit resets.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-16": {
+      "panel-23": {
         "kind": "Panel",
         "spec": {
-          "id": 17,
+          "id": 24,
           "title": "Instruction file changes",
           "links": [
             {
@@ -3024,6 +4002,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "When"
                       }
                     }
@@ -3090,10 +4073,10 @@
           "description": "The newest time in the range that the daily check of an agent pod found an instruction file new, changed or gone. The name of the file stays in Loki.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-17": {
+      "panel-24": {
         "kind": "Panel",
         "spec": {
-          "id": 18,
+          "id": 25,
           "title": "Mover denials",
           "links": [
             {
@@ -3221,6 +4204,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Denials"
                       }
                     }
@@ -3434,7 +4422,34 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-7"
+                                    "name": "panel-8"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-9"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-10"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-11"
                                   }
                                 }
                               }
@@ -3462,6 +4477,91 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-6"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-7"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-12"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Detail",
+                        "collapse": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Model calls"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-14"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-13"
                                   }
                                 }
                               }
@@ -3501,7 +4601,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-8"
+                                    "name": "panel-15"
                                   }
                                 }
                               },
@@ -3510,7 +4610,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-10"
+                                    "name": "panel-17"
                                   }
                                 }
                               }
@@ -3537,7 +4637,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-9"
+                                    "name": "panel-16"
                                   }
                                 }
                               },
@@ -3546,7 +4646,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-11"
+                                    "name": "panel-18"
                                   }
                                 }
                               }
@@ -3586,7 +4686,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-12"
+                                    "name": "panel-19"
                                   }
                                 }
                               }
@@ -3613,7 +4713,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-13"
+                                    "name": "panel-20"
                                   }
                                 }
                               },
@@ -3622,7 +4722,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-14"
+                                    "name": "panel-21"
                                   }
                                 }
                               }
@@ -3662,7 +4762,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-15"
+                                    "name": "panel-22"
                                   }
                                 }
                               },
@@ -3671,7 +4771,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-16"
+                                    "name": "panel-23"
                                   }
                                 }
                               },
@@ -3680,7 +4780,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-17"
+                                    "name": "panel-24"
                                   }
                                 }
                               }
@@ -3792,7 +4892,7 @@
         }
       }
     ],
-    "description": "Is each part of the agent platform there and ready, do its checks, tool calls and backups work, and did a limit or a security signal fire?",
+    "description": "Is each part of the agent platform there and ready, do its model calls, checks, tool calls and backups work, and did a limit or a security signal fire?",
     "editable": false
   }
 }

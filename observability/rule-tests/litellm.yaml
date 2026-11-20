@@ -1,8 +1,8 @@
-# Cases for the certificate alert of the model gateway
-# (kubernetes/apps/ai/litellm/app/prometheusrule.yaml). The rule compares the
-# time with a fixed date, so each test starts near that date
-# (start_timestamp, in seconds). When the certificate is renewed, the date of
-# the rule and the dates here move together.
+# Cases for the alerts of the model gateway
+# (kubernetes/apps/ai/litellm/app/prometheusrule.yaml). The certificate rule
+# compares the time with a fixed date, so each of its tests starts near that
+# date (start_timestamp, in seconds). When the certificate is renewed, the
+# date of the rule and the dates here move together.
 rule_files:
   - kubernetes/apps/ai/litellm/app/prometheusrule.yaml
 evaluation_interval: 1m
@@ -27,4 +27,68 @@ tests:
     alert_rule_test:
       - alertname: LiteLLMBedrockCertificateExpiring
         eval_time: 5m
+        exp_alerts: []
+  # ModelGatewayCallsFailing reads the counters of the gateway's metrics: a
+  # failed call counts in both series.
+  - name: one failed turn with its retries does not fire
+    interval: 1m
+    input_series:
+      # Calls that pass, then 18 failed attempts in 3 minutes (a turn with
+      # the retries of the SDK and of the agent framework), then quiet.
+      - series: 'litellm_proxy_failed_requests_metric_total{api_key_alias="agents-workflows",requested_model="agents-workflows",api_provider="openai",exception_status="429"}'
+        values: "0x10 6 12 18x50"
+      - series: 'litellm_proxy_total_requests_metric_total{api_key_alias="agents-workflows",requested_model="agents-workflows",api_provider="openai",status_code="429"}'
+        values: "0x10 6 12 18x50"
+      - series: 'litellm_proxy_total_requests_metric_total{api_key_alias="agents-workflows",requested_model="agents-workflows",api_provider="openai",status_code="200"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - alertname: ModelGatewayCallsFailing
+        eval_time: 20m
+        exp_alerts: []
+      - alertname: ModelGatewayCallsFailing
+        eval_time: 30m
+        exp_alerts: []
+      - alertname: ModelGatewayCallsFailing
+        eval_time: 45m
+        exp_alerts: []
+  - name: failures for 20 minutes fire
+    interval: 1m
+    input_series:
+      # Each call fails from minute 5, one a minute.
+      - series: 'litellm_proxy_failed_requests_metric_total{api_key_alias="agents-main",requested_model="agents-main",api_provider="openai",exception_status="500"}'
+        values: "0x5 1+1x40"
+      - series: 'litellm_proxy_total_requests_metric_total{api_key_alias="agents-main",requested_model="agents-main",api_provider="openai",status_code="500"}'
+        values: "0x5 1+1x40"
+    alert_rule_test:
+      - alertname: ModelGatewayCallsFailing
+        eval_time: 20m
+        exp_alerts: []
+      - alertname: ModelGatewayCallsFailing
+        eval_time: 40m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              api_key_alias: agents-main
+              trust_domain: main
+  - name: a quiet trust domain, a domain whose failures are a quarter, and the scrape key do not fire
+    interval: 1m
+    input_series:
+      # No call at all.
+      - series: 'litellm_proxy_total_requests_metric_total{api_key_alias="agents-pilot",requested_model="agents-pilot",api_provider="openai",status_code="200"}'
+        values: "5x60"
+      # 4 calls a minute, 1 of them fails.
+      - series: 'litellm_proxy_failed_requests_metric_total{api_key_alias="agents-finance",requested_model="agents-finance",api_provider="openai",exception_status="500"}'
+        values: "0+1x60"
+      - series: 'litellm_proxy_total_requests_metric_total{api_key_alias="agents-finance",requested_model="agents-finance",api_provider="openai",status_code="500"}'
+        values: "0+1x60"
+      - series: 'litellm_proxy_total_requests_metric_total{api_key_alias="agents-finance",requested_model="agents-finance",api_provider="openai",status_code="200"}'
+        values: "0+3x60"
+      # The daily check of the scrape key: each of its calls is refused.
+      - series: 'litellm_proxy_failed_requests_metric_total{api_key_alias="metrics-scrape",requested_model="agents-main",api_provider="openai",exception_status="403"}'
+        values: "0+1x60"
+      - series: 'litellm_proxy_total_requests_metric_total{api_key_alias="metrics-scrape",requested_model="agents-main",api_provider="openai",status_code="403"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - alertname: ModelGatewayCallsFailing
+        eval_time: 50m
         exp_alerts: []

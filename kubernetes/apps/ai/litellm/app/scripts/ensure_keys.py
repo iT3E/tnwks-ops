@@ -7,7 +7,13 @@ KEYS_FILE is a JSON list from a SOPS Secret:
 
 An entry may also set a spend limit: "max_budget" (US dollars) and
 "budget_duration" (how often the spend resets, such as "30d"). LiteLLM then
-refuses the key's calls once its spend reaches the limit.
+refuses the key's calls once its spend reaches the limit. An entry may also
+set "allowed_routes", the only routes that its key may call.
+
+The fields of a key in PINNED are fixed here, in plain text, and not only in
+the encrypted list: an entry with that alias and any other value is refused,
+and its key is neither made nor changed. So git shows what the key of the
+metrics scrape can do without a decrypt (tests/test_model_gateway_metrics.py).
 
 For each entry the key is created (POST /key/generate with that exact key
 value) or, if it exists, updated (models, alias, and the limit when the entry
@@ -28,7 +34,12 @@ MASTER = os.environ["LITELLM_MASTER_KEY"]
 KEYS_FILE = os.environ.get("KEYS_FILE", "/keys/keys.json")
 RECHECK_SECONDS = int(os.environ.get("RECHECK_SECONDS", "21600"))
 # Optional fields of an entry that go to LiteLLM as they are.
-BUDGET_FIELDS = ("max_budget", "budget_duration")
+OPTIONAL_FIELDS = ("max_budget", "budget_duration", "allowed_routes")
+# The key of the scrape of /metrics (docs/apps/litellm.md, "Metrics"). Its
+# model list is a name that is no model: an empty list would give it each
+# model. LiteLLM lets a key that is not an admin key read /metrics only when
+# the key lists that route.
+PINNED = {"metrics-scrape": {"models": ["no-default-models"], "allowed_routes": ["/metrics"]}}
 
 
 def call(method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
@@ -62,8 +73,12 @@ def wait_ready() -> None:
 
 def ensure(entry: dict) -> str:
     key, alias, models = entry["key"], entry["alias"], entry.get("models", [])
+    pinned = PINNED.get(alias, {})
+    wrong = sorted(field for field, value in pinned.items() if entry.get(field) != value)
+    if wrong:
+        raise RuntimeError(f"{alias}: refused, {', '.join(wrong)} must be as PINNED in ensure_keys.py")
     spec = {"key": key, "key_alias": alias, "models": models, "metadata": {"managed_by": "tnwks-ops"}}
-    for field in BUDGET_FIELDS:
+    for field in OPTIONAL_FIELDS:
         if field in entry:
             spec[field] = entry[field]
     status, _ = call("GET", "/key/info?" + urllib.parse.urlencode({"key": key}))
@@ -79,7 +94,10 @@ def ensure(entry: dict) -> str:
     budget = ""
     if "max_budget" in entry:
         budget = f", budget: {entry['max_budget']} USD per {entry.get('budget_duration', 'key lifetime')}"
-    return f"{alias}: {verb} (models: {', '.join(models) or 'all'}{budget})"
+    routes = ""
+    if "allowed_routes" in entry:
+        routes = f", routes: {', '.join(entry['allowed_routes'])}"
+    return f"{alias}: {verb} (models: {', '.join(models) or 'all'}{budget}{routes})"
 
 
 def run_once() -> bool:

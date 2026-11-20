@@ -932,6 +932,15 @@
         "clusters": [
           "homelab-wsl"
         ]
+      },
+      {
+        "trust_domain": "shared",
+        "namespace": "ai",
+        "cronjob": "litellm-key-check",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
       }
     ],
     "results": [

@@ -5295,7 +5295,7 @@
     "dashboard": "tnwks-ai",
     "tab": "Parts",
     "panel": "AI alerts firing",
-    "query": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "query": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
     "unit": "short",
     "query_mode": "instant",
     "inputs": [
@@ -5312,6 +5312,199 @@
     "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
     "scope": "selected sites; explicitly described shared sources may span sites",
     "missing": "None",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Model calls by key",
+    "query": "sum by (k8s_cluster, api_key_alias, requested_model, status_code) (increase(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "litellm_proxy_total_requests_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_proxy_total_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Failed model calls by status",
+    "query": "sum by (k8s_cluster, api_key_alias, requested_model, exception_status) (increase(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "litellm_proxy_failed_requests_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_proxy_failed_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Model calls",
+    "query": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+    "unit": "reqps",
+    "query_mode": "range",
+    "inputs": [
+      "litellm_proxy_total_requests_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_proxy_total_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Share of model calls that failed",
+    "query": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])) / sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "litellm_proxy_failed_requests_metric_total",
+      "litellm_proxy_total_requests_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_proxy_failed_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      },
+      {
+        "metric": "litellm_proxy_total_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Time of a model call (p95)",
+    "query": "histogram_quantile(0.95, sum by (k8s_cluster, api_key_alias, le) (rate(litellm_request_total_latency_metric_bucket{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])))",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "litellm_request_total_latency_metric_bucket"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_request_total_latency_metric_bucket",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Tokens per day",
+    "query": "sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d])) + sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d]))",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "litellm_input_tokens_metric_total",
+      "litellm_output_tokens_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_input_tokens_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      },
+      {
+        "metric": "litellm_output_tokens_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Tokens in the range",
+    "query": "sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) + sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "litellm_input_tokens_metric_total",
+      "litellm_output_tokens_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_input_tokens_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      },
+      {
+        "metric": "litellm_output_tokens_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/agent-platform-runbook.md",
     "owner": "homelab operator"
