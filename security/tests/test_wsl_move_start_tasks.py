@@ -123,6 +123,22 @@ def test_the_copy_of_the_watchdog_names_the_copy_of_the_keepalive():
     assert "'\\g<1>' ~ wsl_keepalive_task_account" in args
 
 
+def test_the_copy_of_the_watchdog_skips_the_check_of_the_wsl_service():
+    """A batch logon of a standard account may not query the WSL service (the service
+    control manager and the service grant that to interactive and service logons, SYSTEM
+    and the Administrators). The copy skips check 1, which the WSL service task (SYSTEM)
+    does; the copy exists only with the start with no elevation, which has that task."""
+    args = " ".join(DEFAULTS["wsl_watchdog_args_account"].split())
+    assert args.startswith("{{ (wsl_watchdog_args | regex_replace(")
+    assert args.endswith("~ ' -SkipService') | trim }}")
+    assert "SkipService" not in str(DEFAULTS["wsl_watchdog_args"])
+    task = named(MAINTENANCE, "WSL service task (SYSTEM, every 5 min and at boot)")
+    assert task["when"] == "wsl_start_unelevated | bool"
+    script = (ANSIBLE / "roles/windows_wsl_maintenance/files/Watch-TnwksWsl.ps1").read_text()
+    assert "[switch]$SkipService" in script
+    assert "if (-not $SkipService -and -not (Test-WslService)) {" in script
+
+
 def test_the_wsl_service_task_starts_the_copy_of_the_keepalive_once_the_move_is_done():
     assert DEFAULTS["wsl_service_keepalive_task"] == (
         "{{ wsl_keepalive_task_account if wsl_move_phase == 'done' else wsl_keepalive_task }}")

@@ -1,0 +1,56 @@
+---
+# LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
+# lists ./vault-backup/restore-test/ks.yaml, for the restore test of the
+# finance share. The next pull request takes the line out and sets the name
+# of the snapshot back to its placeholder (vault-SET-ME): Flux then deletes
+# the Restore, the scratch volume and the check Job.
+# Restore one snapshot of the policy vault (the finance share) into the
+# scratch volume, in the form of ../../../agent/restore-test/restore/
+# restore.yaml: the snapshot by name, credentialProjection, and the mover
+# identity of ../../app/backup.yaml. Reads the repository only; writes only
+# the scratch volume, never the share.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: vault-restore-test
+spec:
+  source:
+    snapshotRef:
+      # The newest Succeeded snapshot of the policy vault when the test is
+      # listed, by name
+      # (kubectl -n agents-finance get snapshots.kopiur.home-operations.com).
+      # The same name is SNAPSHOT in ../check/job.yaml.
+      name: vault-SET-ME
+  target:
+    # The claim of pvc.yaml. No pod holds it, so the mover is not pinned to
+    # a node.
+    pvcRef:
+      name: vault-restore-test
+  # The mover gets the credentials of the repository for the run; the copy
+  # is owned by the Restore and goes with it.
+  credentialProjection:
+    enabled: true
+  mover:
+    # uid 1000, the owner of each file of the share, and the restricted
+    # level of the namespace. fsGroup makes a new volume writable for it.
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      seccompProfile:
+        type: RuntimeDefault
+  failurePolicy:
+    # The share is far smaller than the state volume, whose first snapshot
+    # (about 0.5 GB) took under 3 minutes. A stuck restore fails here, and
+    # KopiurRestoreFailed fires 10 minutes after.
+    activeDeadlineSeconds: 1800

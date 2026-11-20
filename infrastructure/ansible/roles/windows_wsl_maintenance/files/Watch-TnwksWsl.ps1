@@ -32,6 +32,13 @@
 # -ServiceOnly: check 1 and the start of the keepalive task, and no wsl.exe.
 # SYSTEM's wsl.exe can not see the distro of the user, so that task never
 # starts a process in it.
+#
+# The copy of this task for the account that owns the distro (a standard
+# account, batch logon) runs with -SkipService: Windows gives a batch logon of
+# a standard account no right to query the WSL service (the service control
+# manager and the service grant that to interactive and service logons,
+# SYSTEM and the Administrators), so check 1 would always read "unavailable".
+# The SYSTEM task tnwks-wsl-service does check 1 on that host.
 
 [CmdletBinding()]
 param(
@@ -45,7 +52,10 @@ param(
     [string]$KeepAliveTask,
     # Check 1 and the keepalive task only, with no wsl.exe: the SYSTEM task
     # tnwks-wsl-service.
-    [switch]$ServiceOnly
+    [switch]$ServiceOnly,
+    # No check 1: the copy for a standard account, which may not query the
+    # service. The SYSTEM task tnwks-wsl-service does check 1.
+    [switch]$SkipService
 )
 
 $ErrorActionPreference = 'Continue'
@@ -199,7 +209,7 @@ function Start-KeepAliveTask {
 # ---------------- main ----------------
 Rotate-Log
 
-if (-not (Test-WslService)) {
+if (-not $SkipService -and -not (Test-WslService)) {
     Write-Log 'aborting: WSL service unavailable.' 'ERROR'
     exit 1
 }

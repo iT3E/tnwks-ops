@@ -501,7 +501,8 @@ def host_config(tmp_path: Path) -> dict:
     after_boot = datetime(2026, 11, 20, 3, 5, tzinfo=UTC).timestamp()
     os.utime(tmp_path / "address.json", (after_boot, after_boot))
     return config(tmp_path, registration_file=str(tmp_path / "registration.json"),
-                  wslconfig_file=str(tmp_path / "present.wslconfig"), bridge_address_file=str(tmp_path / "address.json"))
+                  wslconfig_file=str(tmp_path / "present.wslconfig"), bridge_address_file=str(tmp_path / "address.json"),
+                  wsl_conf_uid="none")
 
 
 def after_window(tmp_path: Path) -> dict:
@@ -515,6 +516,8 @@ def after_window(tmp_path: Path) -> dict:
 
 
 READINESS = "Get-TnwksReadiness | ConvertTo-Json -Compress -Depth 4"
+DEFAULT_USER = ("a launch with no user takes the user of today, not root: the user that /etc/wsl.conf names "
+                "(the read in the distro), else the default uid of the registration")
 CHECK = "$global:Processes = @{}; $global:Profile = 'PROFILE'; $global:Admins = @(); $global:Proxy = @('Address Port Address Port', '0.0.0.0 80 172.20.1.2 80', '0.0.0.0 443 172.20.1.2 443')\n"
 
 
@@ -571,7 +574,7 @@ def test_the_readiness_and_the_check_fail_on_another_copy_of_the_window_script(t
     ("copy before boot", "each start task of the new account is enabled, and ran after the boot with result 0 or still runs"),
     ("copy failed", "each start task of the new account is enabled, and ran after the boot with result 0 or still runs"),
     ("other path", "the new account registers the distro once, at the new disk file, as its default distro when it was the default of today"),
-    ("root", "the default user of the distro is the user of today, and not root"),
+    ("root", DEFAULT_USER),
     ("flags", "the flags, the default environment and the kernel command line of the registration are as step 3 read them"),
     ("environment", "the flags, the default environment and the kernel command line of the registration are as step 3 read them"),
     ("proxy", "the port proxy points to the address that the new VM wrote after the boot"),
@@ -604,6 +607,43 @@ def test_each_line_of_the_check_play(tmp_path, case, line):
     body = HOST_FAKES + CHECK.replace("PROFILE", str(tmp_path / "prof")) + change + "\nGet-TnwksCheck | ConvertTo-Json -Compress -Depth 4"
     lines = run(cfg, body, tasks)
     assert len(lines) == 15 and fails(lines) == ([line] if line else [])
+
+
+@needs_pwsh
+@pytest.mark.parametrize(("uid", "conf", "passes"), [
+    # An import in place registers DefaultUid 0; wsl.conf names the user of today.
+    ("0", "1000", True),
+    ("1000", "none", True),
+    ("1000", "1000", True),
+    # No default user in wsl.conf: the DefaultUid of 0 is root.
+    ("0", "none", False),
+    # wsl.conf names root, or another user, before the registration counts.
+    ("1000", "0", False),
+    ("0", "1001", False),
+    ("1000", "1001", False),
+    # No read in the distro: the line can not tell, so it fails.
+    ("1000", "", False),
+    ("1000", "somebody", False),
+    # No DefaultUid value: WSL reads root.
+    ("$null", "none", False),
+])
+def test_the_default_user_line_takes_wsl_conf_first_then_the_registration(tmp_path, uid, conf, passes):
+    """By the init of WSL, a launch with no user takes the user that [user] default of
+    /etc/wsl.conf names, else the DefaultUid of the registration, else root. The script
+    reads the registration; the read in the distro gives the uid of the wsl.conf user."""
+    cfg = host_config(tmp_path)
+    cfg["wsl_conf_uid"] = conf
+    tasks = after_window(tmp_path)
+    body = (HOST_FAKES + CHECK.replace("PROFILE", str(tmp_path / "prof"))
+            + f"$global:Hives['S-1-5-21-1-2-3-1002'].found[0].DefaultUid = {uid}\n"
+            + "Get-TnwksCheck | ConvertTo-Json -Compress -Depth 4")
+    lines = run(cfg, body, tasks)
+    assert len(lines) == 15 and fails(lines) == ([] if passes else [DEFAULT_USER])
+
+
+def test_the_check_play_gives_the_read_in_the_distro_to_the_script():
+    assert VARS["wsl_move_window_read"]["wsl_conf_uid"] == "{{ wsl_move_check_wsl_conf_uid | string | trim }}"
+    assert DEFAULTS["wsl_move_check_wsl_conf_uid"] == ""
 
 
 @needs_pwsh

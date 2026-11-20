@@ -1,0 +1,77 @@
+---
+# LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
+# lists ./vault-backup/restore-test/ks.yaml, for the restore test of the
+# finance share. The next pull request takes the line out and sets the name
+# of the snapshot back to its placeholder (vault-SET-ME, in
+# restore/restore.yaml and check/job.yaml): Flux then deletes the Restore,
+# the scratch volume and the check Job, and this directory is a template.
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# A restore test of the finance share (docs/apps/agent-platform-runbook.md,
+# "The restore test of the finance share"), in the form of the restore test
+# of the state volume (../../agent/restore-test/). It writes into a scratch
+# volume only: the share, its claims vault-rw and vault-ro, the vault server
+# and the agent stay as they are and keep running.
+#
+# Two steps, in this order: the Restore fills the scratch volume, then the
+# check Job compares it with the live share. dependsOn holds the check until
+# the Restore is Completed, so the check never reads a volume that is still
+# being written.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-vault-restore-test
+  namespace: flux-system
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/vault-backup/restore-test/restore
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The Restore CRD, and the repository the snapshot is in.
+    - name: kopiur-agents-finance-repository
+    # The SnapshotPolicy vault, whose snapshot this restores.
+    - name: agents-finance-vault-backup
+  # Ready only when the Restore is Completed and the scratch volume is
+  # Bound. kstatus alone calls a Restore with no status yet Current, so the
+  # phase conditions of kopiur decide (Completed: Ready=True; Failed:
+  # Stalled=True).
+  wait: true
+  healthCheckExprs:
+    - apiVersion: kopiur.home-operations.com/v1alpha1
+      kind: Restore
+      current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')
+      failed: status.conditions.exists(e, e.type == 'Stalled' && e.status == 'True')
+  interval: 30m
+  retryInterval: 5m
+  # Longer than the deadline of the restore mover (restore/restore.yaml), so
+  # a stuck restore fails in kopiur first.
+  timeout: 45m
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The check: one Job that compares the restored volume with the live share
+# and logs only flags and counts. No ${VAR} substitution here: the script of
+# the Job uses shell variables.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-vault-restore-check
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/vault-backup/restore-test/check
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: agents-finance-vault-restore-test
+    # The claim vault-ro, Bound to its volume.
+    - name: agents-finance-vault-share
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

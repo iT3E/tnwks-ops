@@ -134,23 +134,25 @@
     # The account of the distro has two rules: on the folder itself, list it
     # and make files in it (no delete of the folder, no subfolder); on the
     # files, change, replace and delete them, which the write of the distro (a
-    # new file, then a rename over the document) needs. A link or a junction
-    # at the inbox is refused by the relay and by the role (the next task stops
-    # before it reads or sets a rule).
+    # new file, then a rename over the document) needs. While the move of the
+    # distro runs, each of the two accounts has them (host_check_inbox_writers):
+    # after the window the distro runs as the new account. A link or a
+    # junction at the inbox is refused by the relay and by the role (the next
+    # task stops before it reads or sets a rule).
     - name: Inbox of the distro
       ansible.windows.win_file:
         path: "{{ host_check_inbox_dir }}"
         state: directory
       register: host_check_inbox_dir_result
 
-    - name: Only SYSTEM, the Administrators and the account of the distro may change the inbox
+    - name: Only SYSTEM, the Administrators and the accounts of the distro may change the inbox
       ansible.windows.win_powershell:
         parameters:
           Path: "{{ host_check_inbox_dir }}"
-          Account: "{{ host_check_distro_account }}"
+          Accounts: "{{ host_check_inbox_writers }}"
         script: |
           [CmdletBinding(SupportsShouldProcess)]
-          param([string]$Path, [string]$Account)
+          param([string]$Path, [string[]]$Accounts)
           $ErrorActionPreference = 'Stop'
           # Get-Acl and Set-Acl follow a link or a junction, so the rules would
           # go to its target. Stop, and change nothing.
@@ -159,15 +161,29 @@
               throw "The inbox $Path is not a plain directory (a link or a junction?). Nothing is changed."
           }
           $sid = [System.Security.Principal.SecurityIdentifier]
-          $distro = (New-Object System.Security.Principal.NTAccount $Account).Translate($sid).Value
+          $writers = @()
+          foreach ($name in @($Accounts | Where-Object { $_ })) {
+              try { $writers += (New-Object System.Security.Principal.NTAccount $name).Translate($sid).Value }
+              catch {
+                  # A check run before the apply that makes the account of the
+                  # move (role windows_wsl_move): the rules would change.
+                  $e = $_.Exception
+                  while ($e -and $e.GetType().Name -ne 'IdentityNotMappedException') { $e = $e.InnerException }
+                  if ($WhatIfPreference -and $e) { $Ansible.Changed = $true; return }
+                  throw
+              }
+          }
+          if (-not $writers) { throw 'No account of the distro is given. Nothing is changed.' }
           $all = 'ContainerInherit, ObjectInherit'
           # Who, which rights, to which children, how far.
           $want = @(
               @('S-1-5-18', 'FullControl', $all, 'None'),
-              @('S-1-5-32-544', 'FullControl', $all, 'None'),
-              @($distro, 'ReadAndExecute, CreateFiles, Synchronize', 'None', 'None'),
-              @($distro, 'Modify, Synchronize', 'ObjectInherit', 'InheritOnly')
+              @('S-1-5-32-544', 'FullControl', $all, 'None')
           )
+          foreach ($writer in @($writers | Select-Object -Unique)) {
+              $want += , @($writer, 'ReadAndExecute, CreateFiles, Synchronize', 'None', 'None')
+              $want += , @($writer, 'Modify, Synchronize', 'ObjectInherit', 'InheritOnly')
+          }
           function Get-RuleKey($rules) {
               @($rules | ForEach-Object {
                   '{0}|{1}|{2}|{3}|{4}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights,

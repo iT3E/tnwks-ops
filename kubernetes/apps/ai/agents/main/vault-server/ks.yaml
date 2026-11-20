@@ -1,0 +1,27 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The vault server of main (docs/apps/agent-platform.md, "The vault
+# shares"): the one writer of the share /vault-main, behind the central
+# MCP gateway (kubernetes/apps/ai/mcp-gateway, route main-vault). It
+# mounts the claim vault-rw of ../vault-share.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-main-vault-server
+  namespace: flux-system
+spec:
+  targetNamespace: agents-main
+  path: ./kubernetes/apps/ai/agents/main/vault-server/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The claim vault-rw, Bound to its volume.
+    - name: agents-main-vault-share
+  # Ready only when the server is: a server that can not start (no share, a
+  # moved import) shows as a Kustomization that is not Ready.
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

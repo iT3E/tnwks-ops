@@ -79,6 +79,7 @@ the MCP server and checks the headers that arrive.
 | `/finance/` | `no-tools` | nothing | nothing |
 | `/finance-vault/` | `finance` | the nine tools of the vault | the nine tools of the vault |
 | `/finance-vault/` | `finance-probe` | the nine tools of the vault | `get_file_info` only |
+| `/main-vault/` | `main` | the nine tools of the vault | the nine tools of the vault |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -95,6 +96,13 @@ hung call of the vault or of the finance app holds a turn of the finance
 agent up to 60 s. The vault route takes the key of the finance agent, so a
 leak of that key also gives the writes of the vault
 ([agent-platform.md](agent-platform.md), "The vault server").
+
+**The vault of main** has the same form: the route `/main-vault/`, the
+nine tools, the 60 s, and the vault server of main as its target. Its one
+client is the main agent, which has no other route, so its key is a key
+of its own and no key of finance is on it (a test holds the two routes
+apart). Until the values step its hash is a placeholder, so each call
+gets a 401.
 
 **The pilot and the workflow agents get no key.** No key is the safer
 default. A key with no tool still authenticates: it opens a connection,
@@ -152,6 +160,7 @@ its place for the container tests.
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
+| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only), not made yet | `config.yaml`, route `main-vault` (`metadata: {client: main, route: main-vault}`) |
 
 **The hash and the value stay in step** in two ways: the owner changes both
 in one commit (below), and a check finds a difference. The values check of
@@ -164,6 +173,11 @@ of the route `finance-vault` has a second field
 (`metadata: {client: finance, route: finance-vault}`): one hash for the
 check, and a test checks that both routes have the same one. A new value of
 the key changes the hash on both routes in the same commit.
+
+The key of main is new: the main agent had no key at the gateway before
+its vault. The lead makes the value and its hash in one commit, at the
+step that gives the agent its vault tools; until then the hash is the
+placeholder `sha256:000...01`.
 
 ## Network policy
 

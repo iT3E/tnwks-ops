@@ -190,3 +190,4 @@ wsl_move_window_read:
   log_lines: "{{ wsl_move_window_log_lines | int }}"
   line_limit: "{{ wsl_move_window_line_limit | int }}"
   batch_logons: "{{ wsl_move_window_batch_logons | int }}"
+  wsl_conf_uid: "{{ wsl_move_check_wsl_conf_uid | string | trim }}"

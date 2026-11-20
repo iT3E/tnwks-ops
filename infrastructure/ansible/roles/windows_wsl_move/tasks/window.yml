@@ -16,7 +16,9 @@
 #             does not wait: the path of the lead ends when WSL stops. Then
 #             status, after the restart.
 #   check     Read only. The check play of step 6, after the restart of the
-#             window. One line for each, pass or fail.
+#             window. One line for each, pass or fail. It needs
+#             -e wsl_move_check_wsl_conf_uid=<uid|none>, the read in the
+#             distro of the user that /etc/wsl.conf names (defaults/main.yml).
 #
 # The reads run as SYSTEM, from files/Read-TnwksMoveWindow.ps1, and print no
 # name, SID or folder of the move. Each task that takes one has no_log.
