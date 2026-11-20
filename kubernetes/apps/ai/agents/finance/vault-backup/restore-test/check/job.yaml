@@ -1,0 +1,168 @@
+---
+# LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
+# lists ./vault-backup/restore-test/ks.yaml, for the restore test of the
+# finance share. The next pull request takes the line out and sets the name
+# of the snapshot back to its placeholder (vault-SET-ME): Flux then deletes
+# the Restore, the scratch volume and the check Job.
+# Compares the restored scratch volume with the live share, both read only,
+# and logs only flags and counts: never a file name, a folder name or a word
+# of a note. The live share is the claim vault-ro, as the agent and the
+# backup mover read it. The count of the share is not in git (a public
+# repository): the Job reads it from the share at run time.
+# Loki: {namespace="agents-finance", app="vault-restore-check"}.
+#
+# Pass: the restore and the share have the same files (the same relative
+# path and the same SHA-256 for each one), so the same count of files, of
+# notes (*.md) and of bytes; the same folders and links; nothing either side
+# that uid 1000 cannot read; and at least one note. Any difference fails the
+# Job with each reason in its line. live-newer counts the files of the share
+# changed after the time in the name of the snapshot: when it is not 0 the
+# reason has share-changed too (a write through the vault route after the
+# snapshot, not a fault of the restore), and the test runs again after the
+# next nightly snapshot.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # One name for each run: a Job cannot run again.
+  name: vault-restore-check
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vault-restore-check
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # No nodeSelector: the PV of the scratch volume has the node affinity
+      # of the node the restore mover bound it on, and the scheduler follows
+      # it; the share mounts on each node. No network: default-deny
+      # (../../../namespace.yaml) applies, and the kubelet mounts the share.
+      # The pod identity of the agent: uid 1000 is the owner of each file
+      # of the share and of the restored copy.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: check
+          # The image of the agent, the same release and digest as
+          # agent/app/deployment.yaml: GNU find, sort, comm and sha256sum.
+          # Renovate reads every YAML file under kubernetes/, listed or not,
+          # so one update PR moves both lines together.
+          image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          command: ["sh", "-c"]
+          env:
+            # The snapshot of ../restore/restore.yaml (the same name). Its
+            # name holds its time (vault-YYYYMMDDHHMMSS, UTC).
+            - name: SNAPSHOT
+              value: vault-20261119103300
+          args:
+            - |
+              set -eu
+              R=/restored
+              L=/live
+              W=/work
+              fail() { echo "vault-restore-check result=failed reason=$1"; exit 1; }
+              d=${SNAPSHOT#vault-}
+              case "$d" in
+                [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+                *) fail snapshot-name ;;
+              esac
+              at=$(date -u -d "$(echo "$d" | sed -E 's/^(....)(..)(..)(..)(..)(..)$/\1-\2-\3 \4:\5:\6/')" +%s 2>/dev/null) \
+                || fail snapshot-name
+              echo "vault-restore-check snapshot=$SNAPSHOT at=$(date -u -d "@$at" +%Y-%m-%dT%H:%M:%SZ)"
+              test -d "$R" || fail no-restore
+              test -d "$L" || fail no-share
+
+              # The facts of one side, by relative path: counts on stdout,
+              # and in $W (memory only, gone with the pod) the sorted list
+              # of "SHA-256 path" for each file and a hash of the list of
+              # folders and of links. Errors go to /dev/null: a message of
+              # find or sha256sum would name a file.
+              facts() {
+                cd "$1"
+                files=$(find . -type f 2>/dev/null | wc -l)
+                notes=$(find . -type f -name '*.md' 2>/dev/null | wc -l)
+                bytes=$(find . -type f -printf '%s\n' 2>/dev/null | awk '{ s += $1 } END { printf "%d\n", s }')
+                dirs=$(find . -mindepth 1 -type d 2>/dev/null | wc -l)
+                links=$(find . -type l 2>/dev/null | wc -l)
+                unreadable=$(find . -mindepth 1 ! -readable 2>/dev/null | wc -l)
+                { find . -type f -print0 2>/dev/null | xargs -0 -r sha256sum -- 2>/dev/null || true; } \
+                  | LC_ALL=C sort > "$W/$2.sums"
+                find . -mindepth 1 -type d -print0 2>/dev/null | LC_ALL=C sort -z | sha256sum | cut -c1-64 > "$W/$2.dirs"
+                find . -type l -printf '%p %l\0' 2>/dev/null | LC_ALL=C sort -z | sha256sum | cut -c1-64 > "$W/$2.links"
+                echo "vault-restore-check side=$2 files=$files notes=$notes bytes=$bytes dirs=$dirs links=$links unreadable=$unreadable"
+                echo "$files $notes $bytes $unreadable" > "$W/$2.counts"
+              }
+              facts "$R" restored
+              facts "$L" live
+              read -r rf rn rb ru < "$W/restored.counts"
+              read -r lf ln lb lu < "$W/live.counts"
+              only_live=$(LC_ALL=C comm -23 "$W/live.sums" "$W/restored.sums" | wc -l)
+              only_restored=$(LC_ALL=C comm -13 "$W/live.sums" "$W/restored.sums" | wc -l)
+              same_dirs=no; cmp -s "$W/live.dirs" "$W/restored.dirs" && same_dirs=yes
+              same_links=no; cmp -s "$W/live.links" "$W/restored.links" && same_links=yes
+              newer=$(find "$L" -type f -newermt "@$at" 2>/dev/null | wc -l)
+              echo "vault-restore-check compare only-live=$only_live only-restored=$only_restored same-dirs=$same_dirs same-links=$same_links live-newer=$newer"
+
+              bad=""
+              [ "$rf" -gt 0 ] || bad="$bad empty"
+              [ "$rn" -gt 0 ] || bad="$bad no-notes"
+              [ "$rf" -eq "$lf" ] || bad="$bad files"
+              [ "$rn" -eq "$ln" ] || bad="$bad notes"
+              [ "$rb" -eq "$lb" ] || bad="$bad bytes"
+              [ "$ru" -eq 0 ] || bad="$bad unreadable"
+              [ "$lu" -eq 0 ] || bad="$bad live-unreadable"
+              [ "$only_live" -eq 0 ] && [ "$only_restored" -eq 0 ] || bad="$bad content"
+              [ "$same_dirs" = yes ] || bad="$bad dirs"
+              [ "$same_links" = yes ] || bad="$bad links"
+              if [ -n "$bad" ]; then
+                [ "$newer" -eq 0 ] || bad="$bad share-changed"
+                echo "vault-restore-check result=failed reason=$(echo $bad | tr ' ' ',') files=$rf notes=$rn bytes=$rb"
+                exit 1
+              fi
+              echo "vault-restore-check result=ok files=$rf notes=$rn bytes=$rb"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            # Each claim at its root, with no subPath (a subPath of a
+            # local-path volume is an empty directory on this cluster:
+            # talos/wsl/README.md).
+            - name: restored
+              mountPath: /restored
+              readOnly: true
+            - name: live
+              mountPath: /live
+              readOnly: true
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: restored
+          persistentVolumeClaim:
+            claimName: vault-restore-test
+            readOnly: true
+        # The live share, read only, as the agent mounts it.
+        - name: live
+          persistentVolumeClaim:
+            claimName: vault-ro
+            readOnly: true
+        # The lists of paths of the comparison, in memory only.
+        - name: work
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi

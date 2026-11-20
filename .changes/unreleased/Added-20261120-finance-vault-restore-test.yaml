@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the restore test of the finance share (finance/vault-backup/restore-test/), listed for one run: the Restore of the newest Succeeded snapshot of the policy vault to a scratch claim, then a check Job that compares it with the live share, read only, by path and SHA-256 of each file, with counts of files, notes and bytes, and logs flags and counts only. The next change takes it out of the list.'
+time: 2026-11-20T03:30:00.000000000Z

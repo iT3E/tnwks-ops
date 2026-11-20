@@ -1,0 +1,10 @@
+---
+# LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
+# lists ./vault-backup/restore-test/ks.yaml, for the restore test of the
+# finance share. The next pull request takes the line out and sets the name
+# of the snapshot back to its placeholder (vault-SET-ME): Flux then deletes
+# the Restore, the scratch volume and the check Job.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./job.yaml
