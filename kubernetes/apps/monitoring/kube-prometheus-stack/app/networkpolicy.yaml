@@ -1,0 +1,39 @@
+---
+# Prometheus of this site: the network rule, in its first form. It observes
+# and denies nothing (Design Doc 0003, section 4.2.8, "The readers of that
+# port"; docs/operations/observability-implementation.md, "The network rule
+# of Prometheus").
+#
+# Each request to port 9090 from any source goes through the proxy of Cilium
+# (Envoy, the cilium-envoy DaemonSet), and each one passes. So Hubble shows
+# the method, the path and the source of each request
+# (`hubble observe --type l7`), and the proxy is in the path before a rule
+# can refuse a request. enableDefaultDeny is off, so each other port of the
+# pod stays open as before. The kubelet probes come from the local host,
+# which Cilium lets in before any rule, so they do not go through the proxy.
+#
+# The next form names each reader, with its port and its requests, and puts
+# the pod in default deny.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+      operator.prometheus.io/name: kube-prometheus-stack-prometheus
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingress:
+    - fromEntities:
+        - all
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+          rules:
+            # An empty HTTP rule: each request passes, through the proxy.
+            http:
+              - {}

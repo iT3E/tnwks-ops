@@ -786,6 +786,32 @@ No ingress serves that port. Alloy forwards each span to Tempo.
   product release, passes until it's added here: the trace test of each agent
   image release checks for that.
 
+## The network rule of Prometheus
+
+The CiliumNetworkPolicy `prometheus`
+(`kubernetes/apps/monitoring/kube-prometheus-stack/app/networkpolicy.yaml`)
+will say who may call the pod of Prometheus on each site, and with which HTTP
+requests. It is the first rule with HTTP rules in this repository, so the
+proxy of Cilium (the `cilium-envoy` DaemonSet) comes into the path of each
+request to port 9090. It comes before the write path of the AI board (step 3
+of task 5.23): only the collector may write, so the readers must not.
+
+- **First form: it observes.** Each request to 9090 from any source goes
+  through the proxy and passes, and no port goes into default deny
+  (`enableDefaultDeny` off). So `hubble observe --type l7 --to-namespace
+  monitoring --to-label app.kubernetes.io/name=prometheus` shows the method,
+  the path and the source of each request, before a rule can refuse one.
+  The kubelet probes come from the local host, which Cilium lets in before
+  any rule, so they do not go through the proxy.
+- **What the proxy changes.** The proxy retries a request that gets a 5xx
+  answer 3 times (Cilium `http-retry-count`), and Prometheus answers 503 to
+  a query that times out: such a query runs up to 4 times, until the client
+  stops. The proxy ends a request after 1 hour, or a stream with no data for
+  5 minutes (`http-stream-idle-timeout`): a query of today ends in 2 minutes
+  (the default `--query.timeout`).
+- **Way back.** Revert the PR of the rule: Flux prunes it, and each request
+  goes straight to Prometheus again.
+
 ## Following rollout work
 
 Access, recovery, review and drills are in
