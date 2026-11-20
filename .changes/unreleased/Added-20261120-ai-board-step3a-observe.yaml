@@ -1,3 +1,0 @@
-kind: Added
-body: 'observability: the network rule of Prometheus, first form (step 3 of task 5.23). The CiliumNetworkPolicy prometheus sends each request to the query port through the proxy of Cilium and lets each one pass, with default deny off, so Hubble shows the method, the path and the source of each request before the next form names the readers.'
-time: 2026-11-20T20:00:00.000000000Z

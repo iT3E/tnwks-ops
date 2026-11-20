@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.241.0 - 2026-11-20
+
+### Added
+
+* observability: the network rule of Prometheus, first form (step 3 of task 5.23). The CiliumNetworkPolicy prometheus sends each request to the query port through the proxy of Cilium and lets each one pass, with default deny off, so Hubble shows the method, the path and the source of each request before the next form names the readers.
+
 ## v2.240.1 - 2026-11-20
 
 ### Fixed
