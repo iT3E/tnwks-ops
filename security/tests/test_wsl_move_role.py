@@ -12,6 +12,7 @@ import base64
 import re
 from pathlib import Path
 
+import ansible_render
 import pytest
 import yaml
 from test_wsl_start_unelevated import needs_pwsh, pwsh
@@ -398,6 +399,21 @@ try {{
     assert out["no reads"] == out["one read"] == out["no tasks"] == stop
 
 
+def test_the_account_and_the_disk_file_follow_the_phase_before_any_change():
+    """The done change: the owner of the distro and the file of the compaction and the host check."""
+    names = [t.get("name") for t in tasks("main.yml")]
+    gate = "The account that owns the distro and the disk file follow the phase of the move"
+    assert names.index(gate) < names.index("Folder of the procedure")
+    that = [" ".join(line.split()) for line in next(t for t in tasks("main.yml") if t.get("name") == gate)[
+        "ansible.builtin.assert"]["that"]]
+    desktop = ("(windows_desktop_user | default('') | lower) == ((wsl_move_new_account if wsl_move_phase == 'done' "
+               "else wsl_move_present_account) | lower)")
+    folder = ("(vhdx_compact_vhdx | default('') | ansible.builtin.win_dirname | lower) == ((wsl_move_disk_dir "
+              "if wsl_move_phase == 'done' else wsl_move_present_folder) | lower)")
+    name = "(vhdx_compact_vhdx | default('') | ansible.builtin.win_basename | lower) == (wsl_move_disk_name | lower)"
+    assert that == [desktop, folder, name]
+
+
 def test_on_site_2_the_administrator_logs_in_and_the_distro_keeps_its_owner_and_user():
     """Step 4 (plan task 10.14): the inventory of site 2."""
     host = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
@@ -411,9 +427,79 @@ def test_on_site_2_the_administrator_logs_in_and_the_distro_keeps_its_owner_and_
     assert "{{ wsl_move_present_account }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}" in (
         host["ansible_ssh_common_args"])
     assert "wsl_distro_user" not in host["ansible_ssh_common_args"]
-    # The disk file of today is in the folder of the present account, not of the SSH user.
-    assert host["vhdx_compact_vhdx"] == "{{ wsl_move_present_folder }}\\ext4.vhdx"
+    # The disk file is the moved file from the done switch, and before it the file in the folder of the
+    # present account, not of the SSH user. The folder of the move is the role's own.
+    assert host["wsl_move_disk_dir"] == DEFAULTS["wsl_move_disk_dir"].replace("{{ wsl_move_dir }}", DEFAULTS["wsl_move_dir"])
+    assert host["vhdx_compact_vhdx"] == (
+        "{{ wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder }}\\" + DEFAULTS["wsl_move_disk_name"])
     # No public value of site 2 takes the owner or the user of the distro from the SSH user.
     for path in ("inventory/host_vars/WSL-02/main.yml", "inventory/host_vars/WSL-02-ubuntu/main.yml"):
         code = [line for line in (ANSIBLE / path).read_text().splitlines() if not line.lstrip().startswith("#")]
         assert not any("ansible_user" in line for line in code), path
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_values_of_site_2_in_each_phase_render_as_windows_paths(tmp_path):
+    """Ansible renders the disk file of the compaction and the host check, the account that owns the
+    distro and the gate of the host check of site 2, with stand-ins for its encrypted values. Each path has
+    one backslash between its names: a doubled one would make the standing check report a missing file."""
+    site2 = ansible_render.load(
+        "roles/windows_wsl_move/defaults/main.yml", "roles/windows_host_check/defaults/main.yml",
+        "inventory/group_vars/windows_hosts.yml", "inventory/host_vars/WSL-02/main.yml")
+    standins = {"wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+                "wsl_move_present_folder": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}",
+                "wsl_move_rehearsed_wsl_version": "3.0.5.0", "ansible_user": "standin-admin"}
+    distro = {"wsl_distro_ssh_host": "192.0.2.10", "ansible_host": "192.0.2.10", "ansible_port": 22,
+              "ansible_ssh_private_key_file": "/dev/null"}
+    hosts = {"WSL-02": {**site2, **standins}, "WSL-02-move": {**site2, **standins, "wsl_move_done": False},
+             "WSL-02-ubuntu": distro}
+    names = ("vhdx_compact_vhdx", "host_check_wsl_disk", "host_check_wsl_disk_account", "windows_desktop_user",
+             "wsl_move_phase")
+    out = ansible_render.render(tmp_path, hosts, ["WSL-02", "WSL-02-move"],
+                                {**{name: name for name in names}, "rules": "host_check_wsl_disk_rules | bool"})
+    assert out["WSL-02"] == {
+        "vhdx_compact_vhdx": "C:\\ProgramData\\tnwks-wsl-move\\disk\\ext4.vhdx",
+        "host_check_wsl_disk": "C:\\ProgramData\\tnwks-wsl-move\\disk\\ext4.vhdx",
+        "host_check_wsl_disk_account": "standin-wsl", "windows_desktop_user": "standin-wsl",
+        "wsl_move_phase": "done", "rules": True}
+    assert out["WSL-02-move"] == {
+        "vhdx_compact_vhdx": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}\\ext4.vhdx",
+        "host_check_wsl_disk": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}\\ext4.vhdx",
+        "host_check_wsl_disk_account": "standin1", "windows_desktop_user": "standin1",
+        "wsl_move_phase": "move", "rules": False}
+
+
+def test_the_done_switch_stops_the_host_before_the_wsl_roles_until_a_window_ended_done():
+    """Merged before a done window, the done switch would turn each WSL role to the tasks of the new account.
+    The guard runs after the read of the marker and before the first change, with each tag, and the role runs
+    before the WSL roles in a play with no rescue: its failure ends the play for the host."""
+    main = tasks("main.yml")
+    names = [t.get("name") for t in main]
+    guard = main[names.index("The done switch comes after a done window")]
+    assert guard["ansible.builtin.assert"]["that"] == "(wsl_move_marker_read.output | last | default('')) == 'window-done'"
+    assert guard["when"] == "wsl_move_phase == 'done'" and guard["tags"] == ["always"]
+    read = main[names.index("Read the last marker of the state file")]
+    assert read["check_mode"] is False and read["tags"] == ["always"]
+    assert names.index("Whether a window is started") < names.index("The done switch comes after a done window") < (
+        names.index("Folder of the procedure"))
+    play = next(p for p in yaml.safe_load((ANSIBLE / "playbooks/windows-host.yml").read_text())
+                if p["hosts"] == "windows_hosts")
+    assert not any(key in play for key in ("ignore_errors", "max_fail_percentage", "ignore_unreachable"))
+    roles = [role["role"] for role in play["roles"]]
+    for wsl_role in ("windows_udp_relay", "windows_lan_bridge", "windows_wsl_maintenance", "windows_host_check",
+                     "windows_host_settings"):
+        assert roles.index("windows_wsl_move") < roles.index(wsl_role), wsl_role
+    for role in play["roles"]:
+        assert "ignore_errors" not in role, role["role"]
+
+
+def test_only_windows_host_settings_writes_the_wslconfig_of_the_new_account_once_done():
+    """The role writes the .wslconfig of the new account in its own form while the move runs; from the done
+    switch, windows_host_settings writes and checks it from its template, at the profile of the new account."""
+    write = next(t for t in ALL if t.get("name") == ".wslconfig of the new account")
+    assert write["when"] == "wsl_move_phase != 'done'"
+    settings = yaml.safe_load((ANSIBLE / "roles/windows_host_settings/defaults/main.yml").read_text())
+    assert settings["wslconfig_path"] == "C:\\Users\\{{ windows_desktop_user }}\\.wslconfig"
+    site2 = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
+    assert site2["wslconfig_write"] is True
