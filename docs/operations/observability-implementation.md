@@ -790,27 +790,50 @@ No ingress serves that port. Alloy forwards each span to Tempo.
 
 The CiliumNetworkPolicy `prometheus`
 (`kubernetes/apps/monitoring/kube-prometheus-stack/app/networkpolicy.yaml`)
-will say who may call the pod of Prometheus on each site, and with which HTTP
+says who may call the pod of Prometheus on each site, and with which HTTP
 requests. It is the first rule with HTTP rules in this repository, so the
-proxy of Cilium (the `cilium-envoy` DaemonSet) comes into the path of each
-request to port 9090. It comes before the write path of the AI board (step 3
-of task 5.23): only the collector may write, so the readers must not.
+proxy of Cilium (the `cilium-envoy` DaemonSet) is in the path of each request
+to port 9090 that it admits. It comes before the write path of the AI board
+(step 3 of task 5.23): only the collector may write, so the readers must not.
 
-- **First form: it observes.** Each request to 9090 from any source goes
-  through the proxy and passes, and no port goes into default deny
-  (`enableDefaultDeny` off). So `hubble observe --type l7 --to-namespace
-  monitoring --to-label app.kubernetes.io/name=prometheus` shows the method,
-  the path and the source of each request, before a rule can refuse one.
-  The kubelet probes come from the local host, which Cilium lets in before
-  any rule, so they do not go through the proxy.
-- **What the proxy changes.** The proxy retries a request that gets a 5xx
-  answer 3 times (Cilium `http-retry-count`), and Prometheus answers 503 to
-  a query that times out: such a query runs up to 4 times, until the client
-  stops. The proxy ends a request after 1 hour, or a stream with no data for
-  5 minutes (`http-stream-idle-timeout`): a query of today ends in 2 minutes
-  (the default `--query.timeout`).
-- **Way back.** Revert the PR of the rule: Flux prunes it, and each request
-  goes straight to Prometheus again.
+- **The readers.** On 9090: Grafana of each site (the Prometheus, Local,
+  Site 1 and Site 2 datasources), the Pyrra UI and the internal ingress of
+  the site, the observability evidence of the other site (the readiness and
+  one query), and the LAN bridge of the site (`prometheus-peer`), where the
+  Prometheus and the API checks of the other site federate and query. On
+  10901: Thanos Query of each site. On 8080 and 10902: this Prometheus.
+  The list came from the flow log of Cilium (Hubble, both sites, 30 minutes
+  on 2026-11-20) and from git. `tests/test_prometheus_policy.py` fails when
+  a file of git names a Service or an address of Prometheus and the rule
+  does not know it.
+- **What a reader may send.** GET on each path, and POST on the query paths.
+  The readers through the bridge get GET `/federate` and GET
+  `/api/v1/query` only, and the evidence of the other site GET `/-/ready`
+  and GET `/api/v1/query` only. Nobody may write, call the admin API (it is
+  on: `--web.enable-admin-api`) or call `/-/reload` and `/-/quit`. The
+  proxy answers 403 to such a request.
+- **What passes before the rule.** The local host (the kubelet probes): in
+  Kubernetes, Cilium lets the host reach each pod before any rule. A
+  `kubectl port-forward` and the calls of the reloader and the sidecar
+  enter on the loopback of the pod.
+- **What the proxy changes.** A request through the bridge arrives as
+  `world` or as a node, because the LoadBalancer keeps the address of the
+  bridge only when Prometheus runs on the node of the VIP. The proxy retries
+  a request that gets a 5xx answer 3 times (Cilium `http-retry-count`), and
+  Prometheus answers 503 to a query that times out: such a query runs up to
+  4 times, until the client stops. The proxy ends a request after 1 hour, or
+  a stream with no data for 5 minutes (`http-stream-idle-timeout`): the
+  queries of today end in 2 minutes. A path in a rule matches the whole
+  path with its query string.
+- **Its first form** sent each request to 9090 through the proxy and let
+  each one pass, with default deny off, so that Hubble showed the method,
+  the path and the source of each request (`hubble observe --type l7`)
+  before this form refused any.
+- **A new reader.** Add its pod to the rule in the same PR. Until then its
+  calls are dropped: `hubble observe --to-namespace monitoring --to-label
+  app.kubernetes.io/name=prometheus --verdict DROPPED` shows them.
+- **Way back.** Revert the PR that added or changed the rule: Flux prunes
+  the rule, and each reader passes again.
 
 ## Following rollout work
 

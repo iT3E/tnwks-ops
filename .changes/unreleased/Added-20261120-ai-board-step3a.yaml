@@ -1,0 +1,3 @@
+kind: Added
+body: 'observability: the network rule of Prometheus names its readers (step 3 of task 5.23). On the query port, Grafana of each site, the Pyrra UI, the internal ingress and Prometheus itself may send GET on each path and POST on the query paths; the evidence of the other site and the LAN bridge get the two paths that they call; Thanos Query of each site gets the sidecar port. Nobody may write or call the admin and lifecycle paths. A test fails when git names a new reader of Prometheus that the rule does not know.'
+time: 2026-11-20T20:30:00.000000000Z
