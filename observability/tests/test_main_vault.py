@@ -203,7 +203,13 @@ def test_the_checks_of_main_are_the_shared_checks_and_the_probe():
     (ks,) = docs(MAIN / "checks/ks.yaml")
     assert ks["spec"]["path"] == "./kubernetes/apps/ai/agents/main/checks/app"
     app = yaml.safe_load((MAIN / "checks/app/kustomization.yaml").read_text())
-    assert app["resources"] == ["../../../checks/app", "./mcp-gateway-probe.yaml"]
+    # The key of the probe (PROBE_KEY) is a SOPS Secret of these checks.
+    assert app["resources"] == ["../../../checks/app", "./mcp-gateway-probe.yaml",
+                                "./secret-mcp-gateway-probe.sops.yaml"]
+    (secret,) = docs(MAIN / "checks/app/secret-mcp-gateway-probe.sops.yaml")
+    assert secret["metadata"] == {"name": "mcp-gateway-probe-secret", "namespace": "agents-main"}
+    assert set(secret["stringData"]) == {"PROBE_KEY"}
+    assert secret["stringData"]["PROBE_KEY"].startswith("ENC[")
     (gen,) = app["configMapGenerator"]
     assert gen["files"] == ["config.yaml=../../../../mcp-gateway/app/config/config.yaml"]
 
@@ -218,7 +224,8 @@ def test_the_probe_of_main_is_the_probe_of_finance_for_the_vault_route_only():
     assert "http://" + env["VAULT_SERVER"] + "/mcp" == HOST
     assert env["VAULT_ROUTE"] == "main-vault"
     assert env["TRUST_DOMAIN_NAMESPACES"] == "agents-main"
-    # Until the lead makes the Secret, the probe runs with no key.
+    # The Secret stays optional: with no Secret the probe runs with no key
+    # and says "skipped" for the checks that need one.
     assert main["envFrom"] == [{"secretRef": {"name": "mcp-gateway-probe-secret", "optional": True}}]
 
 
