@@ -412,9 +412,22 @@ function Get-TnwksCheck {
             $registration -and $registration.found.Count -eq 1 -and
             [string]::Equals((Get-TnwksRegistrationDisk $registration.found[0]), $DiskNew, [StringComparison]::OrdinalIgnoreCase) -and
             (-not $saved.default -or "$($registration.root.DefaultDistribution)" -eq $registration.found[0].PSChildName) })
-        (New-TnwksLine 'the default user of the distro is the user of today, and not root' {
+        # The user of a launch with no user, by the rule of WSL (its init,
+        # src/linux/init/init.cpp): the user that [user] default of
+        # /etc/wsl.conf names, when that user exists; else the user of the
+        # DefaultUid of the registration; else root. An import in place
+        # registers DefaultUid 0, root (LxssUserSession.cpp,
+        # ImportDistributionInplace). This script reads the registration only.
+        # The read in the distro gives the first part (wsl_conf_uid): the uid
+        # of the user that wsl.conf names, or 'none' when it names no user that
+        # exists. With no such read, the line fails.
+        (New-TnwksLine 'a launch with no user takes the user of today, not root: the user that /etc/wsl.conf names (the read in the distro), else the default uid of the registration' {
             $reg = $registration.found[0]
-            $null -ne $reg.DefaultUid -and [int64]$reg.DefaultUid -ne 0 -and [int64]$reg.DefaultUid -eq [int64]$saved.dwords.DefaultUid })
+            $conf = "$($c.wsl_conf_uid)".Trim()
+            $uid = if ($conf -match '^[0-9]+$') { [int64]$conf }
+                elseif ($conf -eq 'none' -and $null -ne $reg.DefaultUid) { [int64]$reg.DefaultUid }
+                else { $null }
+            $null -ne $uid -and $uid -ne 0 -and $uid -eq [int64]$saved.dwords.DefaultUid })
         (New-TnwksLine 'the flags, the default environment and the kernel command line of the registration are as step 3 read them' {
             $reg = $registration.found[0]
             $flags = @($saved.dwords.PSObject.Properties | Where-Object { $_.Name -ne 'DefaultUid' } |

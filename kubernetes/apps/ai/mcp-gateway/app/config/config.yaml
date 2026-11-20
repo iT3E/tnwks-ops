@@ -7,7 +7,7 @@
 # One route for each trust domain that has a client, at /<domain>/mcp, with
 # its own clients, its own tool rule and its own MCP servers; and one route
 # for the vault of each trust domain with a vault, at /<domain>-vault/mcp,
-# with the keys of the agents of that domain. Deny by
+# with the keys of the agents of that domain (finance-vault, main-vault). Deny by
 # default: a request with no key or a key that is not here gets a 401, and a
 # client sees and calls only the tools that a rule names for it.
 #
@@ -268,6 +268,69 @@ routes:
               # says more (agentgateway 1.7.0). The 60 s of the route, so a
               # short stop of the NFS server ends in the true answer, not an
               # error for a write that lands later.
+              policies:
+                http:
+                  requestTimeout: 60s
+
+  # The vault of the main trust domain (agents-main/vault-server), in the
+  # form of the route finance-vault: a route of its own, with the key of the
+  # main agent and no key of another trust domain (R6). The main agent has
+  # no other route, so this is its one key at the gateway. Its hash is a
+  # placeholder until the values step (docs/apps/mcp-gateway.md, "The
+  # keys"); the second field of the metadata names the route, as on
+  # finance-vault.
+  - name: main-vault
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-vault/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+            metadata: {client: main, route: main-vault}
+      # As on finance-vault: a write on the hard mount waits while the NFS
+      # server is away, and the caller reads the note again before a retry.
+      timeout:
+        requestTimeout: 60s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The nine tools of the design (Design Doc, section 4.2.5), the list of
+      # finance-vault.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "create_directory",
+                "directory_tree",
+                "edit_file",
+                "get_file_info",
+                "list_directory",
+                "read_multiple_files",
+                "read_text_file",
+                "search_files",
+                "write_file"
+              ] && (
+                apiKey.client == "main"
+              )
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The vault server takes no credential: no backendAuth, and the
+            # rule above drops the key of the client.
+            - name: vault
+              mcp:
+                host: http://vault-server.agents-main.svc.cluster.local:8080/mcp
+              # The 60 s of the route, as on finance-vault.
               policies:
                 http:
                   requestTimeout: 60s

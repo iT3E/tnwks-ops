@@ -1228,7 +1228,11 @@ A way back turns `wsl_move_done` off first. The copies run with no
 elevation, so `wsl_move` needs `wsl_start_unelevated`. Each copy is
 registered as SYSTEM, which sets a new random password on the account for
 each registration (`s4u_user`). The copy of the watchdog names the copy of
-the keepalive. From `done` on, the WSL service task starts the copy of the
+the keepalive, and runs with `-SkipService`: Windows gives a batch logon of
+a standard account no right to query the WSL service (the service control
+manager and the service grant that to interactive and service logons,
+SYSTEM and the Administrators), and the WSL service task (SYSTEM) does that
+check. From `done` on, the WSL service task starts the copy of the
 keepalive. With `running`, the module does not start a task that is
 disabled while the state is the task's own.
 
@@ -1243,6 +1247,12 @@ Each UDP relay has a copy too (`<task>-account`). A relay and its copy
 listen on the same port, and the window runs one of them only. While the
 move runs, both accounts may write the logs of the relays, and the handler
 of the role restarts the relays that are enabled.
+
+The distro writes the document of its host check to the inbox of the role
+`windows_host_check`, as the account that runs it. While the move runs,
+both accounts may write there (`host_check_inbox_writers`): after the
+window the distro runs as the new account, and the done switch makes it
+the only one.
 
 ## The window of the move
 
@@ -1260,7 +1270,7 @@ cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-move-wind
 | `forward` | The guards, then the request of a forward window, and one start of the window task. Needs `-e wsl_move_window_host=WSL-02` | The window, with the owner's go and time |
 | `wayback` | The same for the way back mode of the procedure. Needs `-e wsl_move_window_host=WSL-02` | Only on a decision to go back, before the done switch |
 | `status` | Reads only. The markers of the state file, the request, the window task and the boot task, and the tail of the window log | At any time; after the restart of the window |
-| `check` | Reads only. The check play of step 6 | After the restart of the window, before the done switch |
+| `check` | Reads only. The check play of step 6. Needs `-e wsl_move_check_wsl_conf_uid=<uid or none>` (the default user, below) | After the restart of the window, before the done switch |
 
 The reads run as SYSTEM, from `roles/windows_wsl_move/files/Read-TnwksMoveWindow.ps1`,
 and their output masks each account, SID and folder of the move. The
@@ -1300,14 +1310,30 @@ the run when a line fails.
   account runs. Each WSL task of the present account is disabled, and no
   other enabled task of it runs WSL. Each start task of the new account is
   enabled, and ran after the boot with result 0 or still runs. The new
-  account registers the distro at the new disk file, with the default user,
-  the flags, the default environment and the kernel command line that
-  step 3 read. The port proxy points to the address that the new VM wrote
+  account registers the distro at the new disk file, with the flags, the
+  default environment and the kernel command line that step 3 read. A
+  launch with no user takes the user of today, not root. The port proxy points to the address that the new VM wrote
   after the boot. The `.wslconfig` of the new account holds each setting of
   today. The read of the host check of the moved file passes. The old path
   is empty. Neither account is in Administrators. The write test from the
   distro and the memory of the VM against the limit of its `.wslconfig` are
   reads over SSH, in the distro.
+- **The default user.** WSL gives a launch with no user the user that
+  `[user] default` of `/etc/wsl.conf` names, when that user exists; else the
+  user of the `DefaultUid` of the registration; else root (the init of WSL,
+  `src/linux/init/init.cpp`). An import in place registers `DefaultUid` 0,
+  root (`ImportDistributionInplace`). The play reads the registration, not
+  the distro, so the lead reads the first part over SSH, in the distro, and
+  gives it to the check:
+
+  ```sh
+  u=$(sed -n '/^\[user\]/,/^\[/s/^[[:space:]]*default[[:space:]]*=[[:space:]]*//p' /etc/wsl.conf | head -n 1 | tr -d '[:space:]')
+  [ -n "$u" ] && id -u -- "$u" 2>/dev/null || echo none
+  ```
+
+  Then `-e wsl_move_check_wsl_conf_uid=<that output>`. The line passes when
+  that uid, or with `none` the `DefaultUid` of the registration, is the
+  `DefaultUid` that step 3 read, and not 0. With no value the line fails.
 
 ## Check-only settings
 
