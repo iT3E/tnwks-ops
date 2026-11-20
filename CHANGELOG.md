@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.234.0 - 2026-11-20
+
+### Added
+
+* agents: the nightly snapshot of the main share (task 3.37, step C): the SnapshotPolicy and SnapshotSchedule vault in agents-main, the form of finance, from the read-only claim vault-ro to the repository agents-main, with the retention of the state volume.
+
 ## v2.233.0 - 2026-11-20
 
 ### Added
