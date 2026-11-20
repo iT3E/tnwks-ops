@@ -20,7 +20,7 @@ spec:
       # listed, by name
       # (kubectl -n agents-finance get snapshots.kopiur.home-operations.com).
       # The same name is SNAPSHOT in ../check/job.yaml.
-      name: vault-20261119103300
+      name: vault-SET-ME
   target:
     # The claim of pvc.yaml. No pod holds it, so the mover is not pinned to
     # a node.

@@ -1998,6 +1998,12 @@ of the class wipes its folder on the node. The restored notes must not stay
 behind. Check: `kubectl -n agents-finance get restore,job,pvc` shows no
 `vault-restore-test` and no `vault-restore-check`.
 
+**The run of 2026-11-20.** The Restore of the nightly snapshot of
+2026-11-19 was `Completed` at 04:51 UTC, and the Job printed `result=ok`
+at 04:52: the same files, notes, bytes, folders and links on both sides,
+nothing unreadable, and no file of the share newer than the snapshot. The
+next change took the test out of the list.
+
 ## The cutover of the main agent
 
 **Draft.** The main agent moves from the host to `agents-main` (phase 6 of

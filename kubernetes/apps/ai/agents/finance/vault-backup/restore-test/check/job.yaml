@@ -61,7 +61,7 @@ spec:
             # The snapshot of ../restore/restore.yaml (the same name). Its
             # name holds its time (vault-YYYYMMDDHHMMSS, UTC).
             - name: SNAPSHOT
-              value: vault-20261119103300
+              value: vault-SET-ME
           args:
             - |
               set -eu
