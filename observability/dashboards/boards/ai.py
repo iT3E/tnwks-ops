@@ -3,7 +3,9 @@
 The declared parts, checks, result lines and backups are in observability/inventory.py
 (AI_*); docs/apps/agent-platform.md describes the platform. Step 1 of the AI board
 is the data of today; step 2 adds the series of the model gateway (calls, failed
-calls, the time of a call and tokens, by key; docs/apps/litellm.md, "Metrics").
+calls, the time of a call and tokens, by key; docs/apps/litellm.md, "Metrics"),
+and step 3 the metrics of the personal agents (messages, turns, replies, stuck
+sessions and failovers; docs/apps/agent-platform.md, "Metrics").
 No money: the plan is not paid by the call.
 """
 
@@ -72,6 +74,31 @@ TOKENS_OUT = "litellm_output_tokens_metric_total"
 CALLERS = 'api_key_alias!="metrics-scrape"'
 
 
+# The metrics of the product (step 3; docs/apps/agent-platform.md, "Metrics"):
+# Alloy keeps 8 instruments and their labels, and Prometheus takes them on its
+# OTLP path. job is the service name of the agent (openclaw-agents-<domain>), or
+# undeclared.
+RECEIVED = "openclaw_message_received_total"
+PROCESSED = "openclaw_message_processed_total"
+DELIVERIES = "openclaw_message_delivery_started_total"
+DELIVERY = "openclaw_message_delivery_duration_ms_milliseconds"
+TURNS = "openclaw_session_turn_created_total"
+STUCK = "openclaw_session_stuck_total"
+FAILOVERS = "openclaw_model_failover_total"
+ERROR = 'openclaw_outcome="error"'
+
+
+def product(name: str, window: str, by: str, extra: str = "") -> str:
+    """The increase of a counter of the product in a window, by trust domain and labels."""
+    expr = by_trust_domain(f"increase({selector(name, extra)}[{window}])", "job", "(?:openclaw-agents-)?(.+)")
+    return f"sum by (k8s_cluster, trust_domain{', ' + by if by else ''}) ({expr})"
+
+
+def product_rate(name: str, by: str = "", extra: str = "") -> str:
+    expr = by_trust_domain(f"rate({selector(name, extra)}[$__rate_interval])", "job", "(?:openclaw-agents-)?(.+)")
+    return f"sum by (k8s_cluster, trust_domain{', ' + by if by else ''}) ({expr})"
+
+
 def calls(name: str, window: str, by: str) -> str:
     """The increase of a counter of the model gateway in a window, by labels."""
     return f"sum by ({by}) (increase({selector(name, CALLERS)}[{window}]))"
@@ -134,6 +161,39 @@ def board() -> Board:
                   "short",
                   "The input and output tokens in the selected range, by key, name and provider.",
                   "table", column="Tokens"),
+            ],
+            "Messages": [
+                p("Messages by channel", product(RECEIVED, "$__range", "openclaw_channel"), "short",
+                  "The messages that reached each personal agent in the selected range, by trust domain and channel, as the agent counts them. A trust domain of undeclared is a sender with a service name that is not one of the three.",
+                  "table", column="Messages"),
+                p("Turns by outcome", product(PROCESSED, "$__range", "openclaw_channel, openclaw_outcome"), "short",
+                  "The messages that each agent finished in the selected range, by outcome: completed, skipped or error. A value that is not declared reads other.",
+                  "table", column="Messages"),
+                p("Messages in", product_rate(RECEIVED), "reqps",
+                  "Messages in each second, by trust domain."),
+                p("Turns that ended in an error", product_rate(PROCESSED, extra=ERROR), "reqps",
+                  "Messages that an agent finished with an error, each second, by trust domain.", empty=NO_EVENTS),
+                p("Replies sent", product(DELIVERIES, "$__range", "openclaw_channel, openclaw_delivery_kind"), "short",
+                  "The replies that each agent started to send in the selected range, by channel and kind (text or media).",
+                  "table", column="Replies"),
+                p("Replies that failed",
+                  f'{product(DELIVERY + "_count", "$__range", "openclaw_channel, openclaw_delivery_kind, openclaw_errorCategory", ERROR)} > 0',
+                  "short",
+                  "The replies that the channel did not take in the selected range, by channel, kind and the class of the error. The text of the error stays out.",
+                  "table", column="Failed replies", empty=NO_EVENTS),
+                p("Time to send a reply (p95)",
+                  f'histogram_quantile(0.95, {product_rate(DELIVERY + "_bucket", "le")})', "ms",
+                  "The 95th percentile of the time to hand a reply to its channel, by trust domain. A gap is a time with no reply."),
+                p("Turns by trigger", product(TURNS, "$__range", "openclaw_trigger"), "short",
+                  "The turns that each agent started in the selected range, by what started them: a message of a user, the heartbeat, or an event such as a scheduled job.",
+                  "table", column="Turns"),
+                p("Stuck sessions", f'{product(STUCK, "$__range", "openclaw_state")} > 0', "short",
+                  "The times in the selected range that an agent found a session that did not end, by its state.",
+                  "table", column="Times", empty=NO_EVENTS),
+                p("Model failovers", f'{product(FAILOVERS, "$__range", "openclaw_provider, openclaw_model, openclaw_failover_to_model")} > 0',
+                  "short",
+                  "The times in the selected range that an agent moved a turn to a second model. Each trust domain has one model name, so each row here is against the rule of one model for each domain.",
+                  "table", column="Failovers", empty=NO_EVENTS),
             ],
             "Tool calls": [
                 p("MCP requests by route", f'sum by (k8s_cluster, route, method, status) ({mcp("$__range")})', "short",

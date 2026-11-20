@@ -492,6 +492,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Download"
                       }
                     }
@@ -718,6 +727,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Upload"
                       }
                     }
@@ -944,6 +962,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Data"
                       }
                     }
@@ -1438,6 +1465,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Traffic"
                       }
                     }
@@ -1664,6 +1700,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Data"
                       }
                     }

@@ -173,6 +173,16 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-ai / Model calls / Time of a model call (p95) | `litellm_request_total_latency_metric_bucket` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Model calls / Tokens per day | `litellm_input_tokens_metric_total`<br>`litellm_output_tokens_metric_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Model calls / Tokens in the range | `litellm_input_tokens_metric_total`<br>`litellm_output_tokens_metric_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Messages by channel | `openclaw_message_received_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Turns by outcome | `openclaw_message_processed_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Messages in | `openclaw_message_received_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Turns that ended in an error | `openclaw_message_processed_total` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Replies sent | `openclaw_message_delivery_started_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Replies that failed | `openclaw_message_delivery_duration_ms_milliseconds_count` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Time to send a reply (p95) | `openclaw_message_delivery_duration_ms_milliseconds_bucket` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Turns by trigger | `openclaw_session_turn_created_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Stuck sessions | `openclaw_session_stuck_total` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Model failovers | `openclaw_model_failover_total` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Tool calls / MCP requests by route | `agentgateway_requests_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Tool calls / MCP failed requests | `agentgateway_requests_total` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Checks / Scheduled check state | `homelab_ai_schedule_objective_seconds`<br>`kube_cronjob_spec_suspend`<br>`kube_cronjob_status_last_successful_time`<br>`kube_job_owner`<br>`kube_job_status_failed`<br>`kube_job_status_start_time` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |

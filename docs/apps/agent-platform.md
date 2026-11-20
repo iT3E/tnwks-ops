@@ -664,7 +664,8 @@ the sandbox plugin copies the workspace only.
   only, so a hold of an outward message needs a plugin hook
   (`before_tool_call` with `requireApproval`).
   **Plugins.** `plugins.allow` names the plugins that the agent loads:
-  `brave` (web search), `diagnostics-otel` (the traces), `memory-core`
+  `brave` (web search), `diagnostics-otel` (the traces and the metrics,
+  [Metrics](#metrics)), `memory-core`
   (memory search), `openshell` (the sandbox backend) and `telegram` (the
   channel; with the channel off, the plugin does not load). Without the list, the product enables each plugin that it finds
   by default: the bundled ones, and any plugin in the state directory
@@ -1845,6 +1846,60 @@ Not in Loki, on purpose:
 - **The workload pod of a sandbox** (`openshell.ai/boundary-role: workload`):
   the code that an agent runs. The run job logs the result of a run.
 - **The other pods of `ai`**: the model gateway and the browser tool.
+
+## Metrics
+
+Each personal agent (pilot, finance, main) sends the metrics of the product
+to Alloy, next to its traces (`diagnostics.otel.metrics` in its
+`openclaw.json`, every 60 seconds, as cumulative counters). Alloy keeps 8
+instruments and their labels, and writes them to the Prometheus of the site
+on its OTLP path (`otelcol.processor.filter` and `otelcol.processor.transform`
+`agent_metrics` in `kubernetes/apps/monitoring/alloy/app/helmrelease.yaml`).
+The AI board shows them on its Messages tab
+([the AI board](../operations/observability-implementation.md#the-ai-board)).
+
+| Instrument (series in Prometheus) | Labels kept | What it answers |
+| --- | --- | --- |
+| `openclaw.message.received` (`openclaw_message_received_total`) | `channel`, `source` | Messages in |
+| `openclaw.message.processed` (`openclaw_message_processed_total`) | `channel`, `outcome` | The outcome of each turn |
+| `openclaw.message.delivery.started` (`openclaw_message_delivery_started_total`) | `channel`, `delivery.kind` | Replies sent |
+| `openclaw.message.delivery.duration_ms` (`openclaw_message_delivery_duration_ms_milliseconds_bucket`, `_count`, `_sum`) | `channel`, `delivery.kind`, `outcome`, `errorCategory` | Replies that failed, and their time |
+| `openclaw.tokens` (`openclaw_tokens_total`) | `agent`, `channel`, `provider`, `model`, `token` | Tokens, as the product counts them |
+| `openclaw.session.turn.created` (`openclaw_session_turn_created_total`) | `agent`, `channel`, `trigger` | Turns by trigger |
+| `openclaw.session.stuck` (`openclaw_session_stuck_total`) | `state` | A turn that does not end |
+| `openclaw.model.failover` (`openclaw_model_failover_total`) | `provider`, `model`, `failover.to_provider`, `failover.to_model` | A move to a second model |
+
+Each label has the prefix `openclaw.` (in Prometheus `openclaw_`).
+
+- **Keep lists, at two places.** Alloy drops each other instrument, and each
+  other label of a data point. It cuts the resource to `service.name`, so
+  Prometheus makes no `target_info`, and `job` is the service name
+  (`openclaw-agents-<domain>`). A service name that is not one of the three
+  reads `undeclared`. The scope loses its attributes and its version.
+- **Declared values.** Each kept label has a list of values in the
+  transform, and a value that is not on it reads `other`: a channel, a
+  model or provider that no config names, or a value that is not a string.
+  The models and providers are the ones of the three configs
+  (`observability/tests/test_agent_metrics.py` holds them together). A new
+  channel, model or named agent adds its value to the list in the same
+  pull request.
+- **Never kept.** A session key, a chat, a message, a skill, the hash of an
+  actor, a reason of a failover, and the host and process attributes of the
+  resource. The test of the keep list sends each one through the real Alloy
+  and Prometheus, and fails when one comes out.
+- **The write path.** Prometheus takes OTLP on `/api/v1/otlp/v1/metrics`
+  (`enableOTLPReceiver`). Its network rule lets Alloy of the same site POST
+  there and nothing else, and refuses each other writer; the daily
+  `prometheus-rule-check` proves that a reader can not write
+  ([the network rule](../operations/observability-implementation.md#the-network-rule-of-prometheus)).
+- **A restart of the agent pod resets the counters.** The series have no
+  `instance` label, so `increase` and `rate` read across the restart.
+- **One agent at a time.** A change of `openclaw.json` restarts the pod of
+  that agent (the ConfigMap has a hash in its name). So the metrics turn on
+  in three merges: pilot, then finance, then main, each after the series of
+  the one before are right. `METRICS_ON` in
+  `observability/tests/test_agent_metrics.py` names the agents that send.
+- **The workflow agents** do not send metrics: their runs are short Jobs.
 
 ## Checks
 

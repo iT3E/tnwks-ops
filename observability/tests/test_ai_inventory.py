@@ -76,12 +76,15 @@ def test_each_applied_workload_of_the_ai_domain_is_a_declared_part():
 
 def test_each_cronjob_of_the_ai_domain_is_a_declared_schedule():
     found = {(namespace, name) for namespace, kind, name in applied() if kind == "CronJob"}
-    # The check of the trace filter of the agents lives with the trace pipeline.
-    traces = [path for path in (ROOT / "kubernetes/apps/monitoring").rglob("*.yaml")
-              if re.search(r"(?m)^kind: CronJob$", path.read_text())
-              and re.search(r"(?m)^  name: trace-filter-check$", path.read_text())]
-    assert traces
-    found.add(("monitoring", "trace-filter-check"))
+    # The check of the trace filter of the agents lives with the trace
+    # pipeline, and the check of the network rule of Prometheus (the write
+    # path of the metrics of the agents) with Prometheus.
+    for name in ("trace-filter-check", "prometheus-rule-check"):
+        paths = [path for path in (ROOT / "kubernetes/apps/monitoring").rglob("*.yaml")
+                 if re.search(r"(?m)^kind: CronJob$", path.read_text())
+                 and re.search(rf"(?m)^  name: {name}$", path.read_text())]
+        assert paths, name
+        found.add(("monitoring", name))
     declared = {(item["namespace"], item["cronjob"]) for item in AI_SCHEDULES}
     assert found == declared, (sorted(found - declared), sorted(declared - found))
 

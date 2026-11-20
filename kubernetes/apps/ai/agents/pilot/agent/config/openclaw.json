@@ -114,7 +114,7 @@
       "protocol": "http/protobuf",
       "serviceName": "openclaw-agents-pilot",
       "traces": true,
-      "metrics": false,
+      "metrics": true,
       "logs": false,
       "sampleRate": 1.0
     }

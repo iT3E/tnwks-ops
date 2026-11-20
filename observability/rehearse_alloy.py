@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RELEASE = ROOT / "kubernetes/apps/monitoring/alloy/app/helmrelease.yaml"
 API = "http://127.0.0.1:13501"
 # Flux substitutes these from cluster-settings and cluster-secrets.
-STAND_INS = {"${SECRET_DOMAIN}": "example.invalid"}
+STAND_INS = {"${SECRET_DOMAIN}": "example.invalid", "${CLUSTER_NAME}": "homelab-test"}
 
 
 def docker(*args):

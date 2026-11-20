@@ -44,6 +44,7 @@ PRODUCERS = {
     "kopiur_": "Kopiur controller (PVC backups and restores)",
     "agentgateway_": "MCP gateway (agentgateway) PodMonitor; board queries only, no rule",
     "litellm_": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+    "openclaw_": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
     "apiserver_": "Kubernetes API server metrics (kept series only)",
     "plausible_": "Plausible exporter (its stats and health API)",
     "ALERTS": "local Prometheus alert rules (current state)",

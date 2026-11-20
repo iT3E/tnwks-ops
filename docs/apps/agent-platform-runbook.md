@@ -876,6 +876,11 @@ morning when the scheduled turn did not complete.
    In Loki, the `call` and `engine_error` lines of the bridge
    (`{namespace="ai", app="model-bridge"}`) for the minutes of the message.
    A plan limit is [its own case](#at-a-limit-of-the-claude-plan).
+   The Messages tab of the AI board shows where the message stopped, by
+   trust domain: no row in "Messages by channel" is the receive path of
+   the channel; a row in "Turns that ended in an error" is the turn; a row
+   in "Replies that failed" is the send path, with the class of the error.
+   The series come once a minute, so wait one minute after the message.
    The start line of the gateway lists the plugins that loaded
    (`kubectl -n agents-pilot logs deploy/agent -c agent | grep 'http server listening'`):
    `brave, diagnostics-otel, memory-core, openshell, telegram`. A plugin

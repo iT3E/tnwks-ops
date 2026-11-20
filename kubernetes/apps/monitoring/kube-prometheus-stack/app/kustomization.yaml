@@ -6,6 +6,14 @@ resources:
   - ./helmrelease.yaml
   # Who may call Prometheus, and with which requests.
   - ./networkpolicy.yaml
+  # The daily check of that rule (scripts/prometheus_rule_check.py).
+  - ./rule-check.yaml
   # The other WSL site: its federation VIP, and alerts about that site.
   - ./peer-service.yaml
   - ./peer-rules.yaml
+configMapGenerator:
+  - name: prometheus-rule-check
+    files:
+      - prometheus_rule_check.py=./scripts/prometheus_rule_check.py
+generatorOptions:
+  disableNameSuffixHash: true

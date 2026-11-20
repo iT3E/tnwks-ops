@@ -1337,6 +1337,86 @@
   },
   {
     "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Messages by channel",
+    "expr": "sum by (k8s_cluster, trust_domain, openclaw_channel) (label_replace(increase(openclaw_message_received_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Turns by outcome",
+    "expr": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_outcome) (label_replace(increase(openclaw_message_processed_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Messages in",
+    "expr": "sum by (k8s_cluster, trust_domain) (label_replace(rate(openclaw_message_received_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "reqps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Turns that ended in an error",
+    "expr": "sum by (k8s_cluster, trust_domain) (label_replace(rate(openclaw_message_processed_total{k8s_cluster=~\"$cluster\",openclaw_outcome=\"error\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "reqps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Replies sent",
+    "expr": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_delivery_kind) (label_replace(increase(openclaw_message_delivery_started_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Replies that failed",
+    "expr": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_delivery_kind, openclaw_errorCategory) (label_replace(increase(openclaw_message_delivery_duration_ms_milliseconds_count{k8s_cluster=~\"$cluster\",openclaw_outcome=\"error\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Time to send a reply (p95)",
+    "expr": "histogram_quantile(0.95, sum by (k8s_cluster, trust_domain, le) (label_replace(rate(openclaw_message_delivery_duration_ms_milliseconds_bucket{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")))",
+    "unit": "ms",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Turns by trigger",
+    "expr": "sum by (k8s_cluster, trust_domain, openclaw_trigger) (label_replace(increase(openclaw_session_turn_created_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Stuck sessions",
+    "expr": "sum by (k8s_cluster, trust_domain, openclaw_state) (label_replace(increase(openclaw_session_stuck_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Model failovers",
+    "expr": "sum by (k8s_cluster, trust_domain, openclaw_provider, openclaw_model, openclaw_failover_to_model) (label_replace(increase(openclaw_model_failover_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
     "tab": "Tool calls",
     "title": "MCP requests by route",
     "expr": "sum by (k8s_cluster, route, method, status) (increase(agentgateway_requests_total{k8s_cluster=~\"$cluster\"}[$__range]) unless increase(agentgateway_requests_total{k8s_cluster=~\"$cluster\",method=\"GET\",status=\"405\"}[$__range]))",
