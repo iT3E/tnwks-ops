@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.230.1 - 2026-11-20
+
+### Fixed
+
+* windows: in the move of the distro, the copy of the watchdog for the standard account skips the check of the WSL service, which that account may not query and the SYSTEM task does; both accounts may write the inbox of the host check while the move runs; and the check play reads the default user by the rule of WSL, wsl.conf first, with the read in the distro
+
 ## v2.230.0 - 2026-11-20
 
 ### Added
