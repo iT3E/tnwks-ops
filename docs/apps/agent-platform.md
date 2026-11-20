@@ -293,6 +293,7 @@ read only. The parts come in steps; this table says what is there now.
 | The vault server of finance | `vault-server` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-server/`): one pod on `vault-rw`, behind the route `finance-vault` of the central MCP gateway (below) |
 | The backup of the finance share | The SnapshotPolicy `vault` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-backup/`): each night, the claim `vault-ro` to the repository `agents-finance`, with the retention of the state volume |
 | The restore test of the finance share | A template `kubernetes/apps/ai/agents/finance/vault-backup/restore-test/`, listed for one run: the Restore `vault-restore-test` of one `Succeeded` snapshot of the policy `vault` to the scratch claim `vault-restore-test`, then the Job `vault-restore-check`, which compares it with the live share (`vault-ro`, read only) by path and SHA-256 and logs flags and counts only. The second change takes it out of the list, and Flux deletes the Restore, the Job and the scratch claim ([the runbook](agent-platform-runbook.md#the-restore-test-of-the-finance-share)) |
+| The backup of the main share | The SnapshotPolicy `vault` in `agents-main` (`kubernetes/apps/ai/agents/main/vault-backup/`), the same as for finance: each night, the claim `vault-ro` to the repository `agents-main`, with the retention of the state volume. The first run (`runOnCreate`) is of the empty share |
 | The seed of the finance share | A one-time Job `vault-seed` in `agents-finance` (`kubernetes/apps/ai/agents/finance/vault-seed/`), which ran once on 2026-11-19 with `result=ok` and is not listed now ([The seed of the finance share](#the-seed-of-the-finance-share)) |
 | The mount of the finance agent | The claim `vault-ro` at `/vault` in the agent pod (the product, its repair step and the index step), with `readOnly: true` on the claim and on each mount. `/vault` is the path of the vault server too, so a path from a memory search works in a vault tool call. The index reads `/vault` (`memory.search.extraPaths`, Markdown only) and polls (`CHOKIDAR_USEPOLLING`), because a write of the vault server gives no file event on this mount. The agent calls the nine tools as `vault__*` through the route `finance-vault`, with its key. Until the seed, the index also reads the copy on the state volume |
 | Active memory of finance | The stock plugin `active-memory` of the product, with the settings of the host: the agent `main`, direct and group chats, query mode `recent`, prompt style `recall-heavy`, a limit of 25 s, summaries of 220 characters, its log on, the default mode `escalate`. Two settings of the host are not here. Its own model (a small model on Bedrock on the host) needs an entry of the model gateway for this trust domain, an open point; until then a recall runs on the model of the session (`litellm/agents-finance`, through LiteLLM) and counts in the budget of that key. Its list of chat ids is not in git; the finance bot takes the direct chat of the owner only. An eligible reply waits for the recall, up to 25 s |
@@ -325,9 +326,8 @@ takes the read-only flag from the pod (its claim or its mount), so a pod
 that does not set it would get a mount that writes.
 
 What is still not there: the key of the main agent at the gateway (a
-placeholder hash), the mount of the main agent, the backup policy of the
-main share, the seed of the main share, and the change of the two
-admission rules to `Deny`.
+placeholder hash), the mount of the main agent, the seed of the main
+share, and the change of the two admission rules to `Deny`.
 
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may
