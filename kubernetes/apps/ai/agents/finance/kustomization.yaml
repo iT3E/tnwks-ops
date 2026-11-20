@@ -22,5 +22,8 @@ resources:
   - ./vault-server/ks.yaml
   # The nightly snapshot of the share (vault-backup/ks.yaml).
   - ./vault-backup/ks.yaml
+  # The restore test of the share ran once on 2026-11-20 and passed
+  # (vault-backup/restore-test/). It is not listed: its files stay in git
+  # for the next run, with the name of the snapshot as a placeholder.
   # The seed of the share ran once on 2026-11-19 (vault-seed/). It is not
   # listed: its files stay in git for the seed of the main share.

@@ -3,6 +3,36 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.232.0 - 2026-11-20
+
+### Changed
+
+* agents: the restore test of the finance share passed on 2026-11-20 and is out of the list again; Flux deletes its Restore, its Job and its scratch claim. The files stay, with the snapshot name as a placeholder.
+
+## v2.231.0 - 2026-11-20
+
+### Added
+
+* agents: the vault server of main (task 3.37, step A): the pod of finance in agents-main on the claim vault-rw of the main share, the route main-vault on the central MCP gateway with the key of the main agent (a placeholder hash until the values step) and the nine tools, the egress of the gateway to it, and main's DNS rule without the vault server. No pod of main calls the route yet.
+
+## v2.230.1 - 2026-11-20
+
+### Fixed
+
+* windows: in the move of the distro, the copy of the watchdog for the standard account skips the check of the WSL service, which that account may not query and the SYSTEM task does; both accounts may write the inbox of the host check while the move runs; and the check play reads the default user by the rule of WSL, wsl.conf first, with the read in the distro
+
+## v2.230.0 - 2026-11-20
+
+### Added
+
+* agents: the restore test of the finance share (finance/vault-backup/restore-test/), listed for one run: the Restore of the newest Succeeded snapshot of the policy vault to a scratch claim, then a check Job that compares it with the live share, read only, by path and SHA-256 of each file, with counts of files, notes and bytes, and logs flags and counts only. The next change takes it out of the list.
+
+## v2.229.0 - 2026-11-20
+
+### Changed
+
+* agents: the main agent thinks at level high by default (thinkingDefault), by the owner's word. The copy of the host setting was off, which the model of the platform does not take: the product used low and wrote a warning in each run.
+
 ## v2.228.0 - 2026-11-20
 
 ### Changed
