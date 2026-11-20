@@ -847,7 +847,7 @@ the sandbox plugin copies the workspace only.
 | When | What | Kept |
 | --- | --- | --- |
 | Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `official-plugins` installs the Brave plugin again from the image (it stops the start on a plugin in the state that the image did not put there), `doctor` migrates the state, on a copy of the config, and `memory-index` brings the memory index up to date (see "The index at each start" above) | 14 days |
-| Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): once the gateway is ready, `openclaw backup create --verify` to `archives/daily/`. The command checks that the gateway owns the state, and it can only see the gateway process in the same PID namespace, so the pod shares one (`shareProcessNamespace: true`) | The last 7 |
+| Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): once the gateway is ready, `openclaw backup create --verify` to `archives/daily/`. The command checks that the gateway owns the state, and it can only see the gateway process in the same PID namespace, so the pod shares one (`shareProcessNamespace: true`). The command also captures each file of the config, and it refuses an include file that is a link; in the projected volume of the config each file is a link. So in the main agent, whose config includes the group file, the container runs the script on a copy of the two files in `/tmp/backup-config/` (regular files, made at each start of the container), and the archive holds that copy | The last 7 |
 | Each day, after that backup | The same container: the SHA-256 of `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md` and each file under `skills/`, compared with the list of the day before (`archives/instruction-files/`). One log line for each file that is new, changed or gone, then `instruction-check result=...` | 30 days of lists |
 | Each start of the Signal daemon | `archive` init container: a `tar.gz` of `data` in `archives/start/`, with the signal-cli release | 14 days |
 | Nightly | kopiur copies each volume, with its archives, to the repository of the agent trust domains (`*/app/backup.yaml`, [Backups of the agent trust domains](#backups-of-the-agent-trust-domains)) | As the other volumes |
@@ -1967,7 +1967,8 @@ by hand, and the steps at a limit of the Claude plan.
 - **The heartbeat check** reads one span of each agent's heartbeat trace:
   `openclaw.run` with `openclaw.trigger=heartbeat` and
   `openclaw.outcome=completed`, for each service in its env `SERVICES`
-  (comma separated: `openclaw-agents-pilot,openclaw-agents-finance` now).
+  (comma separated:
+  `openclaw-agents-pilot,openclaw-agents-finance,openclaw-agents-main` now).
   Add a service after the first heartbeat of a new agent is in Tempo; a
   domain with no agent is not in the list, so it never alerts. Each service
   gets its own tries and its own log line, and one missing service fails
