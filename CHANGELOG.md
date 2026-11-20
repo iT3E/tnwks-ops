@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.242.0 - 2026-11-20
+
+### Added
+
+* windows: once the move of the distro is done, the compaction runs as SYSTEM, reads the owner and the rules of the disk file before the pause and before diskpart, and stops WSL with a stop task of the account that owns the distro
+
 ## v2.241.0 - 2026-11-20
 
 ### Added
