@@ -1,0 +1,152 @@
+---
+# The gateway probe of main (scripts/platform_checks.py mcp-gateway, in
+# kubernetes/apps/ai/agents/checks/app; docs/apps/mcp-gateway.md, "The
+# probe"): the probe of finance (../../../finance/checks/app/
+# mcp-gateway-probe.yaml) for the vault route of main only, since main has
+# no other route. With a key of its own (client main-probe) and none of the
+# agent's:
+# - no key, and a random key that is not in the config: a 401 each;
+# - the probe key: it lists exactly the nine tools of the route main-vault
+#   (the list in the gateway's config, mounted here), it reads the facts of
+#   the root of the share (get_file_info /vault: no note name and no note
+#   text), and a write and a move are refused at the gateway;
+# - a straight connection to the vault server of main fails: only the
+#   gateway may reach it (../../vault-server/app/networkpolicy.yaml);
+# - the other trust domain: the probe key gets a 401 on the vault route of
+#   finance, and a straight connection to the vault server of finance
+#   fails (R6).
+# Until the values step the Secret is not there (optional below), so the
+# checks that need the probe key print "skipped: the key is pending" and
+# pass; the checks with no key and with an unknown key, and the straight
+# connections, always run. It changes no data. A failed run alerts as the
+# other checks do (AgentPlatformCronJobFailed, AgentPlatformCheckStale).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-check-mcp-gateway-probe
+  labels: &labels
+    app.kubernetes.io/name: platform-checks
+    app.kubernetes.io/component: mcp-gateway-probe
+spec:
+  # Ten minutes after the probe of finance, so the two never meet.
+  schedule: "47 5 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # The worst case, in seconds: two straight connections of 5 each,
+      # then seven MCP requests of 30 each (210). That is 220.
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          restartPolicy: Never
+          serviceAccountName: platform-checks
+          # It calls no API of the cluster.
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: check
+              image: docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+              command: ["python3", "/scripts/platform_checks.py", "mcp-gateway"]
+              env:
+                - name: OWN_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: TRUST_DOMAIN_NAMESPACES
+                  value: agents-main
+                - name: GATEWAY_CONFIG
+                  value: /gateway/config.yaml
+                # The vault route of main and the vault server behind it
+                # (../../vault-server).
+                - name: VAULT_GATEWAY_URL
+                  value: http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp
+                - name: VAULT_SERVER
+                  value: vault-server.agents-main.svc.cluster.local:8080
+                - name: VAULT_ROUTE
+                  value: main-vault
+                # The vault of the other trust domain.
+                - name: OTHER_VAULT_GATEWAY_URL
+                  value: http://mcp-gateway.ai.svc.cluster.local:3000/finance-vault/mcp
+                - name: OTHER_VAULT_SERVER
+                  value: vault-server.agents-finance.svc.cluster.local:8080
+              # PROBE_KEY, once the lead makes the Secret.
+              envFrom:
+                - secretRef:
+                    name: mcp-gateway-probe-secret
+                    optional: true
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: gateway
+                  mountPath: /gateway
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: platform-checks
+            # The config of the gateway, the same file (kustomization.yaml).
+            - name: gateway
+              configMap:
+                name: mcp-gateway-probe-config
+---
+# The gateway probe may call the MCP gateway, and may try both vault servers
+# straight: the policy of each vault server, not this one, must stop that.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: platform-check-mcp-gateway-probe
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-checks
+      app.kubernetes.io/component: mcp-gateway-probe
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    # The vault servers, straight: their own policies must stop that.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: vault-server
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: vault-server
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

@@ -80,6 +80,7 @@ the MCP server and checks the headers that arrive.
 | `/finance-vault/` | `finance` | the nine tools of the vault | the nine tools of the vault |
 | `/finance-vault/` | `finance-probe` | the nine tools of the vault | `get_file_info` only |
 | `/main-vault/` | `main` | the nine tools of the vault | the nine tools of the vault |
+| `/main-vault/` | `main-probe` | the nine tools of the vault | `get_file_info` only |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -161,6 +162,7 @@ its place for the container tests.
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
 | `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only), not made yet | `config.yaml`, route `main-vault` (`metadata: {client: main, route: main-vault}`) |
+| `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, not made yet (then listed in that `kustomization.yaml`) | `config.yaml`, route `main-vault` |
 
 **The hash and the value stay in step** in two ways: the owner changes both
 in one commit (below), and a check finds a difference. The values check of
@@ -293,8 +295,22 @@ agent does, with two keys of its own and none of the agent's:
    `get_file_info` of `/vault` (the facts of the root of the share, no note
    name and no note text) reaches the server through the NFS mount;
    `write_file` and `move_file` are refused at the gateway; the key
-   `no-tools` gets a 401. The container test has no vault server until the
-   image has a release, so it runs the probe with no vault route.
+   `no-tools` gets a 401. The container test of the route of finance runs
+   with no vault server; the one of main (below) has the vault server.
+6. The vault of the other trust domain (`OTHER_VAULT_GATEWAY_URL`,
+   `OTHER_VAULT_SERVER`): the probe key gets a 401 on its route, and a
+   straight connection to its server fails (R6). Each probe checks the
+   other.
+
+**The probe of main** (`agents/main/checks/app/`, daily at 05:47) is the
+same probe for the route `main-vault` only, since main has no other route:
+items 5 and 6, with its key `main-probe`, and no key with no tool. Its
+Secret `mcp-gateway-probe-secret` (`PROBE_KEY`) is not made yet, and the
+CronJob reads it with `optional: true`, so until the values step the checks
+of its key print `skipped: the key is pending` and pass. A container test
+runs it against the gateway of the cluster with this config and the vault
+server of main on an empty share
+(`observability/tests/test_main_vault.py`).
 
 With the placeholder keys, 3 and 4 print `skipped: the key is pending` and
 pass, for as long as the keys are placeholders. The owner's values step

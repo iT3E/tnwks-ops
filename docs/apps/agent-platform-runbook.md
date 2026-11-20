@@ -177,6 +177,12 @@ before the create, and fails a run that leaves its own record.
   the straight connection to the MCP server, always run. A
   `connected` for the straight connection: the policy of the MCP server
   lets in more than the gateway; fix it before the next run.
+  `agents-main` has the same probe for its vault route only, with the key
+  `main-probe` (no Secret yet, so its key checks print `skipped`). In each
+  namespace, `other vault server` with `connected`, or `other vault: probe
+  key` with anything but a 401, is a path across the two trust domains
+  (R6): the policy of that vault server or the keys of that route are
+  wrong; fix it before the next run.
 
 ### WorkflowProvidersStale
 
