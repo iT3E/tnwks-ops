@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.229.0 - 2026-11-20
+
+### Changed
+
+* agents: the main agent thinks at level high by default (thinkingDefault), by the owner's word. The copy of the host setting was off, which the model of the platform does not take: the product used low and wrote a warning in each run.
+
 ## v2.228.0 - 2026-11-20
 
 ### Changed
