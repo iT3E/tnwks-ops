@@ -182,6 +182,7 @@ def test_each_task_with_no_elevation_writes_only_where_the_account_has_a_write_r
         "udp-relay.xml.j2": ["udp_relay_log_dir"],
         "wsl-keepalive.xml.j2": [],
         "wsl-watchdog.xml.j2": ["wsl_watchdog_log_dir"],
+        "wsl-stop.xml.j2": [],
     }
     assert values["lan_bridge_ip_file"][1].startswith("{{ lan_bridge_ip_dir }}\\")
 

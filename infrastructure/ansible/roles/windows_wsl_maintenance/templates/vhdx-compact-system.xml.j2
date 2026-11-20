@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!-- Managed by tnwks-ops (role windows_wsl_maintenance). The compaction once
+     the move of the distro is done: run on demand with
+     Start-ScheduledTask {{ vhdx_compact_system_task }}. It stops WSL and the
+     cluster. -->
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers />
+  <Actions Context="Author">
+    <Exec>
+      <Command>powershell.exe</Command>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ vhdx_compact_dir | e }}\Compact-WslVhdxSystem.ps1" -Vhdx "{{ vhdx_compact_vhdx | e }}" -Account "{{ wsl_move_new_account | e }}" -CapabilitySid {{ vhdx_compact_capability_sid | e }} -HostCheck "{{ vhdx_compact_host_check | e }}" -HostCheckSha256 {{ vhdx_compact_host_check_sha256 | e }} -StopTask {{ wsl_stop_task_account | e }} -Paused {{ vhdx_compact_paused | join(',') | e }} -LogDir "{{ vhdx_compact_dir | e }}"</Arguments>
+    </Exec>
+  </Actions>
+</Task>

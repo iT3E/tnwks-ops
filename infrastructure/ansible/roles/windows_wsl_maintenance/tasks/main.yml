@@ -126,6 +126,35 @@
     keep_task_enabled_state: "{{ wsl_move_phase == 'move' }}"
   when: wsl_move_phase != 'done'
 
+# The stop of WSL for the compaction of SYSTEM: a task of the account that
+# owns the distro, registered as SYSTEM, which sets a new random password on
+# that account (s4u_user). It has no trigger: only the compaction starts it.
+- name: Stop task of the account that owns the distro
+  tnwks_win_scheduled_task:
+    name: "{{ wsl_stop_task_account }}"
+    xml: "{{ lookup('ansible.builtin.template', 'wsl-stop.xml.j2') }}"
+    s4u_user: "{{ wsl_move_new_account }}"
+    s4u_description: "{{ wsl_move_new_description }}"
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  when: wsl_move_phase != 'off'
+  no_log: true
+
+- name: Compaction script of SYSTEM
+  ansible.windows.win_copy:
+    src: Compact-WslVhdxSystem.ps1
+    dest: '{{ vhdx_compact_dir }}\Compact-WslVhdxSystem.ps1'
+  when: wsl_move_phase == 'done'
+
+- name: vhdx compaction task of SYSTEM, once the move is done
+  tnwks_win_scheduled_task:
+    name: "{{ vhdx_compact_system_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'vhdx-compact-system.xml.j2') }}"
+  when: wsl_move_phase == 'done'
+  no_log: true
+
 - name: Superseded files are gone
   ansible.windows.win_file:
     path: "{{ item }}"
