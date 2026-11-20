@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.230.0 - 2026-11-20
+
+### Added
+
+* agents: the restore test of the finance share (finance/vault-backup/restore-test/), listed for one run: the Restore of the newest Succeeded snapshot of the policy vault to a scratch claim, then a check Job that compares it with the live share, read only, by path and SHA-256 of each file, with counts of files, notes and bytes, and logs flags and counts only. The next change takes it out of the list.
+
 ## v2.229.0 - 2026-11-20
 
 ### Changed
