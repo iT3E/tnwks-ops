@@ -400,8 +400,8 @@ def test_the_distro_gets_no_right_on_the_textfile_directory_and_its_old_director
     assert gone["ansible.windows.win_file"] == {"path": "{{ host_check_distro_dir }}", "state": "absent"}
     for task in tasks:
         text = yaml.safe_dump(task)
-        if "host_check_distro_account" in text:
-            assert task["name"].startswith("Only SYSTEM, the Administrators and the account of the distro"), task["name"]
+        if "host_check_distro_account" in text or "host_check_inbox_writers" in text:
+            assert task["name"].startswith("Only SYSTEM, the Administrators and the accounts of the distro"), task["name"]
     defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
     assert defaults["host_check_distro_dir"] == "{{ host_check_textfile_dir }}\\wsl-distro"
     assert not defaults["host_check_inbox_dir"].startswith(defaults["host_check_textfile_dir"])
@@ -423,7 +423,7 @@ def test_the_inbox_has_no_inherited_rule_and_a_split_rule_for_the_distro():
     lock = inbox_lock()
     assert names.index("Inbox of the distro") < names.index(lock["name"])
     task = lock["ansible.windows.win_powershell"]
-    assert task["parameters"] == {"Path": "{{ host_check_inbox_dir }}", "Account": "{{ host_check_distro_account }}"}
+    assert task["parameters"] == {"Path": "{{ host_check_inbox_dir }}", "Accounts": "{{ host_check_inbox_writers }}"}
     script = task["script"]
     assert "SetAccessRuleProtection($true, $false)" in script, "no inherited rule"
     assert "GetAccessRules($true, $true, $sid)" in script, "an inherited rule is a change"
@@ -447,7 +447,7 @@ WANT_ACL = ("New-TestAcl $true 'S-1-5-32-544' @("
             f"(New-TestRule '{DISTRO_SID}' 'Modify, Synchronize' 'ObjectInherit' 'InheritOnly'))")
 
 
-def run_inbox_lock(have: str, what_if: bool = False, link: bool = False) -> dict:
+def run_inbox_lock(have: str, what_if: bool = False, link: bool = False, accounts: tuple = ("adult1",)) -> dict:
     """Run the script of the ACL task of the inbox with fakes for the commands and the
     types that only Windows has; give what it changed."""
     script = inbox_lock()["ansible.windows.win_powershell"]["script"]
@@ -458,7 +458,7 @@ $script:IsLink = ${str(link).lower()}
 $text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))
 $thrown = $null
 try {{
-    & ([scriptblock]::Create($text)) -Path 'C:\\ProgramData\\inbox' -Account 'adult1' -WhatIf:${str(what_if).lower()} 6>$null | Out-Null
+    & ([scriptblock]::Create($text)) -Path 'C:\\ProgramData\\inbox' -Accounts @({", ".join(f"'{a}'" for a in accounts)}) -WhatIf:${str(what_if).lower()} 6>$null | Out-Null
 }} catch {{ $thrown = $_.Exception.Message }}
 $sets = @($script:Calls | Where-Object {{ $_ -is [hashtable] }} | ForEach-Object {{
     @{{ owner = $_.Acl.Owner; protected = $_.Acl.Protected; rules = @(Get-TestKeys $_.Acl.Rules) }} }})
@@ -499,6 +499,43 @@ def test_a_link_or_junction_in_the_place_of_the_inbox_stops_the_task_before_any_
     out = run_inbox_lock(WANT_ACL, link=True)
     assert out["thrown"] and "not a plain directory" in out["thrown"]
     assert out["calls"] == ["Get-Item"] and out["sets"] == []
+
+
+def test_both_accounts_may_write_to_the_inbox_while_the_move_runs():
+    """After the window the distro runs as the new account, and the done switch makes it
+    the account of the distro (windows_desktop_user). While the move runs, both write."""
+    defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
+    assert " ".join(defaults["host_check_inbox_writers"].split()) == (
+        "{{ [host_check_distro_account] + ([wsl_move_new_account] if (wsl_move_phase | default('off')) == 'move' else []) }}")
+    assert defaults["host_check_distro_account"] == "{{ windows_desktop_user }}"
+
+
+KID_SID = "S-1-5-21-7-7-7-1002"
+
+
+@needs_pwsh
+def test_the_inbox_gives_each_account_of_the_move_the_split_rules():
+    out = run_inbox_lock(WANT_ACL, accounts=("adult1", "kid1"))
+    assert out["changed"] is True and out["thrown"] is None
+    both = sorted(INBOX_RULES + [rule.replace(DISTRO_SID, KID_SID) for rule in INBOX_RULES if rule.startswith(DISTRO_SID)])
+    assert out["sets"] == [{"owner": "S-1-5-32-544", "protected": True, "rules": both}]
+    have = WANT_ACL[:-1] + "".join(
+        f",(New-TestRule '{KID_SID}' '{r}' '{i}' '{p}')" for r, i, p in [
+            ("ReadAndExecute, CreateFiles, Synchronize", "None", "None"), ("Modify, Synchronize", "ObjectInherit", "InheritOnly")]) + ")"
+    again = run_inbox_lock(have, accounts=("adult1", "kid1"))
+    assert again["changed"] is False and again["sets"] == []
+    # The done switch: the new account only, so the rules of the present one go.
+    done = run_inbox_lock(have, accounts=("kid1",))
+    assert done["changed"] is True
+    assert done["sets"][0]["rules"] == sorted(rule.replace(DISTRO_SID, KID_SID) for rule in INBOX_RULES)
+
+
+@needs_pwsh
+def test_a_check_run_before_the_account_of_the_move_is_there_reports_a_change():
+    checked = run_inbox_lock(WANT_ACL, what_if=True, accounts=("adult1", "missing1"))
+    assert checked["changed"] is True and checked["thrown"] is None and checked["sets"] == []
+    applied = run_inbox_lock(WANT_ACL, accounts=("adult1", "missing1"))
+    assert applied["thrown"] and "could not be translated" in applied["thrown"] and applied["sets"] == []
 
 
 # The rules that the host check directory passes down, in the form of New-TestRule.

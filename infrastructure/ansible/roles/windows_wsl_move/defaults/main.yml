@@ -117,6 +117,12 @@ wsl_move_window_log_lines: 60
 wsl_move_window_line_limit: 300
 # The precheck reads the last batch logons of the present account.
 wsl_move_window_batch_logons: 10
+# The check play: the read in the distro, over SSH, of the uid of the user
+# that [user] default of /etc/wsl.conf names, or none when it names no user
+# that exists. The lead gives it with -e. A launch with no user takes that
+# user first, and the DefaultUid of the registration only after it (the init
+# of WSL). Empty: not read, and the line of the default user fails.
+wsl_move_check_wsl_conf_uid: ""
 # The copy of the host check on the host (role windows_host_check:
 # host_check_dir and host_check_script), whose read of the disk file the
 # window play makes, and the address file of the LAN bridge (role

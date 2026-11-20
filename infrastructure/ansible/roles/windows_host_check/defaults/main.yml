@@ -35,6 +35,13 @@ host_check_distro_dir: '{{ host_check_textfile_dir }}\wsl-distro'
 # The Windows account that owns the WSL distro, as which the distro writes to
 # drvfs (/mnt/c): it may change files in the inbox only.
 host_check_distro_account: "{{ windows_desktop_user }}"
+# The accounts that may write to the inbox: the account of the distro, and
+# while the move of the distro runs (wsl_move_phase move), the account that
+# the move made too. After the window the distro runs as that account, and
+# the done switch makes it the account of the distro.
+host_check_inbox_writers: >-
+  {{ [host_check_distro_account]
+     + ([wsl_move_new_account] if (wsl_move_phase | default('off')) == 'move' else []) }}
 
 # The relay of the distro (Design Doc 0004, section 5.9).
 host_check_inbox_dir: 'C:\ProgramData\tnwks-host-check-distro'
