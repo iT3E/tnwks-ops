@@ -7,11 +7,8 @@ kind: Kustomization
 resources:
   - ../../../checks/app
   - ./mcp-gateway-probe.yaml
-  # The Secret mcp-gateway-probe-secret (PROBE_KEY) is not here yet: the
-  # lead makes it at the values step of the key of main, as
-  # secret-mcp-gateway-probe.sops.yaml, and lists it here. Until then the
-  # probe has no PROBE_KEY and says "skipped: the key is pending" for the
-  # checks that need it (mcp-gateway-probe.yaml).
+  # The key of the probe (PROBE_KEY, client main-probe), made on 2026-11-20.
+  - ./secret-mcp-gateway-probe.sops.yaml
 configMapGenerator:
   # The config of the MCP gateway, the same file: the gateway probe reads
   # the tool list of the route main-vault from it.
