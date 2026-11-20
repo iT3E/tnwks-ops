@@ -35,10 +35,12 @@ WSL-02, which has that cluster's kubeconfig
 - **A reader can not reach Prometheus** (a board with no data on one
   datasource, Pyrra empty, `up{job="peer-federate"}` at 0 on the other
   site): see "The network rule of Prometheus" in the implementation doc.
-  `hubble observe --to-namespace monitoring --to-label
-  app.kubernetes.io/name=prometheus --verdict DROPPED` names the source,
-  and `--type l7 --http-status 403` shows a request that the rule refused.
-  The quick way back is a revert of the rule's PR.
+  `hubble observe --pod
+  monitoring/prometheus-kube-prometheus-stack-prometheus-0 --verdict
+  DROPPED` names the source, and `--type l7 --http-status 403` shows a
+  request that the rule refused. If the pod is NotReady, look first for a
+  403 to the host on `/-/ready` or `/-/healthy`. The quick way back is a
+  revert of the rule's PR.
 - **Archive behind or full:** `ObservabilityArchiveBehind` and
   `ObservabilityArchiveSpaceLow`. Check the Compactor first: whether it has
   halted (`thanos_compact_halted`) and how many compactions it has left. Then

@@ -812,10 +812,16 @@ to port 9090 that it admits. It comes before the write path of the AI board
   and GET `/api/v1/query` only. Nobody may write, call the admin API (it is
   on: `--web.enable-admin-api`) or call `/-/reload` and `/-/quit`. The
   proxy answers 403 to such a request.
-- **What passes before the rule.** The local host (the kubelet probes): in
-  Kubernetes, Cilium lets the host reach each pod before any rule. A
-  `kubectl port-forward` and the calls of the reloader and the sidecar
-  enter on the loopback of the pod.
+- **The kubelet probes.** They come from the local host, on 9090 (GET
+  `/-/ready` and `/-/healthy`), and a refused probe makes the pod NotReady.
+  The host gets 9090 with no HTTP rule. Cilium allows the local host
+  (`allow-localhost`), and when a rule with HTTP rules also selects it (the
+  first form did, and the entity `kube-apiserver` does on the control plane
+  node), Cilium sends the probe through the proxy and gives the host no HTTP
+  rule there (`L4Filter.attach`, Cilium 1.19.4). The probe paths are also in
+  the HTTP rules of each entity that can be the host. A `kubectl
+  port-forward` and the calls of the reloader and the sidecar enter on the
+  loopback of the pod.
 - **What the proxy changes.** A request through the bridge arrives as
   `world` or as a node, because the LoadBalancer keeps the address of the
   bridge only when Prometheus runs on the node of the VIP. The proxy retries
@@ -830,8 +836,11 @@ to port 9090 that it admits. It comes before the write path of the AI board
   the path and the source of each request (`hubble observe --type l7`)
   before this form refused any.
 - **A new reader.** Add its pod to the rule in the same PR. Until then its
-  calls are dropped: `hubble observe --to-namespace monitoring --to-label
-  app.kubernetes.io/name=prometheus --verdict DROPPED` shows them.
+  calls are dropped: `hubble observe --pod
+  monitoring/prometheus-kube-prometheus-stack-prometheus-0 --verdict DROPPED`
+  shows them, and `--type l7 --http-status 403` the requests that the proxy
+  refused. (A filter by the label of the destination misses the flows of
+  the proxy.)
 - **Way back.** Revert the PR that added or changed the rule: Flux prunes
   the rule, and each reader passes again.
 

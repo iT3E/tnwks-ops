@@ -87,9 +87,12 @@ def test_each_reader_has_its_port_and_its_requests_and_no_other():
             "9090": READ_API, "8080": None, "10902": None},
         (PEER, "monitoring", "observability-evidence"): {
             "9090": [("GET", "/-/ready"), ("GET", r"/api/v1/query(\?.*)?")]},
-        ("entity", "world"): {"9090": [("GET", r"/federate(\?.*)?"), ("GET", r"/api/v1/query(\?.*)?")]},
-        ("entity", "remote-node"): {"9090": [("GET", r"/federate(\?.*)?"), ("GET", r"/api/v1/query(\?.*)?")]},
-        ("entity", "kube-apiserver"): {"9090": [("GET", r"/federate(\?.*)?"), ("GET", r"/api/v1/query(\?.*)?")]},
+        ("entity", "world"): {"9090": [("GET", r"/federate(\?.*)?"), ("GET", r"/api/v1/query(\?.*)?"),
+                                      ("GET", "/-/(healthy|ready)")]},
+        ("entity", "remote-node"): {"9090": [("GET", r"/federate(\?.*)?"), ("GET", r"/api/v1/query(\?.*)?"),
+                                      ("GET", "/-/(healthy|ready)")]},
+        ("entity", "kube-apiserver"): {"9090": [("GET", r"/federate(\?.*)?"), ("GET", r"/api/v1/query(\?.*)?"),
+                                      ("GET", "/-/(healthy|ready)")]},
         (HERE, "monitoring", "thanos-query"): {"10901": None},
         (PEER, "monitoring", "thanos-query"): {"10901": None},
         ("entity", "host"): {"9090": None},
@@ -117,8 +120,8 @@ WRITES = [
 
 
 def test_nobody_may_write_or_call_the_admin_and_lifecycle_paths():
-    # The host is the exception: Cilium lets the local host reach each pod
-    # before any rule (allow-localhost), so its line only names the kubelet.
+    # The host is the exception: Cilium allows the local host
+    # (allow-localhost), and its line names the kubelet with no HTTP rule.
     for s in set(grants()) - {("entity", "host")}:
         for method, path in WRITES:
             assert not allowed(s, method, path), (s, method, path)
@@ -145,7 +148,9 @@ def test_each_reader_may_send_the_requests_it_sends_today():
         assert allowed(("entity", entity), "GET", "/federate?match%5B%5D=up")
         assert allowed(("entity", entity), "GET", "/api/v1/query?query=count+by+%28version%29+%28x%29")
         assert not allowed(("entity", entity), "GET", "/api/v1/series?match[]=up")
-        assert not allowed(("entity", entity), "GET", "/-/ready")
+        assert allowed(("entity", entity), "GET", "/-/ready")
+        assert not allowed(("entity", entity), "GET", "/-/ready?x=1")
+        assert not allowed(("entity", entity), "GET", "/-/reload")
         assert not allowed(("entity", entity), "GET", "/", port="10901")
     assert not allowed((HERE, "monitoring", "grafana"), "GET", "/", port="10901")
     for site in (HERE, PEER):
@@ -201,3 +206,21 @@ def test_each_reader_of_prometheus_in_git_is_in_the_rule():
         if NAMES.search(path.read_text(errors="replace")):
             found.add(str(path.relative_to(ROOT)))
     assert found == set(READERS), sorted(found ^ set(READERS))
+
+
+# The probes that the operator sets on the container prometheus (live pod,
+# 2026-11-20): startup and readiness GET /-/ready, liveness GET /-/healthy, on
+# 9090. The entities that can be the local host of the node of Prometheus: the
+# host itself, all, and kube-apiserver (the host of the control plane node
+# carries it). Cilium gives the host no HTTP rule on a port that a rule with
+# HTTP rules opens to it (pkg/policy/l4.go, L4Filter.attach, v1.19.4). The
+# probe paths pass even without that.
+PROBES = [("GET", "/-/ready"), ("GET", "/-/healthy")]
+
+
+def test_the_kubelet_probes_pass_in_each_case():
+    assert grants()[("entity", "host")] == {"9090": None}
+    for entity in ("all", "host", "kube-apiserver"):
+        if ("entity", entity) in grants():
+            for method, path in PROBES:
+                assert allowed(("entity", entity), method, path), (entity, path)

@@ -18,10 +18,19 @@
 #   10901, the gRPC port of the Thanos sidecar: Thanos Query of each site.
 #   8080 and 10902, the metrics of the reloader and of the sidecar: this
 #     Prometheus only.
-# The kubelet probes (9090, from the host) always pass: Cilium in Kubernetes
-# lets the local host reach each pod (allow-localhost), before any rule. A
-# kubectl port-forward enters the pod on its loopback, and no rule sees it.
-# The config reloader and the sidecar call Prometheus on its loopback too.
+# The kubelet probes (9090, GET /-/ready and /-/healthy, from the host) must
+# always pass: a refused probe makes the pod NotReady. Cilium in Kubernetes
+# allows the local host (allow-localhost). The host rule at the end names it
+# with no HTTP rule, so the proxy is not in its path. When a rule with HTTP
+# rules also selects the host (the first form of this rule did, with "all";
+# the entity kube-apiserver does on the control plane node), Cilium sends the
+# probe through the proxy, and adds the host to that port with no HTTP rule
+# (L4Filter.attach in pkg/policy/l4.go, test TestL7WithLocalHostWildcard of
+# v1.19.4): each request of the host passes. The probe paths are also in the
+# HTTP rules of each entity that can be the host, so a probe passes even if
+# that changes. A kubectl port-forward enters the pod on its loopback, and no
+# rule sees it. The config reloader and the sidecar call Prometheus on its
+# loopback too.
 #
 # The HTTP rules. A reader may send GET on each path, and POST on the query
 # paths only. Nobody may write (/api/v1/write, the OTLP path), call the
@@ -113,7 +122,9 @@ spec:
     # the other site's Prometheus, and the query of its API checks
     # (security/api-checks/app/cronjob.yaml). They arrive as world or as a
     # node of either cluster (remote-node; the control plane node also
-    # carries kube-apiserver).
+    # carries kube-apiserver). The probe paths are here too: on the control
+    # plane node the host carries kube-apiserver, and its probes must pass
+    # (see the head of this file). They answer one word and hold no data.
     - fromEntities:
         - world
         - remote-node
@@ -128,6 +139,8 @@ spec:
                 path: "/federate(\\?.*)?"
               - method: GET
                 path: "/api/v1/query(\\?.*)?"
+              - method: GET
+                path: "/-/(healthy|ready)"
     # Thanos Query of each site, to the StoreAPI of the sidecar (mutual TLS).
     - fromEndpoints:
         - matchLabels:
@@ -155,8 +168,8 @@ spec:
               protocol: TCP
             - port: "10902"
               protocol: TCP
-    # The kubelet probes. The local host passes before any rule; this names
-    # it, as the other rules of this repository do.
+    # The kubelet probes, from the local host: port 9090 with no HTTP rule,
+    # so the proxy is not in their path (see the head of this file).
     - fromEntities:
         - host
       toPorts:
