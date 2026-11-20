@@ -14,6 +14,10 @@ resources:
   # The fetch proxy of the main agent: its one way to a web site that the
   # agent picks (fetch-proxy/ks.yaml).
   - ./fetch-proxy/ks.yaml
-  # The share of the vault: its two volumes and two claims, mounted by no pod
-  # yet (vault-share/ks.yaml).
+  # The share of the vault: its two volumes and two claims
+  # (vault-share/ks.yaml).
   - ./vault-share/ks.yaml
+  # The vault server of the share, behind the central MCP gateway
+  # (vault-server/ks.yaml). No pod of main mounts the share or calls the
+  # route yet.
+  - ./vault-server/ks.yaml

@@ -5,8 +5,9 @@
 # (the kubelet). No sandbox comes in: neither the workload pod nor the
 # supervisor of a sandbox carries the labels of a client. The admin port
 # listens on loopback and no rule names it.
-# Out: the MCP servers that are targets of the config (the finance app and
-# the vault server of finance), and DNS for their names only. No app, no other namespace, nothing outside the cluster.
+# Out: the MCP servers that are targets of the config (the finance app, the
+# vault server of finance and the vault server of main), and DNS for their
+# names only. No app, no other namespace, nothing outside the cluster.
 # A trust domain that gets a client adds its agent pod and its probe below,
 # and its MCP server and its name to the egress, in the same PR as its route.
 apiVersion: cilium.io/v2
@@ -71,6 +72,10 @@ spec:
             io.kubernetes.pod.namespace: agents-finance
             app.kubernetes.io/name: vault-server
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: vault-server
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:
             - port: "8080"
@@ -90,3 +95,4 @@ spec:
             dns:
               - matchName: firefly-mcp.agents-finance.svc.cluster.local
               - matchName: vault-server.agents-finance.svc.cluster.local
+              - matchName: vault-server.agents-main.svc.cluster.local
