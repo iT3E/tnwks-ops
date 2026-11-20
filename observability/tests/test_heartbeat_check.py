@@ -5,10 +5,12 @@ a day; one short break of Tempo at that time must not fail the day's check.
 """
 
 import importlib.util
+import json
 import urllib.error
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "kubernetes/apps/ai/agents/monitoring/app/scripts/heartbeat_check.py"
@@ -79,3 +81,23 @@ def test_main_fails_when_one_service_is_missing(check, monkeypatch, capsys):
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("heartbeat-check result=ok service=a ")
     assert out[-1].startswith("heartbeat-check result=missing service=b ")
+
+
+def test_services_are_the_running_agents_with_a_heartbeat():
+    """SERVICES names each personal agent whose pod runs (replicas 1) and whose
+    config has a heartbeat, by its service name, and nothing else. The list
+    grows after the first heartbeat of a new agent is in Tempo (the comment
+    of heartbeat-check.yaml); this test then holds it."""
+    agents = ROOT / "kubernetes/apps/ai/agents"
+    running = set()
+    for config in sorted(agents.glob("*/agent/config/openclaw.json")):
+        deployment = config.parents[1] / "app/deployment.yaml"
+        docs = [d for d in yaml.safe_load_all(deployment.read_text()) if d and d["kind"] == "Deployment"]
+        c = json.loads(config.read_text())
+        if docs[0]["spec"]["replicas"] >= 1 and c["agents"]["defaults"].get("heartbeat", {}).get("every"):
+            running.add(c["diagnostics"]["otel"]["serviceName"])
+    cron = yaml.safe_load((ROOT / "kubernetes/apps/ai/agents/monitoring/app/heartbeat-check.yaml").read_text())
+    (job,) = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"]
+    services = {e["name"]: e["value"] for e in job["env"]}["SERVICES"].split(",")
+    assert len(services) == len(set(services))
+    assert set(services) == running == {"openclaw-agents-pilot", "openclaw-agents-finance", "openclaw-agents-main"}

@@ -1967,7 +1967,8 @@ by hand, and the steps at a limit of the Claude plan.
 - **The heartbeat check** reads one span of each agent's heartbeat trace:
   `openclaw.run` with `openclaw.trigger=heartbeat` and
   `openclaw.outcome=completed`, for each service in its env `SERVICES`
-  (comma separated: `openclaw-agents-pilot,openclaw-agents-finance` now).
+  (comma separated:
+  `openclaw-agents-pilot,openclaw-agents-finance,openclaw-agents-main` now).
   Add a service after the first heartbeat of a new agent is in Tempo; a
   domain with no agent is not in the list, so it never alerts. Each service
   gets its own tries and its own log line, and one missing service fails
