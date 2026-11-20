@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.233.0 - 2026-11-20
+
+### Added
+
+* agents: the gateway probe covers the vault route of main (task 3.37, step B): platform-check-mcp-gateway-probe in agents-main (05:47) checks the route main-vault with its key main-probe (a placeholder until the values step, read from an optional Secret), and the probes of finance and main each check that their key gets a 401 on the vault route of the other trust domain and that the other vault server is out of reach. The probe script runs for a vault route only when a domain has no other route.
+
 ## v2.232.0 - 2026-11-20
 
 ### Changed
