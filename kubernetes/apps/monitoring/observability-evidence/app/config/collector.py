@@ -154,6 +154,23 @@ class Collector:
                     metrics.add("homelab_expected_other_database_info", 1, k8s_cluster=site["cluster"],
                                 observer_cluster=self.cluster, **labels_)
 
+        # The AI domain: each declared part on each site, run there or absent
+        # by design, and the checks, result lines and backups it must have.
+        ai = self.inventory.get("ai", {})
+        for part in ai.get("parts", []):
+            labels_ = {key: part[key] for key in ("trust_domain", "part", "namespace", "kind", "workload")}
+            for site in self.inventory["sites"]:
+                name = ("homelab_expected_ai_part_info" if site["cluster"] in part["clusters"]
+                        else "homelab_absent_ai_part_info")
+                metrics.add(name, 1, k8s_cluster=site["cluster"], observer_cluster=self.cluster, **labels_)
+        for kind, name, keys in (("schedules", "homelab_ai_schedule_objective_seconds", ("namespace", "cronjob")),
+                                 ("results", "homelab_expected_ai_result_info", ("check",)),
+                                 ("backups", "homelab_ai_backup_objective_seconds", ("namespace", "policy"))):
+            for item in ai.get(kind, []):
+                for cluster in item["clusters"]:
+                    metrics.add(name, item.get("within", 1), k8s_cluster=cluster, observer_cluster=self.cluster,
+                                trust_domain=item["trust_domain"], **{key: item[key] for key in keys})
+
         for database in self.expected_databases():
             metrics.add("homelab_expected_database_info", 1, app=database["app"],
                         namespace=database["namespace"], db_cluster=database["name"],

@@ -1907,6 +1907,12 @@ and each rule's `runbook_url` links to it. It also has the restore of the
 state of an agent, the fast stop of the workflow agent, the move to Bedrock
 by hand, and the steps at a limit of the Claude plan.
 
+Each alert, and the certificate alert of the model gateway, opens the AI
+board in Grafana (`tnwks-ai`) for the site whose Prometheus raised it. The
+board has a state for each part, scheduled check, result line and snapshot
+policy that `observability/inventory.py` declares
+([the AI board](../operations/observability-implementation.md#the-ai-board)).
+
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |
 | `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive`, `official-plugins` or `doctor` init container, or a lock on the state volume. Revert the last image if it came with an update |

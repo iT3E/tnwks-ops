@@ -163,6 +163,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "State"
                       }
                     }
@@ -943,6 +951,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "Windows disk free"
                       }
                     }

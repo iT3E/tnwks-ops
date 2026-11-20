@@ -119,6 +119,97 @@ spec:
         "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_spec_replicas, "workload", "$1",
         "deployment", "(.+)"))) or (max by (k8s_cluster, namespace, workload, engine, app) (homelab_expected_other_database_info)
         * 0)
+    - record: homelab:ai_part_state
+      expr: (max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab_absent_ai_part_info) *
+        0 + 5) or (max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab_expected_ai_part_info)
+        * 0 + 4) and on (k8s_cluster, namespace, workload) (max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_replicas,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_spec_replicas, "workload", "$1",
+        "deployment", "(.+)")) == 0) or (max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab_expected_ai_part_info)
+        * 0 + 1) and on (k8s_cluster, namespace, workload) ((max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_status_replicas_ready,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_status_replicas_available, "workload",
+        "$1", "deployment", "(.+)")) >= max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_replicas,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_spec_replicas, "workload", "$1",
+        "deployment", "(.+)"))) > 0) or (max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab_expected_ai_part_info)
+        * 0 + 2) and on (k8s_cluster, namespace, workload) ((max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_status_replicas_ready,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_status_replicas_available, "workload",
+        "$1", "deployment", "(.+)")) < max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_replicas,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_spec_replicas, "workload", "$1",
+        "deployment", "(.+)"))) and on (k8s_cluster, namespace, workload) (max by (k8s_cluster, namespace, workload)
+        (label_replace(kube_statefulset_status_replicas_ready, "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_status_replicas_available,
+        "workload", "$1", "deployment", "(.+)")) > 0)) or (max by (k8s_cluster, trust_domain, part, namespace, kind,
+        workload) (homelab_expected_ai_part_info) * 0 + 3) and on (k8s_cluster, namespace, workload) (max by (k8s_cluster,
+        namespace, workload) (label_replace(kube_statefulset_status_replicas_ready, "workload", "$1", "statefulset",
+        "(.+)") or label_replace(kube_deployment_status_replicas_available, "workload", "$1", "deployment", "(.+)"))
+        < max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_replicas, "workload", "$1",
+        "statefulset", "(.+)") or label_replace(kube_deployment_spec_replicas, "workload", "$1", "deployment", "(.+)")))
+        or (max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab_expected_ai_part_info)
+        * 0)
+    - record: homelab:ai_schedule_state
+      expr: (max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds) * 0
+        + 4) and on (k8s_cluster, namespace, cronjob) (max by (k8s_cluster, namespace, cronjob) (kube_cronjob_spec_suspend{namespace=~"agents-.+|monitoring"})
+        == 1) or (max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds)
+        * 0 + 3) and on (k8s_cluster, namespace, cronjob) ((max by (k8s_cluster, namespace, cronjob) (kube_job_status_start_time{namespace=~"agents-.+|monitoring"}
+        * on (k8s_cluster, namespace, job_name) group_left (cronjob) max by (k8s_cluster, namespace, job_name, cronjob)
+        (label_replace(kube_job_owner{namespace=~"agents-.+|monitoring",owner_kind="CronJob"}, "cronjob", "$1",
+        "owner_name", "(.+)")) and on (k8s_cluster, namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+|monitoring",reason!=""}
+        > 0)) > max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|monitoring"}))
+        or (max by (k8s_cluster, namespace, cronjob) (kube_job_status_start_time{namespace=~"agents-.+|monitoring"}
+        * on (k8s_cluster, namespace, job_name) group_left (cronjob) max by (k8s_cluster, namespace, job_name, cronjob)
+        (label_replace(kube_job_owner{namespace=~"agents-.+|monitoring",owner_kind="CronJob"}, "cronjob", "$1",
+        "owner_name", "(.+)")) and on (k8s_cluster, namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+|monitoring",reason!=""}
+        > 0)) unless on (k8s_cluster, namespace, cronjob) max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|monitoring"})))
+        or (((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds) - on
+        (k8s_cluster, namespace, cronjob) group_left () (time() - max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|monitoring"})))
+        >= 0) * 0 + 1) or (((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds)
+        - on (k8s_cluster, namespace, cronjob) group_left () (time() - max by (k8s_cluster, namespace, cronjob)
+        (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|monitoring"}))) < 0) * 0 + 2) or (max by
+        (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds) * 0)
+    - record: homelab:ai_result_state
+      expr: (max by (k8s_cluster, trust_domain, check) (homelab_expected_ai_result_info) * 0 + 3) and on (k8s_cluster,
+        trust_domain, check) (((max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="instruction-check",result!~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="daily-backup",result!~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="memory-index",result!~"ok|first|none"}[15d]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="automations-sync",result!~"ok|first|none"}[3h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="app-drift",result!~"ok|first|none"}[30m]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)"))) > (max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="instruction-check",result=~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="daily-backup",result=~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="memory-index",result=~"ok|first|none"}[15d]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="automations-sync",result=~"ok|first|none"}[3h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="app-drift",result=~"ok|first|none"}[30m]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")))) or ((max by (k8s_cluster, trust_domain, check)
+        (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="instruction-check",result!~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="daily-backup",result!~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="memory-index",result!~"ok|first|none"}[15d]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="automations-sync",result!~"ok|first|none"}[3h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="app-drift",result!~"ok|first|none"}[30m]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)"))) unless on (k8s_cluster, trust_domain, check) (max
+        by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="instruction-check",result=~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="daily-backup",result=~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="memory-index",result=~"ok|first|none"}[15d]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="automations-sync",result=~"ok|first|none"}[3h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="app-drift",result=~"ok|first|none"}[30m]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)"))))) or (max by (k8s_cluster, trust_domain, check)
+        (homelab_expected_ai_result_info) * 0 + 1) and on (k8s_cluster, trust_domain, check) (max by (k8s_cluster,
+        trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="instruction-check",result=~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="daily-backup",result=~"ok|first|none"}[26h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="memory-index",result=~"ok|first|none"}[15d]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="automations-sync",result=~"ok|first|none"}[3h]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)")) or max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="app-drift",result=~"ok|first|none"}[30m]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)"))) or (max by (k8s_cluster, trust_domain, check) (homelab_expected_ai_result_info)
+        * 0)
+    - record: homelab:ai_backup_age_seconds
+      expr: ((time() - max by (k8s_cluster, namespace, policy) (kopiur_policy_last_backup_success_timestamp_seconds))
+        >= 0) * on (k8s_cluster, namespace, policy) group_right () (0 * max by (k8s_cluster, trust_domain, namespace,
+        policy) (homelab_ai_backup_objective_seconds) + 1)
+    - record: homelab:ai_backup_state
+      expr: ((homelab:ai_backup_age_seconds <= bool on (k8s_cluster, trust_domain, namespace, policy) max by (k8s_cluster,
+        trust_domain, namespace, policy) (homelab_ai_backup_objective_seconds)) + 3 * (homelab:ai_backup_age_seconds
+        > bool on (k8s_cluster, trust_domain, namespace, policy) max by (k8s_cluster, trust_domain, namespace, policy)
+        (homelab_ai_backup_objective_seconds))) or (max by (k8s_cluster, trust_domain, namespace, policy) (homelab_ai_backup_objective_seconds)
+        * 0)
+    - record: homelab:ai_restore_result_timestamp_seconds
+      expr: max by (k8s_cluster, trust_domain, check, result) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check=~"restore-check|vault-restore-check"}[15d]),
+        "trust_domain", "$1", "pod_namespace", "agents-(.+)"))
     - record: homelab:network_path_state
       expr: (label_replace(label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site1"}) < bool 180), "k8s_cluster",
         "homelab-wsl", "", "") or label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site2"}) < bool
