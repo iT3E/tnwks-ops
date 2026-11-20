@@ -353,7 +353,13 @@ backup command.
 **Seen so far.** The first daily backup failed with
 `GatewayLockNamespaceError`: the command must see the gateway process, so the
 pod shares one PID namespace (`f19083dc`). The first full run passed on
-2026-11-12.
+2026-11-12. The first backup of the main agent (2026-11-19) failed with
+`Cannot capture required config file /home/node/config/telegram-groups.json:
+file identity could not be pinned`: the command refuses an include file
+that is a link, and each file of a projected volume is one. The backup
+container of main now runs on a copy of the config with regular files. A
+new include in the config of an agent needs its file in that copy too
+(`observability/tests/test_main_agent_backup.py` checks it).
 
 **Fix.** Fix the cause in git. The container tries again when it starts; a
 day with no archive leaves the archives of the 6 days before and the
@@ -651,7 +657,8 @@ heartbeat, `result=error` is a check that could not ask Tempo. The check
 has one line for each service, and the alert fires when one of them is not
 `result=ok`. The namespace is the end of the service name
 (`openclaw-agents-pilot` is `agents-pilot`, `openclaw-agents-finance` is
-`agents-finance`). Then, with that namespace:
+`agents-finance`, `openclaw-agents-main` is `agents-main`). Then, with that
+namespace:
 
 ```sh
 kubectl -n agents-pilot get pods
@@ -2046,7 +2053,7 @@ What is different from the steps below in the test run:
 | 3b | The owner's values: the three Secret files, not listed yet, and the entry `agents-main` in the key list of the model gateway ([Before the cutover](#before-the-cutover-main)) | The key `agents-main` at the model gateway. Nothing in `agents-main` | `kubectl -n ai logs deploy/litellm -c ensure-keys` has `agents-main: created` (or `updated`) `(models: agents-main, agents-main-embeddings)` | Revert. The key stays at the model gateway until it is removed in the admin UI |
 | 3c | The fetch proxy, after 3a and before 5: `main/fetch-proxy/`, the rule to it in the agent's network policy, the ConfigMap `agent-fetch-proxy` and `tools.web.fetch` in the config | The proxy pod, its Service and its policy. The agent's policy, its config and a new pod template. At zero replicas no agent pod starts, and step 5 starts it with the proxy env; at one, the agent pod rolls once. The restore Job of step 4 does not change | `kubectl -n agents-main get deploy fetch-proxy` is `1/1`; `kubectl -n agents-main get cnp fetch-proxy agent` exist; `kubectl -n agents-main logs deploy/fetch-proxy` has no `[error]` line | Revert. The agent then has no web fetch |
 | Host | The owner stops the Telegram account of the main agent on the host and its scheduled jobs, makes the copy of the main agent, and puts it in the volume | Nothing in git | The checksum and the count of the copy | Turn the account and the jobs on again on the host |
-| 4 | Out `state-inbox.yaml`; in the three Secrets and `restore-job.yaml` (with `ARCHIVE` set; `VAULT` empty) | The Job checks each member of the archive, then puts the copy in place as `state/`. The Secrets. No pod | `kubectl -n agents-main get job agent-restore` is `1/1`; in Loki, `{namespace="agents-main", app="agent-restore"}` has `restore result=ok archive=start/<name> files=<n> vault-notes=0`, with the count of the owner | Revert step 4, then turn the account on again on the host. The copy stays in `archives/start/` |
+| 4 | Out `state-inbox.yaml`; in the three Secrets and `restore-job.yaml` (with `ARCHIVE` set; `VAULT` empty) | The Job checks each member of the archive, then puts the copy in place as `state/`. The Secrets. No pod | `kubectl -n agents-main get job agent-restore` is `1/1`; in Loki, `{namespace="agents-main", app="agent-restore"}` has `restore result=ok archive=start/<name> files=<n> vault-notes=none`, with the count of the owner (`none`: no vault archive) | Revert step 4, then turn the account on again on the host. The copy stays in `archives/start/` |
 | 4b | The move of the test bot: `TELEGRAM_BOT_TOKEN` in `main/agent/app/secret.sops.yaml` holds the token of the pilot's test bot, and `channels.telegram.enabled: false` in `pilot/agent/config/openclaw.json` | The Secret `agent-secret` of main (no pod reads it: main is at `0/0`). The pilot pod starts again once, with no Telegram account | `kubectl -n agents-pilot get deploy agent` is `1/1` with the new pod; `kubectl -n agents-pilot logs deploy/agent -c agent \| grep -c '\[telegram\]'` is `0`, and its line `http server listening` names no `telegram`; `kubectl -n agents-main get deploy agent` stays `0/0` | Main at `0/0` first, then revert: the pilot polls the bot again |
 | 5 | Out `restore-job.yaml`; `replicas: 1` in `deployment.yaml` | The agent pod starts and polls the bot | [The cutover](#the-cutover-on-telegram) | [The way back](#the-way-back-of-the-main-agent) |
 
@@ -2156,7 +2163,12 @@ As [The cutover](#the-cutover) of finance, with these changes:
 4. **The restore test** with that snapshot (owner's go), as for finance,
    with no vault count.
 5. **The heartbeat.** The first heartbeat of `openclaw-agents-main` is in
-   Tempo; then the pull request that adds it to `SERVICES`.
+   Tempo; then the pull request that adds it to `SERVICES`. The first one
+   came at 2026-11-19 15:05 UTC (`openclaw.run`, `trigger=heartbeat`,
+   `outcome=completed`). The product puts the heartbeat at a fixed time of
+   day, from the device identity in the agent's state and the agent id, so
+   it comes at about 15:05 UTC each day, and the check of 06:33 UTC finds
+   the one of the day before in its 26 hours.
 
 **Pass.** Each step passed, and no alert of `agents-main` fired from step 1
 of the merges, but the ones named in a step.

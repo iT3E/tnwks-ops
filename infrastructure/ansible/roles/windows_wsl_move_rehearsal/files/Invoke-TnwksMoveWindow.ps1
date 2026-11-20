@@ -1048,10 +1048,11 @@ function Invoke-TnwksForward {
     $pSid = Get-TnwksSid $present.account
     $nSid = Get-TnwksSid $new.account
     # A window that started and did not end goes back first (mode wayback, or
-    # the boot task), never forward again.
+    # the boot task), never forward again. Nor does a done window: a second
+    # forward run on a host that had a good window would go back.
     $last = Get-LastMarker
-    if ($last -in @('window-started', 'boot-run')) {
-        Write-Log "stop: the last marker is '$last': a window started and did not end. Nothing is changed."
+    if ($last -in @('window-started', 'boot-run', 'window-done')) {
+        Write-Log "stop: the last marker is '$last': a window started and did not end, or a done window needs its way back first. Nothing is changed."
         return 'stopped'
     }
     # (1) Before any change: the disk file has the inherited rules that its
@@ -1361,9 +1362,15 @@ try {
             }
         }
         'wayback' {
+            # A way back only from a window: a done one, or one that started and
+            # did not end. With no window, or after its way back, nothing.
+            $last = Get-LastMarker
             $version = Get-TnwksWslVersion
             $saved = ("$(Get-Content -LiteralPath $cfg.version_file -Raw)").Trim()
-            if ($version -ne $saved) {
+            if ($last -in @('', 'wayback-done')) {
+                Write-Log "stop: the last marker is '$last': no window to go back from. Nothing is changed."
+                $outcome = 'stopped'
+            } elseif ($version -ne $saved) {
                 Write-Log "stop: WSL $version is not the saved $saved. Nothing is changed."
                 $outcome = 'stopped'
             } else {

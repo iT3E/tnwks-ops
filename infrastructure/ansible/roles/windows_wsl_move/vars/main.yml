@@ -147,3 +147,41 @@ wsl_move_file_hashes: >-
   {%- set _ = out.update({wsl_move_dir ~ '\\' ~ key ~ '.json': value | to_nice_json | hash('sha256')}) -%}
   {%- endfor -%}
   {{ out }}
+
+# The config of the reads of the window play (files/Read-TnwksMoveWindow.ps1).
+# The way of a start: wayback only in the mode wayback.
+wsl_move_window_read:
+  way: "{{ 'wayback' if (wsl_move_window | default('')) == 'wayback' else 'forward' }}"
+  force_session: "{{ wsl_move_window_force_session | default(false) | bool }}"
+  present:
+    account: "{{ wsl_move_present_account }}"
+    folder: "{{ wsl_move_present_folder }}"
+    tasks: "{{ wsl_move_present_tasks }}"
+    window_tasks: "{{ wsl_move_window_tasks.present.values() | list }}"
+  new:
+    account: "{{ wsl_move_new_account }}"
+    folder: "{{ wsl_move_disk_dir }}"
+    start_tasks: "{{ wsl_move_new_start_tasks }}"
+    window_tasks: "{{ wsl_move_window_tasks.new.values() | list }}"
+  disk_name: "{{ wsl_move_disk_name }}"
+  distro: "{{ wsl_move_distro }}"
+  state_file: "{{ wsl_move_state_file }}"
+  log_file: "{{ wsl_move_log_file }}"
+  request_file: "{{ wsl_move_request_file }}"
+  version_file: "{{ wsl_move_version_file }}"
+  window_task: "{{ wsl_move_window_task }}"
+  boot_task: "{{ wsl_move_boot_task }}"
+  hashes: "{{ wsl_move_file_hashes }}"
+  window_script: '{{ wsl_move_dir }}\Invoke-TnwksMoveWindow.ps1'
+  rehearsed_version: "{{ wsl_move_rehearsed_wsl_version }}"
+  service_binary: "{{ wsl_move_service_binary }}"
+  host_check: "{{ wsl_move_host_check }}"
+  host_check_sha256: >-
+    {{ lookup('ansible.builtin.file', role_path ~ '/../windows_host_check/files/Invoke-TnwksHostCheck.ps1', rstrip=false) | hash('sha256') }}
+  capability_sid: "{{ wsl_move_vm_capability_sid }}"
+  registration_file: "{{ wsl_move_registration_file }}"
+  wslconfig_file: "{{ wsl_move_wslconfig_file }}"
+  bridge_address_file: "{{ wsl_move_bridge_address_file }}"
+  log_lines: "{{ wsl_move_window_log_lines | int }}"
+  line_limit: "{{ wsl_move_window_line_limit | int }}"
+  batch_logons: "{{ wsl_move_window_batch_logons | int }}"

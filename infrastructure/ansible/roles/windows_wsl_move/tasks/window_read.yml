@@ -1,0 +1,22 @@
+---
+# One run of files/Read-TnwksMoveWindow.ps1 as SYSTEM, in the mode
+# wsl_move_window_read_mode: wsl_move_window_result. Its parameters name the
+# accounts and the folders, so the run logs nothing; its result has none of
+# them. Only the mode start changes something, and only outside a check run.
+- name: "The window play, {{ wsl_move_window_read_mode }}"
+  ansible.windows.win_powershell:
+    script: "{{ lookup('ansible.builtin.file', 'Read-TnwksMoveWindow.ps1') }}"
+    parameters:
+      Mode: "{{ wsl_move_window_read_mode }}"
+      Config: "{{ wsl_move_window_read | to_json }}"
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  check_mode: "{{ wsl_move_window_read_mode == 'start' and ansible_check_mode }}"
+  register: wsl_move_window_run
+  no_log: true
+
+- name: "The result of the window play, {{ wsl_move_window_read_mode }}"
+  ansible.builtin.set_fact:
+    wsl_move_window_result: "{{ wsl_move_window_run.output | last }}"

@@ -93,7 +93,7 @@ def var(text: str) -> str:
 def test_each_folder_of_a_role_is_in_the_list():
     found = {name for name, (_, value) in defaults().items()
              if isinstance(value, str) and value.lower().startswith("c:\\programdata\\")
-             and not value.lower().endswith(".ps1")}
+             and not value.lower().endswith((".ps1", ".json"))}
     assert found == set(FOLDERS), "a new folder under C:\\ProgramData needs its rules here"
 
 

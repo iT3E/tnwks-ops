@@ -1,0 +1,175 @@
+---
+# The window play (playbooks/windows-move-window.yml): the start of the window
+# of the move (Design Doc 0004, section 9, step 5; plan task 10.15), its
+# status, its precheck, and the check play of step 6. The lead runs it by
+# hand, for one host, with -e wsl_move_window=<mode>:
+#
+#   status    Read only, in any phase of the move. The last marker and the
+#             markers of the state file, the request, the window task and the
+#             boot task, and the tail of the window log. A file that is not
+#             there reads "absent".
+#   precheck  Read only. Each guard of a forward start, and the readiness
+#             reads before the window. One line for each, pass or fail.
+#   forward   The guards, then the request of a forward window, and one
+#   wayback   start of the window task (SYSTEM), or the same for the way back
+#             mode. Each needs -e wsl_move_window_host=<the host>. The play
+#             does not wait: the path of the lead ends when WSL stops. Then
+#             status, after the restart.
+#   check     Read only. The check play of step 6, after the restart of the
+#             window. One line for each, pass or fail.
+#
+# The reads run as SYSTEM, from files/Read-TnwksMoveWindow.ps1, and print no
+# name, SID or folder of the move. Each task that takes one has no_log.
+
+- name: The mode of the window play
+  ansible.builtin.assert:
+    that: (wsl_move_window | default('')) in wsl_move_window_modes
+    fail_msg: "Give the mode: -e wsl_move_window=<{{ wsl_move_window_modes | join('|') }}>. Nothing is read or changed."
+    quiet: true
+
+- name: The variables of the move are set
+  ansible.builtin.assert:
+    that:
+      - wsl_move_present_account | default('') | length > 0
+      - wsl_move_new_account | default('') | length > 0
+      - wsl_move_present_folder | default('') | length > 0
+      - wsl_move_rehearsed_wsl_version | default('') | length > 0
+      - wsl_move_present_account | lower != wsl_move_new_account | lower
+      - wsl_move_new_start_tasks | length > 0
+    fail_msg: >-
+      wsl_move_present_account, wsl_move_new_account, wsl_move_present_folder and wsl_move_rehearsed_wsl_version are set
+      in the encrypted variables of the host, the two accounts differ, and wsl_move_new_start_tasks is not empty.
+    quiet: true
+  no_log: true
+
+# A start, and its precheck, only while the move is on and not done. After
+# the done switch, the way back is its revert first (section 9, step 6).
+- name: The phase of the move lets this mode run
+  ansible.builtin.assert:
+    that: wsl_move_phase == 'move' if wsl_move_window in ['precheck', 'forward', 'wayback'] else wsl_move_phase in ['move', 'done']
+    fail_msg: "The phase of the move is {{ wsl_move_phase }}: the mode {{ wsl_move_window }} does not run in it."
+    quiet: true
+
+- name: Whether Ansible logs in as the present account
+  ansible.builtin.set_fact:
+    wsl_move_window_as_other: "{{ ansible_user | lower != wsl_move_present_account | lower }}"
+  no_log: true
+
+# Window step 7 takes the present account out of Administrators, which ends
+# the login of a play as that account: a start needs step 4 done, so that
+# Ansible logs in as the administrator account.
+- name: A start runs only when Ansible logs in as another account than the present one
+  ansible.builtin.assert:
+    that: wsl_move_window_as_other | bool
+    fail_msg: Ansible logs in as the present account, whose login window step 7 ends. Step 4 comes first. Nothing is changed.
+    quiet: true
+  when: wsl_move_window in ['forward', 'wayback']
+
+- name: A start names the host again, and is not a check run
+  ansible.builtin.assert:
+    that:
+      - (wsl_move_window_host | default('')) == inventory_hostname
+      - not ansible_check_mode
+    fail_msg: >-
+      A start of the window needs -e wsl_move_window_host={{ inventory_hostname }}, and no --check. Nothing is changed.
+    quiet: true
+  when: wsl_move_window in ['forward', 'wayback']
+
+# The configs of the scripts take the values of the kept registration, so
+# the SHA-256 of their copies needs it.
+- name: The reads of today, as step 3 kept them
+  ansible.builtin.include_tasks: read_kept.yml
+
+- name: The status of the window
+  when: wsl_move_window == 'status'
+  block:
+    - name: Read the status of the window
+      ansible.builtin.include_tasks: window_read.yml
+      vars:
+        wsl_move_window_read_mode: status
+
+    - name: The status of the window, each account, SID and folder masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_window_result }}"
+
+- name: The guards, the readiness and the check
+  when: wsl_move_window != 'status'
+  block:
+    - name: Read the lines of the mode
+      ansible.builtin.include_tasks: window_read.yml
+      vars:
+        wsl_move_window_read_mode: "{{ 'check' if wsl_move_window == 'check' else 'guards' }}"
+
+    - name: Keep the lines
+      ansible.builtin.set_fact:
+        wsl_move_window_lines: "{{ wsl_move_window_result }}"
+
+    - name: The readiness before the window
+      when: wsl_move_window == 'precheck'
+      block:
+        - name: Read the readiness
+          ansible.builtin.include_tasks: window_read.yml
+          vars:
+            wsl_move_window_read_mode: readiness
+
+        # The play runs as the administrator account after step 4: its own
+        # login, with no become.
+        - name: Read the token of the login of Ansible
+          ansible.windows.win_powershell:
+            script: |
+              $ErrorActionPreference = 'Stop'
+              $Ansible.Changed = $false
+              $sids = @(whoami.exe /groups /fo csv /nh | ConvertFrom-Csv -Header name, type, sid, attributes | ForEach-Object { $_.sid })
+              $principal = New-Object Security.Principal.WindowsPrincipal ([Security.Principal.WindowsIdentity]::GetCurrent())
+              [pscustomobject]@{
+                  high = ($sids -contains 'S-1-16-12288')
+                  administrators = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+              }
+          check_mode: false
+          register: wsl_move_window_login
+
+        - name: Keep the lines of the readiness
+          vars:
+            login: "{{ wsl_move_window_login.output | last }}"
+          ansible.builtin.set_fact:
+            wsl_move_window_lines: >-
+              {{ wsl_move_window_lines + wsl_move_window_result
+                 + [{'name': 'Ansible logs in as another account than the present one', 'pass': wsl_move_window_as_other | bool},
+                    {'name': 'the login of Ansible reads a High token with the Administrators group enabled',
+                     'pass': (login.high | bool) and (login.administrators | bool)}] }}
+
+    - name: Each line, pass or fail
+      ansible.builtin.debug:
+        msg: >-
+          {{ wsl_move_window_lines | map(attribute='pass') | map('ternary', 'pass: ', 'FAIL: ')
+             | zip(wsl_move_window_lines | map(attribute='name')) | map('join') | list }}
+
+    - name: Each line passes
+      ansible.builtin.assert:
+        that: wsl_move_window_lines | rejectattr('pass') | list | length == 0
+        fail_msg: >-
+          {{ wsl_move_window_lines | rejectattr('pass') | list | length }} line(s) fail:
+          {{ wsl_move_window_lines | rejectattr('pass') | map(attribute='name') | join('; ') }}.
+          {{ 'Nothing is started.' if wsl_move_window in ['forward', 'wayback'] else 'Nothing is changed.' }}
+        quiet: true
+
+- name: The start of the window
+  when: wsl_move_window in ['forward', 'wayback']
+  block:
+    - name: Start the window
+      ansible.builtin.include_tasks: window_read.yml
+      vars:
+        wsl_move_window_read_mode: start
+
+    - name: The start
+      ansible.builtin.debug:
+        msg: >-
+          The window task {{ 'started' if wsl_move_window_result.started else 'did not start' }} (state
+          {{ wsl_move_window_result.state }}), with the request {{ wsl_move_window_result.request }}. The path of the
+          play ends when WSL stops. After the restart: -e wsl_move_window=status, then -e wsl_move_window=check.
+
+    - name: The window task started
+      ansible.builtin.assert:
+        that: wsl_move_window_result.started | bool
+        fail_msg: The window task did not start. Read the status (-e wsl_move_window=status).
+        quiet: true
