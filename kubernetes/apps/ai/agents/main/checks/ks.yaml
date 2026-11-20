@@ -1,8 +1,8 @@
 ---
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
-# The checks of the agent platform in agents-main: the isolation check
-# and the sandbox probe, as CronJobs. The app is shared by every trust domain
-# (kubernetes/apps/ai/agents/checks/app).
+# The checks of the agent platform in agents-main: the checks of every trust
+# domain (kubernetes/apps/ai/agents/checks/app), and the gateway probe of
+# the vault route of main (app/mcp-gateway-probe.yaml).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -10,7 +10,7 @@ metadata:
   namespace: flux-system
 spec:
   targetNamespace: agents-main
-  path: ./kubernetes/apps/ai/agents/checks/app
+  path: ./kubernetes/apps/ai/agents/main/checks/app
   prune: true
   sourceRef:
     kind: GitRepository

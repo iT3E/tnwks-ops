@@ -294,6 +294,11 @@ routes:
         keys:
           - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
             metadata: {client: main, route: main-vault}
+          # The gateway probe of main (agents-main/checks): it lists the
+          # tools and reads the facts of the root of the share. A key of its
+          # own, a placeholder until the values step.
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000002"
+            metadata: {client: main-probe, route: main-vault}
       # As on finance-vault: a write on the hard mount waits while the NFS
       # server is away, and the caller reads the note again before a retry.
       timeout:
@@ -317,7 +322,9 @@ routes:
                 "search_files",
                 "write_file"
               ] && (
-                apiKey.client == "main"
+                apiKey.client == "main" ||
+                (apiKey.client == "main-probe" &&
+                  (mcp.methodName == "tools/list" || mcp.tool.name == "get_file_info"))
               )
     backends:
       - mcp:

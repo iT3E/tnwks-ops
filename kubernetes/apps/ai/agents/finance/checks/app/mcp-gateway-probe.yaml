@@ -14,7 +14,10 @@
 # - the key with no tool (client no-tools): it lists nothing and its read
 #   is refused;
 # - a straight connection to the MCP server fails: only the gateway may
-#   reach it (../../firefly-mcp/app/networkpolicy.yaml).
+#   reach it (../../firefly-mcp/app/networkpolicy.yaml);
+# - the vault route of finance with the same checks, and the vault of main:
+#   the probe key gets a 401 on its route, and a straight connection to its
+#   server fails (R6).
 # Until the owner's values step the two keys are placeholders: the checks
 # that need them print "skipped: the key is pending" and pass, and the
 # values step ends that (docs/apps/agent-platform-runbook.md,
@@ -83,6 +86,12 @@ spec:
                   value: http://mcp-gateway.ai.svc.cluster.local:3000/finance-vault/mcp
                 - name: VAULT_SERVER
                   value: vault-server.agents-finance.svc.cluster.local:8080
+                # The vault of the other trust domain: the probe key gets a
+                # 401 on its route, and its server is out of reach (R6).
+                - name: OTHER_VAULT_GATEWAY_URL
+                  value: http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp
+                - name: OTHER_VAULT_SERVER
+                  value: vault-server.agents-main.svc.cluster.local:8080
               # PROBE_KEY and NO_TOOLS_KEY.
               envFrom:
                 - secretRef:
@@ -141,10 +150,15 @@ spec:
         - ports:
             - port: "3000"
               protocol: TCP
-    # The vault server, straight: its own policy must stop that.
+    # The vault servers of finance and of main, straight: their own
+    # policies must stop that.
     - toEndpoints:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: vault-server
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
             app.kubernetes.io/name: vault-server
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
