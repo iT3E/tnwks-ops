@@ -287,6 +287,7 @@ def test_the_gateway_takes_the_agent_and_its_probe_and_reaches_the_mcp_server_on
             into[s] = ports(rule)
     assert into == {("agents-finance", "agent"): ["3000"],
                     ("agents-finance", "mcp-gateway-probe"): ["3000"],
+                    ("agents-main", "mcp-gateway-probe"): ["3000"],
                     ("monitoring", "prometheus"): ["15020"],
                     ("entity", "host"): ["15021"]}
     text = (GATEWAY / "app/networkpolicy.yaml").read_text()

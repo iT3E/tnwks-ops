@@ -109,12 +109,23 @@ def test_the_sync_container_gets_two_values_of_the_secret_and_the_zone_of_the_cl
 
 FAKE = r'''
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
+
+# The turn of each request: the name of the first text of MARKERS that the
+# messages hold, or "other" (a turn of the product that no test starts,
+# such as its heartbeat).
+MARKERS = json.loads(os.environ.get("MARKERS", "{}"))
 
 
 def log(line):
     print(line, flush=True)
+
+
+def turn(body):
+    text = json.dumps(body.get("messages", []))
+    return next((name for name, marker in MARKERS.items() if marker in text), "other")
 
 
 def events(model, block, delta, stop):
@@ -130,7 +141,8 @@ def events(model, block, delta, stop):
 
 
 class Model(BaseHTTPRequestHandler):
-    """The model: it asks for a search of the finance tools, then answers."""
+    """The model: it asks for a search of the finance tools, then answers.
+    Each line names the turn of the request (MARKERS)."""
 
     def log_message(self, *a):
         pass
@@ -147,11 +159,11 @@ class Model(BaseHTTPRequestHandler):
         if results:
             text = json.dumps(results[-1].get("content"))
             found = sorted(set(__import__("re").findall(r"firefly__[a-z_]+", text)))
-            log("search " + json.dumps(found))
+            log(f"search {turn(body)} " + json.dumps(found))
             it = events(body.get("model"), {"type": "text", "text": ""},
                         {"type": "text_delta", "text": "test reply"}, "end_turn")
         else:
-            log("tools " + json.dumps(tools))
+            log(f"tools {turn(body)} " + json.dumps(tools))
             it = events(body.get("model"),
                         {"type": "tool_use", "id": "toolu_test", "name": "tool_search", "input": {}},
                         {"type": "input_json_delta", "partial_json": json.dumps({"query": "firefly"})},
@@ -216,6 +228,11 @@ def run(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
         assert result.returncode == 0, (result.stdout + result.stderr)[-4000:]
     return result
 
+
+# The two turns of test_a_scheduled_turn_gets_the_tools_of_a_chat_turn_and_
+# the_same_finance_tools, by a text of their first message.
+CHAT_TURN = "a chat turn"
+MARKERS = {"chat": CHAT_TURN, "job": "This is the scheduled job weekday-check."}
 
 # The list of the lab: one job on and one off.
 JOBS = [{"key": "weekday-check", "cron": "0 9 * * 1-5", "message": message("weekday-check"), "enabled": True},
@@ -291,7 +308,7 @@ def lab():
         run([tool, "run", "-d", "--quiet", "--name", names["fake"], "--network", net,
              "--network-alias", "litellm-app.ai.svc.cluster.local",
              "--network-alias", "mcp-gateway.ai.svc.cluster.local",
-             "--read-only", "--cap-drop", "ALL", "--user", "65534",
+             "--read-only", "--cap-drop", "ALL", "--user", "65534", "-e", f"MARKERS={json.dumps(MARKERS)}",
              "-v", f"{work}/fake/fake.py:/fake.py:ro", python_image(), "python3", "-I", "-u", "/fake.py"])
         # The gateway as in the pod: no TZ, so it runs in UTC.
         run([tool, "run", "-d", "--quiet", "--name", names["gateway"], "--network", net, *base, *env,
@@ -421,11 +438,18 @@ def test_a_job_with_no_git_value_it_can_read_is_a_stop_of_the_owner(lab):
     lab.cli("automations", "disable", job["id"])
     lab.cli("automations", "edit", job["id"], "--description", "a note of a chat")
     try:
-        # The first pass after the change says so once and writes the
-        # value; the passes after it say stopped.
+        # The first pass that reads the job after the change says so once
+        # and writes the value. That can be the pass after the one that runs
+        # now, when that one read the jobs before the change: so wait for
+        # the note first. A pass that starts after it says stopped.
+        note = "automations-sync key=weekday-check result=ok state=stopped note=no-git-value"
+        deadline = time.monotonic() + 120
+        while note not in lab.log()[start:]:
+            assert time.monotonic() < deadline, lab.log()
+            time.sleep(1)
         lines = lab.next_pass()
         since = lab.log()[start:]
-        assert since.count("automations-sync key=weekday-check result=ok state=stopped note=no-git-value") == 1
+        assert since.count(note) == 1
         assert "automations-sync key=weekday-check result=ok state=stopped" in lines
         again = lab.jobs()["flux:weekday-check"]
         assert not again["enabled"]
@@ -457,27 +481,32 @@ def test_a_missing_zone_or_chat_fails_at_each_pass_and_changes_nothing(lab, miss
 def test_a_scheduled_turn_gets_the_tools_of_a_chat_turn_and_the_same_finance_tools(lab):
     """One run of a declared job, then one chat turn of the agent. The fake
     model records the tools each is offered, and the finance tools that a
-    search finds. The delivery fails here (no Telegram), and the turn is ok."""
+    search finds, with the turn of each request: a turn of the product that
+    the test did not start (its heartbeat comes at a time of its own) is
+    not one of the two. The delivery fails here (no Telegram), and the turn
+    is ok."""
+    assert MARKERS["job"] in message("weekday-check")
     job = lab.jobs()["flux:weekday-check"]
     result = json.loads(lab.cli("automations", "run", job["id"], "--wait", "--wait-timeout", "4m",
                                 "--json", check=False).stdout)
     assert result["status"] == "ok", result
     assert result["run"]["delivery"]["resolved"] == {"ok": True, "channel": "telegram", "to": CHAT,
                                                      "source": "explicit"}
-    scheduled = run([lab.tool, "logs", lab.names["fake"]]).stdout.splitlines()
-    lab.cli("agent", "--agent", "main", "--message", "a chat turn", "--json")
-    chat = run([lab.tool, "logs", lab.names["fake"]]).stdout.splitlines()[len(scheduled):]
+    lab.cli("agent", "--agent", "main", "--message", CHAT_TURN, "--json")
+    lines = run([lab.tool, "logs", lab.names["fake"]]).stdout.splitlines()
 
-    def seen(lines, kind):
-        (only,) = {line.split(" ", 1)[1] for line in lines if line.startswith(kind + " ")}
+    def seen(turn, kind):
+        # One value for each turn: each request of the turn was offered the
+        # same tools, and each search found the same.
+        (only,) = {line.split(" ", 2)[2] for line in lines if line.startswith(f"{kind} {turn} ")}
         return set(json.loads(only))
 
-    tools = seen(scheduled, "tools")
+    tools = seen("job", "tools")
     # The sandbox tools and the search of deferred tools, as in a chat.
     assert {"exec", "read", "tool_search", "dispatch_action"} <= tools
-    assert tools <= seen(chat, "tools")
+    assert tools <= seen("chat", "tools")
     # The MCP filter of the config holds in both: no delete.
-    assert seen(scheduled, "search") == seen(chat, "search") == {
+    assert seen("job", "search") == seen("chat", "search") == {
         "firefly__get_summary", "firefly__create_transaction"}
 
 

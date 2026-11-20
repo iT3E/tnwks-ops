@@ -10,10 +10,17 @@ other fails here.
 """
 
 import copy
+import hashlib
+import json
 import re
+import subprocess
+import time
+import uuid
 from pathlib import Path
 
+import pytest
 import yaml
+from test_hand_written_rules import docker, scratch
 
 ROOT = Path(__file__).resolve().parents[2]
 AGENTS = ROOT / "kubernetes/apps/ai/agents"
@@ -165,3 +172,200 @@ def test_the_gateway_reaches_the_server_of_main_by_its_name():
     names = [d["matchName"] for rule in policy["spec"]["egress"] for tp in rule["toPorts"]
              for d in tp.get("rules", {}).get("dns", [])]
     assert "vault-server.agents-main.svc.cluster.local" in names
+
+
+# The gateway probe of main (step B)
+
+
+PROBE = MAIN / "checks/app/mcp-gateway-probe.yaml"
+FINANCE_PROBE = FINANCE / "checks/app/mcp-gateway-probe.yaml"
+CHECKS = ROOT / "kubernetes/apps/ai/agents/checks/app/scripts/platform_checks.py"
+
+
+def probe_container(path: Path) -> dict:
+    (cron,) = [d for d in docs(path) if d["kind"] == "CronJob"]
+    (container,) = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"]
+    return container
+
+
+def probe_env(path: Path) -> dict:
+    return {e["name"]: e.get("value") for e in probe_container(path)["env"]}
+
+
+def egress(path: Path) -> list[tuple]:
+    (policy,) = [d for d in docs(path) if d["kind"] == "CiliumNetworkPolicy"]
+    return [(p["matchLabels"]["io.kubernetes.pod.namespace"], p["matchLabels"]["app.kubernetes.io/name"],
+             [x["port"] for tp in r["toPorts"] for x in tp["ports"]])
+            for r in policy["spec"]["egress"] for p in r["toEndpoints"]]
+
+
+def test_the_checks_of_main_are_the_shared_checks_and_the_probe():
+    (ks,) = docs(MAIN / "checks/ks.yaml")
+    assert ks["spec"]["path"] == "./kubernetes/apps/ai/agents/main/checks/app"
+    app = yaml.safe_load((MAIN / "checks/app/kustomization.yaml").read_text())
+    # The key of the probe (PROBE_KEY) is a SOPS Secret of these checks.
+    assert app["resources"] == ["../../../checks/app", "./mcp-gateway-probe.yaml",
+                                "./secret-mcp-gateway-probe.sops.yaml"]
+    (secret,) = docs(MAIN / "checks/app/secret-mcp-gateway-probe.sops.yaml")
+    assert secret["metadata"] == {"name": "mcp-gateway-probe-secret", "namespace": "agents-main"}
+    assert set(secret["stringData"]) == {"PROBE_KEY"}
+    assert secret["stringData"]["PROBE_KEY"].startswith("ENC[")
+    (gen,) = app["configMapGenerator"]
+    assert gen["files"] == ["config.yaml=../../../../mcp-gateway/app/config/config.yaml"]
+
+
+def test_the_probe_of_main_is_the_probe_of_finance_for_the_vault_route_only():
+    main, finance = probe_container(PROBE), probe_container(FINANCE_PROBE)
+    for key in ("image", "command", "securityContext", "resources", "volumeMounts"):
+        assert main[key] == finance[key], key
+    env = probe_env(PROBE)
+    assert "MCP_GATEWAY_URL" not in env and "MCP_SERVER" not in env
+    assert env["VAULT_GATEWAY_URL"] == "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp"
+    assert "http://" + env["VAULT_SERVER"] + "/mcp" == HOST
+    assert env["VAULT_ROUTE"] == "main-vault"
+    assert env["TRUST_DOMAIN_NAMESPACES"] == "agents-main"
+    # The Secret stays optional: with no Secret the probe runs with no key
+    # and says "skipped" for the checks that need one.
+    assert main["envFrom"] == [{"secretRef": {"name": "mcp-gateway-probe-secret", "optional": True}}]
+
+
+def test_each_probe_tries_the_vault_of_the_other_trust_domain():
+    main, finance = probe_env(PROBE), probe_env(FINANCE_PROBE)
+    assert main["OTHER_VAULT_GATEWAY_URL"] == finance["VAULT_GATEWAY_URL"]
+    assert main["OTHER_VAULT_SERVER"] == finance["VAULT_SERVER"]
+    assert finance["OTHER_VAULT_GATEWAY_URL"] == main["VAULT_GATEWAY_URL"]
+    assert finance["OTHER_VAULT_SERVER"] == main["VAULT_SERVER"]
+    for path in (PROBE, FINANCE_PROBE):
+        out = egress(path)
+        assert ("agents-main", "vault-server", ["8080"]) in out
+        assert ("agents-finance", "vault-server", ["8080"]) in out
+
+
+def test_the_probe_key_of_main_may_list_and_read_the_facts_of_a_path_only():
+    r = routes()["main-vault"]
+    keys = [k["metadata"] for k in r["policies"]["apiKey"]["keys"]]
+    assert keys == [{"client": "main", "route": "main-vault"}, {"client": "main-probe", "route": "main-vault"}]
+    (rule,) = r["policies"]["mcpAuthorization"]["rules"]
+    assert '(apiKey.client == "main-probe" &&\n' in rule["allow"]
+    assert '(mcp.methodName == "tools/list" || mcp.tool.name == "get_file_info")' in rule["allow"]
+
+
+def test_the_gateway_takes_the_probe_of_main_and_not_yet_its_agent():
+    (policy,) = [d for d in docs(GATEWAY_POLICY) if d["kind"] == "CiliumNetworkPolicy"]
+    into = [(p["matchLabels"]["io.kubernetes.pod.namespace"],
+             p["matchLabels"].get("app.kubernetes.io/component") or p["matchLabels"].get("app.kubernetes.io/name"))
+            for rule in policy["spec"]["ingress"] for p in rule.get("fromEndpoints", [])]
+    assert ("agents-main", "mcp-gateway-probe") in into
+    assert ("agents-main", "agent") not in into
+
+
+# The container test: the gateway of the cluster with this config, the vault
+# server of main on an empty share, and the probe of main on another network.
+
+
+def run(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
+    result = subprocess.run(args, capture_output=True, text=True, timeout=300, check=False)
+    if check:
+        assert result.returncode == 0, (result.stdout + result.stderr)[-4000:]
+    return result
+
+
+def image(path: Path, kind: str = "Deployment") -> str:
+    (d,) = [x for x in docs(path) if x["kind"] == kind]
+    return d["spec"]["template"]["spec"]["containers"][0]["image"]
+
+
+@pytest.fixture(scope="module")
+def vault_lab():
+    tool = docker()
+    work = scratch()
+    (work / "vault").mkdir()
+    (work / "vault").chmod(0o777)
+    (work / "gateway").mkdir()
+    key = f"test-main-probe-{uuid.uuid4().hex}"
+    text = CONFIG.read_text()
+    (old,) = [k["keyHash"] for k in routes()["main-vault"]["policies"]["apiKey"]["keys"]
+              if k["metadata"]["client"] == "main-probe"]
+    assert text.count(old) == 1
+    (work / "gateway/config.yaml").write_text(
+        text.replace(old, "sha256:" + hashlib.sha256(key.encode()).hexdigest()))
+    for path in (work / "gateway", work / "gateway/config.yaml"):
+        path.chmod(0o755 if path.is_dir() else 0o644)
+    tag = uuid.uuid4().hex[:8]
+    front, back = f"mainvault-front-{tag}", f"mainvault-back-{tag}"
+    names = {n: f"mainvault-{n}-{tag}" for n in ("server", "gateway")}
+    python = probe_container(PROBE)["image"]
+    try:
+        for net in (front, back):
+            run([tool, "network", "create", "--internal", net])
+        run([tool, "run", "-d", "--name", names["server"], "--network", back,
+             "--network-alias", "vault-server.agents-main.svc.cluster.local",
+             "--read-only", "--cap-drop", "ALL", "--user", "1000:1000",
+             "-v", f"{work / 'vault'}:/vault", image(MAIN / "vault-server/app/deployment.yaml")])
+        gateway = image(ROOT / "kubernetes/apps/ai/mcp-gateway/app/deployment.yaml")
+        run([tool, "create", "--name", names["gateway"], "--network", back,
+             "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL", "--user", "65532",
+             "-v", f"{work / 'gateway'}:/config:ro", gateway, "-f", "/config/config.yaml"])
+        run([tool, "network", "connect", "--alias", "mcp-gateway.ai.svc.cluster.local",
+             front, names["gateway"]])
+        run([tool, "start", names["gateway"]])
+        wait = ("import urllib.request,urllib.error,time\n"
+                "for i in range(90):\n"
+                "    try:\n"
+                "        urllib.request.urlopen(urllib.request.Request("
+                "'http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp', method='POST', data=b'{}'), timeout=5)\n"
+                "    except urllib.error.HTTPError as e:\n"
+                "        if e.code == 401: break\n"
+                "    except Exception:\n"
+                "        pass\n"
+                "    time.sleep(1)\n"
+                "else:\n"
+                "    raise SystemExit('gateway not ready')\n")
+        run([tool, "run", "--rm", "--network", front, python, "python3", "-I", "-c", wait])
+        time.sleep(2)
+        yield {"tool": tool, "work": work, "key": key, "front": front, "python": python}
+    finally:
+        for name in names.values():
+            subprocess.run([tool, "container", "remove", "-f", name], capture_output=True, check=False)
+        for net in (front, back):
+            subprocess.run([tool, "network", "remove", net], capture_output=True, check=False)
+
+
+def run_probe(lab: dict, key: str | None) -> tuple[int, dict[str, str]]:
+    env = {k: v for k, v in probe_env(PROBE).items() if v is not None}
+    env["OWN_NAMESPACE"] = "agents-main"
+    if key is not None:
+        env["PROBE_KEY"] = key
+    flags = [x for k, v in env.items() for x in ("-e", f"{k}={v}")]
+    result = run([lab["tool"], "run", "--rm", "--network", lab["front"], "--read-only", "--cap-drop", "ALL",
+                  "--user", "65534", "-v", f"{CHECKS.parent}:/scripts:ro",
+                  "-v", f"{lab['work'] / 'gateway'}:/gateway:ro", *flags, lab["python"],
+                  "python3", "/scripts/platform_checks.py", "mcp-gateway"], check=False)
+    lines = [json.loads(line) for line in result.stdout.splitlines()]
+    assert all(line["ok"] for line in lines), result.stdout + result.stderr
+    return result.returncode, {line["target"]: line["got"] for line in lines}
+
+
+def test_the_probe_of_main_passes_with_its_key(vault_lab):
+    code, got = run_probe(vault_lab, vault_lab["key"])
+    assert code == 0
+    assert got["vault server, direct from a pod that is not the gateway"].startswith("blocked")
+    assert got["vault: no key: tools/list"] == "refused: HTTP 401"
+    assert got["vault: a key that is not in the config: tools/list"] == "refused: HTTP 401"
+    assert got["vault: probe key: lists the 9 tools of the rule"] == "same"
+    assert got["vault: probe key: the facts of the root (get_file_info /vault)"] == "reached: ok"
+    assert got["vault: probe key: a write (write_file), not the probe's"] == "refused: gateway"
+    assert got["vault: probe key: a move (move_file), off every rule"] == "refused: gateway"
+    assert got["other vault server, direct from this trust domain"].startswith("blocked")
+    assert got["other vault: probe key: tools/list"] == "refused: HTTP 401"
+    # No route of a domain, and no key with no tool: main has neither.
+    assert not [t for t in got if t.startswith(("probe key", "no key", "key with no tool", "MCP server"))]
+    assert not [t for t in got if "vault: key with no tool" in t]
+    assert list((vault_lab["work"] / "vault").iterdir()) == []
+
+
+def test_the_probe_of_main_skips_and_passes_with_no_key(vault_lab):
+    code, got = run_probe(vault_lab, None)
+    assert code == 0
+    assert got["vault: probe key"] == got["other vault: probe key"] == "skipped: the key is pending"
+    assert got["vault: no key: tools/list"] == "refused: HTTP 401"

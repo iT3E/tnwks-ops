@@ -3,6 +3,36 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.237.0 - 2026-11-20
+
+### Changed
+
+* Site 2, Windows host: the allow list of sshd names only the account that Ansible logs in as (Design Doc 0004, section 9, step 6). The encrypted `windows_sshd_allow_users` of the host loses the present account of the move; the apply on the host stays the explicit one of the role windows_sshd.
+
+## v2.236.0 - 2026-11-20
+
+### Changed
+
+* windows: site 2 turns on the done switch of the move of the distro: the account that owns the distro, the disk file of the compaction and the host check, and the read of its rules follow the phase, and the play stops when they do not
+
+## v2.235.0 - 2026-11-20
+
+### Added
+
+* agents: the gateway probe of main has its key (PROBE_KEY, client main-probe of the route main-vault), and the gateway config has its hash in place of the placeholder. The key checks of the probe run from the next scheduled run.
+
+## v2.234.0 - 2026-11-20
+
+### Added
+
+* agents: the nightly snapshot of the main share (task 3.37, step C): the SnapshotPolicy and SnapshotSchedule vault in agents-main, the form of finance, from the read-only claim vault-ro to the repository agents-main, with the retention of the state volume.
+
+## v2.233.0 - 2026-11-20
+
+### Added
+
+* agents: the gateway probe covers the vault route of main (task 3.37, step B): platform-check-mcp-gateway-probe in agents-main (05:47) checks the route main-vault with its key main-probe (a placeholder until the values step, read from an optional Secret), and the probes of finance and main each check that their key gets a 401 on the vault route of the other trust domain and that the other vault server is out of reach. The probe script runs for a vault route only when a domain has no other route.
+
 ## v2.232.0 - 2026-11-20
 
 ### Changed

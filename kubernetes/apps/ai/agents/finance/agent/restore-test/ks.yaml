@@ -1,17 +1,21 @@
 ---
 # LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
 # lists ./agent/restore-test/ks.yaml, for the restore test of the first nightly
-# snapshot with the state (the owner's go of 2026-11-17). The next pull
-# request reverts this one: it takes the line out, so Flux deletes the
-# Restore, the scratch volume and the check Job, and this directory is a
-# template again.
+# snapshot with the state (the owner's go of 2026-11-17). The cleanup is two
+# changes, not one revert. First the line out of that list, with no other
+# edit: Flux deletes the Restore, the scratch volume and the check Job.
+# Then, when they are gone, the name of the snapshot back to its
+# placeholder (agent-state-SET-ME, in restore/restore.yaml), and this
+# directory is a template again. Not both in one change: Flux applies the
+# placeholder to the Restore while it prunes, and the deletion then waits
+# for the health check (60 minutes).
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
 # A restore test of the finance agent's state volume from its backup
 # repository (docs/apps/agent-platform-runbook.md, "Restore the state of an
 # agent"). It writes into a scratch volume only: the agent, its volume
-# `agent-state` and its snapshots stay as they are. Remove this directory
-# and its line in ../../kustomization.yaml when the result is read: Flux then
-# deletes the Restore, the scratch volume and the check Job.
+# `agent-state` and its snapshots stay as they are. Take its line out of
+# ../../kustomization.yaml when the result is read (the two changes above):
+# Flux then deletes the Restore, the scratch volume and the check Job.
 #
 # Two steps, in this order: the Restore fills the scratch volume, then the
 # check Job reads it. dependsOn holds the check until the Restore is
