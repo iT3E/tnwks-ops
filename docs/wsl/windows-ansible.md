@@ -1192,7 +1192,12 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   (`roles/windows_wsl_move_rehearsal/files`), and each copy on the host must
   have the SHA-256 of the role's file. The installed version of WSL is
   saved once. The scripts, the configs and the tasks change only while no
-  window is started.
+  window is started. After the deletion of the tasks of the present account
+  (`wsl_move_present_removed`), the scripts and the configs follow the role
+  again, and the tasks stay as they are. The values of the registration of
+  today reach the configs as a mapping of whole numbers, or the play stops.
+  After a window that ended done, the play writes them into the
+  registration of the new account, and removes a value `Length` there.
 - **The tasks.** The new account has its probe and its stop, unregister and
   import tasks. The present account registers its own stop, unregister and
   import tasks while Ansible logs in as it. SYSTEM has the window task and

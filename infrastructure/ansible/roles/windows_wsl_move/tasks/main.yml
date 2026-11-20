@@ -182,9 +182,15 @@
 
 # A window is started from its marker until the marker of the end of its way
 # back: no apply in between changes what the window runs.
+# The copies of the scripts and the configs of the procedure stay as the
+# window found them from its start until the deletion of the tasks of the
+# present account (host_files.yml).
 - name: Whether a window is started
   ansible.builtin.set_fact:
     wsl_move_window_started: "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}"
+    wsl_move_copies_frozen: >-
+      {{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done']
+         and not (wsl_move_present_removed | bool) }}
 
 # The done switch turns each WSL role to the start tasks of the new account:
 # merged before a window ended done, the first apply would leave the host
