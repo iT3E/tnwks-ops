@@ -479,6 +479,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "Signal"
                       }
                     }
@@ -692,6 +700,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "Satisfaction"
                       }
                     }
@@ -905,6 +921,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "Retry rate"
                       }
                     }
@@ -1118,6 +1142,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "Reconnects"
                       }
                     }
@@ -1648,6 +1680,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "Connected for"
                       }
                     }

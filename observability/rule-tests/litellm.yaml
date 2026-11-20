@@ -1,0 +1,30 @@
+# Cases for the certificate alert of the model gateway
+# (kubernetes/apps/ai/litellm/app/prometheusrule.yaml). The rule compares the
+# time with a fixed date, so each test starts near that date
+# (start_timestamp, in seconds). When the certificate is renewed, the date of
+# the rule and the dates here move together.
+rule_files:
+  - kubernetes/apps/ai/litellm/app/prometheusrule.yaml
+evaluation_interval: 1m
+tests:
+  - name: quiet before 2027-02-26, fires from that day
+    interval: 1m
+    # 2027-02-25T23:50:00Z: 10 minutes before the date of the rule.
+    start_timestamp: 1803599400
+    alert_rule_test:
+      - alertname: LiteLLMBedrockCertificateExpiring
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: LiteLLMBedrockCertificateExpiring
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+  - name: quiet today
+    interval: 1m
+    # 2026-11-20T00:00:00Z.
+    start_timestamp: 1795132800
+    alert_rule_test:
+      - alertname: LiteLLMBedrockCertificateExpiring
+        eval_time: 5m
+        exp_alerts: []

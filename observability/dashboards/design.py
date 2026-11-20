@@ -34,6 +34,9 @@ LABELS = {
     # The security board (security/README.md).
     "safeguard": "Safeguard", "title": "Title", "function": "Function", "system": "System",
     "system_type": "Type", "site": "Site of the system", "domain": "Domain", "source": "Source",
+    # The AI board (boards/ai.py).
+    "trust_domain": "Trust domain", "part": "Part", "check": "Check", "policy": "Policy",
+    "result": "Result", "route": "Route", "method": "Method", "status": "Status",
 }
 
 

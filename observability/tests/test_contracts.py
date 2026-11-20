@@ -18,7 +18,9 @@ EMPTY_IS_NORMAL = {"Override creation age", "Needs attention",
                    "Top uploaders now", "Now: device, app and destination", "Top WAN devices now",
                    # Lists of what fails, is late or is accepted on the security board.
                    "Failing safeguards by system", "Late sources", "Failing checks",
-                   "Accepted findings by system"}
+                   "Accepted findings by system",
+                   # The AI board's alerts of the platform that fire now.
+                   "AI alerts firing"}
 
 
 def test_sdk_generates_isolated_household_and_operator_resources():
@@ -559,3 +561,40 @@ def test_probe_needs_every_expected_string_and_other_databases_are_expected(smal
     # Expected only where it's deployed, so the other site doesn't read Unknown forever.
     assert 'k8s_cluster="one",kind="deployment",namespace="cache"' in out
     assert 'k8s_cluster="two",kind="deployment",namespace="cache"' not in out
+
+
+def test_ai_parts_are_rows_on_each_site_absent_where_a_site_does_not_run_them(small_inventory):
+    """A declared AI part is a row on each site: expected where it runs, absent by
+    design (Not applicable) on the other. A part gone from the cluster stays a row:
+    the collector emits the list, not what it finds."""
+    from inventory import ai_inventory
+
+    small_inventory["ai"] = {
+        "parts": [{"trust_domain": "main", "part": "Agent pod", "namespace": "agents-main", "kind": "deployment",
+                   "workload": "agent", "clusters": ["one"]},
+                  {"trust_domain": "shared", "part": "Browser tool server", "namespace": "ai",
+                   "kind": "deployment", "workload": "browser", "clusters": ["one", "two"]}],
+        "schedules": [{"trust_domain": "main", "namespace": "agents-main", "cronjob": "check", "within": 3600,
+                       "clusters": ["one"]}],
+        "results": [{"trust_domain": "main", "check": "memory-index", "clusters": ["one"]}],
+        "backups": [{"trust_domain": "main", "namespace": "agents-main", "policy": "state", "within": 108000,
+                     "clusters": ["one"]}],
+    }
+    api = FakeApi()
+    api.workload_present = False
+    out = Collector(api, small_inventory, "one", clock=lambda: 1000).collect().decode()
+    labels = 'kind="deployment",namespace="agents-main",observer_cluster="one",part="Agent pod",trust_domain="main",workload="agent"'
+    assert f'homelab_expected_ai_part_info{{k8s_cluster="one",{labels}}} 1' in out
+    assert f'homelab_absent_ai_part_info{{k8s_cluster="two",{labels}}} 1' in out
+    for site in ("one", "two"):
+        assert f'homelab_expected_ai_part_info{{k8s_cluster="{site}",kind="deployment",namespace="ai"' in out
+    assert ('homelab_ai_schedule_objective_seconds{cronjob="check",k8s_cluster="one",namespace="agents-main",'
+            'observer_cluster="one",trust_domain="main"} 3600') in out
+    assert 'homelab_expected_ai_result_info{check="memory-index",k8s_cluster="one",observer_cluster="one",trust_domain="main"} 1' in out
+    assert ('homelab_ai_backup_objective_seconds{k8s_cluster="one",namespace="agents-main",observer_cluster="one",'
+            'policy="state",trust_domain="main"} 108000') in out
+    assert 'k8s_cluster="two",namespace="agents-main"' not in out.replace("homelab_absent_ai_part_info", "")
+    # The real lists: every part on both sites, once each.
+    real = ai_inventory([{"cluster": "homelab-wsl"}, {"cluster": "homelab-wsl-02"}])
+    assert all(set(part["clusters"]) <= {"homelab-wsl", "homelab-wsl-02"} for part in real["parts"])
+    assert len({(p["namespace"], p["workload"]) for p in real["parts"]}) == len(real["parts"])

@@ -13,6 +13,8 @@ PRODUCERS = {
     # Before "homelab_": the first prefix that fits names the producer.
     "homelab_security_": "security sources (security/README.md)",
     "homelab:security_": "security registry rules (security/generate.py)",
+    "homelab_agent_platform_": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+    "homelab_model_bridge_": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
     "homelab_": "read-only evidence collector",
     "probe_": "evidence collector probes",
     "cnpg_": "CloudNativePG PostgreSQL exporter",
@@ -40,6 +42,8 @@ PRODUCERS = {
     "pyrra_": "Pyrra SLO rules (kubernetes/apps/monitoring/pyrra/app/slos.yaml)",
     "garage_": "Garage admin metrics (WSL-02 archive)",
     "kopiur_": "Kopiur controller (PVC backups and restores)",
+    "agentgateway_": "MCP gateway (agentgateway) PodMonitor; board queries only, no rule",
+    "apiserver_": "Kubernetes API server metrics (kept series only)",
     "plausible_": "Plausible exporter (its stats and health API)",
     "ALERTS": "local Prometheus alert rules (current state)",
     "up": "Prometheus scrape status",

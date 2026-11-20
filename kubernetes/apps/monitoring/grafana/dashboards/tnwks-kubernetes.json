@@ -163,6 +163,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "Ready"
                       }
                     }
@@ -370,6 +378,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "Reconciling"
                       }
                     }
@@ -921,6 +937,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "When"
                       }
                     }
@@ -1110,6 +1134,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "When"
                       }
                     }
@@ -1299,6 +1331,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "When"
                       }
                     }
@@ -1488,6 +1528,14 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
                         "Value": "When"
                       }
                     }

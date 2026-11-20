@@ -64,6 +64,95 @@ OTHER_DATABASES = [
      "clusters": ["homelab-wsl"]},
 ]
 
+# The AI domain (docs/apps/agent-platform.md): the parts, scheduled checks,
+# result lines and backups that each trust domain must have. A declared row
+# stays on the AI board when its source is gone, as Unknown. `clusters` names
+# the sites that run a part (homelab-wsl when it is not set); each other site
+# declares the part absent by design, as Not applicable. The trust domain is
+# the name after `agents-`, or `shared` for a part that serves each of them.
+# tests/test_ai_inventory.py holds these lists to the manifests in git.
+AI_SITE = "homelab-wsl"
+AI_PARTS = [
+    *[{"trust_domain": domain, "part": "Agent pod", "namespace": f"agents-{domain}", "kind": "deployment",
+       "workload": "agent"} for domain in ("pilot", "main", "finance")],
+    *[{"trust_domain": domain, "part": "Sandbox gateway", "namespace": f"agents-{domain}", "kind": "statefulset",
+       "workload": "openshell"} for domain in ("pilot", "main", "finance", "workflows")],
+    *[{"trust_domain": domain, "part": "Vault server", "namespace": f"agents-{domain}", "kind": "deployment",
+       "workload": "vault-server"} for domain in ("main", "finance")],
+    {"trust_domain": "main", "part": "Fetch proxy", "namespace": "agents-main", "kind": "deployment",
+     "workload": "fetch-proxy"},
+    {"trust_domain": "finance", "part": "Finance MCP server", "namespace": "agents-finance", "kind": "deployment",
+     "workload": "firefly-mcp"},
+    {"trust_domain": "finance", "part": "Finance proxy", "namespace": "agents-finance", "kind": "deployment",
+     "workload": "firefly-proxy"},
+    {"trust_domain": "workflows", "part": "Run receiver", "namespace": "agents-workflows", "kind": "deployment",
+     "workload": "run-receiver"},
+    {"trust_domain": "shared", "part": "Model gateway", "namespace": "ai", "kind": "deployment", "workload": "litellm"},
+    {"trust_domain": "shared", "part": "Model bridge", "namespace": "ai", "kind": "deployment",
+     "workload": "model-bridge"},
+    {"trust_domain": "shared", "part": "MCP gateway", "namespace": "ai", "kind": "deployment",
+     "workload": "mcp-gateway"},
+    {"trust_domain": "shared", "part": "Sandbox controller", "namespace": "agent-sandbox-system",
+     "kind": "deployment", "workload": "agent-sandbox-controller"},
+    # One site at a time (docs/wsl/multi-site.md): Standby where it is at zero.
+    {"trust_domain": "shared", "part": "Browser tool server", "namespace": "ai", "kind": "deployment",
+     "workload": "playwright-mcp", "clusters": ["homelab-wsl", "homelab-wsl-02"]},
+]
+# Each CronJob of the domain, and the longest time since its last good run:
+# a day and two hours for a daily check, two runs and slack for the others.
+DAILY = 26 * 3600
+AI_SCHEDULES = [
+    *[{"trust_domain": domain, "namespace": f"agents-{domain}", "cronjob": cronjob, "within": DAILY}
+      for domain in ("pilot", "main", "finance", "workflows")
+      for cronjob in ("platform-check-isolation", "platform-check-probe")],
+    *[{"trust_domain": "finance", "namespace": "agents-finance", "cronjob": cronjob, "within": DAILY}
+      for cronjob in ("platform-check-firefly-probe", "platform-check-firefly-dns")],
+    *[{"trust_domain": domain, "namespace": f"agents-{domain}", "cronjob": "platform-check-mcp-gateway-probe",
+       "within": DAILY} for domain in ("main", "finance")],
+    {"trust_domain": "workflows", "namespace": "agents-workflows", "cronjob": "workflow-providers",
+     "within": 35 * 60},
+    {"trust_domain": "workflows", "namespace": "agents-workflows", "cronjob": "workflow-sweep", "within": 35 * 60},
+    {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "agent-heartbeat-check", "within": DAILY},
+    {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "trace-filter-check", "within": DAILY},
+]
+# The `<check> result=<result>` lines of the agent pods, which the Vector
+# aggregator turns into homelab_agent_platform_result_timestamp_seconds, and
+# the window in which a line must come. The memory index runs at each start
+# of the pod, so its window is the local history of Prometheus (15 days).
+AI_RESULT_WINDOWS = {"instruction-check": "26h", "daily-backup": "26h", "memory-index": "15d",
+                     "automations-sync": "3h", "app-drift": "30m"}
+# A line that ends a pass well. Any other result (failed, drift) is a failure.
+AI_GOOD_RESULTS = ("ok", "first", "none")
+AI_RESULTS = [
+    *[{"trust_domain": domain, "check": check} for domain in ("pilot", "main", "finance")
+      for check in ("instruction-check", "daily-backup", "memory-index")],
+    {"trust_domain": "finance", "check": "automations-sync"},
+    {"trust_domain": "workflows", "check": "app-drift"},
+]
+# The snapshot policies of the state volumes and the vault shares. Their
+# recovery point objective is the one of every app (OBJECTIVES).
+AI_BACKUPS = [
+    {"trust_domain": "pilot", "namespace": "agents-pilot", "policy": "agent-state-v2"},
+    *[{"trust_domain": domain, "namespace": f"agents-{domain}", "policy": policy}
+      for domain in ("main", "finance") for policy in ("agent-state", "vault")],
+]
+# The checks of the restore tests. A result line lives 5 minutes in
+# Prometheus, so a recording rule keeps the time of the newest one.
+AI_RESTORE_CHECKS = ("restore-check", "vault-restore-check")
+
+
+def ai_inventory(sites):
+    """The AI lists for the collector: each part on each site, run or absent."""
+    clusters = [site["cluster"] for site in sites]
+    parts = [{**part, "clusters": part.get("clusters", [AI_SITE])} for part in AI_PARTS]
+    for part in parts:
+        assert set(part["clusters"]) <= set(clusters), part
+    return {"parts": parts,
+            "schedules": [{**item, "clusters": [AI_SITE]} for item in AI_SCHEDULES],
+            "results": [{**item, "clusters": [AI_SITE]} for item in AI_RESULTS],
+            "backups": [{**item, "clusters": [AI_SITE], "within": OBJECTIVES["rpo"]} for item in AI_BACKUPS]}
+
+
 PROBES = {
     "mealie": ("http://mealie.production.svc.cluster.local:9000/api/app/about", '"version"'),
     "transcriber": ("http://transcriber-app.production.svc.cluster.local:8081/api/healthz", '"ok":true'),
@@ -135,7 +224,7 @@ def inventory():
     vips, ingress = shared_vips()
     return {"version": 1, "sites": sites, "apps": apps, "databases": databases(sites), "objectives": OBJECTIVES,
             "other_databases": OTHER_DATABASES,
-            "vips": vips, "ingress": ingress}
+            "vips": vips, "ingress": ingress, "ai": ai_inventory(sites)}
 
 
 if __name__ == "__main__":
