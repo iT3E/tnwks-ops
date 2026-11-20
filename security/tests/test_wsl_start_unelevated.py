@@ -454,6 +454,28 @@ function Test-Admin { $false }
 
 
 @needs_pwsh
+@pytest.mark.parametrize("skip", [True, False])
+def test_the_copy_for_a_standard_account_skips_the_check_of_the_wsl_service(tmp_path, skip):
+    """A batch logon of a standard account reads nothing from Get-Service. With
+    -SkipService the copy reads no service, runs its other checks and ends with 0;
+    without it, it stops with 1 before any wsl.exe."""
+    script = ROLES / "windows_wsl_maintenance/files/Watch-TnwksWsl.ps1"
+    result = pwsh(FAKES + r"""
+function wsl.exe { $global:Calls.Add('wsl ' + ($args -join ' ')); $global:LASTEXITCODE = 0; 'Ubuntu' }
+function Get-Service { $global:Calls.Add('get-service') }
+function Test-Admin { $false }
+& '""" + str(script) + "' -SkipGateway -SkipUsb -KeepAliveTask keepalive" + (" -SkipService" if skip else "")
+        + " -LogDir '" + str(tmp_path) + "'\n"
+        + "[Console]::Out.Write(\"exit $LASTEXITCODE`n\" + ($global:Calls -join \"`n\"))")
+    lines = result.stdout.splitlines()
+    if skip:
+        assert lines == ["exit 0", "wsl --list --running", "start keepalive"], result.stdout + result.stderr
+    else:
+        assert lines == ["exit 1", "get-service"], result.stdout + result.stderr
+        assert "aborting: WSL service unavailable." in (tmp_path / "watchdog.log").read_text()
+
+
+@needs_pwsh
 @pytest.mark.parametrize("no_start", [True, False])
 def test_the_compaction_with_no_distro_start_starts_no_process_in_the_distro(tmp_path, no_start):
     script = ROLES / "windows_wsl_maintenance/files/Compact-WslVhdx.ps1"
