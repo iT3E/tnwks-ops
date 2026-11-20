@@ -1,3 +1,0 @@
-kind: Changed
-body: 'agents: the restore test of the finance share passed on 2026-11-20 and is out of the list again; Flux deletes its Restore, its Job and its scratch claim. The files stay, with the snapshot name as a placeholder.'
-time: 2026-11-20T05:00:00.000000000Z

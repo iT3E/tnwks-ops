@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.232.0 - 2026-11-20
+
+### Changed
+
+* agents: the restore test of the finance share passed on 2026-11-20 and is out of the list again; Flux deletes its Restore, its Job and its scratch claim. The files stay, with the snapshot name as a placeholder.
+
 ## v2.231.0 - 2026-11-20
 
 ### Added
