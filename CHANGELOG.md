@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.235.0 - 2026-11-20
+
+### Added
+
+* agents: the gateway probe of main has its key (PROBE_KEY, client main-probe of the route main-vault), and the gateway config has its hash in place of the placeholder. The key checks of the probe run from the next scheduled run.
+
 ## v2.234.0 - 2026-11-20
 
 ### Added

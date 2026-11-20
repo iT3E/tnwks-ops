@@ -1,3 +1,0 @@
-kind: Added
-body: 'agents: the gateway probe of main has its key (PROBE_KEY, client main-probe of the route main-vault), and the gateway config has its hash in place of the placeholder. The key checks of the probe run from the next scheduled run.'
-time: 2026-11-20T05:30:00.000000000Z
