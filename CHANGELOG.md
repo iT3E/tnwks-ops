@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.238.0 - 2026-11-20
+
+### Added
+
+* observability: the AI board in Grafana (tnwks-ai, step 1 of task 5.23), from the data of today. A declared list of the AI parts, scheduled checks, result lines and snapshot policies, with a state for each (a part that is gone stays a row, as Unknown; site 2 declares each part it does not run as Not applicable); the AI tile on the Homelab wall and its row in Needs attention; tool calls of the MCP gateway without the GET with 405 of a client start; the plan limit, instruction file changes and mover denials; the time of the newest restore test result. Each of the 18 AI alerts opens the AI board, and the certificate alert of the model gateway has its runbook section and promtool cases.
+
 ## v2.237.0 - 2026-11-20
 
 ### Changed
