@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.237.0 - 2026-11-20
+
+### Changed
+
+* Site 2, Windows host: the allow list of sshd names only the account that Ansible logs in as (Design Doc 0004, section 9, step 6). The encrypted `windows_sshd_allow_users` of the host loses the present account of the move; the apply on the host stays the explicit one of the role windows_sshd.
+
 ## v2.236.0 - 2026-11-20
 
 ### Changed

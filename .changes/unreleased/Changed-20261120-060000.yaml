@@ -1,3 +1,0 @@
-kind: Changed
-body: "Site 2, Windows host: the allow list of sshd names only the account that Ansible logs in as (Design Doc 0004, section 9, step 6). The encrypted `windows_sshd_allow_users` of the host loses the present account of the move; the apply on the host stays the explicit one of the role windows_sshd."
-time: 2026-11-20T06:00:00.000000+00:00
