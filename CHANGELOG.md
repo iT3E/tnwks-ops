@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.231.0 - 2026-11-20
+
+### Added
+
+* agents: the vault server of main (task 3.37, step A): the pod of finance in agents-main on the claim vault-rw of the main share, the route main-vault on the central MCP gateway with the key of the main agent (a placeholder hash until the values step) and the nine tools, the egress of the gateway to it, and main's DNS rule without the vault server. No pod of main calls the route yet.
+
 ## v2.230.1 - 2026-11-20
 
 ### Fixed
