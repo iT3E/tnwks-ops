@@ -171,6 +171,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Path"
                       }
                     }
@@ -1033,6 +1038,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Mesh"
                       }
                     }
@@ -1248,6 +1258,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "KVStoreMesh"
                       }
                     }
@@ -1634,6 +1649,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Router uptime"
                       }
                     }
@@ -2465,6 +2485,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Link"
                       }
                     }
@@ -2680,6 +2705,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Address pool use"
                       }
                     }
@@ -3114,6 +3144,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Upgrade"
                       }
                     }
@@ -3329,6 +3364,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Router BGP session resets"
                       }
                     }
@@ -3526,6 +3566,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Cilium BGP session changes"
                       }
                     }
@@ -3723,6 +3768,11 @@
                         "route": "Route",
                         "method": "Method",
                         "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
                         "Value": "Path hop changes"
                       }
                     }

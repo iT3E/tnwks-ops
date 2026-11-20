@@ -43,6 +43,7 @@ PRODUCERS = {
     "garage_": "Garage admin metrics (WSL-02 archive)",
     "kopiur_": "Kopiur controller (PVC backups and restores)",
     "agentgateway_": "MCP gateway (agentgateway) PodMonitor; board queries only, no rule",
+    "litellm_": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
     "apiserver_": "Kubernetes API server metrics (kept series only)",
     "plausible_": "Plausible exporter (its stats and health API)",
     "ALERTS": "local Prometheus alert rules (current state)",

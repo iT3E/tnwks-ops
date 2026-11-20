@@ -1,10 +1,14 @@
 ---
-# The Roles Anywhere client certificate in secret-roles-anywhere.sops.yaml
-# expires 2027-03-28; without it LiteLLM gets no Bedrock credentials, and
-# claude-sonnet (the transcriber's summaries) and claude-opus-bedrock (the
-# agent platform after a move) fail. This fires 30 days before.
-# After renewing the certificate, move the date (epoch seconds) with it, and
-# the dates of its cases in observability/rule-tests/litellm.yaml.
+# The alerts of the model gateway. Their cases are in
+# observability/rule-tests/litellm.yaml.
+# LiteLLMBedrockCertificateExpiring: the Roles Anywhere client certificate in
+# secret-roles-anywhere.sops.yaml expires 2027-03-28; without it LiteLLM gets
+# no Bedrock credentials, and claude-sonnet (the transcriber's summaries) and
+# claude-opus-bedrock (the agent platform after a move) fail. This fires 30
+# days before. After renewing the certificate, move the date (epoch seconds)
+# with it, and the dates of its cases.
+# ModelGatewayCallsFailing: the model calls of a trust domain fail. It reads
+# the series of the gateway's metrics (configmap.yaml, the keep list).
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -24,3 +28,29 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#litellmbedrockcertificateexpiring"
             summary: "The Bedrock Roles Anywhere certificate expires 2027-03-28."
             description: "Renew it, update kubernetes/apps/ai/litellm/app/secret-roles-anywhere.sops.yaml, and move the date in this rule."
+
+        - alert: ModelGatewayCallsFailing
+          # The calls of the key of a trust domain (alias agents-<name>):
+          # at least 3 failed in 15 minutes and more than half failed, for 20
+          # minutes. The hold is longer than the window, so one burst, such as
+          # one turn with its retries (about 3 minutes), leaves the window
+          # before the rule fires: the failures must go on for about 5
+          # minutes or more. A failed call counts in both series. The key of
+          # the metrics scrape and the transcriber's key are not a trust
+          # domain. The first failed call of a new series is not counted
+          # (increase needs two samples), so a domain needs one more.
+          expr: |
+            label_replace(
+              sum by (api_key_alias) (increase(litellm_proxy_failed_requests_metric_total{api_key_alias=~"agents-.+"}[15m])) >= 3
+              and on (api_key_alias)
+              sum by (api_key_alias) (increase(litellm_proxy_failed_requests_metric_total{api_key_alias=~"agents-.+"}[15m]))
+                > 0.5 * sum by (api_key_alias) (increase(litellm_proxy_total_requests_metric_total{api_key_alias=~"agents-.+"}[15m])),
+              "trust_domain", "$1", "api_key_alias", "agents-(.+)")
+          for: 20m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-ai?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#modelgatewaycallsfailing"
+            summary: "More than half of the model calls of trust domain {{ $labels.trust_domain }} failed in the last 15 minutes, for 20 minutes."
+            description: "The Model calls tab of the AI board shows the status of the failed calls: 429 is the limit of the plan, 401 or 403 a key or a model list, 5xx the bridge, Bedrock or the vendor. The log of the gateway is in Loki ({namespace=\"ai\", app=\"litellm\"})."

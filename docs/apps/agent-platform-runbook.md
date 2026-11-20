@@ -39,14 +39,14 @@ section here (`runbook_url`).
 
 ## The alerts
 
-23 alerts cover the platform: the 17 rules of
+24 alerts cover the platform: the 17 rules of
 `kubernetes/apps/ai/agents/monitoring/app/` (15 in `prometheusrule.yaml`, 2
-in `heartbeat-prometheusrule.yaml`), the rule of the model gateway in
+in `heartbeat-prometheusrule.yaml`), the 2 rules of the model gateway in
 `kubernetes/apps/ai/litellm/app/prometheusrule.yaml`, and the 5 rules of the
 backup operator (the kopiur chart) that match the snapshot policy, the
 snapshots and the restores of a state volume. The other rules of the backup
 operator are about its repository and its controller, and `backups.md`
-covers them. Each of the 18 rules in `kubernetes/apps/ai/` opens the AI
+covers them. Each of the 19 rules in `kubernetes/apps/ai/` opens the AI
 board in Grafana (`tnwks-ai`), for the site whose Prometheus raised it
 (`observability/tests/test_alert_links.py`). No alert of the platform has
 fired live yet; the rule tests (`observability/tests/test_hand_written_rules.py`)
@@ -701,6 +701,42 @@ kubectl -n flux-system get kustomization agents-monitoring
 
 **Fix.** A suspended CronJob, or one that Flux did not apply: fix it in
 git.
+
+### ModelGatewayCallsFailing
+
+**What it means.** More than half of the model calls of the key of a trust
+domain failed in the last 15 minutes, at least 3 of them, and this went on
+for 20 minutes. It reads the series of the model gateway
+([`litellm.md`](litellm.md#metrics)): the calls and the failed calls of the
+key `agents-<name>`. The hold is longer than the window, so one turn with
+its retries (about 3 minutes) does not fire it. The failures must go on
+for about 5 minutes or more. The key of the metrics scrape and the key of
+the transcriber are not a trust domain, and do not fire it.
+
+**First checks.** The Model calls tab of the AI board, "Failed model calls
+by status", for the key of the alert:
+
+- 429: the limit of the Claude plan, if the name goes to the plan. The model
+  bridge logs it too, and `ModelBridgeRateLimited` fires.
+- 401 or 403: a key or a model list. Is the key of the agent the one in
+  `keys.json`, and does its entry list the name? The `ensure-keys` sidecar
+  logs each key it made or changed (`kubectl -n ai logs deploy/litellm -c
+  ensure-keys --tail=20`).
+- 5xx: the model bridge, Bedrock or the vendor. The log of the gateway is in
+  Loki, `{namespace="ai", app="litellm"}`, and the bridge has its own
+  (`{namespace="ai", app="model-bridge"}`).
+
+**Seen so far.** Not fired. The promtool cases in
+`observability/rule-tests/litellm.yaml` prove that one turn with its retries
+does not fire it, that failures for 20 minutes fire it, and that a quiet
+trust domain, a domain whose failures are a quarter and the scrape key do
+not.
+
+**Fix.** By the status. [At a limit of the Claude
+plan](#at-a-limit-of-the-claude-plan) for a 429. A wrong key or model list:
+fix the entry of `keys.json` by a pull request. The bridge or Bedrock down:
+their own sections, or [move the trust domain](#move-a-trust-domain-to-bedrock-by-hand)
+when the plan is the fault and the owner says so.
 
 ### LiteLLMBedrockCertificateExpiring
 

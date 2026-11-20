@@ -1,8 +1,10 @@
-"""AI (L2): Is each part of the agent platform there and ready, do its checks, tool calls and backups work, and did a limit or a security signal fire?
+"""AI (L2): Is each part of the agent platform there and ready, do its model calls, checks, tool calls and backups work, and did a limit or a security signal fire?
 
 The declared parts, checks, result lines and backups are in observability/inventory.py
-(AI_*); docs/apps/agent-platform.md describes the platform. Step 1 of the AI board:
-only the data of today, no product metrics and no spend.
+(AI_*); docs/apps/agent-platform.md describes the platform. Step 1 of the AI board
+is the data of today; step 2 adds the series of the model gateway (calls, failed
+calls, the time of a call and tokens, by key; docs/apps/litellm.md, "Metrics").
+No money: the plan is not paid by the call.
 """
 
 from __future__ import annotations
@@ -59,6 +61,28 @@ LIMIT = 'kind="rate_limit"'
 INSTRUCTION_FILE = 'check="instruction-file"'
 DENIALS = "apiserver_validating_admission_policy_check_total"
 MOVER_DENY = 'policy="agents-backup-mover-configmaps",enforcement_action="deny"'
+# The series of the model gateway (kubernetes/apps/ai/litellm/app/configmap.yaml,
+# the keep list). The key of the metrics scrape makes refused calls each day on
+# purpose (the CronJob litellm-key-check), so the call panels leave it out.
+CALLS = "litellm_proxy_total_requests_metric_total"
+FAILED_CALLS = "litellm_proxy_failed_requests_metric_total"
+CALL_TIME = "litellm_request_total_latency_metric_bucket"
+TOKENS_IN = "litellm_input_tokens_metric_total"
+TOKENS_OUT = "litellm_output_tokens_metric_total"
+CALLERS = 'api_key_alias!="metrics-scrape"'
+
+
+def calls(name: str, window: str, by: str) -> str:
+    """The increase of a counter of the model gateway in a window, by labels."""
+    return f"sum by ({by}) (increase({selector(name, CALLERS)}[{window}]))"
+
+
+def call_rate(name: str, by: str) -> str:
+    return f"sum by ({by}) (rate({selector(name, CALLERS)}[$__rate_interval]))"
+
+
+def tokens(window: str, by: str) -> str:
+    return f"{calls(TOKENS_IN, window, by)} + {calls(TOKENS_OUT, window, by)}"
 
 
 def events(series: str, label: str = "pod_namespace", pattern: str = "agents-(.+)") -> str:
@@ -69,8 +93,8 @@ def events(series: str, label: str = "pod_namespace", pattern: str = "agents-(.+
 def board() -> Board:
     firing = alerts_firing()
     return Board("tnwks-ai", "AI", "ai", "l2",
-              "Is each part of the agent platform there and ready, do its checks, tool calls and backups work, "
-              "and did a limit or a security signal fire?", {
+              "Is each part of the agent platform there and ready, do its model calls, checks, tool calls and "
+              "backups work, and did a limit or a security signal fire?", {
             "Parts": [
                 p("Parts", worst(PARTS), "state",
                   "The worst state of the declared AI parts: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable do not count.",
@@ -85,6 +109,31 @@ def board() -> Board:
                 p("AI alerts firing", firing, "short",
                   "The alerts of the agent platform, the model gateway and the heartbeat that fire now, by the site whose Prometheus raised them.",
                   "table", "tnwks-alerts", empty=NO_ALERTS, column=None, role="status"),
+            ],
+            "Model calls": [
+                p("Model calls by key", calls(CALLS, "$__range", "k8s_cluster, api_key_alias, requested_model, status_code"),
+                  "short",
+                  "Calls to the model gateway in the selected range, by the key of the caller, the name it asked for and the status. The key of a trust domain has the name of its domain (agents-main); a key that is not declared in the scrape reads undeclared, and None is a call with no valid key. The daily refused calls of the key of the metrics scrape are left out (Checks tab, litellm-key-check).",
+                  "table", column="Calls"),
+                p("Failed model calls by status", f'{calls(FAILED_CALLS, "$__range", "k8s_cluster, api_key_alias, requested_model, exception_status")} > 0',
+                  "short",
+                  "Calls that failed in the selected range, by key, name and status: 429 is the limit of the plan, 401 or 403 a key or a model list, 5xx the bridge, Bedrock or the vendor. ModelGatewayCallsFailing fires when more than half of the calls of a trust domain fail for 20 minutes.",
+                  "table", column="Failed calls", empty=NO_EVENTS),
+                p("Model calls", call_rate(CALLS, "k8s_cluster, api_key_alias"), "reqps",
+                  "Calls to the model gateway each second, by the key of the caller."),
+                p("Share of model calls that failed",
+                  f'{call_rate(FAILED_CALLS, "k8s_cluster, api_key_alias")} / {call_rate(CALLS, "k8s_cluster, api_key_alias")}',
+                  "percentunit",
+                  "The failed calls as a share of all calls, by key. A gap is a time with no call."),
+                p("Time of a model call (p95)",
+                  f'histogram_quantile(0.95, {call_rate(CALL_TIME, "k8s_cluster, api_key_alias, le")})', "s",
+                  "The 95th percentile of the time of a call that passed, from the request to the end of the answer, by key. A turn of an agent with tools makes many calls."),
+                p("Tokens per day", tokens("1d", "k8s_cluster, api_key_alias, requested_model"), "short",
+                  "The input and output tokens of the 24 hours before each point, by key and the name it asked for. The plan is one budget that only the owner sees, so no panel shows a share of the limit or money."),
+                p("Tokens in the range", tokens("$__range", "k8s_cluster, api_key_alias, requested_model, api_provider"),
+                  "short",
+                  "The input and output tokens in the selected range, by key, name and provider.",
+                  "table", column="Tokens"),
             ],
             "Tool calls": [
                 p("MCP requests by route", f'sum by (k8s_cluster, route, method, status) ({mcp("$__range")})', "short",
