@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.228.0 - 2026-11-20
+
+### Changed
+
+* agents: the daily heartbeat check (06:33 UTC) checks the main agent too, after its first completed heartbeat in Tempo (2026-11-19 15:05 UTC): SERVICES is openclaw-agents-pilot,openclaw-agents-finance,openclaw-agents-main, and a test holds the list to the running agents with a heartbeat. The runbook shows vault-notes=none for a restore with no vault archive.
+
 ## v2.227.0 - 2026-11-19
 
 ### Changed
