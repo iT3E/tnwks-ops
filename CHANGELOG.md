@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.251.0 - 2026-11-21
+
+### Added
+
+* site 1 Windows host: the encrypted host variables hold the password of the administrator account, for step 1 of the account change (the same key as site 2). No role reads it
+
 ## v2.250.1 - 2026-11-21
 
 ### Security
