@@ -70,6 +70,20 @@ For each request of the two controllers:
 An update of a controller that keeps the spec of a Kustomization or a
 HelmRelease (a finalizer, an annotation) passes the last three rules.
 
+## Substitution
+
+The class Kustomization `flux-substitution`
+(`kubernetes/apps/flux-system/substitution`) makes the reduced Secret
+`cluster-secrets-apps` on each site: the keys of `cluster-secrets` that the
+children outside the class use, and no other. Flux fills its template from
+`cluster-secrets`. A later change gives it to the children outside the class
+in place of the full Secret; until then no child reads it.
+
+When a child outside the class starts to use a key of `cluster-secrets`, add
+the key to the template (a change of the class). The CI test fails until
+each variable of a child outside the class is a key of the template or a
+setting of the site.
+
 ## Failure and deletion
 
 - `failurePolicy: Fail`. An error of an expression refuses that one request

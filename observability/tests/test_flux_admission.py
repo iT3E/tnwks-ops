@@ -11,6 +11,7 @@ on a throwaway API server (admission/tests/run.sh), with Docker.
 
 import ast
 import os
+import re
 import subprocess
 import sys
 
@@ -62,10 +63,34 @@ def test_the_class_paths_are_the_kubernetes_folders_of_owner_label():
     assert sorted(folders) == sorted(classlist.CLASS_PATHS)
 
 
+SUBSTITUTION = ROOT / "kubernetes/apps/flux-system/substitution/app/secret.yaml"
+# A variable of Flux; a doubled dollar sign is an escape, which Flux writes
+# as one.
+VARIABLE = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)(:=[^}]*)?\}")
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(site):
+    keys = set(yaml.safe_load(SUBSTITUTION.read_text())["stringData"])
+    (settings,) = [d for d in yaml.safe_load_all((ROOT / f"kubernetes/clusters/{site}/cluster-settings.yaml").read_text()) if d]
+    known = keys | set(settings["data"])
+    missing = {}
+    for child in classlist.walk(site).values():
+        if classlist.is_class_path(child.path):
+            continue
+        inline = set((child.doc["spec"].get("postBuild") or {}).get("substitute") or {})
+        for doc in child.build.docs:
+            for m in VARIABLE.finditer(yaml.safe_dump(doc)):
+                if m.group(2) is None and m.group(1) not in known | inline:
+                    missing.setdefault(child.key, set()).add(m.group(1))
+    assert not missing, f"add these keys to {SUBSTITUTION.relative_to(ROOT)}, or a default: {missing}"
+
+
 def test_both_sites_list_the_policy():
     for site in classlist.SITES:
         text = (ROOT / f"kubernetes/clusters/{site}/apps/kustomization.yaml").read_text()
         assert "- ../../../apps/flux-system/admission/ks.yaml" in text, site
+        assert "- ../../../apps/flux-system/substitution/ks.yaml" in text, site
 
 
 def test_the_policy_matches_the_two_controllers_and_fails_closed():
