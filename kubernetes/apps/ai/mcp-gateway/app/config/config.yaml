@@ -402,3 +402,58 @@ routes:
               policies:
                 http:
                   requestTimeout: 30s
+  - name: main-flux
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-flux/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+            metadata: {client: main, route: main-flux}
+      # A trace or a long log can take longer than the 10 s of the gateway:
+      # 30 s, as for the cluster server.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The read tools of the design, by exact name, from the dump of the
+      # pinned image in its read-only mode (../../tools/flux.json). Not
+      # listed, so refused: diff_kubernetes_manifest (the design keeps it
+      # out: it needs patch on the kinds of a manifest) and get_flux_instance
+      # (this cluster has no Flux Operator, so no FluxInstance). The
+      # read-only mode of the server has no write tool.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "get_kubernetes_api_versions",
+                "get_kubernetes_events",
+                "get_kubernetes_logs",
+                "get_kubernetes_metrics",
+                "get_kubernetes_resources",
+                "read_flux_doc",
+                "search_flux_docs",
+                "trace_kubernetes_resource"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: flux
+              mcp:
+                host: http://flux-mcp.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s

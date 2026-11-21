@@ -109,7 +109,8 @@ def test_no_other_pod_of_main_has_the_dns_label():
             template = spec.get("template") or spec.get("jobTemplate", {}).get("spec", {}).get("template") or {}
             if "agents.home.arpa/dns" in template.get("metadata", {}).get("labels", {}):
                 holders.append(str(path.relative_to(MAIN)))
-    assert sorted(holders) == ["cluster-mcp/app/deployment.yaml", "vault-server/app/deployment.yaml"]
+    assert sorted(holders) == ["cluster-mcp/app/deployment.yaml", "flux-mcp/app/deployment.yaml",
+                               "vault-server/app/deployment.yaml"]
 
 
 # The route of the gateway

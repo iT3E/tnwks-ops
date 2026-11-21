@@ -31,3 +31,4 @@ resources:
   # route of its own (Design Doc, section 4.2.6). No pod of main calls
   # their routes yet: the config of the agent gets them in its own step.
   - ./cluster-mcp/ks.yaml
+  - ./flux-mcp/ks.yaml

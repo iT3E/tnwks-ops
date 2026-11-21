@@ -83,6 +83,8 @@ AI_PARTS = [
      "workload": "fetch-proxy"},
     {"trust_domain": "main", "part": "Cluster MCP server", "namespace": "agents-main", "kind": "deployment",
      "workload": "cluster-mcp"},
+    {"trust_domain": "main", "part": "Flux MCP server", "namespace": "agents-main", "kind": "deployment",
+     "workload": "flux-mcp"},
     {"trust_domain": "finance", "part": "Finance MCP server", "namespace": "agents-finance", "kind": "deployment",
      "workload": "firefly-mcp"},
     {"trust_domain": "finance", "part": "Finance proxy", "namespace": "agents-finance", "kind": "deployment",

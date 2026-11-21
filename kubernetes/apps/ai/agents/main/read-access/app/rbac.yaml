@@ -1,7 +1,8 @@
 ---
 # The read rights of the read servers of main (Design Doc, section 4.2.6):
-# the cluster server (../../cluster-mcp). The role view in each namespace
-# but agents-finance and ai, and the list of the namespaces. Nothing else.
+# the cluster server (../../cluster-mcp) and the Flux server (../../flux-mcp),
+# each as its own service account. The role view in each namespace but
+# agents-finance and ai, and the list of the namespaces. Nothing else.
 #
 # The role view reads no Secret, gives no exec, no port-forward and no
 # attach (it is the aggregated role of Kubernetes). No ClusterRoleBinding
@@ -37,6 +38,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -50,6 +54,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -65,6 +72,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -78,6 +88,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -93,6 +106,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -106,6 +122,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -121,6 +140,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -134,6 +156,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -149,6 +174,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -162,6 +190,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -177,6 +208,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -190,6 +224,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -205,6 +242,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -218,6 +258,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -233,6 +276,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -246,6 +292,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -261,6 +310,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -274,6 +326,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -289,6 +344,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -302,6 +360,9 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -317,6 +378,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -331,6 +395,9 @@ subjects:
   - kind: ServiceAccount
     name: cluster-mcp
     namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
+    namespace: agents-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -344,4 +411,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-mcp
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp
     namespace: agents-main

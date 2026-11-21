@@ -82,6 +82,7 @@ the MCP server and checks the headers that arrive.
 | `/main-vault/` | `main` | the nine tools of the vault | the nine tools of the vault |
 | `/main-vault/` | `main-probe` | the nine tools of the vault | `get_file_info` only |
 | `/main-cluster/` | `main` | the eight kept reads of the cluster server | the eight kept reads of the cluster server |
+| `/main-flux/` | `main` | the eight kept reads of the Flux server | the eight kept reads of the Flux server |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -112,7 +113,7 @@ same hash as on `/main-vault/`, with `route` as the second field of its
 metadata. Each route names its kept tools one by one, from a dump of the
 pinned image in `tools/`, sets 30 s on the route and on the target, and
 sets no credential on the target: the credential of each read server stays
-in its pod. Today one is in git:
+in its pod. In git today:
 
 - `/main-cluster/`: the cluster server of main
   (`kubernetes/apps/ai/agents/main/cluster-mcp`), the Kubernetes MCP server
@@ -123,6 +124,15 @@ in its pod. Today one is in git:
   exposed-secret reports, and the gateway refuses each tool that the route
   does not name: no exec, no run, no write, no list across all namespaces,
   no node log. `tools/cluster.json` is the dump.
+
+- `/main-flux/`: the Flux server of main
+  (`kubernetes/apps/ai/agents/main/flux-mcp`), the Flux MCP server of the
+  Flux Operator, unmodified (AGPL-3.0), in its read-only mode, as its own
+  service account with the same read bindings. Its pod has no DNS: it
+  calls the API server by the address in its environment, and its docs
+  are in the image. The route keeps the reads and the docs, and refuses
+  the diff (it needs `patch`) and `get_flux_instance` (no Flux Operator
+  here). The reconcile is a later step. `tools/flux.json` is the dump.
 
 `observability/tests/test_main_read_servers.py` checks the routes, the
 pods, the network rules and the bindings, and runs the pinned gateway with

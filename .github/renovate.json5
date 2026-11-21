@@ -93,7 +93,7 @@
       // each update (renovate/autoMerge.json5), with the new tool dump.
       "description": "Read MCP servers of main: 7 days after release",
       "matchDatasources": ["docker"],
-      "matchPackageNames": ["quay.io/containers/kubernetes_mcp_server"],
+      "matchPackageNames": ["quay.io/containers/kubernetes_mcp_server", "ghcr.io/controlplaneio-fluxcd/flux-operator-mcp"],
       "minimumReleaseAge": "7 days",
       "internalChecksFilter": "strict"
     },

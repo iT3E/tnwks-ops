@@ -712,6 +712,16 @@
         ]
       },
       {
+        "trust_domain": "main",
+        "part": "Flux MCP server",
+        "namespace": "agents-main",
+        "kind": "deployment",
+        "workload": "flux-mcp",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
         "trust_domain": "finance",
         "part": "Finance MCP server",
         "namespace": "agents-finance",

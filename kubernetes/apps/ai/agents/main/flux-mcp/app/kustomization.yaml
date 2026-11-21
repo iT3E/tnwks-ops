@@ -1,0 +1,9 @@
+---
+# The Flux server of main: the Flux MCP server of the Flux Operator, over
+# Streamable HTTP, read only. Its one credential is the token of its service
+# account, in its own pod.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml

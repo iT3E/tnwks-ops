@@ -49,6 +49,20 @@ SERVERS = {
         "never": ["pods_list", "pods_exec", "pods_run", "pods_delete", "resources_create_or_update",
                   "resources_delete", "resources_scale", "nodes_log", "nodes_stats_summary"],
     },
+    "flux": {
+        "dir": "flux-mcp", "route": "main-flux", "port": 8080, "dump": "flux.json",
+        "groups": "read-only",
+        "keep": ["get_kubernetes_api_versions", "get_kubernetes_events", "get_kubernetes_logs",
+                 "get_kubernetes_metrics", "get_kubernetes_resources", "read_flux_doc", "search_flux_docs",
+                 "trace_kubernetes_resource"],
+        # The diff and the tool of the Flux Operator (the dump of the
+        # read-only mode), and the writes of the full mode, which the
+        # read-only mode does not list.
+        "never": ["diff_kubernetes_manifest", "get_flux_instance", "reconcile_flux_resource",
+                  "apply_kubernetes_manifest", "delete_kubernetes_resource", "suspend_flux_reconciliation",
+                  "resume_flux_reconciliation", "install_flux_instance"],
+        "reader": True,
+    },
 }
 # The namespaces with no binding of the read account (R6): the finance trust
 # domain, and ai with the log of the MCP gateway.
@@ -230,6 +244,21 @@ def test_the_cluster_server_reaches_the_api_server_and_its_name_only():
     assert pod("cluster")["metadata"]["labels"]["agents.home.arpa/dns"] == "own-rule"
 
 
+def test_the_flux_server_reads_only_as_its_own_account_with_no_dns():
+    spec = pod("flux")["spec"]
+    assert spec["serviceAccountName"] == "flux-mcp"
+    assert spec["automountServiceAccountToken"] is True
+    args = container("flux")["args"]
+    assert args[:4] == ["serve", "--transport", "http", "--port"]
+    assert "--read-only" in args and "--mask-secrets=true" in args
+    # No kubeconfig and no other identity: the in-cluster account only.
+    assert not [a for a in args if a.startswith(("--kubeconfig", "--kube-as", "--as"))]
+    assert [e["name"] for e in container("flux")["env"]] == ["HOME"]
+    assert pod("flux")["metadata"]["labels"]["agents.home.arpa/dns"] == "none"
+    (policy,) = [d for d in docs(MAIN / "flux-mcp/app/networkpolicy.yaml") if d["kind"] == "CiliumNetworkPolicy"]
+    assert policy["spec"]["egress"] == [{"toEntities": ["kube-apiserver"]}]
+
+
 def namespaces_of_the_cluster() -> set[str]:
     """Each namespace that Flux applies on the cluster of site 1, where the
     agents run: the walk of the app list of that cluster, as
@@ -284,7 +313,7 @@ def test_no_cluster_wide_read_but_the_names_of_the_namespaces():
     assert role["rules"] == [{"apiGroups": [""], "resources": ["namespaces"], "verbs": ["get", "list", "watch"]}]
     (binding,) = [d for d in docs(READ_ACCESS) if d["kind"] == "ClusterRoleBinding"]
     assert binding["roleRef"]["name"] == role["metadata"]["name"]
-    assert binding["subjects"] == [r for r in readers() if r["name"] == "cluster-mcp"]
+    assert binding["subjects"] == readers()
     # No other binding in the repository names a read account.
     names = {r["name"] for r in readers()}
     for doc in manifests("RoleBinding", "ClusterRoleBinding"):
@@ -343,18 +372,26 @@ UPSTREAM_HEADERS = {"accept", "content-type", "content-length", "host",
                     "mcp-method", "mcp-name", "mcp-protocol-version", "mcp-session-id"}
 
 
+def fake_account(work: Path) -> Path:
+    """The files of a service account in a pod, with a token that is no
+    token, for each server."""
+    sa = work / "sa"
+    if not sa.exists():
+        sa.mkdir()
+        (sa / "token").write_text("read-test-not-a-token")
+        (sa / "namespace").write_text("agents-main")
+        (sa / "ca.crt").write_text("")
+        for p in sa.iterdir():
+            p.chmod(0o644)
+        sa.chmod(0o755)
+    return sa
+
+
 def start_cluster_server(tool: str, work: Path, net: str, name: str) -> None:
     """The cluster server with the config of the repo, as in its pod: an
     in-cluster account whose API server does not answer (no tool call needs
     one to reach the server)."""
-    sa = work / "sa"
-    sa.mkdir()
-    (sa / "token").write_text("read-test-not-a-token")
-    (sa / "namespace").write_text("agents-main")
-    (sa / "ca.crt").write_text("")
-    for p in sa.iterdir():
-        p.chmod(0o644)
-    sa.chmod(0o755)
+    sa = fake_account(work)
     config = work / "cluster.toml"
     config.write_text((MAIN / "cluster-mcp/app/config.toml").read_text())
     config.chmod(0o644)
@@ -366,7 +403,18 @@ def start_cluster_server(tool: str, work: Path, net: str, name: str) -> None:
          container("cluster")["image"], *container("cluster")["args"]])
 
 
-STARTERS = {"cluster": start_cluster_server}
+def start_flux_server(tool: str, work: Path, net: str, name: str) -> None:
+    """The Flux server with the args of its pod, in-cluster: its API server
+    does not answer (no tool call needs one to reach the server)."""
+    sa = fake_account(work)
+    run([tool, "run", "-d", "--name", name, "--network", net, "--network-alias", "flux-upstream",
+         "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL", "--user", "65532",
+         "-e", "HOME=/tmp", "-e", "KUBERNETES_SERVICE_HOST=192.0.2.10", "-e", "KUBERNETES_SERVICE_PORT=443",
+         "-v", f"{sa}:/var/run/secrets/kubernetes.io/serviceaccount:ro",
+         container("flux")["image"], *container("flux")["args"]])
+
+
+STARTERS = {"cluster": start_cluster_server, "flux": start_flux_server}
 
 
 @pytest.fixture(scope="module")
