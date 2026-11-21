@@ -71,6 +71,12 @@ KINDS = {
     "ImageUpdateAutomation": ("imageupdateautomations", True),
     "ValidatingAdmissionPolicy": ("validatingadmissionpolicies", False),
     "ValidatingAdmissionPolicyBinding": ("validatingadmissionpolicybindings", False),
+    "AutoscalingRunnerSet": ("autoscalingrunnersets", True),
+    "EphemeralRunner": ("ephemeralrunners", True),
+    "Sandbox": ("sandboxes", True),
+    "SandboxTemplate": ("sandboxtemplates", True),
+    "Cluster": ("clusters", True),
+    "Pooler": ("poolers", True),
 }
 VERSIONS = {
     "ConfigMap": "v1", "Secret": "v1", "Namespace": "v1", "PersistentVolume": "v1", "Pod": "v1",
@@ -369,7 +375,41 @@ def cases():
         ("work", "the release storage of the helm controller in kube-system", HELM, "allow",
          obj("Secret", "sh.helm.release.v1.cilium.v2", "kube-system", {"owner": "helm", "name": "cilium"},
              type="helm.sh/release.v1", stringData={"release": "x"})),
-    ] + privileged_cases()
+    ] + privileged_cases() + operator_cases()
+
+
+def operator_cases():
+    """The kinds from which an operator makes a pod of its own template: none
+    from outside the class, in a namespace outside it; each from the class.
+    A plain database cluster from outside the class, as the children of the
+    apps make one each, passes."""
+    template = {"spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1"}]}}
+    out = [
+        ("AutoscalingRunnerSet", {"template": template}),
+        ("EphemeralRunner", {"spec": template["spec"]}),
+        ("Sandbox", {"podTemplate": template}),
+        ("SandboxTemplate", {"podTemplate": template}),
+        ("Pooler", {"cluster": {"name": "app-pg"}, "instances": 1, "type": "rw", "template": template}),
+    ]
+    cases = []
+    for kind, spec in out:
+        cases.append(("operator-pods", f"a {kind} outside the class", KUSTOMIZE, "deny",
+                      obj(kind, "new-app", "production", OUT_K, spec=spec)))
+    namespace = {"AutoscalingRunnerSet": "tools", "EphemeralRunner": "tools", "Pooler": "databases"}
+    for kind, spec in out:
+        cases.append(("operator-pods", f"a {kind} of the class", KUSTOMIZE, "allow",
+                      obj(kind, "new-app", namespace.get(kind, "agents-main"), CLASS_K, spec=spec)))
+    cluster = {"instances": 1, "storage": {"size": "1Gi"}}
+    for what, context in (("a privileged container", {"privileged": True}),
+                          ("an added capability", {"capabilities": {"add": ["NET_ADMIN"]}})):
+        cases.append(("operator-pods", f"a database cluster outside the class with {what}", KUSTOMIZE, "deny",
+                      obj("Cluster", "new-app-pg", "databases", OUT_K, spec=dict(cluster, securityContext=context))))
+    cases.append(("operator-pods", "a plain database cluster outside the class", KUSTOMIZE, "allow",
+                  obj("Cluster", "new-app-pg", "databases", OUT_K, spec=cluster)))
+    cases.append(("operator-pods", "a database cluster outside the class that drops capabilities", KUSTOMIZE, "allow",
+                  obj("Cluster", "new-app-pg", "databases", OUT_K,
+                      spec=dict(cluster, securityContext={"capabilities": {"drop": ["ALL"]}}))))
+    return cases
 
 
 def apply_policy(actions, drop=None):
@@ -431,7 +471,7 @@ class FluxAdmission(unittest.TestCase):
                 for x in call("GET", f"/apis/apiextensions.k8s.io/v1/customresourcedefinitions/{c['metadata']['name']}")[1]
                 .get("status", {}).get("conditions", [])))
         namespaces = {"ai", "flux-system", "production", "home-automation", "media", "selfhosted", "kube-system",
-                      "agents-main", "databases"}
+                      "agents-main", "databases", "tools"}
         namespaces |= {e["doc"]["metadata"]["namespace"] for e in GIT_HELMRELEASES}
         namespaces |= {e["doc"]["metadata"].get("namespace", "flux-system") for e in GIT_KUSTOMIZATIONS}
         for namespace in sorted(namespaces):
@@ -533,7 +573,7 @@ class FluxAdmission(unittest.TestCase):
 
     def test_7_each_rule_can_fail(self):
         rules = sorted({c[0] for c in cases() if c[3] == "deny"})
-        self.assertEqual(len(rules), 11)
+        self.assertEqual(len(rules), 12)
         try:
             for rule in rules:
                 apply_policy(["Deny"])
