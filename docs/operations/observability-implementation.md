@@ -390,6 +390,10 @@ the VHDX again in the phase `file`.
 
 The run order of the move, with the owner's go and time (R4):
 
+The Windows host goes first on the way in, and the distro first on the way
+back, so the two sides are never left in different phases across a restart
+of WSL.
+
 1. The phase `ready`, applied to both hosts. The script makes the file.
 2. Read the used size of the data on the VHDX. It must fit in the file.
 3. Stop Prometheus, and each other pod on the class `local-path-observability`.
@@ -405,9 +409,14 @@ The run order of the move, with the owner's go and time (R4):
 7. Start Prometheus, and check that each series goes on.
 
 The way back is today's mount, until the proof of site 1: stop Prometheus,
-`release`, the phase `vhdx` on both hosts, and start Prometheus. The VHDX
-holds the data of the copy, not the data written to the file after it. After
-the proof, the mount task, its scripts and the VHDX go.
+apply the phase `vhdx` to the distro first (the role stops the timer, then
+releases the file; if that run stops after the timer is off, run `release`
+by hand), then to the Windows host, and start Prometheus. The VHDX holds the
+data of the copy, not the data written to the file after it. This way back
+holds only before step 4 of the account change of the host: after it, the
+mount task can not be registered again for a standard account with no
+password, and the way back of the account change comes first. After the
+proof, the mount task, its scripts and the VHDX go.
 
 ## Grafana on both sites
 

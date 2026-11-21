@@ -261,6 +261,19 @@ def test_the_distro_play_runs_the_role_only_where_the_windows_host_has_the_volum
     assert entry["tags"] == ["observability-file"]
 
 
+def test_the_way_back_releases_the_file_only_after_the_timer_is_off():
+    """Within a minute of a release, a running timer would mount the file again."""
+    tasks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+    names = [task.get("name") for task in tasks]
+    stop = names.index("With the VHDX, the timer of the file is stopped and off")
+    release = names.index("With the VHDX, the file is released from the point")
+    assert release == stop + 1
+    assert tasks[stop]["register"] == "wsl_observability_file_timer_off"
+    assert tasks[release]["when"].split("  #")[0] == "wsl_observability_file_timer_off is changed"
+    assert tasks[release]["ansible.builtin.command"].endswith("/observability-file.py release")
+    assert tasks[release]["changed_when"] is True
+
+
 def test_the_timer_mounts_the_file_only_in_the_phase_file():
     tasks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
     timer = [task for task in tasks if "ansible.builtin.systemd" in task]

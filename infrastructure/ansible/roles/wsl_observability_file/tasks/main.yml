@@ -23,9 +23,16 @@
     name: "{{ wsl_observability_file_unit }}.timer"
     state: stopped
     enabled: false
+  register: wsl_observability_file_timer_off
   when:
     - wsl_observability_file_mount == 'vhdx'
     - wsl_observability_file_timer.stat.exists
+
+# The way back: the timer is off first, so it can not mount the file again.
+- name: With the VHDX, the file is released from the point
+  ansible.builtin.command: "/usr/bin/python3 {{ wsl_observability_file_lib }}/observability-file.py release"
+  changed_when: true
+  when: wsl_observability_file_timer_off is changed  # noqa: no-handler (right after the timer stop)
 
 - name: The file of the monitoring data
   when: wsl_observability_file_mount != 'vhdx'
