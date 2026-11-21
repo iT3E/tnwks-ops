@@ -114,6 +114,10 @@ AI_SCHEDULES = [
     {"trust_domain": "workflows", "namespace": "agents-workflows", "cronjob": "workflow-sweep", "within": 35 * 60},
     {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "agent-heartbeat-check", "within": DAILY},
     {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "trace-filter-check", "within": DAILY},
+    # The network rule of Prometheus: a reader may not write (step 3 of the
+    # AI board; kube-prometheus-stack/app/rule-check.yaml). It runs on each
+    # site; this list covers the site of the agents, and KubeJobFailed both.
+    {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "prometheus-rule-check", "within": DAILY},
     # The key of the metrics scrape of the model gateway calls no model.
     {"trust_domain": "shared", "namespace": "ai", "cronjob": "litellm-key-check", "within": DAILY},
 ]

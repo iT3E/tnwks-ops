@@ -5511,6 +5511,256 @@
   },
   {
     "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Messages by channel",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel) (label_replace(increase(openclaw_message_received_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_received_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_received_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Turns by outcome",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_outcome) (label_replace(increase(openclaw_message_processed_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_processed_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_processed_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Messages in",
+    "query": "sum by (k8s_cluster, trust_domain) (label_replace(rate(openclaw_message_received_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "reqps",
+    "query_mode": "range",
+    "inputs": [
+      "openclaw_message_received_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_received_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Turns that ended in an error",
+    "query": "sum by (k8s_cluster, trust_domain) (label_replace(rate(openclaw_message_processed_total{k8s_cluster=~\"$cluster\",openclaw_outcome=\"error\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "reqps",
+    "query_mode": "range",
+    "inputs": [
+      "openclaw_message_processed_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_processed_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Replies sent",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_delivery_kind) (label_replace(increase(openclaw_message_delivery_started_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_delivery_started_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_delivery_started_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Replies that failed",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_delivery_kind, openclaw_errorCategory) (label_replace(increase(openclaw_message_delivery_duration_ms_milliseconds_count{k8s_cluster=~\"$cluster\",openclaw_outcome=\"error\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_delivery_duration_ms_milliseconds_count"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_delivery_duration_ms_milliseconds_count",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Time to send a reply (p95)",
+    "query": "histogram_quantile(0.95, sum by (k8s_cluster, trust_domain, le) (label_replace(rate(openclaw_message_delivery_duration_ms_milliseconds_bucket{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")))",
+    "unit": "ms",
+    "query_mode": "range",
+    "inputs": [
+      "openclaw_message_delivery_duration_ms_milliseconds_bucket"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_delivery_duration_ms_milliseconds_bucket",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Turns by trigger",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_trigger) (label_replace(increase(openclaw_session_turn_created_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_session_turn_created_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_session_turn_created_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Stuck sessions",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_state) (label_replace(increase(openclaw_session_stuck_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_session_stuck_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_session_stuck_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Model failovers",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_provider, openclaw_model, openclaw_failover_to_model) (label_replace(increase(openclaw_model_failover_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_model_failover_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_model_failover_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
     "tab": "Tool calls",
     "panel": "MCP requests by route",
     "query": "sum by (k8s_cluster, route, method, status) (increase(agentgateway_requests_total{k8s_cluster=~\"$cluster\"}[$__range]) unless increase(agentgateway_requests_total{k8s_cluster=~\"$cluster\",method=\"GET\",status=\"405\"}[$__range]))",

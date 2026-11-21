@@ -741,6 +741,14 @@ the model gateway. It shows no product metrics and no money.
   `undeclared` for a key that is not declared
   ([`litellm.md`](../apps/litellm.md#metrics)). The daily refused calls of
   the key of the scrape (`litellm-key-check`) are left out.
+- **Messages** (question 8) come from the metrics of the product of each
+  personal agent, through the keep list of Alloy to the OTLP path of
+  Prometheus ([`agent-platform.md`](../apps/agent-platform.md#metrics)):
+  messages in by channel, turns by outcome and by trigger, replies sent and
+  replies that failed with the class of the error, the time to send a reply
+  (95th percentile), stuck sessions and failovers to a second model. The
+  trust domain comes from `job` (`openclaw-agents-<domain>`); a sender with
+  another service name reads `undeclared`.
 - **Tool calls** come from the request series of the MCP gateway, in the
   board only: no rule reads them (`tests/test_mcp_gateway.py`). The panels
   leave out the GET with 405 that each start of a client makes
@@ -806,10 +814,24 @@ to port 9090 that it admits. It comes before the write path of the AI board
   on 2026-11-20) and from git. `tests/test_prometheus_policy.py` fails when
   a file of git names a Service or an address of Prometheus and the rule
   does not know it.
+- **The one writer.** Alloy of the same site may POST
+  `/api/v1/otlp/v1/metrics`, the OTLP path that `enableOTLPReceiver` opens,
+  and nothing else: no query, and no query string. The remote write path
+  (`/api/v1/write`) stays off. The metrics that Alloy writes are the keep
+  list of the agents ([`agent-platform.md`](../apps/agent-platform.md#metrics)).
+- **The daily check.** The CronJob `prometheus-rule-check`
+  (`kube-prometheus-stack/app/rule-check.yaml`, 05:53 UTC, each site) has
+  labels of its own, and the rule names it next to Grafana, so it gets the
+  requests of Grafana. It must get 200 for a query, and 403 for a POST to
+  the OTLP path and to `/api/v1/write`, each with an empty body. Without
+  the rule Prometheus answers 200 and 404 to those, and writes nothing. A
+  failed run fails its Job (`KubeJobFailed`), and the AI board shows its
+  state on the Checks tab. Its log line is `prometheus-rule-check
+  result=pass` or `result=fail`, with a line for each request.
 - **What a reader may send.** GET on each path, and POST on the query paths.
   The readers through the bridge get GET `/federate` and GET
   `/api/v1/query` only, and the evidence of the other site GET `/-/ready`
-  and GET `/api/v1/query` only. Nobody may write, call the admin API (it is
+  and GET `/api/v1/query` only. No reader may write, call the admin API (it is
   on: `--web.enable-admin-api`) or call `/-/reload` and `/-/quit`. The
   proxy answers 403 to such a request.
 - **The kubelet probes.** They come from the local host, on 9090 (GET

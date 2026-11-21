@@ -81,10 +81,12 @@ def test_each_reader_has_its_port_and_its_requests_and_no_other():
     assert grants() == {
         (HERE, "monitoring", "grafana"): {"9090": READ_API},
         (PEER, "monitoring", "grafana"): {"9090": READ_API},
+        (HERE, "monitoring", "prometheus-rule-check"): {"9090": READ_API},
         (HERE, "monitoring", "ui"): {"9090": READ_API},
         (HERE, "networking", "ingress-nginx-internal"): {"9090": READ_API},
         (HERE, "monitoring", "kube-prometheus-stack-prometheus"): {
             "9090": READ_API, "8080": None, "10902": None},
+        (HERE, "monitoring", "alloy"): {"9090": [("POST", "/api/v1/otlp/v1/metrics")]},
         (PEER, "monitoring", "observability-evidence"): {
             "9090": [("GET", "/-/ready"), ("GET", r"/api/v1/query(\?.*)?")]},
         ("entity", "world"): {"9090": [("GET", r"/federate(\?.*)?"), ("GET", r"/api/v1/query(\?.*)?"),
@@ -124,7 +126,19 @@ def test_nobody_may_write_or_call_the_admin_and_lifecycle_paths():
     # (allow-localhost), and its line names the kubelet with no HTTP rule.
     for s in set(grants()) - {("entity", "host")}:
         for method, path in WRITES:
+            if s == (HERE, "monitoring", "alloy") and (method, path) == ("POST", "/api/v1/otlp/v1/metrics"):
+                continue
             assert not allowed(s, method, path), (s, method, path)
+
+
+def test_only_alloy_of_this_site_writes_and_it_may_not_read():
+    alloy = (HERE, "monitoring", "alloy")
+    writers = [s for s in grants() if s != ("entity", "host") and allowed(s, "POST", "/api/v1/otlp/v1/metrics")]
+    assert writers == [alloy]
+    for method, path in [("GET", "/api/v1/query?query=up"), ("POST", "/api/v1/query"), ("GET", "/federate"),
+                         ("POST", "/api/v1/write"), ("POST", "/api/v1/otlp/v1/metrics?x=1"),
+                         ("PUT", "/api/v1/otlp/v1/metrics")]:
+        assert not allowed(alloy, method, path), (method, path)
 
 
 def test_each_reader_may_send_the_requests_it_sends_today():
@@ -190,6 +204,9 @@ READERS = {
     "kubernetes/clusters/wsl-02/apps/kustomization.yaml": "the bridge (world or a node)",
     "kubernetes/apps/monitoring/thanos-metrics/app/services.yaml": "the global Services, and Thanos Query",
     "kubernetes/apps/monitoring/thanos-metrics/app/helmrelease.yaml": "Thanos Query",
+    "kubernetes/apps/monitoring/alloy/app/helmrelease.yaml": "Alloy, the one writer",
+    "kubernetes/apps/monitoring/kube-prometheus-stack/app/rule-check.yaml": "the daily check of this rule",
+    "kubernetes/apps/monitoring/kube-prometheus-stack/app/scripts/prometheus_rule_check.py": "the daily check",
 }
 NAMES = re.compile(r"kube-prometheus-stack-prometheus[.:]|prometheus-operated|prometheus-homelab-wsl|"
                    r"prometheus-\$\{(PEER_)?CLUSTER_NAME\}|PEER_WINDOWS_HOST_ADDR\}:9090|"
@@ -224,3 +241,23 @@ def test_the_kubelet_probes_pass_in_each_case():
         if ("entity", entity) in grants():
             for method, path in PROBES:
                 assert allowed(("entity", entity), method, path), (entity, path)
+
+
+def test_the_daily_check_gets_what_grafana_gets_and_its_requests_hold():
+    """scripts/prometheus_rule_check.py: each request and the status it wants."""
+    check = (HERE, "monitoring", "prometheus-rule-check")
+    assert grants()[check] == grants()[(HERE, "monitoring", "grafana")]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("rule_check", APP / "scripts/prometheus_rule_check.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert {name for name, *_ in module.REQUESTS} == {"query", "otlp-write", "remote-write"}
+    for name, method, path, _, _, want in module.REQUESTS:
+        assert allowed(check, method, path) == (want == 200), name
+    job = yaml.safe_load((APP / "rule-check.yaml").read_text())["spec"]["jobTemplate"]["spec"]["template"]
+    labels = job["metadata"]["labels"]
+    assert labels == {"app.kubernetes.io/name": "prometheus-rule-check"}
+    (selector,) = [e["matchLabels"] for rule in policy()["ingress"] for e in rule.get("fromEndpoints", [])
+                   if e["matchLabels"].get("app.kubernetes.io/name") == "prometheus-rule-check"]
+    assert {k: v for k, v in selector.items() if not k.startswith("io.")} == labels
+    assert job["spec"]["automountServiceAccountToken"] is False

@@ -70,7 +70,106 @@ spec:
             }
 
             output {
-              traces = [otelcol.processor.transform.drop_text.input]
+              traces  = [otelcol.processor.transform.drop_text.input]
+              metrics = [otelcol.processor.filter.agent_metrics.input]
+            }
+          }
+
+          // ---------------------------------------------------------------
+          // The metrics of the product (step 3 of the AI board, Design Doc
+          // 0003 section 4.2.8, "The keep list of step 3";
+          // docs/apps/agent-platform.md, "Metrics"). Each other instrument
+          // is dropped here, then agent_metrics keeps only the listed labels
+          // of each instrument, writes "other" for a value that is not
+          // declared, and cuts the resource to service.name. Prometheus
+          // takes the result on its OTLP path, which its network rule opens
+          // to this pod only.
+          // ---------------------------------------------------------------
+          otelcol.processor.filter "agent_metrics" {
+            error_mode = "propagate"
+
+            metrics {
+              metric = [
+                `not IsMatch(name, "^openclaw\\.(message\\.received|message\\.processed|message\\.delivery\\.started|message\\.delivery\\.duration_ms|tokens|session\\.turn\\.created|session\\.stuck|model\\.failover)$")`,
+              ]
+            }
+
+            output {
+              metrics = [otelcol.processor.transform.agent_metrics.input]
+            }
+          }
+
+          // propagate: a statement that fails drops the whole batch, so a
+          // value that a statement can not read never passes unchecked.
+          otelcol.processor.transform "agent_metrics" {
+            error_mode = "propagate"
+
+            // The resource: service.name only (openclaw-agents-<domain>, set
+            // in the config of each agent), or "undeclared". So target_info
+            // gets no label, and job names the trust domain.
+            metric_statements {
+              context    = "resource"
+              statements = [
+                `keep_keys(attributes, ["service.name"])`,
+                `set(attributes["service.name"], "undeclared") where attributes["service.name"] == nil`,
+                `set(attributes["service.name"], "undeclared") where not IsMatch(attributes["service.name"], "^openclaw-agents-(pilot|finance|main)$")`,
+              ]
+            }
+
+            // The scope: no attribute, and no version.
+            metric_statements {
+              context    = "scope"
+              statements = [
+                `keep_keys(attributes, [])`,
+                `set(version, "")`,
+              ]
+            }
+
+            // The labels that each instrument keeps (the table of the
+            // design), then the declared values of each label. The site is
+            // set here, as the scrape class does for each scrape.
+            metric_statements {
+              context    = "datapoint"
+              statements = [
+                `keep_keys(attributes, ["openclaw.channel", "openclaw.source"]) where metric.name == "openclaw.message.received"`,
+                `keep_keys(attributes, ["openclaw.channel", "openclaw.outcome"]) where metric.name == "openclaw.message.processed"`,
+                `keep_keys(attributes, ["openclaw.channel", "openclaw.delivery.kind"]) where metric.name == "openclaw.message.delivery.started"`,
+                `keep_keys(attributes, ["openclaw.channel", "openclaw.delivery.kind", "openclaw.outcome", "openclaw.errorCategory"]) where metric.name == "openclaw.message.delivery.duration_ms"`,
+                `keep_keys(attributes, ["openclaw.agent", "openclaw.channel", "openclaw.provider", "openclaw.model", "openclaw.token"]) where metric.name == "openclaw.tokens"`,
+                `keep_keys(attributes, ["openclaw.agent", "openclaw.channel", "openclaw.trigger"]) where metric.name == "openclaw.session.turn.created"`,
+                `keep_keys(attributes, ["openclaw.state"]) where metric.name == "openclaw.session.stuck"`,
+                `keep_keys(attributes, ["openclaw.provider", "openclaw.model", "openclaw.failover.to_provider", "openclaw.failover.to_model"]) where metric.name == "openclaw.model.failover"`,
+                `set(attributes["openclaw.channel"], "other") where attributes["openclaw.channel"] != nil and not IsMatch(attributes["openclaw.channel"], "^(telegram|signal|webchat|unknown)$")`,
+                `set(attributes["openclaw.source"], "other") where attributes["openclaw.source"] != nil and not IsMatch(attributes["openclaw.source"], "^(dispatchInboundMessage|message|missing|unknown)$")`,
+                `set(attributes["openclaw.outcome"], "other") where attributes["openclaw.outcome"] != nil and not IsMatch(attributes["openclaw.outcome"], "^(completed|skipped|error|unknown)$")`,
+                `set(attributes["openclaw.delivery.kind"], "other") where attributes["openclaw.delivery.kind"] != nil and not IsMatch(attributes["openclaw.delivery.kind"], "^(text|media|other)$")`,
+                `set(attributes["openclaw.errorCategory"], "other") where attributes["openclaw.errorCategory"] != nil and not IsMatch(attributes["openclaw.errorCategory"], "^(Error|TypeError|RangeError|AggregateError|unknown)$")`,
+                `set(attributes["openclaw.agent"], "other") where attributes["openclaw.agent"] != nil and not IsMatch(attributes["openclaw.agent"], "^(main|unknown)$")`,
+                `set(attributes["openclaw.provider"], "other") where attributes["openclaw.provider"] != nil and not IsMatch(attributes["openclaw.provider"], "^(litellm|unknown)$")`,
+                `set(attributes["openclaw.failover.to_provider"], "other") where attributes["openclaw.failover.to_provider"] != nil and not IsMatch(attributes["openclaw.failover.to_provider"], "^(litellm|unknown)$")`,
+                `set(attributes["openclaw.model"], "other") where attributes["openclaw.model"] != nil and not IsMatch(attributes["openclaw.model"], "^(agents-pilot|agents-finance|agents-main|unknown)$")`,
+                `set(attributes["openclaw.failover.to_model"], "other") where attributes["openclaw.failover.to_model"] != nil and not IsMatch(attributes["openclaw.failover.to_model"], "^(agents-pilot|agents-finance|agents-main|unknown)$")`,
+                `set(attributes["openclaw.token"], "other") where attributes["openclaw.token"] != nil and not IsMatch(attributes["openclaw.token"], "^(input|output|cache_read|cache_write|prompt|total)$")`,
+                `set(attributes["openclaw.trigger"], "other") where attributes["openclaw.trigger"] != nil and not IsMatch(attributes["openclaw.trigger"], "^(user|heartbeat|event|cron|unknown)$")`,
+                `set(attributes["openclaw.state"], "other") where attributes["openclaw.state"] != nil and not IsMatch(attributes["openclaw.state"], "^(idle|processing|waiting|unknown)$")`,
+                `set(attributes["k8s_cluster"], "${CLUSTER_NAME}")`,
+              ]
+            }
+
+            output {
+              metrics = [otelcol.exporter.otlphttp.prometheus.input]
+            }
+          }
+
+          // The OTLP path of this site's Prometheus (enableOTLPReceiver in
+          // kube-prometheus-stack/app/helmrelease.yaml). The exporter adds
+          // /v1/metrics: /api/v1/otlp/v1/metrics.
+          otelcol.exporter.otlphttp "prometheus" {
+            client {
+              endpoint = "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/otlp"
+              tls {
+                insecure = true
+              }
             }
           }
 

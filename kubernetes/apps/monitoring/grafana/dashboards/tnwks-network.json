@@ -176,6 +176,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Path"
                       }
                     }
@@ -1043,6 +1052,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Mesh"
                       }
                     }
@@ -1263,6 +1281,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "KVStoreMesh"
                       }
                     }
@@ -1654,6 +1681,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Router uptime"
                       }
                     }
@@ -2490,6 +2526,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Link"
                       }
                     }
@@ -2710,6 +2755,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Address pool use"
                       }
                     }
@@ -3149,6 +3203,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Upgrade"
                       }
                     }
@@ -3369,6 +3432,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Router BGP session resets"
                       }
                     }
@@ -3571,6 +3643,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Cilium BGP session changes"
                       }
                     }
@@ -3773,6 +3854,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Path hop changes"
                       }
                     }

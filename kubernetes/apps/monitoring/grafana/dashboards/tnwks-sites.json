@@ -334,6 +334,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "State"
                       }
                     }
@@ -582,6 +591,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Evidence age"
                       }
                     }
@@ -904,6 +922,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Cross-site observation"
                       }
                     }
@@ -1351,7 +1378,16 @@
                         "requested_model": "Name asked for",
                         "api_provider": "Provider",
                         "status_code": "Status",
-                        "exception_status": "Status"
+                        "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to"
                       }
                     }
                   }
@@ -1541,6 +1577,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Desired replicas"
                       }
                     }
@@ -1743,6 +1788,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Ready replicas"
                       }
                     }
@@ -1945,6 +1999,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Overrides"
                       }
                     }
@@ -2165,6 +2228,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Override creation age"
                       }
                     }
@@ -3400,6 +3472,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Serving-state changes"
                       }
                     }
@@ -3602,6 +3683,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Shared VIP route changes"
                       }
                     }
@@ -3804,6 +3894,15 @@
                         "api_provider": "Provider",
                         "status_code": "Status",
                         "exception_status": "Status",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "When"
                       }
                     }

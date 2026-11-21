@@ -15,6 +15,8 @@
 #     LoadBalancer of prometheus-peer.yaml keeps the address of the bridge
 #     when Prometheus runs on the node of the VIP, and writes the address of
 #     that node when it does not); this Prometheus itself.
+#   9090, the OTLP path, the one write: Alloy of this site, for the metrics
+#     of the agent platform (step 3 of the AI board).
 #   10901, the gRPC port of the Thanos sidecar: Thanos Query of each site.
 #   8080 and 10902, the metrics of the reloader and of the sidecar: this
 #     Prometheus only.
@@ -33,7 +35,8 @@
 # loopback too.
 #
 # The HTTP rules. A reader may send GET on each path, and POST on the query
-# paths only. Nobody may write (/api/v1/write, the OTLP path), call the
+# paths only. Only Alloy may write, on the OTLP path. Nobody may use the
+# remote write path (/api/v1/write, off in Prometheus), call the
 # admin API (/api/v1/admin/...) or the lifecycle paths (/-/reload, /-/quit):
 # Prometheus takes those as POST or PUT only. The proxy answers 403 to each
 # other request. The path of a rule must match the whole path with its query
@@ -84,6 +87,12 @@ spec:
             app.kubernetes.io/name: ingress-nginx
             app.kubernetes.io/instance: ingress-nginx-internal
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The daily check of this rule (rule-check.yaml): labels of its own,
+        # in this block, so it gets the requests of Grafana.
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus-rule-check
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
         # This Prometheus, for its own scrape, if that ever leaves the pod.
         - matchLabels:
             io.kubernetes.pod.namespace: monitoring
@@ -100,6 +109,23 @@ spec:
                 path: "/.*"
               - method: POST
                 path: "/api/v1/(query|query_range|query_exemplars|series|labels|format_query|parse_query)(\\?.*)?"
+    # Alloy of this site, the one writer: the metrics of the agent platform,
+    # after its keep list, on the OTLP path (helmrelease.yaml,
+    # enableOTLPReceiver). POST on that path only: no query.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: alloy
+            app.kubernetes.io/instance: alloy
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+          rules:
+            http:
+              - method: POST
+                path: "/api/v1/otlp/v1/metrics"
     # The observability evidence of the other site: the readiness of this
     # Prometheus, and one query for the fence attestations
     # (observability-evidence/app/config/collector.py).

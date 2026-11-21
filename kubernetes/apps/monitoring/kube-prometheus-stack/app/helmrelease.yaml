@@ -310,6 +310,12 @@ spec:
 
 
         enableAdminAPI: true
+        # The OTLP path (/api/v1/otlp/v1/metrics) for the metrics of the
+        # agent platform, which Alloy sends after its keep list
+        # (alloy/app/helmrelease.yaml, "agent_metrics"). The network rule
+        # (networkpolicy.yaml) lets Alloy, and nobody else, call it. The
+        # remote write path (/api/v1/write) stays off.
+        enableOTLPReceiver: true
         # On every alert too, so the War Room shows which cluster sent it.
         externalLabels:
           cluster: ${CLUSTER_NAME}
