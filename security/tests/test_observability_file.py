@@ -303,6 +303,17 @@ def test_with_the_file_nothing_attaches_the_vhdx_and_it_stays():
     assert defaults["observability_storage_mount"] == "vhdx"
 
 
+def test_site_1_is_in_the_phase_of_its_run_order():
+    """The run order of docs/operations/observability-implementation.md: vhdx, ready, then file."""
+    host = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI/main.yml").read_text())
+    assert host["observability_storage_enabled"] is True
+    assert host["observability_storage_mount"] == "ready"
+    distro = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI-ubuntu/main.yml").read_text())
+    # The distro takes the phase of its Windows host, and sets none of its own.
+    assert distro["wsl_distro_windows_host"] == "DESKTOP-HKE05KI"
+    assert not {"observability_storage_mount", "wsl_observability_file_mount"} & set(distro)
+
+
 @ansible_render.no_ansible
 def test_the_distro_reads_the_phase_of_its_windows_host(tmp_path):
     defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
