@@ -80,11 +80,14 @@ wsl_move_phase: >-
 # enables (role windows_wsl_move): the copy of each start task that the WSL
 # roles register on the host. The watchdog and the address task of the LAN
 # bridge (windows_wsl_maintenance, windows_lan_bridge), the keepalive where it
-# is on, and each UDP relay. The names are those of the roles' defaults.
+# is on, each UDP relay, and the USB attach where a device is bound (the
+# default of windows_usb_attach binds one). The names are those of the roles'
+# defaults.
 wsl_move_new_start_tasks: >-
   {{ (['tnwks-wsl-watchdog', 'tnwks-lan-bridge-ip']
       + (['tnwks-wsl-keepalive'] if wsl_keepalive_enabled | default(false) | bool else [])
-      + (udp_relays | default([]) | map(attribute='task') | list))
+      + (udp_relays | default([]) | map(attribute='task') | list)
+      + (['tnwks-usb-attach'] if usb_attach_bound_devices | default(['the default of the role']) | length > 0 else []))
      | map('regex_replace', '$', wsl_move_task_suffix) | list }}
 
 # Folders under C:\ProgramData that no role owns. The play gives each the

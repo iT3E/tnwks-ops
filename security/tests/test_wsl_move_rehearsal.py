@@ -124,7 +124,7 @@ def test_the_accounts_tasks_run_by_s4u_with_no_elevation_and_no_trigger():
     assert "-d {{ wsl_move_rehearsal_distro | e }} -u root -e /bin/sleep infinity" in text
     system = (ROLE / "templates/system-task.xml.j2").read_text()
     assert "<UserId>S-1-5-18</UserId>" in system
-    assert re.search(r"\{% if item == 'boot' %\}\s*<Triggers>\s*<BootTrigger>", system)
+    assert re.search(r"\{% if item == 'boot' %\}\s*<Triggers>\s*<BootTrigger />", system)
     assert "{% if item == 'boot' %} -Mode boot{% else %} -Request" in system
     tasks = DEFAULTS["wsl_move_rehearsal_tasks"]
     for key in ("a", "b"):
@@ -138,7 +138,7 @@ def test_only_the_rehearsal_sets_the_option_that_keeps_the_enabled_state():
     assert "keep_task_enabled_state = @{ type = 'bool'; default = $false }" in module
     # The WSL roles keep the state of their start tasks while the move of the distro runs only
     # (test_wsl_move_start_tasks.py).
-    start_roles = ("windows_wsl_maintenance", "windows_lan_bridge", "windows_udp_relay")
+    start_roles = ("windows_wsl_maintenance", "windows_lan_bridge", "windows_udp_relay", "windows_usb_attach")
     others = [path for path in ROLES.glob("*/tasks/*.yml") if path.parent.parent.name not in (ROLE.name, *start_roles)]
     assert others and not any("keep_task_enabled_state" in path.read_text() for path in others)
     for role in start_roles:
@@ -2681,15 +2681,15 @@ def test_the_procedure_refuses_an_account_or_a_path_outside_its_scope(tmp_path):
 
 
 @needs_pwsh
-def test_the_procedure_refuses_a_task_outside_its_scope_and_the_session_check(tmp_path):
+def test_the_procedure_refuses_a_task_outside_its_scope_and_a_session_check_that_is_not_a_switch(tmp_path):
     task = run_window(tmp_path / "1", FORWARD_TEST, config={"task_pattern": "^tnwks-other-"})
     none = run_window(tmp_path / "2", FORWARD_TEST, config={"task_pattern": ""})
-    session = run_window(tmp_path / "3", FORWARD_TEST, config={"session_check": True})
+    session = run_window(tmp_path / "3", FORWARD_TEST, config={"session_check": "yes"})
     for out in (task, none, session):
         assert out["code"] == 3 and out["calls"] == [] and out["markers"] == [] and out["disk_a"], out["log"]
     assert "is outside the scope (^tnwks-other-)" in task["log"][0]
     assert none["log"][0] == "stop: the config has no task_pattern. Nothing is changed."
-    assert session["log"][0] == "stop: the session check is on, and this script does not have it. Nothing is changed."
+    assert session["log"][0] == "stop: session_check is 'yes': true or false. Nothing is changed."
 
 
 @needs_pwsh
@@ -3086,3 +3086,94 @@ def test_the_walk_of_the_facts_finds_a_read_before_its_set():
     assert len(early) == 1 and "'uses' reads wsl_move_rehearsal_x" in early[0]
     maybe = [p for p in flow_problems("maybe.yml", False, synthetic.__getitem__) if "wsl_move_rehearsal_x" in p]
     assert len(maybe) == 1 and "'after' reads" in maybe[0]
+
+
+# --- The check of a session of the owner (site 1, session_check) -------------------------------
+
+# A stand-in for the session read of the procedure: the type that it loads, defined first,
+# so its Add-Type does not run. Users() gives the names, or fails as the API would.
+SESSION_TYPE = r"""
+Microsoft.PowerShell.Utility\Add-Type -TypeDefinition @'
+public static class TnwksSessions {
+    public static string[] Names = new string[0];
+    public static bool Fail;
+    public static string[] Users() { if (Fail) throw new System.ComponentModel.Win32Exception(5); return Names; }
+}
+'@
+"""
+PLAIN_FORWARD = {"mode": "forward", "group_steps": False, "stop_after": 0, "rehearsal_group_test": False}
+SESSION_ON = {"session_check": True}
+WAYBACK_STARTED = {"state": "t window-started\n", "disk": ("b",), "acl_file": OLD_SDDL, "marker_a": True,
+                   "tasks": {"tnwks-moverh-a-start": "Disabled", "tnwks-moverh-b-start": "Running"},
+                   "disabled": "tnwks-moverh-a-start"}
+
+
+def sessions(*names: str, fail: bool = False) -> str:
+    listed = ", ".join("'" + name + "'" for name in names)
+    return SESSION_TYPE + f"[TnwksSessions]::Names = [string[]]@({listed}); [TnwksSessions]::Fail = ${str(fail).lower()}\n"
+
+
+@needs_pwsh
+def test_with_the_session_check_window_step_1_stops_while_the_present_account_has_a_session(tmp_path):
+    out = run_window(tmp_path, PLAIN_FORWARD, config=SESSION_ON, restart=True, faults=sessions("someone", "TNWKS-MOVERH-A"))
+    assert out["code"] == 3, out["log"]
+    assert out["calls"] == [] and out["markers"] == [] and out["disk_a"] and not out["disk_b"]
+    assert "stop at step 1: a session of the present account is on the host. Nothing is changed." in out["log"]
+
+
+@needs_pwsh
+def test_with_the_session_check_a_read_that_fails_counts_as_a_session(tmp_path):
+    out = run_window(tmp_path, PLAIN_FORWARD, config=SESSION_ON, faults=sessions(fail=True))
+    assert out["code"] == 3 and out["calls"] == [] and out["markers"] == [], out["log"]
+    assert any(line.startswith("fail: the read of the sessions of the host: ") and
+               line.endswith("it counts as a session of the owner") for line in out["log"])
+    assert out["log"][-2] == "stop at step 1: a session of the present account is on the host. Nothing is changed."
+
+
+@needs_pwsh
+def test_with_the_session_check_and_no_session_of_the_present_account_the_window_runs(tmp_path):
+    out = run_window(tmp_path, PLAIN_FORWARD, config=SESSION_ON, restart=True, faults=sessions("tnwks-moverh-b", "someone"))
+    assert out["code"] == 0, out["log"]
+    assert "step 1: no session of the present account is on the host" in out["log"]
+    assert out["markers"][-1] == "window-done" and out["calls"][-1] == "restart"
+
+
+@needs_pwsh
+@pytest.mark.parametrize("mode", ["wayback", "boot"])
+def test_with_the_session_check_the_way_back_does_not_restart_while_the_owner_has_a_session(tmp_path, mode):
+    """In the procedure and in the boot task: the start tasks of the present account start instead."""
+    on = run_window(tmp_path / "1", mode=mode, restart=True, config=SESSION_ON, faults=sessions("tnwks-moverh-a"),
+                    **WAYBACK_STARTED)
+    assert on["code"] == 0, on["log"]
+    assert on["markers"][-1] == "wayback-done" and on["disk_a"] and not on["disk_b"]
+    assert "restart" not in on["calls"] and "start tnwks-moverh-a-start" in on["calls"]
+    assert "no restart: a session of the owner is on; the start tasks start" in on["log"]
+    off = run_window(tmp_path / "2", mode=mode, restart=True, config=SESSION_ON, faults=sessions("someone"),
+                     **WAYBACK_STARTED)
+    assert off["code"] == 0 and off["calls"][-1] == "restart", off["log"]
+    assert "restart: the end of the way back" in off["log"]
+
+
+@needs_pwsh
+def test_with_the_session_check_a_failed_way_back_does_not_restart_while_the_owner_has_a_session(tmp_path):
+    failed = {**WAYBACK_STARTED, "codes": {"tnwks-moverh-b-stop": 1}}
+    on = run_window(tmp_path / "1", mode="wayback", restart=True, config=SESSION_ON, faults=sessions("tnwks-moverh-a"),
+                    **failed)
+    assert on["code"] == 1 and "restart" not in on["calls"], on["log"]
+    assert "no restart after the failed check: a session of the owner is on" in on["log"]
+    off = run_window(tmp_path / "2", mode="wayback", restart=True, config=SESSION_ON, faults=sessions(), **failed)
+    assert off["code"] == 1 and off["calls"][-1] == "restart", off["log"]
+    assert "restart: a failed check" in off["log"]
+
+
+@needs_pwsh
+def test_with_the_session_check_off_the_procedure_reads_no_session_as_on_site_2(tmp_path):
+    """A read that would fail, and a session of the present account: neither counts."""
+    faults = sessions("tnwks-moverh-a", fail=True)
+    forward = run_window(tmp_path / "1", PLAIN_FORWARD, restart=True, faults=faults)
+    assert forward["code"] == 0 and forward["calls"][-1] == "restart", forward["log"]
+    assert not any("session of the present account" in line for line in forward["log"])
+    assert "step 1: WSL none, as saved. The session check is off." in forward["log"]
+    back = run_window(tmp_path / "2", mode="boot", restart=True, faults=faults, **WAYBACK_STARTED)
+    assert back["code"] == 0 and back["calls"][-1] == "restart", back["log"]
+    assert not any("fail: the read of the sessions" in line for line in back["log"])

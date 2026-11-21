@@ -439,7 +439,7 @@ def test_the_parts_of_the_window_script_load_from_the_real_script(tmp_path):
 . ([scriptblock]::Create($text))
 @{{ admin = $AdministratorsSid; source = ($TnwksSecuritySource -match 'public static class TnwksSecurity');
    functions = @($TnwksWindowFunctions | Where-Object {{ Get-Command $_ -CommandType Function -ErrorAction SilentlyContinue }}).Count }} | ConvertTo-Json -Compress""")
-    assert out == {"admin": "S-1-5-32-544", "source": True, "functions": 6}
+    assert out == {"admin": "S-1-5-32-544", "source": True, "functions": 8}
 
 
 # The reads of the host behind the lines of the readiness and the check: each a fake, so a
@@ -656,3 +656,37 @@ $env:TNWKS_MOVE_WINDOW_LIBRARY = '1'
 & '{SCRIPT}' -Mode {mode} -Config ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}')))
 @{{ changed = $Ansible.Changed }} | ConvertTo-Json -Compress""")
     assert json.loads(result.stdout.strip().splitlines()[-1]) == {"changed": changed}
+
+
+@needs_pwsh
+@pytest.mark.parametrize(("names", "copy_ok", "want"), [
+    (["STANDIN1"], True, True),
+    (["standin-wsl", "someone"], True, False),
+    ([], True, False),
+    (["standin1"], False, None),
+])
+def test_the_session_read_of_the_guards_is_the_read_of_the_procedure_from_its_copy(tmp_path, names, copy_ok, want):
+    """Test-TnwksAccountSession from the copy of the window script, after its SHA-256: the read
+    that window step 1 and the way back make with session_check on. A copy that is not the
+    role's gives no read, so the guard line fails."""
+    cfg = config(tmp_path)
+    copy = Path(cfg["window_script"])
+    copy.write_text(WINDOW_SCRIPT.read_text())
+    cfg["hashes"] = {str(copy): hashlib.sha256(copy.read_bytes()).hexdigest() if copy_ok else "0" * 64}
+    encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
+    listed = ", ".join("'" + name + "'" for name in names)
+    script = f"""$env:TNWKS_MOVE_WINDOW_LIBRARY = '1'
+. '{SCRIPT}' -Mode status -Config ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}')))
+Add-Type -TypeDefinition @'
+public static class TnwksSessions {{
+    public static string[] Names = new string[0];
+    public static string[] Users() {{ return Names; }}
+}}
+'@
+[TnwksSessions]::Names = [string[]]@({listed})
+$session = try {{ Test-TnwksPresentSession }} catch {{ [Console]::Error.WriteLine($_.Exception.Message); $null }}
+[Console]::Out.Write((@{{ session = $session }} | ConvertTo-Json -Compress))
+"""
+    result = pwsh(script)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.strip().splitlines()[-1])["session"] == want, result.stderr

@@ -1168,7 +1168,7 @@ def test_only_the_tasks_of_the_account_register_by_s4u_and_the_other_path_is_unc
 
 
 # The WSL roles with start tasks of the account that owns the distro (test_wsl_move_start_tasks.py).
-START_ROLES = ("windows_wsl_maintenance", "windows_lan_bridge", "windows_udp_relay")
+START_ROLES = ("windows_wsl_maintenance", "windows_lan_bridge", "windows_udp_relay", "windows_usb_attach")
 
 SYSTEM_BECOME = {
     "ansible_become": True,

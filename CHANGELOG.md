@@ -3,6 +3,30 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.249.0 - 2026-11-21
+
+### Added
+
+* windows: the USB attach runs with no elevation with wsl_start_unelevated (-NoElevation): the play binds each device as admin, and the task attaches with no bind and logs to a folder that its account may write. In the move of the distro it has a copy for the account that owns the distro, registered disabled while the move runs, as the UDP relays have, and the way back enables the task of the present account again. The play no longer refuses the switch on a host with a USB device
+
+## v2.248.0 - 2026-11-21
+
+### Added
+
+* windows: the window procedure of the move of the distro has the check of a session of the owner (wsl_move_session_check). With it on, window step 1 stops with nothing changed while the present account has a session at the console or over Remote Desktop, and the way back, in the procedure and in the boot task, does not restart while one is on, also after a failed check. A read that fails counts as a session. With it off the procedure reads no session, as before. The guards of the window play make the same read, from the copy of the procedure on the host
+
+## v2.247.3 - 2026-11-21
+
+### Fixed
+
+* windows: the boot task of the way back of the move (and of its rehearsal) names its boot trigger with no default child, so a check run no longer reads it as a change: the Task Scheduler leaves an Enabled of true out of the export that the task module compares
+
+## v2.247.2 - 2026-11-21
+
+### Fixed
+
+* observability: the schedule state of the AI board matches each namespace of a declared schedule, so litellm-key-check (namespace ai) reads its last good run and no longer no evidence. AgentDailyArchiveFailed reads the exit code of the backup container (1 to 127), so a stop of the node (exit 143 from SIGTERM, or 255) no longer fires it.
+
 ## v2.247.1 - 2026-11-21
 
 ### Fixed

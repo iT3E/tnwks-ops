@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from inventory import AI_GOOD_RESULTS, AI_RESTORE_CHECKS, AI_RESULT_WINDOWS, inventory
+from inventory import AI_GOOD_RESULTS, AI_RESTORE_CHECKS, AI_RESULT_WINDOWS, AI_SCHEDULES, inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 # The SLO window (kubernetes/apps/monitoring/pyrra/app/slos.yaml): inside the
@@ -262,8 +262,11 @@ def ai_records():
     ready = per_workload("kube_statefulset_status_replicas_ready", "kube_deployment_status_replicas_available")
 
     # A scheduled check: its last good run against its window (the objective).
+    # The namespaces are the ones of the declared schedules (inventory.py
+    # AI_SCHEDULES), so a schedule in a new namespace is matched too: a fixed
+    # list left litellm-key-check (namespace ai) at no evidence.
     job = "k8s_cluster, namespace, cronjob"
-    scope = 'namespace=~"agents-.+|monitoring"'
+    scope = f'namespace=~"{"|".join(sorted({item["namespace"] for item in AI_SCHEDULES}))}"'
     schedule = "max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds)"
     success = f"max by ({job}) (kube_cronjob_status_last_successful_time{{{scope}}})"
     # The start of the newest failed Job of each CronJob (AgentPlatformCronJobFailed).
@@ -2474,6 +2477,7 @@ def ai_fixtures():
     expected_result = 'homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="%s",check="%s"}'
     backup = 'homelab_ai_backup_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",policy="%s"}'
     requests = 'agentgateway_requests_total{k8s_cluster="one",route="default/finance",method="%s",status="%s"}'
+    key_check = 'namespace="ai",cronjob="litellm-key-check"'
     plan = ('homelab_model_bridge_plan_%s{k8s_cluster="one",namespace="monitoring",window="%s",'
             'pod="vector-agent-platform-%s"}')
     return [
@@ -2513,11 +2517,17 @@ def ai_fixtures():
                   "values": "1+0x110"})],
              # A failed run of a CronJob in a namespace that is not the domain's.
              {"series": 'kube_job_status_start_time{k8s_cluster="one",namespace="apps",job_name="good-1"}', "values": "5500+0x110"},
+             # A declared schedule outside agents-* and monitoring (the key check of the model gateway).
+             {"series": schedule.replace('trust_domain="main"', 'trust_domain="shared"') % key_check,
+              "values": "86400+0x110"},
+             {"series": f'kube_cronjob_status_last_successful_time{{k8s_cluster="one",{key_check}}}', "values": "5000+0x110"},
          ], "promql_expr_test": [
              {"expr": "homelab:ai_schedule_state", "eval_time": "100m", "exp_samples": [
-                 {"labels": f'homelab:ai_schedule_state{{k8s_cluster="one",trust_domain="main",{job % name}}}', "value": value}
-                 for name, value in (("good", 1), ("stale", 2), ("failed", 3), ("never", 3), ("paused", 4),
-                                     ("unseen", 0), ("recovered", 1))]},
+                 *[{"labels": f'homelab:ai_schedule_state{{k8s_cluster="one",trust_domain="main",{job % name}}}', "value": value}
+                   for name, value in (("good", 1), ("stale", 2), ("failed", 3), ("never", 3), ("paused", 4),
+                                       ("unseen", 0), ("recovered", 1))],
+                 {"labels": 'homelab:ai_schedule_state{k8s_cluster="one",trust_domain="shared",namespace="ai",cronjob="litellm-key-check"}',
+                  "value": 1}]},
          ]},
         {"name": "AI result lines: the newest line in its window decides, no line is Unknown", "interval": "1m",
          "input_series": [

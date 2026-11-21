@@ -196,14 +196,17 @@ spec:
 
         - alert: AgentDailyArchiveFailed
           # The backup container of an agent pod ends when the daily archive of
-          # the product fails (config/scripts/daily-backup.sh, exit 1), so it
-          # restarts with the reason Error. A restart of the node restarts each
-          # container with the reason Unknown, and does not count. It fires for
-          # 2 hours after a restart.
+          # the product fails (config/scripts/daily-backup.sh, exit 1; set -e
+          # ends it with the code of any other failed command). It fires for 2
+          # hours after a restart that followed an exit code from 1 to 127.
+          # A stop of the node does not count: the kubelet stops the container
+          # with SIGTERM (exit 143, reason Error) or the node goes down with it
+          # (reason Unknown, exit 255). The reason alone can not tell 143 from
+          # a failed archive, so the rule reads the exit code.
           expr: |
             max by (namespace, pod) (increase(kube_pod_container_status_restarts_total{namespace=~"agents-.+", container="backup"}[2h])) > 0
             and on (namespace, pod)
-            max by (namespace, pod) (kube_pod_container_status_last_terminated_reason{namespace=~"agents-.+", container="backup", reason="Error"}) == 1
+            max by (namespace, pod) (kube_pod_container_status_last_terminated_exitcode{namespace=~"agents-.+", container="backup"} > 0 < 128)
           labels:
             severity: warning
           annotations:

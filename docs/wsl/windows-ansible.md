@@ -198,10 +198,16 @@ module `tnwks_win_dir_acl` (`playbooks/library`): no inherited rule, the
 Administrators own it, and the account may make and change files but not
 delete the directory or make one in it. The module stops when the path is a
 link or a junction. SYSTEM's `wsl.exe` can not see the distro of the user,
-so a SYSTEM task can not start a process in it. The USB attach and the
-monitoring volume have no part with no elevation yet, and the play refuses
-the switch on a host that runs them (the first task of the play, with each
-tag).
+so a SYSTEM task can not start a process in it. The monitoring volume has
+no part with no elevation yet, and the play refuses the switch on a host
+that runs it (the first task of the play, with each tag). The USB attach
+runs with no elevation with the switch (`-NoElevation`): the play binds each
+device as admin, usbipd-win attaches a bound device with no admin right
+(usbipd-win 4.3.0: `Bind` checks write access, `AttachWsl` does not), and the
+task logs to `C:\ProgramData\tnwks-usb-attach\log`, the folder that its
+account may write. In the move of the distro it has a copy for the account
+that owns the distro (`tnwks-usb-attach-account`), as the UDP relays and the
+address task of the LAN bridge do.
 
 **The folders of the roles.** On each host, with the switch on or off, each
 folder of a role under `C:\ProgramData` gets its rules from the same module,
@@ -722,8 +728,8 @@ and that the disk of the live distro is not under the folder. Each script
 checks it again before any action: the account script refuses a distro name
 outside its pattern and the names of `wsl_move_rehearsal_refused_names` (the
 live distro), whatever the pattern, and a path outside the folder; the
-procedure refuses an account or a task outside its pattern, a path outside
-the folder, and a config with the session check on. Each phase that runs the
+procedure refuses an account or a task outside its pattern, and a path
+outside the folder. The rehearsal keeps the session check off. Each phase that runs the
 procedure first reads the last marker in the state file, and does not start
 on another one than its order gives (a phase run twice, or out of order).
 The phase `window` runs after the setup, or again after a window that went
@@ -1046,8 +1052,15 @@ Administrators at a way back that comes before window step 7. The boot run
 of the group test (above) shows the group step at boot, once for each word
 of the owner. No temporary account is in Administrators across a restart in
 either case, a power loss in the boot run aside (above). The check for a
-session of the owner (site 1) is not built: the procedure refuses a config with it
-on. After a way back with no restart, it starts the start tasks of the
+session of the owner (site 1, `wsl_move_session_check`) reads the user of each
+session of the host with the session API of Windows (a session at the console
+or over Remote Desktop, active or disconnected; a task or an SSH login has
+none). With it on, window step 1 stops with nothing changed while the present
+account has a session, and the way back, in the procedure and in the boot
+task, does not restart while one is on, also after a failed check. A read
+that fails counts as a session. With it off (site 2), the procedure reads no
+session. The guards of the window play make the same read, from the copy of
+the procedure on the host. After a way back with no restart, it starts the start tasks of the
 present account (the third case of the design, a session of the owner, ends
 the same way); in the group test, A leaves Administrators first and the play
 starts them. Way back step 6 enables only the tasks that step 2 disabled (a
@@ -1308,7 +1321,7 @@ the run when a line fails.
   new account is there, and disabled for a forward window. The installed WSL
   is the version of the rehearsal and the version that step 3 saved. No
   restart is pending for updates. No session of the present account is on
-  the host (the session API of Windows), unless
+  the host (the read of the procedure, from its copy on the host), unless
   `-e wsl_move_window_force_session=true`.
 - **The readiness.** No other enabled task of the present account runs WSL.
   The present account registers the distro by its name, once, at the folder
