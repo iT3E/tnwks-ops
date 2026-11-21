@@ -298,8 +298,8 @@ read only. The parts come in steps; this table says what is there now.
 | The mount of the finance agent | The claim `vault-ro` at `/vault` in the agent pod (the product, its repair step and the index step), with `readOnly: true` on the claim and on each mount. `/vault` is the path of the vault server too, so a path from a memory search works in a vault tool call. The index reads `/vault` (`memory.search.extraPaths`, Markdown only) and polls (`CHOKIDAR_USEPOLLING`), because a write of the vault server gives no file event on this mount. The agent calls the nine tools as `vault__*` through the route `finance-vault`, with its key. Until the seed, the index also reads the copy on the state volume |
 | Active memory of finance | The stock plugin `active-memory` of the product, with the settings of the host: the agent `main`, direct and group chats, query mode `recent`, prompt style `recall-heavy`, a limit of 25 s, summaries of 220 characters, its log on, the default mode `escalate`. Two settings of the host are not here. Its own model (a small model on Bedrock on the host) needs an entry of the model gateway for this trust domain, an open point; until then a recall runs on the model of the session (`litellm/agents-finance`, through LiteLLM) and counts in the budget of that key. Its list of chat ids is not in git; the finance bot takes the direct chat of the owner only. An eligible reply waits for the recall, up to 25 s |
 | Active memory of main | The same plugin with the same settings in the config of the main agent, on the model of the session (the decision of the owner for the first run). It takes effect at the start of the agent, which has no pod yet |
-| The vault server of main | `vault-server` in `agents-main` (`kubernetes/apps/ai/agents/main/vault-server/`): the pod of finance in the main trust domain, on its own claim `vault-rw`, behind the route `main-vault` of the central MCP gateway, with the key of the main agent (a placeholder until the values step). No pod of main calls the route yet |
-| The mount of the main agent | Not yet |
+| The vault server of main | `vault-server` in `agents-main` (`kubernetes/apps/ai/agents/main/vault-server/`): the pod of finance in the main trust domain, on its own claim `vault-rw`, behind the route `main-vault` of the central MCP gateway, with the key of the main agent, which calls it (the row below) |
+| The mount of the main agent | As finance: the claim `vault-ro` of main at `/vault` in the agent pod (the gateway, its repair step and the index step), with `readOnly: true` on the claim and on each mount and no `subPath`. The index reads `/vault` (`memory.search.extraPaths`, Markdown only) and polls (`CHOKIDAR_USEPOLLING`). The vault tools go through the route `main-vault` with `MCP_GATEWAY_KEY`: the six read tools only until the seed of the share, because the seed stops at a share that is not empty, and the step of the seed adds the three write tools (the gateway allows all nine). The values check of the pod stops the start when the SHA-256 of that key is not the hash of the client `main` |
 
 Each share has two volumes, one for each claim:
 
@@ -325,9 +325,8 @@ read only, and the vault server is the one writer. The flag
 takes the read-only flag from the pod (its claim or its mount), so a pod
 that does not set it would get a mount that writes.
 
-What is still not there: the key of the main agent at the gateway (a
-placeholder hash), the mount of the main agent, the seed of the main
-share, and the change of the two admission rules to `Deny`.
+What is still not there: the seed of the main share, and the change of
+the two admission rules to `Deny`.
 
 The server checks the address of a client only, and a kubelet mounts from
 the address of its node. So a pod address gets no access, and which pod may

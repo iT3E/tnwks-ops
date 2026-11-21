@@ -1,6 +1,6 @@
 ---
 # The MCP gateway. In: the MCP port from the agent pod of each trust domain
-# that has a client (finance only for now) and from the gateway probe of each
+# that has a client (finance and main) and from the gateway probe of each
 # domain with a route (finance and main); the metrics port from Prometheus; the readiness port from the host
 # (the kubelet). No sandbox comes in: neither the workload pod nor the
 # supervisor of a sandbox carries the labels of a client. The admin port
@@ -34,8 +34,11 @@ spec:
             app.kubernetes.io/name: platform-checks
             app.kubernetes.io/component: mcp-gateway-probe
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
-        # The gateway probe of main. The main agent pod comes in with the
-        # step that gives it its vault tools.
+        # The main agent, for its vault route, and the gateway probe of main.
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: agent
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
         - matchLabels:
             io.kubernetes.pod.namespace: agents-main
             app.kubernetes.io/name: platform-checks

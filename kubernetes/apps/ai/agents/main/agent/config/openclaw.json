@@ -17,11 +17,26 @@
   "tools": {
     "elevated": {"enabled": false},
     "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
-    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search", "web_fetch", "message", "progress_card"]}},
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search", "web_fetch", "message", "progress_card", "vault__*"]}},
     "sessions": {"visibility": "all"},
     "web": {
       "search": {"enabled": true, "provider": "brave"},
       "fetch": {"enabled": true, "useTrustedEnvProxy": true}
+    }
+  },
+  "mcp": {
+    "servers": {
+      "vault": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "read_text_file", "read_multiple_files", "list_directory", "directory_tree",
+            "search_files", "get_file_info"
+          ]
+        }
+      }
     }
   },
   "memory": {
@@ -33,6 +48,9 @@
         "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"}
       },
       "sources": ["memory"],
+      "extraPaths": [
+        {"path": "/vault", "pattern": "**/*.md"}
+      ],
       "rememberAcrossConversations": false
     }
   },
