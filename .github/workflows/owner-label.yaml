@@ -45,8 +45,21 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: .github/scripts/owner-label-check.py
+          sparse-checkout: |
+            .github/scripts/owner-label-check.py
+            .github/scripts/owner-label-requirements.txt
           sparse-checkout-cone-mode: false
+
+      # The YAML parser of the content rule, pinned by hash (from main, like
+      # the script). If it can not install, the check still runs: with no
+      # parser it holds each pull request of the App that touches
+      # kubernetes/, and every other pull request is decided as before.
+      - name: Install the YAML parser
+        continue-on-error: true
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/owner-label"
+          "${RUNNER_TEMP}/owner-label/bin/pip" install --quiet --disable-pip-version-check \
+            --require-hashes --only-binary :all: --no-deps -r .github/scripts/owner-label-requirements.txt
 
       - name: Check who added the label
         env:
@@ -55,4 +68,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           OWNER_ID: ${{ github.repository_owner_id }}
-        run: python3 -I .github/scripts/owner-label-check.py
+        run: |
+          python="${RUNNER_TEMP}/owner-label/bin/python"
+          [[ -x "${python}" ]] || python=python3
+          "${python}" -I .github/scripts/owner-label-check.py
