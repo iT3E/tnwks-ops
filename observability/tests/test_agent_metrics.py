@@ -135,7 +135,7 @@ def test_the_declared_models_and_providers_are_the_ones_of_the_agent_configs():
 # The agents that send metrics. They turn on one at a time, each in its own
 # merge, because a change of openclaw.json restarts the pod of that agent:
 # pilot, then finance, then main (docs/apps/agent-platform.md, "Metrics").
-METRICS_ON = ("pilot", "finance")
+METRICS_ON = ("pilot", "finance", "main")
 
 
 def test_each_personal_agent_sends_its_metrics_to_alloy_and_no_text():
