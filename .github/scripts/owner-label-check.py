@@ -3,6 +3,8 @@
 
     GH_TOKEN=... REPO=<owner>/<name> PR=<number> HEAD_SHA=<sha> OWNER_ID=<id> \\
       python3 -I .github/scripts/owner-label-check.py
+    GH_TOKEN=... REPO=<owner>/<name> PR=<number> OWNER_ID=<id> OWNER_LOGIN=<login> \\
+      ACTOR=<login> python3 -I .github/scripts/owner-label-check.py --trust
 
 Run by .github/workflows/owner-label.yaml on every PR event that can change
 the answer (opened, reopened, synchronize, labeled, unlabeled). It reports
@@ -12,6 +14,15 @@ on HEAD_SHA, the head commit of the event, and passes or fails:
   keep merging. A PR is in a tier if impact/high or impact/critical is on it
   now, or a labeled event shows it was ever on it: taking the label off
   doesn't take a PR out of its tier.
+- Three rules put a PR in the tier of owner/approved whatever its labels
+  (docs/operations/ci.md, "Agent pull requests"):
+  - its author is not the owner, Renovate or the App of the main agent
+    (MAIN_AGENT_APP below; until it is set, that App is another author);
+  - its author is not that App, and someone other than the owner or
+    Renovate pushed to its branch (the activity API of the branch): a push
+    of an App into the branch of another author;
+  - its author is that App, and it touches a path of the "ask first" class
+    (ASK_FIRST below), as a file or as the old name of a renamed file.
 - impact/high needs owner/review; impact/critical needs owner/approved
   (.github/renovate/autoMerge.json5, docs/operations/renovate.md).
 - That label must be on the PR now, and its most recent labeled event must
@@ -22,6 +33,12 @@ on HEAD_SHA, the head commit of the event, and passes or fails:
   PR branch (the repository activity API), so a new push needs a new label.
   The check verifies this itself; it doesn't rely on renovate-review.yaml
   clearing the labels on a push.
+
+With --trust it prints one line, trusted=true or trusted=false, for the
+gates of the CI that run code of a PR branch with a secret or on a runner
+of the house (.github/workflows/pr-trust.yaml): true only when the author
+and the actor of the event are the owner or Renovate and nobody else
+pushed to the branch. It prints trusted=false when it can't tell.
 
 It fails closed: an API error, a page it can't read, a missing event or
 push, a label of the tiers that doesn't exist in the repository (renamed or
@@ -49,6 +66,41 @@ API = "https://api.github.com"
 HIGH, CRITICAL = "impact/high", "impact/critical"
 REVIEW, APPROVED = "owner/review", "owner/approved"
 LABELS = (HIGH, CRITICAL, REVIEW, APPROVED)
+RENOVATE = "renovate[bot]"
+# The bot login of the App of the main agent ("<slug>[bot]"). Empty until
+# the App exists (task 6.20 of the agent platform sets it): until then the
+# App is another author, and each of its PRs waits for owner/approved.
+MAIN_AGENT_APP = ""
+# The "ask first" class: a PR of the App of the main agent that touches one
+# of these paths waits for owner/approved. A path ending in "/" is a
+# directory. The list is the class of the design of the agent platform: the
+# Ansible, EdgeOS and Terraform source (the Terraform of GitHub among it),
+# the CI and its scripts, actions and config, bin/, the files of the
+# impact/critical rules of Renovate (the Flux system files and the cluster
+# entry, Talos, the CNI, the system upgrades, the data stores and storage),
+# the config of each required check, and the agent platform (its gateway
+# routes, tool rules and guardrails, its network policies, RBAC and
+# admission, the config of each agent, the plugins and the tool servers).
+# This file is under .github/, so the list is in its own class.
+ASK_FIRST = (
+    ".github/",
+    "bin/",
+    "infrastructure/",
+    "talos/",
+    "talosconfig",
+    "kubernetes/clusters/",
+    "kubernetes/apps/flux-system/",
+    "kubernetes/apps/kube-system/cilium/",
+    "kubernetes/apps/system-upgrade/",
+    "kubernetes/apps/databases/",
+    "kubernetes/apps/storage/",
+    "kubernetes/apps/ai/",
+    ".betterleaks.toml",
+    ".betterleaksignore",
+    ".pre-commit-config.yaml",
+    ".sops.yaml",
+    "AGENTS.md",
+)
 MAX_PAGES = 20
 ATTEMPTS = 3
 RETRY_SECONDS = 10
@@ -88,6 +140,53 @@ def is_owner(event: dict, owner_id: int) -> bool:
     )
 
 
+def is_owner_user(user: dict, owner_id: int) -> bool:
+    return user.get("id") == owner_id and user.get("type") == "User"
+
+
+def is_renovate(user: dict) -> bool:
+    return user.get("login") == RENOVATE and user.get("type") == "Bot"
+
+
+def is_agent(user: dict) -> bool:
+    return bool(MAIN_AGENT_APP) and user.get("login") == MAIN_AGENT_APP and user.get("type") == "Bot"
+
+
+def others(pushes: list[dict], owner_id: int) -> list[dict]:
+    """The entries of the activity of a branch whose actor is not the owner or Renovate."""
+    return [p for p in pushes if not (is_owner_user(p.get("actor") or {}, owner_id) or is_renovate(p.get("actor") or {}))]
+
+
+def ask_first(files: list[dict]) -> list[str]:
+    """The paths of the files (and old names of renamed files) in the class."""
+    hits = []
+    for f in files:
+        for path in (f.get("filename"), f.get("previous_filename")):
+            if path and any(path == p or (p.endswith("/") and path.startswith(p)) for p in ASK_FIRST):
+                hits.append(path)
+    return hits
+
+
+def forced(pr: dict, pushes: list[dict], files: list[dict] | None, owner_id: int) -> str | None:
+    """Why the PR is in the tier of owner/approved whatever its labels, or None."""
+    author = pr.get("user") or {}
+    if not (is_owner_user(author, owner_id) or is_renovate(author) or is_agent(author)):
+        return f"the author {safe(author.get('login', 'nobody'))} is not the owner, Renovate or the App of the main agent"
+    if not is_agent(author):
+        pushed = others(pushes, owner_id)
+        if pushed:
+            return f"{who(pushed[0])} pushed to the branch of another author"
+        return None
+    if files is None:
+        return "the files of the PR could not be read"
+    if pr.get("changed_files", 0) > len(files):
+        return "the PR has more files than the API lists"
+    hits = ask_first(files)
+    if hits:
+        return f"it touches the ask-first class: {safe(hits[0])}"
+    return None
+
+
 def decide(
     pr: dict,
     events: list[dict],
@@ -95,18 +194,29 @@ def decide(
     missing_labels: list[str],
     head_sha: str,
     owner_id: int,
+    pushes: list[dict] | None = None,
+    files: list[dict] | None = None,
 ) -> Verdict:
-    """The answer for HEAD_SHA, from what the API returned. No I/O."""
+    """The answer for HEAD_SHA, from what the API returned. No I/O.
+
+    push is the newest entry of the activity of the PR branch, and pushes
+    all of it (newest first); files are the files of the PR, read only when
+    its author is the App of the main agent."""
     sha = safe(head_sha[:7])
     if pr["head"]["sha"] != head_sha:
         return Verdict(False, f"the head moved from {sha} to {safe(pr['head']['sha'][:7])}; the run for the new head decides")
     if missing_labels:
         return Verdict(False, f"labels missing from the repository (renamed or deleted?): {', '.join(missing_labels)}")
+    if pushes is None:
+        pushes = [push] if push else []
 
     now = {label["name"] for label in pr.get("labels", [])}
     labeled = [e for e in events if e.get("event") == "labeled" and e.get("label")]
     ever = now | {e["label"].get("name") for e in labeled}
-    if CRITICAL in ever:
+    reason = forced(pr, pushes, files, owner_id)
+    if reason:
+        tier, gate = f"{APPROVED} tier ({reason})", APPROVED
+    elif CRITICAL in ever:
         tier, gate = CRITICAL, APPROVED
     elif HIGH in ever:
         tier, gate = HIGH, REVIEW
@@ -190,7 +300,17 @@ def get_all(fetch: Fetch, url: str) -> list:
     raise RuntimeError(f"more than {MAX_PAGES} pages of events; refusing to decide on part of them")
 
 
-def gather(fetch: Fetch, repo: str, pr_number: int) -> tuple[dict, list, dict | None, list[str]]:
+def activity(fetch: Fetch, repo: str, pr: dict) -> list[dict]:
+    """Each entry of the activity API for the PR branch, newest first; empty
+    for a branch in another repository."""
+    head_repo = pr["head"]["repo"]
+    if head_repo is None or head_repo["full_name"] != repo:
+        return []
+    ref = urllib.parse.quote(f"refs/heads/{pr['head']['ref']}", safe="")
+    return get_all(fetch, f"{API}/repos/{repo}/activity?ref={ref}&direction=desc&per_page=100")
+
+
+def gather(fetch: Fetch, repo: str, pr_number: int) -> tuple[dict, list, list[dict], list[str], list[dict] | None]:
     base = f"{API}/repos/{repo}"
     pr = get(fetch, f"{base}/pulls/{pr_number}")
     missing = []
@@ -201,15 +321,11 @@ def gather(fetch: Fetch, repo: str, pr_number: int) -> tuple[dict, list, dict | 
         elif status != 200:
             raise RuntimeError(f"GET label {name} returned {status}")
     events = get_all(fetch, f"{base}/issues/{pr_number}/events?per_page=100")
-    push = None
-    head_repo = pr["head"]["repo"]
-    if head_repo is not None and head_repo["full_name"] == repo:
-        ref = urllib.parse.quote(f"refs/heads/{pr['head']['ref']}", safe="")
-        activity = get(fetch, f"{base}/activity?ref={ref}&direction=desc&per_page=1")
-        if not isinstance(activity, list):
-            raise RuntimeError("the activity API did not return a list")
-        push = activity[0] if activity else None
-    return pr, events, push, missing
+    pushes = activity(fetch, repo, pr)
+    files = None
+    if is_agent(pr.get("user") or {}):
+        files = get_all(fetch, f"{base}/pulls/{pr_number}/files?per_page=100")
+    return pr, events, pushes, missing, files
 
 
 def run(fetch: Fetch, repo: str, pr_number: int, head_sha: str, owner_id: int, sleep=time.sleep) -> Verdict:
@@ -218,7 +334,9 @@ def run(fetch: Fetch, repo: str, pr_number: int, head_sha: str, owner_id: int, s
         if attempt:
             sleep(RETRY_SECONDS)
         try:
-            verdict = decide(*gather(fetch, repo, pr_number), head_sha=head_sha, owner_id=owner_id)
+            pr, events, pushes, missing, files = gather(fetch, repo, pr_number)
+            verdict = decide(pr, events, pushes[0] if pushes else None, missing, head_sha, owner_id,
+                             pushes=pushes, files=files)
         except (RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
             return Verdict(False, f"could not read the PR: {safe(e)}")
         if not verdict.retry:
@@ -226,7 +344,42 @@ def run(fetch: Fetch, repo: str, pr_number: int, head_sha: str, owner_id: int, s
     return verdict
 
 
+def trusted(pr: dict, pushes: list[dict], actor: str, owner_id: int, owner_login: str) -> bool:
+    """For the gates of the CI: the author and the actor are the owner or
+    Renovate, the head is in this repository, and nobody else pushed."""
+    author = pr.get("user") or {}
+    return (
+        (is_owner_user(author, owner_id) or is_renovate(author))
+        and actor in (owner_login, RENOVATE)
+        and pr["head"]["repo"] is not None
+        and pr["head"]["repo"]["full_name"] == pr["base"]["repo"]["full_name"]
+        and not others(pushes, owner_id)
+    )
+
+
+def trust_main(fetch: Fetch | None = None) -> int:
+    """--trust: one line on stdout, trusted=true or trusted=false. Exit 0."""
+    answer = False
+    try:
+        repo = os.environ["REPO"]
+        pr_number = int(os.environ["PR"])
+        owner_id = int(os.environ["OWNER_ID"])
+        actor = os.environ["ACTOR"]
+        owner_login = os.environ["OWNER_LOGIN"]
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            raise ValueError("REPO")
+        fetch = fetch or http_fetch(os.environ["GH_TOKEN"])
+        pr = get(fetch, f"{API}/repos/{repo}/pulls/{pr_number}")
+        answer = trusted(pr, activity(fetch, repo, pr), actor, owner_id, owner_login)
+    except (KeyError, RuntimeError, TypeError, ValueError, OSError) as e:
+        print(f"::warning title=Trust::could not tell, so not trusted: {safe(e)}", file=sys.stderr)
+    print(f"trusted={'true' if answer else 'false'}")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:] == ["--trust"]:
+        return trust_main()
     try:
         repo = os.environ["REPO"]
         pr_number = int(os.environ["PR"])

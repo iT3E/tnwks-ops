@@ -78,6 +78,29 @@ caller, for example `kubernetes / Render`.
   ([`windows-ansible.md`](../wsl/windows-ansible.md#nightly-drift-check))
   and the Terraform roots' ([below](#terraform-drift)).
 
+## Agent pull requests
+
+The App of the main agent of the agent platform pushes branches under
+`agent/` and merges its own pull requests when every required check is
+green. These rules keep the checks out of its hands and the steps of the
+owner his. Each comes from `main`, so a branch can not change it.
+
+- **"Owner label"** (`.github/scripts/owner-label-check.py`, run from
+  `main`) puts a pull request in the tier of `owner/approved`, whatever its
+  labels, when:
+  - its author is not the owner, Renovate or the App of the main agent
+    (`MAIN_AGENT_APP` in the script; until it is set, that App is another
+    author too);
+  - its author is not that App, and someone other than the owner or
+    Renovate pushed to its branch (the activity API of the branch);
+  - its author is that App, and it touches a path of the "ask first" class
+    (`ASK_FIRST` in the script): the Ansible, EdgeOS and Terraform source,
+    the CI and `bin/`, the files of the `impact/critical` rules, the config
+    of each required check, and `kubernetes/apps/ai/`. The agent asks the
+    owner in the chat, and the merge waits for his label.
+- **A draft waits.** A pull request of the owner (or of a session with his
+  login) that waits for his gate is a draft (AGENTS.md).
+
 ## Terraform: plan in CI, apply in Deploy
 
 Every root under `infrastructure/terraform/environments/prod/` is a

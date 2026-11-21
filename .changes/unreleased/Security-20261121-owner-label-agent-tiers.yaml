@@ -1,0 +1,3 @@
+kind: Security
+body: 'Owner label: a pull request whose author is not the owner, Renovate or the App of the main agent, one with a push of anyone else into the branch of another author, and one of the App that touches a path of the "ask first" class all wait for owner/approved from the owner. The App is not set yet, so each of its pull requests waits. A new mode, owner-label-check.py --trust, answers the gates of the CI. AGENTS.md keeps a pull request that waits for the owner as a draft. docs/operations/ci.md, "Agent pull requests".'
+time: 2026-11-21T11:30:00.000000+00:00
