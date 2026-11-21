@@ -1,3 +1,0 @@
-kind: Added
-body: 'windows: the window procedure of the move of the distro has the check of a session of the owner (wsl_move_session_check). With it on, window step 1 stops with nothing changed while the present account has a session at the console or over Remote Desktop, and the way back, in the procedure and in the boot task, does not restart while one is on, also after a failed check. A read that fails counts as a session. With it off the procedure reads no session, as before. The guards of the window play make the same read, from the copy of the procedure on the host'
-time: 2026-11-21T12:00:00.000000000Z
