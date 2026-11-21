@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.250.1 - 2026-11-21
+
+### Security
+
+* Owner label: a pull request whose author is not the owner, Renovate or the App of the main agent, one with a push of anyone else into the branch of another author (since the branch was last created) or a commit of a bot other than Renovate, and one of the App that touches a path of the "ask first" class all wait for owner/approved from the owner. Such a pull request fails when its base is not main or when its title, body or a commit message holds a skip instruction of GitHub Actions, and a label counts only when it is newer than the last change of the base; the check runs again on each edit. The class also holds the workstation entry files and the other controls of the cluster. The App is not set yet, so each of its pull requests waits. A new mode, owner-label-check.py --trust, answers the gates of the CI; it needs the base main and the newest push of the branch at the head. AGENTS.md keeps a pull request that waits for the owner as a draft. docs/operations/ci.md, "Agent pull requests".
+
 ## v2.250.0 - 2026-11-21
 
 ### Added
