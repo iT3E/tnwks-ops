@@ -774,8 +774,8 @@ the model gateway. It shows no product metrics and no money.
   The collector emits each row on each site:
   `homelab_expected_ai_part_info` where a site runs the part, and
   `homelab_absent_ai_part_info` where it does not run it by design. Site 2
-  runs only the browser tool server. Both sites deploy it, and the site that
-  does not serve it has it at zero replicas, as Standby.
+  runs no AI part, so each row there is Not applicable. The browser tool
+  server runs at site 1 only, beside the MCP gateway and the fetch proxy.
   `tests/test_ai_inventory.py` holds the lists to the manifests that Flux
   applies.
 - **A state for each row** (`ai_records()` in `observability/rules.py`):

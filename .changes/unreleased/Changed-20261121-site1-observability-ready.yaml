@@ -1,3 +1,0 @@
-kind: Changed
-body: 'windows: site 1 takes the phase ready of the move of the monitoring data (observability_storage_mount): the distro makes the file of 19 GiB once, its timer stays off, and the VHDX keeps the data'
-time: 2026-11-21T15:00:00.000000000Z
