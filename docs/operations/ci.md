@@ -118,7 +118,10 @@ owner his. Each comes from `main`, so a branch can not change it.
     admission policy of the Flux children
     ([`flux-admission.md`](flux-admission.md)) can not see a Flux source,
     an admission object, or a file that a path or a link reaches (a SOPS
-    file of the class). A file it can not read holds the pull request too.
+    file of the class). Until the children outside the class decrypt with a
+    key of their own, it also holds a pull request that touches an
+    encrypted file (`.sops.` in its name). A file it can not read holds the
+    pull request too.
 - **Two rules fail** a pull request of that App, or one that a rule above
   holds, whatever its labels:
   - its base is not `main`. Its checks ran against that base, and a green

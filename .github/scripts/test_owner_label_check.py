@@ -546,9 +546,16 @@ class Content(unittest.TestCase):
 
     def test_a_link_holds_the_app(self):
         # A test object of the design: a link to a SOPS file of the class.
-        self.held("a link or a submodule", {"filename": APP + "app/secret.sops.yaml", "mode": "120000"})
+        self.held("a link or a submodule", {"filename": APP + "app/secret.yaml", "mode": "120000"})
         self.held("a link or a submodule", {"filename": "docs/link", "mode": "120000"})
         self.held("a link or a submodule", {"filename": "vendor/module", "mode": "160000"})
+
+    def test_an_encrypted_file_holds_the_app(self):
+        # A copy of an encrypted file of the class would decrypt outside it.
+        for f in ({"filename": APP + "app/secret.sops.yaml", "status": "added"},
+                  {"filename": APP + "app/x.yaml", "previous_filename": APP + "app/x.sops.yaml", "status": "renamed"},
+                  {"filename": "docs/old.sops.json", "status": "removed"}):
+            self.held("an encrypted file", f)
 
     def test_a_removed_link_passes(self):
         self.assertTrue(self.go({"filename": "docs/link", "status": "removed"}).ok)
@@ -614,7 +621,7 @@ class AgentRun(unittest.TestCase):
         self.assertFalse(any(f"ref={OLD_HEAD}" in c for c in api.calls))
 
     def test_a_link_in_the_tree_holds_the_app(self):
-        path = APP + "app/secret.sops.yaml"
+        path = APP + "app/secret.yaml"
         files = [{"filename": path, "status": "added", "patch": "+../../../../ai/x.sops.yaml"}]
         tree = (200, {"truncated": False, "tree": [{"path": path, "mode": "120000"}]}, {})
         api = self.content_routes(files, tree, {(path, HEAD): "x"})

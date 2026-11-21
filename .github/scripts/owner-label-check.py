@@ -31,7 +31,8 @@ reports on HEAD_SHA, the head commit of the event, and passes or fails:
     (content() below): it adds or changes a link or a submodule; or a file
     under kubernetes/ that holds a Flux object or an admission object at
     its head or at its base; or it adds a path with ".." out of the folder
-    of its file under kubernetes/. Flux applies each manifest outside the
+    of its file under kubernetes/; or it touches an encrypted file
+    (".sops." in its name). Flux applies each manifest outside the
     class with full rights, and the admission policy of the Flux children
     (kubernetes/apps/flux-system/admission) can not see a Flux source, an
     admission object or a file that a path or a link reaches.
@@ -307,6 +308,11 @@ def content(files: list[dict]) -> str | None:
         names = [n for n in (f.get("filename"), f.get("previous_filename")) if n]
         name = safe(names[0]) if names else "a file"
         removed = f.get("status") == "removed"
+        # Until the children outside the class decrypt with a key of their
+        # own, a copy of an encrypted file of the class into a folder
+        # outside it would decrypt there with the main key.
+        if any(".sops." in n.rsplit("/", 1)[-1] for n in names):
+            return f"it adds, changes or removes an encrypted file: {name}"
         if not removed:
             if "mode" not in f:
                 return f"the mode of {name} could not be read"
