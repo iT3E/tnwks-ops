@@ -81,6 +81,7 @@ the MCP server and checks the headers that arrive.
 | `/finance-vault/` | `finance-probe` | the nine tools of the vault | `get_file_info` only |
 | `/main-vault/` | `main` | the nine tools of the vault | the nine tools of the vault |
 | `/main-vault/` | `main-probe` | the nine tools of the vault | `get_file_info` only |
+| `/main-cluster/` | `main` | the eight kept reads of the cluster server | the eight kept reads of the cluster server |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -100,10 +101,32 @@ leak of that key also gives the writes of the vault
 
 **The vault of main** has the same form: the route `/main-vault/`, the
 nine tools, the 60 s, and the vault server of main as its target. Its one
-client is the main agent, which has no other route, so its key is a key
-of its own and no key of finance is on it (a test holds the two routes
-apart). The main agent calls it from its gateway process (`mcp.servers.vault`
-of its config, with `MCP_GATEWAY_KEY`), as the finance agent calls its own.
+client is the main agent, so its key is a key of its own and no key of
+finance is on it (a test holds the two routes apart). The main agent calls
+it from its gateway process (`mcp.servers.vault` of its config, with
+`MCP_GATEWAY_KEY`), as the finance agent calls its own.
+
+**The read servers of main** (Design Doc of effort 0003, section 4.2.6)
+each get a route of their own with the key of the main agent only, the
+same hash as on `/main-vault/`, with `route` as the second field of its
+metadata. Each route names its kept tools one by one, from a dump of the
+pinned image in `tools/`, sets 30 s on the route and on the target, and
+sets no credential on the target: the credential of each read server stays
+in its pod. Today one is in git:
+
+- `/main-cluster/`: the cluster server of main
+  (`kubernetes/apps/ai/agents/main/cluster-mcp`), the Kubernetes MCP server
+  of the containers organization, read only, as its own service account.
+  That account has the role `view` in each namespace of this cluster but
+  `agents-finance` and `ai`, and the list of the namespaces
+  (`agents/main/read-access`). The server refuses Secrets and
+  exposed-secret reports, and the gateway refuses each tool that the route
+  does not name: no exec, no run, no write, no list across all namespaces,
+  no node log. `tools/cluster.json` is the dump.
+
+`observability/tests/test_main_read_servers.py` checks the routes, the
+pods, the network rules and the bindings, and runs the pinned gateway with
+the pinned servers in containers.
 
 **The pilot and the workflow agents get no key.** No key is the safer
 default. A key with no tool still authenticates: it opens a connection,
@@ -161,7 +184,7 @@ its place for the container tests.
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
-| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, route `main-vault` (`metadata: {client: main, route: main-vault}`) |
+| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `main-vault` and `main-cluster` (the same hash; `metadata: {client: main, route: <the route>}`) |
 | `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, route `main-vault` |
 
 **The hash and the value stay in step** in two ways: the owner changes both

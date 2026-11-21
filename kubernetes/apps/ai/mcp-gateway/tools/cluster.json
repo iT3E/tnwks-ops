@@ -1,0 +1,1293 @@
+{
+ "groups": "core",
+ "image": "quay.io/containers/kubernetes_mcp_server:v0.1.3@sha256:6347155616c49c78512114500688b50d275ddde7597b6a38cefe6f40a8c42c16",
+ "tools": [
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "unbounded": {
+      "reason": "requires Kubernetes API discovery non-resource URL access across all API groups; current RBAC metadata cannot express non-resource URLs"
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "API Resources: List by Kind"
+   },
+   "description": "Look up the Kubernetes API resource type(s) matching a specific kind you already have in mind (apiVersion, plural resource name, whether namespaced), using the server's preferred version for each match -- the same data 'kubectl api-resources' shows for that kind. Use this to discover the correct apiVersion for a kind before calling resources_get, resources_list, resources_create_or_update, resources_delete, or resources_scale, especially for CRDs whose apiVersion isn't already known.",
+   "inputSchema": {
+    "properties": {
+     "kind": {
+      "description": "Required case-insensitive exact filter on kind (e.g. 'Deployment', 'Route'). Matches the same Kind across every API group and version, so the result can still contain multiple API resource entries.",
+      "minLength": 1,
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind"
+    ],
+    "type": "object"
+   },
+   "name": "api_resources_list",
+   "title": "API Resources: List by Kind"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "target": {
+         "resource": {
+          "resource": "events"
+         }
+        },
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Events: List"
+   },
+   "description": "List Kubernetes events (warnings, errors, state changes) for debugging and troubleshooting in the current cluster from all namespaces. Use limit and continue to retrieve a large list one page at a time.",
+   "inputSchema": {
+    "properties": {
+     "continue": {
+      "description": "Opaque token from the continue field of the previous page. Send it unchanged with the same limit, namespace, and selectors to retrieve the next page. Omit on the first call.",
+      "type": "string"
+     },
+     "fieldSelector": {
+      "description": "Optional Kubernetes field selector to filter events by field values (e.g. 'type=Warning', 'involvedObject.name=my-pod'). Supported fields: involvedObject.kind, involvedObject.name, involvedObject.namespace, involvedObject.uid, involvedObject.apiVersion, involvedObject.resourceVersion, involvedObject.fieldPath, reason, reportingComponent, source, type. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+      "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of items to return. Omit or set to 0 to list everything, which fails if the response exceeds max_backend_response_bytes. Retry with a smaller limit when that happens. The API may return fewer items than requested.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "namespace": {
+      "description": "Optional Namespace to retrieve the events from. If not provided, will list events from all namespaces",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "events_list",
+   "title": "Events: List"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "target": {
+         "resource": {
+          "resource": "namespaces"
+         }
+        },
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Namespaces: List"
+   },
+   "description": "List all the Kubernetes namespaces in the current cluster. Use limit and continue to retrieve a large list one page at a time.",
+   "inputSchema": {
+    "properties": {
+     "continue": {
+      "description": "Opaque token from the continue field of the previous page. Send it unchanged with the same limit, namespace, and selectors to retrieve the next page. Omit on the first call.",
+      "type": "string"
+     },
+     "fieldSelector": {
+      "description": "Optional Kubernetes field selector to filter namespaces by field values (e.g. 'metadata.name=default', 'status.phase=Active'). Supported fields: metadata.name, status.phase. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+      "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of items to return. Omit or set to 0 to list everything, which fails if the response exceeds max_backend_response_bytes. Retry with a smaller limit when that happens. The API may return fewer items than requested.",
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "namespaces_list",
+   "title": "Namespaces: List"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "nodes"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       },
+       {
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "nodes",
+          "subresource": "proxy"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Node: Log"
+   },
+   "description": "Get logs from a Kubernetes node (kubelet, kube-proxy, or other system logs). This accesses node logs through the Kubernetes API proxy to the kubelet",
+   "inputSchema": {
+    "properties": {
+     "name": {
+      "description": "Name of the node to get logs from",
+      "type": "string"
+     },
+     "query": {
+      "description": "query specifies services(s) or files from which to return logs (required). Example: \"kubelet\" to fetch kubelet logs, \"/<log-file-name>\" to fetch a specific log file from the node (e.g., \"/var/log/kubelet.log\" or \"/var/log/kube-proxy.log\")",
+      "type": "string"
+     },
+     "tailLines": {
+      "default": 100,
+      "description": "Number of lines to retrieve from the end of the logs (Optional, 0 means all logs)",
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "query"
+    ],
+    "type": "object"
+   },
+   "name": "nodes_log",
+   "title": "Node: Log"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "nodes"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       },
+       {
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "nodes",
+          "subresource": "proxy"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Node: Stats Summary"
+   },
+   "description": "Get detailed resource usage statistics from a Kubernetes node via the kubelet's Summary API. Provides comprehensive metrics including CPU, memory, filesystem, and network usage at the node, pod, and container levels. On systems with cgroup v2 and kernel 4.20+, also includes PSI (Pressure Stall Information) metrics that show resource pressure for CPU, memory, and I/O. See https://kubernetes.io/docs/reference/instrumentation/understand-psi-metrics/ for details on PSI metrics",
+   "inputSchema": {
+    "properties": {
+     "name": {
+      "description": "Name of the node to get stats from",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "nodes_stats_summary",
+   "title": "Node: Stats Summary"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "target": {
+         "resource": {
+          "apiGroup": "metrics.k8s.io",
+          "resource": "nodes"
+         }
+        },
+        "verbs": [
+         "get",
+         "list"
+        ]
+       },
+       {
+        "target": {
+         "resource": {
+          "resource": "nodes"
+         }
+        },
+        "verbs": [
+         "get",
+         "list"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Nodes: Top"
+   },
+   "description": "List the resource consumption (CPU and memory) as recorded by the Kubernetes Metrics Server for the specified Kubernetes Nodes or all nodes in the cluster. Use limit and continue to retrieve a large list one page at a time.",
+   "inputSchema": {
+    "properties": {
+     "continue": {
+      "description": "Opaque token from the continue field of the previous page. Send it unchanged with the same limit, namespace, and selectors to retrieve the next page. Omit on the first call.",
+      "type": "string"
+     },
+     "label_selector": {
+      "description": "Kubernetes label selector (e.g. 'node-role.kubernetes.io/worker=') to filter nodes by label (Optional, only applicable when name is not provided)",
+      "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of items to return. Omit or set to 0 to list everything, which fails if the response exceeds max_backend_response_bytes. Retry with a smaller limit when that happens. The API may return fewer items than requested.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "name": {
+      "description": "Name of the Node to get the resource consumption from (Optional, all Nodes if not provided)",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "nodes_top",
+   "title": "Nodes: Top"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "pods"
+         }
+        },
+        "verbs": [
+         "get",
+         "delete"
+        ]
+       },
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "target": {
+         "resource": {
+          "resource": "services"
+         }
+        },
+        "verbs": [
+         "list",
+         "delete"
+        ]
+       },
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "target": {
+         "resource": {
+          "apiGroup": "route.openshift.io",
+          "resource": "routes"
+         }
+        },
+        "verbs": [
+         "list",
+         "delete"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Pods: Delete"
+   },
+   "description": "Delete a Kubernetes Pod in the current or provided namespace with the provided name",
+   "inputSchema": {
+    "properties": {
+     "name": {
+      "description": "Name of the Pod to delete",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace to delete the Pod from",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "pods_delete",
+   "title": "Pods: Delete"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "pods"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       },
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "pods",
+          "subresource": "exec"
+         }
+        },
+        "verbs": [
+         "get",
+         "create"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Pods: Exec"
+   },
+   "description": "Execute a command in a Kubernetes Pod (shell access, run commands in container) in the current or provided namespace with the provided name and command",
+   "inputSchema": {
+    "properties": {
+     "command": {
+      "description": "Command to execute in the Pod container. The first item is the command to be run, and the rest are the arguments to that command. Example: [\"ls\", \"-l\", \"/tmp\"]",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "container": {
+      "description": "Name of the Pod container where the command will be executed (Optional)",
+      "type": "string"
+     },
+     "name": {
+      "description": "Name of the Pod where the command will be executed",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace of the Pod where the command will be executed",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "command"
+    ],
+    "type": "object"
+   },
+   "name": "pods_exec",
+   "title": "Pods: Exec"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "pods"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Pods: Get"
+   },
+   "description": "Get a Kubernetes Pod in the current or provided namespace with the provided name",
+   "inputSchema": {
+    "properties": {
+     "name": {
+      "description": "Name of the Pod",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace to get the Pod from",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "pods_get",
+   "title": "Pods: Get"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "all": true
+        },
+        "target": {
+         "resource": {
+          "resource": "pods"
+         }
+        },
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Pods: List"
+   },
+   "description": "List all the Kubernetes pods in the current cluster from all namespaces. Use limit and continue to retrieve a large list one page at a time.",
+   "inputSchema": {
+    "properties": {
+     "continue": {
+      "description": "Opaque token from the continue field of the previous page. Send it unchanged with the same limit, namespace, and selectors to retrieve the next page. Omit on the first call.",
+      "type": "string"
+     },
+     "fieldSelector": {
+      "description": "Optional Kubernetes field selector to filter pods by field values (e.g. 'status.phase=Running', 'spec.nodeName=node1'). Supported fields: metadata.name, metadata.namespace, spec.nodeName, spec.restartPolicy, spec.schedulerName, spec.serviceAccountName, status.phase (Pending/Running/Succeeded/Failed/Unknown), status.podIP, status.nominatedNodeName. Note: CrashLoopBackOff is a container state, not a pod phase, so it cannot be filtered directly. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+      "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+      "type": "string"
+     },
+     "labelSelector": {
+      "description": "Optional Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)'), use this option when you want to filter the pods by label",
+      "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of items to return. Omit or set to 0 to list everything, which fails if the response exceeds max_backend_response_bytes. Retry with a smaller limit when that happens. The API may return fewer items than requested.",
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "pods_list",
+   "title": "Pods: List"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "target": {
+         "resource": {
+          "resource": "pods"
+         }
+        },
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Pods: List in Namespace"
+   },
+   "description": "List all the Kubernetes pods in the specified namespace in the current cluster. Use limit and continue to retrieve a large list one page at a time.",
+   "inputSchema": {
+    "properties": {
+     "continue": {
+      "description": "Opaque token from the continue field of the previous page. Send it unchanged with the same limit, namespace, and selectors to retrieve the next page. Omit on the first call.",
+      "type": "string"
+     },
+     "fieldSelector": {
+      "description": "Optional Kubernetes field selector to filter pods by field values (e.g. 'status.phase=Running', 'spec.nodeName=node1'). Supported fields: metadata.name, metadata.namespace, spec.nodeName, spec.restartPolicy, spec.schedulerName, spec.serviceAccountName, status.phase (Pending/Running/Succeeded/Failed/Unknown), status.podIP, status.nominatedNodeName. Note: CrashLoopBackOff is a container state, not a pod phase, so it cannot be filtered directly. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+      "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+      "type": "string"
+     },
+     "labelSelector": {
+      "description": "Optional Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)'), use this option when you want to filter the pods by label",
+      "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of items to return. Omit or set to 0 to list everything, which fails if the response exceeds max_backend_response_bytes. Retry with a smaller limit when that happens. The API may return fewer items than requested.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "namespace": {
+      "description": "Namespace to list pods from",
+      "type": "string"
+     }
+    },
+    "required": [
+     "namespace"
+    ],
+    "type": "object"
+   },
+   "name": "pods_list_in_namespace",
+   "title": "Pods: List in Namespace"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "pods"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       },
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "resource": {
+          "resource": "pods",
+          "subresource": "log"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Pods: Log"
+   },
+   "description": "Get the logs of a Kubernetes Pod in the current or provided namespace with the provided name",
+   "inputSchema": {
+    "properties": {
+     "container": {
+      "description": "Name of the Pod container to get the logs from (Optional)",
+      "type": "string"
+     },
+     "name": {
+      "description": "Name of the Pod to get the logs from",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace to get the Pod logs from",
+      "type": "string"
+     },
+     "previous": {
+      "description": "Return previous terminated container logs (Optional)",
+      "type": "boolean"
+     },
+     "tail": {
+      "default": 100,
+      "description": "Number of lines to retrieve from the end of the logs (Optional, default: 100)",
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "pods_log",
+   "title": "Pods: Log"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "target": {
+         "resource": {
+          "resource": "pods"
+         }
+        },
+        "verbs": [
+         "create",
+         "patch"
+        ]
+       },
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "target": {
+         "resource": {
+          "resource": "services"
+         }
+        },
+        "verbs": [
+         "create",
+         "patch"
+        ]
+       },
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "target": {
+         "resource": {
+          "apiGroup": "route.openshift.io",
+          "resource": "routes"
+         }
+        },
+        "verbs": [
+         "create",
+         "patch"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Pods: Run"
+   },
+   "description": "Run a Kubernetes Pod in the current or provided namespace with the provided container image and optional name",
+   "inputSchema": {
+    "properties": {
+     "image": {
+      "description": "Container Image to run in the Pod",
+      "type": "string"
+     },
+     "name": {
+      "description": "Name of the Pod (Optional, random name if not provided)",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace to run the Pod in",
+      "type": "string"
+     },
+     "port": {
+      "description": "TCP/IP port to expose from the Pod container (Optional, no port exposed if not provided)",
+      "type": "number"
+     }
+    },
+    "required": [
+     "image"
+    ],
+    "type": "object"
+   },
+   "name": "pods_run",
+   "title": "Pods: Run"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "all": true
+        },
+        "target": {
+         "resource": {
+          "apiGroup": "metrics.k8s.io",
+          "resource": "pods"
+         }
+        },
+        "verbs": [
+         "get",
+         "list"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Pods: Top"
+   },
+   "description": "List the resource consumption (CPU and memory) as recorded by the Kubernetes Metrics Server for the specified Kubernetes Pods in the all namespaces, the provided namespace, or the current namespace. Use limit and continue to retrieve a large list one page at a time.",
+   "inputSchema": {
+    "properties": {
+     "all_namespaces": {
+      "default": true,
+      "description": "If true, list the resource consumption for all Pods in all namespaces. If false, list the resource consumption for Pods in the provided namespace or the current namespace",
+      "type": "boolean"
+     },
+     "continue": {
+      "description": "Opaque token from the continue field of the previous page. Send it unchanged with the same limit, namespace, and selectors to retrieve the next page. Omit on the first call.",
+      "type": "string"
+     },
+     "label_selector": {
+      "description": "Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)'), use this option when you want to filter the pods by label (Optional, only applicable when name is not provided)",
+      "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of items to return. Omit or set to 0 to list everything, which fails if the response exceeds max_backend_response_bytes. Retry with a smaller limit when that happens. The API may return fewer items than requested.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "name": {
+      "description": "Name of the Pod to get the resource consumption from (Optional, all Pods in the namespace if not provided)",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace to get the Pods resource consumption from (Optional, current namespace if not provided and all_namespaces is false)",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "pods_top",
+   "title": "Pods: Top"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "target": {
+         "resource": {
+          "apiGroup": "project.openshift.io",
+          "resource": "projects"
+         }
+        },
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Projects: List"
+   },
+   "description": "List all the OpenShift projects in the current cluster. Use limit and continue to retrieve a large list one page at a time.",
+   "inputSchema": {
+    "properties": {
+     "continue": {
+      "description": "Opaque token from the continue field of the previous page. Send it unchanged with the same limit, namespace, and selectors to retrieve the next page. Omit on the first call.",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of items to return. Omit or set to 0 to list everything, which fails if the response exceeds max_backend_response_bytes. Retry with a smaller limit when that happens. The API may return fewer items than requested.",
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "projects_list",
+   "title": "Projects: List"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "target": {
+         "manifest": {
+          "argument": "resource"
+         }
+        },
+        "verbs": [
+         "create",
+         "patch"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Resources: Create or Update"
+   },
+   "description": "Create or update a Kubernetes resource via Server-Side Apply. The manifest is the complete desired state: any field this tool previously set and the new manifest omits is removed. To edit an existing resource, fetch it with resources_get, modify it, then re-apply the full resource.\n(common apiVersion and kind include: v1 Pod, v1 Service, v1 Node, apps/v1 Deployment, networking.k8s.io/v1 Ingress, route.openshift.io/v1 Route)",
+   "inputSchema": {
+    "properties": {
+     "resource": {
+      "description": "Complete YAML or JSON representation of the Kubernetes resource (full desired state, not a partial patch). Include apiVersion, kind, metadata, and the full spec. For namespaced resources, include metadata.namespace to specify the target namespace; if omitted, the configured default namespace is used",
+      "type": "string"
+     }
+    },
+    "required": [
+     "resource"
+    ],
+    "type": "object"
+   },
+   "name": "resources_create_or_update",
+   "title": "Resources: Create or Update"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "gvk": {
+          "apiVersionArgument": "apiVersion",
+          "kindArgument": "kind"
+         }
+        },
+        "verbs": [
+         "delete"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Resources: Delete"
+   },
+   "description": "Delete a Kubernetes resource in the current cluster by providing its apiVersion, kind, optionally the namespace, and its name\n(common apiVersion and kind include: v1 Pod, v1 Service, v1 Node, apps/v1 Deployment, networking.k8s.io/v1 Ingress, route.openshift.io/v1 Route)",
+   "inputSchema": {
+    "properties": {
+     "apiVersion": {
+      "description": "apiVersion of the resource (examples of valid apiVersion are: v1, apps/v1, networking.k8s.io/v1)",
+      "type": "string"
+     },
+     "gracePeriodSeconds": {
+      "description": "Optional duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used",
+      "type": "integer"
+     },
+     "kind": {
+      "description": "kind of the resource (examples of valid kind are: Pod, Service, Deployment, Ingress)",
+      "type": "string"
+     },
+     "name": {
+      "description": "Name of the resource",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Optional Namespace to delete the namespaced resource from (ignored in case of cluster scoped resources). If not provided, will delete resource from configured namespace",
+      "type": "string"
+     }
+    },
+    "required": [
+     "apiVersion",
+     "kind",
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "resources_delete",
+   "title": "Resources: Delete"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "gvk": {
+          "apiVersionArgument": "apiVersion",
+          "kindArgument": "kind"
+         }
+        },
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Resources: Get"
+   },
+   "description": "Get a Kubernetes resource in the current cluster by providing its apiVersion, kind, optionally the namespace, and its name\n(common apiVersion and kind include: v1 Pod, v1 Service, v1 Node, apps/v1 Deployment, networking.k8s.io/v1 Ingress, route.openshift.io/v1 Route)",
+   "inputSchema": {
+    "properties": {
+     "apiVersion": {
+      "description": "apiVersion of the resource (examples of valid apiVersion are: v1, apps/v1, networking.k8s.io/v1)",
+      "type": "string"
+     },
+     "kind": {
+      "description": "kind of the resource (examples of valid kind are: Pod, Service, Deployment, Ingress)",
+      "type": "string"
+     },
+     "name": {
+      "description": "Name of the resource",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Optional Namespace to retrieve the namespaced resource from (ignored in case of cluster scoped resources). If not provided, will get resource from configured namespace",
+      "type": "string"
+     }
+    },
+    "required": [
+     "apiVersion",
+     "kind",
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "resources_get",
+   "title": "Resources: Get"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "target": {
+         "gvk": {
+          "apiVersionArgument": "apiVersion",
+          "kindArgument": "kind"
+         }
+        },
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Resources: List"
+   },
+   "description": "List Kubernetes resources and objects in the current cluster by providing their apiVersion and kind and optionally the namespace and label selector. Use limit and continue to retrieve a large list one page at a time.\n(common apiVersion and kind include: v1 Pod, v1 Service, v1 Node, apps/v1 Deployment, networking.k8s.io/v1 Ingress, route.openshift.io/v1 Route)",
+   "inputSchema": {
+    "properties": {
+     "apiVersion": {
+      "description": "apiVersion of the resources (examples of valid apiVersion are: v1, apps/v1, networking.k8s.io/v1)",
+      "type": "string"
+     },
+     "continue": {
+      "description": "Opaque token from the continue field of the previous page. Send it unchanged with the same limit, namespace, and selectors to retrieve the next page. Omit on the first call.",
+      "type": "string"
+     },
+     "fieldSelector": {
+      "description": "Optional Kubernetes field selector to filter resources by field values (e.g. 'status.phase=Running', 'metadata.name=myresource'). Supported fields vary by resource type. For Pods: metadata.name, metadata.namespace, spec.nodeName, spec.restartPolicy, spec.schedulerName, spec.serviceAccountName, status.phase (Pending/Running/Succeeded/Failed/Unknown), status.podIP, status.nominatedNodeName. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+      "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+      "type": "string"
+     },
+     "kind": {
+      "description": "kind of the resources (examples of valid kind are: Pod, Service, Deployment, Ingress)",
+      "type": "string"
+     },
+     "labelSelector": {
+      "description": "Optional Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)'), use this option when you want to filter the resources by label",
+      "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of items to return. Omit or set to 0 to list everything, which fails if the response exceeds max_backend_response_bytes. Retry with a smaller limit when that happens. The API may return fewer items than requested.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "namespace": {
+      "description": "Optional Namespace to retrieve the namespaced resources from (ignored in case of cluster scoped resources). If not provided, will list resources from all namespaces",
+      "type": "string"
+     }
+    },
+    "required": [
+     "apiVersion",
+     "kind"
+    ],
+    "type": "object"
+   },
+   "name": "resources_list",
+   "title": "Resources: List"
+  },
+  {
+   "_meta": {
+    "io.kubernetes-mcp-server/rbac": {
+     "bounded": {
+      "requirements": [
+       {
+        "namespace": {
+         "argument": "namespace"
+        },
+        "resourceName": {
+         "argument": "name"
+        },
+        "target": {
+         "gvk": {
+          "apiVersionArgument": "apiVersion",
+          "kindArgument": "kind",
+          "subresource": "scale"
+         }
+        },
+        "verbs": [
+         "get",
+         "update"
+        ]
+       }
+      ]
+     },
+     "version": "v1alpha1"
+    }
+   },
+   "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Resources: Scale"
+   },
+   "description": "Get or update the scale of a Kubernetes resource in the current cluster by providing its apiVersion, kind, name, and optionally the namespace. If the scale is set in the tool call, the scale will be updated to that value. Always returns the current scale of the resource",
+   "inputSchema": {
+    "properties": {
+     "apiVersion": {
+      "description": "apiVersion of the resource (examples of valid apiVersion are apps/v1)",
+      "type": "string"
+     },
+     "kind": {
+      "description": "kind of the resource (examples of valid kind are: StatefulSet, Deployment)",
+      "type": "string"
+     },
+     "name": {
+      "description": "Name of the resource",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Optional Namespace to get/update the namespaced resource scale from (ignored in case of cluster scoped resources). If not provided, will get/update resource scale from configured namespace",
+      "type": "string"
+     },
+     "scale": {
+      "description": "Optional scale to update the resources scale to. If not provided, will return the current scale of the resource, and not update it",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "apiVersion",
+     "kind",
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "resources_scale",
+   "title": "Resources: Scale"
+  }
+ ]
+}

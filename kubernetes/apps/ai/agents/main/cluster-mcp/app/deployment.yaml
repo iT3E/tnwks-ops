@@ -1,0 +1,113 @@
+---
+# The service account of the cluster server. Its rights are the role view
+# in each namespace but agents-finance and ai, and the list of the
+# namespaces (../../read-access/app/rbac.yaml). Its token is in this pod
+# only (R2).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-mcp
+  labels:
+    app.kubernetes.io/name: cluster-mcp
+automountServiceAccountToken: false
+---
+# The cluster server of main (Design Doc, section 4.2.6): the Kubernetes
+# MCP server of the containers organization, from its upstream image at a
+# release and a digest, in HTTP mode on /mcp, read only (config.toml). The
+# central MCP gateway is its one client (networkpolicy.yaml), and it
+# refuses each tool that its route main-cluster does not name.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-mcp
+  labels:
+    app.kubernetes.io/name: cluster-mcp
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cluster-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cluster-mcp
+        # Its own DNS rule, for the name of the API server only
+        # (networkpolicy.yaml), and not the namespace's rule for any name
+        # (../../namespace.yaml): in a pod the server calls the API server
+        # at https://kubernetes.default.svc (pkg/kubernetes/configuration.go
+        # of the pinned release), not at the address in its environment.
+        agents.home.arpa/dns: own-rule
+    spec:
+      serviceAccountName: cluster-mcp
+      # The token of the service account is the credential of the server
+      # at the API server. Only this pod mounts it.
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The user of the image.
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          # v0.1.3 of 2026-11-13, Apache-2.0, the newest release on
+          # 2026-11-21. The digest is the one of the image index.
+          image: quay.io/containers/kubernetes_mcp_server:v0.1.3@sha256:6347155616c49c78512114500688b50d275ddde7597b6a38cefe6f40a8c42c16
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/etc/cluster-mcp/config.toml"]
+          ports:
+            - name: mcp
+              containerPort: 8080
+              protocol: TCP
+          # /healthz answers without a call to the API server.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            periodSeconds: 30
+            timeoutSeconds: 2
+          # The limit is over the floor of the memory bounds of config.toml
+          # (464 MiB).
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cluster-mcp
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: cluster-mcp-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster-mcp
+  labels:
+    app.kubernetes.io/name: cluster-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: cluster-mcp
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: mcp
+      protocol: TCP

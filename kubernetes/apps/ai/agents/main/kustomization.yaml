@@ -24,3 +24,10 @@ resources:
   # The nightly snapshot of the share (vault-backup/ks.yaml), to the
   # repository of main.
   - ./vault-backup/ks.yaml
+  # The read rights of the read servers of main (read-access/ks.yaml): the
+  # role view in each namespace but agents-finance and ai.
+  - ./read-access/ks.yaml
+  # The read servers of M7b, each behind the central MCP gateway with a
+  # route of its own (Design Doc, section 4.2.6). No pod of main calls
+  # their routes yet: the config of the agent gets them in its own step.
+  - ./cluster-mcp/ks.yaml

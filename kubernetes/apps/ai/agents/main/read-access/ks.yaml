@@ -1,0 +1,22 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The read rights of the read servers of main (Design Doc, section 4.2.6):
+# the role view in each namespace but agents-finance and ai, for the
+# service account of each read server. The bindings sit in other
+# namespaces, so this entry sets no targetNamespace: each object of
+# app/rbac.yaml names its own.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-main-read-access
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/ai/agents/main/read-access/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

@@ -341,3 +341,64 @@ routes:
               policies:
                 http:
                   requestTimeout: 60s
+
+  # The cluster server of main (agents-main/cluster-mcp, Design Doc, section
+  # 4.2.6): a read server of M7b, with a route of its own and the key of the
+  # main agent (the hash of the route main-vault, with the second field of
+  # the metadata that names this route). The server holds the token of its
+  # own service account: the gateway sets no credential on this target, and
+  # the header rule drops the key of the client.
+  - name: main-cluster
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-cluster/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+            metadata: {client: main, route: main-cluster}
+      # A large list or a long log can take longer than the 10 s of the
+      # gateway: 30 s, the proposal of the design. The rehearsal measures
+      # the slowest read.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The eight read tools of the design, by exact name, from the dump of
+      # the pinned image (../../tools/cluster.json). Not listed, so refused:
+      # pods_list (each namespace at once), pods_exec, pods_run,
+      # pods_delete, the writes of resources, the nodes and the top tools.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "api_resources_list",
+                "events_list",
+                "namespaces_list",
+                "pods_get",
+                "pods_list_in_namespace",
+                "pods_log",
+                "resources_get",
+                "resources_list"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: cluster
+              mcp:
+                host: http://cluster-mcp.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s
