@@ -114,7 +114,7 @@ same hash as on `/main-vault/`, with `route` as the second field of its
 metadata. Each route names its kept tools one by one, from a dump of the
 pinned image in `tools/`, sets 30 s on the route and on the target, and
 sets no credential on the target: the credential of each read server stays
-in its pod. In git today:
+in its pod. Live since the read step:
 
 - `/main-cluster/`: the cluster server of main
   (`kubernetes/apps/ai/agents/main/cluster-mcp`), the Kubernetes MCP server
@@ -144,9 +144,20 @@ in its pod. In git today:
   no header of a client, so a client can not give it a token either.
   `tools/terraform.json` is the dump.
 
+**The read step.** The config of the main agent
+(`agents/main/agent/config/openclaw.json`) has one server entry for each
+read route, beside its vault entry, at
+`http://mcp-gateway.ai.svc.cluster.local:3000/<route>/mcp` with
+`Bearer ${MCP_GATEWAY_KEY}`, and its `toolFilter` lists the same tools as
+the rule of the route. In a sandboxed session an MCP tool also passes the
+sandbox allow list, so `tools.sandbox.tools.alsoAllow` names each read
+tool as `<server>__<tool>`, one by one, with no wildcard (Design Doc,
+section 4.2.6). The MCP client is in the gateway process of the product,
+so the agent pod reaches the gateway on its MCP port, and no sandbox does.
+
 `observability/tests/test_main_read_servers.py` checks the routes, the
-pods, the network rules and the bindings, and runs the pinned gateway with
-the pinned servers in containers.
+pods, the network rules, the bindings and the config of the agent, and
+runs the pinned gateway with the pinned servers in containers.
 
 **The pilot and the workflow agents get no key.** No key is the safer
 default. A key with no tool still authenticates: it opens a connection,
@@ -204,7 +215,7 @@ its place for the container tests.
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
-| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `main-vault` and `main-cluster` (the same hash; `metadata: {client: main, route: <the route>}`) |
+| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux` and `main-terraform` (the same hash; `metadata: {client: main, route: <the route>}`) |
 | `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, route `main-vault` |
 
 **The hash and the value stay in step** in two ways: the owner changes both
@@ -226,6 +237,17 @@ the probe of finance). The values check of the main agent reads the line
 `metadata: {client: main, route: main-vault}`, and two tests keep each
 value and its hash together: a key that the Secret names must be in git
 with it, and a real hash of `main-probe` needs its Secret listed.
+
+**A new route of main** gets the hash of the key of main from
+`bin/main-mcp-key`, run on its branch before the push. The script reads
+the key through `bin/sops -d --extract` in a pipe, keeps it, and puts
+`sha256:` and the SHA-256 of its 64 characters on each route of main; a
+route that has it already stays as it is. It prints names and `ok` only,
+never the value or the hash (the hash is not a secret; `git diff` shows
+it). With no key in the file it makes one in the editor step of
+`bin/sops` (never an argument, an env var or a line of output), and
+`--new` makes a new key in its place. A test fails while a server of the
+config of the agent has a route with another hash than `main-vault`.
 
 ## Network policy
 

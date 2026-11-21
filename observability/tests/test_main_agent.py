@@ -101,9 +101,10 @@ def test_the_config_volume_joins_the_group_file_of_the_owner():
 def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     c = json.loads(CONFIG.read_text())
     f = json.loads((FINANCE.parent / "config/openclaw.json").read_text())
-    # One MCP server, the vault of main, as finance calls its own vault
-    # (task 3.37). No finance app.
-    assert list(c["mcp"]["servers"]) == ["vault"]
+    # The vault of main, as finance calls its own vault (task 3.37), then the
+    # read servers of M7b (test_main_read_servers.py). No finance app.
+    assert list(c["mcp"]["servers"])[0] == "vault"
+    assert set(c["mcp"]["servers"]) <= {"vault", "cluster", "flux", "terraform", "github"}
     vault = dict(c["mcp"]["servers"]["vault"])
     assert vault.pop("url") == "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp"
     other = dict(f["mcp"]["servers"]["vault"])
@@ -124,8 +125,9 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     # The owner's decisions of 2026-11-19: the progress card, and each session
     # of main sees the other sessions of main, as on the host. Web fetch goes
     # through the fetch proxy (test_main_fetch_proxy.py).
-    assert c["tools"]["sandbox"]["tools"]["alsoAllow"] == ["memory_search", "memory_get", "web_search", "web_fetch",
-                                                           "message", "progress_card", "vault__*"]
+    # The read tools of M7b follow, each by its exact name (test_main_read_servers.py).
+    assert c["tools"]["sandbox"]["tools"]["alsoAllow"][:7] == ["memory_search", "memory_get", "web_search",
+                                                               "web_fetch", "message", "progress_card", "vault__*"]
     assert c["tools"]["sessions"] == {"visibility": "all"}
     assert c["agents"]["defaults"]["sandbox"]["sessionToolsVisibility"] == "all"
     telegram = c["channels"]["telegram"]
@@ -239,7 +241,11 @@ def with_hash(client, key):
     text = GATEWAY_CONFIG.read_text()
     (route,) = [r for r in yaml.safe_load(text)["routes"] if r["name"] == "main-vault"]
     (old,) = [k["keyHash"] for k in route["policies"]["apiKey"]["keys"] if k["metadata"]["client"] == client]
-    assert text.count(old) == 1
+    # The key of main is on each route of main (the read routes of M7b too,
+    # bin/main-mcp-key): each copy changes, as the script sets each one.
+    routes = {r["name"] for r in yaml.safe_load(text)["routes"]
+              for k in r["policies"]["apiKey"]["keys"] if k["keyHash"] == old}
+    assert text.count(old) == len(routes) and "main-vault" in routes
     return text.replace(old, "sha256:" + hashlib.sha256(key.encode()).hexdigest())
 
 

@@ -183,6 +183,58 @@ def test_no_other_route_names_a_read_server():
                 assert t["mcp"]["host"].split("//")[1].split(":")[0] not in hosts
 
 
+# The config of the main agent (the read step: each server in SERVERS is live)
+
+AGENT_CONFIG = MAIN / "agent/config/openclaw.json"
+AGENT_SECRET = MAIN / "agent/app/secret.sops.yaml"
+
+
+def agent_config() -> dict:
+    return json.loads(AGENT_CONFIG.read_text())
+
+
+@pytest.mark.parametrize("server", SERVERS)
+def test_the_agent_lists_the_kept_tools_of_the_server_and_no_other(server):
+    """The design: "The config of the agent lists the same tools in its
+    filter." The client is in the gateway process of the product, with the
+    key of the agent from its env, never from the config."""
+    spec = SERVERS[server]
+    entry = agent_config()["mcp"]["servers"][server]
+    assert entry == {
+        "url": f"http://mcp-gateway.ai.svc.cluster.local:3000/{spec['route']}/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {"include": sorted(spec["keep"])},
+    }
+
+
+def test_the_sandbox_allow_list_names_each_kept_tool_by_its_exact_name():
+    """In a sandboxed session an MCP tool also passes the sandbox allow list,
+    so it names each tool of each route by its exact name, never with a
+    wildcard (the design, section 4.2.6; OBS-944)."""
+    config = agent_config()
+    allow = config["tools"]["sandbox"]["tools"]["alsoAllow"]
+    mcp = [a for a in allow if a.split("__")[0] in SERVERS and "__" in a]
+    assert len(mcp) == len(set(mcp))
+    assert not [a for a in mcp if "*" in a or "?" in a]
+    assert sorted(mcp) == sorted(f"{s}__{t}" for s in SERVERS
+                                 for t in config["mcp"]["servers"][s]["toolFilter"]["include"])
+    # The vault of main (test_main_vault.py) and the read servers, no other.
+    assert set(config["mcp"]["servers"]) == {"vault"} | set(SERVERS)
+
+
+def test_the_live_step_has_the_key_of_main_and_its_hash():
+    """The read step is live only with the key: the values check of the agent
+    pod stops the start with the placeholder, so CI stops it first. A read
+    route with another hash than main-vault fails
+    test_the_route_takes_the_main_key_only_and_sets_no_credential: the lead
+    runs bin/main-mcp-key on the branch before the push."""
+    assert agent_config()["mcp"]["servers"]
+    assert not main_hash().startswith("sha256:" + "0" * 63), "run bin/main-mcp-key"
+    (secret,) = docs(AGENT_SECRET)
+    assert "MCP_GATEWAY_KEY" in secret["stringData"], "run bin/main-mcp-key"
+
+
 # The pods
 
 

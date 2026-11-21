@@ -2189,10 +2189,11 @@ The differences from finance:
   agent](agent-platform.md#web-fetch-of-the-main-agent)), a look at
   an image (the model reads it), memory search on the workspace, and the
   `message` tool (D16), which can reach only the chats of the bot: the
-  direct chat of the owner and the group. No MCP gateway, no finance app
-  (D69), no vault (task 3.37), no new image (the model gateway has no image
-  route), and no scheduled job: the Monday job moves with its skill at the
-  Signal step (D110).
+  direct chat of the owner and the group. No finance app (D69), no vault
+  (task 3.37), no new image (the model gateway has no image route), and no
+  scheduled job: the Monday job moves with its skill at the Signal step
+  (D110). The read tools of M7b come after it, through the MCP gateway
+  ([The read step of M7b (main)](#the-read-step-of-m7b-main)).
 - **The owner's decisions of 2026-11-19 for the first step:** the
   `progress_card` tool is in the sandbox list, and each session of main
   sees the other sessions of main, as on the host (`tools.sessions.visibility`
@@ -2454,6 +2455,60 @@ The proxy holds no state. A restart loses only its log
 approval, as each live change). To stop web fetch fast, a pull request sets
 `replicas: 0` in `main/fetch-proxy/app/deployment.yaml`: each fetch then
 fails, and the rest of the agent works.
+
+### The read step of M7b (main)
+
+The cluster, Flux and Terraform servers of main go live in one pull
+request: their pods, their routes on the MCP gateway with the hash of
+the key of the main agent (the key of its vault route), and their server
+entries in the config of the agent
+([mcp-gateway.md](mcp-gateway.md), "The read servers of main"). The code
+host server is one more pull request, when its read credential is there.
+
+**Before the push** (the lead, on the branch, from the repo root):
+
+```bash
+bin/main-mcp-key
+```
+
+The key of main exists since its vault step, so it prints
+`secret.sops.yaml key=MCP_GATEWAY_KEY kept ok`, then
+`config.yaml route=main-vault unchanged ok` and one line
+`config.yaml route=<route> set ok` for each read route. It never prints
+the value or the hash, and it leaves the Secret file as it is. Commit
+`kubernetes/apps/ai/mcp-gateway/app/config/config.yaml`. On the branch of
+the code host server, run it again: it sets the hash on the new route.
+Without it, a test fails
+(`test_the_route_takes_the_main_key_only_and_sets_no_credential`): the
+read routes would answer the agent with a 401.
+
+**After the merge.** The new config of the agent and the new gateway
+config roll the agent pod once (Flux applies the pod template with both
+ConfigMaps at once). The new gateway config also rolls the gateway pod and
+the finance agent pod, which mounts the same file. Each read below takes no chat content: the access log of the
+gateway has the route, the method, the tool name, the status and the
+client, never the arguments or the result.
+
+| Read | Pass rule |
+| --- | --- |
+| `kubectl -n flux-system get kustomizations agents-main-cluster-mcp agents-main-flux-mcp agents-main-terraform-mcp agents-main-read-access` | Each `Ready` |
+| `kubectl -n agents-main get deploy cluster-mcp flux-mcp terraform-mcp agent` | Each ready, with no restart |
+| `kubectl -n agents-main logs deploy/agent -c values-check` | `values-check result=ok` |
+| The owner asks the agent, in his chat, for one read of each server: the namespaces of the cluster, the state of the Flux Kustomizations, the latest version of a provider | The agent answers each one |
+| `kubectl -n ai logs deploy/mcp-gateway --since=30m \| jq -c 'select(.client == "main") \| [.route, ."mcp.method.name", ."gen_ai.tool.name", ."http.status"]'` | For each of `default/main-cluster`, `default/main-flux` and `default/main-terraform`: a `tools/list` and at least one `tools/call` with a kept tool name, status 200. No 401 or 403 for the client `main`. The 405 of the stream at each start is noise ([mcp-gateway.md](mcp-gateway.md), "Logs and metrics") |
+| `sum by (k8s_cluster, route, status) (increase(agentgateway_requests_total{route=~"default/main-(cluster\|flux\|terraform)"}[1h]))`, through thanos-query | A 200 series for each route, on site 1. No 5xx series |
+| The board ([observability-operations.md](../operations/observability-operations.md)): the rows of the parts of main | Cluster, Flux and Terraform MCP server healthy. The code host MCP server has no row until its step |
+| The next run of the gateway probe of main (`kubectl -n agents-main get jobs -l app.kubernetes.io/component=mcp-gateway-probe`) | Complete. It covers the vault route only, with its own key |
+
+**The rehearsal rows** of the design that the lab did not cover (section
+4.2.6, "Not tested"): the DNS rules of Cilium and the reach of each pod
+(a pod of another namespace gets no connection to a server; only the
+gateway does), and the slowest read under 30 s. A read that gets a `504`
+at the gateway brings the step back to the owner.
+
+**The way back** is one revert of the squash commit: the servers, the
+routes, the key, its hash and the server entries go out together, and the
+agent pod starts again with the tools of M7a.
 
 ### The way back of the main agent
 

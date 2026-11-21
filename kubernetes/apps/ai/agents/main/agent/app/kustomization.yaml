@@ -41,7 +41,12 @@
 # images through the model, and the vault of main (task 3.37): the share
 # read only for the index, and the vault tools through the central MCP
 # gateway with MCP_GATEWAY_KEY (the key of the client main, its hash in the
-# gateway's config). No finance app, no Signal and no scheduled job yet.
+# gateway's config). M7b, the read step: the read tools of the cluster, Flux
+# and Terraform servers (../../cluster-mcp, ../../flux-mcp,
+# ../../terraform-mcp) through the same gateway with the same key;
+# bin/main-mcp-key keeps the key and puts its hash on each route of main
+# (docs/apps/mcp-gateway.md, "The keys"). No finance app, no Signal and no
+# scheduled job yet.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
