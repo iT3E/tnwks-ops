@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""The live check of the policy of the Flux children on one cluster.
+
+    bin/flux-admission-check [--context NAME] [--parent flux-system/cluster-apps]
+
+Run by the owner, by hand, with a kubeconfig that may impersonate
+(docs/operations/flux-admission.md, "The live check"). For each test object
+of the design it sends a server-side dry run as the service account of the
+Flux controller that would apply it, with the owner labels of a child
+outside the class (or of the parent of the apps, for a Kustomization). The
+API server runs its admission on a dry run and stores nothing.
+
+- With the binding in Deny, each object must be refused by flux-child-scope.
+- With the binding in Audit and Warn, each object must pass with a warning
+  of flux-child-scope.
+
+It prints one line for each object and exits 1 when an object is neither
+refused nor warned. The parent of the apps is cluster-apps on site 1 and
+cluster-apps-wsl-02 on site 2. The two test objects of decryption (a SOPS
+file of another folder, by a relative path and by a link) are content of git:
+Owner label holds them, and this check can not send them.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+
+KUSTOMIZE = "system:serviceaccount:flux-system:kustomize-controller"
+OUTSIDE = {"kustomize.toolkit.fluxcd.io/name": "mealie", "kustomize.toolkit.fluxcd.io/namespace": "flux-system"}
+
+
+def labels(key: str) -> dict:
+    namespace, name = key.split("/")
+    return {"kustomize.toolkit.fluxcd.io/name": name, "kustomize.toolkit.fluxcd.io/namespace": namespace}
+
+
+def objects(parent: str) -> list[tuple[str, dict]]:
+    privileged = []
+    for namespace in ("home-automation", "media", "production"):
+        privileged.append((f"a privileged pod in {namespace}", {
+            "apiVersion": "apps/v1", "kind": "Deployment",
+            "metadata": {"name": "flux-admission-check", "namespace": namespace, "labels": OUTSIDE},
+            "spec": {"selector": {"matchLabels": {"app": "flux-admission-check"}},
+                     "template": {"metadata": {"labels": {"app": "flux-admission-check"}},
+                                  "spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1",
+                                                           "securityContext": {"privileged": True}}]}}}}))
+    return [
+        ("cluster RBAC", {
+            "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
+            "metadata": {"name": "flux-admission-check", "labels": OUTSIDE},
+            "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "view"},
+            "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": "production"}]}),
+        ("an object in ai", {
+            "apiVersion": "v1", "kind": "ConfigMap",
+            "metadata": {"name": "flux-admission-check", "namespace": "ai", "labels": OUTSIDE},
+            "data": {"check": "true"}}),
+        ("a Kustomization with a class path", {
+            "apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+            "metadata": {"name": "flux-admission-check", "namespace": "flux-system", "labels": labels(parent)},
+            "spec": {"interval": "30m", "path": "./kubernetes/apps/ai", "prune": True,
+                     "sourceRef": {"kind": "GitRepository", "name": "flux-system"}}}),
+    ] + privileged
+
+
+def send(doc: dict, context: str | None) -> tuple[str, str]:
+    command = ["kubectl", "create", "--dry-run=server", f"--as={KUSTOMIZE}", "-o", "name", "-f", "-"]
+    if context:
+        command[1:1] = ["--context", context]
+    result = subprocess.run(command, input=json.dumps(doc), capture_output=True, text=True, timeout=60, check=False)
+    output = result.stdout + result.stderr
+    marker = "flux-child-scope/"
+    if result.returncode != 0:
+        return ("refused" if marker in output else "error"), output.strip().splitlines()[-1][:300]
+    return ("warned" if marker in output else "passed"), output.strip().splitlines()[0][:300]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--context")
+    parser.add_argument("--parent", default="flux-system/cluster-apps")
+    args = parser.parse_args()
+    bad = 0
+    for what, doc in objects(args.parent):
+        verdict, detail = send(doc, args.context)
+        print(f"{verdict:8} {what}: {detail}")
+        bad += verdict not in ("refused", "warned")
+    print("each test object is refused or warned" if not bad else f"{bad} test objects passed or failed for another reason")
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

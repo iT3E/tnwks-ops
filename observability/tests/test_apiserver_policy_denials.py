@@ -1,4 +1,4 @@
-"""The scrape of the API server on homelab-wsl keeps the checks of three policies.
+"""The scrape of the API server keeps the checks of a few admission policies.
 
 kubernetes/clusters/wsl/apps/kustomization.yaml patches the HelmRelease of
 kube-prometheus-stack. It replaces the regex of the first metric relabeling of
@@ -7,10 +7,13 @@ that keep only the series of the admission policy
 agents-backup-mover-configmaps with enforcement_action="deny" (the alert
 AgentBackupMoverConfigMapDenied), and the series of the two policies of NFS
 volumes with enforcement_action "audit" or "deny" (the count of the volumes
-they would refuse, then refuse). The first test checks that the regex stays
-the one of the HelmRelease plus that name. The second runs the patched rules
-in Prometheus, in a container with no network, against a sample of the
-metrics of an API server.
+they would refuse, then refuse), and the series of the policy of the Flux
+children (kubernetes/apps/flux-system/admission) the same way.
+kubernetes/clusters/wsl-02/apps/kustomization.yaml does the same for the
+policy of the Flux children only. The first test checks that the regex of
+each site stays the one of the HelmRelease plus that name. The second runs
+the patched rules of each site in Prometheus, in a container with no
+network, against a sample of the metrics of an API server.
 """
 
 import copy
@@ -18,17 +21,22 @@ import json
 import re
 import subprocess
 
+import pytest
 import yaml
 from test_hand_written_rules import ROOT, docker, scratch
 
 from versions import PROMETHEUS
 
 HELMRELEASE = ROOT / "kubernetes/apps/monitoring/kube-prometheus-stack/app/helmrelease.yaml"
-WSL = ROOT / "kubernetes/clusters/wsl/apps/kustomization.yaml"
+SITES = {
+    "wsl": ROOT / "kubernetes/clusters/wsl/apps/kustomization.yaml",
+    "wsl-02": ROOT / "kubernetes/clusters/wsl-02/apps/kustomization.yaml",
+}
 RELABELINGS = "/spec/values/kubeApiServer/serviceMonitor/metricRelabelings"
 NAME = "apiserver_validating_admission_policy_check"
 POLICY = "agents-backup-mover-configmaps"
 NFS_POLICIES = ("nfs-pod-volumes", "nfs-persistent-volumes")
+FLUX_POLICY = "flux-child-scope"
 
 
 def base_relabelings():
@@ -36,23 +44,23 @@ def base_relabelings():
     return release["spec"]["values"]["kubeApiServer"]["serviceMonitor"]["metricRelabelings"]
 
 
-def wsl_operations():
-    """The JSON patch operations of homelab-wsl on the HelmRelease."""
-    for entry in yaml.safe_load(WSL.read_text())["patches"]:
+def site_operations(site):
+    """The JSON patch operations of a site on the HelmRelease."""
+    for entry in yaml.safe_load(SITES[site].read_text())["patches"]:
         outer = yaml.safe_load(entry["patch"])
         if outer.get("kind") != "Kustomization" or outer["metadata"]["name"] != "kube-prometheus-stack":
             continue
         for inner in outer["spec"]["patches"]:
             if inner["target"] == {"kind": "HelmRelease", "name": "kube-prometheus-stack"}:
                 return yaml.safe_load(inner["patch"])
-    raise AssertionError("no patch of the HelmRelease kube-prometheus-stack in " + str(WSL))
+    raise AssertionError("no patch of the HelmRelease kube-prometheus-stack in " + str(SITES[site]))
 
 
-def wsl_relabelings():
-    """The relabelings of the API server after the operations of homelab-wsl."""
+def site_relabelings(site):
+    """The relabelings of the API server after the operations of a site."""
     rules = copy.deepcopy(base_relabelings())
     touched = 0
-    for operation in wsl_operations():
+    for operation in site_operations(site):
         path = operation["path"]
         if not path.startswith(RELABELINGS + "/"):
             continue
@@ -64,7 +72,7 @@ def wsl_relabelings():
             rules[int(rest[0])][rest[1]] = operation["value"]
         else:
             raise AssertionError(f"an operation this test does not read: {operation}")
-    assert touched, "homelab-wsl no longer patches the relabelings of the API server"
+    assert touched, f"{site} no longer patches the relabelings of the API server"
     return rules
 
 
@@ -74,10 +82,11 @@ def names(regex):
     return found.group(1).split("|")
 
 
-def test_the_wsl_regex_is_the_regex_of_the_helmrelease_plus_one_name():
+@pytest.mark.parametrize("site", sorted(SITES))
+def test_the_regex_of_each_site_is_the_regex_of_the_helmrelease_plus_one_name(site):
     base = names(base_relabelings()[0]["regex"])
-    wsl = names(wsl_relabelings()[0]["regex"])
-    assert sorted(wsl) == sorted(base + [NAME])
+    patched = names(site_relabelings(site)[0]["regex"])
+    assert sorted(patched) == sorted(base + [NAME])
 
 
 SAMPLE = f"""\
@@ -89,6 +98,9 @@ apiserver_validating_admission_policy_check_total{{enforcement_action="audit",er
 apiserver_validating_admission_policy_check_total{{enforcement_action="warn",error_type="invalid_error",policy="nfs-pod-volumes",policy_binding="nfs-pod-volumes"}} 3
 apiserver_validating_admission_policy_check_total{{enforcement_action="deny",error_type="invalid_error",policy="nfs-persistent-volumes",policy_binding="nfs-persistent-volumes"}} 1
 apiserver_validating_admission_policy_check_total{{enforcement_action="audit",error_type="invalid_error",policy="nfs-volumes-other",policy_binding="nfs-volumes-other"}} 4
+apiserver_validating_admission_policy_check_total{{enforcement_action="audit",error_type="invalid_error",policy="flux-child-scope",policy_binding="flux-child-scope"}} 5
+apiserver_validating_admission_policy_check_total{{enforcement_action="warn",error_type="invalid_error",policy="flux-child-scope",policy_binding="flux-child-scope"}} 5
+apiserver_validating_admission_policy_check_total{{enforcement_action="deny",error_type="invalid_error",policy="flux-child-scope",policy_binding="flux-child-scope"}} 1
 # TYPE apiserver_validating_admission_policy_check_duration_seconds histogram
 apiserver_validating_admission_policy_check_duration_seconds_bucket{{enforcement_action="deny",error_type="invalid_error",policy="{POLICY}",policy_binding="{POLICY}",le="+Inf"}} 2
 apiserver_validating_admission_policy_check_duration_seconds_sum{{enforcement_action="deny",error_type="invalid_error",policy="{POLICY}",policy_binding="{POLICY}"}} 0.01
@@ -120,7 +132,16 @@ def snake(rule):
     return {keys.get(key, key): value for key, value in rule.items()}
 
 
-def test_prometheus_keeps_only_the_checks_of_the_three_policies():
+# The checks that each site keeps, as (enforcement_action, policy).
+KEPT = {
+    "wsl": [("audit", FLUX_POLICY), ("audit", NFS_POLICIES[0]), ("deny", POLICY), ("deny", FLUX_POLICY),
+            ("deny", NFS_POLICIES[1])],
+    "wsl-02": [("audit", FLUX_POLICY), ("deny", FLUX_POLICY)],
+}
+
+
+@pytest.mark.parametrize("site", sorted(SITES))
+def test_prometheus_keeps_only_the_checks_of_the_listed_policies(site):
     binary = docker()
     work = scratch()
     (work / "srv").mkdir()
@@ -131,7 +152,7 @@ def test_prometheus_keeps_only_the_checks_of_the_three_policies():
             "scrape_interval": "1s",
             "fallback_scrape_protocol": "PrometheusText0.0.4",
             "static_configs": [{"targets": ["127.0.0.1:8080"]}],
-            "metric_relabel_configs": [snake(rule) for rule in wsl_relabelings()],
+            "metric_relabel_configs": [snake(rule) for rule in site_relabelings(site)],
         }],
     }
     (work / "prometheus.yml").write_text(yaml.safe_dump(config, sort_keys=False))
@@ -163,9 +184,6 @@ def test_prometheus_keeps_only_the_checks_of_the_three_policies():
             ("policy_binding", policy),
         )
 
-    assert kept == [
-        (("__name__", "apiserver_request_total"), ("code", "200"), ("verb", "GET")),
-        check("audit", NFS_POLICIES[0]),
-        check("deny", POLICY),
-        check("deny", NFS_POLICIES[1]),
+    assert kept == [(("__name__", "apiserver_request_total"), ("code", "200"), ("verb", "GET"))] + [
+        check(action, policy) for action, policy in KEPT[site]
     ], kept
