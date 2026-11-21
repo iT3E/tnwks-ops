@@ -11,6 +11,7 @@ on a throwaway API server (admission/tests/run.sh), with Docker.
 
 import ast
 import os
+import re
 import subprocess
 import sys
 
@@ -94,3 +95,32 @@ def test_the_rules_on_a_throwaway_api_server():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# A remote source of kustomize: a URL, a git address, a query of a ref, or a
+# host name before the first slash.
+REMOTE = re.compile(r"://|^git@|^git::|[?&](?:ref|version)=|^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::[0-9]+)?/")
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_kustomize_controller_refuses_remote_bases(site):
+    # A URL in a kustomization outside the class would bring in any
+    # manifest, an admission object among them, which the policy can not see.
+    patches = yaml.safe_load((ROOT / f"kubernetes/clusters/{site}/flux-system/kustomization.yaml").read_text())["patches"]
+    args = [op["value"] for p in patches if (p.get("target") or {}).get("name") == "kustomize-controller"
+            for op in yaml.safe_load(p["patch"])]
+    assert args == ["--no-remote-bases=true"]
+
+
+def test_no_build_of_flux_uses_a_remote_source():
+    # With the flag, a build with one fails. Only the bootstrap of Flux, which
+    # no Kustomization builds, has one.
+    built = {child.path for site in classlist.SITES for child in classlist.walk(site).values()}
+    found = []
+    for path in ROOT.glob("kubernetes/**/kustomization.yaml"):
+        for doc in yaml.safe_load_all(path.read_text()):
+            for key in ("resources", "components", "bases", "crds"):
+                found += [(str(path.relative_to(ROOT)), entry) for entry in (doc or {}).get(key) or []
+                          if isinstance(entry, str) and REMOTE.search(entry)]
+    assert {path for path, _ in found} == {"kubernetes/bootstrap/kustomization.yaml"}, found
+    assert not any(p == "kubernetes/bootstrap" or p.startswith("kubernetes/bootstrap/") for p in built)
