@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from ..design import NO_EVENTS
 from ..model import Board, p
-from ..queries import changes, metric, selector
+from ..queries import WAN_CLIENT, changes, metric, reachability, selector
+from .wan_clients import both
+
+# The EP-R6 (sce-ep01, 10.10.140.140 on VLAN 140): the gateway of the radio
+# network 10.60.10.0/24, pinged by smokeping as role edge (radio-gateway.yaml).
+RADIO_GATEWAY = 'role="edge",name="sce-ep01"'
+# The gateway beside the router hop, so a probe path at fault shows as both.
+PINGED = 'role=~"lan|edge"'
+SITE1_PROBES = "Only site 1 probes it, so the site filter doesn't apply"
 
 
 def board() -> Board:
@@ -70,6 +78,23 @@ def board() -> Board:
                 p("Firmware upgrade", 'max by (routerboard_name, current_firmware, upgrade_firmware) (mktxp_routerboard_firmware_upgrade_available)', "bool",
                   "Whether the RouterBOOT firmware is behind the installed RouterOS. It's upgraded from the router, followed by a reboot. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.",
                   "table", column="Upgrade", words=("Available", "Up to date")),
+            ],
+            # The radio network's gateway: the second router the house runs. Pings say
+            # whether it answers; the router's VLAN 140 counters and flow export say
+            # whether it passes traffic. Nothing here reads the radios themselves.
+            "Radio gateway": [
+                p("Radio gateway reachability", reachability(RADIO_GATEWAY), "state",
+                  "Whether the EP-R6 (sce-ep01, 10.10.140.140), the gateway of the radio network 10.60.10.0/24, answers smokeping's pings: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioGatewayUnreachable fires after 4 minutes of that). Unknown while the router hop or SW03 lose pings too, as the probe's own path is at fault then, and when the EP-R6 isn't probed. Pings only: nothing reads the radios or a UISP controller. " + SITE1_PROBES + ".",
+                  "stat", states=(("1", "Reachable"), ("2", "Losing pings"), ("3", "Unreachable"), ("0", "Unknown"))),
+                p("Radio gateway packet loss", f'max by (name) (smokeping:loss_ratio:rate1m{{{PINGED}}})', "percentunit",
+                  "Share of pings lost over each minute: the EP-R6 (sce-ep01) beside the router hop (sce-rtr01). Both rising together is the probe's path, not the gateway. " + SITE1_PROBES + "; no sce-ep01 line means the EP-R6 isn't probed."),
+                p("Radio gateway latency", f'max by (name) (smokeping:rtt_p90:rate1m{{{PINGED}}})', "s",
+                  "p90 round trip over each minute to the EP-R6 and the router hop. A lost ping has no round trip, so an unreachable gateway is a gap here and 100% on packet loss. " + SITE1_PROBES + "."),
+                p("VLAN 140 traffic", 'sum by (direction) (label_replace(rate(mktxp_interface_rx_byte_total{name="bridge-lan-vlan140"}[5m]), "direction", "from VLAN 140", "", "") or label_replace(rate(mktxp_interface_tx_byte_total{name="bridge-lan-vlan140"}[5m]), "direction", "to VLAN 140", "", ""))', "Bps",
+                  "The router's counters on its VLAN 140 interface, where the EP-R6 is the only client. Nothing received for hours means nothing comes from the radio network, whatever the pings say. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Radio network Internet traffic", both("client, direction", '{sel}{{client_ip="10.10.140.140"}}'), "bps",
+                  "The radio network's Internet traffic from flow export, down and up. The EP-R6 masquerades the network, so it is one device, named sce-ep01 from its DHCP lease. Click a line for its apps and destinations on WAN clients. A gap is a time the network sent nothing to the Internet, or flow export saw nothing (compare VLAN 140 traffic).",
+                  link=WAN_CLIENT),
             ],
             "History": [
                 p("Router BGP session resets", f'max by (k8s_cluster, routerboard_name, name) (resets({selector("mktxp_bgp_uptime")}[$__range])) > 0', "short",

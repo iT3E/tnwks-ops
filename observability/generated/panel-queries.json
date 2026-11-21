@@ -665,6 +665,46 @@
   },
   {
     "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "title": "Radio gateway reachability",
+    "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}))",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "title": "Radio gateway packet loss",
+    "expr": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "title": "Radio gateway latency",
+    "expr": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "title": "VLAN 140 traffic",
+    "expr": "sum by (direction) (label_replace(rate(mktxp_interface_rx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"from VLAN 140\", \"\", \"\") or label_replace(rate(mktxp_interface_tx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"to VLAN 140\", \"\", \"\"))",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "title": "Radio network Internet traffic",
+    "expr": "sum by (client, direction) (label_replace(wan:client_app_receive_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"up\", \"\", \"\"))",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
     "tab": "History",
     "title": "Router BGP session resets",
     "expr": "max by (k8s_cluster, routerboard_name, name) (resets(mktxp_bgp_uptime{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
@@ -699,7 +739,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "title": "WAN p90 latency",
-    "expr": "smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, name) (smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "s",
     "kiosk": false
   },
@@ -707,7 +747,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "title": "WAN latency threshold",
-    "expr": "smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, name) (smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "s",
     "kiosk": false
   },
@@ -715,7 +755,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "title": "Packet loss",
-    "expr": "smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, name) (smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "percentunit",
     "kiosk": false
   },
