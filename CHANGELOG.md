@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.255.0 - 2026-11-21
+
+### Changed
+
+* site 1 Windows host: the encrypted host variables hold the values of the move of the distro (the present account, the new account, the present folder, the WSL release of the rehearsal), and the allow list of sshd names both accounts (step 2 of the account change). sshd changes only with its explicit apply
+
 ## v2.254.2 - 2026-11-21
 
 ### Security
