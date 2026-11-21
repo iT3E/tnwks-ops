@@ -91,7 +91,12 @@ HelmRelease (a finalizer, an annotation) passes the last three rules.
 1. The binding starts with `Audit` and `Warn`. A request that a rule refuses
    passes, with an audit annotation, a warning in the log of the controller
    and a count of `apiserver_validating_admission_policy_check_total`.
-2. After one reconcile cycle on both sites, read the result (below).
+2. After one reconcile cycle on both sites, the owner reads the result
+   (below), with the positive control of each site. A reconcile applies the
+   output of a chart only at a Helm install or upgrade, so the read also
+   needs a replay of the chart output of both sites, rendered from git, on
+   the throwaway API server of the tests: no refusal, or only objects of
+   apps that then join the class.
 3. A second change turns the binding to `Deny`. It also changes
    `test_the_binding_is_still_audit_and_warn`.
 
@@ -106,11 +111,18 @@ git for site 2:
 | StatefulSet `home-automation/zwave-js-ui` (privileged, a host path) | `privileged-pod` | 1 |
 | StatefulSet `media/qbittorrent` (`NET_ADMIN` on its VPN sidecar) | `privileged-pod` | 1 and 2 |
 
-Two CRDs of site 1 carry the owner labels of a HelmRelease that no longer
-exists (`tools/node-feature-discovery`). No controller applies them, so no
-request comes. The folders of the four apps of the table are in the class
-(`CLASS_PATHS` and the list of Owner label), so the rules refuse no live
-object.
+A second replay on 2026-11-21 sent the full output of git for each site,
+rendered as the CI diff job renders it (each Kustomization and the templates
+and hooks of each chart: 1661 objects of site 1 with its 85 HelmReleases,
+1013 of site 2 with its 50), and found the same objects, no other. Three
+CRDs of site 1 carry the owner labels of a HelmRelease that no longer exists
+(`tools/node-feature-discovery`, `networking/external-dns`). No controller
+applies them, so no request comes. The CRDs of the `crds` folder of a chart
+are not in a render; Helm applies them at a first install, and at an
+upgrade only for a HelmRelease with `crds: Create` or `CreateReplace`, and
+each of those is in the class on both sites. The folders of the four apps of
+the table are in the class (`CLASS_PATHS` and the list of Owner label), so
+the rules refuse no object of either replay.
 
 ## Read the audit result
 
@@ -122,16 +134,39 @@ kubectl -n flux-system logs deploy/kustomize-controller --since=2h | grep -c 'fl
 kubectl -n flux-system logs deploy/helm-controller --since=2h | grep -c 'flux-child-scope/'
 ```
 
-On both sites, through the Thanos query of site 1 (both sites keep the
-series of this policy with `enforcement_action` "audit" or "deny"). The API
-server counts a check only when it fails, so no series means no request
-that the policy would refuse:
+On both sites, through the Thanos query of site 1. The API server counts a
+check of a policy only when a validation refuses: it adds one to
+`apiserver_validating_admission_policy_check_total` for each action of the
+binding ("audit", "warn" or "deny") and each rule that fails. A check that
+allows adds nothing, and the series appears at the first refusal (the test
+`test_8_the_count_has_refusals_only` shows it at the version of the
+clusters). The scrape of the API server keeps, on each site, only the series
+of this policy with `enforcement_action` "audit" or "deny" (and, on site 1,
+the series of the policies of NFS volumes and of the backup mover); the
+"warn" series and the duration series are dropped. So no series is the
+expected result, and it proves nothing alone. Read it in three steps:
 
-```promql
-sum by (cluster, enforcement_action) (
-  increase(apiserver_validating_admission_policy_check_total{policy="flux-child-scope"}[1d])
-)
-```
+1. **The window.** From the merge of the policy (or the last read) to now,
+   no series of this policy on either site. A restart of the API server
+   resets the count, so read the highest value in the window:
+
+   ```promql
+   sum by (cluster, enforcement_action) (
+     max_over_time(apiserver_validating_admission_policy_check_total{policy="flux-child-scope"}[1d])
+   )
+   ```
+
+2. **The positive control.** The owner runs the live check (below) on each
+   site. It sends 7 test objects as the two controllers, and each one fails
+   at least one rule. After two scrapes, the query above shows a series with
+   "audit" of at least 7 for each `cluster` (with `Deny` and `Audit`: "deny"
+   and "audit", at least 7 each). That proves that the policy evaluates the
+   requests of the controllers on that site and that the series reaches
+   Thanos. With no series after the run, the read is void: find the break
+   first.
+3. **After the control.** The count of each site stays at the value of the
+   control for the rest of the window. Any rise is a request of a Flux
+   child that the policy refuses.
 
 The names of the objects are in the audit stream `k8s-audit` of each site,
 with the annotation `validation.policy.admission.k8s.io/validation_failure`.
@@ -151,7 +186,10 @@ or when the Prometheus of the site did not scrape. So also check that:
 side dry run, as the service account of `kustomize-controller`, with the
 owner labels of a child outside the class: cluster RBAC, an object in `ai`,
 a Kustomization with a class path, and a privileged pod in `home-automation`,
-`media` and `production`. The API server stores nothing. With `Audit` and
+`media` and `production`. It sends one more privileged pod in `production`
+as `helm-controller`, with the owner labels of a HelmRelease outside the
+class. Each object adds to the count of the site, so the run is the positive
+control of the read (above). The API server stores nothing. With `Audit` and
 `Warn` each object passes with a warning. With `Deny` each one is refused.
 The owner runs it with a kubeconfig that may impersonate:
 
