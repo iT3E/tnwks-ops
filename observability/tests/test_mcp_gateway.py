@@ -303,6 +303,7 @@ def test_the_gateway_takes_the_agent_and_its_probe_and_reaches_the_mcp_server_on
                    # The read servers of main (test_main_read_servers.py).
                    ("agents-main", "cluster-mcp"): ["8080"],
                    ("agents-main", "flux-mcp"): ["8080"],
+                   ("agents-main", "terraform-mcp"): ["8080"],
                    ("kube-system", "kube-dns"): ["53"]}
     (dns,) = [r for r in policy["egress"] if peers(r)[0].get("k8s-app") == "kube-dns"]
     names = [d for tp in dns["toPorts"] for d in tp["rules"]["dns"]]

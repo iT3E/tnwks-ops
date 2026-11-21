@@ -109,6 +109,15 @@ spec:
         - ports:
             - port: "8080"
               protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: terraform-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
     # DNS for the name of each target, and no other name: DNS would be a way
     # out too.
     - toEndpoints:
@@ -127,3 +136,4 @@ spec:
               - matchName: vault-server.agents-main.svc.cluster.local
               - matchName: cluster-mcp.agents-main.svc.cluster.local
               - matchName: flux-mcp.agents-main.svc.cluster.local
+              - matchName: terraform-mcp.agents-main.svc.cluster.local

@@ -83,6 +83,7 @@ the MCP server and checks the headers that arrive.
 | `/main-vault/` | `main-probe` | the nine tools of the vault | `get_file_info` only |
 | `/main-cluster/` | `main` | the eight kept reads of the cluster server | the eight kept reads of the cluster server |
 | `/main-flux/` | `main` | the eight kept reads of the Flux server | the eight kept reads of the Flux server |
+| `/main-terraform/` | `main` | the nine tools of the registry | the nine tools of the registry |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -133,6 +134,15 @@ in its pod. In git today:
   are in the image. The route keeps the reads and the docs, and refuses
   the diff (it needs `patch`) and `get_flux_instance` (no Flux Operator
   here). The reconcile is a later step. `tools/flux.json` is the dump.
+
+- `/main-terraform/`: the Terraform server of main
+  (`kubernetes/apps/ai/agents/main/terraform-mcp`), the Terraform MCP
+  server of HashiCorp with the registry toolset and no token (the free plan
+  of HCP Terraform has no read token). Its pod has no account at the API
+  server and reaches the public registry only: not HCP Terraform, and not
+  the host of the style guide resources of the server. The gateway sends
+  no header of a client, so a client can not give it a token either.
+  `tools/terraform.json` is the dump.
 
 `observability/tests/test_main_read_servers.py` checks the routes, the
 pods, the network rules and the bindings, and runs the pinned gateway with

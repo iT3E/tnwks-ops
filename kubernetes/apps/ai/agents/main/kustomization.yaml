@@ -32,3 +32,4 @@ resources:
   # their routes yet: the config of the agent gets them in its own step.
   - ./cluster-mcp/ks.yaml
   - ./flux-mcp/ks.yaml
+  - ./terraform-mcp/ks.yaml

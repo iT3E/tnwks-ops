@@ -457,3 +457,57 @@ routes:
               policies:
                 http:
                   requestTimeout: 30s
+  - name: main-terraform
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-terraform/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+            metadata: {client: main, route: main-terraform}
+      # A search of the registry can take longer than the 10 s of the
+      # gateway: 30 s, as for the other read servers.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The nine tools of the registry toolset, by exact name, from the dump
+      # of the pinned image (../../tools/terraform.json). The server has no
+      # token, so it lists no tool of HCP Terraform; a tool of HCP Terraform
+      # in a later release is refused here until a PR names it.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "get_latest_module_version",
+                "get_latest_provider_version",
+                "get_module_details",
+                "get_policy_details",
+                "get_provider_capabilities",
+                "get_provider_details",
+                "search_modules",
+                "search_policies",
+                "search_provider_docs"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: terraform
+              mcp:
+                host: http://terraform-mcp.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s

@@ -63,6 +63,18 @@ SERVERS = {
                   "resume_flux_reconciliation", "install_flux_instance"],
         "reader": True,
     },
+    "terraform": {
+        "dir": "terraform-mcp", "route": "main-terraform", "port": 8080, "dump": "terraform.json",
+        "groups": "registry",
+        "keep": ["get_latest_module_version", "get_latest_provider_version", "get_module_details",
+                 "get_policy_details", "get_provider_capabilities", "get_provider_details", "search_modules",
+                 "search_policies", "search_provider_docs"],
+        # Tools of HCP Terraform, which the server lists only with a token
+        # and other toolsets.
+        "never": ["list_terraform_orgs", "list_workspaces", "get_workspace_details", "create_run",
+                  "search_private_modules", "list_runs", "create_workspace"],
+        "reader": False,
+    },
 }
 # The namespaces with no binding of the read account (R6): the finance trust
 # domain, and ai with the log of the MCP gateway.
@@ -259,6 +271,29 @@ def test_the_flux_server_reads_only_as_its_own_account_with_no_dns():
     assert policy["spec"]["egress"] == [{"toEntities": ["kube-apiserver"]}]
 
 
+def test_the_terraform_server_has_the_registry_only_and_no_token():
+    """The design row: tools/list shows registry tools only, and the pod has
+    no TFE_TOKEN. No account at the API server, no Secret, and out to the
+    public registry only."""
+    assert container("terraform")["args"] == ["streamable-http", "--toolsets", "registry"]
+    env = {e["name"]: e for e in container("terraform")["env"]}
+    assert set(env) == {"TRANSPORT_HOST", "TRANSPORT_PORT", "MCP_SESSION_MODE"}
+    assert not [e for e in env.values() if "valueFrom" in e]
+    assert "envFrom" not in container("terraform")
+    spec = pod("terraform")["spec"]
+    assert spec["automountServiceAccountToken"] is False
+    assert "serviceAccountName" not in spec
+    assert not [v for v in spec["volumes"] if "secret" in v or "projected" in v]
+    assert {t["name"] for t in dump("terraform")["tools"]} == set(SERVERS["terraform"]["keep"])
+    (policy,) = [d for d in docs(MAIN / "terraform-mcp/app/networkpolicy.yaml") if d["kind"] == "CiliumNetworkPolicy"]
+    out, dns = policy["spec"]["egress"]
+    assert out == {"toFQDNs": [{"matchName": "registry.terraform.io"}],
+                   "toPorts": [{"ports": [{"port": "443", "protocol": "TCP"}]}]}
+    names = [d["matchName"] for tp in dns["toPorts"] for d in tp["rules"]["dns"]]
+    assert all(n.startswith("registry.terraform.io") for n in names)
+    assert pod("terraform")["metadata"]["labels"]["agents.home.arpa/dns"] == "own-rule"
+
+
 def namespaces_of_the_cluster() -> set[str]:
     """Each namespace that Flux applies on the cluster of site 1, where the
     agents run: the walk of the app list of that cluster, as
@@ -414,7 +449,16 @@ def start_flux_server(tool: str, work: Path, net: str, name: str) -> None:
          container("flux")["image"], *container("flux")["args"]])
 
 
-STARTERS = {"cluster": start_cluster_server, "flux": start_flux_server}
+def start_terraform_server(tool: str, work: Path, net: str, name: str) -> None:
+    """The Terraform server with the args and the env of its pod. No
+    registry behind it: the tool list and the tool rule need none."""
+    env = [x for e in container("terraform")["env"] for x in ("-e", f"{e['name']}={e['value']}")]
+    run([tool, "run", "-d", "--name", name, "--network", net, "--network-alias", "terraform-upstream",
+         "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL", "--user", "65532", *env,
+         container("terraform")["image"], *container("terraform")["args"]])
+
+
+STARTERS = {"cluster": start_cluster_server, "flux": start_flux_server, "terraform": start_terraform_server}
 
 
 @pytest.fixture(scope="module")

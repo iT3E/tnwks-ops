@@ -117,6 +117,7 @@ spec:
           'flux-system/agents-main-flux-mcp': ['flux-system/cluster-apps'],
           'flux-system/agents-main-read-access': ['flux-system/cluster-apps'],
           'flux-system/agents-main-sandbox-gateway': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-terraform-mcp': ['flux-system/cluster-apps'],
           'flux-system/agents-main-vault-backup': ['flux-system/cluster-apps'],
           'flux-system/agents-main-vault-server': ['flux-system/cluster-apps'],
           'flux-system/agents-main-vault-share': ['flux-system/cluster-apps'],
