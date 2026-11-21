@@ -141,10 +141,11 @@ spec:
           # tools), or the daily key check of the model gateway in ai
           # (litellm-key-check, 05:41), has not passed in 26 hours: a day plus
           # room for a slow run. The second part is a check that never passed,
-          # once a run was due. A failed Job is AgentPlatformCronJobFailed
-          # (trust domains) or KubeJobFailed (ai) while the Job is kept; this
-          # rule still fires when the CronJob is suspended, or the failed Job
-          # is gone and no run passed since.
+          # once a run was due. Both alerts fire for one cause: a failed Job
+          # is AgentPlatformCronJobFailed (trust domains) or KubeJobFailed (ai)
+          # while the Job is kept, and from 26 hours after the last success
+          # this rule fires as well, until a run passes. With the CronJob
+          # suspended, it fires alone once the failed Job is gone.
           expr: |
             (time() - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|ai", cronjob=~"platform-check-.+|litellm-key-check"})) > 26 * 3600
             or (

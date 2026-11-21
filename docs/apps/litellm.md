@@ -309,10 +309,13 @@ by key ([the AI board](../operations/observability-implementation.md#the-ai-boar
   a 401 (the gateway does not know the key) or any other answer fails the
   Job, and `KubeJobFailed` fires. The alert clears when the failed Job is
   deleted, 26 hours after it ended: about 2 hours after the next good run.
-  A next run that fails too keeps it firing. With no next run (the CronJob
-  suspended, or its runs stop), it clears with no good run, and
-  `AgentPlatformCheckStale` fires once the check has not passed in 26 hours
+  A next run that fails too keeps it firing. Both alerts fire for one
+  cause: from 26 hours after the last success, `AgentPlatformCheckStale`
+  fires as well, until a run passes
   ([`agent-platform-runbook.md`](agent-platform-runbook.md#agentplatformcheckstale)).
+  With no next run (the CronJob suspended, or its runs stop),
+  `KubeJobFailed` clears with no good run when the Job goes, and
+  `AgentPlatformCheckStale` keeps firing alone.
   It prints one line for each name, never the key. The AI board shows the CronJob on its Checks tab. These refused
   calls show on the metrics as the key `metrics-scrape` with status 403, and
   the board and the alert leave them out.

@@ -246,9 +246,13 @@ job before any token, and shows as
 `agents-main` and `agents-finance`, and the two checks of the finance app
 in `agents-finance`), or the daily key check of the model gateway in `ai`
 (`litellm-key-check`, 05:41), has not passed in 26 hours, or never passed
-once a run was due. For the key check, the failed Job fires `KubeJobFailed`
-while it is kept; this alert still fires when that Job is gone or the
-CronJob is suspended, and no run passed since.
+once a run was due. For the key check, two alerts fire for one cause, as
+for the checks of a trust domain, where `AgentPlatformCronJobFailed` pairs
+with this one. After a failed run of the key check, `KubeJobFailed` fires while the failed Job is
+kept (26 hours after it ended). From 26 hours after the last success, this
+alert fires as well, until a run passes: about 22 hours of two alerts when
+the next run passes. With the CronJob suspended or its runs stopped,
+this alert fires alone once the failed Job is gone.
 
 **First checks.**
 
