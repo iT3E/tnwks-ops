@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.254.2 - 2026-11-21
+
+### Security
+
+* Owner label and the Flux admission policy: the folders of hajimari, frigate, zwave-js-ui and qbittorrent join the "ask first" class, because each needs a right of the class (cluster RBAC, or a privileged pod with a host path or an added capability). With them in the class the policy refuses no live object
+
 ## v2.254.1 - 2026-11-21
 
 ### Security
