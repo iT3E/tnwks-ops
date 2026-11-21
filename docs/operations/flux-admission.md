@@ -163,6 +163,19 @@ bin/flux-admission-check --context <site 2> --parent flux-system/cluster-apps-ws
 The two test objects of decryption (a SOPS file of another folder, by a
 relative path and by a link) are content of git. Owner label holds them.
 
+## The daily check of admission objects
+
+The API server runs no admission policy on a webhook configuration, an
+admission policy or a binding, so the policy can not refuse one. The CronJob
+`flux-system/flux-admission-objects` (05:41 UTC, both sites) lists each of
+them, reads the owner labels of Flux, and fails when one names a
+Kustomization or a HelmRelease outside the class. It takes the class from the
+live policy, and its account may only get and list admission objects. A
+failure raises `KubeJobFailed`; on site 1 the AI board shows the CronJob on
+its Checks tab. On 2026-11-21 site 1 had 25 admission objects, each owned by
+a child of the class. To read a failure:
+`kubectl -n flux-system logs job/<job> | grep 'flux-admission-objects kind='`.
+
 ## Break-glass
 
 When the policy refuses an apply that must go through now, the owner, by

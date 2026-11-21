@@ -120,6 +120,12 @@ AI_SCHEDULES = [
     {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "prometheus-rule-check", "within": DAILY},
     # The key of the metrics scrape of the model gateway calls no model.
     {"trust_domain": "shared", "namespace": "ai", "cronjob": "litellm-key-check", "within": DAILY},
+    # The admission objects that a Flux child outside the "ask first" class
+    # owns, which the admission policy of the Flux children can not refuse
+    # (kubernetes/apps/flux-system/admission/app/objects-check.yaml). It runs
+    # on each site; this list covers the site of the agents, and KubeJobFailed
+    # both.
+    {"trust_domain": "shared", "namespace": "flux-system", "cronjob": "flux-admission-objects", "within": DAILY},
 ]
 # The `<check> result=<result>` lines of the agent pods, which the Vector
 # aggregator turns into homelab_agent_platform_result_timestamp_seconds, and

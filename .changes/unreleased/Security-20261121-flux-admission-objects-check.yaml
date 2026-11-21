@@ -1,0 +1,3 @@
+kind: Security
+body: 'Flux admission: the daily CronJob flux-admission-objects on both sites lists each admission object (webhook configurations, admission policies and bindings) and fails when a Flux child outside the "ask first" class owns one, which the admission policy can not refuse. It reads the class from the live policy, with a read-only account; a failure raises KubeJobFailed, and the AI board shows it on its Checks tab'
+time: 2026-11-21T21:20:00.000000000Z

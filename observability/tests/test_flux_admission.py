@@ -10,6 +10,7 @@ on a throwaway API server (admission/tests/run.sh), with Docker.
 """
 
 import ast
+import importlib.util
 import os
 import subprocess
 import sys
@@ -66,6 +67,52 @@ def test_both_sites_list_the_policy():
     for site in classlist.SITES:
         text = (ROOT / f"kubernetes/clusters/{site}/apps/kustomization.yaml").read_text()
         assert "- ../../../apps/flux-system/admission/ks.yaml" in text, site
+
+
+def objects_check():
+    path = ADMISSION / "app/scripts/admission_objects.py"
+    spec = importlib.util.spec_from_file_location("admission_objects", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_objects_check_reads_the_class_of_the_policy():
+    check = objects_check()
+    kustomizations, helmreleases = check.class_lists(docs()["ValidatingAdmissionPolicy"])
+    data = classlist.lists()
+    assert kustomizations == set(data["classKustomizations"])
+    assert helmreleases == set(data["classHelmReleases"])
+
+
+def test_the_objects_check_finds_an_admission_object_owned_outside_the_class():
+    check = objects_check()
+    k, h = {"flux-system/flux-admission"}, {"cert-manager/cert-manager"}
+
+    def hook(name, labels):
+        return {"kind": "MutatingWebhookConfiguration", "metadata": {"name": name, "labels": labels}}
+
+    objects = [
+        hook("policy", {"kustomize.toolkit.fluxcd.io/namespace": "flux-system",
+                        "kustomize.toolkit.fluxcd.io/name": "flux-admission"}),
+        hook("cert-manager-webhook", {"helm.toolkit.fluxcd.io/namespace": "cert-manager",
+                                      "helm.toolkit.fluxcd.io/name": "cert-manager"}),
+        hook("by-hand", {}),
+        hook("outside-k", {"kustomize.toolkit.fluxcd.io/namespace": "flux-system",
+                           "kustomize.toolkit.fluxcd.io/name": "mealie"}),
+        hook("outside-h", {"helm.toolkit.fluxcd.io/namespace": "production",
+                           "helm.toolkit.fluxcd.io/name": "mealie"}),
+    ]
+    lines, unowned = check.findings(objects, k, h)
+    assert unowned == 1
+    assert [line.split()[2] for line in lines] == ["name=outside-k", "name=outside-h"]
+    assert check.findings(objects[:3], k, h) == ([], 1)
+
+
+def test_the_objects_check_may_only_read():
+    rules = [d for d in yaml.safe_load_all((ADMISSION / "app/objects-check.yaml").read_text())
+             if d and d["kind"] == "ClusterRole"]
+    assert [r["verbs"] for role in rules for r in role["rules"]] == [["get", "list"]]
 
 
 def test_the_policy_matches_the_two_controllers_and_fails_closed():
