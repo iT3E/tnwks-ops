@@ -6,8 +6,12 @@
 # alerts of the platform and the use of the Claude plan. The tests are in
 # observability/vector-tests/agent-platform-logs.yaml.
 data_dir: /vector-data-dir
-# A counter or gauge stays one hour after its last change, as on the
-# aggregator.
+# Vector's own metrics (internal_metrics) stay for an hour after their last
+# change, as on the aggregator. This does not hold for the metrics of the
+# exporter: it drops a metric that no event changed in its flush period (60 s;
+# it looks on each event, so after 1 to 2 minutes). A gauge of a line also
+# carries the time of the line, so Prometheus shows it for 5 minutes (its
+# lookback) and no longer. The token counter is kept alive by token_zero.
 expire_metrics_secs: 3600
 
 api:
@@ -38,6 +42,32 @@ sources:
 
   internal_metrics:
     type: internal_metrics
+
+  # The token counter of each declared trust domain, model and kind of token,
+  # at 0 from the start of the pod and again every 30 seconds. So the series
+  # is there before the first call (increase() counts the first call), and the
+  # exporter never drops it while the pod runs (a dropped counter starts again
+  # at the next call, and increase() loses what it had). The lists are the
+  # ones of platform_gauges (observability/tests/test_plan_usage.py). A value
+  # that reads other has no zero series: its counter lives from its first line
+  # to the flush period after its last one.
+  token_zero:
+    type: static_metrics
+    namespace: homelab
+    interval_secs: 30
+    metrics:
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: main, model: claude-opus-5-5, token: input}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: main, model: claude-opus-5-5, token: output}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: main, model: claude-opus-5-5, token: cache_read}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: main, model: claude-opus-5-5, token: cache_write}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: finance, model: claude-opus-5-5, token: input}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: finance, model: claude-opus-5-5, token: output}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: finance, model: claude-opus-5-5, token: cache_read}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: finance, model: claude-opus-5-5, token: cache_write}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: input}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: output}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: cache_read}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: cache_write}}
 
 transforms:
   # The gateway's lines lose, in order: colour codes; a whole OCSF JSON
@@ -306,6 +336,8 @@ transforms:
           window: "{{ window }}"
 
   # The tokens of the calls of each trust domain, as the bridge counts them.
+  # token_zero keeps each declared series alive; token_now gives each sample
+  # the time it was counted, so a sample is never older than the one before.
   token_metrics:
     type: log_to_metric
     inputs:
@@ -348,6 +380,13 @@ transforms:
           model: "{{ model }}"
           token: cache_write
 
+  token_now:
+    type: remap
+    inputs:
+      - token_metrics
+    source: |
+      .timestamp = now()
+
 sinks:
   # To the kubernetes source of the aggregator, as the pod-log agent sends.
   # The scheme must be there: from Vector 0.61 on, an address with no scheme
@@ -389,5 +428,6 @@ sinks:
       - instruction_metrics
       - bridge_metrics
       - plan_metrics
-      - token_metrics
+      - token_now
+      - token_zero
     address: 0.0.0.0:9598

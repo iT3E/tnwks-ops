@@ -34,6 +34,12 @@ BRIDGE = "http://model-bridge.ai.svc.cluster.local:8080"
 WINDOWS = ["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet", "seven_day_overage_included", "overage"]
 TOKENS = ["input", "output", "cache_read", "cache_write"]
 PORT = 13598
+# The lab's exporter drops a metric after 2 s with no event, not 60 s, and
+# token_zero sends every 1 s, not 30 s: the same ratio as the config (the zero
+# interval at most half the flush period, test_each_declared_token_series_has_a_zero_series),
+# so a drop on the config of main and the keep on this one show in seconds.
+LAB_FLUSH_SECONDS = 2
+LAB_ZERO_SECONDS = 1
 
 
 def load():
@@ -77,27 +83,50 @@ def test_the_series_and_their_bound():
     assert [m["field"] for m in tokens] == ["input", "output", "cache_read", "cache_write"]
     assert all(m["type"] == "counter" and m["increment_by_value"] for m in tokens)
     assert all(set(m["tags"]) == {"domain", "model", "token"} for m in tokens)
-    assert {"plan_metrics", "token_metrics"} <= set(config["sinks"]["prometheus"]["inputs"])
+    assert {"plan_metrics", "token_now", "token_zero"} <= set(config["sinks"]["prometheus"]["inputs"])
+    assert config["transforms"]["token_now"]["inputs"] == ["token_metrics"]
     # Each value of each list, and other.
     bound = len(plan) * (len(WINDOWS) + 1) + len(TOKENS) * (len(listed("domain")) + 1) * (len(listed("model")) + 1)
     assert bound == 60, bound
 
 
 def lab_config(path: str) -> dict:
-    """The transforms of the config as they are, fed from a file in place of
-    the logs of the pod, and the exporter on a port of the host."""
+    """The config as it is, from the lines to the exporter, fed from a file in
+    place of the logs of the pod: its internal_metrics and token_zero sources,
+    the transforms, and its exporter with each of its settings and inputs, on
+    a port of the host. The exporter drops a metric only when an event comes
+    in (internal_metrics sends them), so a lab without those inputs never
+    drops one. Only the flush period and the zero interval are shorter."""
     config = load()
+    sink = {**config["sinks"]["prometheus"], "address": f"127.0.0.1:{PORT}",
+            "flush_period_secs": LAB_FLUSH_SECONDS}
     transforms = {name: config["transforms"][name]
                   for name in ("platform_gauges", "platform_gauge_route", "plan_metrics", "token_metrics",
-                               "bridge_metrics", "instruction_metrics")}
+                               "token_now", "bridge_metrics", "instruction_metrics") if name in config["transforms"]}
     transforms["as_pod"] = {"type": "remap", "inputs": ["lines"], "source": (
         '.kubernetes.pod_namespace = "ai"\n.kubernetes.container_name = "model-bridge"\n')}
     transforms["platform_gauges"] = {**transforms["platform_gauges"], "inputs": ["as_pod"]}
+    sources = {"lines": {"type": "file", "include": [path], "read_from": "beginning"},
+               **{name: config["sources"][name] for name in ("internal_metrics", "token_zero")
+                  if name in config["sources"]}}
+    if "token_zero" in sources:
+        sources["token_zero"] = {**sources["token_zero"], "interval_secs": LAB_ZERO_SECONDS}
+    assert set(sink["inputs"]) <= set(sources) | set(transforms), sink["inputs"]
     return {"data_dir": "/tmp", "expire_metrics_secs": config["expire_metrics_secs"],
-            "sources": {"lines": {"type": "file", "include": [path], "read_from": "beginning"}},
-            "transforms": transforms,
-            "sinks": {"prometheus": {"type": "prometheus_exporter", "address": f"127.0.0.1:{PORT}",
-                                     "inputs": ["plan_metrics", "token_metrics", "bridge_metrics"]}}}
+            "sources": sources, "transforms": transforms, "sinks": {"prometheus": sink}}
+
+
+def test_each_declared_token_series_has_a_zero_series():
+    """token_zero holds one series at 0 for each declared domain, model and kind."""
+    source = load()["sources"]["token_zero"]
+    assert source["type"] == "static_metrics" and source["namespace"] == "homelab"
+    # Shorter than the flush period of the exporter, so the exporter never drops one.
+    flush = load()["sinks"]["prometheus"].get("flush_period_secs", 60)
+    assert source["interval_secs"] * 2 <= flush
+    found = sorted((m["tags"]["domain"], m["tags"]["model"], m["tags"]["token"]) for m in source["metrics"])
+    assert all(m["name"] == "model_bridge_tokens_total" and m["kind"] == "incremental"
+               and m["value"] == {"counter": {"value": 0}} for m in source["metrics"])
+    assert found == sorted((d, m, t) for d in listed("domain") for m in listed("model") for t in TOKENS)
 
 
 def plan(domain, window, status, utilization, resets_at, threshold=None, limiting=True):
@@ -123,40 +152,69 @@ LINES = [
 ]
 
 
-def scrape() -> dict:
+def scrape(stamps: bool = False) -> dict:
+    """Each homelab_ sample of the exporter: its value, or (value, time in seconds)."""
     text = urllib.request.urlopen(f"http://127.0.0.1:{PORT}/metrics", timeout=5).read().decode()
     found = {}
     for line in text.splitlines():
         if line.startswith("homelab_"):
-            key, value = line.rsplit(" ", 2)[0], line.rsplit(" ", 2)[1]
-            found[key] = float(value)
+            key, rest = line.split("} ", 1) if "}" in line else line.split(" ", 1)
+            key += "}" if "{" in key else ""
+            value, *stamp = rest.split()
+            found[key] = (float(value), int(stamp[0]) / 1000 if stamp else None) if stamps else float(value)
     return found
 
 
-def test_the_newest_line_sets_the_gauges_and_the_counts_add_up():
+def start(binary: str, work, name: str, lines: list[str]) -> None:
+    (work / "lines.log").write_text("".join(line + "\n" for line in lines))
+    (work / "vector.yaml").write_text(yaml.safe_dump(lab_config("/w/lines.log"), sort_keys=False))
+    subprocess.run(["chmod", "-R", "a+rwX", str(work)], check=True)
+    subprocess.run([binary, "run", "-d", "--name", name, "--network", "host", "--read-only", "--tmpfs", "/tmp",
+                    "--mount", f"type=bind,src={work},dst=/w", vector_image(CONFIG),
+                    "--config", "/w/vector.yaml"], check=True, capture_output=True, text=True, timeout=300)
+
+
+def wait_for(binary: str, name: str, key: str, value: float | None = None) -> dict:
+    deadline = time.monotonic() + 60
+    found = {}
+    while time.monotonic() < deadline:
+        try:
+            found = scrape()
+            if key in found and (value is None or found[key] == value):
+                return found
+        except OSError:
+            pass
+        time.sleep(0.5)
+    logs = subprocess.run([binary, "logs", name], capture_output=True, text=True, check=False)
+    raise AssertionError((key, value, found, (logs.stdout + logs.stderr)[-3000:]))
+
+
+def append(work, *lines: str) -> None:
+    with (work / "lines.log").open("a") as log:
+        log.writelines(line + "\n" for line in lines)
+
+
+def test_in_the_pinned_vector_the_newest_line_wins_and_the_token_counter_lives():
+    """One start of the lab. The counter is there at 0 before any call; the
+    newest plan line of any trust domain sets the gauges of its window; the
+    token counts add up; the counter keeps its count past two flush periods
+    with no call, with a sample time of now; a later call adds to it.
+
+    The live fault of the first build: the exporter dropped the counter 1 to 2
+    minutes after its last line, and its sample kept the time of the line, so
+    Prometheus showed it for 5 minutes. increase() then counted the first call
+    as 0, and each later call only when its count was above the last one. On
+    that config this test fails at its first wait."""
     binary = docker()
     work = scratch()
     name = f"plan-usage-{uuid.uuid4().hex[:8]}"
+    token = 'homelab_model_bridge_tokens_total{domain="%s",model="claude-opus-5-5",token="%s"}'
     try:
-        (work / "lines.log").write_text("\n".join(LINES) + "\n")
-        (work / "vector.yaml").write_text(yaml.safe_dump(lab_config("/w/lines.log"), sort_keys=False))
-        subprocess.run(["chmod", "-R", "a+rX", str(work)], check=True)
-        subprocess.run([binary, "run", "-d", "--name", name, "--network", "host", "--read-only", "--tmpfs", "/tmp",
-                        "--mount", f"type=bind,src={work},dst=/w,readonly", vector_image(CONFIG),
-                        "--config", "/w/vector.yaml"], check=True, capture_output=True, text=True, timeout=300)
-        want = 'homelab_model_bridge_tokens_total{domain="finance",model="claude-opus-5-5",token="cache_write"}'
-        deadline = time.monotonic() + 60
-        found = {}
-        while time.monotonic() < deadline:
-            try:
-                found = scrape()
-                if want in found:
-                    break
-            except OSError:
-                pass
-            time.sleep(0.5)
-        logs = subprocess.run([binary, "logs", name], capture_output=True, text=True, check=False)
-        assert want in found, (found, (logs.stdout + logs.stderr)[-3000:])
+        start(binary, work, name, [])
+        # Before any call: each declared series is there, at 0.
+        wait_for(binary, name, token % ("main", "input"), 0)
+        append(work, *LINES)
+        found = wait_for(binary, name, token % ("finance", "cache_write"), 4)
         five = '{window="five_hour"}'
         assert found["homelab_model_bridge_plan_utilization_ratio" + five] == 0.91
         assert found["homelab_model_bridge_plan_status" + five] == 1
@@ -166,11 +224,21 @@ def test_the_newest_line_sets_the_gauges_and_the_counts_add_up():
         plan = [k for k in found if k.startswith("homelab_model_bridge_plan_")]
         assert len(plan) == 8, plan
         assert all("domain" not in k for k in plan)
-        main = 'homelab_model_bridge_tokens_total{domain="main",model="claude-opus-5-5",token="%s"}'
-        assert [found[main % t] for t in TOKENS] == [111, 222, 300, 5]
-        finance = 'homelab_model_bridge_tokens_total{domain="finance",model="claude-opus-5-5",token="%s"}'
-        assert [found[finance % t] for t in TOKENS] == [1, 2, 3, 4]
-        assert len([k for k in found if k.startswith("homelab_model_bridge_tokens_total")]) == 8
+        assert [found[token % ("main", t)] for t in TOKENS] == [111, 222, 300, 5]
+        assert [found[token % ("finance", t)] for t in TOKENS] == [1, 2, 3, 4]
+        assert [found[token % ("workflows", t)] for t in TOKENS] == [0, 0, 0, 0]
+        assert len([k for k in found if k.startswith("homelab_model_bridge_tokens_total")]) == 12
+        # Two flush periods and more with no call: the counter is there at each
+        # look, at its count, with a sample time of now (not of the line).
+        until = time.monotonic() + 2 * LAB_FLUSH_SECONDS + 2
+        while time.monotonic() < until:
+            value, stamp = scrape(stamps=True).get(token % ("main", "input"), (None, None))
+            assert value == 111, value
+            assert stamp is None or time.time() - stamp < LAB_ZERO_SECONDS + 2, time.time() - stamp
+            time.sleep(0.25)
+        # A later call adds to it.
+        append(work, call("main", input=50, output=1, cache_read=0, cache_write=0))
+        wait_for(binary, name, token % ("main", "input"), 161)
     finally:
         subprocess.run([binary, "rm", "-f", name], capture_output=True, check=False)
         subprocess.run(["rm", "-rf", str(work)], check=False)
