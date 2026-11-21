@@ -426,3 +426,33 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#modelplannearlimit"
             summary: "The {{ $labels.window }} window of the Claude plan is near its limit."
             description: "The AI board, tab Limits and security, shows the use and the reset time of each window. The plan_limit lines of the bridge are in Loki ({namespace=\"ai\", app=\"model-bridge\"} |= \"plan_limit\")."
+
+        - alert: AgentTurnNotEnded
+          # A personal agent took a message and did not end its turn for 30
+          # minutes: its counter of messages in is higher than its counter of
+          # messages that ended (completed, skipped or error), the metrics of
+          # the product (docs/apps/agent-platform.md, "Metrics"). The product
+          # counts the end when the turn ends: after the model run, the tools,
+          # and the streamed parts of the reply that the turn waits for
+          # (OpenClaw 2026.11.3, dispatch-from-config). So it catches a turn
+          # that never ends. It does not catch a final reply that the channel
+          # sends after the turn ended and that then hangs or fails: that
+          # message counts as ended. A quiet evening has no message, so no
+          # gap, and a group message that needs no reply ends as skipped. A
+          # normal turn ends in minutes. Both counters start again at a
+          # restart of the pod. A turn that ends in an error is on the board.
+          expr: |
+            sum by (job, openclaw_channel) (openclaw_message_received_total{job=~"openclaw-agents-.+"})
+              - (
+                sum by (job, openclaw_channel) (openclaw_message_processed_total{job=~"openclaw-agents-.+"})
+                or sum by (job, openclaw_channel) (openclaw_message_received_total{job=~"openclaw-agents-.+"}) * 0
+              )
+              >= 1
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-ai?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentturnnotended"
+            summary: "{{ $labels.job }} took a message on {{ $labels.openclaw_channel }} and has not ended its turn for 30 minutes."
+            description: "{{ $value }} messages of this agent have no end of their turn. The AI board, tab Messages, row Messages with no end, shows the gap. The chat may get no reply until the channel or the pod starts again."

@@ -187,6 +187,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-ai / Messages / Time to send a reply (p95) | `openclaw_message_delivery_duration_ms_milliseconds_bucket` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Messages / Turns by trigger | `openclaw_session_turn_created_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Messages / Stuck sessions | `openclaw_session_stuck_total` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |
+| tnwks-ai / Messages / Messages with no end | `openclaw_message_processed_total`<br>`openclaw_message_received_total` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Messages / Model failovers | `openclaw_model_failover_total` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Tool calls / MCP requests by route | `agentgateway_requests_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/agent-platform-runbook.md) |
 | tnwks-ai / Tool calls / MCP failed requests | `agentgateway_requests_total` | 180s | None in range | [Runbook](../../docs/apps/agent-platform-runbook.md) |

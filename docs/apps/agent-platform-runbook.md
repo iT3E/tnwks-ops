@@ -39,14 +39,14 @@ section here (`runbook_url`).
 
 ## The alerts
 
-24 alerts cover the platform: the 17 rules of
-`kubernetes/apps/ai/agents/monitoring/app/` (15 in `prometheusrule.yaml`, 2
+26 alerts cover the platform: the 19 rules of
+`kubernetes/apps/ai/agents/monitoring/app/` (17 in `prometheusrule.yaml`, 2
 in `heartbeat-prometheusrule.yaml`), the 2 rules of the model gateway in
 `kubernetes/apps/ai/litellm/app/prometheusrule.yaml`, and the 5 rules of the
 backup operator (the kopiur chart) that match the snapshot policy, the
 snapshots and the restores of a state volume. The other rules of the backup
 operator are about its repository and its controller, and `backups.md`
-covers them. Each of the 19 rules in `kubernetes/apps/ai/` opens the AI
+covers them. Each of the 21 rules in `kubernetes/apps/ai/` opens the AI
 board in Grafana (`tnwks-ai`), for the site whose Prometheus raised it
 (`observability/tests/test_alert_links.py`). No alert of the platform has
 fired live yet; the rule tests (`observability/tests/test_hand_written_rules.py`)
@@ -692,6 +692,51 @@ When the limit stops calls, see
 [At a limit of the Claude plan](#at-a-limit-of-the-claude-plan). An alert
 that fires often on the week window is a sign that the plan is too small
 for the work: that is a decision of the owner.
+
+### AgentTurnNotEnded
+
+**What it means.** A personal agent took a message on a channel (the label
+`openclaw_channel`, for example `telegram`) and has not ended its turn for
+30 minutes. The product counts each message in, and each message whose turn
+ended: completed, skipped (a group message that needs no reply, a
+duplicate) or error. The alert fires while the first count stays higher for
+30 minutes. The product counts the end when the turn ends: after the model
+run, the tools, and the streamed parts of the reply that the turn waits for.
+So the alert catches a turn that never ends (a model call, a tool or the
+send of a streamed part that hangs, or a turn that waits in the queue of the
+session), and the person who wrote gets no answer. It does not catch a final
+reply that the channel sends after the turn ended and that then hangs or
+fails: that message counts as ended. A send that fails with an error shows
+on the board ("Replies that failed"), but only for a reply that is not
+streamed. A quiet evening has no
+message, so it does not fire. A turn that ends in an error does not fire
+it: the Messages tab of the AI board shows those ("Turns by outcome").
+
+**First checks.** Read only.
+
+1. The AI board, tab Messages: "Messages with no end" (the gap by trust
+   domain and channel), "Stuck sessions" and "Turns by outcome".
+2. The start lines of the channel and its errors, by their heads only:
+   `kubectl -n agents-<name> logs deploy/agent -c agent --since=2h | grep -E '\[telegram\] (\[default\] starting|.*(timeout|failed|error))' | cut -c1-80`.
+   Never copy the text after `Inbound message`, or the name in brackets
+   after `starting provider`: they hold chat content and the name of the bot.
+3. The flows of the pod to the chat service in Hubble (dropped or not
+   answered).
+
+**Seen so far.** Not as this alert. On 2026-11-20 from 20:13 UTC both
+agents logged timeouts to the chat service. The product started the
+channel of finance again at 22:25. Main took two messages at about 22:00,
+made its model calls, and sent nothing until its pod was deleted at 00:06
+on 2026-11-21. That loss had no alert; this alert came after it. The
+metrics of main were not on then, so the case was not replayed, and it is
+not known if those turns ended: if the final replies hung after the turns
+ended, this alert would not have fired.
+
+**Fix.** Delete the agent pod (`kubectl -n agents-<name> delete pod -l
+app.kubernetes.io/name=agent`), with the go of the owner: Flux starts it
+again, and the channel starts in about two seconds. The messages of the
+hung turn get no reply; tell the person who wrote. If it comes again, keep
+the log heads of the minutes before it for the cause.
 
 ### AgentHeartbeatMissing
 

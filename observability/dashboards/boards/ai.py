@@ -130,6 +130,16 @@ def bridge_tokens(window: str) -> str:
     return by_trust_domain(f"increase({selector(BRIDGE_TOKENS)}[{window}])", "domain", "(.+)")
 
 
+def unanswered() -> str:
+    """The messages of each agent with no end of their turn yet: the messages in less the messages
+    that ended (completed, skipped or error), by trust domain and channel (AgentTurnNotEnded)."""
+    by = "k8s_cluster, job, openclaw_channel"
+    got = f"sum by ({by}) ({selector(RECEIVED)})"
+    ended = f"sum by ({by}) ({selector(PROCESSED)})"
+    gap = by_trust_domain(f"({got} - ({ended} or {got} * 0))", "job", "(?:openclaw-agents-)?(.+)")
+    return f"sum by (k8s_cluster, trust_domain, openclaw_channel) ({gap})"
+
+
 def events(series: str, label: str = "pod_namespace", pattern: str = "agents-(.+)") -> str:
     """The newest event time of each series in the selected range, by trust domain."""
     return by_trust_domain(f"max_over_time({series}[$__range])", label, pattern)
@@ -208,6 +218,9 @@ def board() -> Board:
                 p("Stuck sessions", f'{product(STUCK, "$__range", "openclaw_state")} > 0', "short",
                   "The times in the selected range that an agent found a session that did not end, by its state.",
                   "table", column="Times", empty=NO_EVENTS),
+                p("Messages with no end", f"{unanswered()} > 0", "short",
+                  "The messages that each agent took and has not ended its turn for, by channel: a turn that runs now, or one that hangs (a model call, a tool, a streamed part). A final reply that hangs after the turn ended is not counted here. AgentTurnNotEnded fires when one stays for 30 minutes. A restart of the agent pod starts the count again.",
+                  "table", column="Messages", empty=NO_EVENTS),
                 p("Model failovers", f'{product(FAILOVERS, "$__range", "openclaw_provider, openclaw_model, openclaw_failover_to_model")} > 0',
                   "short",
                   "The times in the selected range that an agent moved a turn to a second model. Each trust domain has one model name, so each row here is against the rule of one model for each domain.",
