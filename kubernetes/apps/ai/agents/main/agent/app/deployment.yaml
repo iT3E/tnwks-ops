@@ -8,9 +8,10 @@
 # M7a, the first step: one Telegram account with the direct chat of the
 # owner and one group, web search, images through the model, and the
 # built-in tools of the product, and the vault of the main trust domain
-# (task 3.37): its share, read only at /vault for the index, and its vault
-# tools through the central MCP gateway, with the key of this agent
-# (MCP_GATEWAY_KEY). No finance app, no Signal and no scheduled job (the
+# (task 3.37): its share, read only at /vault for the index, and the six
+# read tools of the vault through the central MCP gateway, with the key of
+# this agent (MCP_GATEWAY_KEY). The three write tools come with the seed of
+# the share: the seed stops at a share that is not empty. No finance app, no Signal and no scheduled job (the
 # Monday job comes with the Signal step). Each command it runs goes to a sandbox of this trust domain,
 # through the sandbox gateway; each model call goes to the model gateway,
 # with the key of this trust domain.

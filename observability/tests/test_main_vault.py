@@ -416,14 +416,22 @@ def test_the_index_of_the_agent_polls_and_reads_the_share():
     assert env["CHOKIDAR_USEPOLLING"] == "1"
 
 
-def test_the_agent_calls_the_vault_route_of_main_with_its_key_and_the_nine_tools():
+# The tools that write the share. Until the seed of the share (step F, at the
+# cutover) the agent lists the six read tools only: the seed stops at a share
+# that is not empty (share-not-empty), so a note of the agent before it would
+# stop the seed. The step of the seed adds these three again.
+WRITES = {"write_file", "edit_file", "create_directory"}
+
+
+def test_the_agent_calls_the_vault_route_of_main_with_its_key_and_the_read_tools():
     c = json.loads(OPENCLAW.read_text())
     entry = c["mcp"]["servers"]["vault"]
     assert entry["url"] == "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp"
     assert entry["headers"] == {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"}
     (rule,) = routes()["main-vault"]["policies"]["mcpAuthorization"]["rules"]
     nine = re.findall(r'"([a-z_]+)"', rule["allow"].split("]")[0])
-    assert sorted(entry["toolFilter"]["include"]) == sorted(nine)
+    assert WRITES <= set(nine)
+    assert sorted(entry["toolFilter"]["include"]) == sorted(set(nine) - WRITES)
     assert "vault__*" in c["tools"]["sandbox"]["tools"]["alsoAllow"]
 
 

@@ -108,6 +108,10 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     assert vault.pop("url") == "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp"
     other = dict(f["mcp"]["servers"]["vault"])
     other.pop("url")
+    # Until the seed of the share, the read tools of finance only
+    # (test_main_vault.py, WRITES).
+    other["toolFilter"] = {"include": [t for t in other["toolFilter"]["include"]
+                                       if t not in ("write_file", "edit_file", "create_directory")]}
     assert vault == other
     assert "firefly" not in CONFIG.read_text() and "finance" not in CONFIG.read_text()
     assert c["agents"]["defaults"]["model"]["primary"] == "litellm/agents-main"
