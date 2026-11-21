@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.247.2 - 2026-11-21
+
+### Fixed
+
+* observability: the schedule state of the AI board matches each namespace of a declared schedule, so litellm-key-check (namespace ai) reads its last good run and no longer no evidence. AgentDailyArchiveFailed reads the exit code of the backup container (1 to 127), so a stop of the node (exit 143 from SIGTERM, or 255) no longer fires it.
+
 ## v2.247.1 - 2026-11-21
 
 ### Fixed
