@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.258.0 - 2026-11-21
+
+### Added
+
+* mikrotik: the router lets the desktop ping the EP-R6 (sce-ep01), the gateway of the radio network: ICMP from the monitoring list to 10.10.140.140 only, so smokeping can watch it. Its SSH and web UI stay VPN-only
+
 ## v2.257.0 - 2026-11-21
 
 ### Changed
