@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -283,6 +282,8 @@ def test_with_the_file_nothing_attaches_the_vhdx_and_it_stays():
     tasks = yaml.safe_load((WINDOWS_ROLE / "tasks/main.yml").read_text())
     attach = next(task for task in tasks if "win_powershell" in str(task) and "-Initialize" in str(task))
     assert attach["when"] == "observability_storage_mount != 'file'"
+    register = next(task for task in tasks if "tnwks_win_scheduled_task" in task)
+    assert register["when"] == "observability_storage_mount != 'file'", "with the file, never registered again"
     assert not any(task.get("tnwks_win_scheduled_task", {}).get("state") == "absent" for task in tasks)
     assert not any("win_file" in task and task["ansible.windows.win_file"].get("state") == "absent" for task in tasks)
     defaults = yaml.safe_load((WINDOWS_ROLE / "defaults/main.yml").read_text())
@@ -290,31 +291,62 @@ def test_with_the_file_nothing_attaches_the_vhdx_and_it_stays():
 
 
 @ansible_render.no_ansible
-def test_the_mount_task_is_registered_disabled_only_with_the_file_and_the_distro_reads_the_phase(tmp_path):
-    template = WINDOWS_ROLE / "templates/monitoring-mount.xml.j2"
+def test_the_distro_reads_the_phase_of_its_windows_host(tmp_path):
     defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
-    hosts = {}
-    for mount in ("vhdx", "ready", "file", None):
-        name = f"win-{mount}"
-        hosts[name] = {"observability_storage_dir": "C:\\ProgramData\\tnwks-observability",
-                       "observability_storage_vhdx": "C:\\WSL\\observability.vhdx",
-                       "observability_storage_distro": "Ubuntu", "windows_desktop_user": "standin1",
-                       **({"observability_storage_mount": mount} if mount else {})}
-        hosts[f"distro-{mount}"] = {"wsl_distro_windows_host": name}
     phase = defaults["wsl_observability_file_mount"].strip()
     assert phase.startswith("{{ ") and phase.endswith(" }}")
-    out = ansible_render.render(
-        tmp_path, hosts, list(hosts),
-        {"xml": f"lookup('ansible.builtin.template', {str(template)!r}) "
-                f"if inventory_hostname.startswith('win-') and observability_storage_mount is defined else ''",
-         "phase": f"'' if inventory_hostname.startswith('win-') else ({phase[3:-3]})"})
+    hosts = {}
+    for mount in ("vhdx", "ready", "file", None):
+        hosts[f"win-{mount}"] = {"observability_storage_mount": mount} if mount else {}
+        hosts[f"distro-{mount}"] = {"wsl_distro_windows_host": f"win-{mount}"}
+    distros = [name for name in hosts if name.startswith("distro-")]
+    out = ansible_render.render(tmp_path, hosts, distros, {"phase": phase[3:-3]})
     for mount in ("vhdx", "ready", "file"):
-        xml = out[f"win-{mount}"]["xml"]
-        assert ("<Enabled>false</Enabled>" in xml) is (mount == "file"), mount
-        assert re.search(r"</IdleSettings>\s*(<!--.*?-->\s*)?(<Enabled>false</Enabled>\s*)?<UseUnifiedSchedulingEngine>",
-                         xml, re.DOTALL), mount
         assert out[f"distro-{mount}"]["phase"] == mount
     assert out["distro-None"]["phase"] == "vhdx"
+
+
+def disable_script() -> str:
+    tasks = yaml.safe_load((WINDOWS_ROLE / "tasks/main.yml").read_text())
+    task = next(task for task in tasks if task.get("when") == "observability_storage_mount == 'file'")
+    return task["ansible.windows.win_powershell"]["script"]
+
+
+TASK_FAKES = r"""
+$global:Calls = New-Object System.Collections.Generic.List[string]
+function Get-ScheduledTask { param([string]$TaskPath, [string]$TaskName)
+    if (-not $global:Task) { return $null }
+    $global:Task }
+function Disable-ScheduledTask { param($InputObject) $global:Calls.Add('disable'); $global:Task.Settings.Enabled = $false }
+function Stop-ScheduledTask { param([string]$TaskPath, [string]$TaskName) $global:Calls.Add('stop') }
+function Register-ScheduledTask { $global:Calls.Add('register') }
+"""
+
+
+@needs_pwsh
+@pytest.mark.parametrize(("enabled", "state", "check", "calls", "changed"), [
+    (True, "Ready", False, ["disable", "stop"], True),
+    (False, "Running", False, ["disable", "stop"], True),
+    (False, "Disabled", False, [], False),
+    (True, "Ready", True, [], True),
+])
+def test_with_the_file_the_mount_task_is_disabled_in_place(enabled, state, check, calls, changed):
+    """Never registered again: a principal of a standard account with no password is refused."""
+    task = (f"$global:Task = [pscustomobject]@{{ State = '{state}'; "
+            f"Settings = [pscustomobject]@{{ Enabled = ${str(enabled).lower()} }} }}\n")
+    result = pwsh(TASK_FAKES + task + f"$Ansible = [pscustomobject]@{{ Changed = $null; CheckMode = ${str(check).lower()} }}\n"
+                  + "& {\n" + disable_script() + "\n} -Name tnwks-observability-mount\n"
+                  + "[Console]::Out.Write((@{ calls = @($global:Calls); changed = $Ansible.Changed } | ConvertTo-Json -Compress))")
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    assert out["calls"] == calls and out["changed"] is changed
+
+
+@needs_pwsh
+def test_with_the_file_a_missing_mount_task_stops_the_play():
+    result = pwsh(TASK_FAKES + "$global:Task = $null\n$Ansible = [pscustomobject]@{ Changed = $null; CheckMode = $false }\n"
+                  + "$ErrorActionPreference = 'Stop'\n& {\n" + disable_script() + "\n} -Name tnwks-observability-mount\n")
+    assert result.returncode != 0 and "way back" in result.stderr + result.stdout
 
 
 @needs_pwsh

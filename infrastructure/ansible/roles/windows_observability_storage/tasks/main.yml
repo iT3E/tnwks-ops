@@ -54,8 +54,29 @@
   # With the file, nothing attaches the VHDX: it stays as it is, for the way back.
   when: observability_storage_mount != 'file'
 
-# Disabled with the file (the template), so it can not mount the VHDX over it.
 - name: Monitoring volume attachment at boot and every minute
   tnwks_win_scheduled_task:
     name: "{{ observability_storage_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'monitoring-mount.xml.j2') }}"
+  when: observability_storage_mount != 'file'
+
+# With the file, the mount task is disabled, so it can not mount the VHDX over
+# the file, and it is not registered again: its account stays the one that it
+# has. A registration with a principal of a standard account and no password is
+# refused (Design Doc 0004, F1), and the task stays for the way back.
+- name: With the file, the mount task is disabled and stopped, and stays
+  ansible.windows.win_powershell:
+    error_action: stop
+    parameters:
+      Name: "{{ observability_storage_task }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Name)
+      $task = Get-ScheduledTask -TaskPath '\' -TaskName $Name -ErrorAction SilentlyContinue
+      if (-not $task) { throw "The task $Name is not there: it is the way back of the file. Nothing is changed." }
+      $Ansible.Changed = [bool]$task.Settings.Enabled -or "$($task.State)" -eq 'Running'
+      if ($Ansible.CheckMode -or -not $Ansible.Changed) { return }
+      Disable-ScheduledTask -InputObject $task | Out-Null
+      Stop-ScheduledTask -TaskPath '\' -TaskName $Name -ErrorAction SilentlyContinue
+      if ((Get-ScheduledTask -TaskPath '\' -TaskName $Name).Settings.Enabled) { throw "The task $Name does not read disabled." }
+  when: observability_storage_mount == 'file'

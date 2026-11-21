@@ -377,7 +377,7 @@ and mounted by a loop device at the same point. The variable
 | --- | --- | --- |
 | `vhdx` (default) | The mount task attaches and mounts the VHDX, as above | The timer of the file is off |
 | `ready` | The same | The script makes the file once: it records a random UUID, then formats with it. The timer is off |
-| `file` | The mount task is registered disabled and attaches nothing. It, its scripts and the VHDX stay | `tnwks-observability-file.timer` mounts the file at the point at the start of the distro and each minute |
+| `file` | The mount task is disabled and stopped in place. It is not registered again, so its account stays the one that it has. It, its scripts and the VHDX stay | `tnwks-observability-file.timer` mounts the file at the point at the start of the distro and each minute |
 
 `observability-file.py` (in `/usr/local/lib/tnwks-observability`, as root)
 also has `stage` and `unstage`, which mount the file at
