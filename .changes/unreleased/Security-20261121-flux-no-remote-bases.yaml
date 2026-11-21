@@ -1,3 +1,0 @@
-kind: Security
-body: 'Flux: kustomize-controller runs with --no-remote-bases=true on both sites, so a kustomization can not bring in a remote base or resource; no build of the clusters uses one, and a CI test keeps it so'
-time: 2026-11-21T21:30:00.000000000Z

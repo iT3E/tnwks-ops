@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.256.1 - 2026-11-21
+
+### Security
+
+* Flux: kustomize-controller runs with --no-remote-bases=true on both sites, so a kustomization can not bring in a remote base or resource; no build of the clusters uses one, and a CI test keeps it so
+
 ## v2.256.0 - 2026-11-21
 
 ### Changed
