@@ -7,8 +7,11 @@ on the central MCP gateway ([mcp-gateway.md](mcp-gateway.md)).
 
 Manifests: `kubernetes/apps/ai/playwright-mcp/`, image
 `mcr.microsoft.com/playwright/mcp` in `app/helmrelease.yaml`. It runs at
-one site at a time (`PLAYWRIGHT_MCP_REPLICAS` in each site's cluster
-settings; switching sites is in [multi-site.md](../wsl/multi-site.md)).
+homelab-wsl only, with one replica, beside the central MCP gateway and the
+fetch proxy of the main agent. It does not move between the sites
+([multi-site.md](../wsl/multi-site.md#apps)): at homelab-wsl-02 it would
+need a global Service of the fetch proxy, so the egress of the main trust
+domain would be reachable from the other cluster.
 Upstream: [GitHub](https://github.com/microsoft/playwright-mcp)
 (Apache-2.0).
 
@@ -17,7 +20,7 @@ Upstream: [GitHub](https://github.com/microsoft/playwright-mcp)
 | Piece | Where |
 | --- | --- |
 | App | Deployment `playwright-mcp`, port 8000 (`/mcp`, and the legacy `/sse`) |
-| Service | `playwright-mcp`, global across the WSL sites (Cilium Cluster Mesh) |
+| Service | `playwright-mcp`, local to homelab-wsl (not a global Service of the mesh) |
 | Ingress | None: an agent reaches it through the gateway only |
 | Network policy | CiliumNetworkPolicy `playwright-mcp` (`app/networkpolicy.yaml`) |
 | Data | None: `--isolated` gives each session a fresh browser profile in memory, and `/tmp` and the home directory are `emptyDir` |
@@ -33,18 +36,26 @@ Upstream: [GitHub](https://github.com/microsoft/playwright-mcp)
 The flags of origins of the server are not a security boundary (its own
 docs say so), so the network policy is the wall.
 
-The app moves between the sites, and the gateway and the fetch proxy run
-at homelab-wsl only. So each peer is named at this cluster and at the
-other one (`${CLUSTER_NAME}` and `${PEER_CLUSTER_NAME}`), as in
+The app, the gateway and the fetch proxy run at homelab-wsl only. Both
+WSL clusters are one Cilium Cluster Mesh, so each peer names this cluster
+(`${CLUSTER_NAME}`), as in
 [agent-platform.md](agent-platform.md#network-policy-and-the-cluster-mesh).
+
+## Monitoring
+
+The AI board shows it as the row "Browser tool server" of the shared parts
+(`AI_PARTS` in `observability/inventory.py`): Healthy at homelab-wsl when
+its replica is ready, and Not applicable at homelab-wsl-02, which does not
+run it by design. The alert `AgentPlatformWorkloadNotReady` does not name
+it. The alerts of kube-prometheus-stack for a Deployment cover it, for
+example `KubeDeploymentReplicasMismatch` after 15 minutes.
 
 ## What is left
 
 - **No way to a web site yet.** The fetch proxy lets in the agent pod of
-  main only, and its Service is not global, so a page load fails. The step
-  that gives the browser to the main agent adds the proxy flag of the
-  browser, the rule of the fetch proxy for it, and the route and egress of
-  the gateway.
+  main only, so a page load fails. The step that gives the browser to the
+  main agent adds the proxy flag of the browser, the rule of the fetch
+  proxy for it, and the route and egress of the gateway.
 - **No gateway route yet.** The gateway names no browser target, so the
   rule that lets it in carries no traffic until that step.
 - **The Chromium sandbox.** The entrypoint of the image runs Chromium with

@@ -553,10 +553,10 @@ cluster with `io.cilium.k8s.policy.cluster`.
 | --- | --- | --- |
 | Warm | Mealie, Home Assistant, Firefly, Grafana, storefront API | switchover: database primary and PVC data move |
 | Moves, state per site | Frigate, mosquitto | only config moves; each site keeps its own state |
-| Stateless | sites, playwright-mcp | scale up there, down here |
+| Stateless | sites | scale up there, down here |
 | Cold | media stack, Immich | stay down until their home site is back |
 | Pinned | zwave-js-ui (Z-Stick) | down while wsl-01 is down. Home Assistant runs without Z-Wave on wsl-02; accepted |
-| Not placed | monitoring (Prometheus, Thanos, Alertmanager), the OpenClaw gateway | each site runs its own monitoring and watches the other |
+| Not placed | monitoring (Prometheus, Thanos, Alertmanager), the OpenClaw gateway, the browser tool (playwright-mcp, beside the MCP gateway and the fetch proxy of the main agent) | each site runs its own monitoring and watches the other |
 
 Vaultwarden isn't in use and isn't planned for.
 
