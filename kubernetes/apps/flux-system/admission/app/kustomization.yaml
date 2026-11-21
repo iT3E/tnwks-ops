@@ -3,3 +3,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./policy.yaml
+  # The daily list of the admission objects owned outside the class.
+  - ./objects-check.yaml
+configMapGenerator:
+  - name: flux-admission-objects
+    namespace: flux-system
+    files:
+      - admission_objects.py=./scripts/admission_objects.py
