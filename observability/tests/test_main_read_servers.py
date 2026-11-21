@@ -342,7 +342,9 @@ def test_the_terraform_server_has_the_registry_only_and_no_token():
     assert out == {"toFQDNs": [{"matchName": "registry.terraform.io"}],
                    "toPorts": [{"ports": [{"port": "443", "protocol": "TCP"}]}]}
     names = [d["matchName"] for tp in dns["toPorts"] for d in tp["rules"]["dns"]]
-    assert all(n.startswith("registry.terraform.io") for n in names)
+    host = "registry.terraform.io"
+    # The name, and the name with each search suffix of the pod: no other name.
+    assert set(names) == {host} | {f"{host}.{s}" for s in ("agents-main.svc.cluster.local", "svc.cluster.local", "cluster.local")}
     assert pod("terraform")["metadata"]["labels"]["agents.home.arpa/dns"] == "own-rule"
 
 
