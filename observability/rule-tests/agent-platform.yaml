@@ -156,6 +156,40 @@ tests:
         exp_alerts:
           - exp_labels: {severity: warning, namespace: agents-finance, cronjob: platform-check-isolation}
 
+  - name: the key check of the model gateway that has not passed in 26 hours, and another CronJob of ai that does not count
+    interval: 2m
+    input_series:
+      # The key check passed at 0 and never again (the failed Job is gone,
+      # or the CronJob is suspended).
+      - series: kube_cronjob_created{namespace="ai", cronjob="litellm-key-check"}
+        values: 0x900
+      - series: kube_cronjob_status_last_successful_time{namespace="ai", cronjob="litellm-key-check"}
+        values: 0x900
+      # Another CronJob of ai, also old: not a check of this rule.
+      - series: kube_cronjob_created{namespace="ai", cronjob="other-job"}
+        values: 0x900
+      - series: kube_cronjob_status_last_successful_time{namespace="ai", cronjob="other-job"}
+        values: 0x900
+    alert_rule_test:
+      - alertname: AgentPlatformCheckStale
+        eval_time: 26h
+        exp_alerts: []
+      - alertname: AgentPlatformCheckStale
+        eval_time: 26h20m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: ai, cronjob: litellm-key-check}
+
+  - name: a key check that never passed fires once a run was due
+    interval: 2m
+    input_series:
+      - series: kube_cronjob_created{namespace="ai", cronjob="litellm-key-check"}
+        values: 0x900
+    alert_rule_test:
+      - alertname: AgentPlatformCheckStale
+        eval_time: 26h20m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: ai, cronjob: litellm-key-check}
+
   - name: a run sandbox older than 90 minutes; the pilot's long-lived sandbox and the probe do not count
     interval: 1m
     input_series:

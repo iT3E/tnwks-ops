@@ -241,9 +241,14 @@ job before any token, and shows as
 
 ### AgentPlatformCheckStale
 
-**What it means.** A daily check of a trust domain, the isolation check
-(04:17) or the sandbox probe (04:47), has not passed in 26 hours, or never
-passed once a run was due.
+**What it means.** A daily check of a trust domain (the isolation check at
+04:17, the sandbox probe at 04:47, the probe of the gateway of tools in
+`agents-main` and `agents-finance`, and the two checks of the finance app
+in `agents-finance`), or the daily key check of the model gateway in `ai`
+(`litellm-key-check`, 05:41), has not passed in 26 hours, or never passed
+once a run was due. For the key check, the failed Job fires `KubeJobFailed`
+while it is kept; this alert still fires when that Job is gone or the
+CronJob is suspended, and no run passed since.
 
 **First checks.**
 
@@ -253,7 +258,9 @@ kubectl -n <namespace> get jobs --sort-by=.metadata.creationTimestamp
 ```
 
 The log of the last run is in Loki,
-`{namespace="<namespace>", app="platform-checks"}`.
+`{namespace="<namespace>", app="platform-checks"}`, or for the key check
+`{namespace="ai", app="litellm-key-check"}` (one line for each model name,
+never the key; [`litellm.md`](litellm.md)).
 
 **Seen so far.** Not fired. The probe had two fixes in its first days: it
 finds its pods through the Sandbox record (`175976a6`), and the workload pod
