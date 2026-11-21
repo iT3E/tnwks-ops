@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.256.2 - 2026-11-21
+
+### Security
+
+* Flux admission: the rule operator-pods refuses, for a Flux child outside the "ask first" class, the objects from which an operator makes a pod of its own template (runner sets, sandboxes, a database pooler, and a database cluster with a privileged container or an added capability). The test harness takes its Kubernetes version from the upgrade file of the clusters, and the test that the class lists equal git also runs on a change of the Owner label script
+
 ## v2.256.1 - 2026-11-21
 
 ### Security
