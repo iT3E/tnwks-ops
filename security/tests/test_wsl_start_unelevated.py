@@ -87,9 +87,9 @@ def templates() -> list[Path]:
                   if "<Task " in path.read_text() and path.parts[-3] not in REHEARSALS)
 
 
-# The elevated tasks of the desktop user that may still run wsl.exe with the switch on:
-# the play refuses the switch on a host with the USB attach or the monitoring volume.
-STILL_ELEVATED = {"usb-attach.xml.j2", "monitoring-mount.xml.j2"}
+# The elevated task of the desktop user that may still run wsl.exe with the switch on:
+# the play refuses the switch on a host with the monitoring volume.
+STILL_ELEVATED = {"monitoring-mount.xml.j2"}
 # The wsl.exe commands that an elevated client may run: none of them creates the WSL VM
 # or starts a process in a distro (LxssUserSession.cpp, the callers of _CreateVm: a
 # distro start, --mount, and --manage resize, compact or set-version create the VM).
@@ -155,7 +155,8 @@ $r = Invoke-Native -FilePath 'wsl.exe' -Arguments @('-d', $Distro, '--exec', 'tr
 
 def test_with_the_switch_on_each_task_that_starts_the_distro_runs_with_no_elevation():
     # And the stop task of the account that owns the distro (test_wsl_move_compaction.py).
-    expected = {"wsl-keepalive.xml.j2", "wsl-watchdog.xml.j2", "udp-relay.xml.j2", "lan-bridge-ip.xml.j2", "wsl-stop.xml.j2"}
+    expected = {"wsl-keepalive.xml.j2", "wsl-watchdog.xml.j2", "udp-relay.xml.j2", "lan-bridge-ip.xml.j2", "wsl-stop.xml.j2",
+                "usb-attach.xml.j2"}
     unelevated = set()
     for path in templates():
         text = render(path, on=True)
@@ -173,7 +174,7 @@ def test_with_the_switch_off_each_task_is_as_before():
         text = render(path, on=False)
         _, level = principal(text)
         assert level == "HighestAvailable", path.name
-        assert "-NoDistroStart" not in text and "-IpFile" not in text, path.name
+        assert "-NoDistroStart" not in text and "-IpFile" not in text and "-NoElevation" not in text, path.name
     sync = render(ROLES / "windows_lan_bridge/templates/lan-bridge-sync.xml.j2", on=False)
     assert principal(sync) == ("{{ lan_bridge_user | e }}", "HighestAvailable")
 
@@ -347,20 +348,20 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
     guard = first["ansible.builtin.assert"]
     for role in ROLES.glob("windows_*/tasks/*.yml"):
         assert "wsl_start_unelevated_done" not in role.read_text(), role
-    usb_default = yaml.safe_load((ROLES / "windows_usb_attach/defaults/main.yml").read_text())["usb_attach_bound_devices"]
 
     def passes(data: dict) -> bool:
         on = bool(data.get("wsl_start_unelevated"))
-        usb = data.get("usb_attach_bound_devices", usb_default)
-        return all([not on or len(usb) == 0, not on or not data.get("observability_storage_enabled", False)])
+        return not on or not data.get("observability_storage_enabled", False)
 
-    assert [condition.split(" or ")[0] for condition in guard["that"][:2]] == ["not (wsl_start_unelevated | bool)"] * 2
-    assert guard["that"][2] == "not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)"
+    assert guard["that"][0].split(" or ")[0] == "not (wsl_start_unelevated | bool)"
+    assert guard["that"][1] == "not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)"
+    # The USB attach has its part with no elevation: the switch does not depend on it.
+    assert not any("usb_attach" in condition for condition in guard["that"])
     for name, data in windows_hosts().items():
         assert passes(data), name
         assert not data["wsl_start_unelevated_done"] or data["wsl_start_unelevated"], name
     site1 = windows_hosts()["DESKTOP-HKE05KI"]
-    assert not passes({**site1, "wsl_start_unelevated": True}), "site 1 needs the split of its two roles first"
+    assert not passes({**site1, "wsl_start_unelevated": True}), "site 1 needs the split of the monitoring volume first"
 
 
 # Stand-ins for the encrypted values of a Windows host with the move of the distro on.

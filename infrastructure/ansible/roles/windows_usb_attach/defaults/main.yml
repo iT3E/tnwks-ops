@@ -30,6 +30,18 @@ usb_attach_task: tnwks-usb-attach
 # The account that owns the WSL distro (usbipd attach --wsl and docker restart
 # go through its wsl.exe).
 usb_attach_user: "{{ windows_desktop_user }}"
+# With wsl_start_unelevated (group_vars/windows_hosts.yml), the task runs with
+# no elevation (-NoElevation): it attaches and does not bind (the play binds,
+# above), and it logs to a directory that the account may change, apart from
+# the script.
+usb_attach_log_dir: '{{ usb_attach_dir }}\log'
+# The move of the distro (group_vars/windows_hosts.yml, wsl_move_phase): the
+# accounts that may write the log (both while the move runs), and the copy of
+# the task for the account that owns the distro, named with the suffix.
+usb_attach_writers: >-
+  {{ [usb_attach_user] if wsl_move_phase == 'off'
+     else ([usb_attach_user, wsl_move_new_account] if wsl_move_phase == 'move' else [wsl_move_new_account]) }}
+usb_attach_task_account: "{{ usb_attach_task }}{{ wsl_move_task_suffix }}"
 # Extra script arguments. The usbip fallback for the Coral would add
 # `-CoralDfuVidPid 1a6e:089a -CoralRuntimeVidPid 18d1:9302`.
 usb_attach_args: ""

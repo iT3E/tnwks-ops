@@ -22,7 +22,13 @@ Windows WinUSB driver and served by the tnwks-coral-detector-<id> services
 flip below) is off unless both -CoralDfuVidPid and -CoralRuntimeVidPid are
 given, which is only for the usbip fallback in coral-detector.md.
 
-Run elevated (usbipd bind/attach need Administrator).
+Run elevated, or with -NoElevation. usbipd-win needs an admin right to bind a
+device, and none to attach a device that is bound (usbipd-win 4.3.0,
+Usbipd/CommandHandlersCli.cs: Bind checks write access, AttachWsl does not).
+With -NoElevation (the start of WSL with no elevation, Design Doc 0004,
+section 5.9) the script does not bind: the play binds each device, forced,
+and the bind persists across reboots. It then logs to -LogPath and -StatePath,
+in a directory that the account may write.
 
 Devices are matched by VID:PID from the USB InstanceId, NOT busid, because the
 busid changes across reboots and replugs.
@@ -87,7 +93,9 @@ param(
     [string]$LogPath,
     [string]$StatePath,
     [switch]$DryRun,
-    [switch]$NoWorkerRestart
+    [switch]$NoWorkerRestart,
+    # No admin right: no bind, and no stop when the token is not elevated.
+    [switch]$NoElevation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -225,10 +233,14 @@ function Set-DeviceAttached {
     }
 
     # bind --force is persistent and safe to repeat; it just ensures the device is
-    # shared before we attach it into the WSL VM.
-    $bind = Invoke-Usbipd @('bind', '--force', '--busid', $device.BusId)
-    if ($bind.ExitCode -ne 0) {
-        Write-Log "$Label bind returned exit $($bind.ExitCode): $($bind.Output)" 'WARN'
+    # shared before we attach it into the WSL VM. With no elevation the play binds it.
+    if ($NoElevation) {
+        Write-Log "$Label ($VidPid busid $($device.BusId)): no bind with no elevation; the play binds it" 'INFO'
+    } else {
+        $bind = Invoke-Usbipd @('bind', '--force', '--busid', $device.BusId)
+        if ($bind.ExitCode -ne 0) {
+            Write-Log "$Label bind returned exit $($bind.ExitCode): $($bind.Output)" 'WARN'
+        }
     }
     $attach = Invoke-Usbipd @('attach', '--wsl', '--busid', $device.BusId)
     if ($attach.ExitCode -ne 0) {
@@ -349,10 +361,10 @@ function Restart-WorkerContainer {
 # nonzero exit code and reported success to Task Scheduler.
 function Invoke-Sync {
     Write-Log '=== tnwks-usb-attach sync starting ==='
-    Write-Log ('identity={0} elevated={1} dryRun={2} distro={3}' -f `
-        [Security.Principal.WindowsIdentity]::GetCurrent().Name, (Test-Admin), [bool]$DryRun, $WslDistro)
+    Write-Log ('identity={0} elevated={1} noElevation={2} dryRun={3} distro={4}' -f `
+        [Security.Principal.WindowsIdentity]::GetCurrent().Name, (Test-Admin), [bool]$NoElevation, [bool]$DryRun, $WslDistro)
 
-    if (-not (Test-Admin)) {
+    if (-not $NoElevation -and -not (Test-Admin)) {
         Write-Log 'not running as Administrator - usbipd bind/attach will fail. Aborting.' 'ERROR'
         return 1
     }

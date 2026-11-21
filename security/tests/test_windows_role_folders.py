@@ -57,6 +57,7 @@ OWN_RULES = {
     "lan_bridge_dir": ["lan_bridge_ip_dir"],
     "wsl_watchdog_dir": ["wsl_watchdog_log_dir", "wsl_service_log_dir"],
     "udp_relay_dir": ["udp_relay_log_dir"],
+    "usb_attach_dir": ["usb_attach_log_dir"],
 }
 
 
@@ -122,7 +123,7 @@ def test_each_folder_with_rules_of_its_own_is_below_its_role_folder_and_has_its_
             assert f"{{{{ {child} }}}}" in calls, child
     writers = {var(call["path"]): call.get("writer", "") for role in {r for r, _ in values.values()}
                for call in module_calls(role) if call.get("writer")}
-    assert set(writers) == {"lan_bridge_ip_dir", "wsl_watchdog_log_dir", "udp_relay_log_dir"}
+    assert set(writers) == {"lan_bridge_ip_dir", "wsl_watchdog_log_dir", "udp_relay_log_dir", "usb_attach_log_dir"}
 
 
 def test_the_folders_of_the_host_check_and_the_detector_let_no_user_make_files():
@@ -158,7 +159,7 @@ WRITES = [
     re.compile(r"-WriteIpFile '\{\{ (\w+) \}\}'"),
     re.compile(r"\*&gt;&gt; '\{\{ (\w+) \}\}\\"),
 ]
-WRITER_DIRS = {"lan_bridge_ip_dir", "wsl_watchdog_log_dir", "udp_relay_log_dir"}
+WRITER_DIRS = {"lan_bridge_ip_dir", "wsl_watchdog_log_dir", "udp_relay_log_dir", "usb_attach_log_dir"}
 
 
 def test_each_task_with_no_elevation_writes_only_where_the_account_has_a_write_rule():
@@ -180,6 +181,7 @@ def test_each_task_with_no_elevation_writes_only_where_the_account_has_a_write_r
     assert unelevated == {
         "lan-bridge-ip.xml.j2": ["lan_bridge_ip_dir"],
         "udp-relay.xml.j2": ["udp_relay_log_dir"],
+        "usb-attach.xml.j2": ["usb_attach_log_dir"],
         "wsl-keepalive.xml.j2": [],
         "wsl-watchdog.xml.j2": ["wsl_watchdog_log_dir"],
         "wsl-stop.xml.j2": [],
