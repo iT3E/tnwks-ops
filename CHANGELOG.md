@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.253.0 - 2026-11-21
+
+### Changed
+
+* windows: site 1 takes the phase ready of the move of the monitoring data (observability_storage_mount): the distro makes the file of 19 GiB once, its timer stays off, and the VHDX keeps the data
+
 ## v2.252.0 - 2026-11-21
 
 ### Changed
