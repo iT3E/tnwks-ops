@@ -32,6 +32,15 @@ WSL-02, which has that cluster's kubeconfig
   with it, and the provisioned boards are already on both sites.
 - **Site 1 Prometheus volume:** see "Site 1 Prometheus volume" in the
   implementation doc. Without the mount, only Prometheus stops.
+- **A reader can not reach Prometheus** (a board with no data on one
+  datasource, Pyrra empty, `up{job="peer-federate"}` at 0 on the other
+  site): see "The network rule of Prometheus" in the implementation doc.
+  `hubble observe --pod
+  monitoring/prometheus-kube-prometheus-stack-prometheus-0 --verdict
+  DROPPED` names the source, and `--type l7 --http-status 403` shows a
+  request that the rule refused. If the pod is NotReady, look first for a
+  403 to the host on `/-/ready` or `/-/healthy`. The quick way back is a
+  revert of the rule's PR.
 - **Archive behind or full:** `ObservabilityArchiveBehind` and
   `ObservabilityArchiveSpaceLow`. Check the Compactor first: whether it has
   halted (`thanos_compact_halted`) and how many compactions it has left. Then

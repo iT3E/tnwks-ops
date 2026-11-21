@@ -1,19 +1,52 @@
 ---
-# Prometheus of this site: the network rule, in its first form. It observes
-# and denies nothing (Design Doc 0003, section 4.2.8, "The readers of that
-# port"; docs/operations/observability-implementation.md, "The network rule
-# of Prometheus").
+# Prometheus of this site: who may open a connection to its pod, on which
+# port, and with which HTTP requests (Design Doc 0003, section 4.2.8, "The
+# readers of that port"; docs/operations/observability-implementation.md, "The
+# network rule of Prometheus"). It is the first rule of this repository with
+# HTTP rules, so the proxy of Cilium (Envoy, the cilium-envoy DaemonSet) is in
+# the path of each request to port 9090 that this rule admits.
 #
-# Each request to port 9090 from any source goes through the proxy of Cilium
-# (Envoy, the cilium-envoy DaemonSet), and each one passes. So Hubble shows
-# the method, the path and the source of each request
-# (`hubble observe --type l7`), and the proxy is in the path before a rule
-# can refuse a request. enableDefaultDeny is off, so each other port of the
-# pod stays open as before. The kubelet probes come from the local host,
-# which Cilium lets in before any rule, so they do not go through the proxy.
+# The readers, from the flow log of Cilium (Hubble, both sites, 2026-11-20)
+# and from git:
+#   9090, the query port: Grafana and the Pyrra UI and the internal ingress of
+#     this site; Grafana and the observability evidence of the other site,
+#     over the mesh; the Prometheus and the API checks of the other site,
+#     through its LAN bridge (they arrive as world or as a node: the
+#     LoadBalancer of prometheus-peer.yaml keeps the address of the bridge
+#     when Prometheus runs on the node of the VIP, and writes the address of
+#     that node when it does not); this Prometheus itself.
+#   10901, the gRPC port of the Thanos sidecar: Thanos Query of each site.
+#   8080 and 10902, the metrics of the reloader and of the sidecar: this
+#     Prometheus only.
+# The kubelet probes (9090, GET /-/ready and /-/healthy, from the host) must
+# always pass: a refused probe makes the pod NotReady. Cilium in Kubernetes
+# allows the local host (allow-localhost). The host rule at the end names it
+# with no HTTP rule, so the proxy is not in its path. When a rule with HTTP
+# rules also selects the host (the first form of this rule did, with "all";
+# the entity kube-apiserver does on the control plane node), Cilium sends the
+# probe through the proxy, and adds the host to that port with no HTTP rule
+# (L4Filter.attach in pkg/policy/l4.go, test TestL7WithLocalHostWildcard of
+# v1.19.4): each request of the host passes. The probe paths are also in the
+# HTTP rules of each entity that can be the host, so a probe passes even if
+# that changes. A kubectl port-forward enters the pod on its loopback, and no
+# rule sees it. The config reloader and the sidecar call Prometheus on its
+# loopback too.
 #
-# The next form names each reader, with its port and its requests, and puts
-# the pod in default deny.
+# The HTTP rules. A reader may send GET on each path, and POST on the query
+# paths only. Nobody may write (/api/v1/write, the OTLP path), call the
+# admin API (/api/v1/admin/...) or the lifecycle paths (/-/reload, /-/quit):
+# Prometheus takes those as POST or PUT only. The proxy answers 403 to each
+# other request. The path of a rule must match the whole path with its query
+# string, so each named path ends in an optional query string. The readers
+# through the bridge, and the evidence of the other site, get the two paths
+# they call and no other.
+#
+# Both WSL clusters are one Cilium Cluster Mesh. A selector without the
+# cluster label selects this cluster only (policy-default-local-cluster), so
+# each selector names its cluster.
+#
+# A new reader of Prometheus adds its pod below in the same PR. Without it,
+# its calls are dropped and Hubble shows them as POLICY_DENIED.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -23,17 +56,123 @@ spec:
     matchLabels:
       app.kubernetes.io/name: prometheus
       operator.prometheus.io/name: kube-prometheus-stack-prometheus
-  enableDefaultDeny:
-    ingress: false
-    egress: false
   ingress:
-    - fromEntities:
-        - all
+    # The readers in pods: the whole read API.
+    - fromEndpoints:
+        # Grafana of this site: the Prometheus, Local and site datasources.
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: grafana
+            app.kubernetes.io/instance: grafana
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # Grafana of the other site: its site datasources, over the mesh
+        # (thanos-metrics/app/services.yaml, the global Services).
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: grafana
+            app.kubernetes.io/instance: grafana
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+        # The Pyrra UI (pyrra/app/helmrelease.yaml, --prometheus-url).
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: pyrra
+            app.kubernetes.io/component: ui
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The internal ingress, for the UI of Prometheus.
+        - matchLabels:
+            io.kubernetes.pod.namespace: networking
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/instance: ingress-nginx-internal
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # This Prometheus, for its own scrape, if that ever leaves the pod.
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+            operator.prometheus.io/name: kube-prometheus-stack-prometheus
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:
             - port: "9090"
               protocol: TCP
           rules:
-            # An empty HTTP rule: each request passes, through the proxy.
             http:
-              - {}
+              - method: GET
+                path: "/.*"
+              - method: POST
+                path: "/api/v1/(query|query_range|query_exemplars|series|labels|format_query|parse_query)(\\?.*)?"
+    # The observability evidence of the other site: the readiness of this
+    # Prometheus, and one query for the fence attestations
+    # (observability-evidence/app/config/collector.py).
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: observability-evidence
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+          rules:
+            http:
+              - method: GET
+                path: "/-/ready"
+              - method: GET
+                path: "/api/v1/query(\\?.*)?"
+    # The LAN bridge of this site (prometheus-peer.yaml): the federation of
+    # the other site's Prometheus, and the query of its API checks
+    # (security/api-checks/app/cronjob.yaml). They arrive as world or as a
+    # node of either cluster (remote-node; the control plane node also
+    # carries kube-apiserver). The probe paths are here too: on the control
+    # plane node the host carries kube-apiserver, and its probes must pass
+    # (see the head of this file). They answer one word and hold no data.
+    - fromEntities:
+        - world
+        - remote-node
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+          rules:
+            http:
+              - method: GET
+                path: "/federate(\\?.*)?"
+              - method: GET
+                path: "/api/v1/query(\\?.*)?"
+              - method: GET
+                path: "/-/(healthy|ready)"
+    # Thanos Query of each site, to the StoreAPI of the sidecar (mutual TLS).
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: thanos-query
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: thanos-query
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "10901"
+              protocol: TCP
+    # This Prometheus, for the metrics of its reloader and its sidecar.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+            operator.prometheus.io/name: kube-prometheus-stack-prometheus
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+            - port: "10902"
+              protocol: TCP
+    # The kubelet probes, from the local host: port 9090 with no HTTP rule,
+    # so the proxy is not in their path (see the head of this file).
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
