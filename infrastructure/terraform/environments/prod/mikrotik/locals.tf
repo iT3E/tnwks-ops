@@ -18,8 +18,8 @@
 ##   DHCP static leases   25
 ##   Address lists        5 (11 members)
 ##   Port lists           1
-##   Zone-pair chains     19
-##   Firewall accepts     14 (expanded from VyOS tcp_udp / port-limit splits)
+##   Zone-pair chains     20
+##   Firewall accepts     15 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
@@ -501,6 +501,19 @@ locals {
           comment          = "smokeping (WSL cluster) pings of SW03"
           src_address_list = "monitoring"
           dst_address      = "10.98.0.251"
+          protocol         = "icmp"
+        },
+      ]
+    }
+    "200-unifi-frontend-910-UISP-140" = {
+      from    = "unifi-frontend-910"
+      to      = "UISP-140"
+      comment = "From unifi-frontend-910 to UISP-140"
+      rules = [
+        {
+          comment          = "smokeping (WSL cluster) pings of the EP-R6"
+          src_address_list = "monitoring"
+          dst_address      = "10.10.140.140"
           protocol         = "icmp"
         },
       ]
