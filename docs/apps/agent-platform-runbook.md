@@ -653,6 +653,38 @@ the plan. See [the plan limit](#at-a-limit-of-the-claude-plan).
 
 **Fix.** [At a limit of the Claude plan](#at-a-limit-of-the-claude-plan).
 
+### ModelPlanNearLimit
+
+**What it means.** The newest `plan_limit` line of the model bridge says
+that a window of the Claude plan is near its limit (`allowed_warning`: the
+warning of the vendor) or at it (`rejected`), and the window did not reset
+since. The label `window` names it: `five_hour`, `seven_day`, or a week
+window of one model family (`seven_day_opus`, `seven_day_sonnet`). The calls
+still work while it is near; at the limit the calls of each trust domain stop
+until the reset, and `ModelBridgeRateLimited` fires too. It warns in the
+chat and does not page.
+
+**First checks.** Read only.
+
+1. The AI board, tab "Limits and security": the use of the window, the time
+   to its reset, and the tokens of each trust domain (which domain uses the
+   plan).
+2. In Loki, the lines of the last hours:
+   `{namespace="ai", app="model-bridge"} |= "plan_limit"` for the readings,
+   and `|= "\"event\":\"call\""` for the calls of each trust domain.
+3. The scheduled work of the agents in those hours (the Checks tab of the
+   board, and the runs of `agents-workflows`).
+
+**Seen so far.** Never. The series start with bridge 0.3.0.
+
+**Fix.** Nothing breaks while the window is only near its limit. When the
+reset is near, wait. When it is far, the owner can slow the work that uses
+the plan (a scheduled job or a workflow run that loops) until the reset.
+When the limit stops calls, see
+[At a limit of the Claude plan](#at-a-limit-of-the-claude-plan). An alert
+that fires often on the week window is a sign that the plan is too small
+for the work: that is a decision of the owner.
+
 ### AgentHeartbeatMissing
 
 **What it means.** The daily `agent-heartbeat-check` (06:33 UTC) found no
@@ -2534,6 +2566,9 @@ owner decides each move.
 One plan is one budget for the owner's own sessions, the build sessions, and
 each trust domain on the bridge. At its limit the calls of each of them fail
 at the same time, until the limit resets. Nothing moves to Bedrock by itself.
+From bridge 0.3.0, `ModelPlanNearLimit` warns before the limit, and the tab
+"Limits and security" of the AI board shows the use of each window and its
+reset time.
 
 1. **Confirm.** Read only. `ModelBridgeRateLimited` names the trust domain.
    In Loki, `{namespace="ai", app="model-bridge"} |= "engine_error"` shows

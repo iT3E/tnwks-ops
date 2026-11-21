@@ -584,6 +584,55 @@ homelab-wsl lists it next to `agents/`.
   why a call matched no live conversation. The repository README has the
   contract and the log format.
 
+### Plan use
+
+All trust domains share one Claude plan, and the plan has limits: a five
+hour window and a weekly window, and at times a weekly window for one model
+family. From version 0.3.0 the bridge logs what the vendor tells it about
+these limits, and the platform log agent of Vector
+(`kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml`)
+turns two kinds of line into series:
+
+| Line of the bridge | Series | Labels |
+| --- | --- | --- |
+| `plan_limit`, one for each window | `homelab_model_bridge_plan_utilization_ratio` (the share used, 1 is the limit), `homelab_model_bridge_plan_reset_timestamp_seconds`, `homelab_model_bridge_plan_status` (0 `allowed`, 1 `allowed_warning`, 2 `rejected`), `homelab_model_bridge_plan_observed_timestamp_seconds` (the time of the line) | `window` |
+| `call` with an answer | `homelab_model_bridge_tokens_total`, a counter | `domain`, `model`, `token` (`input`, `output`, `cache_read`, `cache_write`) |
+
+- **One plan, so no domain on the plan series.** The newest `plan_limit`
+  line of any trust domain sets the value of its window. The domain of the
+  line stays in Loki.
+- **Lists of values.** `window` is `five_hour`, `seven_day`,
+  `seven_day_opus`, `seven_day_sonnet`, `seven_day_overage_included` or
+  `overage`; `domain` is `main`, `finance` or `workflows`; `model` is the
+  model of the bridge entries of the model gateway. Each other value reads
+  `other`. A value that a line does not give, or that is out of range, is
+  -1, and the records read it as unknown. So the series are at most 60, from
+  one pod. `observability/tests/test_plan_usage.py` keeps the lists equal to
+  the entries of the model gateway, and runs the transforms in the pinned
+  Vector to prove that the newest line wins and the counts add up.
+- **When a line comes.** The bridge reads the limits on each answer, and
+  logs a `plan_limit` line at the first answer after its start, when the use
+  moves by a whole percent, when the status, the reset time or the warning
+  threshold changes, and at most every 30 minutes while calls go on. With
+  no call there is no line, and the gauges of Vector expire after one hour.
+- **The records keep the reading.** `homelab:ai_plan_utilization_ratio`,
+  `homelab:ai_plan_reset_timestamp_seconds`, `homelab:ai_plan_state` and
+  `homelab:ai_plan_observed_timestamp_seconds` (`observability/rules.py`)
+  read the newest reading of the last 8 days, of any pod of the agent. A
+  reading counts until its window resets, or for 6 hours when the line gave
+  no reset time. After the reset the use of the window is not known until
+  the next call, and the panels say so.
+- **Where it shows.** The tab "Limits and security" of the AI board starts
+  with the five hour and the week use, the time to each reset, the state of
+  each window, the use over time, the age of the last reading, and the
+  tokens of each trust domain
+  ([the AI board](../operations/observability-implementation.md#the-ai-board)).
+  The alert `ModelPlanNearLimit` warns in the chat when a window is near
+  its limit ([Alerts](#alerts)).
+- **The model gateway counts too.** Its token series count by key. The
+  bridge counts by trust domain, with the cache tokens apart, as the vendor
+  gives them. The two do not have to be equal.
+
 ## The pilot agent
 
 One personal agent in `agents-pilot` (`pilot/agent/`,
@@ -1946,13 +1995,15 @@ The rules are in `monitoring/app/prometheusrule.yaml` and
 War Room, the default Telegram route of Alertmanager, with severity
 `warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
 `AgentInstructionFileChanged`, `AgentInstructionCheckStale`,
-`AgentMemoryIndexFailed`, `AgentAutomationsSyncFailed` and
-`ModelBridgeRateLimited` read lines of the logs, as gauges of Vector: the
+`AgentMemoryIndexFailed`, `AgentAutomationsSyncFailed`,
+`ModelBridgeRateLimited` and `ModelPlanNearLimit` read lines of the logs, as
+gauges of Vector: the
 aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
 `AgentInstructionCheckStale`, `AgentMemoryIndexFailed`,
 `AgentAutomationsSyncFailed`),
 the platform agent for the `instruction-check file=` lines and the bridge
-(`AgentInstructionFileChanged`, `ModelBridgeRateLimited`) ([Logs](#logs)).
+(`AgentInstructionFileChanged`, `ModelBridgeRateLimited`, and through the
+records of [Plan use](#plan-use) `ModelPlanNearLimit`) ([Logs](#logs)).
 `AgentBackupMoverConfigMapDenied` reads a counter of the API server, and
 `AgentBackupRepositoryNotReady` the phase gauge of the backup operator.
 
@@ -1992,6 +2043,7 @@ policy that `observability/inventory.py` declares
 | `AgentBackupMoverConfigMapDenied` | The admission rule `agents-backup-mover-configmaps` refused a ConfigMap write of a backup mover in a trust domain ([The backup mover and ConfigMaps](#the-backup-mover-and-configmaps)). It fires for one to two hours after each denial (`keep_firing_for: 1h`) | none | The audit lines of that hour in Loki name the namespace, the ConfigMap and the ServiceAccount, and the events of the namespace name the mover Job. Suspend the snapshots of that namespace |
 | `AgentBackupRepositoryNotReady` | The backup repository of the trust domains (`agents`) is `Pending` or `Initializing`: it never got `Ready`, so no snapshot of a trust domain runs. `Failed` and `Degraded` are the chart rule `KopiurRepositoryNotReady` | 1h | `kubectl get clusterrepository agents -o yaml`, then the refresher of its session ([Backups of the agent trust domains](#backups-of-the-agent-trust-domains)) |
 | `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |
+| `ModelPlanNearLimit` | The newest reading of the five hour window or a week window of the Claude plan is near the limit (`allowed_warning`, the warning of the vendor) or at it (`rejected`), and the window did not reset since ([Plan use](#plan-use)). The overage windows do not fire | 5m | The tab "Limits and security" of the AI board: the use and the reset time of each window. Slow the scheduled work of the agents, or wait for the reset |
 | `ModelGatewayCallsFailing` | At least 3 model calls of the key of a trust domain failed in 15 minutes, and more than half of its calls. One turn with its retries does not fire it | 20m | "Failed model calls by status" on the Model calls tab of the AI board: 429 the limit of the plan, 401 or 403 a key or a model list, 5xx the bridge, Bedrock or the vendor |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,

@@ -145,7 +145,7 @@ its line, so Prometheus holds it for 5 minutes, its lookback, and the sink
 drops the series a minute after its last line. A rule on it reads
 `max_over_time` over a window longer than the time between two lines.
 
-The platform agent serves two more series of the same kind on its own port
+The platform agent serves more series on its own port
 9598, through the PodMonitor `vector-agent-platform`, so that the aggregator
 stays the same on each cluster:
 
@@ -157,9 +157,16 @@ stays the same on each cluster:
 - `homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}`, the
   time of the newest `engine_error` line of the model bridge. The alert
   `ModelBridgeRateLimited` reads it.
+- The use of the Claude plan, from the `plan_limit` and `call` lines of the
+  model bridge: four gauges of each plan window
+  (`homelab_model_bridge_plan_*{window}`) and the counter
+  `homelab_model_bridge_tokens_total{domain, model, token}`, at most 60
+  series (`docs/apps/agent-platform.md`, "Plan use"). The records
+  `homelab:ai_plan_*` keep the newest reading after the gauges expire.
 
 The tests of the platform agent are in
-`observability/vector-tests/agent-platform-logs.yaml`.
+`observability/vector-tests/agent-platform-logs.yaml` and
+`observability/tests/test_plan_usage.py`.
 
 Two settings shape these series:
 

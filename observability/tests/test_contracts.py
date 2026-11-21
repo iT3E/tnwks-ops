@@ -19,6 +19,8 @@ EMPTY_IS_NORMAL = {"Override creation age", "Needs attention",
                    # Lists of what fails, is late or is accepted on the security board.
                    "Failing safeguards by system", "Late sources", "Failing checks",
                    "Accepted findings by system",
+                   # No model call through the bridge is no token, not missing evidence.
+                   "Model tokens by trust domain", "Model tokens in the range",
                    # The AI board's alerts of the platform that fire now.
                    "AI alerts firing"}
 

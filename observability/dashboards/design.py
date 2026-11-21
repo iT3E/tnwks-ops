@@ -38,7 +38,7 @@ LABELS = {
     "trust_domain": "Trust domain", "part": "Part", "check": "Check", "policy": "Policy",
     "result": "Result", "route": "Route", "method": "Method", "status": "Status",
     "api_key_alias": "Key", "requested_model": "Name asked for", "api_provider": "Provider",
-    "status_code": "Status", "exception_status": "Status",
+    "status_code": "Status", "exception_status": "Status", "window": "Plan window", "token": "Kind of token",
     # The metrics of the product (step 3 of the AI board).
     "openclaw_channel": "Channel", "openclaw_outcome": "Outcome", "openclaw_delivery_kind": "Kind",
     "openclaw_errorCategory": "Error", "openclaw_trigger": "Trigger", "openclaw_state": "Session state",

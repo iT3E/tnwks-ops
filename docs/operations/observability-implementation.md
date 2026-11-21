@@ -749,6 +749,17 @@ the model gateway. It shows no product metrics and no money.
   (95th percentile), stuck sessions and failovers to a second model. The
   trust domain comes from `job` (`openclaw-agents-<domain>`); a sender with
   another service name reads `undeclared`.
+- **Plan use** comes from the `plan_limit` and `call` lines of the model
+  bridge, through the platform log agent of Vector
+  ([`agent-platform.md`](../apps/agent-platform.md#plan-use)). The tab
+  "Limits and security" starts with it: the use of the five hour window and
+  of the week, the time to each reset, the state of each window, the use
+  over time, the age of the last reading, and the tokens of each trust
+  domain by kind. The panels read the records `homelab:ai_plan_*`
+  (`plan_records()` in `observability/rules.py`), which keep the newest
+  reading of the last 8 days until its window resets, because the bridge
+  logs a reading only when it moves and the gauges of Vector expire after
+  one hour. With no reading, a panel says why in plain words.
 - **Tool calls** come from the request series of the MCP gateway, in the
   board only: no rule reads them (`tests/test_mcp_gateway.py`). The panels
   leave out the GET with 405 that each start of a client makes
@@ -756,7 +767,7 @@ the model gateway. It shows no product metrics and no money.
 - **Homelab.** The AI tile is the worst of the parts, the checks, the result
   lines and the backups. Needs attention has a row for each part that is not
   Healthy, Standby or Not applicable.
-- **Alerts.** Each of the 19 rules in `kubernetes/apps/ai/` opens this board
+- **Alerts.** Each of the 20 rules in `kubernetes/apps/ai/` opens this board
   (`tests/test_alert_links.py`). Its runbook is
   [`agent-platform-runbook.md`](../apps/agent-platform-runbook.md).
 - **No picker of the trust domain yet.** Each table has the trust domain as

@@ -334,6 +334,46 @@ def ai_records():
             f"max by (k8s_cluster, trust_domain, check, result) (label_replace(max_over_time("
             f'homelab_agent_platform_result_timestamp_seconds{{pod_namespace=~"agents-.+",check=~"{restore}"}}[15d]),'
             f' "trust_domain", "$1", "pod_namespace", "agents-(.+)"))'),
+        **plan_records(),
+    }
+
+
+# The use of the Claude plan (docs/apps/agent-platform.md, "Plan use"). The
+# model bridge logs a plan_limit line for a window only when its use, status or
+# reset moves, and the gauges of Vector expire one hour after their last line.
+# So each record reads the newest reading of the last 8 days (one week window
+# and a day). The plan is one account: the gauges carry the window only, and a
+# restart of the Vector pod gives a series of a new pod, so the newest reading
+# of all pods wins.
+PLAN_HELD = "8d"
+# A reading with no reset time counts for 6 hours (more than the five hour window).
+PLAN_UNKNOWN_RESET_SECONDS = 6 * 3600
+
+
+def plan_records():
+    window = "k8s_cluster, window"
+    pod = "k8s_cluster, window, namespace, pod"
+    observed = f"last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[{PLAN_HELD}])"
+
+    def newest(name):
+        return (f"max by ({window}) (last_over_time({name}[{PLAN_HELD}]) and on ({pod})"
+                f" ({observed} == on ({window}) group_left () homelab:ai_plan_observed_timestamp_seconds))")
+
+    reset = newest("homelab_model_bridge_plan_reset_timestamp_seconds")
+    # A reading counts until its window resets, or for 6 hours when the line gave
+    # no reset time. After that the window is new, and its use is not known.
+    current = (f"(({reset}) > time()) or ((({reset}) <= 0) and on ({window})"
+               f" ((time() - homelab:ai_plan_observed_timestamp_seconds) < {PLAN_UNKNOWN_RESET_SECONDS}))")
+    return {
+        "homelab:ai_plan_observed_timestamp_seconds": f"max by ({window}) ({observed})",
+        # The share used of the window (1 is the limit), while the reading counts.
+        "homelab:ai_plan_utilization_ratio": (
+            f"({newest('homelab_model_bridge_plan_utilization_ratio')} >= 0) and on ({window}) ({current})"),
+        "homelab:ai_plan_reset_timestamp_seconds": f"{reset} > time()",
+        # The status as a state: 1 allowed, 2 allowed_warning (near the limit),
+        # 3 rejected (at the limit), 0 a status that the bridge did not know.
+        "homelab:ai_plan_state": (
+            f"clamp_min({newest('homelab_model_bridge_plan_status')} + 1, 0) and on ({window}) ({current})"),
     }
 
 
@@ -2434,6 +2474,8 @@ def ai_fixtures():
     expected_result = 'homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="%s",check="%s"}'
     backup = 'homelab_ai_backup_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",policy="%s"}'
     requests = 'agentgateway_requests_total{k8s_cluster="one",route="default/finance",method="%s",status="%s"}'
+    plan = ('homelab_model_bridge_plan_%s{k8s_cluster="one",namespace="monitoring",window="%s",'
+            'pod="vector-agent-platform-%s"}')
     return [
         {"name": "AI parts: ready, some, none, zero replicas, gone, and absent by design", "interval": "1m",
          "input_series": [
@@ -2510,6 +2552,47 @@ def ai_fixtures():
              {"expr": "homelab:ai_backup_age_seconds", "eval_time": "10m", "exp_samples": [
                  {"labels": f'homelab:ai_backup_age_seconds{{k8s_cluster="one",trust_domain="main",namespace="agents-main",policy="{name}"}}', "value": value}
                  for name, value in (("fresh", 50), ("old", 500))]},
+         ]},
+        {"name": "AI plan use: the newest reading of any pod, until its window resets", "interval": "10m",
+         "input_series": [
+             # Pod a read the five hour window at 0, then Vector restarted, and
+             # pod b read it at 2h (near the limit). Each gauge lives one hour.
+             *[{"series": plan % (gauge, "five_hour", "a"), "values": f"{value}x6 _x30"}
+               for gauge, value in (("utilization_ratio", 0.3), ("reset_timestamp_seconds", 18000),
+                                    ("status", 0), ("observed_timestamp_seconds", 0))],
+             *[{"series": plan % (gauge, "five_hour", "b"), "values": f"_x12 {value}x6 _x20"}
+               for gauge, value in (("utilization_ratio", 0.6), ("reset_timestamp_seconds", 18000),
+                                    ("status", 1), ("observed_timestamp_seconds", 7200))],
+             # The week, read once at 0, resets in 10 days.
+             *[{"series": plan % (gauge, "seven_day", "a"), "values": f"{value}x6 _x30"}
+               for gauge, value in (("utilization_ratio", 0.1), ("reset_timestamp_seconds", 864000),
+                                    ("status", 0), ("observed_timestamp_seconds", 0))],
+             # A window at its limit with no share and no reset time: it counts
+             # for 6 hours.
+             *[{"series": plan % (gauge, "seven_day_opus", "a"), "values": f"{value}x6 _x30"}
+               for gauge, value in (("utilization_ratio", -1), ("reset_timestamp_seconds", -1),
+                                    ("status", 2), ("observed_timestamp_seconds", 0))],
+         ], "promql_expr_test": [
+             {"expr": "homelab:ai_plan_utilization_ratio", "eval_time": "4h", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="five_hour"}', "value": 0.6},
+                 {"labels": 'homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day"}', "value": 0.1}]},
+             {"expr": "homelab:ai_plan_state", "eval_time": "4h", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_state{k8s_cluster="one",window="five_hour"}', "value": 2},
+                 {"labels": 'homelab:ai_plan_state{k8s_cluster="one",window="seven_day"}', "value": 1},
+                 {"labels": 'homelab:ai_plan_state{k8s_cluster="one",window="seven_day_opus"}', "value": 3}]},
+             {"expr": "homelab:ai_plan_reset_timestamp_seconds", "eval_time": "4h", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="five_hour"}', "value": 18000},
+                 {"labels": 'homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="seven_day"}', "value": 864000}]},
+             {"expr": "homelab:ai_plan_observed_timestamp_seconds", "eval_time": "4h", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="five_hour"}', "value": 7200},
+                 {"labels": 'homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="seven_day"}', "value": 0},
+                 {"labels": 'homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="seven_day_opus"}', "value": 0}]},
+             # After 5h the five hour window is new; after 6h the reading with
+             # no reset time no longer counts. The week stays.
+             {"expr": "homelab:ai_plan_state", "eval_time": "370m", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_state{k8s_cluster="one",window="seven_day"}', "value": 1}]},
+             {"expr": "homelab:ai_plan_utilization_ratio", "eval_time": "370m", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day"}', "value": 0.1}]},
          ]},
         {"name": "AI restore results keep their time after the line is gone", "interval": "1m",
          "input_series": [
