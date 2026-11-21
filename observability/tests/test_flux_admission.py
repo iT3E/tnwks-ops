@@ -31,8 +31,8 @@ def docs():
 
 
 def test_the_lists_of_the_policy_are_the_class_of_git():
-    text, want = classlist.current()
-    assert text == want, "run: python3 kubernetes/apps/flux-system/admission/classlist.py write"
+    stale = [str(path.relative_to(ROOT)) for path, text, want in classlist.targets() if text != want]
+    assert not stale, f"{stale}: run python3 kubernetes/apps/flux-system/admission/classlist.py write"
 
 
 def test_the_walk_finds_each_child_of_each_site():
@@ -189,6 +189,36 @@ def test_the_reduced_secret_builds_in_strict_mode_with_the_keys_of_the_site(site
     assert all(m.group(2) is None for m in VARIABLE.finditer(yaml.safe_dump(secret))), site
     # Each key is its own variable, so the Secret holds the values of its site and no other.
     assert all(v == f"${{{k}}}" for k, v in secret["stringData"].items()), site
+
+
+def substitution_of(site, child):
+    """The substituteFrom of a direct child of the parent of the apps, after
+    the patches of the parent, as (kind, name) pairs."""
+    parent = next(d for d in yaml.safe_load_all((ROOT / f"kubernetes/clusters/{site}/apps.yaml").read_text()) if d)
+    labels = child.doc["metadata"].get("labels") or {}
+    sources = (child.doc["spec"].get("postBuild") or {}).get("substituteFrom")
+    for patch in parent["spec"]["patches"]:
+        target = patch["target"]
+        assert target["labelSelector"] == "substitution.flux.home.arpa/disabled notin (true)"
+        if labels.get("substitution.flux.home.arpa/disabled") == "true":
+            continue
+        if "name" in target and not re.fullmatch(target["name"], child.doc["metadata"]["name"]):
+            continue
+        sources = yaml.safe_load(patch["patch"])["spec"]["postBuild"]["substituteFrom"]
+    return [(s["kind"], s["name"]) for s in sources or []]
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_only_the_children_of_the_class_get_the_full_secret(site):
+    for child in classlist.walk(site).values():
+        if child.parent != classlist.APPS_PARENT[site]:
+            continue
+        sources = substitution_of(site, child)
+        if classlist.is_class_path(child.path):
+            assert ("Secret", "cluster-secrets-apps") not in sources, child.key
+        else:
+            assert ("Secret", "cluster-secrets") not in sources, child.key
+            assert ("Secret", "cluster-secrets-apps") in sources, child.key
 
 
 @pytest.mark.parametrize("site", classlist.SITES)

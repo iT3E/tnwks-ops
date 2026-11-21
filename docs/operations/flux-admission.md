@@ -84,7 +84,7 @@ For each request of the two controllers:
 
 | Rule | What it checks |
 | --- | --- |
-| `kustomization-spec` | A Kustomization outside the class has a path in the form `a/b/c`, not in a class path and not above one (so not the root). It has no service account, no kubeconfig and no `commonMetadata` key of Flux. It substitutes from `cluster-settings`, `site-overrides` and `cluster-secrets` only |
+| `kustomization-spec` | A Kustomization outside the class has a path in the form `a/b/c`, not in a class path and not above one (so not the root). It has no service account, no kubeconfig and no `commonMetadata` key of Flux. It substitutes from `cluster-settings`, `site-overrides` and the reduced Secret `cluster-secrets-apps` only |
 | `kustomization-class` | A Kustomization of the class comes from one of its parents in git, with a path of the class |
 | `helmrelease-class` | A HelmRelease of the class comes from a Kustomization of the class |
 | `parent-objects` | A parent of the apps applies Kustomizations and the objects of its build in git only |
@@ -97,8 +97,24 @@ HelmRelease (a finalizer, an annotation) passes the last three rules.
 The class Kustomization `flux-substitution` makes the reduced Secret
 `cluster-secrets-apps` on each site: the keys of `cluster-secrets` that the
 children outside the class use, and no other. Flux fills its template from
-`cluster-secrets`. A later change gives it to the children outside the class
-in place of the full Secret; until then no child reads it.
+`cluster-secrets`. In `kubernetes/clusters/<site>/apps.yaml` the parent of
+the apps gives each child the reduced Secret, and a second patch gives the
+full one to the direct children of the class, by a list of names that
+`classlist.py write` keeps. The parent itself substitutes no key of
+`cluster-secrets`, because its build reads the `ks.yaml` of the children
+outside the class.
+
+Flux substitutes in strict mode (below), so a variable of a child with no
+key and no default stops the build of that child. So before this merge the
+owner runs
+`python3 kubernetes/apps/flux-system/admission/substitution_names.py` (with
+PyYAML and the key of the files). It decrypts each encrypted file of a child
+outside the class in memory and prints only its path and the names of its
+variables that are neither keys of the reduced Secret of its site nor
+settings of the site nor inline substitutes of the child. It prints, writes
+and logs no value. An empty output (exit 0) means the switch stops no build;
+a name in the output goes into the template of the reduced Secret of that
+site first.
 
 Each site has a template of its own, because the two `cluster-secrets` do
 not hold the same keys:

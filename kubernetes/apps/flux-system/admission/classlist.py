@@ -20,6 +20,11 @@ lists of the policy:
   children outside the class), with each object of their builds but the
   Flux Kustomizations, as kind/namespace/name.
 
+It also writes, in kubernetes/clusters/<site>/apps.yaml, the names of the
+direct children of the parent of the apps that are in the class: the patch
+of that parent gives them the full Secret cluster-secrets, and each other
+child gets the reduced Secret cluster-secrets-apps.
+
 It reads no SOPS file: a file with ".sops." in its name is skipped. It
 follows the resources of a kustomization.yaml, its patches that delete an
 object, and its patches that change the spec.path of a Flux Kustomization,
@@ -138,6 +143,8 @@ def norm(path: str) -> str:
 class Build:
     docs: list[dict] = field(default_factory=list)
     files: set[str] = field(default_factory=set)
+    # The SOPS files of the build, by path only (substitution_names.py).
+    encrypted: set[str] = field(default_factory=set)
 
 
 def load(path: Path) -> list[dict]:
@@ -157,6 +164,8 @@ def build(path: Path) -> Build:
         if ".sops." not in path.name:
             out.docs += load(path)
             out.files.add(rel(path))
+        else:
+            out.encrypted.add(rel(path))
         return out
     k = next((path / n for n in KUSTOMIZE_FILES if (path / n).exists()), None)
     if k is None:
@@ -165,6 +174,8 @@ def build(path: Path) -> Build:
             if f.is_file() and f.suffix in (".yaml", ".yml", ".json") and ".sops." not in f.name:
                 out.docs += load(f)
                 out.files.add(rel(f))
+            elif f.is_file() and f.suffix in (".yaml", ".yml", ".json"):
+                out.encrypted.add(rel(f))
         return out
     out.files.add(rel(k))
     (kz,) = load(k)[:1] or [{}]
@@ -175,10 +186,12 @@ def build(path: Path) -> Build:
         sub = build(path / name)
         out.docs += sub.docs
         out.files |= sub.files
+        out.encrypted |= sub.encrypted
     for component in kz.get("components") or []:
         sub = build(path / component)
         out.docs += sub.docs
         out.files |= sub.files
+        out.encrypted |= sub.encrypted
     if kz.get("namespace"):
         for d in out.docs:
             d.setdefault("metadata", {})
@@ -341,29 +354,57 @@ def render(data: dict, indent: str) -> str:
     return "\n".join(lines)
 
 
-def current() -> tuple[str, str]:
-    """The policy file, and the text it should have."""
-    text = POLICY.read_text(encoding="utf-8")
+# The parent of the apps of each site, which patches the substitution of its
+# direct children (kubernetes/clusters/<site>/apps.yaml).
+APPS_PARENT = {"wsl": "flux-system/cluster-apps", "wsl-02": "flux-system/cluster-apps-wsl-02"}
+
+
+def class_children(site: str) -> list[str]:
+    """The names of the direct children of the parent of the apps that are
+    in the class."""
+    return sorted(c.key.split("/")[1] for c in walk(site).values()
+                  if c.parent == APPS_PARENT[site] and is_class_path(c.path))
+
+
+def render_names(names: list[str], indent: str) -> str:
+    """The name of the target of the patch (kustomize reads it as a regular
+    expression that must match the whole name)."""
+    return "\n".join([indent + BEGIN, f"{indent}name: {'|'.join(n.replace('.', r'\.') for n in names)}", indent + END])
+
+
+def replace_block(path: Path, render) -> tuple[str, str]:
+    text = path.read_text(encoding="utf-8")
     m = re.search(r"^( *)" + re.escape(BEGIN) + r".*?^ *" + re.escape(END) + r"$", text, re.MULTILINE | re.DOTALL)
     if not m:
-        raise SystemExit(f"{POLICY}: no generated block")
-    want = text[: m.start()] + render(lists(), m.group(1)) + text[m.end():]
-    return text, want
+        raise SystemExit(f"{path}: no generated block")
+    return text, text[: m.start()] + render(m.group(1)) + text[m.end():]
+
+
+def targets() -> list[tuple[Path, str, str]]:
+    """Each file with a generated block: the file, its text, and the text it
+    should have."""
+    data = lists()
+    out = [(POLICY, *replace_block(POLICY, lambda indent: render(data, indent)))]
+    for site in SITES:
+        path = ROOT / f"kubernetes/clusters/{site}/apps.yaml"
+        names = class_children(site)
+        out.append((path, *replace_block(path, lambda indent, names=names: render_names(names, indent))))
+    return out
 
 
 def main(argv: list[str]) -> int:
     if argv == ["json"]:
         print(json.dumps(lists(), indent=2))
         return 0
-    text, want = current()
     if argv == ["write"]:
-        POLICY.write_text(want, encoding="utf-8")
+        for path, _, want in targets():
+            path.write_text(want, encoding="utf-8")
         return 0
     if argv == ["check"]:
-        if text != want:
-            print(f"{POLICY.relative_to(ROOT)} is not the class of git: run classlist.py write")
-            return 1
-        return 0
+        stale = [path for path, text, want in targets() if text != want]
+        for path in stale:
+            print(f"{path.relative_to(ROOT)} is not the class of git: run classlist.py write")
+        return 1 if stale else 0
     print(__doc__)
     return 2
 
