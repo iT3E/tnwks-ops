@@ -103,7 +103,7 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     f = json.loads((FINANCE.parent / "config/openclaw.json").read_text())
     # The vault of main, as finance calls its own vault (task 3.37), then the
     # read servers of M7b (test_main_read_servers.py). No finance app.
-    assert list(c["mcp"]["servers"])[0] == "vault"
+    assert next(iter(c["mcp"]["servers"])) == "vault"
     assert set(c["mcp"]["servers"]) <= {"vault", "cluster", "flux", "terraform", "github"}
     vault = dict(c["mcp"]["servers"]["vault"])
     assert vault.pop("url") == "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp"
