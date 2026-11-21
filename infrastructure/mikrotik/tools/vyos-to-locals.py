@@ -216,6 +216,14 @@ MONITORING_ZONE_RULES = {
             "dst_address": "10.98.0.251",
         },
     ],
+    # smokeping pings the EP-R6 (role edge), the gateway of the radio network.
+    # ICMP to that one address only: SSH and the web UI stay VPN-only.
+    ("unifi-frontend-910", "UISP-140"): [{
+        "description": "smokeping (WSL cluster) pings of the EP-R6",
+        "protocol": "icmp",
+        "src_address_list": "monitoring",
+        "dst_address": "10.10.140.140",
+    }],
 }
 
 # Static DNS records that pointed at container IPs. None drops the record;
