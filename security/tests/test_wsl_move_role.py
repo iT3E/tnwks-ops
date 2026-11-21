@@ -388,20 +388,23 @@ def test_site_1_turns_the_move_on_in_the_phase_of_step_3_with_the_copies_that_it
     relay = yaml.safe_load((roles / "windows_udp_relay/defaults/main.yml").read_text())
     usb = yaml.safe_load((roles / "windows_usb_attach/defaults/main.yml").read_text())
     storage = yaml.safe_load((roles / "windows_observability_storage/defaults/main.yml").read_text())
-    # Site 1 takes the relays and the bound device of the roles' defaults.
-    assert not {"udp_relays", "usb_attach_bound_devices"} & set(host) and usb["usb_attach_bound_devices"]
+    # Site 1 states its relays and its bound device, with the values of the roles' defaults, as site 2 does:
+    # the play of the window loads only the role windows_wsl_move, and sees only the values of the host
+    # (test_both_plays_write_the_same_configs_of_the_procedure_on_each_host_with_the_move).
+    assert host["udp_relays"] == relay["udp_relays"]
+    assert host["usb_attach_bound_devices"] == usb["usb_attach_bound_devices"] != []
     assert host["wsl_keepalive_enabled"] is True
     assert host["wsl_watchdog_args"] == "-KeepAliveTask " + maintenance["wsl_keepalive_task"]
     copies = [maintenance["wsl_watchdog_task"], bridge["lan_bridge_ip_task"], maintenance["wsl_keepalive_task"],
-              usb["usb_attach_task"]] + [r["task"] for r in relay["udp_relays"]]
+              usb["usb_attach_task"]] + [r["task"] for r in host["udp_relays"]]
     assert sorted(host["wsl_move_present_tasks"]) == sorted(copies + [maintenance["vhdx_compact_task"]])
     assert storage["observability_storage_task"] not in host["wsl_move_present_tasks"]
     assert set(host["wsl_move_present_start_tasks"]) == {maintenance["wsl_keepalive_task"]} | {
-        r["task"] for r in relay["udp_relays"]}
+        r["task"] for r in host["udp_relays"]}
     # The start tasks of the new account are derived in the group variables; the rule of the role's assert
     # holds for this host.
     assert "wsl_move_new_start_tasks" not in host
-    derived = {"tnwks-wsl-watchdog", "tnwks-lan-bridge-ip", "tnwks-usb-attach"} | {r["task"] for r in relay["udp_relays"]}
+    derived = {"tnwks-wsl-watchdog", "tnwks-lan-bridge-ip", "tnwks-usb-attach"} | {r["task"] for r in host["udp_relays"]}
     derived |= {"tnwks-wsl-keepalive"} if host["wsl_keepalive_enabled"] else set()
     present = [t for t in host["wsl_move_present_tasks"] if t != "tnwks-vhdx-compact"]
     assert sorted(derived) == sorted(present)
@@ -602,6 +605,44 @@ def test_the_values_of_site_1_pass_the_guards_of_the_role_and_render_as_windows_
         "tnwks-wsl-watchdog", "tnwks-lan-bridge-ip", "tnwks-wsl-keepalive", "tnwks-udp-relay", "tnwks-udp-relay-syslog",
         "tnwks-usb-attach"))
     assert got["vhdx"] == got["disk"] == "E:\\WSL\\Ubuntu\\ext4.vhdx" and got["rules"] is False
+
+
+# The roles of the play of the host, whose defaults are public to each role of that play; the play of the
+# window loads only the role windows_wsl_move (include_role), so only its own defaults.
+HOST_PLAY_ROLES = [role["role"] for play in yaml.safe_load((ANSIBLE / "playbooks/windows-host.yml").read_text())
+                   if play["hosts"] == "windows_hosts" for role in play["roles"]]
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+@pytest.mark.parametrize("host", ["DESKTOP-HKE05KI", "WSL-02"])
+def test_both_plays_write_the_same_configs_of_the_procedure_on_each_host_with_the_move(tmp_path, host):
+    """Step 3 writes the configs of the procedure in the play of the host, and the play of the window reads
+    their SHA-256 against its own render: a value that one play takes from the defaults of another role
+    differs there, and the window refuses to start. Ansible renders the configs, the config of the reads and
+    the start tasks of the new account for each host, once with the defaults of each role of the play of the
+    host and once with those of windows_wsl_move only, with stand-ins for the encrypted values."""
+    plays = [play for play in yaml.safe_load((ANSIBLE / "playbooks/windows-move-window.yml").read_text())
+             if play.get("hosts") == "windows_hosts"]
+    included = [task["ansible.builtin.include_role"]["name"] for play in plays for task in play.get("tasks", [])
+                if "ansible.builtin.include_role" in task]
+    assert included == ["windows_wsl_move"] and not any(play.get("roles") for play in plays)
+    assert "windows_wsl_move" in HOST_PLAY_ROLES
+    inventory = ("inventory/group_vars/windows_hosts.yml", f"inventory/host_vars/{host}/main.yml")
+    own = ("roles/windows_wsl_move/defaults/main.yml", "roles/windows_wsl_move/vars/main.yml")
+    others = tuple(f"roles/{role}/defaults/main.yml" for role in HOST_PLAY_ROLES
+                   if role != "windows_wsl_move" and (ANSIBLE / "roles" / role / "defaults/main.yml").exists())
+    standins = {"wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+                "wsl_move_present_folder": "E:\\WSL\\Ubuntu" if host == "DESKTOP-HKE05KI" else "C:\\Users\\standin1\\wsl",
+                "wsl_move_rehearsed_wsl_version": "3.0.5.0", "ansible_user": "standin-admin",
+                "role_path": str(ROLE), "wsl_move_registration": {"dwords": {"DefaultUid": 1000, "Flags": 15}}}
+    hosts = {"host-play": {**ansible_render.load(*others, *own, *inventory), **standins},
+             "window-play": {**ansible_render.load(*own, *inventory), **standins}}
+    expressions = {"configs": "wsl_move_configs | to_nice_json", "read": "wsl_move_window_read | to_nice_json",
+                   "new": "wsl_move_new_start_tasks"}
+    out = ansible_render.render(tmp_path, hosts, list(hosts), expressions, extra={"wsl_move_window": "precheck"})
+    assert out["host-play"] == out["window-play"]
+    assert len(out["window-play"]["new"]) == (6 if host == "DESKTOP-HKE05KI" else 4)
 
 
 def test_the_done_switch_stops_the_host_before_the_wsl_roles_until_a_window_ended_done():

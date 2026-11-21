@@ -51,6 +51,22 @@ wsl_start_unelevated: true
 # keeps its checks of the gateway and the Z-Stick.
 wsl_keepalive_enabled: true
 wsl_watchdog_args: -KeepAliveTask tnwks-wsl-keepalive
+# The UDP relays and the USB device of this host, the values of the roles'
+# defaults, here as on site 2: the play of the move window loads only the role
+# windows_wsl_move, so the start tasks of the new account
+# (wsl_move_new_start_tasks, group_vars/windows_hosts.yml) see only the values
+# of the host there. Both plays then write the same configs of the procedure.
+udp_relays:
+  # NetFlow v9 from the router -> monitoring/flow-collector. From the LAN.
+  - task: tnwks-udp-relay
+    port: 2055
+    remote: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+  # Router syslog -> monitoring/vector-aggregator. Only the router.
+  - task: tnwks-udp-relay-syslog
+    port: 6001
+    remote: [10.10.91.1]
+usb_attach_bound_devices:
+  - "0658:0200" # Aeotec Z-Stick Gen5
 
 # Step 3 of the account change (role windows_wsl_move, Design Doc 0004,
 # section 9, step 3), with the owner's go: the account that owns the distro,
