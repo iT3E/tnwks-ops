@@ -358,6 +358,8 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
         return not on or not volume
 
     assert guard["that"][0].split(" or ")[0] == "not (wsl_start_unelevated | bool)"
+    assert " ".join(guard["that"][0].split()) == ("not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool) "
+                                                  "or (observability_storage_mount | default('vhdx')) == 'file'")
     assert guard["that"][1] == "not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)"
     # The USB attach has its part with no elevation: the switch does not depend on it.
     assert not any("usb_attach" in condition for condition in guard["that"])
