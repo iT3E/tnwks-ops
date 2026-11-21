@@ -351,7 +351,8 @@ Worth fixing in `vyos-config` regardless of the migration:
   - Live hands `UISP-140` clients `8.8.8.8` for DNS (git: the dnsdist
     container). The port hands out the router.
   - Live has a `910 -> UISP-140` HTTP/HTTPS rule. The port makes UISP
-    management VPN-only (`wg01` and admin peers).
+    management VPN-only (`wg01` and admin peers). From 910 only ICMP from
+    the `monitoring` list reaches the EP-R6 (smokeping, `MONITORING_ZONE_RULES`).
 
   Everything else is syntax drift between VyOS releases (`state-policy`
   location, `inbound-interface name`, syslog quoting), per-ruleset

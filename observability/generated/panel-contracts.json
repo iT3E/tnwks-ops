@@ -3165,6 +3165,143 @@
   },
   {
     "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "panel": "Radio gateway reachability",
+    "query": "(((max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}))",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "smokeping:loss_ratio:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:loss_ratio:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "panel": "Radio gateway packet loss",
+    "query": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "smokeping:loss_ratio:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:loss_ratio:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "panel": "Radio gateway latency",
+    "query": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge\"})",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "smokeping:rtt_p90:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:rtt_p90:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "panel": "VLAN 140 traffic",
+    "query": "sum by (direction) (label_replace(rate(mktxp_interface_rx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"from VLAN 140\", \"\", \"\") or label_replace(rate(mktxp_interface_tx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"to VLAN 140\", \"\", \"\"))",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_interface_rx_byte_total",
+      "mktxp_interface_tx_byte_total"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_interface_rx_byte_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_interface_tx_byte_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio gateway",
+    "panel": "Radio network Internet traffic",
+    "query": "sum by (client, direction) (label_replace(wan:client_app_receive_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"up\", \"\", \"\"))",
+    "unit": "bps",
+    "query_mode": "range",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
     "tab": "History",
     "panel": "Router BGP session resets",
     "query": "max by (k8s_cluster, routerboard_name, name) (resets(mktxp_bgp_uptime{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
@@ -3307,7 +3444,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "panel": "WAN p90 latency",
-    "query": "smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\"}",
+    "query": "max by (k8s_cluster, name) (smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "s",
     "query_mode": "range",
     "inputs": [
@@ -3332,7 +3469,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "panel": "WAN latency threshold",
-    "query": "smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\"}",
+    "query": "max by (k8s_cluster, name) (smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "s",
     "query_mode": "range",
     "inputs": [
@@ -3357,7 +3494,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "panel": "Packet loss",
-    "query": "smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\"}",
+    "query": "max by (k8s_cluster, name) (smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "percentunit",
     "query_mode": "range",
     "inputs": [

@@ -1,0 +1,63 @@
+---
+# The EP-R6 (sce-ep01, 10.10.140.140 on VLAN 140): the gateway of the radio
+# network 10.60.10.0/24 (infrastructure/edgeos). Fed by smokeping-prober
+# (role edge, 1 ping/s; smokeping:loss_ratio:rate1m from wan-latency.yaml).
+# Dashboard: Network & Routing, tab Radio gateway.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: radio-gateway-alerts
+spec:
+  groups:
+    - name: radio-gateway
+      rules:
+        # Gated like WifiAPUnreachable: the router (role lan) and SW03 (role
+        # switch) must answer. With the desktop's wg01-home tunnel up, the
+        # pings to VLAN 140 take the same tunnel as those to SW03, so a broken
+        # probe path stays quiet. A reboot (about 2 min) stays under `for`; an
+        # outage notifies about 5 min after it starts (loss passes 50% after
+        # ~30 s, then `for`, then Alertmanager's group_wait).
+        - alert: RadioGatewayUnreachable
+          expr: |
+            max by (host, name) (smokeping:loss_ratio:rate1m{role="edge"}) > 0.5
+            and on ()
+            max(smokeping:loss_ratio:rate1m{role="lan"}) < 0.1
+            and on ()
+            max(smokeping:loss_ratio:rate1m{role="switch"}) < 0.1
+          for: 4m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-gateway"
+            summary: "Radio gateway (EP-R6) not answering pings"
+            description: >-
+              {{ $labels.name }} ({{ $labels.host }}) lost {{ $value | humanizePercentage }}
+              of its pings over the last minute while the router and SW03 answer.
+              The radio network 10.60.10.0/24 is cut off from the LAN and the Internet.
+              Router VLAN 140 traffic now:
+              {{ with query "sum(rate(mktxp_interface_rx_byte_total{name=\"bridge-lan-vlan140\"}[5m]))" }}{{ . | first | value | humanize }}{{ end }}B/s received.
+              Check the EP-R6's power and its cable to the switch; over wg01,
+              `ssh` to 10.10.140.140. Right after a change to the router's
+              MONITORING_ZONE_RULES, check that rule
+              200-unifi-frontend-910-UISP-140 is applied.
+
+        # The series is gone while the prober is up: the target left the
+        # config, or the prober stopped probing it. SmokepingProberDown covers
+        # a prober that isn't scraped at all. 30 min, so a rollout of the
+        # config (Flux, then the pod restart) never fires it.
+        - alert: RadioGatewayProbeMissing
+          expr: |
+            absent(smokeping_requests_total{role="edge",name="sce-ep01"})
+            and on ()
+            (max(up{job="smokeping-prober"}) == 1)
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-gateway"
+            summary: "Nothing probes the radio gateway (EP-R6)"
+            description: >-
+              smokeping-prober is up but exports no series for sce-ep01, so
+              RadioGatewayUnreachable can't fire. Check the target in
+              monitoring/smokeping-prober/app/config/smokeping.yaml and
+              `kubectl -n monitoring logs deploy/smokeping-prober --tail=20`.

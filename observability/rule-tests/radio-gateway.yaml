@@ -1,0 +1,88 @@
+# Cases for the radio gateway (EP-R6) alerts
+# (kubernetes/apps/monitoring/kube-prometheus-stack/addons/alerts/radio-gateway.yaml).
+# The loss ratio comes in as the recorded series (wan-latency.yaml records it
+# from the smokeping counters), one sample per 30s.
+rule_files:
+  - kubernetes/apps/monitoring/kube-prometheus-stack/addons/alerts/radio-gateway.yaml
+evaluation_interval: 30s
+tests:
+  - name: the gateway stops answering while the router and SW03 answer
+    interval: 30s
+    input_series:
+      # Down from 2m30s.
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: RadioGatewayUnreachable
+        eval_time: 6m
+        exp_alerts: []
+      - alertname: RadioGatewayUnreachable
+        eval_time: 7m
+        exp_alerts:
+          - exp_labels: {severity: warning, host: 10.10.140.140, name: sce-ep01}
+
+  - name: the router hop or SW03 losing pings too is the probe's path, not the gateway
+    interval: 30s
+    input_series:
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x4 1x26
+      # The router hop drops with it until 10m, then SW03 (the wg01-home path) from 10m.
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x4 1x15 0x10
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x19 1x10
+    alert_rule_test:
+      - alertname: RadioGatewayUnreachable
+        eval_time: 8m
+        exp_alerts: []
+      - alertname: RadioGatewayUnreachable
+        eval_time: 14m
+        exp_alerts: []
+
+  - name: a reboot of about 2 minutes stays quiet
+    interval: 30s
+    input_series:
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x4 1x5 0x20
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: RadioGatewayUnreachable
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: RadioGatewayUnreachable
+        eval_time: 10m
+        exp_alerts: []
+
+  - name: the target leaves the config while the prober is up
+    interval: 1m
+    input_series:
+      # Last sample at 9m: absent from 14m (the 5m lookback), firing from 44m.
+      - series: smokeping_requests_total{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0+60x9 _x50
+      - series: up{k8s_cluster="homelab-wsl", job="smokeping-prober"}
+        values: 1x60
+    alert_rule_test:
+      - alertname: RadioGatewayProbeMissing
+        eval_time: 40m
+        exp_alerts: []
+      - alertname: RadioGatewayProbeMissing
+        eval_time: 50m
+        exp_alerts:
+          - exp_labels: {severity: warning, role: edge, name: sce-ep01}
+
+  - name: a prober that is down is SmokepingProberDown's, not this alert's
+    interval: 1m
+    input_series:
+      - series: up{k8s_cluster="homelab-wsl", job="smokeping-prober"}
+        values: 0x60
+    alert_rule_test:
+      - alertname: RadioGatewayProbeMissing
+        eval_time: 50m
+        exp_alerts: []
