@@ -49,7 +49,24 @@
       "terraform__get_provider_details",
       "terraform__search_modules",
       "terraform__search_policies",
-      "terraform__search_provider_docs"
+      "terraform__search_provider_docs",
+      "github__actions_get",
+      "github__actions_list",
+      "github__get_commit",
+      "github__get_file_contents",
+      "github__get_job_logs",
+      "github__get_label",
+      "github__get_latest_release",
+      "github__get_release_by_tag",
+      "github__get_tag",
+      "github__issue_read",
+      "github__list_branches",
+      "github__list_commits",
+      "github__list_issues",
+      "github__list_pull_requests",
+      "github__list_releases",
+      "github__list_tags",
+      "github__pull_request_read"
     ]}},
     "sessions": {"visibility": "all"},
     "web": {
@@ -119,6 +136,32 @@
             "search_modules",
             "search_policies",
             "search_provider_docs"
+          ]
+        }
+      },
+      "github": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-github/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "actions_get",
+            "actions_list",
+            "get_commit",
+            "get_file_contents",
+            "get_job_logs",
+            "get_label",
+            "get_latest_release",
+            "get_release_by_tag",
+            "get_tag",
+            "issue_read",
+            "list_branches",
+            "list_commits",
+            "list_issues",
+            "list_pull_requests",
+            "list_releases",
+            "list_tags",
+            "pull_request_read"
           ]
         }
       }

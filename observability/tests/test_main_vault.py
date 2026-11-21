@@ -111,6 +111,7 @@ def test_no_other_pod_of_main_has_the_dns_label():
             if "agents.home.arpa/dns" in template.get("metadata", {}).get("labels", {}):
                 holders.append(str(path.relative_to(MAIN)))
     assert sorted(holders) == ["cluster-mcp/app/deployment.yaml", "flux-mcp/app/deployment.yaml",
+                               "github-mcp/app/deployment.yaml",
                                "terraform-mcp/app/deployment.yaml", "vault-server/app/deployment.yaml"]
 
 

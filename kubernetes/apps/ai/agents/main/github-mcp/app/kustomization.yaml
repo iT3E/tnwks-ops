@@ -1,0 +1,17 @@
+---
+# The code host server of main: the GitHub MCP server over Streamable HTTP,
+# read only, with a proxy container in its pod that sets the token on each
+# request (the pattern of the proxy of finance).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml
+configMapGenerator:
+  - name: github-mcp-proxy
+    files:
+      - default.conf.template=./proxy/default.conf.template
+    options:
+      annotations:
+        # ${GITHUB_MCP_TOKEN} is for the entrypoint of the proxy, not Flux.
+        kustomize.toolkit.fluxcd.io/substitute: disabled

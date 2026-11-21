@@ -84,6 +84,7 @@ the MCP server and checks the headers that arrive.
 | `/main-cluster/` | `main` | the eight kept reads of the cluster server | the eight kept reads of the cluster server |
 | `/main-flux/` | `main` | the eight kept reads of the Flux server | the eight kept reads of the Flux server |
 | `/main-terraform/` | `main` | the nine tools of the registry | the nine tools of the registry |
+| `/main-github/` | `main` | the 17 kept reads of the code host server | the 17 kept reads, for the ops repository only |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -114,7 +115,8 @@ same hash as on `/main-vault/`, with `route` as the second field of its
 metadata. Each route names its kept tools one by one, from a dump of the
 pinned image in `tools/`, sets 30 s on the route and on the target, and
 sets no credential on the target: the credential of each read server stays
-in its pod. Live since the read step:
+in its pod. Live since the read step (the code host server one pull request
+later, with its read credential):
 
 - `/main-cluster/`: the cluster server of main
   (`kubernetes/apps/ai/agents/main/cluster-mcp`), the Kubernetes MCP server
@@ -143,6 +145,26 @@ in its pod. Live since the read step:
   the host of the style guide resources of the server. The gateway sends
   no header of a client, so a client can not give it a token either.
   `tools/terraform.json` is the dump.
+
+- `/main-github/`: the code host server of main
+  (`kubernetes/apps/ai/agents/main/github-mcp`), the GitHub MCP server, read
+  only, in lockdown mode, with no toolset but its 17 reads by name. In HTTP
+  mode it takes its token from each request, so a proxy container in its
+  pod (the pattern of the proxy of finance) sets the token on each request
+  and drops each mode header of a client; the server listens on the
+  loopback of the pod. Each of the 17 reads takes the owner and the
+  repository, and a guardrail of the route (`mcpGuardrails`, on
+  `tools/call`) refuses a call for any repository but the ops repository
+  and sends nothing on: the rule of a route can not see the arguments of a
+  call in agentgateway 1.7.0. The pod reaches the API of the code host and
+  its host of raw file content only. `tools/github.json` is the dump.
+
+  **The token is the owner's step.** The pod reads the Secret
+  `github-mcp-token` in `agents-main`, key `GITHUB_MCP_TOKEN`, and does not
+  start without it, so `agents-main-github-mcp` is not ready until it
+  exists. The design puts an installation token of the App of the main
+  agent there, renewed by a token job; Reloader starts the pod again when
+  the Secret changes.
 
 **The read step.** The config of the main agent
 (`agents/main/agent/config/openclaw.json`) has one server entry for each
@@ -215,7 +237,7 @@ its place for the container tests.
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
-| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux` and `main-terraform` (the same hash; `metadata: {client: main, route: <the route>}`) |
+| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux`, `main-terraform` and `main-github` (the same hash; `metadata: {client: main, route: <the route>}`) |
 | `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, route `main-vault` |
 
 **The hash and the value stay in step** in two ways: the owner changes both

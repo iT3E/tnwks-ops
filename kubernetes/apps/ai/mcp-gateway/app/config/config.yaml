@@ -511,3 +511,82 @@ routes:
               policies:
                 http:
                   requestTimeout: 30s
+  - name: main-github
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-github/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+            metadata: {client: main, route: main-github}
+      # A long job log can take longer than the 10 s of the gateway: 30 s,
+      # as for the other read servers.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The reads of the design, by exact name, from the dump of the pinned
+      # image in its read-only mode (../../tools/github.json). Not listed,
+      # so refused: the search tools, get_me, the team and collaborator
+      # tools, the issue types and fields, and ui_get. The server runs read
+      # only, with the same list (../../../agents/main/github-mcp).
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "actions_get",
+                "actions_list",
+                "get_commit",
+                "get_file_contents",
+                "get_job_logs",
+                "get_label",
+                "get_latest_release",
+                "get_release_by_tag",
+                "get_tag",
+                "issue_read",
+                "list_branches",
+                "list_commits",
+                "list_issues",
+                "list_pull_requests",
+                "list_releases",
+                "list_tags",
+                "pull_request_read"
+              ] && apiKey.client == "main"
+      # Each of those reads takes the owner and the repository: a call for
+      # another repository gets a refusal and is not sent on. The token of
+      # the server reaches the ops repository only, but a public repository
+      # would stay readable without this check. The rule above can not see
+      # the arguments of a call (agentgateway 1.7.0 gives mcpAuthorization
+      # the target and the name only), so a guardrail on tools/call does it.
+      mcpGuardrails:
+        processors:
+          - kind: expression
+            methods: {"tools/call": request}
+            condition: >-
+              !(has(mcp.params.arguments) &&
+              has(mcp.params.arguments.owner) && has(mcp.params.arguments.repo) &&
+              mcp.params.arguments.owner == 'iT3E' &&
+              mcp.params.arguments.repo == 'tnwks-ops')
+            reject: "main-github: the ops repository only"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: github
+              mcp:
+                host: http://github-mcp.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s

@@ -225,6 +225,7 @@
         "quay.io/containers/kubernetes_mcp_server",
         "ghcr.io/controlplaneio-fluxcd/flux-operator-mcp",
         "docker.io/hashicorp/terraform-mcp-server",
+        "ghcr.io/github/github-mcp-server",
       ],
       matchFileNames: ["!/^(talos/ms-01|kubernetes/clusters/ms-01|kubernetes/apps/(kube-system/cilium|monitoring/thanos|monitoring/vector/agent|production/uisp|storage/rook-ceph|tools/node-feature-discovery|databases/cloudnative-pg/cluster-backup))//"],
       automerge: false,

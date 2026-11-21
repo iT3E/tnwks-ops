@@ -33,3 +33,5 @@ resources:
   - ./cluster-mcp/ks.yaml
   - ./flux-mcp/ks.yaml
   - ./terraform-mcp/ks.yaml
+  # Not ready until the Secret github-mcp-token exists (github-mcp/ks.yaml).
+  - ./github-mcp/ks.yaml

@@ -213,6 +213,12 @@ def test_the_log_adds_the_client_and_nothing_of_a_call():
     cfg = config()
     assert cfg["frontendPolicies"]["accessLog"] == {"add": {"client": "apiKey.client"}}
     text = CONFIG.read_text()
+    # The one use of the arguments of a call is the check of the repository
+    # of the code host route (a guardrail on tools/call, which logs nothing;
+    # test_main_read_servers.py).
+    guardrails = [r["name"] for r in cfg["routes"] if "mcpGuardrails" in r["policies"]]
+    assert guardrails == ["main-github"]
+    text = text.replace("mcp.params.arguments", "")
     for word in ("arguments", "result", "request.body", "response.body", "unredacted"):
         assert word not in re.sub(r"(?m)^\s*#.*$", "", text), word
 
@@ -304,6 +310,7 @@ def test_the_gateway_takes_the_agent_and_its_probe_and_reaches_the_mcp_server_on
                    ("agents-main", "cluster-mcp"): ["8080"],
                    ("agents-main", "flux-mcp"): ["8080"],
                    ("agents-main", "terraform-mcp"): ["8080"],
+                   ("agents-main", "github-mcp"): ["8080"],
                    ("kube-system", "kube-dns"): ["53"]}
     (dns,) = [r for r in policy["egress"] if peers(r)[0].get("k8s-app") == "kube-dns"]
     names = [d for tp in dns["toPorts"] for d in tp["rules"]["dns"]]
