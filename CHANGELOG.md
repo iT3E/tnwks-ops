@@ -3,6 +3,42 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.256.5 - 2026-11-21
+
+### Security
+
+* Flux: the class Kustomization flux-substitution makes the reduced Secret cluster-secrets-apps on both sites, with only the keys of cluster-secrets that the children outside the "ask first" class use; no child reads it yet. CI checks that each variable of a child outside the class is a key of it or a setting of the site
+
+## v2.256.4 - 2026-11-21
+
+### Security
+
+* Flux admission: the read of the audit result before Deny has a positive control. The API server counts a check of a policy only when it refuses, so the live check bin/flux-admission-check (now as both Flux controllers) adds a known count on each site; a harness test shows that an allowed check adds nothing. The runbook reads the highest count in the window, so a restart of the API server does not hide one, and adds a replay of the rendered chart output of both sites
+
+## v2.256.3 - 2026-11-21
+
+### Security
+
+* Flux admission: the daily CronJob flux-admission-objects on both sites lists each admission object (webhook configurations, admission policies and bindings) and fails when a Flux child outside the "ask first" class owns one, which the admission policy can not refuse. It reads the class from the live policy, with a read-only account; a failure raises KubeJobFailed, and the AI board shows it on its Checks tab
+
+## v2.256.2 - 2026-11-21
+
+### Security
+
+* Flux admission: the rule operator-pods refuses, for a Flux child outside the "ask first" class, the objects from which an operator makes a pod of its own template (runner sets, sandboxes, a database pooler, and a database cluster with a privileged container or an added capability). The test harness takes its Kubernetes version from the upgrade file of the clusters, and the test that the class lists equal git also runs on a change of the Owner label script
+
+## v2.256.1 - 2026-11-21
+
+### Security
+
+* Flux: kustomize-controller runs with --no-remote-bases=true on both sites, so a kustomization can not bring in a remote base or resource; no build of the clusters uses one, and a CI test keeps it so
+
+## v2.256.0 - 2026-11-21
+
+### Changed
+
+* windows: site 1 turns on step 3 of the account change (wsl_move, phase move) with the session check, the start of WSL with no elevation and the keepalive, with the folder of the move on E:, the volume of its disk file
+
 ## v2.255.0 - 2026-11-21
 
 ### Changed

@@ -19,6 +19,7 @@ object is made, except the few that the cases of an update need.
 
 import copy
 import json
+import re
 import ssl
 import time
 import unittest
@@ -71,6 +72,12 @@ KINDS = {
     "ImageUpdateAutomation": ("imageupdateautomations", True),
     "ValidatingAdmissionPolicy": ("validatingadmissionpolicies", False),
     "ValidatingAdmissionPolicyBinding": ("validatingadmissionpolicybindings", False),
+    "AutoscalingRunnerSet": ("autoscalingrunnersets", True),
+    "EphemeralRunner": ("ephemeralrunners", True),
+    "Sandbox": ("sandboxes", True),
+    "SandboxTemplate": ("sandboxtemplates", True),
+    "Cluster": ("clusters", True),
+    "Pooler": ("poolers", True),
 }
 VERSIONS = {
     "ConfigMap": "v1", "Secret": "v1", "Namespace": "v1", "PersistentVolume": "v1", "Pod": "v1",
@@ -369,7 +376,41 @@ def cases():
         ("work", "the release storage of the helm controller in kube-system", HELM, "allow",
          obj("Secret", "sh.helm.release.v1.cilium.v2", "kube-system", {"owner": "helm", "name": "cilium"},
              type="helm.sh/release.v1", stringData={"release": "x"})),
-    ] + privileged_cases()
+    ] + privileged_cases() + operator_cases()
+
+
+def operator_cases():
+    """The kinds from which an operator makes a pod of its own template: none
+    from outside the class, in a namespace outside it; each from the class.
+    A plain database cluster from outside the class, as the children of the
+    apps make one each, passes."""
+    template = {"spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1"}]}}
+    out = [
+        ("AutoscalingRunnerSet", {"template": template}),
+        ("EphemeralRunner", {"spec": template["spec"]}),
+        ("Sandbox", {"podTemplate": template}),
+        ("SandboxTemplate", {"podTemplate": template}),
+        ("Pooler", {"cluster": {"name": "app-pg"}, "instances": 1, "type": "rw", "template": template}),
+    ]
+    cases = []
+    for kind, spec in out:
+        cases.append(("operator-pods", f"a {kind} outside the class", KUSTOMIZE, "deny",
+                      obj(kind, "new-app", "production", OUT_K, spec=spec)))
+    namespace = {"AutoscalingRunnerSet": "tools", "EphemeralRunner": "tools", "Pooler": "databases"}
+    for kind, spec in out:
+        cases.append(("operator-pods", f"a {kind} of the class", KUSTOMIZE, "allow",
+                      obj(kind, "new-app", namespace.get(kind, "agents-main"), CLASS_K, spec=spec)))
+    cluster = {"instances": 1, "storage": {"size": "1Gi"}}
+    for what, context in (("a privileged container", {"privileged": True}),
+                          ("an added capability", {"capabilities": {"add": ["NET_ADMIN"]}})):
+        cases.append(("operator-pods", f"a database cluster outside the class with {what}", KUSTOMIZE, "deny",
+                      obj("Cluster", "new-app-pg", "databases", OUT_K, spec=dict(cluster, securityContext=context))))
+    cases.append(("operator-pods", "a plain database cluster outside the class", KUSTOMIZE, "allow",
+                  obj("Cluster", "new-app-pg", "databases", OUT_K, spec=cluster)))
+    cases.append(("operator-pods", "a database cluster outside the class that drops capabilities", KUSTOMIZE, "allow",
+                  obj("Cluster", "new-app-pg", "databases", OUT_K,
+                      spec=dict(cluster, securityContext={"capabilities": {"drop": ["ALL"]}}))))
+    return cases
 
 
 def apply_policy(actions, drop=None):
@@ -431,7 +472,7 @@ class FluxAdmission(unittest.TestCase):
                 for x in call("GET", f"/apis/apiextensions.k8s.io/v1/customresourcedefinitions/{c['metadata']['name']}")[1]
                 .get("status", {}).get("conditions", [])))
         namespaces = {"ai", "flux-system", "production", "home-automation", "media", "selfhosted", "kube-system",
-                      "agents-main", "databases"}
+                      "agents-main", "databases", "tools"}
         namespaces |= {e["doc"]["metadata"]["namespace"] for e in GIT_HELMRELEASES}
         namespaces |= {e["doc"]["metadata"].get("namespace", "flux-system") for e in GIT_KUSTOMIZATIONS}
         for namespace in sorted(namespaces):
@@ -533,7 +574,7 @@ class FluxAdmission(unittest.TestCase):
 
     def test_7_each_rule_can_fail(self):
         rules = sorted({c[0] for c in cases() if c[3] == "deny"})
-        self.assertEqual(len(rules), 11)
+        self.assertEqual(len(rules), 12)
         try:
             for rule in rules:
                 apply_policy(["Deny"])
@@ -543,6 +584,52 @@ class FluxAdmission(unittest.TestCase):
                 # With the rule off, at least one of its cases passes: so its
                 # test fails, and the rule is what refuses it.
                 wait_for(f"{rule} off", lambda d=denied: any(not refused(send(c)) for c in d), 30)
+        finally:
+            apply_policy(["Deny"])
+
+    def test_8_the_count_has_refusals_only(self):
+        # apiserver_validating_admission_policy_check_total, the count that
+        # the clusters keep for this policy, adds one for each action of a
+        # validation that refuses (one request can fail two rules). A check
+        # that allows adds nothing, from either controller. So the read
+        # before Deny needs refusals on purpose: the live check
+        # (bin/flux-admission-check) sends test objects as both controllers,
+        # and each adds at least one to "audit" on that site.
+        def counts():
+            text = call("GET", "/metrics")[1]["text"]
+            out = {}
+            for m in re.finditer(r'^apiserver_validating_admission_policy_check_total\{([^}]*)\} ([0-9.e+]+)$',
+                                 text, re.MULTILINE):
+                labels = dict(re.findall(r'(\w+)="([^"]*)"', m.group(1)))
+                if labels.get("policy") == "flux-child-scope":
+                    action = labels["enforcement_action"]
+                    out[action] = out.get(action, 0) + float(m.group(2))
+            return out
+
+        allowed = [c for c in cases() if c[3] == "allow"]
+        denied = [next(c for c in cases() if c[3] == "deny" and c[2] == user) for user in (KUSTOMIZE, HELM)]
+        self.assertEqual({c[2] for c in allowed} >= {KUSTOMIZE, HELM}, True)
+        try:
+            apply_policy(["Audit", "Warn"])
+            wait_for("audit and warn", lambda: send(denied[0])[0] in (200, 201))
+            before = counts()
+            for case in allowed:
+                send(case)
+            self.assertEqual(counts(), before, "an allowed check added to the count")
+            for case in denied:
+                send(case)
+            after = counts()
+            rise = {k: after[k] - before.get(k, 0) for k in after if after[k] != before.get(k, 0)}
+            self.assertEqual(set(rise), {"audit", "warn"}, rise)
+            self.assertTrue(rise["audit"] == rise["warn"] >= 2, rise)
+            apply_policy(["Deny", "Audit"])
+            wait_for("deny", lambda: refused(send(denied[0])))
+            before = counts()
+            send(denied[1])
+            after = counts()
+            rise = {k: after[k] - before.get(k, 0) for k in after if after[k] != before.get(k, 0)}
+            self.assertEqual(set(rise), {"deny", "audit"}, rise)
+            self.assertTrue(rise["deny"] == rise["audit"] >= 1, rise)
         finally:
             apply_policy(["Deny"])
 

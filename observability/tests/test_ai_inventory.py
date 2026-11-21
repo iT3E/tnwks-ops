@@ -85,6 +85,11 @@ def test_each_cronjob_of_the_ai_domain_is_a_declared_schedule():
                  and re.search(rf"(?m)^  name: {name}$", path.read_text())]
         assert paths, name
         found.add(("monitoring", name))
+    # The list of the admission objects owned outside the class lives with
+    # the admission policy of the Flux children.
+    check = ROOT / "kubernetes/apps/flux-system/admission/app/objects-check.yaml"
+    assert re.search(r"(?m)^kind: CronJob\n(?:.*\n){0,2}  name: flux-admission-objects$", check.read_text())
+    found.add(("flux-system", "flux-admission-objects"))
     declared = {(item["namespace"], item["cronjob"]) for item in AI_SCHEDULES}
     assert found == declared, (sorted(found - declared), sorted(declared - found))
 

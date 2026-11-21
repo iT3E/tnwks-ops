@@ -10,7 +10,9 @@ on a throwaway API server (admission/tests/run.sh), with Docker.
 """
 
 import ast
+import importlib.util
 import os
+import re
 import subprocess
 import sys
 
@@ -62,10 +64,80 @@ def test_the_class_paths_are_the_kubernetes_folders_of_owner_label():
     assert sorted(folders) == sorted(classlist.CLASS_PATHS)
 
 
+SUBSTITUTION = ROOT / "kubernetes/apps/flux-system/substitution/app/secret.yaml"
+# A variable of Flux; a doubled dollar sign is an escape, which Flux writes
+# as one.
+VARIABLE = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)(:=[^}]*)?\}")
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(site):
+    keys = set(yaml.safe_load(SUBSTITUTION.read_text())["stringData"])
+    (settings,) = [d for d in yaml.safe_load_all((ROOT / f"kubernetes/clusters/{site}/cluster-settings.yaml").read_text()) if d]
+    known = keys | set(settings["data"])
+    missing = {}
+    for child in classlist.walk(site).values():
+        if classlist.is_class_path(child.path):
+            continue
+        inline = set((child.doc["spec"].get("postBuild") or {}).get("substitute") or {})
+        for doc in child.build.docs:
+            for m in VARIABLE.finditer(yaml.safe_dump(doc)):
+                if m.group(2) is None and m.group(1) not in known | inline:
+                    missing.setdefault(child.key, set()).add(m.group(1))
+    assert not missing, f"add these keys to {SUBSTITUTION.relative_to(ROOT)}, or a default: {missing}"
+
+
 def test_both_sites_list_the_policy():
     for site in classlist.SITES:
         text = (ROOT / f"kubernetes/clusters/{site}/apps/kustomization.yaml").read_text()
         assert "- ../../../apps/flux-system/admission/ks.yaml" in text, site
+        assert "- ../../../apps/flux-system/substitution/ks.yaml" in text, site
+
+
+def objects_check():
+    path = ADMISSION / "app/scripts/admission_objects.py"
+    spec = importlib.util.spec_from_file_location("admission_objects", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_objects_check_reads_the_class_of_the_policy():
+    check = objects_check()
+    kustomizations, helmreleases = check.class_lists(docs()["ValidatingAdmissionPolicy"])
+    data = classlist.lists()
+    assert kustomizations == set(data["classKustomizations"])
+    assert helmreleases == set(data["classHelmReleases"])
+
+
+def test_the_objects_check_finds_an_admission_object_owned_outside_the_class():
+    check = objects_check()
+    k, h = {"flux-system/flux-admission"}, {"cert-manager/cert-manager"}
+
+    def hook(name, labels):
+        return {"kind": "MutatingWebhookConfiguration", "metadata": {"name": name, "labels": labels}}
+
+    objects = [
+        hook("policy", {"kustomize.toolkit.fluxcd.io/namespace": "flux-system",
+                        "kustomize.toolkit.fluxcd.io/name": "flux-admission"}),
+        hook("cert-manager-webhook", {"helm.toolkit.fluxcd.io/namespace": "cert-manager",
+                                      "helm.toolkit.fluxcd.io/name": "cert-manager"}),
+        hook("by-hand", {}),
+        hook("outside-k", {"kustomize.toolkit.fluxcd.io/namespace": "flux-system",
+                           "kustomize.toolkit.fluxcd.io/name": "mealie"}),
+        hook("outside-h", {"helm.toolkit.fluxcd.io/namespace": "production",
+                           "helm.toolkit.fluxcd.io/name": "mealie"}),
+    ]
+    lines, unowned = check.findings(objects, k, h)
+    assert unowned == 1
+    assert [line.split()[2] for line in lines] == ["name=outside-k", "name=outside-h"]
+    assert check.findings(objects[:3], k, h) == ([], 1)
+
+
+def test_the_objects_check_may_only_read():
+    rules = [d for d in yaml.safe_load_all((ADMISSION / "app/objects-check.yaml").read_text())
+             if d and d["kind"] == "ClusterRole"]
+    assert [r["verbs"] for role in rules for r in role["rules"]] == [["get", "list"]]
 
 
 def test_the_policy_matches_the_two_controllers_and_fails_closed():
@@ -94,3 +166,32 @@ def test_the_rules_on_a_throwaway_api_server():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# A remote source of kustomize: a URL, a git address, a query of a ref, or a
+# host name before the first slash.
+REMOTE = re.compile(r"://|^git@|^git::|[?&](?:ref|version)=|^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::[0-9]+)?/")
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_kustomize_controller_refuses_remote_bases(site):
+    # A URL in a kustomization outside the class would bring in any
+    # manifest, an admission object among them, which the policy can not see.
+    patches = yaml.safe_load((ROOT / f"kubernetes/clusters/{site}/flux-system/kustomization.yaml").read_text())["patches"]
+    args = [op["value"] for p in patches if (p.get("target") or {}).get("name") == "kustomize-controller"
+            for op in yaml.safe_load(p["patch"])]
+    assert args == ["--no-remote-bases=true"]
+
+
+def test_no_build_of_flux_uses_a_remote_source():
+    # With the flag, a build with one fails. Only the bootstrap of Flux, which
+    # no Kustomization builds, has one.
+    built = {child.path for site in classlist.SITES for child in classlist.walk(site).values()}
+    found = []
+    for path in ROOT.glob("kubernetes/**/kustomization.yaml"):
+        for doc in yaml.safe_load_all(path.read_text()):
+            for key in ("resources", "components", "bases", "crds"):
+                found += [(str(path.relative_to(ROOT)), entry) for entry in (doc or {}).get(key) or []
+                          if isinstance(entry, str) and REMOTE.search(entry)]
+    assert {path for path, _ in found} == {"kubernetes/bootstrap/kustomization.yaml"}, found
+    assert not any(p == "kubernetes/bootstrap" or p.startswith("kubernetes/bootstrap/") for p in built)

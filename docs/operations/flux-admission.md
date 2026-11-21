@@ -41,6 +41,12 @@ children do not apply to it.
 After a change of the class, of a cluster tree or of a namespace, run
 `python3 kubernetes/apps/flux-system/admission/classlist.py write` and
 commit the policy. The CI test fails until the lists are the ones of git.
+It is `observability/tests/test_flux_admission.py`, in the job `contracts`
+of the Observability workflow. That job runs on each change under
+`kubernetes/` and of `.github/scripts/owner-label-check.py`
+(`.github/ci/domains.toml`), and `Build Success`, a required check of
+`main`, needs it. So a merge that adds an app or an object to a parent of
+the class without `classlist.py write` can not pass.
 The walk of git gave the same Kustomizations and HelmReleases as the two
 live sites on 2026-11-21: 155 and 85 on site 1, 85 and 51 on site 2.
 
@@ -56,6 +62,7 @@ A child outside the class may not:
 | `flux-kinds` | a Flux Kustomization or an ImageUpdateAutomation |
 | `helmrelease-spec` | a HelmRelease with a service account, a kubeconfig, a target or storage namespace of the class, or the post render strategy `nohooks` |
 | `privileged-pod` | a pod spec with `privileged`, a host path, the host network, PID or IPC namespace, a host port or an added capability, in any namespace |
+| `operator-pods` | an object from which an operator makes a pod of its own template: a runner set (`actions.github.com`), a sandbox (`agents.x-k8s.io`, `extensions.agents.x-k8s.io`), a database pooler, or a database cluster with a privileged container or an added capability (`postgresql.cnpg.io`). A plain database cluster passes: each app outside the class with a database makes one |
 | `takeover` | a change of an object whose owner labels name a child of the class |
 
 For each request of the two controllers:
@@ -69,6 +76,20 @@ For each request of the two controllers:
 
 An update of a controller that keeps the spec of a Kustomization or a
 HelmRelease (a finalizer, an annotation) passes the last three rules.
+
+## Substitution
+
+The class Kustomization `flux-substitution`
+(`kubernetes/apps/flux-system/substitution`) makes the reduced Secret
+`cluster-secrets-apps` on each site: the keys of `cluster-secrets` that the
+children outside the class use, and no other. Flux fills its template from
+`cluster-secrets`. A later change gives it to the children outside the class
+in place of the full Secret; until then no child reads it.
+
+When a child outside the class starts to use a key of `cluster-secrets`, add
+the key to the template (a change of the class). The CI test fails until
+each variable of a child outside the class is a key of the template or a
+setting of the site.
 
 ## Failure and deletion
 
@@ -86,12 +107,39 @@ HelmRelease (a finalizer, an annotation) passes the last three rules.
   the next reconcile of `flux-admission` (30 minutes, or 1 minute after a
   failure), unless that Kustomization is suspended.
 
+## Remote sources
+
+kustomize-controller runs with `--no-remote-bases=true` on both sites (a
+patch in `kubernetes/clusters/<site>/flux-system/kustomization.yaml`). A
+kustomization that names a remote base or resource (a URL, a git address)
+then fails its build, so a URL in a folder outside the class can not bring
+in a manifest that the policy can not see, such as an admission object. No
+build of the clusters uses one: only `kubernetes/bootstrap`, which no
+Kustomization builds, and a CI test keeps it so.
+
+- **How it is applied.** The Kustomization `flux-system` applies the
+  patched Deployment at its next reconcile (10 minutes). The Deployment
+  rolls: the new pod starts, takes the leader lease when the old pod
+  releases it at its stop (a few seconds, at most the lease of 35 seconds),
+  and the old pod goes. Reconciles of Kustomizations wait for that time
+  and then go on; an apply that was running is retried. No object changes,
+  and the helm controller does not restart.
+- **The way back.** Revert the change; Flux rolls the controller again. By
+  hand, the owner suspends `flux-system`
+  (`flux suspend kustomization flux-system -n flux-system`), removes the
+  argument from the Deployment, and resumes after the revert is on `main`.
+
 ## Roll-out
 
 1. The binding starts with `Audit` and `Warn`. A request that a rule refuses
    passes, with an audit annotation, a warning in the log of the controller
    and a count of `apiserver_validating_admission_policy_check_total`.
-2. After one reconcile cycle on both sites, read the result (below).
+2. After one reconcile cycle on both sites, the owner reads the result
+   (below), with the positive control of each site. A reconcile applies the
+   output of a chart only at a Helm install or upgrade, so the read also
+   needs a replay of the chart output of both sites, rendered from git, on
+   the throwaway API server of the tests: no refusal, or only objects of
+   apps that then join the class.
 3. A second change turns the binding to `Deny`. It also changes
    `test_the_binding_is_still_audit_and_warn`.
 
@@ -106,11 +154,18 @@ git for site 2:
 | StatefulSet `home-automation/zwave-js-ui` (privileged, a host path) | `privileged-pod` | 1 |
 | StatefulSet `media/qbittorrent` (`NET_ADMIN` on its VPN sidecar) | `privileged-pod` | 1 and 2 |
 
-Two CRDs of site 1 carry the owner labels of a HelmRelease that no longer
-exists (`tools/node-feature-discovery`). No controller applies them, so no
-request comes. The folders of the four apps of the table are in the class
-(`CLASS_PATHS` and the list of Owner label), so the rules refuse no live
-object.
+A second replay on 2026-11-21 sent the full output of git for each site,
+rendered as the CI diff job renders it (each Kustomization and the templates
+and hooks of each chart: 1661 objects of site 1 with its 85 HelmReleases,
+1013 of site 2 with its 50), and found the same objects, no other. Three
+CRDs of site 1 carry the owner labels of a HelmRelease that no longer exists
+(`tools/node-feature-discovery`, `networking/external-dns`). No controller
+applies them, so no request comes. The CRDs of the `crds` folder of a chart
+are not in a render; Helm applies them at a first install, and at an
+upgrade only for a HelmRelease with `crds: Create` or `CreateReplace`, and
+each of those is in the class on both sites. The folders of the four apps of
+the table are in the class (`CLASS_PATHS` and the list of Owner label), so
+the rules refuse no object of either replay.
 
 ## Read the audit result
 
@@ -122,16 +177,39 @@ kubectl -n flux-system logs deploy/kustomize-controller --since=2h | grep -c 'fl
 kubectl -n flux-system logs deploy/helm-controller --since=2h | grep -c 'flux-child-scope/'
 ```
 
-On both sites, through the Thanos query of site 1 (both sites keep the
-series of this policy with `enforcement_action` "audit" or "deny"). The API
-server counts a check only when it fails, so no series means no request
-that the policy would refuse:
+On both sites, through the Thanos query of site 1. The API server counts a
+check of a policy only when a validation refuses: it adds one to
+`apiserver_validating_admission_policy_check_total` for each action of the
+binding ("audit", "warn" or "deny") and each rule that fails. A check that
+allows adds nothing, and the series appears at the first refusal (the test
+`test_8_the_count_has_refusals_only` shows it at the version of the
+clusters). The scrape of the API server keeps, on each site, only the series
+of this policy with `enforcement_action` "audit" or "deny" (and, on site 1,
+the series of the policies of NFS volumes and of the backup mover); the
+"warn" series and the duration series are dropped. So no series is the
+expected result, and it proves nothing alone. Read it in three steps:
 
-```promql
-sum by (cluster, enforcement_action) (
-  increase(apiserver_validating_admission_policy_check_total{policy="flux-child-scope"}[1d])
-)
-```
+1. **The window.** From the merge of the policy (or the last read) to now,
+   no series of this policy on either site. A restart of the API server
+   resets the count, so read the highest value in the window:
+
+   ```promql
+   sum by (cluster, enforcement_action) (
+     max_over_time(apiserver_validating_admission_policy_check_total{policy="flux-child-scope"}[1d])
+   )
+   ```
+
+2. **The positive control.** The owner runs the live check (below) on each
+   site. It sends 7 test objects as the two controllers, and each one fails
+   at least one rule. After two scrapes, the query above shows a series with
+   "audit" of at least 7 for each `cluster` (with `Deny` and `Audit`: "deny"
+   and "audit", at least 7 each). That proves that the policy evaluates the
+   requests of the controllers on that site and that the series reaches
+   Thanos. With no series after the run, the read is void: find the break
+   first.
+3. **After the control.** The count of each site stays at the value of the
+   control for the rest of the window. Any rise is a request of a Flux
+   child that the policy refuses.
 
 The names of the objects are in the audit stream `k8s-audit` of each site,
 with the annotation `validation.policy.admission.k8s.io/validation_failure`.
@@ -151,7 +229,10 @@ or when the Prometheus of the site did not scrape. So also check that:
 side dry run, as the service account of `kustomize-controller`, with the
 owner labels of a child outside the class: cluster RBAC, an object in `ai`,
 a Kustomization with a class path, and a privileged pod in `home-automation`,
-`media` and `production`. The API server stores nothing. With `Audit` and
+`media` and `production`. It sends one more privileged pod in `production`
+as `helm-controller`, with the owner labels of a HelmRelease outside the
+class. Each object adds to the count of the site, so the run is the positive
+control of the read (above). The API server stores nothing. With `Audit` and
 `Warn` each object passes with a warning. With `Deny` each one is refused.
 The owner runs it with a kubeconfig that may impersonate:
 
@@ -162,6 +243,19 @@ bin/flux-admission-check --context <site 2> --parent flux-system/cluster-apps-ws
 
 The two test objects of decryption (a SOPS file of another folder, by a
 relative path and by a link) are content of git. Owner label holds them.
+
+## The daily check of admission objects
+
+The API server runs no admission policy on a webhook configuration, an
+admission policy or a binding, so the policy can not refuse one. The CronJob
+`flux-system/flux-admission-objects` (05:41 UTC, both sites) lists each of
+them, reads the owner labels of Flux, and fails when one names a
+Kustomization or a HelmRelease outside the class. It takes the class from the
+live policy, and its account may only get and list admission objects. A
+failure raises `KubeJobFailed`; on site 1 the AI board shows the CronJob on
+its Checks tab. On 2026-11-21 site 1 had 25 admission objects, each owned by
+a child of the class. To read a failure:
+`kubectl -n flux-system logs job/<job> | grep 'flux-admission-objects kind='`.
 
 ## Break-glass
 
@@ -186,19 +280,30 @@ An agent never suspends or resumes a Kustomization.
   webhook configuration or an admission policy, so this policy can not
   refuse one (the test `test_5_admission_objects_are_out_of_reach` shows it).
   Owner label holds a pull request of the App that adds or changes a Flux
-  object or an admission object, a path out of its folder, or a link
-  ([`ci.md`](ci.md), "Agent pull requests"). The Flux lockdown closes it on
-  the cluster.
-- **Pods of an operator.** A pod that an operator makes from a resource of
-  its own (a database cluster, a runner set) is not in a request of Flux.
+  object or an admission object, a remote source, a path out of its folder,
+  or a link ([`ci.md`](ci.md), "Agent pull requests"). The daily check
+  `flux-admission-objects` lists each admission object that a child outside
+  the class owns. The Flux lockdown closes it on the cluster.
+- **Pods of other operators.** The rule `operator-pods` holds the operators
+  of the clusters today. A pod that another operator makes from a resource
+  of its own is not in a request of Flux: a new operator needs a line in
+  that rule.
 - **Decryption.** The children outside the class still decrypt with the main
   key. The design asks for a key of their own; that needs a new key and a new
   encryption of their files, which is work of the owner. Until then Owner
-  label holds a pull request of the App that touches an encrypted file, a
-  path out of its folder or a link, which are the ways to reach an encrypted
-  file of the class.
+  label holds a pull request of the App that touches an encrypted file (by
+  its name or by its content), a path out of its folder or a link. These are
+  the three ways to reach an encrypted file of the class: a path, a link,
+  and a copy of its content under another name.
 - **Deletes.** The policy checks create and update. A delete of a
   controller (the garbage collection of a child, the uninstall of a Helm
   release) is not checked. The Flux lockdown closes it.
 - **Reach at run time.** What the apps outside the class reach in their own
-  namespaces (their Secrets, service accounts and egress) stays open.
+  namespaces (their Secrets, service accounts and egress) stays open. So
+  does a Service with `externalIPs`, or an Ingress or a certificate that
+  claims a host name of the class, from a namespace outside it.
+- **Fields for a later step.** `kustomization-spec` does not yet refuse
+  `spec.decryption` or a `spec.components` entry with `..`, and
+  `helmrelease-spec` does not yet refuse `install.createNamespace` (a new
+  empty namespace with no owner label). Owner label holds each Flux object
+  of a pull request of the App until then.

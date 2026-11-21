@@ -36,6 +36,29 @@ CRDS = (
 )
 
 
+# The kinds of the operators that make a pod from a template of their own
+# (the rule operator-pods): CRDs that take any spec, enough for the test.
+OPERATOR_KINDS = (
+    ("actions.github.com", "v1alpha1", "AutoscalingRunnerSet", "autoscalingrunnersets"),
+    ("actions.github.com", "v1alpha1", "EphemeralRunner", "ephemeralrunners"),
+    ("agents.x-k8s.io", "v1beta1", "Sandbox", "sandboxes"),
+    ("extensions.agents.x-k8s.io", "v1beta1", "SandboxTemplate", "sandboxtemplates"),
+    ("postgresql.cnpg.io", "v1", "Cluster", "clusters"),
+    ("postgresql.cnpg.io", "v1", "Pooler", "poolers"),
+)
+
+
+def operator_crd(group: str, version: str, kind: str, plural: str) -> dict:
+    return {
+        "apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
+        "metadata": {"name": f"{plural}.{group}"},
+        "spec": {"group": group, "scope": "Namespaced",
+                 "names": {"kind": kind, "plural": plural, "singular": kind.lower(), "listKind": kind + "List"},
+                 "versions": [{"name": version, "served": True, "storage": True, "schema": {"openAPIV3Schema": {
+                     "type": "object", "x-kubernetes-preserve-unknown-fields": True}}}]},
+    }
+
+
 VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::=([^}]*))?\}")
 
 
@@ -59,6 +82,7 @@ def main(out: Path) -> None:
     crds = [d for d in yaml.safe_load_all(components.read_text())
             if d and d.get("kind") == "CustomResourceDefinition" and d["metadata"]["name"] in CRDS]
     assert len(crds) == len(CRDS), [d["metadata"]["name"] for d in crds]
+    crds += [operator_crd(*k) for k in OPERATOR_KINDS]
     data = classlist.lists()
     kustomizations, helmreleases = [], []
     for site in classlist.SITES:

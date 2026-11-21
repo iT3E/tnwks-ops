@@ -944,6 +944,15 @@
         "clusters": [
           "homelab-wsl"
         ]
+      },
+      {
+        "trust_domain": "shared",
+        "namespace": "flux-system",
+        "cronjob": "flux-admission-objects",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
       }
     ],
     "results": [

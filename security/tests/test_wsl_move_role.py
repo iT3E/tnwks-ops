@@ -359,6 +359,56 @@ catch {{ $_.Exception.Message }}
     assert (tmp_path / "same/v").read_text() == "2.0.0.0"
 
 
+def test_site_1_turns_the_move_on_in_the_phase_of_step_3_with_the_copies_that_its_roles_register():
+    """The values of site 1 for step 3 (plan task 10.37), as site 2 has them, with the disk file on E:."""
+    host = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI/main.yml").read_text())
+    # The phase move: step 3, with no done switch and no deletion.
+    assert host["wsl_move"] is True
+    assert not {"wsl_move_done", "wsl_move_present_removed", "wsl_move_phase"} & set(host)
+    assert host["wsl_start_unelevated"] is True and "wsl_start_unelevated_done" not in host
+    assert host["wsl_move_session_check"] is True
+    # The move needs the start with no elevation, which needs the monitoring data in the file.
+    assert host["observability_storage_mount"] == "file"
+    # The secrets are in the encrypted file only, never in the public one.
+    assert not set(SECRET) & set(host)
+    assert " ".join(host["windows_desktop_user"].split()) == (
+        "{{ wsl_move_new_account if wsl_move_phase == 'done' else wsl_move_present_account }}")
+    # The disk file is on E:, and the move is a rename in one volume: the folder of the procedure and the
+    # folder of the moved file are on E: too, in the long, normalized form.
+    assert host["wsl_move_dir"] == "E:\\tnwks-wsl-move"
+    assert host["wsl_move_disk_dir"] == DEFAULTS["wsl_move_disk_dir"].replace("{{ wsl_move_dir }}", host["wsl_move_dir"])
+    form = re.compile(VARS["wsl_move_path_form"])
+    assert form.match(host["wsl_move_dir"]) and form.match(host["wsl_move_disk_dir"])
+    assert host["vhdx_compact_vhdx"] == (
+        "{{ wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder }}\\" + DEFAULTS["wsl_move_disk_name"])
+    # The WSL tasks of the present account, and not the mount task of the monitoring volume.
+    roles = ANSIBLE / "roles"
+    maintenance = yaml.safe_load((roles / "windows_wsl_maintenance/defaults/main.yml").read_text())
+    bridge = yaml.safe_load((roles / "windows_lan_bridge/defaults/main.yml").read_text())
+    relay = yaml.safe_load((roles / "windows_udp_relay/defaults/main.yml").read_text())
+    usb = yaml.safe_load((roles / "windows_usb_attach/defaults/main.yml").read_text())
+    storage = yaml.safe_load((roles / "windows_observability_storage/defaults/main.yml").read_text())
+    # Site 1 takes the relays and the bound device of the roles' defaults.
+    assert not {"udp_relays", "usb_attach_bound_devices"} & set(host) and usb["usb_attach_bound_devices"]
+    assert host["wsl_keepalive_enabled"] is True
+    assert host["wsl_watchdog_args"] == "-KeepAliveTask " + maintenance["wsl_keepalive_task"]
+    copies = [maintenance["wsl_watchdog_task"], bridge["lan_bridge_ip_task"], maintenance["wsl_keepalive_task"],
+              usb["usb_attach_task"]] + [r["task"] for r in relay["udp_relays"]]
+    assert sorted(host["wsl_move_present_tasks"]) == sorted(copies + [maintenance["vhdx_compact_task"]])
+    assert storage["observability_storage_task"] not in host["wsl_move_present_tasks"]
+    assert set(host["wsl_move_present_start_tasks"]) == {maintenance["wsl_keepalive_task"]} | {
+        r["task"] for r in relay["udp_relays"]}
+    # The start tasks of the new account are derived in the group variables; the rule of the role's assert
+    # holds for this host.
+    assert "wsl_move_new_start_tasks" not in host
+    derived = {"tnwks-wsl-watchdog", "tnwks-lan-bridge-ip", "tnwks-usb-attach"} | {r["task"] for r in relay["udp_relays"]}
+    derived |= {"tnwks-wsl-keepalive"} if host["wsl_keepalive_enabled"] else set()
+    present = [t for t in host["wsl_move_present_tasks"] if t != "tnwks-vhdx-compact"]
+    assert sorted(derived) == sorted(present)
+    # No default user entry in /etc/wsl.conf on site 1: the check play reads the registration.
+    assert "wsl_move_check_wsl_conf_uid" not in host
+
+
 def test_site_2_turns_the_move_on_with_the_copies_that_its_roles_register():
     host = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
     assert host["wsl_move"] is True and host["wsl_start_unelevated"] is True
@@ -513,6 +563,45 @@ def test_the_values_of_site_2_in_each_phase_render_as_windows_paths(tmp_path):
         "host_check_wsl_disk": "C:\\Users\\standin1\\AppData\\Local\\wsl\\{0a1b}\\ext4.vhdx",
         "host_check_wsl_disk_account": "standin1", "windows_desktop_user": "standin1",
         "wsl_move_phase": "move", "rules": False}
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_values_of_site_1_pass_the_guards_of_the_role_and_render_as_windows_paths(tmp_path):
+    """Ansible renders the guards of the role that take the paths and the start tasks, with the values of site 1,
+    the defaults of the WSL roles of the play (public, as each role of the play) and stand-ins for its encrypted
+    values: the folder of the procedure, the moved file and the disk file of today are on one volume, E:."""
+    site1 = ansible_render.load(
+        "roles/windows_wsl_maintenance/defaults/main.yml", "roles/windows_lan_bridge/defaults/main.yml",
+        "roles/windows_udp_relay/defaults/main.yml", "roles/windows_usb_attach/defaults/main.yml",
+        "roles/windows_wsl_move/defaults/main.yml", "roles/windows_wsl_move/vars/main.yml",
+        "roles/windows_host_check/defaults/main.yml",
+        "inventory/group_vars/windows_hosts.yml", "inventory/host_vars/DESKTOP-HKE05KI/main.yml")
+    standins = {"wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+                "wsl_move_present_folder": "E:\\WSL\\Ubuntu", "wsl_move_rehearsed_wsl_version": "3.0.5.0",
+                "ansible_user": "standin1", "role_path": str(ROLE)}
+    guards = {t.get("name"): t["ansible.builtin.assert"]["that"] for t in tasks("main.yml") if "ansible.builtin.assert" in t}
+    volume = guards["The folder of the new disk file is on the volume of the disk file today"]
+    starts = guards["The start tasks of the new account are the copies of the tasks of the present account"]
+    phase = guards["The account that owns the distro and the disk file follow the phase of the move"]
+    # The first condition is the form of the root, a drive and one backslash: a regular expression with
+    # escaped backslashes, which a template renders unlike a condition does. The root is compared below.
+    assert volume[0] == "wsl_move_root is match('^[A-Za-z]:\\\\\\\\$')"
+    volume = volume[1:]
+    expressions = {f"volume{i}": f"({c.strip()}) | bool" for i, c in enumerate(volume)}
+    expressions |= {f"phase{i}": f"({c.strip()}) | bool" for i, c in enumerate(phase)}
+    expressions |= {"starts": f"({starts.strip()}) | bool", "paths": "wsl_move_paths | reject('match', wsl_move_path_form) | list",
+                    "root": "wsl_move_root", "new": "wsl_move_new_start_tasks", "vhdx": "vhdx_compact_vhdx",
+                    "disk": "host_check_wsl_disk", "rules": "host_check_wsl_disk_rules | bool"}
+    out = ansible_render.render(tmp_path, {"DESKTOP-HKE05KI": {**site1, **standins}}, ["DESKTOP-HKE05KI"], expressions)
+    got = out["DESKTOP-HKE05KI"]
+    assert all(got[f"volume{i}"] for i in range(len(volume))), got
+    assert all(got[f"phase{i}"] for i in range(len(phase))), got
+    assert got["starts"] is True and got["paths"] == [] and got["root"] == "E:\\"
+    assert sorted(got["new"]) == sorted(t + "-account" for t in (
+        "tnwks-wsl-watchdog", "tnwks-lan-bridge-ip", "tnwks-wsl-keepalive", "tnwks-udp-relay", "tnwks-udp-relay-syslog",
+        "tnwks-usb-attach"))
+    assert got["vhdx"] == got["disk"] == "E:\\WSL\\Ubuntu\\ext4.vhdx" and got["rules"] is False
 
 
 def test_the_done_switch_stops_the_host_before_the_wsl_roles_until_a_window_ended_done():

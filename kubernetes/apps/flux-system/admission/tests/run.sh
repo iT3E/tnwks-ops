@@ -21,7 +21,12 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-version="${KUBE_VERSION:-v1.37.2}"
+# The Kubernetes version of the clusters (the upgrade of tuppr, which
+# Renovate bumps), so an update of the clusters runs this test at the new
+# version first. KUBE_VERSION overrides it.
+upgrade="${here}/../../../system-upgrade/tuppr/upgrades/kubernetes.yaml"
+version="${KUBE_VERSION:-$(sed -nE 's/^ +version: (v[0-9]+\.[0-9]+\.[0-9]+)$/\1/p' "${upgrade}" | head -n 1)}"
+[[ "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "no Kubernetes version in ${upgrade}" >&2; exit 1; }
 etcd_image="${ETCD_IMAGE:-registry.k8s.io/etcd:3.6.6-0}"
 # The Python image of the checks of the agent platform.
 python_image="docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928"
