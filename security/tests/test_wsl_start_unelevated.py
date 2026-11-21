@@ -334,8 +334,11 @@ def test_the_switch_is_off_by_default_and_on_for_site_2_first():
     group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
     assert group["wsl_start_unelevated"] is False
     assert group["wsl_start_unelevated_done"] is False
+    # Site 2 first, then site 1 with the move of its distro (test_wsl_move_role.py).
     switched = {name for name, data in windows_hosts().items() if data["wsl_start_unelevated"]}
-    assert switched == {"WSL-02"}
+    assert switched == {"WSL-02", "DESKTOP-HKE05KI"}
+    done = {name for name, data in windows_hosts().items() if data["wsl_start_unelevated_done"]}
+    assert done <= {"WSL-02"}
 
 
 def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet():
@@ -355,6 +358,8 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
         return not on or not volume
 
     assert guard["that"][0].split(" or ")[0] == "not (wsl_start_unelevated | bool)"
+    assert " ".join(guard["that"][0].split()) == ("not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool) "
+                                                  "or (observability_storage_mount | default('vhdx')) == 'file'")
     assert guard["that"][1] == "not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)"
     # The USB attach has its part with no elevation: the switch does not depend on it.
     assert not any("usb_attach" in condition for condition in guard["that"])
@@ -362,10 +367,13 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
         assert passes(data), name
         assert not data["wsl_start_unelevated_done"] or data["wsl_start_unelevated"], name
     site1 = windows_hosts()["DESKTOP-HKE05KI"]
-    assert not passes({**site1, "wsl_start_unelevated": True}), "site 1 needs the split of the monitoring volume first"
-    # The monitoring data in the file on the distro disk (section 5.13): the mount task is disabled.
+    # The monitoring data of site 1 is in the file on the distro disk (section 5.13): the mount
+    # task is disabled, so the guard lets the switch on there. With the VHDX, it would not.
     assert guard["that"][0].endswith(" or (observability_storage_mount | default('vhdx')) == 'file'")
-    assert passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "file"})
+    assert site1["observability_storage_mount"] == "file"
+    assert passes({**site1, "wsl_start_unelevated": True})
+    assert not passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "vhdx"})
+    assert not passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "ready"})
 
 
 # Stand-ins for the encrypted values of a Windows host with the move of the distro on.
