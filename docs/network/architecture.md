@@ -64,7 +64,7 @@ zone pair with no rule falls to the terminal forward drop.
 | --- | --- | --- | --- |
 | 1 (native) | `switch-mgmt` | `10.98.0.1/24` | Switch management, untagged on ether2. From 910 only the desktop to SW03: SNMP (udp/161) for snmp-exporter and ICMP for smokeping |
 | — | `transit-10` | — | The outside (internet) zone: only `ether1`. Its old VLAN 10 transit hop is disabled, so `172.16.1.0/24` is not routed |
-| 140 | `UISP-140` | `10.10.140.1/24` | EP-R6 bridge; `10.60.10.0/24` is routed via `10.10.140.140` |
+| 140 | `UISP-140` | `10.10.140.1/24` | EP-R6 bridge; `10.60.10.0/24` is routed via `10.10.140.140`. From 910 only ICMP from the desktop to the EP-R6 (smokeping); its SSH and UI are VPN-only |
 | 610 | `seccam-610` | `10.10.60.1/24` | Cameras. Untrusted: router services only, Frigate pulls RTSP |
 | 900 | `unifi-mgmt-900` | `10.10.90.1/24` | UniFi AP management. From 910: the controller (inform, SSH, STUN) and ICMP from the desktop to the 3 APs (smokeping) |
 | 910 | `unifi-frontend-910` | `10.10.91.1/24` | Main client network; hosts the WSL desktop |
@@ -108,6 +108,7 @@ flowchart LR
 
     subgraph k8s["homelab-wsl · monitoring"]
         mktxp["mktxp"]
+        smoke["smokeping-prober"]
         vector["vector-aggregator"]
         flow["flow-collector"]
         prom["Prometheus"]
@@ -116,6 +117,7 @@ flowchart LR
     end
 
     mktxp -->|"api-ssl 8729, read-only"| rtr
+    smoke -->|"ICMP 1/s: router, APs, SW03, EP-R6"| rtr
     rtr -->|"syslog tcp 6001"| win
     rtr -->|"NetFlow v9 udp 2055"| win
     win --> bridge
@@ -124,6 +126,7 @@ flowchart LR
     vector --> loki
     prom -->|"scrape"| mktxp
     prom -->|"scrape"| flow
+    prom -->|"scrape"| smoke
     prom --> graf
     loki --> graf
 ```
@@ -134,11 +137,22 @@ flowchart LR
   to `vector-aggregator`; Vector writes to Loki.
 - **Flows:** NetFlow v9 from the WAN interface goes to `flow-collector`, for
   per-client upload and download.
+- **Reachability:** `smokeping-prober` pings the router, the Internet
+  targets, the 3 APs, SW03 and the EP-R6 once a second, from the desktop's
+  address. The router allows ICMP from the `monitoring` list to the
+  management addresses (`MONITORING_ZONE_RULES` in the generator; the EP-R6
+  in pair `200-unifi-frontend-910-UISP-140`). `RadioGatewayUnreachable`
+  fires when the EP-R6 loses over half its pings for 4 minutes while the
+  router and SW03 answer. Its board is Network & Routing, tab Radio gateway:
+  the pings, the router's VLAN 140 counters and the EP-R6's Internet traffic
+  from flow export.
 
 ## Not running
 
 UISP ran as a container on VyOS and has no host yet. The radios keep working
 without it; adoption and firmware changes wait until it is hosted again.
+Until then nothing reads the radios themselves: the EP-R6 is watched only by
+pings and the router's counters (Reachability, above).
 
 The UniFi controller moved to the WSL cluster (`networking/unifi`), with its
 configuration in Terraform; see [`unifi.md`](unifi.md).
