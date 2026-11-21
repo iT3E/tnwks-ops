@@ -64,6 +64,29 @@ def test_the_class_paths_are_the_kubernetes_folders_of_owner_label():
     assert sorted(folders) == sorted(classlist.CLASS_PATHS)
 
 
+# The groups of the operators that the rule operator-pods keeps to the
+# class (app/policy.yaml, variables.operatorPods).
+OPERATOR_GROUPS = ("actions.github.com", "agents.x-k8s.io", "extensions.agents.x-k8s.io",
+                   "postgresql.cnpg.io", "barmancloud.cnpg.io")
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_no_child_outside_the_class_applies_an_object_of_an_operator_of_the_class(site):
+    """D149: the database folders of the apps are in the class, so a new app
+    with a database puts its db folder in the class (classlist.py and
+    ASK_FIRST) before the policy denies it."""
+    found = {}
+    for child in classlist.walk(site).values():
+        if classlist.is_class_path(child.path):
+            continue
+        for doc in child.build.docs:
+            if classlist.api_group(doc) in OPERATOR_GROUPS:
+                found.setdefault(child.key, set()).add(doc["kind"])
+    assert not found, found
+    policy = (ROOT / "kubernetes/apps/flux-system/admission/app/policy.yaml").read_text()
+    assert all(f"'{g}'" in policy for g in OPERATOR_GROUPS)
+
+
 SUBSTITUTION = ROOT / "kubernetes/apps/flux-system/substitution/app/secret.yaml"
 # A variable of Flux; a doubled dollar sign is an escape, which Flux writes
 # as one.

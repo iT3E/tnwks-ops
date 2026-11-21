@@ -20,6 +20,13 @@ A Flux Kustomization is in the class when its `spec.path` is under a path of
 class of Owner label. A HelmRelease is in the class when a Kustomization of
 the class applies it. Each other child is outside the class.
 
+The `db/` folder of each app with a database is in the class (D149), and
+the app folder stays outside it. The database operator makes the
+pods of a database cluster from a template of its own, with the access of
+the operator, so its objects are a change of the class. The namespace
+`databases`, where these folders put their clusters, is then a namespace of
+the class.
+
 The policy knows the child of an object by the owner labels that the
 controller sets last: `kustomize.toolkit.fluxcd.io/name` and `/namespace`,
 or `helm.toolkit.fluxcd.io/name` and `/namespace`. A request of a controller
@@ -62,7 +69,7 @@ A child outside the class may not:
 | `flux-kinds` | a Flux Kustomization or an ImageUpdateAutomation |
 | `helmrelease-spec` | a HelmRelease with a service account, a kubeconfig, a target or storage namespace of the class, or the post render strategy `nohooks` |
 | `privileged-pod` | a pod spec with `privileged`, a host path, the host network, PID or IPC namespace, a host port or an added capability, in any namespace |
-| `operator-pods` | an object from which an operator makes a pod of its own template: a runner set (`actions.github.com`), a sandbox (`agents.x-k8s.io`, `extensions.agents.x-k8s.io`), a database pooler, or a database cluster with a privileged container or an added capability (`postgresql.cnpg.io`). A plain database cluster passes: each app outside the class with a database makes one |
+| `operator-pods` | an object from which an operator makes a pod of its own template: a runner set (`actions.github.com`), a sandbox (`agents.x-k8s.io`, `extensions.agents.x-k8s.io`), and each object of the database operator and of its backup plugin (`postgresql.cnpg.io`, `barmancloud.cnpg.io`): a cluster, a pooler, a backup, a scheduled backup, an object store. The database folders are in the class (above), so no child outside it needs one |
 | `takeover` | a change of an object whose owner labels name a child of the class |
 
 For each request of the two controllers:
@@ -166,6 +173,12 @@ upgrade only for a HelmRelease with `crds: Create` or `CreateReplace`, and
 each of those is in the class on both sites. The folders of the four apps of
 the table are in the class (`CLASS_PATHS` and the list of Owner label), so
 the rules refuse no object of either replay.
+
+A third replay on 2026-11-21 sent the render of git of each site, in the
+same way, to the policy with the database folders in the class: 1668
+objects of site 1 and 1020 of site 2, and the rules refuse none. The keys
+of the reduced Secret stay the same: each of the eight is still a variable
+of a child outside the class.
 
 ## Read the audit result
 
