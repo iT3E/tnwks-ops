@@ -149,6 +149,7 @@ spec:
           'flux-system/flow-collector': ['flux-system/cluster-apps'],
           'flux-system/flux-admission': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/flux-alerts': ['flux-system/cluster-apps'],
+          'flux-system/flux-substitution': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/flux-system': ['flux-system/flux-system'],
           'flux-system/flux-webhooks': ['flux-system/cluster-apps'],
           'flux-system/frigate': ['flux-system/cluster-apps'],
