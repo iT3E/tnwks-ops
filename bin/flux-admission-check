@@ -6,9 +6,12 @@
 Run by the owner, by hand, with a kubeconfig that may impersonate
 (docs/operations/flux-admission.md, "The live check"). For each test object
 of the design it sends a server-side dry run as the service account of the
-Flux controller that would apply it, with the owner labels of a child
-outside the class (or of the parent of the apps, for a Kustomization). The
-API server runs its admission on a dry run and stores nothing.
+Flux controller that would apply it (kustomize-controller, and
+helm-controller for one pod), with the owner labels of a child outside the
+class (or of the parent of the apps, for a Kustomization). The API server
+runs its admission on a dry run and stores nothing. Each object adds to the
+count of refused checks of the site, so the run is also the positive control
+of the read of that count (docs/operations/flux-admission.md).
 
 - With the binding in Deny, each object must be refused by flux-child-scope.
 - With the binding in Audit and Warn, each object must pass with a warning
@@ -29,7 +32,9 @@ import subprocess
 import sys
 
 KUSTOMIZE = "system:serviceaccount:flux-system:kustomize-controller"
+HELM = "system:serviceaccount:flux-system:helm-controller"
 OUTSIDE = {"kustomize.toolkit.fluxcd.io/name": "mealie", "kustomize.toolkit.fluxcd.io/namespace": "flux-system"}
+HELM_OUTSIDE = {"helm.toolkit.fluxcd.io/name": "mealie", "helm.toolkit.fluxcd.io/namespace": "production"}
 
 
 def labels(key: str) -> dict:
@@ -37,27 +42,30 @@ def labels(key: str) -> dict:
     return {"kustomize.toolkit.fluxcd.io/name": name, "kustomize.toolkit.fluxcd.io/namespace": namespace}
 
 
-def objects(parent: str) -> list[tuple[str, dict]]:
+def objects(parent: str) -> list[tuple[str, str, dict]]:
+    """Each test object as (what, the controller that sends it, the object)."""
     privileged = []
-    for namespace in ("home-automation", "media", "production"):
-        privileged.append((f"a privileged pod in {namespace}", {
+    for namespace, user, owner in (("home-automation", KUSTOMIZE, OUTSIDE), ("media", KUSTOMIZE, OUTSIDE),
+                                   ("production", KUSTOMIZE, OUTSIDE), ("production", HELM, HELM_OUTSIDE)):
+        by = "a HelmRelease" if user == HELM else "a Kustomization"
+        privileged.append((f"a privileged pod in {namespace} from {by}", user, {
             "apiVersion": "apps/v1", "kind": "Deployment",
-            "metadata": {"name": "flux-admission-check", "namespace": namespace, "labels": OUTSIDE},
+            "metadata": {"name": "flux-admission-check", "namespace": namespace, "labels": owner},
             "spec": {"selector": {"matchLabels": {"app": "flux-admission-check"}},
                      "template": {"metadata": {"labels": {"app": "flux-admission-check"}},
                                   "spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1",
                                                            "securityContext": {"privileged": True}}]}}}}))
     return [
-        ("cluster RBAC", {
+        ("cluster RBAC", KUSTOMIZE, {
             "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
             "metadata": {"name": "flux-admission-check", "labels": OUTSIDE},
             "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "view"},
             "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": "production"}]}),
-        ("an object in ai", {
+        ("an object in ai", KUSTOMIZE, {
             "apiVersion": "v1", "kind": "ConfigMap",
             "metadata": {"name": "flux-admission-check", "namespace": "ai", "labels": OUTSIDE},
             "data": {"check": "true"}}),
-        ("a Kustomization with a class path", {
+        ("a Kustomization with a class path", KUSTOMIZE, {
             "apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
             "metadata": {"name": "flux-admission-check", "namespace": "flux-system", "labels": labels(parent)},
             "spec": {"interval": "30m", "path": "./kubernetes/apps/ai", "prune": True,
@@ -65,8 +73,8 @@ def objects(parent: str) -> list[tuple[str, dict]]:
     ] + privileged
 
 
-def send(doc: dict, context: str | None) -> tuple[str, str]:
-    command = ["kubectl", "create", "--dry-run=server", f"--as={KUSTOMIZE}", "-o", "name", "-f", "-"]
+def send(doc: dict, user: str, context: str | None) -> tuple[str, str]:
+    command = ["kubectl", "create", "--dry-run=server", f"--as={user}", "-o", "name", "-f", "-"]
     if context:
         command[1:1] = ["--context", context]
     result = subprocess.run(command, input=json.dumps(doc), capture_output=True, text=True, timeout=60, check=False)
@@ -83,11 +91,16 @@ def main() -> int:
     parser.add_argument("--parent", default="flux-system/cluster-apps")
     args = parser.parse_args()
     bad = 0
-    for what, doc in objects(args.parent):
-        verdict, detail = send(doc, args.context)
+    sent = objects(args.parent)
+    for what, user, doc in sent:
+        verdict, detail = send(doc, user, args.context)
         print(f"{verdict:8} {what}: {detail}")
         bad += verdict not in ("refused", "warned")
     print("each test object is refused or warned" if not bad else f"{bad} test objects passed or failed for another reason")
+    # Each refused or warned object adds at least one to the count of the
+    # site (one for each rule it fails): the positive control of the read.
+    print(f"apiserver_validating_admission_policy_check_total{{policy=\"flux-child-scope\"}} rises by at least "
+          f"{len(sent)} for \"audit\" (Audit and Warn) or for \"deny\" and \"audit\" (Deny and Audit)")
     return 1 if bad else 0
 
 

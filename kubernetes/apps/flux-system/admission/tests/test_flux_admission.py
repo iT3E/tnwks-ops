@@ -19,6 +19,7 @@ object is made, except the few that the cases of an update need.
 
 import copy
 import json
+import re
 import ssl
 import time
 import unittest
@@ -583,6 +584,52 @@ class FluxAdmission(unittest.TestCase):
                 # With the rule off, at least one of its cases passes: so its
                 # test fails, and the rule is what refuses it.
                 wait_for(f"{rule} off", lambda d=denied: any(not refused(send(c)) for c in d), 30)
+        finally:
+            apply_policy(["Deny"])
+
+    def test_8_the_count_has_refusals_only(self):
+        # apiserver_validating_admission_policy_check_total, the count that
+        # the clusters keep for this policy, adds one for each action of a
+        # validation that refuses (one request can fail two rules). A check
+        # that allows adds nothing, from either controller. So the read
+        # before Deny needs refusals on purpose: the live check
+        # (bin/flux-admission-check) sends test objects as both controllers,
+        # and each adds at least one to "audit" on that site.
+        def counts():
+            text = call("GET", "/metrics")[1]["text"]
+            out = {}
+            for m in re.finditer(r'^apiserver_validating_admission_policy_check_total\{([^}]*)\} ([0-9.e+]+)$',
+                                 text, re.MULTILINE):
+                labels = dict(re.findall(r'(\w+)="([^"]*)"', m.group(1)))
+                if labels.get("policy") == "flux-child-scope":
+                    action = labels["enforcement_action"]
+                    out[action] = out.get(action, 0) + float(m.group(2))
+            return out
+
+        allowed = [c for c in cases() if c[3] == "allow"]
+        denied = [next(c for c in cases() if c[3] == "deny" and c[2] == user) for user in (KUSTOMIZE, HELM)]
+        self.assertEqual({c[2] for c in allowed} >= {KUSTOMIZE, HELM}, True)
+        try:
+            apply_policy(["Audit", "Warn"])
+            wait_for("audit and warn", lambda: send(denied[0])[0] in (200, 201))
+            before = counts()
+            for case in allowed:
+                send(case)
+            self.assertEqual(counts(), before, "an allowed check added to the count")
+            for case in denied:
+                send(case)
+            after = counts()
+            rise = {k: after[k] - before.get(k, 0) for k in after if after[k] != before.get(k, 0)}
+            self.assertEqual(set(rise), {"audit", "warn"}, rise)
+            self.assertTrue(rise["audit"] == rise["warn"] >= 2, rise)
+            apply_policy(["Deny", "Audit"])
+            wait_for("deny", lambda: refused(send(denied[0])))
+            before = counts()
+            send(denied[1])
+            after = counts()
+            rise = {k: after[k] - before.get(k, 0) for k in after if after[k] != before.get(k, 0)}
+            self.assertEqual(set(rise), {"deny", "audit"}, rise)
+            self.assertTrue(rise["deny"] == rise["audit"] >= 1, rise)
         finally:
             apply_policy(["Deny"])
 
