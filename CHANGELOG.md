@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.254.1 - 2026-11-21
+
+### Security
+
+* Flux: the admission policy flux-child-scope (kubernetes/apps/flux-system/admission, docs/operations/flux-admission.md) limits what a Flux child outside the "ask first" class may apply: no cluster object, no object in a namespace of the class, no RBAC, no Flux Kustomization, no privileged pod spec, and no change of an object of the class; Kustomizations and HelmReleases of the class must come from their parents in git. Its lists come from git (classlist.py, checked in CI), its rules run on a throwaway API server in CI, each rule switched off once to show its test fails, and both sites keep its audit and deny counts. The binding starts with Audit and Warn
+
 ## v2.254.0 - 2026-11-21
 
 ### Changed
