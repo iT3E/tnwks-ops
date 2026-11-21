@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.257.0 - 2026-11-21
+
+### Changed
+
+* site 1 Windows host: Ansible logs in as the administrator account (step 4 of the account change). The desktop user, the tasks and the disk path stay with the present account by their own values
+
 ## v2.256.5 - 2026-11-21
 
 ### Security
