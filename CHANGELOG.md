@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.254.0 - 2026-11-21
+
+### Changed
+
+* windows: site 1 takes the phase file of the move of the monitoring data: the timer of the distro mounts the file of 19 GiB at the point each minute, and the mount task of the VHDX is disabled and stays as the way back
+
 ## v2.253.0 - 2026-11-21
 
 ### Changed
