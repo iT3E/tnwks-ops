@@ -109,19 +109,24 @@ owner his. Each comes from `main`, so a branch can not change it.
     of namespaces), plus a `.gitattributes` file in any folder. The agent
     asks the owner in the chat, and the merge waits for his label;
   - its author is that App, and its content reaches past the class: it
-    adds or changes a link or a submodule (the tree of the head), a file
-    under `kubernetes/` that holds a Flux object (any kind of
-    `*.toolkit.fluxcd.io`) or an admission object at its head or its base,
-    or a line with a path whose `..` leaves the folder of its file (the
-    folder of the app under `kubernetes/apps/<namespace>/<app>/`). Flux
-    applies each manifest outside the class with full rights, and the
-    admission policy of the Flux children
-    ([`flux-admission.md`](flux-admission.md)) can not see a Flux source,
-    an admission object, or a file that a path or a link reaches (a SOPS
-    file of the class). Until the children outside the class decrypt with a
-    key of their own, it also holds a pull request that touches an
-    encrypted file (`.sops.` in its name). A file it can not read holds the
-    pull request too.
+    adds or changes a link or a submodule (the tree of the head); a file
+    under `kubernetes/` that holds, at its head or its base, a Flux object
+    (any kind of `*.toolkit.fluxcd.io`, a HelmRelease too), an admission
+    object, encrypted content (SOPS metadata or an encrypted value, whatever
+    the name of the file) or a remote source of a kustomization; or a line
+    with a path whose `..` leaves the folder of its file (the folder of the
+    app under `kubernetes/apps/<namespace>/<app>/`). The script parses each
+    such file as YAML with PyYAML (pinned in
+    `.github/scripts/owner-label-requirements.txt`), so anchors, tags and
+    folded scalars read as Flux reads them, and a file that does not parse
+    or repeats a key holds the pull request. Flux applies each manifest
+    outside the class with full rights, and the admission policy of the
+    Flux children ([`flux-admission.md`](flux-admission.md)) can not see a
+    Flux source, an admission object, a remote source, or a file that a
+    path, a link or a copy reaches (an encrypted file of the class). Until
+    the children outside the class decrypt with a key of their own, it
+    also holds a pull request that touches a file with `.sops.` in its
+    name. A file it can not read holds the pull request too.
 - **Two rules fail** a pull request of that App, or one that a rule above
   holds, whatever its labels:
   - its base is not `main`. Its checks ran against that base, and a green

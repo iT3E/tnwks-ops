@@ -29,13 +29,18 @@ reports on HEAD_SHA, the head commit of the event, and passes or fails:
     a renamed file;
   - its author is that App, and its content reaches past the class
     (content() below): it adds or changes a link or a submodule; or a file
-    under kubernetes/ that holds a Flux object or an admission object at
-    its head or at its base; or it adds a path with ".." out of the folder
-    of its file under kubernetes/; or it touches an encrypted file
-    (".sops." in its name). Flux applies each manifest outside the
-    class with full rights, and the admission policy of the Flux children
-    (kubernetes/apps/flux-system/admission) can not see a Flux source, an
-    admission object or a file that a path or a link reaches.
+    under kubernetes/ that holds a Flux object, an admission object,
+    encrypted content or a remote source of a kustomization at its head or
+    at its base (parsed as YAML, so anchors, tags and folded scalars read as
+    Flux reads them; a file that does not parse holds it); or it adds a
+    path with ".." out of the folder of its file under kubernetes/; or it
+    touches a file with ".sops." in its name. Flux applies each manifest
+    outside the class with full rights, and the admission policy of the
+    Flux children (kubernetes/apps/flux-system/admission) can not see a
+    Flux source, an admission object, a remote source or a file that a
+    path, a link or a copy reaches.
+    The parse needs PyYAML, pinned in owner-label-requirements.txt; with no
+    parser each file under kubernetes/ holds the PR.
 - Two rules fail a PR of that App, or a PR that one of the other three
   rules holds, whatever its labels:
   - its base is not the default branch: its checks ran against that base,
@@ -174,10 +179,34 @@ SKIP = re.compile(
 # The content rule (content() below), for a PR of the App outside the class.
 # Flux applies kubernetes/: a file there that holds a Flux object (each kind
 # of *.toolkit.fluxcd.io) or an admission object, at the head or at the
-# base of the PR, holds it. So does a line it adds with a path that leaves
-# the folder of its file (for kubernetes/apps/<namespace>/<app>/, the
-# folder of the app), and a link or a submodule anywhere (tree modes).
+# base of the PR, holds it. So does encrypted content (SOPS) whatever the
+# name of its file, a remote resource of a kustomization, a line it adds
+# with a path that leaves the folder of its file (for
+# kubernetes/apps/<namespace>/<app>/, the folder of the app), and a link or
+# a submodule anywhere (tree modes). Each file under kubernetes/ is parsed
+# as YAML (JSON is YAML), so an anchor, a tag or a folded scalar resolves
+# as Flux reads it; a file that does not parse, or that repeats a key,
+# holds the PR. The text patterns below hold it too, as a second net.
 APPLIED = "kubernetes/"
+ADMISSION_GROUP = "admissionregistration.k8s.io"
+ADMISSION_KINDS = frozenset({
+    "ValidatingWebhookConfiguration", "MutatingWebhookConfiguration",
+    "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding",
+    "MutatingAdmissionPolicy", "MutatingAdmissionPolicyBinding",
+})
+# Encrypted content in the formats of SOPS: a value of YAML or JSON, a line
+# of a dotenv file, a section of an INI file. A document with a top-level
+# "sops" key is caught by the parse.
+SOPS_TEXT = re.compile(r"ENC\[[A-Za-z0-9_]+,|^sops_[A-Za-z0-9_]+=|^\[sops\]", re.MULTILINE)
+KUSTOMIZE_NAMES = ("kustomization.yaml", "kustomization.yml", "Kustomization")
+# The fields of a kustomization that name a file, a folder or a remote
+# source (a list of strings each), and the ones that pull a chart.
+KUSTOMIZE_PATHS = ("resources", "components", "bases", "crds", "configurations", "generators",
+                   "transformers", "validators", "patchesStrategicMerge")
+KUSTOMIZE_CHARTS = ("helmCharts", "helmGlobals", "helmChartInflationGenerator")
+# A remote source of kustomize: a URL, a git address, a query of a ref, or a
+# host name before the first slash ("github.com/<owner>/<repo>//<path>").
+REMOTE = re.compile(r"://|^git@|^git::|[?&](?:ref|version|timeout|submodules)=|^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::[0-9]+)?/")
 FLUX_OBJECT = re.compile(r"""apiVersion["']?\s*:\s*["']?[A-Za-z0-9.-]*toolkit\.fluxcd\.io/""")
 ADMISSION_OBJECT = re.compile(
     r"""kind["']?\s*:\s*["']?(?:Validating|Mutating)(?:AdmissionPolicy(?:Binding)?|WebhookConfiguration)\b"""
@@ -297,6 +326,120 @@ def path_out(path: str, patch: str) -> str | None:
     return None
 
 
+class Unparsed(Exception):
+    """A file that the content rule can not read as Flux would."""
+
+
+_loader = None
+
+
+def yaml_loader():
+    """A safe loader of PyYAML that refuses a repeated key (Flux refuses one
+    too, and a parser that took the other copy would read another kind)."""
+    global _loader
+    if _loader is None:
+        try:
+            import yaml
+        except ImportError as e:
+            raise Unparsed("no YAML parser (PyYAML) in the job") from e
+
+        class Loader(yaml.SafeLoader):
+            def construct_mapping(self, node, deep=False):
+                if isinstance(node, yaml.MappingNode):
+                    seen = set()
+                    for key_node, _ in node.value:
+                        if key_node.tag == "tag:yaml.org,2002:merge":
+                            continue
+                        key = self.construct_object(key_node, deep=True)
+                        if not isinstance(key, (str, int, float, bool)) or key in seen:
+                            raise yaml.constructor.ConstructorError(
+                                None, None, "a repeated key or a key that is not a plain value", key_node.start_mark)
+                        seen.add(key)
+                return super().construct_mapping(node, deep)
+
+        _loader = (yaml, Loader)
+    return _loader
+
+
+def documents(text: str) -> list:
+    yaml, loader = yaml_loader()
+    try:
+        return list(yaml.load_all(text, Loader=loader))
+    except (yaml.YAMLError, ValueError, TypeError, RecursionError) as e:
+        raise Unparsed(type(e).__name__) from e
+
+
+def mappings(value: object):
+    """Each mapping in a document, nested ones too (the items of a List, the
+    values of a HelmRelease)."""
+    stack, seen = [value], set()
+    while stack:
+        v = stack.pop()
+        if isinstance(v, (dict, list)) and id(v) not in seen:
+            seen.add(id(v))
+            if isinstance(v, dict):
+                yield v
+                stack.extend(v.values())
+            else:
+                stack.extend(v)
+
+
+def remote(doc: dict) -> str | None:
+    """The first remote source or chart in a kustomization, or None."""
+    for key in KUSTOMIZE_CHARTS:
+        if key in doc:
+            return key
+    entries = []
+    for key in KUSTOMIZE_PATHS:
+        value = doc.get(key)
+        entries += value if isinstance(value, list) else [value]
+    for key in ("patches", "patchesJson6902", "replacements"):
+        for item in doc.get(key) or []:
+            if isinstance(item, dict):
+                entries.append(item.get("path"))
+    entries.append((doc.get("openapi") or {}).get("path") if isinstance(doc.get("openapi"), dict) else None)
+    for key in ("configMapGenerator", "secretGenerator"):
+        for item in doc.get(key) or []:
+            if isinstance(item, dict):
+                for field in ("files", "envs"):
+                    values = item.get(field)
+                    entries += [str(v).split("=", 1)[-1] for v in values] if isinstance(values, list) else []
+                entries.append(item.get("env"))
+    for entry in entries:
+        if isinstance(entry, str) and REMOTE.search(entry.strip()):
+            return entry
+    return None
+
+
+def file_content(path: str, text: str) -> str | None:
+    """Why the text of a file under kubernetes/ reaches past the class, or
+    None. Unparsed when it does not parse."""
+    if SOPS_TEXT.search(text):
+        return "encrypted content"
+    if FLUX_OBJECT.search(text):
+        return "a Flux object"
+    if ADMISSION_OBJECT.search(text):
+        return "an admission object"
+    kustomize_file = path.rsplit("/", 1)[-1] in KUSTOMIZE_NAMES
+    for doc in documents(text):
+        if isinstance(doc, dict) and "sops" in doc:
+            return "encrypted content"
+        for m in mappings(doc):
+            api, kind = m.get("apiVersion"), m.get("kind")
+            if ("apiVersion" in m and not isinstance(api, str)) or ("kind" in m and not isinstance(kind, str)):
+                return "an apiVersion or a kind that is not a string"
+            group = (api or "").strip().lower().split("/")[0] if "/" in (api or "") else ""
+            if "toolkit.fluxcd.io" in (api or "").lower():
+                return "a Flux object"
+            if group == ADMISSION_GROUP or (kind or "").strip() in ADMISSION_KINDS:
+                return "an admission object"
+        if isinstance(doc, dict) and (kustomize_file or str(doc.get("apiVersion", "")).startswith("kustomize.config.k8s.io/")):
+            source = remote(doc)
+            if source:
+                return f"a remote source: {safe(source)}"
+    return None
+
+
 def content(files: list[dict]) -> str | None:
     """Why the content of a PR of the App reaches past the class, or None.
 
@@ -322,11 +465,16 @@ def content(files: list[dict]) -> str | None:
             continue
         if "head" not in f or "base" not in f:
             return f"the content of {name} could not be read"
-        for text in (f["head"], f["base"]):
-            if text and FLUX_OBJECT.search(text):
-                return f"it adds or changes a file with a Flux object: {name}"
-            if text and ADMISSION_OBJECT.search(text):
-                return f"it adds or changes a file with an admission object: {name}"
+        for which, path in (("head", f.get("filename")), ("base", f.get("previous_filename") or f.get("filename"))):
+            text = f[which]
+            if not text:
+                continue
+            try:
+                found = file_content(path or "", text)
+            except Unparsed as e:
+                return f"{name} could not be parsed as YAML at its {which}: {safe(e)}"
+            if found:
+                return f"it adds or changes a file with {found}: {name}"
         if not removed:
             if not isinstance(f.get("patch"), str):
                 return f"the diff of {name} could not be read"

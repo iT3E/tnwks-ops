@@ -15,6 +15,11 @@ import sys
 import unittest
 from pathlib import Path
 
+# The content rule parses YAML with PyYAML. CI installs the pinned version
+# of .github/scripts/owner-label-requirements.txt; with no parser the rule
+# holds each file under kubernetes/ (test_no_parser_holds_the_app).
+import yaml  # noqa: F401
+
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("owner_label_check", HERE / "owner-label-check.py")
 check = importlib.util.module_from_spec(spec)
@@ -556,6 +561,93 @@ class Content(unittest.TestCase):
                   {"filename": APP + "app/x.yaml", "previous_filename": APP + "app/x.sops.yaml", "status": "renamed"},
                   {"filename": "docs/old.sops.json", "status": "removed"}):
             self.held("an encrypted file", f)
+
+    # The six shapes of the review that a text rule let through, each a file
+    # that Flux reads as an admission object, a Flux object, a remote source
+    # or encrypted content.
+    def test_an_admission_object_behind_anchors_holds_the_app(self):
+        text = ("x-names: [&v admissionregistration.k8s.io/v1, &k MutatingWebhookConfiguration]\n"
+                "apiVersion: *v\nkind: *k\nmetadata: {name: x}\n")
+        self.held("an admission object", {"filename": APP + "app/hook.yaml", "status": "added", "head": text})
+
+    def test_an_admission_object_with_a_folded_kind_holds_the_app(self):
+        text = "apiVersion: >-\n  admissionregistration.k8s.io/v1\nkind: >-\n  MutatingWebhookConfiguration\n"
+        self.held("an admission object", {"filename": APP + "app/hook.yaml", "status": "added", "head": text})
+        text = "apiVersion: v1\nkind: >-\n  MutatingWebhook\n  Configuration\n"
+        self.assertTrue(self.go({"filename": APP + "app/x.yaml", "status": "added", "head": text}).ok,
+                        "a folded scalar joins with a space, so this kind is another")
+        # An escaped line break of a double-quoted scalar joins with no space.
+        text = 'apiVersion: v1\nkind: "Mutating\\\n  WebhookConfiguration"\n'
+        self.held("an admission object", {"filename": APP + "app/hook.yaml", "status": "added", "head": text})
+
+    def test_an_admission_object_with_a_tagged_kind_holds_the_app(self):
+        text = "apiVersion: !!str admissionregistration.k8s.io/v1\nkind: !!str ValidatingAdmissionPolicy\n"
+        self.held("an admission object", {"filename": APP + "app/policy.yaml", "status": "added", "head": text})
+        text = 'apiVersion: v1\nkind: "Mutating\\x57ebhookConfiguration"\n'
+        self.held("an admission object", {"filename": APP + "app/hook.yaml", "status": "added", "head": text})
+
+    def test_a_flux_object_with_a_folded_api_version_holds_the_app(self):
+        text = "apiVersion: >-\n  kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n"
+        self.held("a Flux object", {"filename": APP + "app/x.yaml", "status": "added", "head": text})
+        text = 'apiVersion: "kustomize.toolkit.\\x66luxcd.io/v1"\nkind: Kustomization\n'
+        self.held("a Flux object", {"filename": APP + "app/x.yaml", "status": "added", "head": text})
+
+    def test_a_remote_resource_in_a_kustomization_holds_the_app(self):
+        for entry in ("https://example.invalid/hook.yaml", "github.com/example/repo//deploy?ref=v1",
+                      "git@example.invalid:example/repo.git", "example.invalid/example/repo/deploy"):
+            text = f"resources:\n  - ./helmrelease.yaml\n  - {entry}\n"
+            self.held("a remote source", {"filename": APP + "app/kustomization.yaml", "head": text, "base": None})
+        text = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Component\ncomponents: [https://example.invalid/c]\n"
+        self.held("a remote source", {"filename": APP + "app/component.yaml", "head": text, "base": None})
+        text = "patches:\n  - path: https://example.invalid/p.yaml\n"
+        self.held("a remote source", {"filename": APP + "app/kustomization.yaml", "head": text, "base": None})
+        text = "helmCharts:\n  - name: x\n    repo: https://example.invalid\n"
+        self.held("a remote source", {"filename": APP + "app/kustomization.yaml", "head": text, "base": None})
+
+    def test_local_entries_of_a_kustomization_pass(self):
+        text = ("resources:\n  - ./helmrelease.yaml\n  - app.yaml\n  - sub/dir\n"
+                "configMapGenerator:\n  - name: c\n    files: [config.yaml=./files/config.yaml]\n"
+                "images:\n  - name: app\n    newName: ghcr.io/example/app\n")
+        v = self.go({"filename": APP + "app/kustomization.yaml", "head": text, "base": text})
+        self.assertTrue(v.ok, v.message)
+
+    def test_encrypted_content_under_another_name_holds_the_app(self):
+        # A copy of an encrypted file of the class with no ".sops." in its name:
+        # Flux decrypts by the content, not by the name.
+        for text in ("apiVersion: v1\nkind: Secret\nstringData:\n  a: ENC[AES256_GCM,data:x,iv:y,tag:z,type:str]\n",
+                     "apiVersion: v1\nkind: Secret\nsops:\n  age: []\n  mac: x\n",
+                     '{"data": "x", "sops": {"mac": "x"}}',
+                     "A=ENC[AES256_GCM,data:x,type:str]\nsops_mac=x\n"):
+            self.held("encrypted content", {"filename": APP + "app/secret.yaml", "head": text, "base": None})
+            self.held("encrypted content", {"filename": APP + "app/old.yaml", "status": "removed", "base": text})
+
+    def test_a_file_that_does_not_parse_holds_the_app(self):
+        for text in ("a: [1, 2\n", "a: !custom x\n", "a: 1\na: 2\n", "? [a]\n: b\n"):
+            self.held("could not be parsed", {"filename": APP + "app/x.yaml", "head": text, "base": None})
+
+    def test_a_kind_that_is_not_a_string_holds_the_app(self):
+        self.held("not a string", {"filename": APP + "app/x.yaml", "head": "apiVersion: v1\nkind: [a]\n", "base": None})
+
+    def test_an_admission_object_in_a_list_or_a_value_holds_the_app(self):
+        text = "apiVersion: v1\nkind: List\nitems:\n  - apiVersion: admissionregistration.k8s.io/v1\n    kind: X\n"
+        self.held("an admission object", {"filename": APP + "app/x.yaml", "head": text, "base": None})
+
+    def test_plain_manifests_pass(self):
+        text = (CONFIGMAP + "---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: x\n"
+                "spec:\n  template:\n    metadata:\n      labels: &l {app: x}\n    spec: {}\n  selector:\n"
+                "    matchLabels: *l\n")
+        v = self.go({"filename": APP + "app/deployment.yaml", "head": text, "base": text, "patch": "+  a: c"})
+        self.assertTrue(v.ok, v.message)
+
+    def test_no_parser_holds_the_app(self):
+        def missing():
+            raise check.Unparsed("no YAML parser (PyYAML) in the job")
+        real, check.yaml_loader = check.yaml_loader, missing
+        try:
+            self.held("could not be parsed", {"filename": APP + "app/configmap.yaml", "head": CONFIGMAP,
+                                               "base": CONFIGMAP})
+        finally:
+            check.yaml_loader = real
 
     def test_a_removed_link_passes(self):
         self.assertTrue(self.go({"filename": "docs/link", "status": "removed"}).ok)

@@ -1,0 +1,8 @@
+# The YAML parser of the content rule of owner-label-check.py, installed by
+# .github/workflows/owner-label.yaml and actionlint.yaml (the tests) with
+# --require-hashes --only-binary :all:. The version of observability/uv.lock;
+# the hash is the wheel for CPython 3.12 on x86_64 Linux (the Python of the
+# runner) and the source archive.
+pyyaml==6.0.3 \
+    --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc \
+    --hash=sha256:d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f
