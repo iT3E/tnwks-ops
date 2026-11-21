@@ -5,7 +5,7 @@ The lists of the policy are the class of git: classlist.py walks the Flux
 trees of both sites the way Flux builds them and writes them. These tests
 check that the policy holds the lists of git now, that each site lists the
 policy, that only the two parents of the apps read files outside the class,
-and that the binding is still Audit and Warn. The last test runs the rules
+and that the binding denies. The last test runs the rules
 on a throwaway API server (admission/tests/run.sh), with Docker.
 """
 
@@ -770,10 +770,11 @@ def test_the_policy_matches_the_two_controllers_and_fails_closed():
         assert f"system:serviceaccount:flux-system:{account}" in condition["expression"]
 
 
-def test_the_binding_is_still_audit_and_warn():
-    # The change that turns it to Deny changes this test, after a read of
-    # the audit counts of both sites (docs/operations/flux-admission.md).
-    assert docs()["ValidatingAdmissionPolicyBinding"]["spec"]["validationActions"] == ["Audit", "Warn"]
+def test_the_binding_denies_and_audits():
+    # It was Audit and Warn until a read of the audit counts of both sites
+    # (docs/operations/flux-admission.md, "Roll-out"). Audit keeps the
+    # annotation with the name of a refused object in the audit stream.
+    assert docs()["ValidatingAdmissionPolicyBinding"]["spec"]["validationActions"] == ["Deny", "Audit"]
 
 
 def test_the_rules_on_a_throwaway_api_server():
