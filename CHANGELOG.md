@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.245.0 - 2026-11-21
+
+### Changed
+
+* agents: the finance agent sends the metrics of the product to Alloy, after the pilot agent (step 3 of task 5.23). Its pod restarts once for the change of its config.
+
 ## v2.244.0 - 2026-11-21
 
 ### Added

@@ -1,3 +1,0 @@
-kind: Changed
-body: 'agents: the finance agent sends the metrics of the product to Alloy, after the pilot agent (step 3 of task 5.23). Its pod restarts once for the change of its config.'
-time: 2026-11-20T19:01:00.000000000Z
