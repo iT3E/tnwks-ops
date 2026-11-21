@@ -2506,9 +2506,10 @@ client, never the arguments or the result.
 gateway does), and the slowest read under 30 s. A read that gets a `504`
 at the gateway brings the step back to the owner.
 
-**The way back** is one revert of the squash commit: the servers, the
-routes, the key, its hash and the server entries go out together, and the
-agent pod starts again with the tools of M7a.
+**The way back** is one revert of the squash commit: the servers, their
+routes and hashes, the read bindings and the three server entries go out
+together. The key of main and its vault route stay, and the agent pod
+starts again with its vault tools.
 
 ### The way back of the main agent
 
