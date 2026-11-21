@@ -307,7 +307,7 @@ def test_site_1_is_in_the_phase_of_its_run_order():
     """The run order of docs/operations/observability-implementation.md: vhdx, ready, then file."""
     host = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI/main.yml").read_text())
     assert host["observability_storage_enabled"] is True
-    assert host["observability_storage_mount"] == "ready"
+    assert host["observability_storage_mount"] == "file"
     distro = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI-ubuntu/main.yml").read_text())
     # The distro takes the phase of its Windows host, and sets none of its own.
     assert distro["wsl_distro_windows_host"] == "DESKTOP-HKE05KI"

@@ -362,10 +362,13 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
         assert passes(data), name
         assert not data["wsl_start_unelevated_done"] or data["wsl_start_unelevated"], name
     site1 = windows_hosts()["DESKTOP-HKE05KI"]
-    assert not passes({**site1, "wsl_start_unelevated": True}), "site 1 needs the split of the monitoring volume first"
-    # The monitoring data in the file on the distro disk (section 5.13): the mount task is disabled.
+    # The monitoring data of site 1 is in the file on the distro disk (section 5.13): the mount
+    # task is disabled, so the guard lets the switch on there. With the VHDX, it would not.
     assert guard["that"][0].endswith(" or (observability_storage_mount | default('vhdx')) == 'file'")
-    assert passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "file"})
+    assert site1["observability_storage_mount"] == "file"
+    assert passes({**site1, "wsl_start_unelevated": True})
+    assert not passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "vhdx"})
+    assert not passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "ready"})
 
 
 # Stand-ins for the encrypted values of a Windows host with the move of the distro on.
