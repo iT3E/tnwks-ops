@@ -15,6 +15,11 @@ windows_monitoring_remote_extra: [10.10.91.112]
 
 # Prometheus sits on its own ext4 VHDX on C:, not the E: distro disk.
 observability_storage_enabled: true
+# The move of the monitoring data into a file on the distro disk (Design Doc
+# 0004, section 5.13; docs/operations/observability-implementation.md): ready,
+# the distro makes the file of 19 GiB, its timer stays off, and the VHDX keeps
+# the data.
+observability_storage_mount: ready
 
 # One tnwks-coral-detector-<id> service per Coral; a second Coral is one more
 # line (ports 5556 / 9556). docs/wsl/coral-detector.md.
