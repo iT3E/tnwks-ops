@@ -34,6 +34,12 @@ BRIDGE = "http://model-bridge.ai.svc.cluster.local:8080"
 WINDOWS = ["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet", "seven_day_overage_included", "overage"]
 TOKENS = ["input", "output", "cache_read", "cache_write"]
 PORT = 13598
+# The lab's exporter drops a metric after 2 s with no event, not 60 s, and
+# token_zero sends every 1 s, not 30 s: the same ratio as the config (the zero
+# interval at most half the flush period, test_each_declared_token_series_has_a_zero_series),
+# so a drop on the config of main and the keep on this one show in seconds.
+LAB_FLUSH_SECONDS = 2
+LAB_ZERO_SECONDS = 1
 
 
 def load():
@@ -90,9 +96,10 @@ def lab_config(path: str) -> dict:
     the transforms, and its exporter with each of its settings and inputs, on
     a port of the host. The exporter drops a metric only when an event comes
     in (internal_metrics sends them), so a lab without those inputs never
-    drops one."""
+    drops one. Only the flush period and the zero interval are shorter."""
     config = load()
-    sink = {**config["sinks"]["prometheus"], "address": f"127.0.0.1:{PORT}"}
+    sink = {**config["sinks"]["prometheus"], "address": f"127.0.0.1:{PORT}",
+            "flush_period_secs": LAB_FLUSH_SECONDS}
     transforms = {name: config["transforms"][name]
                   for name in ("platform_gauges", "platform_gauge_route", "plan_metrics", "token_metrics",
                                "token_now", "bridge_metrics", "instruction_metrics") if name in config["transforms"]}
@@ -102,6 +109,8 @@ def lab_config(path: str) -> dict:
     sources = {"lines": {"type": "file", "include": [path], "read_from": "beginning"},
                **{name: config["sources"][name] for name in ("internal_metrics", "token_zero")
                   if name in config["sources"]}}
+    if "token_zero" in sources:
+        sources["token_zero"] = {**sources["token_zero"], "interval_secs": LAB_ZERO_SECONDS}
     assert set(sink["inputs"]) <= set(sources) | set(transforms), sink["inputs"]
     return {"data_dir": "/tmp", "expire_metrics_secs": config["expire_metrics_secs"],
             "sources": sources, "transforms": transforms, "sinks": {"prometheus": sink}}
@@ -180,14 +189,32 @@ def wait_for(binary: str, name: str, key: str, value: float | None = None) -> di
     raise AssertionError((key, value, found, (logs.stdout + logs.stderr)[-3000:]))
 
 
-def test_the_newest_line_sets_the_gauges_and_the_counts_add_up():
+def append(work, *lines: str) -> None:
+    with (work / "lines.log").open("a") as log:
+        log.writelines(line + "\n" for line in lines)
+
+
+def test_in_the_pinned_vector_the_newest_line_wins_and_the_token_counter_lives():
+    """One start of the lab. The counter is there at 0 before any call; the
+    newest plan line of any trust domain sets the gauges of its window; the
+    token counts add up; the counter keeps its count past two flush periods
+    with no call, with a sample time of now; a later call adds to it.
+
+    The live fault of the first build: the exporter dropped the counter 1 to 2
+    minutes after its last line, and its sample kept the time of the line, so
+    Prometheus showed it for 5 minutes. increase() then counted the first call
+    as 0, and each later call only when its count was above the last one. On
+    that config this test fails at its first wait."""
     binary = docker()
     work = scratch()
     name = f"plan-usage-{uuid.uuid4().hex[:8]}"
+    token = 'homelab_model_bridge_tokens_total{domain="%s",model="claude-opus-5-5",token="%s"}'
     try:
-        start(binary, work, name, LINES)
-        found = wait_for(binary, name,
-                         'homelab_model_bridge_tokens_total{domain="finance",model="claude-opus-5-5",token="cache_write"}', 4)
+        start(binary, work, name, [])
+        # Before any call: each declared series is there, at 0.
+        wait_for(binary, name, token % ("main", "input"), 0)
+        append(work, *LINES)
+        found = wait_for(binary, name, token % ("finance", "cache_write"), 4)
         five = '{window="five_hour"}'
         assert found["homelab_model_bridge_plan_utilization_ratio" + five] == 0.91
         assert found["homelab_model_bridge_plan_status" + five] == 1
@@ -197,45 +224,21 @@ def test_the_newest_line_sets_the_gauges_and_the_counts_add_up():
         plan = [k for k in found if k.startswith("homelab_model_bridge_plan_")]
         assert len(plan) == 8, plan
         assert all("domain" not in k for k in plan)
-        main = 'homelab_model_bridge_tokens_total{domain="main",model="claude-opus-5-5",token="%s"}'
-        assert [found[main % t] for t in TOKENS] == [111, 222, 300, 5]
-        finance = 'homelab_model_bridge_tokens_total{domain="finance",model="claude-opus-5-5",token="%s"}'
-        assert [found[finance % t] for t in TOKENS] == [1, 2, 3, 4]
-        workflows = 'homelab_model_bridge_tokens_total{domain="workflows",model="claude-opus-5-5",token="%s"}'
-        assert [found[workflows % t] for t in TOKENS] == [0, 0, 0, 0]
+        assert [found[token % ("main", t)] for t in TOKENS] == [111, 222, 300, 5]
+        assert [found[token % ("finance", t)] for t in TOKENS] == [1, 2, 3, 4]
+        assert [found[token % ("workflows", t)] for t in TOKENS] == [0, 0, 0, 0]
         assert len([k for k in found if k.startswith("homelab_model_bridge_tokens_total")]) == 12
-    finally:
-        subprocess.run([binary, "rm", "-f", name], capture_output=True, check=False)
-        subprocess.run(["rm", "-rf", str(work)], check=False)
-
-
-def test_the_token_counter_is_there_from_the_start_and_outlives_the_flush_period():
-    """The live fault of the first build: the exporter dropped the counter 1 to 2
-    minutes after its last line, and its sample kept the time of the line, so
-    Prometheus showed it for 5 minutes. increase() then counted the first call as
-    0, and each later call only when its count was above the last one."""
-    binary = docker()
-    work = scratch()
-    name = f"plan-usage-{uuid.uuid4().hex[:8]}"
-    key = 'homelab_model_bridge_tokens_total{domain="main",model="claude-opus-5-5",token="input"}'
-    flush = load()["sinks"]["prometheus"].get("flush_period_secs", 60)
-    try:
-        start(binary, work, name, [])
-        # Before any call: the series is there, at 0.
-        wait_for(binary, name, key, 0)
-        with (work / "lines.log").open("a") as lines:
-            lines.write(call("main", input=100, output=1, cache_read=0, cache_write=0) + "\n")
-        wait_for(binary, name, key, 100)
-        # Two flush periods and more with no call: still there, at its count, with a
-        # sample time of now (not of the line).
-        time.sleep(2 * flush + 15)
-        value, stamp = scrape(stamps=True)[key]
-        assert value == 100
-        assert stamp is None or time.time() - stamp < 45, time.time() - stamp
+        # Two flush periods and more with no call: the counter is there at each
+        # look, at its count, with a sample time of now (not of the line).
+        until = time.monotonic() + 2 * LAB_FLUSH_SECONDS + 2
+        while time.monotonic() < until:
+            value, stamp = scrape(stamps=True).get(token % ("main", "input"), (None, None))
+            assert value == 111, value
+            assert stamp is None or time.time() - stamp < LAB_ZERO_SECONDS + 2, time.time() - stamp
+            time.sleep(0.25)
         # A later call adds to it.
-        with (work / "lines.log").open("a") as lines:
-            lines.write(call("main", input=50, output=1, cache_read=0, cache_write=0) + "\n")
-        wait_for(binary, name, key, 150)
+        append(work, call("main", input=50, output=1, cache_read=0, cache_write=0))
+        wait_for(binary, name, token % ("main", "input"), 161)
     finally:
         subprocess.run([binary, "rm", "-f", name], capture_output=True, check=False)
         subprocess.run(["rm", "-rf", str(work)], check=False)
