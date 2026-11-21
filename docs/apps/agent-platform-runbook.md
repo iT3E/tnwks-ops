@@ -347,8 +347,13 @@ hand; the caller retries with a new key.
 ### AgentDailyArchiveFailed
 
 **What it means.** The `backup` container of an agent pod started again in
-the last 2 hours after an exit with an error: the daily archive of the
-product failed. A restart of the node (reason `Unknown`) does not count.
+the last 2 hours after an exit code from 1 to 127: the daily archive of the
+product failed (`daily-backup.sh` ends with exit 1). A stop of the node does
+not count: the kubelet stops the container with SIGTERM (exit 143, reason
+`Error`), or the node goes down with it (exit 255, reason `Unknown`). The
+rule reads the exit code
+(`kube_pod_container_status_last_terminated_exitcode`), because the reason
+`Error` is the same for exit 1 and exit 143.
 
 **First checks.**
 
@@ -369,7 +374,10 @@ file identity could not be pinned`: the command refuses an include file
 that is a link, and each file of a projected volume is one. The backup
 container of main now runs on a copy of the config with regular files. A
 new include in the config of an agent needs its file in that copy too
-(`observability/tests/test_main_agent_backup.py` checks it).
+(`observability/tests/test_main_agent_backup.py` checks it). On 2026-11-21
+the rule of that time (reason `Error`) fired for the three agent pods after a
+planned stop of the node: the container ended with exit 143 at the stop, and
+no archive failed. The rule now reads the exit code.
 
 **Fix.** Fix the cause in git. The container tries again when it starts; a
 day with no archive leaves the archives of the 6 days before and the

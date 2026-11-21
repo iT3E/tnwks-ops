@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'observability: the schedule state of the AI board matches each namespace of a declared schedule, so litellm-key-check (namespace ai) reads its last good run and no longer no evidence. AgentDailyArchiveFailed reads the exit code of the backup container (1 to 127), so a stop of the node (exit 143 from SIGTERM, or 255) no longer fires it.'
+time: 2026-11-21T07:49:00.000000000Z
