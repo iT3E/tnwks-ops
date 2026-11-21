@@ -838,7 +838,8 @@ the model gateway. It shows no product metrics and no money.
 The agent platform sends its traces to Alloy on homelab-wsl over OTLP/HTTP:
 `http://alloy.monitoring.svc.cluster.local:4318` (the `otelcol.receiver.otlp
 "agents"` block of `kubernetes/apps/monitoring/alloy/app/helmrelease.yaml`).
-No ingress serves that port. Alloy forwards each span to Tempo.
+No ingress serves that port, and [the network rule of Alloy](#the-network-rule-of-alloy)
+admits only the senders of git. Alloy forwards each span to Tempo.
 
 - **Text filter.** Before Tempo, `otelcol.processor.transform "drop_text"`
   removes the attributes that carry the text of a conversation, on spans and
@@ -862,6 +863,43 @@ No ingress serves that port. Alloy forwards each span to Tempo.
 - The filter removes known names. A new attribute with text, from a new
   product release, passes until it's added here: the trace test of each agent
   image release checks for that.
+
+## The network rule of Alloy
+
+The CiliumNetworkPolicy `alloy`
+(`kubernetes/apps/monitoring/alloy/app/networkpolicy.yaml`) says who may
+open a connection to the pod of Alloy on each site, and on which port. It
+has no HTTP rules, so the proxy of Cilium is not in the path. Before it, each
+pod of either cluster could send OTLP to the receiver of the agents: false
+series of the product into Prometheus, and a false span of a completed turn
+into Tempo, which could hide a missed heartbeat.
+
+- **4318, the OTLP receiver of the agents.** The agent pod of each personal
+  trust domain (`agents-main`, `agents-finance`, `agents-pilot`), the sandbox
+  supervisors of `agents-workflows` (label `openshell.ai/boundary-role:
+  supervisor`: the supervisor opens each connection that the sandbox policy
+  of a run approves), and the daily test span (`trace-filter-check`).
+- **12347, the Faro receiver.** The public ingress (`ingress-nginx`, class
+  `nginx`), for the browsers of the sites.
+- **12345, the HTTP server.** Prometheus of the same site (the scrape), and
+  the kubelet probes from the local host. The config reloader and a `kubectl
+  port-forward` enter on the loopback of the pod.
+- **Where the list came from.** The flow log of Cilium (Hubble, both sites,
+  2026-11-21): the three agent pods on 4318, Prometheus and the host on
+  12345. Git for the rest: the supervisors (no run in that window), the
+  test span (05:27 UTC) and the Faro ingress (no browser in that window).
+  Site 2 runs no Alloy pod today; the rule is the same there.
+  `observability/tests/test_alloy_policy.py` fails when a file of git names
+  the receiver and the rule does not know its pod, and when an egress rule
+  of a trust domain to Alloy has no line in it.
+- **What stays open.** An agent pod can still send false counts of its own,
+  and any listed sender can send on any OTLP path. An HTTP rule (POST
+  `/v1/traces` and `/v1/metrics` only) is a later step.
+- **A new sender.** Add its pod to the rule in the same PR. Until then its
+  connections are dropped: `hubble observe --to-label
+  app.kubernetes.io/name=alloy --verdict DROPPED` shows them.
+- **Way back.** Revert the PR that added or changed the rule: Flux prunes
+  it, and each sender passes again.
 
 ## The network rule of Prometheus
 
