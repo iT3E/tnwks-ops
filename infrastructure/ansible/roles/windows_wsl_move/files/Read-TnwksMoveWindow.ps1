@@ -69,8 +69,9 @@ function Import-TnwksWindowPart([string]$Path, [string[]]$Functions, [string[]]$
 }
 
 $TnwksWindowFunctions = @('Get-TnwksSid', 'Get-TnwksAdminSids', 'Test-TnwksAdmin', 'Get-TnwksWslInstallFolder',
-    'Test-TnwksWslImage', 'Get-TnwksWslProcess')
-$TnwksWindowVariables = @('AdministratorsSid', 'TnwksWslPackageNames', 'TnwksWslSystemNames', 'TnwksSecuritySource')
+    'Test-TnwksWslImage', 'Get-TnwksWslProcess', 'Get-TnwksSessionUsers', 'Test-TnwksAccountSession')
+$TnwksWindowVariables = @('AdministratorsSid', 'TnwksWslPackageNames', 'TnwksWslSystemNames', 'TnwksSecuritySource',
+    'TnwksSessionSource')
 
 # Once, and only from a copy that has the SHA-256 of the role's.
 function Initialize-TnwksWindowPart {
@@ -89,37 +90,6 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
-// The user of each session of the host (Remote Desktop Services API).
-public static class TnwksWts {
-    [DllImport("wtsapi32.dll", SetLastError = true)]
-    static extern bool WTSEnumerateSessionsW(IntPtr server, int reserved, int version, out IntPtr info, out int count);
-    [DllImport("wtsapi32.dll", SetLastError = true)]
-    static extern bool WTSQuerySessionInformationW(IntPtr server, int session, int infoClass, out IntPtr buffer, out int bytes);
-    [DllImport("wtsapi32.dll")]
-    static extern void WTSFreeMemory(IntPtr memory);
-    [StructLayout(LayoutKind.Sequential)]
-    struct SessionInfo { public int SessionId; public IntPtr WinStationName; public int State; }
-    static string Query(int session, int infoClass) {
-        IntPtr buffer; int bytes;
-        if (!WTSQuerySessionInformationW(IntPtr.Zero, session, infoClass, out buffer, out bytes)) throw new Win32Exception(Marshal.GetLastWin32Error());
-        try { return Marshal.PtrToStringUni(buffer); } finally { WTSFreeMemory(buffer); }
-    }
-    // The user name of each session that has one (WTSUserName, 5).
-    public static string[] Users() {
-        IntPtr info; int count;
-        if (!WTSEnumerateSessionsW(IntPtr.Zero, 0, 1, out info, out count)) throw new Win32Exception(Marshal.GetLastWin32Error());
-        List<string> users = new List<string>();
-        try {
-            int size = Marshal.SizeOf(typeof(SessionInfo));
-            for (int i = 0; i < count; i++) {
-                SessionInfo s = (SessionInfo)Marshal.PtrToStructure(new IntPtr(info.ToInt64() + i * size), typeof(SessionInfo));
-                string user = Query(s.SessionId, 5);
-                if (!String.IsNullOrEmpty(user)) users.Add(user);
-            }
-        } finally { WTSFreeMemory(info); }
-        return users.ToArray();
-    }
-}
 // The groups of the token of a process, each as "<SID> <attributes>" (TokenGroups).
 public static class TnwksMoveToken {
     [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(int access, bool inherit, int pid);
@@ -164,7 +134,7 @@ public static class TnwksDosDevice {
 '@
 
 function Initialize-TnwksWindowRead {
-    if (-not ('TnwksWts' -as [type])) { Add-Type -TypeDefinition $TnwksWindowReadSource }
+    if (-not ('TnwksDosDevice' -as [type])) { Add-Type -TypeDefinition $TnwksWindowReadSource }
 }
 
 function Get-TnwksBootTime { (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime() }
@@ -190,9 +160,13 @@ function Test-TnwksRestartPending {
     (Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')
 }
 
+# The read of the procedure itself (Test-TnwksAccountSession), from the copy of
+# the window script on the host, after its SHA-256: the same read that window
+# step 1 and the way back make with session_check on.
 function Test-TnwksPresentSession {
-    Initialize-TnwksWindowRead
-    @([TnwksWts]::Users() | Where-Object { [string]::Equals($_, $c.present.account, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+    Initialize-TnwksWindowPart
+    . ([scriptblock]::Create($script:TnwksWindowPartText))
+    Test-TnwksAccountSession $c.present.account
 }
 
 function Get-TnwksInstalledWslVersion {

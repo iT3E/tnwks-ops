@@ -967,8 +967,7 @@ function Test-TnwksScope {
     }
     if ("$($cfg.disk_rule.owner)" -notin @('administrators', 'new-account')) { return "the owner of the moved file is '$($cfg.disk_rule.owner)': administrators or new-account" }
     if ("$($cfg.disk_rule.new_mask)" -notmatch '^(0x[0-9a-fA-F]{1,8}|F[ARWX])$') { return "the mask of the new account is '$($cfg.disk_rule.new_mask)': a hex mask or FA, FR, FW, FX" }
-    # The check for a session of the owner (site 1) is not in this script.
-    if ($cfg.session_check) { return 'the session check is on, and this script does not have it' }
+    if ($null -ne $cfg.session_check -and $cfg.session_check -isnot [bool]) { return "session_check is '$($cfg.session_check)': true or false" }
     # The group test takes the present account out of Administrators at the end
     # of its run: a restart in the run would keep it there.
     if ($req.rehearsal_group_test -and $cfg.restart) { return 'the group test runs only with the switch restart off' }
@@ -993,10 +992,70 @@ function Test-TnwksScope {
     ''
 }
 
-# Whether a session of the owner is on, so that the way back must not restart
-# (site 1). The script has no such check: Test-TnwksScope refuses a config
-# with session_check on, so this reads no session.
-function Test-TnwksOwnerSession { $false }
+# The user name of each session of the host that has one, from the Remote
+# Desktop Services API (WTSEnumerateSessions, then WTSQuerySessionInformation
+# with WTSUserName): a session at the console or over Remote Desktop, active
+# or disconnected. A batch logon (a task) and a network logon (SSH) have no
+# session there. The reads of the window play take these parts too.
+$TnwksSessionSource = @'
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class TnwksSessions {
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    static extern bool WTSEnumerateSessionsW(IntPtr server, int reserved, int version, out IntPtr info, out int count);
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    static extern bool WTSQuerySessionInformationW(IntPtr server, int session, int infoClass, out IntPtr buffer, out int bytes);
+    [DllImport("wtsapi32.dll")]
+    static extern void WTSFreeMemory(IntPtr memory);
+    [StructLayout(LayoutKind.Sequential)]
+    struct SessionInfo { public int SessionId; public IntPtr WinStationName; public int State; }
+    static string Query(int session, int infoClass) {
+        IntPtr buffer; int bytes;
+        if (!WTSQuerySessionInformationW(IntPtr.Zero, session, infoClass, out buffer, out bytes)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        try { return Marshal.PtrToStringUni(buffer); } finally { WTSFreeMemory(buffer); }
+    }
+    public static string[] Users() {
+        IntPtr info; int count;
+        if (!WTSEnumerateSessionsW(IntPtr.Zero, 0, 1, out info, out count)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        List<string> users = new List<string>();
+        try {
+            int size = Marshal.SizeOf(typeof(SessionInfo));
+            for (int i = 0; i < count; i++) {
+                SessionInfo s = (SessionInfo)Marshal.PtrToStructure(new IntPtr(info.ToInt64() + i * size), typeof(SessionInfo));
+                string user = Query(s.SessionId, 5);
+                if (!String.IsNullOrEmpty(user)) users.Add(user);
+            }
+        } finally { WTSFreeMemory(info); }
+        return users.ToArray();
+    }
+}
+'@
+
+function Get-TnwksSessionUsers {
+    if (-not ('TnwksSessions' -as [type])) { Add-Type -TypeDefinition $TnwksSessionSource }
+    @([TnwksSessions]::Users())
+}
+
+# Whether an account has a session on the host. A local account: the name
+# alone, with no case.
+function Test-TnwksAccountSession([string]$Account) {
+    @(Get-TnwksSessionUsers | Where-Object { [string]::Equals($_, $Account, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+}
+
+# Whether a session of the owner (the present account) is on, so that window
+# step 1 stops and the way back does not restart (site 1, session_check on).
+# With session_check off (site 2), no session is read: the run is as before.
+# A read that fails counts as a session: no start, and no restart.
+function Test-TnwksOwnerSession {
+    if (-not $cfg.session_check) { return $false }
+    try { Test-TnwksAccountSession $cfg.present.account }
+    catch {
+        Write-TnwksFail "the read of the sessions of the host: $($_.Exception.Message); it counts as a session of the owner"
+        $true
+    }
+}
 
 function Request-TnwksRestart([string]$Why) {
     if ($cfg.restart) {
@@ -1112,6 +1171,15 @@ function Invoke-TnwksForward {
         return 'stopped'
     }
     Write-Log "step 1: WSL $version, as saved. The session check is $(if ($cfg.session_check) { 'on' } else { 'off' })."
+    # (1) The owner is signed out (site 1): a restart of the window or of its
+    # way back would end a session of the owner.
+    if ($cfg.session_check) {
+        if (Test-TnwksOwnerSession) {
+            Write-Log 'stop at step 1: a session of the present account is on the host. Nothing is changed.'
+            return 'stopped'
+        }
+        Write-Log 'step 1: no session of the present account is on the host'
+    }
     # (2) The marker of a started window, then the tasks of the present account.
     # The tasks that this step disables, saved first, for way back step 6.
     $enabled = @($present.disable_tasks | Where-Object { Test-TnwksTaskEnabled $_ })
@@ -1421,7 +1489,11 @@ Write-Log "result: $outcome"
 if ($outcome -eq 'failed' -and $Mode -ne 'boot') {
     # A failed way back: the restart ends a VM that did not stop, and the boot
     # task makes one more run. The boot task itself never restarts after a fail.
-    if ($script:WroteMarkers.Count -gt 0 -and (Get-LastMarker) -in @('window-started', 'boot-run')) { Request-TnwksRestart 'a failed check' }
+    # Not while a session of the owner is on (site 1).
+    if ($script:WroteMarkers.Count -gt 0 -and (Get-LastMarker) -in @('window-started', 'boot-run')) {
+        if (Test-TnwksOwnerSession) { Write-Log 'no restart after the failed check: a session of the owner is on' }
+        else { Request-TnwksRestart 'a failed check' }
+    }
 }
 switch ($outcome) {
     { $_ -in @('done', 'no-action', 'stopped-after') } { exit 0 }
