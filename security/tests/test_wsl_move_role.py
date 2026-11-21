@@ -648,3 +648,18 @@ def test_the_deletion_renders_its_tasks_and_stops_on_each_allow_list_that_names_
         "tnwks-lan-bridge-ip", "tnwks-udp-relay-syslog", "tnwks-vhdx-compact", "tnwks-wsl-keepalive", "tnwks-wsl-watchdog",
         "tnwks-wsl-move-present-stop", "tnwks-wsl-move-present-unregister", "tnwks-wsl-move-present-import",
         "tnwks-wsl-move-boot"]
+
+
+def test_no_trigger_of_a_windows_role_names_a_default_that_the_task_scheduler_drops():
+    """The task module compares the export of a registered task with the template, in one
+    canonical form. The Task Scheduler leaves a trigger's Enabled of true (its default) out of
+    the export, so a template that names it reads as a change at each run, also in a check
+    run. The boot task of the way back is the case: its trigger is <BootTrigger />."""
+    templates = sorted(ANSIBLE.glob("roles/windows_*/templates/*.xml.j2"))
+    assert templates
+    for path in templates:
+        text = path.read_text()
+        for trigger in re.findall(r"<(\w+Trigger)>(.*?)</\1>", text, re.DOTALL):
+            assert "<Enabled>true</Enabled>" not in trigger[1], (path.name, trigger[0])
+    system = (ROLE / "templates/system-task.xml.j2").read_text()
+    assert re.search(r"\{% if item == 'boot' %\}\s*<Triggers>\s*<BootTrigger />\s*</Triggers>", system)

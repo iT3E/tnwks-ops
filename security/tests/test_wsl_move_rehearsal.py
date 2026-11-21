@@ -124,7 +124,7 @@ def test_the_accounts_tasks_run_by_s4u_with_no_elevation_and_no_trigger():
     assert "-d {{ wsl_move_rehearsal_distro | e }} -u root -e /bin/sleep infinity" in text
     system = (ROLE / "templates/system-task.xml.j2").read_text()
     assert "<UserId>S-1-5-18</UserId>" in system
-    assert re.search(r"\{% if item == 'boot' %\}\s*<Triggers>\s*<BootTrigger>", system)
+    assert re.search(r"\{% if item == 'boot' %\}\s*<Triggers>\s*<BootTrigger />", system)
     assert "{% if item == 'boot' %} -Mode boot{% else %} -Request" in system
     tasks = DEFAULTS["wsl_move_rehearsal_tasks"]
     for key in ("a", "b"):
