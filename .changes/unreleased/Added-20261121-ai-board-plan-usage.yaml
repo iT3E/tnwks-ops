@@ -1,3 +1,0 @@
-kind: Added
-body: 'observability: the AI board shows the use of the Claude plan first on its tab Limits and security: the share used of the five hour window and of the week, the time to each reset, the state of each window, the use over time, the age of the last reading, and the tokens of each trust domain by kind. The platform log agent of Vector turns the plan_limit and call lines of the model bridge into series (the window only on the plan series, so the newest line of any trust domain wins; at most 60 series), the records homelab:ai_plan_* keep the newest reading until its window resets, and the warning ModelPlanNearLimit goes to the chat (it never pages) when a window is near or at its limit.'
-time: 2026-11-21T00:40:00.000000000Z

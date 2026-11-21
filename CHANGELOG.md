@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.246.0 - 2026-11-21
+
+### Added
+
+* observability: the AI board shows the use of the Claude plan first on its tab Limits and security: the share used of the five hour window and of the week, the time to each reset, the state of each window, the use over time, the age of the last reading, and the tokens of each trust domain by kind. The platform log agent of Vector turns the plan_limit and call lines of the model bridge into series (the window only on the plan series, so the newest line of any trust domain wins; at most 60 series), the records homelab:ai_plan_* keep the newest reading until its window resets, and the warning ModelPlanNearLimit goes to the chat (it never pages) when a window is near or at its limit.
+
+### Changed
+
+* ai: the model bridge 0.3.0 logs a plan_limit line for each limit window of the Claude plan and the token counts of each answer on its call line. The AI board and the alert ModelPlanNearLimit read them.
+
 ## v2.245.0 - 2026-11-21
 
 ### Changed
