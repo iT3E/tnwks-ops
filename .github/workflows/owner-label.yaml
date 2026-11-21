@@ -7,7 +7,12 @@ name: "Owner label"
 # of its head commit. A label from a bot, a GitHub App or a workflow token
 # fails it. Every other PR passes at once, so the automerge tiers keep
 # merging. The rules and the logic are in .github/scripts/owner-label-check.py
-# (docs/operations/renovate.md).
+# (docs/operations/renovate.md, docs/operations/ci.md).
+#
+# "edited" runs it again when the title, the body or the base of a PR
+# changes: a PR of an App fails on a base that is not the default branch
+# and on a skip instruction in its title or body, and a label of the owner
+# counts only when it is newer than the last change of the base.
 #
 # pull_request_target runs main's copy of this file and of the script, so a
 # PR can't change what decides. The job checks out only the script, from
@@ -16,7 +21,7 @@ name: "Owner label"
 # it from the API and prints it filtered.
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] only main's script runs; no PR code is checked out or run
-    types: [opened, reopened, synchronize, labeled, unlabeled]
+    types: [opened, reopened, synchronize, labeled, unlabeled, edited]
 
 permissions: {}
 

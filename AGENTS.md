@@ -171,8 +171,10 @@ for a gate of the owner (his review, his label, his approval of a plan or
 of a host check) stays a **draft** until he gives it: open it with
 `gh pr create --draft`, and mark it ready only after his yes. The code host
 refuses the merge of a draft. "Owner label" puts each pull request of
-another author, or with a push of another App, in the tier of
-`owner/approved` ([`docs/operations/ci.md`](docs/operations/ci.md#agent-pull-requests)).
+another author, or with a push or a commit of another App, in the tier of
+`owner/approved`, and fails such a pull request to a base other than
+`main` or with a skip instruction of GitHub Actions in its text
+([`docs/operations/ci.md`](docs/operations/ci.md#agent-pull-requests)).
 
 ## Architecture
 

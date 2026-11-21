@@ -92,12 +92,34 @@ owner his. Each comes from `main`, so a branch can not change it.
     (`MAIN_AGENT_APP` in the script; until it is set, that App is another
     author too);
   - its author is not that App, and someone other than the owner or
-    Renovate pushed to its branch (the activity API of the branch);
+    Renovate pushed to its branch since the branch was last created (the
+    activity API of the branch);
+  - its author is not that App, and a bot other than Renovate is the
+    author or the committer of one of its commits;
   - its author is that App, and it touches a path of the "ask first" class
-    (`ASK_FIRST` in the script): the Ansible, EdgeOS and Terraform source,
-    the CI and `bin/`, the files of the `impact/critical` rules, the config
-    of each required check, and `kubernetes/apps/ai/`. The agent asks the
-    owner in the chat, and the merge waits for his label.
+    (`ASK_FIRST` and `ASK_FIRST_NAMES` in the script): the Ansible, EdgeOS
+    and Terraform source, the CI and `bin/`, the files of the
+    `impact/critical` rules, the config of each required check,
+    `kubernetes/apps/ai/`, what else runs with the owner's credentials on
+    the workstation (`Taskfile.yml`, `.taskfiles/`, `.envrc`, `.vscode/`,
+    `observability/`, `security/`), and the other controls of the cluster
+    (the Flux sources and the bootstrap, the shared components,
+    `kube-system`, identity, the network edge, certificates, the runners
+    of the house, backups, monitoring, the security scanners, and the list
+    of namespaces), plus a `.gitattributes` file in any folder. The agent
+    asks the owner in the chat, and the merge waits for his label.
+- **Two rules fail** a pull request of that App, or one that a rule above
+  holds, whatever its labels:
+  - its base is not `main`. Its checks ran against that base, and a green
+    check stays on the head when the base changes later. "Owner label"
+    runs again on each edit of a pull request, and a label of the owner
+    counts only when it is newer than the last change of the base;
+  - its title, its body or one of its commit messages holds a skip
+    instruction of GitHub Actions (`[skip ci]`, `[ci skip]`, `[no ci]`,
+    `[skip actions]`, `[actions skip]`, or the trailer `skip-checks: true`).
+    The squash merge carries the commit messages into the commit on
+    `main`, and that push would start no workflow: no merge notice, no
+    push checks, no apply.
 - **A draft waits.** A pull request of the owner (or of a session with his
   login) that waits for his gate is a draft (AGENTS.md).
 
