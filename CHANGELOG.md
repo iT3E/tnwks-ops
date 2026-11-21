@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.249.0 - 2026-11-21
+
+### Added
+
+* windows: the USB attach runs with no elevation with wsl_start_unelevated (-NoElevation): the play binds each device as admin, and the task attaches with no bind and logs to a folder that its account may write. In the move of the distro it has a copy for the account that owns the distro, registered disabled while the move runs, as the UDP relays have, and the way back enables the task of the present account again. The play no longer refuses the switch on a host with a USB device
+
 ## v2.248.0 - 2026-11-21
 
 ### Added
