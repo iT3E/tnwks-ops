@@ -669,7 +669,11 @@ class Paths(Base):
                      "kubernetes/apps/cert-manager/cert-manager/ks.yaml",
                      "kubernetes/apps/tools/actions-runner-controller/ks.yaml",
                      "kubernetes/apps/kopiur-system/kopiur/ks.yaml", "kubernetes/apps/monitoring/alertmanager/ks.yaml",
-                     ".changie.yaml", ".gitattributes", "kubernetes/apps/default/x/.gitattributes"):
+                     ".changie.yaml", ".gitattributes", "kubernetes/apps/default/x/.gitattributes",
+                     "kubernetes/apps/default/hajimari/app/helmrelease.yaml",
+                     "kubernetes/apps/production/frigate/ks.yaml",
+                     "kubernetes/apps/home-automation/zwave-js-ui/app/helmrelease.yaml",
+                     "kubernetes/apps/media/qbittorrent/app/helmrelease.yaml"):
             v = self.go(pr([], user=AGENT_APP), files=[{"filename": path}])
             self.assertFalse(v.ok, path)
             self.assertIn("ask-first class", v.message)

@@ -62,6 +62,9 @@ resources:
   # Fence a warm app's Postgres when its site lease names this site.
   - ../../../apps/databases/site-lease-fence/ks.yaml
   - ../../../apps/flux-system
+  # What a Flux child outside the "ask first" class may apply
+  # (docs/operations/flux-admission.md). Both WSL clusters.
+  - ../../../apps/flux-system/admission/ks.yaml
   - ../../../apps/kube-system
   # CNI: Cilium (shared HelmRelease; IPAM mode and pool from cluster-settings).
   - ../../../apps/kube-system/cilium/ks.yaml
@@ -214,6 +217,18 @@ patches:
                 value:
                   sourceLabels: [__name__, policy, enforcement_action]
                   regex: apiserver_validating_admission_policy_check_total;nfs-(pod|persistent)-volumes;(audit|deny)
+                  targetLabel: __tmp_keep
+                  replacement: "true"
+                  action: replace
+              # And the series of the policy of the Flux children
+              # (kubernetes/apps/flux-system/admission), "audit" or "deny":
+              # the count of the requests it would refuse while it audits,
+              # then of the ones it refuses. homelab-wsl-02 keeps the same.
+              - op: add
+                path: /spec/values/kubeApiServer/serviceMonitor/metricRelabelings/-
+                value:
+                  sourceLabels: [__name__, policy, enforcement_action]
+                  regex: apiserver_validating_admission_policy_check_total;flux-child-scope;(audit|deny)
                   targetLabel: __tmp_keep
                   replacement: "true"
                   action: replace

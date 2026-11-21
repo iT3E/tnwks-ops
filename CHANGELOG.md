@@ -3,6 +3,24 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.255.0 - 2026-11-21
+
+### Changed
+
+* site 1 Windows host: the encrypted host variables hold the values of the move of the distro (the present account, the new account, the present folder, the WSL release of the rehearsal), and the allow list of sshd names both accounts (step 2 of the account change). sshd changes only with its explicit apply
+
+## v2.254.2 - 2026-11-21
+
+### Security
+
+* Owner label and the Flux admission policy: the folders of hajimari, frigate, zwave-js-ui and qbittorrent join the "ask first" class, because each needs a right of the class (cluster RBAC, or a privileged pod with a host path or an added capability). With them in the class the policy refuses no live object
+
+## v2.254.1 - 2026-11-21
+
+### Security
+
+* Flux: the admission policy flux-child-scope (kubernetes/apps/flux-system/admission, docs/operations/flux-admission.md) limits what a Flux child outside the "ask first" class may apply: no cluster object, no object in a namespace of the class, no RBAC, no Flux Kustomization, no privileged pod spec, and no change of an object of the class; Kustomizations and HelmReleases of the class must come from their parents in git. Its lists come from git (classlist.py, checked in CI), its rules run on a throwaway API server in CI, each rule switched off once to show its test fails, and both sites keep its audit and deny counts. The binding starts with Audit and Warn
+
 ## v2.254.0 - 2026-11-21
 
 ### Changed

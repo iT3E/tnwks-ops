@@ -1,0 +1,602 @@
+---
+# What a Flux child outside the "ask first" class may apply
+# (docs/operations/flux-admission.md). The two Flux controllers that apply
+# manifests are bound to cluster-admin. A child of the class is a Flux
+# Kustomization whose spec.path is under a path of the class of Owner label
+# (classPaths), or a HelmRelease that such a child applies. Each other child
+# is outside the class.
+#
+# The policy matches the requests of the two controllers only. It knows the
+# child of an object by the owner labels that the controller sets last:
+# kustomize.toolkit.fluxcd.io/name and /namespace (after commonMetadata, so
+# the rule kustomization-spec refuses those keys there), and
+# helm.toolkit.fluxcd.io/name and /namespace (after the post renderers). A
+# request of a controller for an object without its owner label is its own
+# work (events, leases, finalizers, the storage of a Helm release) and is
+# not a child's.
+#
+# A child outside the class may not:
+# - cluster-object: make or change an object with no namespace (cluster
+#   RBAC, CRDs, namespaces, volumes, cluster network policies and the rest);
+# - class-namespace: make or change an object in a namespace of the class
+#   (classNamespaces). The HelmChart that the helm controller makes in the
+#   namespace of the chart source is its own work;
+# - rbac: make or change a Role or a RoleBinding;
+# - flux-kinds: make a Flux Kustomization or an ImageUpdateAutomation;
+# - helmrelease-spec: give a HelmRelease a service account, a kubeconfig, a
+#   target or storage namespace of the class, or the post render strategy
+#   "nohooks" (hooks with no owner labels);
+# - privileged-pod: make a pod spec with privileged, a host path, the host
+#   network, PID or IPC namespace, a host port or an added capability, in
+#   any namespace;
+# - takeover: change an object whose owner labels name a child of the class.
+#
+# For each request of the controllers:
+# - kustomization-spec: a Kustomization outside the class has a path in the
+#   form a/b/c that is not in a class path and holds none (so not the root),
+#   no service account, no kubeconfig, no commonMetadata key of Flux, and
+#   substitutes from cluster-settings, site-overrides and cluster-secrets
+#   only;
+# - kustomization-class: a Kustomization of the class comes from one of its
+#   parents in git, with a path of the class;
+# - helmrelease-class: a HelmRelease of the class comes from a Kustomization
+#   of the class;
+# - parent-objects: a parent of the class whose build reads files outside
+#   the class (the aggregators of kubernetes/apps) applies Kustomizations and
+#   the objects of its build in git only.
+# An update by a controller that keeps the spec of a Kustomization or a
+# HelmRelease (a finalizer, an annotation) passes the last three.
+#
+# Not covered here, and why (docs/operations/flux-admission.md):
+# - Admission objects (webhooks and admission policies): the API server
+#   runs no admission policy on them. Owner label holds a pull request of
+#   the App that adds or changes a Flux object or an admission object, and
+#   the Flux lockdown of a later step closes it.
+# - A pod that an operator makes from a resource of its own (a database
+#   cluster, a runner set): the pod spec is not in the request of Flux.
+# - Decryption with the main key: the children outside the class still have
+#   it (docs/operations/flux-admission.md, "Not in this step").
+#
+# failurePolicy Fail: an error of an expression refuses the request of the
+# controller, so one child fails its apply and the rest go on. The binding
+# starts with Audit and Warn: a refusal is an audit annotation, a warning in
+# the log of the controller and a count of the metric
+# apiserver_validating_admission_policy_check_total{policy="flux-child-scope"};
+# a later change turns it to Deny after a read of both sites.
+#
+# The lists between the BEGIN and END lines are the class of git: run
+# `python3 kubernetes/apps/flux-system/admission/classlist.py write` after a
+# change of the class, of a cluster tree or of a namespace;
+# observability/tests/test_flux_admission.py fails until it is run.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: flux-child-scope
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["*"]
+        scope: "*"
+  matchConditions:
+    - name: a-flux-controller-that-applies
+      expression: >-
+        request.userInfo.username in [
+          'system:serviceaccount:flux-system:kustomize-controller',
+          'system:serviceaccount:flux-system:helm-controller'
+        ]
+  variables:
+    # BEGIN classlist.py: written by classlist.py write, do not edit by hand.
+    - name: classKustomizations
+      expression: >-
+        {
+          'flux-system/actions-runner-controller': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/actions-runner-controller-monitoring': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/agent-sandbox': ['flux-system/cluster-apps'],
+          'flux-system/agents-admission': ['flux-system/cluster-apps'],
+          'flux-system/agents-finance-agent': ['flux-system/cluster-apps'],
+          'flux-system/agents-finance-checks': ['flux-system/cluster-apps'],
+          'flux-system/agents-finance-firefly-mcp': ['flux-system/cluster-apps'],
+          'flux-system/agents-finance-sandbox-gateway': ['flux-system/cluster-apps'],
+          'flux-system/agents-finance-vault-backup': ['flux-system/cluster-apps'],
+          'flux-system/agents-finance-vault-server': ['flux-system/cluster-apps'],
+          'flux-system/agents-finance-vault-share': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-agent': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-checks': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-fetch-proxy': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-sandbox-gateway': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-vault-backup': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-vault-server': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-vault-share': ['flux-system/cluster-apps'],
+          'flux-system/agents-monitoring': ['flux-system/cluster-apps'],
+          'flux-system/agents-pilot-agent': ['flux-system/cluster-apps'],
+          'flux-system/agents-pilot-checks': ['flux-system/cluster-apps'],
+          'flux-system/agents-pilot-sandbox-gateway': ['flux-system/cluster-apps'],
+          'flux-system/agents-workflows-checks': ['flux-system/cluster-apps'],
+          'flux-system/agents-workflows-run-admission': ['flux-system/cluster-apps'],
+          'flux-system/agents-workflows-run-receiver': ['flux-system/cluster-apps'],
+          'flux-system/agents-workflows-sandbox-gateway': ['flux-system/cluster-apps'],
+          'flux-system/alertmanager': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/alloy': ['flux-system/cluster-apps'],
+          'flux-system/aws-backup-credentials': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/blackbox-exporter': ['flux-system/cluster-apps'],
+          'flux-system/cert-manager': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/cert-manager-issuers': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/cert-manager-prometheusrules': ['flux-system/cluster-apps'],
+          'flux-system/cilium': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/cilium-bgp': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/cilium-clustermesh': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/cilium-config': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/cloudflared': ['flux-system/cluster-apps'],
+          'flux-system/cloudnative-pg-app': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/cloudnative-pg-cluster-prometheusrules': ['flux-system/cluster-apps'],
+          'flux-system/cloudnative-pg-plugin-barman-cloud': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/cluster-apps': ['flux-system/flux-system'],
+          'flux-system/cluster-apps-wsl-02': ['flux-system/flux-system'],
+          'flux-system/cluster-meta': ['flux-system/flux-system'],
+          'flux-system/cluster-meta-wsl-02': ['flux-system/flux-system'],
+          'flux-system/coe-runner': ['flux-system/cluster-apps'],
+          'flux-system/descheduler': ['flux-system/cluster-apps'],
+          'flux-system/flow-collector': ['flux-system/cluster-apps'],
+          'flux-system/flux-admission': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/flux-alerts': ['flux-system/cluster-apps'],
+          'flux-system/flux-system': ['flux-system/flux-system'],
+          'flux-system/flux-webhooks': ['flux-system/cluster-apps'],
+          'flux-system/frigate': ['flux-system/cluster-apps'],
+          'flux-system/grafana': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/grafana-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/hajimari': ['flux-system/cluster-apps'],
+          'flux-system/ingress-nginx': ['flux-system/cluster-apps'],
+          'flux-system/ingress-nginx-certificates': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/ingress-nginx-internal': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/ingress-nginx-internal-shared-vip': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/k8s-gateway': ['flux-system/cluster-apps'],
+          'flux-system/kopiur': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/kopiur-agents-finance-repository': ['flux-system/cluster-apps'],
+          'flux-system/kopiur-agents-main-repository': ['flux-system/cluster-apps'],
+          'flux-system/kopiur-agents-repository': ['flux-system/cluster-apps'],
+          'flux-system/kopiur-policies': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/kopiur-repository': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/kopiur-standby-repository': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/kube-prometheus-stack': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/kube-prometheus-stack-addons': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/litellm': ['flux-system/cluster-apps'],
+          'flux-system/litellm-db': ['flux-system/cluster-apps'],
+          'flux-system/local-path-provisioner': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/loki': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/mcp-gateway': ['flux-system/cluster-apps'],
+          'flux-system/metrics-server': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/mktxp': ['flux-system/cluster-apps'],
+          'flux-system/model-bridge': ['flux-system/cluster-apps'],
+          'flux-system/nfs-admission': ['flux-system/cluster-apps'],
+          'flux-system/nfs-server': ['flux-system/cluster-apps'],
+          'flux-system/node-exporter': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/oauth2-proxy': ['flux-system/cluster-apps'],
+          'flux-system/observability-dashboards': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/observability-evidence': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/observability-garage': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/observability-pki': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/observability-rules': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/observability-storage-check': ['flux-system/cluster-apps'],
+          'flux-system/onboard': ['flux-system/cluster-apps'],
+          'flux-system/openclaw-hooks-runner': ['flux-system/cluster-apps'],
+          'flux-system/packing-api-runner': ['flux-system/cluster-apps'],
+          'flux-system/plausible-exporter': ['flux-system/cluster-apps'],
+          'flux-system/playwright-mcp': ['flux-system/cluster-apps'],
+          'flux-system/pushgateway': ['flux-system/cluster-apps'],
+          'flux-system/pyrra': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/pyrra-crds': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/qbittorrent': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/reflector': ['flux-system/cluster-apps'],
+          'flux-system/reloader': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-api-checks': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-aws-credentials': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-converter': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-loki-proxy': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-prowler': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-registry-rules': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-trail-copy': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-trivy-operator': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/site-lease-fence': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/sites-runner': ['flux-system/cluster-apps'],
+          'flux-system/smokeping-prober': ['flux-system/cluster-apps'],
+          'flux-system/snmp-exporter': ['flux-system/cluster-apps'],
+          'flux-system/standby-restore': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/tempo': ['flux-system/cluster-apps'],
+          'flux-system/thanos-metrics': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/thanos-metrics-archive': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/tnwks-ansible-runner': ['flux-system/cluster-apps'],
+          'flux-system/tnwks-ops-runner': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/tuppr': ['flux-system/cluster-apps'],
+          'flux-system/tuppr-upgrades': ['flux-system/cluster-apps'],
+          'flux-system/unifi': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/unms-exporter': ['flux-system/cluster-apps'],
+          'flux-system/unpoller': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/vector-agent': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/vector-agent-platform': ['flux-system/cluster-apps'],
+          'flux-system/vector-aggregator': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/vector-audit-reader': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/weave-gitops': ['flux-system/cluster-apps'],
+          'flux-system/zwave-js-ui': ['flux-system/cluster-apps']
+        }
+    - name: classHelmReleases
+      expression: >-
+        [
+          'agent-sandbox-system/agent-sandbox',
+          'agents-finance/openshell',
+          'agents-main/openshell',
+          'agents-pilot/openshell',
+          'agents-workflows/openshell',
+          'ai/litellm',
+          'ai/playwright-mcp',
+          'auth/oauth2-proxy',
+          'cert-manager/cert-manager',
+          'databases/cloudnative-pg',
+          'databases/plugin-barman-cloud',
+          'default/hajimari',
+          'flux-system/weave-gitops',
+          'home-automation/zwave-js-ui',
+          'kopiur-system/kopiur',
+          'kube-system/cilium',
+          'kube-system/local-path-provisioner',
+          'kube-system/metrics-server',
+          'kube-system/reflector',
+          'kube-system/reloader',
+          'media/qbittorrent',
+          'monitoring/alertmanager',
+          'monitoring/alloy',
+          'monitoring/blackbox-exporter',
+          'monitoring/flow-collector',
+          'monitoring/grafana',
+          'monitoring/kube-prometheus-stack',
+          'monitoring/loki',
+          'monitoring/mktxp',
+          'monitoring/node-exporter',
+          'monitoring/observability-evidence',
+          'monitoring/observability-garage',
+          'monitoring/plausible-exporter',
+          'monitoring/pushgateway',
+          'monitoring/pyrra',
+          'monitoring/security-loki-proxy',
+          'monitoring/smokeping-prober',
+          'monitoring/snmp-exporter',
+          'monitoring/tempo',
+          'monitoring/thanos-compactor',
+          'monitoring/thanos-query',
+          'monitoring/thanos-store',
+          'monitoring/unms-exporter',
+          'monitoring/unpoller',
+          'monitoring/vector-agent',
+          'monitoring/vector-agent-platform',
+          'monitoring/vector-aggregator',
+          'monitoring/vector-audit-reader',
+          'networking/cloudflared',
+          'networking/ingress-nginx',
+          'networking/ingress-nginx-internal',
+          'networking/k8s-gateway',
+          'networking/unifi',
+          'production/frigate',
+          'security/security-converter',
+          'security/trivy-operator',
+          'system-upgrade/tuppr',
+          'tools/descheduler',
+          'tools/gha-runner-scale-set-controller',
+          'tools/openclaw-hooks',
+          'tools/sites-builder',
+          'tools/tnwks-ansible-runner',
+          'tools/tnwks-coe',
+          'tools/tnwks-ops-runner',
+          'tools/tnwks-packing-api'
+        ]
+    - name: classNamespaces
+      expression: >-
+        [
+          'agent-sandbox-system',
+          'agents-finance',
+          'agents-main',
+          'agents-pilot',
+          'agents-workflows',
+          'ai',
+          'auth',
+          'cert-manager',
+          'cilium-secrets',
+          'flux-system',
+          'kopiur-system',
+          'kube-node-lease',
+          'kube-public',
+          'kube-system',
+          'monitoring',
+          'networking',
+          'security',
+          'storage',
+          'system-upgrade',
+          'tools'
+        ]
+    - name: classPaths
+      expression: >-
+        [
+          'kubernetes/clusters/',
+          'kubernetes/flux/',
+          'kubernetes/bootstrap/',
+          'kubernetes/components/',
+          'kubernetes/apps/flux-system/',
+          'kubernetes/apps/kube-system/',
+          'kubernetes/apps/system-upgrade/',
+          'kubernetes/apps/databases/',
+          'kubernetes/apps/storage/',
+          'kubernetes/apps/ai/',
+          'kubernetes/apps/security/',
+          'kubernetes/apps/auth/',
+          'kubernetes/apps/networking/',
+          'kubernetes/apps/cert-manager/',
+          'kubernetes/apps/tools/',
+          'kubernetes/apps/kopiur-system/',
+          'kubernetes/apps/monitoring/',
+          'kubernetes/apps/default/hajimari/',
+          'kubernetes/apps/production/frigate/',
+          'kubernetes/apps/home-automation/zwave-js-ui/',
+          'kubernetes/apps/media/qbittorrent/'
+        ]
+    - name: parentObjects
+      expression: >-
+        {
+          'flux-system/cluster-apps': [
+            'CiliumNetworkPolicy/agents-finance/allow-dns',
+            'CiliumNetworkPolicy/agents-finance/backup-mover',
+            'CiliumNetworkPolicy/agents-main/allow-dns',
+            'CiliumNetworkPolicy/agents-main/backup-mover',
+            'CiliumNetworkPolicy/agents-pilot/allow-dns',
+            'CiliumNetworkPolicy/agents-pilot/backup-mover',
+            'CiliumNetworkPolicy/agents-workflows/allow-dns',
+            'Namespace//agent-sandbox-system',
+            'Namespace//agents-finance',
+            'Namespace//agents-main',
+            'Namespace//agents-pilot',
+            'Namespace//agents-workflows',
+            'Namespace//ai',
+            'Namespace//auth',
+            'Namespace//cache',
+            'Namespace//cert-manager',
+            'Namespace//databases',
+            'Namespace//default',
+            'Namespace//flux-system',
+            'Namespace//home-automation',
+            'Namespace//kopiur-system',
+            'Namespace//kube-system',
+            'Namespace//media',
+            'Namespace//monitoring',
+            'Namespace//networking',
+            'Namespace//production',
+            'Namespace//security',
+            'Namespace//selfhosted',
+            'Namespace//storage',
+            'Namespace//system-upgrade',
+            'Namespace//tools',
+            'NetworkPolicy/agent-sandbox-system/default-deny',
+            'NetworkPolicy/agents-finance/default-deny',
+            'NetworkPolicy/agents-main/default-deny',
+            'NetworkPolicy/agents-pilot/default-deny',
+            'NetworkPolicy/agents-workflows/default-deny',
+            'NetworkPolicy/security/default-deny'
+          ],
+          'flux-system/cluster-apps-wsl-02': [
+            'Namespace//ai',
+            'Namespace//cert-manager',
+            'Namespace//databases',
+            'Namespace//flux-system',
+            'Namespace//home-automation',
+            'Namespace//kopiur-system',
+            'Namespace//kube-system',
+            'Namespace//media',
+            'Namespace//monitoring',
+            'Namespace//networking',
+            'Namespace//production',
+            'Namespace//security',
+            'Namespace//selfhosted',
+            'Namespace//tools',
+            'NetworkPolicy/security/default-deny'
+          ]
+        }
+    # END classlist.py
+    # The namespace of the request; a cluster-scoped request has none.
+    - name: ns
+      expression: request.?namespace.orValue('')
+    # A Namespace is cluster-scoped, but its request names it as its
+    # namespace.
+    - name: clusterScoped
+      expression: variables.ns == '' || (request.kind.group == '' && request.kind.kind == 'Namespace')
+    - name: objNs
+      expression: "variables.clusterScoped ? '' : variables.ns"
+    - name: kustomize
+      expression: request.userInfo.username == 'system:serviceaccount:flux-system:kustomize-controller'
+    - name: labels
+      expression: object.metadata.?labels.orValue({})
+    - name: kOwner
+      expression: >-
+        variables.labels[?'kustomize.toolkit.fluxcd.io/namespace'].orValue('') + '/' +
+        variables.labels[?'kustomize.toolkit.fluxcd.io/name'].orValue('')
+    - name: hOwner
+      expression: >-
+        variables.labels[?'helm.toolkit.fluxcd.io/namespace'].orValue('') + '/' +
+        variables.labels[?'helm.toolkit.fluxcd.io/name'].orValue('')
+    # An object that a child applies carries the owner label of the
+    # controller that applies it.
+    - name: applied
+      expression: >-
+        variables.kustomize
+          ? 'kustomize.toolkit.fluxcd.io/name' in variables.labels
+          : 'helm.toolkit.fluxcd.io/name' in variables.labels
+    - name: child
+      expression: "variables.kustomize ? 'Kustomization ' + variables.kOwner : 'HelmRelease ' + variables.hOwner"
+    - name: inClass
+      expression: >-
+        variables.kustomize
+          ? variables.kOwner in variables.classKustomizations
+          : variables.hOwner in variables.classHelmReleases
+    - name: outside
+      expression: variables.applied && !variables.inClass
+    - name: group
+      expression: request.kind.group
+    - name: kind
+      expression: request.kind.kind
+    - name: what
+      expression: >-
+        variables.kind + ' ' + (variables.objNs == '' ? '' : variables.objNs + '/') +
+        object.metadata.?name.orValue(object.metadata.?generateName.orValue(''))
+    - name: self
+      expression: variables.objNs + '/' + object.metadata.?name.orValue('')
+    - name: isKustomization
+      expression: variables.group == 'kustomize.toolkit.fluxcd.io' && variables.kind == 'Kustomization'
+    - name: isHelmRelease
+      expression: variables.group == 'helm.toolkit.fluxcd.io' && variables.kind == 'HelmRelease'
+    # A finalizer or an annotation of a controller: the spec stays.
+    - name: sameSpec
+      expression: >-
+        request.operation == 'UPDATE' && oldObject != null &&
+        oldObject.?spec.orValue({}) == object.?spec.orValue({})
+    - name: path
+      expression: "variables.isKustomization ? object.spec.?path.orValue('') : ''"
+    # A path in the form a/b/c (a leading ./ and a trailing / are allowed):
+    # no empty, "." or ".." part, so no root and no way up.
+    - name: pathForm
+      expression: >-
+        variables.path.matches('^(\\./)?[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*/?$')
+    # The path with no leading ./ and one trailing /.
+    - name: pathTrim
+      expression: "variables.path.startsWith('./') ? variables.path.substring(2) : variables.path"
+    - name: pathNorm
+      expression: >-
+        (variables.pathTrim.endsWith('/')
+          ? variables.pathTrim.substring(0, variables.pathTrim.size() - 1)
+          : variables.pathTrim) + '/'
+    - name: pathInClass
+      expression: variables.classPaths.exists(c, variables.pathNorm.startsWith(c))
+    - name: pathHoldsClass
+      expression: variables.classPaths.exists(c, c.startsWith(variables.pathNorm))
+    - name: podSpec
+      expression: >-
+        variables.group == '' && variables.kind == 'Pod' ? object.?spec.orValue({}) :
+        variables.group == '' && variables.kind == 'PodTemplate' ? object.?template.?spec.orValue({}) :
+        variables.group == 'batch' && variables.kind == 'CronJob'
+          ? object.?spec.?jobTemplate.?spec.?template.?spec.orValue({}) :
+        (variables.group == 'apps' && variables.kind in ['Deployment', 'ReplicaSet', 'StatefulSet', 'DaemonSet']) ||
+        (variables.group == 'batch' && variables.kind == 'Job') ||
+        (variables.group == '' && variables.kind == 'ReplicationController')
+          ? object.?spec.?template.?spec.orValue({}) : {}
+    - name: containers
+      expression: >-
+        variables.podSpec.?containers.orValue([]) +
+        variables.podSpec.?initContainers.orValue([]) +
+        variables.podSpec.?ephemeralContainers.orValue([])
+    - name: privileged
+      expression: >-
+        variables.podSpec.?hostNetwork.orValue(false) == true ||
+        variables.podSpec.?hostPID.orValue(false) == true ||
+        variables.podSpec.?hostIPC.orValue(false) == true ||
+        variables.podSpec.?volumes.orValue([]).exists(v, has(v.hostPath)) ||
+        variables.containers.exists(c,
+          c.?securityContext.?privileged.orValue(false) == true ||
+          c.?securityContext.?capabilities.?add.orValue([]).size() > 0 ||
+          c.?ports.orValue([]).exists(p, p.?hostPort.orValue(0) != 0))
+    - name: oldLabels
+      expression: "oldObject != null ? oldObject.metadata.?labels.orValue({}) : {}"
+    - name: oldClass
+      expression: >-
+        (variables.oldLabels[?'kustomize.toolkit.fluxcd.io/namespace'].orValue('') + '/' +
+         variables.oldLabels[?'kustomize.toolkit.fluxcd.io/name'].orValue('')) in variables.classKustomizations ||
+        (variables.oldLabels[?'helm.toolkit.fluxcd.io/namespace'].orValue('') + '/' +
+         variables.oldLabels[?'helm.toolkit.fluxcd.io/name'].orValue('')) in variables.classHelmReleases
+  validations:
+    - expression: "!variables.outside || !variables.clusterScoped"
+      messageExpression: >-
+        'flux-child-scope/cluster-object: ' + variables.child +
+        ' is outside the class and may not apply ' + variables.what
+      reason: Forbidden
+    - expression: >-
+        !variables.outside || variables.clusterScoped || !(variables.ns in variables.classNamespaces) ||
+        (!variables.kustomize && variables.group == 'source.toolkit.fluxcd.io' && variables.kind == 'HelmChart')
+      messageExpression: >-
+        'flux-child-scope/class-namespace: ' + variables.child +
+        ' is outside the class and may not apply ' + variables.what + ' in a namespace of the class'
+      reason: Forbidden
+    - expression: "!variables.outside || variables.group != 'rbac.authorization.k8s.io'"
+      messageExpression: >-
+        'flux-child-scope/rbac: ' + variables.child + ' is outside the class and may not apply ' + variables.what
+      reason: Forbidden
+    - expression: >-
+        !variables.outside || !(variables.isKustomization ||
+          (variables.group == 'image.toolkit.fluxcd.io' && variables.kind == 'ImageUpdateAutomation'))
+      messageExpression: >-
+        'flux-child-scope/flux-kinds: ' + variables.child + ' is outside the class and may not apply ' + variables.what
+      reason: Forbidden
+    - expression: >-
+        !variables.outside || !variables.isHelmRelease || (
+          !has(object.spec.serviceAccountName) && !has(object.spec.kubeConfig) &&
+          !(object.spec.?targetNamespace.orValue('') in variables.classNamespaces) &&
+          !(object.spec.?storageNamespace.orValue('') in variables.classNamespaces) &&
+          object.spec.?postRenderStrategy.orValue('') != 'nohooks')
+      messageExpression: >-
+        'flux-child-scope/helmrelease-spec: ' + variables.child + ' is outside the class, so ' + variables.what +
+        ' may have no service account, kubeconfig, target or storage namespace of the class, or post render strategy nohooks'
+      reason: Forbidden
+    - expression: "!variables.outside || !variables.privileged"
+      messageExpression: >-
+        'flux-child-scope/privileged-pod: ' + variables.child + ' is outside the class, so the pod spec of ' +
+        variables.what + ' may have no privileged container, host path, host network, PID or IPC, host port or added capability'
+      reason: Forbidden
+    - expression: "!variables.outside || !variables.oldClass"
+      messageExpression: >-
+        'flux-child-scope/takeover: ' + variables.child + ' is outside the class and may not change ' +
+        variables.what + ', which a child of the class applies'
+      reason: Forbidden
+    - expression: >-
+        !variables.isKustomization || variables.self in variables.classKustomizations || variables.sameSpec || (
+          variables.pathForm && !variables.pathInClass && !variables.pathHoldsClass &&
+          !has(object.spec.serviceAccountName) && !has(object.spec.kubeConfig) &&
+          !object.spec.?commonMetadata.?labels.orValue({}).exists(k, k.contains('toolkit.fluxcd.io')) &&
+          !object.spec.?commonMetadata.?annotations.orValue({}).exists(k, k.contains('toolkit.fluxcd.io')) &&
+          object.spec.?postBuild.?substituteFrom.orValue([]).all(s,
+            [s.kind, s.name] in [
+              ['ConfigMap', 'cluster-settings'], ['ConfigMap', 'site-overrides'], ['Secret', 'cluster-secrets']
+            ]))
+      messageExpression: >-
+        'flux-child-scope/kustomization-spec: ' + variables.what +
+        ' is outside the class: its path must be in the form a/b/c, not in or above a path of the class,' +
+        ' with no service account, kubeconfig or commonMetadata key of Flux, and substitution from' +
+        ' cluster-settings, site-overrides and cluster-secrets only'
+      reason: Forbidden
+    - expression: >-
+        !variables.isKustomization || !(variables.self in variables.classKustomizations) || variables.sameSpec || (
+          variables.kustomize && variables.applied &&
+          variables.kOwner in variables.classKustomizations[variables.self] &&
+          variables.pathForm && variables.pathInClass)
+      messageExpression: >-
+        'flux-child-scope/kustomization-class: ' + variables.what + ' is in the class, so it must come from ' +
+        variables.classKustomizations[variables.self].join(' or ') + ' with a path of the class, not from ' + variables.child
+      reason: Forbidden
+    - expression: >-
+        !variables.isHelmRelease || !(variables.self in variables.classHelmReleases) || variables.sameSpec || (
+          variables.kustomize && variables.applied && variables.kOwner in variables.classKustomizations)
+      messageExpression: >-
+        'flux-child-scope/helmrelease-class: ' + variables.what +
+        ' is in the class, so a Kustomization of the class must apply it, not ' + variables.child
+      reason: Forbidden
+    - expression: >-
+        !(variables.kustomize && variables.applied && variables.kOwner in variables.parentObjects) ||
+        variables.isKustomization ||
+        (variables.kind + '/' + variables.objNs + '/' + object.metadata.?name.orValue('')) in variables.parentObjects[variables.kOwner]
+      messageExpression: >-
+        'flux-child-scope/parent-objects: ' + variables.child + ' reads files outside the class, so it may apply' +
+        ' Kustomizations and the objects of its build in git only, not ' + variables.what
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: flux-child-scope
+spec:
+  policyName: flux-child-scope
+  validationActions: ["Audit", "Warn"]
