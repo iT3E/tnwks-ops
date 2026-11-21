@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'windows: the boot task of the way back of the move (and of its rehearsal) names its boot trigger with no default child, so a check run no longer reads it as a change: the Task Scheduler leaves an Enabled of true out of the export that the task module compares'
-time: 2026-11-21T09:00:00.000000000Z

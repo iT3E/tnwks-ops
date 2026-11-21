@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.247.3 - 2026-11-21
+
+### Fixed
+
+* windows: the boot task of the way back of the move (and of its rehearsal) names its boot trigger with no default child, so a check run no longer reads it as a change: the Task Scheduler leaves an Enabled of true out of the export that the task module compares
+
 ## v2.247.2 - 2026-11-21
 
 ### Fixed
