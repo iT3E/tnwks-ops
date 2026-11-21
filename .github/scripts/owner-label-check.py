@@ -129,6 +129,13 @@ ASK_FIRST = (
     "kubernetes/apps/tools/",
     "kubernetes/apps/kopiur-system/",
     "kubernetes/apps/monitoring/",
+    # The apps outside the system namespaces that need a right of the class:
+    # cluster RBAC (hajimari), or a privileged pod with a host path or an
+    # added capability (frigate, zwave-js-ui, qbittorrent).
+    "kubernetes/apps/default/hajimari/",
+    "kubernetes/apps/production/frigate/",
+    "kubernetes/apps/home-automation/zwave-js-ui/",
+    "kubernetes/apps/media/qbittorrent/",
     "security/",
     "observability/",
     ".taskfiles/",

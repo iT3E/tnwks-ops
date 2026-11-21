@@ -108,8 +108,9 @@ git for site 2:
 
 Two CRDs of site 1 carry the owner labels of a HelmRelease that no longer
 exists (`tools/node-feature-discovery`). No controller applies them, so no
-request comes. Before the `Deny` change, each object of the table joins the
-class, changes, or goes. That is a choice of the owner.
+request comes. The folders of the four apps of the table are in the class
+(`CLASS_PATHS` and the list of Owner label), so the rules refuse no live
+object.
 
 ## Read the audit result
 

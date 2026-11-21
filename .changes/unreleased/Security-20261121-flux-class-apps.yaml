@@ -1,0 +1,3 @@
+kind: Security
+body: 'Owner label and the Flux admission policy: the folders of hajimari, frigate, zwave-js-ui and qbittorrent join the "ask first" class, because each needs a right of the class (cluster RBAC, or a privileged pod with a host path or an added capability). With them in the class the policy refuses no live object'
+time: 2026-11-21T19:45:00.000000000Z

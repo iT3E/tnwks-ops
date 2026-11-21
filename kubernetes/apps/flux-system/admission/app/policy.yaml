@@ -145,8 +145,10 @@ spec:
           'flux-system/flux-alerts': ['flux-system/cluster-apps'],
           'flux-system/flux-system': ['flux-system/flux-system'],
           'flux-system/flux-webhooks': ['flux-system/cluster-apps'],
+          'flux-system/frigate': ['flux-system/cluster-apps'],
           'flux-system/grafana': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/grafana-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/hajimari': ['flux-system/cluster-apps'],
           'flux-system/ingress-nginx': ['flux-system/cluster-apps'],
           'flux-system/ingress-nginx-certificates': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/ingress-nginx-internal': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
@@ -187,6 +189,7 @@ spec:
           'flux-system/pushgateway': ['flux-system/cluster-apps'],
           'flux-system/pyrra': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/pyrra-crds': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/qbittorrent': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/reflector': ['flux-system/cluster-apps'],
           'flux-system/reloader': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/security-api-checks': ['flux-system/cluster-apps-wsl-02'],
@@ -216,7 +219,8 @@ spec:
           'flux-system/vector-agent-platform': ['flux-system/cluster-apps'],
           'flux-system/vector-aggregator': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/vector-audit-reader': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
-          'flux-system/weave-gitops': ['flux-system/cluster-apps']
+          'flux-system/weave-gitops': ['flux-system/cluster-apps'],
+          'flux-system/zwave-js-ui': ['flux-system/cluster-apps']
         }
     - name: classHelmReleases
       expression: >-
@@ -232,13 +236,16 @@ spec:
           'cert-manager/cert-manager',
           'databases/cloudnative-pg',
           'databases/plugin-barman-cloud',
+          'default/hajimari',
           'flux-system/weave-gitops',
+          'home-automation/zwave-js-ui',
           'kopiur-system/kopiur',
           'kube-system/cilium',
           'kube-system/local-path-provisioner',
           'kube-system/metrics-server',
           'kube-system/reflector',
           'kube-system/reloader',
+          'media/qbittorrent',
           'monitoring/alertmanager',
           'monitoring/alloy',
           'monitoring/blackbox-exporter',
@@ -271,6 +278,7 @@ spec:
           'networking/ingress-nginx-internal',
           'networking/k8s-gateway',
           'networking/unifi',
+          'production/frigate',
           'security/security-converter',
           'security/trivy-operator',
           'system-upgrade/tuppr',
@@ -326,7 +334,11 @@ spec:
           'kubernetes/apps/cert-manager/',
           'kubernetes/apps/tools/',
           'kubernetes/apps/kopiur-system/',
-          'kubernetes/apps/monitoring/'
+          'kubernetes/apps/monitoring/',
+          'kubernetes/apps/default/hajimari/',
+          'kubernetes/apps/production/frigate/',
+          'kubernetes/apps/home-automation/zwave-js-ui/',
+          'kubernetes/apps/media/qbittorrent/'
         ]
     - name: parentObjects
       expression: >-
