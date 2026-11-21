@@ -198,10 +198,16 @@ module `tnwks_win_dir_acl` (`playbooks/library`): no inherited rule, the
 Administrators own it, and the account may make and change files but not
 delete the directory or make one in it. The module stops when the path is a
 link or a junction. SYSTEM's `wsl.exe` can not see the distro of the user,
-so a SYSTEM task can not start a process in it. The USB attach and the
-monitoring volume have no part with no elevation yet, and the play refuses
-the switch on a host that runs them (the first task of the play, with each
-tag).
+so a SYSTEM task can not start a process in it. The monitoring volume has
+no part with no elevation yet, and the play refuses the switch on a host
+that runs it (the first task of the play, with each tag). The USB attach
+runs with no elevation with the switch (`-NoElevation`): the play binds each
+device as admin, usbipd-win attaches a bound device with no admin right
+(usbipd-win 4.3.0: `Bind` checks write access, `AttachWsl` does not), and the
+task logs to `C:\ProgramData\tnwks-usb-attach\log`, the folder that its
+account may write. In the move of the distro it has a copy for the account
+that owns the distro (`tnwks-usb-attach-account`), as the UDP relays and the
+address task of the LAN bridge do.
 
 **The folders of the roles.** On each host, with the switch on or off, each
 folder of a role under `C:\ProgramData` gets its rules from the same module,

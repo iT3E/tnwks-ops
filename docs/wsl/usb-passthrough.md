@@ -92,7 +92,11 @@ usbipd attach --wsl --busid 4-1
 >   the System log). When it attaches the Z-Stick itself, it also restarts
 >   `homelab-wsl-worker-2` (with a 15 minute cooldown) so the device reaches
 >   the node. Log: `C:\ProgramData\tnwks-usb-attach\sync.log`; dry run with
->   `-DryRun`. Its Coral handling (the DFU to runtime firmware flip) is off
+>   `-DryRun`. With `wsl_start_unelevated` it runs with no elevation
+>   (`-NoElevation`): it attaches and does not bind (the role binds), and it
+>   logs to `C:\ProgramData\tnwks-usb-attach\log\sync.log`. In the move of
+>   the distro the account that owns the distro runs its copy,
+>   `tnwks-usb-attach-account` ([windows-ansible.md](windows-ansible.md)). Its Coral handling (the DFU to runtime firmware flip) is off
 >   unless `-CoralDfuVidPid` and `-CoralRuntimeVidPid` are passed
 >   (`usb_attach_args`).
 > - **The watchdog `tnwks-wsl-watchdog`** (role `windows_wsl_maintenance`)

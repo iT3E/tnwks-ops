@@ -418,3 +418,127 @@ def test_the_handler_restarts_the_relays_of_the_phase_that_are_enabled():
     assert handler["parameters"] == {"Tasks": "{{ udp_relay_task_names }}", "SkipDisabled": MOVE}
     script = handler["script"]
     assert script.index("if ($SkipDisabled -and $task.State -eq 'Disabled') { continue }") < script.index("Stop-ScheduledTask")
+
+
+# --- windows_usb_attach ----------------------------------------------------------------
+
+USB = "windows_usb_attach"
+USB_DEFAULTS = yaml.safe_load((ROLES / USB / "defaults/main.yml").read_text())
+USB_SCRIPT = ROLES / USB / "files/Sync-TnwksUsbAttach.ps1"
+
+
+def test_the_attach_task_of_the_present_account_keeps_its_state_and_is_left_once_done():
+    """The way back enables it again as it is: the task of today."""
+    task = named(USB, "Sync task (desktop user; logon, every 15 min, after a WSL vNIC reset)")
+    module = task["tnwks_win_scheduled_task"]
+    assert module["keep_task_enabled_state"] == MOVE and module["name"] == "{{ usb_attach_task }}"
+    assert task["when"] == "wsl_move_phase != 'done'" and "s4u_user" not in module and "vars" not in task
+    assert named(USB, "The move of the distro needs the start with no elevation")["ansible.builtin.assert"]["that"] == (
+        "wsl_move_phase == 'off' or wsl_start_unelevated | bool")
+
+
+def test_the_attach_task_has_a_copy_of_the_account_that_owns_the_distro():
+    task = named(USB, "Sync task of the account that owns the distro")
+    module = task["tnwks_win_scheduled_task"]
+    assert task["when"] == "wsl_move_phase != 'off'"
+    assert module["name"] == "{{ usb_attach_task_account }}"
+    assert USB_DEFAULTS["usb_attach_task_account"] == "{{ usb_attach_task }}{{ wsl_move_task_suffix }}"
+    assert module["s4u_user"] == "{{ wsl_move_new_account }}"
+    assert module["s4u_description"] == "{{ wsl_move_new_description }}"
+    assert module["keep_task_enabled_state"] == MOVE
+    assert "lookup('ansible.builtin.template', 'usb-attach.xml.j2')" in module["xml"]
+    assert "regex_replace('<Settings>', '<Settings><Enabled>false</Enabled>' if wsl_move_phase == 'move'" in module["xml"]
+    become = {key: value for key, value in task["vars"].items() if key.startswith("ansible_become")}
+    assert become == SYSTEM_BECOME and task["vars"]["usb_attach_user"] == "{{ wsl_move_new_account }}"
+    assert task["no_log"] is True
+
+
+def test_the_bind_stays_in_the_play_as_admin_and_both_accounts_write_the_log_while_the_move_runs():
+    bind = named(USB, "Devices are bound (shared, forced) for usbip")
+    assert "bind --force --hardware-id" in bind["ansible.windows.win_powershell"]["script"]
+    assert "vars" not in bind and "become" not in bind
+    writers = " ".join(USB_DEFAULTS["usb_attach_writers"].split())
+    assert writers == ("{{ [usb_attach_user] if wsl_move_phase == 'off' else ([usb_attach_user, "
+                       "wsl_move_new_account] if wsl_move_phase == 'move' else [wsl_move_new_account]) }}")
+    folder = named(USB, "Log directory of the attach task")
+    assert folder["tnwks_win_dir_acl"] == {"path": "{{ usb_attach_log_dir }}", "writer": "{{ usb_attach_writers }}"}
+    assert folder["when"] == "wsl_start_unelevated | bool"
+    root = named(USB, "USB attach directory")["tnwks_win_dir_acl"]
+    assert root["keep"] == ["{{ usb_attach_log_dir }}"]
+
+
+def test_the_attach_task_runs_with_no_elevation_only_with_the_switch():
+    from test_wsl_start_unelevated import principal, render
+    template = ROLES / USB / "templates/usb-attach.xml.j2"
+    on, off = render(template, on=True), render(template, on=False)
+    assert principal(on) == ("{{ usb_attach_user | e }}", "LeastPrivilege")
+    assert principal(off) == ("{{ usb_attach_user | e }}", "HighestAvailable")
+    assert ('-NoElevation -LogPath "{{ usb_attach_log_dir | e }}\\sync.log" '
+            '-StatePath "{{ usb_attach_log_dir | e }}\\sync-state.json"') in on
+    assert "-NoElevation" not in off and "usb_attach_log_dir" not in off
+
+
+def test_the_start_tasks_of_the_new_account_take_the_copy_where_a_device_is_bound():
+    derived = " ".join(GROUP["wsl_move_new_start_tasks"].split())
+    assert ("+ (['tnwks-usb-attach'] if usb_attach_bound_devices | default(['the default of the role']) "
+            "| length > 0 else [])") in derived
+    assert USB_DEFAULTS["usb_attach_task"] == "tnwks-usb-attach" and USB_DEFAULTS["usb_attach_bound_devices"]
+
+
+USB_FAKES = r"""
+$global:Calls = New-Object System.Collections.Generic.List[string]
+function usbipd {
+    $global:Calls.Add('usbipd ' + ($args -join ' ')); $global:LASTEXITCODE = 0
+    if ($args[0] -eq '--version') { '4.3.0' }
+    if ($args[0] -eq 'state') { $global:State }
+}
+function wsl.exe { $global:Calls.Add('wsl ' + ($args -join ' ')); $global:LASTEXITCODE = 0 }
+function Test-Admin { $global:Admin }
+"""
+
+
+def run_usb(tmp_path: Path, args: str, admin: bool, attached: bool = False) -> dict:
+    """The script, with the identity read and Test-Admin as stand-ins (Windows only)."""
+    text = USB_SCRIPT.read_text()
+    assert text.count("function Test-Admin {") == 1 and text.count("[Security.Principal.WindowsIdentity]::GetCurrent().Name") == 1
+    text = text.replace("function Test-Admin {", "function Test-AdminOfWindows {")
+    text = text.replace("[Security.Principal.WindowsIdentity]::GetCurrent().Name", "'standin1'")
+    text = text.replace("exit $exitCode", "$global:Exit = $exitCode")
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    script = tmp_path / "Sync-TnwksUsbAttach.ps1"
+    script.write_text(text)
+    client = "172.25.20.9" if attached else ""
+    state = json.dumps({"Devices": [{"BusId": "1-6", "InstanceId": "USB\\VID_0658&PID_0200\\5&1", "ClientIPAddress": client}]})
+    result = pwsh(USB_FAKES + f"$global:Admin = ${str(admin).lower()}\n$global:State = '{state}'\n"
+                  + f"& '{script}' -LogPath '{tmp_path / 'sync.log'}' -StatePath '{tmp_path / 'sync-state.json'}' {args} | Out-Null\n"
+                  + "[Console]::Out.Write((@{ calls = @($global:Calls); exit = $global:Exit } | ConvertTo-Json -Compress))")
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout.strip().splitlines()[-1])
+    out["log"] = (tmp_path / "sync.log").read_text() if (tmp_path / "sync.log").exists() else ""
+    return out
+
+
+@needs_pwsh
+def test_with_no_elevation_the_script_attaches_with_no_bind_and_restarts_the_worker(tmp_path):
+    out = run_usb(tmp_path, "-NoElevation", admin=False)
+    assert out["exit"] == 0, out["log"]
+    assert out["calls"] == ["usbipd --version", "usbipd state", "usbipd attach --wsl --busid 1-6",
+                            "wsl -d Ubuntu --exec docker restart homelab-wsl-worker-2", "usbipd list"]
+    assert "no bind with no elevation; the play binds it" in out["log"]
+
+
+@needs_pwsh
+def test_with_no_elevation_an_attached_device_is_left_as_it_is(tmp_path):
+    out = run_usb(tmp_path, "-NoElevation", admin=False, attached=True)
+    assert out["exit"] == 0 and out["calls"] == ["usbipd --version", "usbipd state", "usbipd list"], out["log"]
+
+
+@needs_pwsh
+def test_the_elevated_script_binds_then_attaches_as_before_and_stops_with_no_admin_right(tmp_path):
+    elevated = run_usb(tmp_path / "1", "", admin=True)
+    assert elevated["exit"] == 0, elevated["log"]
+    assert elevated["calls"][:4] == ["usbipd --version", "usbipd state", "usbipd bind --force --busid 1-6",
+                                     "usbipd attach --wsl --busid 1-6"]
+    plain = run_usb(tmp_path / "2", "", admin=False)
+    assert plain["exit"] == 1 and plain["calls"] == [], plain["log"]
+    assert "not running as Administrator" in plain["log"]

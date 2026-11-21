@@ -373,12 +373,16 @@ def test_site_2_turns_the_move_on_with_the_copies_that_its_roles_register():
     copies = [maintenance["wsl_watchdog_task"], bridge["lan_bridge_ip_task"]]
     copies += [maintenance["wsl_keepalive_task"]] if host["wsl_keepalive_enabled"] else []
     copies += [relay["task"] for relay in host["udp_relays"]]
+    # Site 2 binds no USB device, so it has no copy of the USB attach.
+    assert host["usb_attach_bound_devices"] == []
     # The list is derived in the group variables from the same values, with the names of the roles' defaults.
     assert "wsl_move_new_start_tasks" not in host
     derived = " ".join(group["wsl_move_new_start_tasks"].split())
     assert derived == ("{{ (['tnwks-wsl-watchdog', 'tnwks-lan-bridge-ip'] + (['tnwks-wsl-keepalive'] "
                        "if wsl_keepalive_enabled | default(false) | bool else []) + (udp_relays | default([]) "
-                       "| map(attribute='task') | list)) | map('regex_replace', '$', wsl_move_task_suffix) | list }}")
+                       "| map(attribute='task') | list) + (['tnwks-usb-attach'] if usb_attach_bound_devices "
+                       "| default(['the default of the role']) | length > 0 else [])) "
+                       "| map('regex_replace', '$', wsl_move_task_suffix) | list }}")
     assert [maintenance["wsl_watchdog_task"], bridge["lan_bridge_ip_task"], maintenance["wsl_keepalive_task"]] == [
         "tnwks-wsl-watchdog", "tnwks-lan-bridge-ip", "tnwks-wsl-keepalive"]
     # The rule of the role's assert holds for this host.
