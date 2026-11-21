@@ -1,0 +1,12 @@
+# Managed by tnwks-ops (role wsl_observability_file). At the start of the
+# distro and each minute, as the mount task of the monitoring VHDX did.
+[Unit]
+Description=Mount the file of the monitoring data each minute
+
+[Timer]
+OnActiveSec=15s
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

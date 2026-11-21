@@ -1,0 +1,12 @@
+---
+# Where the monitoring data of site 1 is mounted: the variable
+# observability_storage_mount of the Windows host (role
+# windows_observability_storage, Design Doc 0004, section 5.13).
+#   vhdx   the VHDX that the mount task of Windows attaches (today). The timer
+#          of the file is off.
+#   ready  the same, and the file is made, for the copy. The timer is off.
+#   file   the file, mounted by the timer. The mount task of Windows is
+#          disabled, and it and the VHDX stay as the way back.
+wsl_observability_file_mount: "{{ hostvars[wsl_distro_windows_host].observability_storage_mount | default('vhdx') }}"
+wsl_observability_file_lib: /usr/local/lib/tnwks-observability
+wsl_observability_file_unit: tnwks-observability-file

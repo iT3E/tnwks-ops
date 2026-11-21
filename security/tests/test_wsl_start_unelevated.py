@@ -351,7 +351,8 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
 
     def passes(data: dict) -> bool:
         on = bool(data.get("wsl_start_unelevated"))
-        return not on or not data.get("observability_storage_enabled", False)
+        volume = data.get("observability_storage_enabled", False) and data.get("observability_storage_mount", "vhdx") != "file"
+        return not on or not volume
 
     assert guard["that"][0].split(" or ")[0] == "not (wsl_start_unelevated | bool)"
     assert guard["that"][1] == "not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)"
@@ -362,6 +363,9 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
         assert not data["wsl_start_unelevated_done"] or data["wsl_start_unelevated"], name
     site1 = windows_hosts()["DESKTOP-HKE05KI"]
     assert not passes({**site1, "wsl_start_unelevated": True}), "site 1 needs the split of the monitoring volume first"
+    # The monitoring data in the file on the distro disk (section 5.13): the mount task is disabled.
+    assert guard["that"][0].endswith(" or (observability_storage_mount | default('vhdx')) == 'file'")
+    assert passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "file"})
 
 
 # Stand-ins for the encrypted values of a Windows host with the move of the distro on.

@@ -1,0 +1,93 @@
+---
+# The monitoring data of site 1 in a file on the disk of the distro, mounted by
+# a loop device (observability-file.py). The run order of the move of the data
+# is in docs/operations/observability-implementation.md.
+
+- name: The mount of the monitoring data is vhdx, ready or file
+  ansible.builtin.assert:
+    that: wsl_observability_file_mount in ['vhdx', 'ready', 'file']
+    fail_msg: >-
+      observability_storage_mount of {{ wsl_distro_windows_host }} is {{ wsl_observability_file_mount }}:
+      it must be vhdx, ready or file. Nothing is changed.
+    quiet: true
+
+- name: Read whether the timer of the file is installed
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ wsl_observability_file_unit }}.timer"
+  register: wsl_observability_file_timer
+
+# The way back: the mount task of Windows mounts the VHDX again, and the file
+# stays as it is.
+- name: With the VHDX, the timer of the file is stopped and off
+  ansible.builtin.systemd:
+    name: "{{ wsl_observability_file_unit }}.timer"
+    state: stopped
+    enabled: false
+  register: wsl_observability_file_timer_off
+  when:
+    - wsl_observability_file_mount == 'vhdx'
+    - wsl_observability_file_timer.stat.exists
+
+# The way back: the timer is off first, so it can not mount the file again.
+- name: With the VHDX, the file is released from the point
+  ansible.builtin.command: "/usr/bin/python3 {{ wsl_observability_file_lib }}/observability-file.py release"
+  changed_when: true
+  when: wsl_observability_file_timer_off is changed  # noqa: no-handler (right after the timer stop)
+
+- name: The file of the monitoring data
+  when: wsl_observability_file_mount != 'vhdx'
+  block:
+    - name: The folder of the script
+      ansible.builtin.file:
+        path: "{{ wsl_observability_file_lib }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: The script of the file
+      ansible.builtin.copy:
+        src: observability-file.py
+        dest: "{{ wsl_observability_file_lib }}/observability-file.py"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: The units of the mount of the file
+      ansible.builtin.copy:
+        src: "{{ wsl_observability_file_unit }}.{{ item }}"
+        dest: "/etc/systemd/system/{{ wsl_observability_file_unit }}.{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [service, timer]
+      notify: Reload systemd
+
+    - name: Flush the systemd reload
+      ansible.builtin.meta: flush_handlers
+
+    # A check run changes nothing here: the command is skipped.
+    - name: The file and its file system, made once
+      ansible.builtin.command: "/usr/bin/python3 {{ wsl_observability_file_lib }}/observability-file.py create"
+      register: wsl_observability_file_create
+      changed_when: (wsl_observability_file_create.stdout | from_json).created
+
+    - name: In the phase ready, the timer of the file is stopped and off
+      ansible.builtin.systemd:
+        name: "{{ wsl_observability_file_unit }}.timer"
+        state: stopped
+        enabled: false
+      # A check run before the first apply has no unit yet.
+      when:
+        - wsl_observability_file_mount == 'ready'
+        - not ansible_check_mode or wsl_observability_file_timer.stat.exists
+
+    - name: In the phase file, the timer mounts the file at the start of the distro and each minute
+      ansible.builtin.systemd:
+        name: "{{ wsl_observability_file_unit }}.timer"
+        state: started
+        enabled: true
+      # A check run before the first apply has no unit yet.
+      when:
+        - wsl_observability_file_mount == 'file'
+        - not ansible_check_mode or wsl_observability_file_timer.stat.exists
