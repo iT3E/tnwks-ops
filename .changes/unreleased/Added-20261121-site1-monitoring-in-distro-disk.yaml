@@ -1,0 +1,3 @@
+kind: Added
+body: 'site 1 monitoring: the data of Prometheus can move from the VHDX that a Windows task attaches into a file of 19 GiB on the disk of the distro, ext4, mounted by a loop device at the same point (role wsl_observability_file, phases vhdx, ready and file of observability_storage_mount). With the file, the mount task is disabled and stays with the VHDX as the way back, and a compaction leaves a disabled task disabled'
+time: 2026-11-21T10:00:00.000000000Z

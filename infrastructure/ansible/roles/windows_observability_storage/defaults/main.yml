@@ -4,3 +4,11 @@ observability_storage_vhdx: 'C:\WSL\observability.vhdx'
 observability_storage_dir: 'C:\ProgramData\tnwks-observability'
 observability_storage_distro: Ubuntu
 observability_storage_task: tnwks-observability-mount
+# Where the monitoring data is mounted (Design Doc 0004, section 5.13). The
+# role wsl_observability_file of the distro reads it too.
+#   vhdx   the VHDX, attached and mounted by the mount task (today).
+#   ready  the same, and the distro makes the file of 19 GiB, for the copy.
+#   file   the file on the distro disk, mounted by a loop device in the
+#          distro. The mount task is registered disabled and attaches nothing.
+#          It, its scripts and the VHDX stay as the way back (vhdx again).
+observability_storage_mount: vhdx

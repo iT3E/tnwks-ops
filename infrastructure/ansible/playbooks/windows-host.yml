@@ -71,18 +71,23 @@
     # rights, and they have no part with no elevation yet: the USB attach
     # (usbipd) and the monitoring volume (wsl --mount). A host with either one
     # can not start WSL with no elevation until they do (Design Doc 0004,
-    # section 5.9, and docs/wsl/windows-ansible.md).
+    # section 5.9, and docs/wsl/windows-ansible.md). With the monitoring data
+    # in the file on the distro disk (observability_storage_mount file, section
+    # 5.13), the mount task is disabled and the role starts nothing.
     - name: The start with no elevation has each role it needs
       ansible.builtin.assert:
         that:
           - not (wsl_start_unelevated | bool) or (usb_attach_bound_devices | default([]) | length == 0)
-          - not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool)
+          - >-
+            not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool)
+            or (observability_storage_mount | default('vhdx')) == 'file'
           - not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)
         fail_msg: >-
           On {{ inventory_hostname }}: wsl_start_unelevated_done needs wsl_start_unelevated. And
-          wsl_start_unelevated needs no USB attach and no monitoring volume: their tasks need
-          admin rights and start a process in the distro, so they need a part with no elevation
-          first (Design Doc 0004, section 5.9).
+          wsl_start_unelevated needs no USB attach and no monitoring volume (a volume with
+          observability_storage_mount file is none): their tasks need admin rights and start a
+          process in the distro, so they need a part with no elevation first (Design Doc 0004,
+          sections 5.9 and 5.13).
         quiet: true
       tags: [always]
 

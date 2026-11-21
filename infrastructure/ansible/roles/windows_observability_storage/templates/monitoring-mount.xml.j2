@@ -21,6 +21,12 @@
       <StopOnIdleEnd>true</StopOnIdleEnd>
       <RestartOnIdle>false</RestartOnIdle>
     </IdleSettings>
+{% if observability_storage_mount == 'file' %}
+    <!-- The data is in the file on the distro disk (role
+         wsl_observability_file): this task attaches nothing, and stays as the
+         way back. -->
+    <Enabled>false</Enabled>
+{% endif %}
     <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
   </Settings>
   <Triggers>

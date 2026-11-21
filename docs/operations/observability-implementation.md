@@ -362,6 +362,53 @@ forever; leave the type off.
   `chattr -i` it first. A new worker gets a new volume, and the task finds it.
 - **Reclaim:** the class is `Retain`. Deleting the PVC leaves the data on the disk.
 
+### The data in a file on the distro disk
+
+The move of the distro to a standard account (Design Doc 0004, section 5.13)
+needs a mount with no attach by Windows: WSL attaches a disk only to the VM of
+the caller, and a standard account can not attach a file it does not own. So
+the data moves into a file of 19 GiB on the disk of the distro, formatted ext4
+and mounted by a loop device at the same point. The variable
+`observability_storage_mount` of the Windows host picks the phase. The roles
+`windows_observability_storage` and `wsl_observability_file` (distro play, tag
+`observability-file`) both follow it:
+
+| Phase | Windows host | Distro |
+| --- | --- | --- |
+| `vhdx` (default) | The mount task attaches and mounts the VHDX, as above | The timer of the file is off |
+| `ready` | The same | The script makes the file once: it records a random UUID, then formats with it. The timer is off |
+| `file` | The mount task is registered disabled and attaches nothing. It, its scripts and the VHDX stay | `tnwks-observability-file.timer` mounts the file at the point at the start of the distro and each minute |
+
+`observability-file.py` (in `/usr/local/lib/tnwks-observability`, as root)
+also has `stage` and `unstage`, which mount the file at
+`/var/lib/tnwks-observability/stage` for the copy and unmount it, `release`,
+which unmounts it from the point, and `check`. It never formats a file with
+no record or with another file system, and never mounts the file at two
+places, over another file system or over data. A compaction of the distro
+disk leaves a disabled task disabled, so it does not start the mount task of
+the VHDX again in the phase `file`.
+
+The run order of the move, with the owner's go and time (R4):
+
+1. The phase `ready`, applied to both hosts. The script makes the file.
+2. Read the used size of the data on the VHDX. It must fit in the file.
+3. Stop Prometheus, and each other pod on the class `local-path-observability`.
+4. `stage`, then copy each claim folder from the point to the stage, with its
+   owners, modes and times. Not the marker `.tnwks-observability-id` (the
+   file has its own) and not `lost+found`. Then `unstage`.
+5. Stop if the drive of the distro disk has less than 30 GiB free after the
+   copy, or if the loop device fails the copy step. The VHDX is untouched, so
+   the way back is to start Prometheus again.
+6. The phase `file`, applied to the Windows host first: the mount task is
+   disabled. Then unmount the VHDX file system from the point, and apply the
+   distro: the timer mounts the file. `check` gives `ready`.
+7. Start Prometheus, and check that each series goes on.
+
+The way back is today's mount, until the proof of site 1: stop Prometheus,
+`release`, the phase `vhdx` on both hosts, and start Prometheus. The VHDX
+holds the data of the copy, not the data written to the file after it. After
+the proof, the mount task, its scripts and the VHDX go.
+
 ## Grafana on both sites
 
 Grafana is a warm app, like Firefly (`docs/wsl/multi-site.md`, "Apps"): one name,

@@ -66,6 +66,14 @@ Write-Log 'watchdog task disabled'
 # tnwks-wsl-keepalive (where present) restarts on failure and would start WSL
 # again mid-compaction.
 $Paused = @('tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-usb-attach', 'tnwks-lan-bridge-sync', 'tnwks-lan-bridge-ip', 'tnwks-wsl-keepalive', 'tnwks-observability-mount')
+# The paused tasks that are enabled now: only these are enabled again at the
+# end. A task that is disabled stays so, for example the monitoring mount
+# while the data is in the file on the distro disk (observability_storage_mount
+# file): enabled, it would attach the VHDX again.
+$Resume = @($Paused | Where-Object {
+    $task = Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue
+    $task -and "$($task.State)" -ne 'Disabled'
+})
 
 try {
     foreach ($t in $Paused) {
@@ -116,13 +124,14 @@ finally {
         Write-Log 'wsl started'
     }
     Enable-ScheduledTask -TaskName 'tnwks-wsl-watchdog' | Out-Null
-    foreach ($t in $Paused) { Enable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
+    foreach ($t in $Resume) { Enable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
     Start-Sleep -Seconds 30
     # usb-attach re-attaches the Z-Stick; lan-bridge-sync points the
     # portproxy at WSL's (possibly new) IP; the relays run until stopped;
     # observability-mount re-attaches the monitoring disk.
     foreach ($t in @('tnwks-wsl-keepalive', 'tnwks-usb-attach', 'tnwks-lan-bridge-ip', 'tnwks-lan-bridge-sync', 'tnwks-observability-mount', 'tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-wsl-watchdog')) {
+        if ($t -in $Paused -and $t -notin $Resume) { continue }
         Start-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
     }
-    Write-Log "re-enabled and started: watchdog, $($Paused -join ', ')"
+    Write-Log "re-enabled and started: watchdog, $($Resume -join ', ')"
 }

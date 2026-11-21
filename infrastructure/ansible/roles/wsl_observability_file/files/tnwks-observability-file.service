@@ -1,0 +1,10 @@
+# Managed by tnwks-ops (role wsl_observability_file). Mounts the file of the
+# monitoring data at its point in the /var volume of worker-1. It fails, and
+# the timer tries again, until the worker is up.
+[Unit]
+Description=Mount the file of the monitoring data at the point of worker-1
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/tnwks-observability/observability-file.py mount

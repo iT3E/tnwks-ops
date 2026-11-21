@@ -1,4 +1,10 @@
 ---
+- name: The mount of the monitoring data is vhdx, ready or file
+  ansible.builtin.assert:
+    that: observability_storage_mount in ['vhdx', 'ready', 'file']
+    fail_msg: "observability_storage_mount is {{ observability_storage_mount }}: it must be vhdx, ready or file."
+    quiet: true
+
 - name: Disk directory
   ansible.windows.win_file:
     path: C:\WSL
@@ -45,7 +51,10 @@
       $Ansible.Changed = -not $exists
       if ($Ansible.CheckMode) { return }
       & (Join-Path $StateDir 'Mount-TnwksObservability.ps1') -Vhdx $Vhdx -StateDir $StateDir -Distro $Distro -Initialize
+  # With the file, nothing attaches the VHDX: it stays as it is, for the way back.
+  when: observability_storage_mount != 'file'
 
+# Disabled with the file (the template), so it can not mount the VHDX over it.
 - name: Monitoring volume attachment at boot and every minute
   tnwks_win_scheduled_task:
     name: "{{ observability_storage_task }}"
