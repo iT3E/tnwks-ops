@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.256.4 - 2026-11-21
+
+### Security
+
+* Flux admission: the read of the audit result before Deny has a positive control. The API server counts a check of a policy only when it refuses, so the live check bin/flux-admission-check (now as both Flux controllers) adds a known count on each site; a harness test shows that an allowed check adds nothing. The runbook reads the highest count in the window, so a restart of the API server does not hide one, and adds a replay of the rendered chart output of both sites
+
 ## v2.256.3 - 2026-11-21
 
 ### Security
