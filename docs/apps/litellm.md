@@ -307,7 +307,8 @@ by key ([the AI board](../operations/observability-implementation.md#the-ai-boar
   with the key of the scrape, and one name that is no model, with a prompt
   of one word. Each call must get 403. A 200 (the key can call that name),
   a 401 (the gateway does not know the key) or any other answer fails the
-  Job, and `KubeJobFailed` fires. It prints one line for each name, never
+  Job, and `KubeJobFailed` fires; the failed Job goes after 26 hours, so the
+  alert clears by itself when the next run passes. It prints one line for each name, never
   the key. The AI board shows the CronJob on its Checks tab. These refused
   calls show on the metrics as the key `metrics-scrape` with status 403, and
   the board and the alert leave them out.

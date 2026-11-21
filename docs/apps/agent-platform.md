@@ -2069,7 +2069,15 @@ policy that `observability/inventory.py` declares
   ([Logs](#logs)).
 - **A failed Job.** The chart rule `KubeJobFailed` also fires for each
   failed Job, and keeps firing while the Job is kept: a run job for 7 days,
-  a failed CronJob run until three newer runs fail. Alertmanager drops it
+  the Job of a CronJob for 26 hours after it ended. Each CronJob of a trust
+  domain and of `ai` deletes a finished Job after 26 hours
+  (`ttlSecondsAfterFinished: 93600`), a failed one too: a day and room for
+  the next run to end. So `AgentPlatformCronJobFailed` and the state of the
+  schedule on the AI board still see a failure until a newer run ends, and
+  `KubeJobFailed` clears by itself when no newer run fails. The one-off Jobs
+  that Flux applies (a restore, the seed, a restore check) get no time to
+  live: Flux would make a deleted Job again, and it would run again
+  (`observability/tests/test_agent_job_ttl.py`). Alertmanager drops it
   for the run jobs and the Jobs of the CronJobs `platform-check-isolation`,
   `platform-check-probe`, `workflow-providers` and `workflow-sweep`, which
   the alerts above cover (the route in
