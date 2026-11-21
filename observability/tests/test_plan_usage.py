@@ -77,27 +77,47 @@ def test_the_series_and_their_bound():
     assert [m["field"] for m in tokens] == ["input", "output", "cache_read", "cache_write"]
     assert all(m["type"] == "counter" and m["increment_by_value"] for m in tokens)
     assert all(set(m["tags"]) == {"domain", "model", "token"} for m in tokens)
-    assert {"plan_metrics", "token_metrics"} <= set(config["sinks"]["prometheus"]["inputs"])
+    assert {"plan_metrics", "token_now", "token_zero"} <= set(config["sinks"]["prometheus"]["inputs"])
+    assert config["transforms"]["token_now"]["inputs"] == ["token_metrics"]
     # Each value of each list, and other.
     bound = len(plan) * (len(WINDOWS) + 1) + len(TOKENS) * (len(listed("domain")) + 1) * (len(listed("model")) + 1)
     assert bound == 60, bound
 
 
 def lab_config(path: str) -> dict:
-    """The transforms of the config as they are, fed from a file in place of
-    the logs of the pod, and the exporter on a port of the host."""
+    """The config as it is, from the lines to the exporter, fed from a file in
+    place of the logs of the pod: its internal_metrics and token_zero sources,
+    the transforms, and its exporter with each of its settings and inputs, on
+    a port of the host. The exporter drops a metric only when an event comes
+    in (internal_metrics sends them), so a lab without those inputs never
+    drops one."""
     config = load()
+    sink = {**config["sinks"]["prometheus"], "address": f"127.0.0.1:{PORT}"}
     transforms = {name: config["transforms"][name]
                   for name in ("platform_gauges", "platform_gauge_route", "plan_metrics", "token_metrics",
-                               "bridge_metrics", "instruction_metrics")}
+                               "token_now", "bridge_metrics", "instruction_metrics") if name in config["transforms"]}
     transforms["as_pod"] = {"type": "remap", "inputs": ["lines"], "source": (
         '.kubernetes.pod_namespace = "ai"\n.kubernetes.container_name = "model-bridge"\n')}
     transforms["platform_gauges"] = {**transforms["platform_gauges"], "inputs": ["as_pod"]}
+    sources = {"lines": {"type": "file", "include": [path], "read_from": "beginning"},
+               **{name: config["sources"][name] for name in ("internal_metrics", "token_zero")
+                  if name in config["sources"]}}
+    assert set(sink["inputs"]) <= set(sources) | set(transforms), sink["inputs"]
     return {"data_dir": "/tmp", "expire_metrics_secs": config["expire_metrics_secs"],
-            "sources": {"lines": {"type": "file", "include": [path], "read_from": "beginning"}},
-            "transforms": transforms,
-            "sinks": {"prometheus": {"type": "prometheus_exporter", "address": f"127.0.0.1:{PORT}",
-                                     "inputs": ["plan_metrics", "token_metrics", "bridge_metrics"]}}}
+            "sources": sources, "transforms": transforms, "sinks": {"prometheus": sink}}
+
+
+def test_each_declared_token_series_has_a_zero_series():
+    """token_zero holds one series at 0 for each declared domain, model and kind."""
+    source = load()["sources"]["token_zero"]
+    assert source["type"] == "static_metrics" and source["namespace"] == "homelab"
+    # Shorter than the flush period of the exporter, so the exporter never drops one.
+    flush = load()["sinks"]["prometheus"].get("flush_period_secs", 60)
+    assert source["interval_secs"] * 2 <= flush
+    found = sorted((m["tags"]["domain"], m["tags"]["model"], m["tags"]["token"]) for m in source["metrics"])
+    assert all(m["name"] == "model_bridge_tokens_total" and m["kind"] == "incremental"
+               and m["value"] == {"counter": {"value": 0}} for m in source["metrics"])
+    assert found == sorted((d, m, t) for d in listed("domain") for m in listed("model") for t in TOKENS)
 
 
 def plan(domain, window, status, utilization, resets_at, threshold=None, limiting=True):
@@ -123,14 +143,41 @@ LINES = [
 ]
 
 
-def scrape() -> dict:
+def scrape(stamps: bool = False) -> dict:
+    """Each homelab_ sample of the exporter: its value, or (value, time in seconds)."""
     text = urllib.request.urlopen(f"http://127.0.0.1:{PORT}/metrics", timeout=5).read().decode()
     found = {}
     for line in text.splitlines():
         if line.startswith("homelab_"):
-            key, value = line.rsplit(" ", 2)[0], line.rsplit(" ", 2)[1]
-            found[key] = float(value)
+            key, rest = line.split("} ", 1) if "}" in line else line.split(" ", 1)
+            key += "}" if "{" in key else ""
+            value, *stamp = rest.split()
+            found[key] = (float(value), int(stamp[0]) / 1000 if stamp else None) if stamps else float(value)
     return found
+
+
+def start(binary: str, work, name: str, lines: list[str]) -> None:
+    (work / "lines.log").write_text("".join(line + "\n" for line in lines))
+    (work / "vector.yaml").write_text(yaml.safe_dump(lab_config("/w/lines.log"), sort_keys=False))
+    subprocess.run(["chmod", "-R", "a+rwX", str(work)], check=True)
+    subprocess.run([binary, "run", "-d", "--name", name, "--network", "host", "--read-only", "--tmpfs", "/tmp",
+                    "--mount", f"type=bind,src={work},dst=/w", vector_image(CONFIG),
+                    "--config", "/w/vector.yaml"], check=True, capture_output=True, text=True, timeout=300)
+
+
+def wait_for(binary: str, name: str, key: str, value: float | None = None) -> dict:
+    deadline = time.monotonic() + 60
+    found = {}
+    while time.monotonic() < deadline:
+        try:
+            found = scrape()
+            if key in found and (value is None or found[key] == value):
+                return found
+        except OSError:
+            pass
+        time.sleep(0.5)
+    logs = subprocess.run([binary, "logs", name], capture_output=True, text=True, check=False)
+    raise AssertionError((key, value, found, (logs.stdout + logs.stderr)[-3000:]))
 
 
 def test_the_newest_line_sets_the_gauges_and_the_counts_add_up():
@@ -138,25 +185,9 @@ def test_the_newest_line_sets_the_gauges_and_the_counts_add_up():
     work = scratch()
     name = f"plan-usage-{uuid.uuid4().hex[:8]}"
     try:
-        (work / "lines.log").write_text("\n".join(LINES) + "\n")
-        (work / "vector.yaml").write_text(yaml.safe_dump(lab_config("/w/lines.log"), sort_keys=False))
-        subprocess.run(["chmod", "-R", "a+rX", str(work)], check=True)
-        subprocess.run([binary, "run", "-d", "--name", name, "--network", "host", "--read-only", "--tmpfs", "/tmp",
-                        "--mount", f"type=bind,src={work},dst=/w,readonly", vector_image(CONFIG),
-                        "--config", "/w/vector.yaml"], check=True, capture_output=True, text=True, timeout=300)
-        want = 'homelab_model_bridge_tokens_total{domain="finance",model="claude-opus-5-5",token="cache_write"}'
-        deadline = time.monotonic() + 60
-        found = {}
-        while time.monotonic() < deadline:
-            try:
-                found = scrape()
-                if want in found:
-                    break
-            except OSError:
-                pass
-            time.sleep(0.5)
-        logs = subprocess.run([binary, "logs", name], capture_output=True, text=True, check=False)
-        assert want in found, (found, (logs.stdout + logs.stderr)[-3000:])
+        start(binary, work, name, LINES)
+        found = wait_for(binary, name,
+                         'homelab_model_bridge_tokens_total{domain="finance",model="claude-opus-5-5",token="cache_write"}', 4)
         five = '{window="five_hour"}'
         assert found["homelab_model_bridge_plan_utilization_ratio" + five] == 0.91
         assert found["homelab_model_bridge_plan_status" + five] == 1
@@ -170,7 +201,41 @@ def test_the_newest_line_sets_the_gauges_and_the_counts_add_up():
         assert [found[main % t] for t in TOKENS] == [111, 222, 300, 5]
         finance = 'homelab_model_bridge_tokens_total{domain="finance",model="claude-opus-5-5",token="%s"}'
         assert [found[finance % t] for t in TOKENS] == [1, 2, 3, 4]
-        assert len([k for k in found if k.startswith("homelab_model_bridge_tokens_total")]) == 8
+        workflows = 'homelab_model_bridge_tokens_total{domain="workflows",model="claude-opus-5-5",token="%s"}'
+        assert [found[workflows % t] for t in TOKENS] == [0, 0, 0, 0]
+        assert len([k for k in found if k.startswith("homelab_model_bridge_tokens_total")]) == 12
+    finally:
+        subprocess.run([binary, "rm", "-f", name], capture_output=True, check=False)
+        subprocess.run(["rm", "-rf", str(work)], check=False)
+
+
+def test_the_token_counter_is_there_from_the_start_and_outlives_the_flush_period():
+    """The live fault of the first build: the exporter dropped the counter 1 to 2
+    minutes after its last line, and its sample kept the time of the line, so
+    Prometheus showed it for 5 minutes. increase() then counted the first call as
+    0, and each later call only when its count was above the last one."""
+    binary = docker()
+    work = scratch()
+    name = f"plan-usage-{uuid.uuid4().hex[:8]}"
+    key = 'homelab_model_bridge_tokens_total{domain="main",model="claude-opus-5-5",token="input"}'
+    flush = load()["sinks"]["prometheus"].get("flush_period_secs", 60)
+    try:
+        start(binary, work, name, [])
+        # Before any call: the series is there, at 0.
+        wait_for(binary, name, key, 0)
+        with (work / "lines.log").open("a") as lines:
+            lines.write(call("main", input=100, output=1, cache_read=0, cache_write=0) + "\n")
+        wait_for(binary, name, key, 100)
+        # Two flush periods and more with no call: still there, at its count, with a
+        # sample time of now (not of the line).
+        time.sleep(2 * flush + 15)
+        value, stamp = scrape(stamps=True)[key]
+        assert value == 100
+        assert stamp is None or time.time() - stamp < 45, time.time() - stamp
+        # A later call adds to it.
+        with (work / "lines.log").open("a") as lines:
+            lines.write(call("main", input=50, output=1, cache_read=0, cache_write=0) + "\n")
+        wait_for(binary, name, key, 150)
     finally:
         subprocess.run([binary, "rm", "-f", name], capture_output=True, check=False)
         subprocess.run(["rm", "-rf", str(work)], check=False)

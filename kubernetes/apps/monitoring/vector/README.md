@@ -162,22 +162,34 @@ stays the same on each cluster:
   (`homelab_model_bridge_plan_*{window}`) and the counter
   `homelab_model_bridge_tokens_total{domain, model, token}`, at most 60
   series (`docs/apps/agent-platform.md`, "Plan use"). The records
-  `homelab:ai_plan_*` keep the newest reading after the gauges expire.
+  `homelab:ai_plan_*` keep the newest reading after the gauges expire. The
+  source `token_zero` keeps the counter alive (see the settings below).
 
 The tests of the platform agent are in
 `observability/vector-tests/agent-platform-logs.yaml` and
 `observability/tests/test_plan_usage.py`.
 
-Two settings shape these series:
+Three settings shape these series:
 
 - **A counter starts at its first event.** Vector makes the series of an
   error when the first error happens, so its first value is 1, and
   `increase()` over a new series is 0. A rule on such a counter must also
   compare it with its value of some minutes before.
-- **A metric stays for one hour after its last change**
+- **Vector's own metrics stay for one hour after their last change**
   (`expire_metrics_secs`). The default of Vector is five minutes, and a
   counter that went away that fast could come back at the same value, which
-  no rule can see.
+  no rule can see. `internal_metrics` sends them again all the time, so the
+  exporter keeps them.
+- **The exporter drops a metric that no event changed in its flush period**
+  (`flush_period_secs`, 60 s; it looks when an event comes in, so after 1 to
+  2 minutes). `expire_metrics_secs` does not change that. A metric of a
+  line also carries the time of the line, so Prometheus shows it for 5
+  minutes after the line. That is right for the gauges of a time, which
+  the rules read with `max_over_time` or `last_over_time`. It is wrong for a
+  counter: dropped, it starts again at the next line, and `increase()` loses
+  the count. A counter of a line needs a `static_metrics` source that adds
+  0 to each declared series more often than the flush period, as
+  `token_zero` of the platform agent does, and the time it was counted.
 
 The PodMonitor drops the histogram buckets (26 for each histogram), which
 leaves about 170 series for each aggregator, and it drops Vector's `host`

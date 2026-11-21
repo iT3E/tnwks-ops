@@ -606,15 +606,32 @@ turns two kinds of line into series:
   `overage`; `domain` is `main`, `finance` or `workflows`; `model` is the
   model of the bridge entries of the model gateway. Each other value reads
   `other`. A value that a line does not give, or that is out of range, is
-  -1, and the records read it as unknown. So the series are at most 60, from
-  one pod. `observability/tests/test_plan_usage.py` keeps the lists equal to
-  the entries of the model gateway, and runs the transforms in the pinned
-  Vector to prove that the newest line wins and the counts add up.
+  -1, and the records read it as unknown. So the series are at most 60 on
+  the pod on the node of the bridge, and 12 counters at 0 on each other pod. `observability/tests/test_plan_usage.py` keeps the lists equal to
+  the entries of the model gateway, and runs the config in the pinned
+  Vector, with its exporter as it is, to prove that the newest line wins,
+  the counts add up, and the counter is there at 0 before the first call and
+  still there with its count after two flush periods with no call.
 - **When a line comes.** The bridge reads the limits on each answer, and
   logs a `plan_limit` line at the first answer after its start, when the use
   moves by a whole percent, when the status, the reset time or the warning
   threshold changes, and at most every 30 minutes while calls go on. With
-  no call there is no line, and the gauges of Vector expire after one hour.
+  no call there is no line. A gauge carries the time of its line, so
+  Prometheus shows it for 5 minutes after the line (its lookback), and the
+  exporter of Vector drops it 1 to 2 minutes after the line (its flush
+  period of 60 s).
+- **The token counter lives as long as the pod.** A counter that the
+  exporter drops starts again at the next call, and `increase()` counts a
+  new series from its second sample: the first build lost tokens that way.
+  So the source `token_zero` (`static_metrics`) adds 0 to each declared
+  series (domain, model and kind) at the start of the pod and every 30
+  seconds: the series is there at 0 before the first call, and the exporter
+  never drops it. Each sample of the counter has the time it was counted,
+  not the time of the line. Each of the 3 pods of the agent serves these 12
+  series at 0; the pod on the node of the bridge counts. A value that reads
+  `other` has no zero series and still lives only from its line to the
+  flush period after it. A restart of the pod starts the counters again
+  from 0, which `increase()` reads as a reset.
 - **The records keep the reading.** `homelab:ai_plan_utilization_ratio`,
   `homelab:ai_plan_reset_timestamp_seconds`, `homelab:ai_plan_state` and
   `homelab:ai_plan_observed_timestamp_seconds` (`observability/rules.py`)

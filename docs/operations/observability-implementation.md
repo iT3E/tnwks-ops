@@ -758,8 +758,10 @@ the model gateway. It shows no product metrics and no money.
   domain by kind. The panels read the records `homelab:ai_plan_*`
   (`plan_records()` in `observability/rules.py`), which keep the newest
   reading of the last 8 days until its window resets, because the bridge
-  logs a reading only when it moves and the gauges of Vector expire after
-  one hour. With no reading, a panel says why in plain words.
+  logs a reading only when it moves, and Prometheus shows a gauge of a line
+  for 5 minutes only. The token counter lives as long as the pod of the log
+  agent ([`agent-platform.md`](../apps/agent-platform.md#plan-use)). With
+  no reading, a panel says why in plain words.
 - **Tool calls** come from the request series of the MCP gateway, in the
   board only: no rule reads them (`tests/test_mcp_gateway.py`). The panels
   leave out the GET with 405 that each start of a client makes
