@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.256.3 - 2026-11-21
+
+### Security
+
+* Flux admission: the daily CronJob flux-admission-objects on both sites lists each admission object (webhook configurations, admission policies and bindings) and fails when a Flux child outside the "ask first" class owns one, which the admission policy can not refuse. It reads the class from the live policy, with a read-only account; a failure raises KubeJobFailed, and the AI board shows it on its Checks tab
+
 ## v2.256.2 - 2026-11-21
 
 ### Security
