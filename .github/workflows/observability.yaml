@@ -28,7 +28,9 @@ permissions:
 jobs:
   contracts:
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    # The runs of 2026-11-21 took 690 to 885 s, and two stopped at the
+    # limit of 15 minutes. 25 leaves room for a slow runner.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
