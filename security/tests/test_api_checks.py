@@ -139,6 +139,8 @@ def by_check(document):
 ])
 def test_the_router_fails_when_a_release_it_does_not_run_is_out_past_the_grace(
         tmp_path, monkeypatch, running, newest, age_days, failed):
+    # The list already holds an older release, so the router is not behind each one.
+    seed(tmp_path, {"7.90.0": (NOW - datetime.timedelta(days=500)).timestamp()})
     code, document = run(tmp_path, monkeypatch, fake(running, newest, age_days))
     assert code == 0
     entry = by_check(document)["routeros-firmware"]
@@ -186,15 +188,21 @@ def firmware_entry(tmp_path, monkeypatch, get):
 
 
 @pytest.mark.parametrize("lines", [(line("7.90.1 (stable)"),), (line("7.90.1"),) * 3])
-def test_lines_that_agree_give_a_result_with_no_answer_of_prometheus(tmp_path, monkeypatch, lines):
+def test_lines_that_agree_give_a_result_with_no_answer_of_prometheus(tmp_path, monkeypatch, capsys, lines):
     code, entry = firmware_entry(tmp_path, monkeypatch, fake(running=NO_PROMETHEUS, newest="7.90.2", lines=lines))
     assert code == 0
     assert entry["failed"] == 1, "7.90.1 runs, and 7.90.2 is out for 30 days"
+    out = capsys.readouterr().out
+    assert "routeros-firmware for sce-rtr01: the lines decide" in out and "agree" not in out
 
 
-def test_lines_that_agree_with_prometheus_give_a_result(tmp_path, monkeypatch):
+def test_lines_that_agree_with_prometheus_give_a_result(tmp_path, monkeypatch, capsys):
+    """The log of the job names the source of the version: here both agree."""
     code, entry = firmware_entry(tmp_path, monkeypatch, fake(lines=(line("7.90.1"),) * 3))
     assert (code, entry["failed"]) == (0, 0)
+    out = capsys.readouterr().out
+    assert "routeros-firmware for sce-rtr01: the version lines and Prometheus agree\n" in out
+    assert "no version line" not in out and "the lines decide" not in out
 
 
 def test_with_no_line_in_the_window_prometheus_decides(tmp_path, monkeypatch, capsys):
@@ -202,7 +210,8 @@ def test_with_no_line_in_the_window_prometheus_decides(tmp_path, monkeypatch, ca
     The log of the job says that no line came."""
     code, entry = firmware_entry(tmp_path, monkeypatch, fake(newest="7.90.2", lines=()))
     assert (code, entry["failed"]) == (0, 1)
-    assert "no version line in 3 hours" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "no version line in 3 hours" in out and "agree" not in out
 
 
 def test_with_no_answer_of_loki_prometheus_decides(tmp_path, monkeypatch):
@@ -274,16 +283,25 @@ def test_the_version_line_of_the_router_is_the_line_that_the_job_reads():
 
 @pytest.mark.parametrize(("event", "versions"), [
     # The form that the syslog source gives: the prefix is the tag.
-    (stored("router=sce-rtr01 version=7.25"), {(7, 25)}),
+    (stored("router=sce-rtr01 version=7.90"), {(7, 90)}),
     (stored("router=sce-rtr01 version=7.90.1 (stable)"), {(7, 90, 1)}),
     (stored("router=sce-rtr01 version=7.90.1 (stable) and more"), None),
     (stored("router=sce-rtr01"), None),
+    (stored("router=sce-rtr01 version=x"), None),
+    # A tag that only contains the prefix is not the tag of the version line.
+    (stored("router=sce-rtr01 version=7.90.1", appname="my-tnwks-routeros-version"), None),
+    (stored("router=sce-rtr01 version=7.90.1", appname="tnwks-routeros-versions"), None),
     # The whole line in message, with another tag or none.
     (stored("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)", appname="script,info"), {(7, 90, 1)}),
     (json.dumps({"message": "script,info tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)"}), {(7, 90, 1)}),
     (json.dumps({"message": "tnwks-routeros-version router=sce-rtr01 version=7.90.1"}), {(7, 90, 1)}),
     (stored("user admin ran tnwks-routeros-version router=sce-rtr01 version=7.90.1", appname="system,info"), None),
     (json.dumps({"message": "tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable) and more"}), None),
+    # A line that is not the JSON of an event is read as it is.
+    ("  tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable)\n", {(7, 90, 1)}),
+    ("tnwks-routeros-version router=sce-rtr01 version=7.90.1 (stable) and more", None),
+    (json.dumps(["tnwks-routeros-version router=sce-rtr01 version=7.90.1"]), None),
+    (json.dumps({"appname": "tnwks-routeros-version", "message": 7}), None),
 ])
 def test_the_job_reads_only_the_whole_version_line_as_the_filter_does(event, versions):
     """The same forms as the filter of the aggregator (observability/vector-tests/
@@ -344,10 +362,14 @@ def releases_file(tmp_path):
     return tmp_path / "results/api-check/routeros-releases.json"
 
 
-def seed(tmp_path, first_seen):
+def seed(tmp_path, first_seen, last_read=None):
+    """A list of the old form, or of the new form with the time of the last read."""
     path = releases_file(tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"version": 1, "first_seen": first_seen}))
+    document = {"version": 1, "first_seen": first_seen}
+    if last_read is not None:
+        document = {"version": 2, "first_seen": first_seen, "last_read": last_read}
+    path.write_text(json.dumps(document))
     return path
 
 
@@ -363,13 +385,102 @@ def test_a_router_two_releases_behind_fails_while_the_newest_is_still_new(tmp_pa
     assert set(seen) == {"7.90.2", "7.90.3"}
 
 
-def test_the_first_run_keeps_the_newest_release_with_its_date(tmp_path, monkeypatch):
+def test_the_first_run_keeps_the_newest_release_with_its_date_and_the_time_of_the_read(tmp_path, monkeypatch):
     assert not releases_file(tmp_path).exists()
-    code, document = run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.2", age_days=3))
+    code, document = run(tmp_path, monkeypatch, fake("7.90.2 (stable)", "7.90.2", age_days=3))
     assert code == 0
     assert by_check(document)["routeros-firmware"]["failed"] == 0
     assert json.loads(releases_file(tmp_path).read_text()) == {
-        "version": 1, "first_seen": {"7.90.2": (NOW - datetime.timedelta(days=3)).timestamp()}}
+        "version": 2, "first_seen": {"7.90.2": (NOW - datetime.timedelta(days=3)).timestamp()},
+        "last_read": NOW.timestamp()}
+
+
+# Design Doc 0004, section 5.6: an age that the check does not know counts as old.
+
+def test_a_router_two_releases_behind_a_list_of_one_release_fails_at_once(tmp_path, monkeypatch):
+    """The feed holds one release: the ones between the router and it are not known."""
+    code, document = run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.3", age_days=1))
+    assert code == 0
+    entry = by_check(document)["routeros-firmware"]
+    assert entry["failed"] == 1
+    message = entry["findings"][0]["message"]
+    assert "7.90.3" in message and "not known" in message
+
+
+def test_a_router_on_the_oldest_release_of_the_list_keeps_its_grace(tmp_path, monkeypatch):
+    seed(tmp_path, {"7.90.2": (NOW - datetime.timedelta(days=60)).timestamp()}, NOW.timestamp() - 86400)
+    _, document = run(tmp_path, monkeypatch, fake("7.90.2 (stable)", "7.90.3", age_days=1))
+    assert by_check(document)["routeros-firmware"]["failed"] == 0
+
+
+def run_at(tmp_path, monkeypatch, day, newest, published_day, running="7.90.1 (stable)"):
+    """One run of the job on a day after day 0 (NOW)."""
+    at = NOW + datetime.timedelta(days=day)
+    # Loki has no version line, so the job reads the version from Prometheus.
+    get = Fake({LOKI: (200, loki_answer()), PROMETHEUS: (200, prometheus_answer(running)),
+                FEED: (200, feed_answer(newest, NOW + datetime.timedelta(days=published_day)))})
+    monkeypatch.delenv("TFE_TOKEN", raising=False)
+    (tmp_path / "results").mkdir(exist_ok=True)
+    assert checks.run(args(tmp_path), now=lambda: at, get=get) == 0
+    document = json.loads((tmp_path / "results/api-check/results.json").read_text())
+    return by_check(document)["routeros-firmware"]["failed"]
+
+
+@pytest.mark.parametrize(("back", "fails_at_once"), [(10, False), (20, True)])
+def test_a_stop_of_the_job_never_moves_the_fail_late(tmp_path, monkeypatch, back, fails_at_once):
+    """The job reads A on day 0. B comes out on day 2 and C on day 8, and the job is back
+    on day 10. C gets the time of the read of day 0, so a router on A fails on day 14,
+    before the grace of B would end on day 16. Back on day 20, it fails at once."""
+    assert run_at(tmp_path, monkeypatch, 0, "7.90.1", -30) == 0  # A, which the router runs
+    assert run_at(tmp_path, monkeypatch, back, "7.90.3", 8) == int(fails_at_once)  # C; B never seen
+    seen = json.loads(releases_file(tmp_path).read_text())
+    assert seen["first_seen"]["7.90.3"] == NOW.timestamp()
+    assert seen["last_read"] == (NOW + datetime.timedelta(days=back)).timestamp()
+    if not fails_at_once:
+        assert run_at(tmp_path, monkeypatch, 13.9, "7.90.3", 8) == 0
+        assert run_at(tmp_path, monkeypatch, 14.01, "7.90.3", 8) == 1
+
+
+def test_a_run_with_no_version_of_the_router_still_advances_the_last_read(tmp_path, monkeypatch):
+    """The list is written after the read of the feed and before the read of the router.
+    A run that gives no result for the router still keeps its read of the feed."""
+    seed(tmp_path, {"7.90.1": (NOW - datetime.timedelta(days=60)).timestamp()}, NOW.timestamp() - 86400)
+    code, document = run(tmp_path, monkeypatch, fake(running=NO_PROMETHEUS, newest="7.90.2", age_days=3))
+    assert code == 1 and "routeros-firmware" not in by_check(document)
+    seen = json.loads(releases_file(tmp_path).read_text())
+    assert seen["last_read"] == NOW.timestamp()
+    assert seen["first_seen"]["7.90.2"] == (NOW - datetime.timedelta(days=3)).timestamp()
+
+
+def test_a_last_read_from_a_clock_that_was_ahead_dates_a_new_release_as_old(tmp_path, monkeypatch):
+    """The clock reads day 30 at the run of day 0, so the list keeps a last read of day
+    30. The clock is set right, and the job stops. B comes out on day 2 and C on day 8,
+    and the job is back on day 10. The feed date of C (day 8) is earlier than that last
+    read, so it would date C, and a router on A would pass until day 22, after the grace
+    of B. A last read after now bounds nothing: C counts as old, and the router fails."""
+    assert run_at(tmp_path, monkeypatch, 30, "7.90.1", -30) == 0
+    assert run_at(tmp_path, monkeypatch, 10, "7.90.3", 8) == 1
+    seen = json.loads(releases_file(tmp_path).read_text())
+    assert seen["first_seen"]["7.90.3"] == 0.0
+    assert seen["last_read"] == (NOW + datetime.timedelta(days=10)).timestamp()
+
+
+def test_in_daily_runs_a_new_release_is_dated_no_more_than_a_day_early(tmp_path, monkeypatch):
+    assert run_at(tmp_path, monkeypatch, 0, "7.90.1", -30) == 0
+    assert run_at(tmp_path, monkeypatch, 1, "7.90.1", -30) == 0
+    # Out at day 1.5, read at day 2: dated by the read of day 1.
+    assert run_at(tmp_path, monkeypatch, 2, "7.90.2", 1.5) == 0
+    assert json.loads(releases_file(tmp_path).read_text())["first_seen"]["7.90.2"] == (
+        NOW + datetime.timedelta(days=1)).timestamp()
+    assert run_at(tmp_path, monkeypatch, 15.01, "7.90.2", 1.5) == 1
+
+
+def test_a_list_of_the_old_form_dates_a_new_release_as_before(tmp_path, monkeypatch):
+    seed(tmp_path, {"7.90.1": (NOW - datetime.timedelta(days=60)).timestamp()})
+    run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.2", age_days=3))
+    seen = json.loads(releases_file(tmp_path).read_text())
+    assert seen["first_seen"]["7.90.2"] == (NOW - datetime.timedelta(days=3)).timestamp()
+    assert seen["version"] == 2 and seen["last_read"] == NOW.timestamp()
 
 
 def test_a_date_in_the_future_counts_from_now(tmp_path, monkeypatch):
@@ -386,6 +497,8 @@ def test_a_release_seen_before_keeps_its_first_time(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("text", ["{not json", '{"version": 2, "first_seen": {}}', '{"version": 1}',
+                                  '{"version": 3, "first_seen": {}, "last_read": 1}',
+                                  '{"version": 2, "first_seen": {}, "last_read": "x"}',
                                   '{"version": 1, "first_seen": {"7.90.2": "x"}}',
                                   '{"version": 1, "first_seen": {"stable": 1}}'])
 def test_a_list_of_releases_that_can_not_be_read_gives_no_result_and_stays_as_it_is(tmp_path, monkeypatch, text):
