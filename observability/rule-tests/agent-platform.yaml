@@ -203,6 +203,9 @@ tests:
         values: 0x6 1x40
       - series: kube_pod_container_status_restarts_total{namespace="agents-pilot", pod="agent-1", container="agent"}
         values: 0x6 1x40
+      # daily-backup.sh ends with exit 1 (reason Error).
+      - series: kube_pod_container_status_last_terminated_exitcode{namespace="agents-pilot", pod="agent-1", container="backup"}
+        values: _x6 1x40
       - series: kube_pod_container_status_last_terminated_reason{namespace="agents-pilot", pod="agent-1", container="backup", reason="Error"}
         values: _x6 1x40
     alert_rule_test:
@@ -260,12 +263,24 @@ tests:
       - {alertname: AgentPlatformCronJobFailed, eval_time: 20m, exp_alerts: []}
       - {alertname: AgentWorkflowRunFailed, eval_time: 10m, exp_alerts: []}
 
-  - name: a node restart (reason Unknown) does not count as a failed archive
+  # A stop of the node: the kubelet stops the container with SIGTERM (exit
+  # 143, reason Error, as seen at the planned stop of 2026-11-21), or the node
+  # goes down with it (exit 255, reason Unknown). Neither is a failed archive.
+  # The case with exit 143 fired on the rule that read reason="Error".
+  - name: a stop of the node (exit 143 or 255) does not count as a failed archive
     interval: 5m
     input_series:
       - series: kube_pod_container_status_restarts_total{namespace="agents-pilot", pod="agent-2", container="backup"}
         values: 0x6 1x40
+      - series: kube_pod_container_status_last_terminated_exitcode{namespace="agents-pilot", pod="agent-2", container="backup"}
+        values: _x6 255x40
       - series: kube_pod_container_status_last_terminated_reason{namespace="agents-pilot", pod="agent-2", container="backup", reason="Unknown"}
+        values: _x6 1x40
+      - series: kube_pod_container_status_restarts_total{namespace="agents-main", pod="agent-3", container="backup"}
+        values: 0x6 1x40
+      - series: kube_pod_container_status_last_terminated_exitcode{namespace="agents-main", pod="agent-3", container="backup"}
+        values: _x6 143x40
+      - series: kube_pod_container_status_last_terminated_reason{namespace="agents-main", pod="agent-3", container="backup", reason="Error"}
         values: _x6 1x40
     alert_rule_test:
       - {alertname: AgentDailyArchiveFailed, eval_time: 1h, exp_alerts: []}

@@ -146,24 +146,25 @@ spec:
         * 0)
     - record: homelab:ai_schedule_state
       expr: (max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds) * 0
-        + 4) and on (k8s_cluster, namespace, cronjob) (max by (k8s_cluster, namespace, cronjob) (kube_cronjob_spec_suspend{namespace=~"agents-.+|monitoring"})
+        + 4) and on (k8s_cluster, namespace, cronjob) (max by (k8s_cluster, namespace, cronjob) (kube_cronjob_spec_suspend{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring"})
         == 1) or (max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds)
-        * 0 + 3) and on (k8s_cluster, namespace, cronjob) ((max by (k8s_cluster, namespace, cronjob) (kube_job_status_start_time{namespace=~"agents-.+|monitoring"}
+        * 0 + 3) and on (k8s_cluster, namespace, cronjob) ((max by (k8s_cluster, namespace, cronjob) (kube_job_status_start_time{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring"}
         * on (k8s_cluster, namespace, job_name) group_left (cronjob) max by (k8s_cluster, namespace, job_name, cronjob)
-        (label_replace(kube_job_owner{namespace=~"agents-.+|monitoring",owner_kind="CronJob"}, "cronjob", "$1",
-        "owner_name", "(.+)")) and on (k8s_cluster, namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+|monitoring",reason!=""}
-        > 0)) > max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|monitoring"}))
-        or (max by (k8s_cluster, namespace, cronjob) (kube_job_status_start_time{namespace=~"agents-.+|monitoring"}
+        (label_replace(kube_job_owner{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring",owner_kind="CronJob"},
+        "cronjob", "$1", "owner_name", "(.+)")) and on (k8s_cluster, namespace, job_name) (kube_job_status_failed{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring",reason!=""}
+        > 0)) > max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring"}))
+        or (max by (k8s_cluster, namespace, cronjob) (kube_job_status_start_time{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring"}
         * on (k8s_cluster, namespace, job_name) group_left (cronjob) max by (k8s_cluster, namespace, job_name, cronjob)
-        (label_replace(kube_job_owner{namespace=~"agents-.+|monitoring",owner_kind="CronJob"}, "cronjob", "$1",
-        "owner_name", "(.+)")) and on (k8s_cluster, namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+|monitoring",reason!=""}
-        > 0)) unless on (k8s_cluster, namespace, cronjob) max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|monitoring"})))
+        (label_replace(kube_job_owner{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring",owner_kind="CronJob"},
+        "cronjob", "$1", "owner_name", "(.+)")) and on (k8s_cluster, namespace, job_name) (kube_job_status_failed{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring",reason!=""}
+        > 0)) unless on (k8s_cluster, namespace, cronjob) max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring"})))
         or (((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds) - on
-        (k8s_cluster, namespace, cronjob) group_left () (time() - max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|monitoring"})))
+        (k8s_cluster, namespace, cronjob) group_left () (time() - max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring"})))
         >= 0) * 0 + 1) or (((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds)
         - on (k8s_cluster, namespace, cronjob) group_left () (time() - max by (k8s_cluster, namespace, cronjob)
-        (kube_cronjob_status_last_successful_time{namespace=~"agents-.+|monitoring"}))) < 0) * 0 + 2) or (max by
-        (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds) * 0)
+        (kube_cronjob_status_last_successful_time{namespace=~"agents-finance|agents-main|agents-pilot|agents-workflows|ai|monitoring"})))
+        < 0) * 0 + 2) or (max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds)
+        * 0)
     - record: homelab:ai_result_state
       expr: (max by (k8s_cluster, trust_domain, check) (homelab_expected_ai_result_info) * 0 + 3) and on (k8s_cluster,
         trust_domain, check) (((max by (k8s_cluster, trust_domain, check) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace=~"agents-.+",check="instruction-check",result!~"ok|first|none"}[26h]),
