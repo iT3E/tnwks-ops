@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.260.1 - 2026-11-21
+
+### Fixed
+
+* ci: the observability contracts job has 25 minutes again instead of 15. Its runs of 2026-11-21 took 690 to 885 s, and two stopped at the limit; the split of the long tests had brought it down to 15.
+
 ## v2.260.0 - 2026-11-21
 
 ### Added
