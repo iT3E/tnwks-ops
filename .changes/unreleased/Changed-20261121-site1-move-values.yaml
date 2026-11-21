@@ -1,3 +1,0 @@
-kind: Changed
-body: 'windows: site 1 turns on step 3 of the account change (wsl_move, phase move) with the session check, the start of WSL with no elevation and the keepalive, with the folder of the move on E:, the volume of its disk file'
-time: 2026-11-21T16:00:00.000000000Z
