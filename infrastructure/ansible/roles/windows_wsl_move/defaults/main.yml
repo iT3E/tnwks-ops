@@ -94,8 +94,9 @@ wsl_move_service_binary: 'C:\Program Files\WSL\wslservice.exe'
 # The procedure restarts the host at the end of the window and of the way
 # back, as section 9 says.
 wsl_move_restart: true
-# The check of a session of the person at window step 1. The shared script
-# does not have it yet, and refuses each run with it on, with nothing changed.
+# The check of a session of the present account (site 1): window step 1
+# stops while one is on, and the way back does not restart while one is on.
+# Off, the procedure reads no session (site 2).
 wsl_move_session_check: false
 wsl_move_task_minutes: 10
 # The keys of .wslconfig that the new account takes from the present one, in
