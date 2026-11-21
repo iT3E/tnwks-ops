@@ -41,6 +41,12 @@ children do not apply to it.
 After a change of the class, of a cluster tree or of a namespace, run
 `python3 kubernetes/apps/flux-system/admission/classlist.py write` and
 commit the policy. The CI test fails until the lists are the ones of git.
+It is `observability/tests/test_flux_admission.py`, in the job `contracts`
+of the Observability workflow. That job runs on each change under
+`kubernetes/` and of `.github/scripts/owner-label-check.py`
+(`.github/ci/domains.toml`), and `Build Success`, a required check of
+`main`, needs it. So a merge that adds an app or an object to a parent of
+the class without `classlist.py write` can not pass.
 The walk of git gave the same Kustomizations and HelmReleases as the two
 live sites on 2026-11-21: 155 and 85 on site 1, 85 and 51 on site 2.
 
@@ -56,6 +62,7 @@ A child outside the class may not:
 | `flux-kinds` | a Flux Kustomization or an ImageUpdateAutomation |
 | `helmrelease-spec` | a HelmRelease with a service account, a kubeconfig, a target or storage namespace of the class, or the post render strategy `nohooks` |
 | `privileged-pod` | a pod spec with `privileged`, a host path, the host network, PID or IPC namespace, a host port or an added capability, in any namespace |
+| `operator-pods` | an object from which an operator makes a pod of its own template: a runner set (`actions.github.com`), a sandbox (`agents.x-k8s.io`, `extensions.agents.x-k8s.io`), a database pooler, or a database cluster with a privileged container or an added capability (`postgresql.cnpg.io`). A plain database cluster passes: each app outside the class with a database makes one |
 | `takeover` | a change of an object whose owner labels name a child of the class |
 
 For each request of the two controllers:
@@ -186,19 +193,30 @@ An agent never suspends or resumes a Kustomization.
   webhook configuration or an admission policy, so this policy can not
   refuse one (the test `test_5_admission_objects_are_out_of_reach` shows it).
   Owner label holds a pull request of the App that adds or changes a Flux
-  object or an admission object, a path out of its folder, or a link
-  ([`ci.md`](ci.md), "Agent pull requests"). The Flux lockdown closes it on
-  the cluster.
-- **Pods of an operator.** A pod that an operator makes from a resource of
-  its own (a database cluster, a runner set) is not in a request of Flux.
+  object or an admission object, a remote source, a path out of its folder,
+  or a link ([`ci.md`](ci.md), "Agent pull requests"). The daily check
+  `flux-admission-objects` lists each admission object that a child outside
+  the class owns. The Flux lockdown closes it on the cluster.
+- **Pods of other operators.** The rule `operator-pods` holds the operators
+  of the clusters today. A pod that another operator makes from a resource
+  of its own is not in a request of Flux: a new operator needs a line in
+  that rule.
 - **Decryption.** The children outside the class still decrypt with the main
   key. The design asks for a key of their own; that needs a new key and a new
   encryption of their files, which is work of the owner. Until then Owner
-  label holds a pull request of the App that touches an encrypted file, a
-  path out of its folder or a link, which are the ways to reach an encrypted
-  file of the class.
+  label holds a pull request of the App that touches an encrypted file (by
+  its name or by its content), a path out of its folder or a link. These are
+  the three ways to reach an encrypted file of the class: a path, a link,
+  and a copy of its content under another name.
 - **Deletes.** The policy checks create and update. A delete of a
   controller (the garbage collection of a child, the uninstall of a Helm
   release) is not checked. The Flux lockdown closes it.
 - **Reach at run time.** What the apps outside the class reach in their own
-  namespaces (their Secrets, service accounts and egress) stays open.
+  namespaces (their Secrets, service accounts and egress) stays open. So
+  does a Service with `externalIPs`, or an Ingress or a certificate that
+  claims a host name of the class, from a namespace outside it.
+- **Fields for a later step.** `kustomization-spec` does not yet refuse
+  `spec.decryption` or a `spec.components` entry with `..`, and
+  `helmrelease-spec` does not yet refuse `install.createNamespace` (a new
+  empty namespace with no owner label). Owner label holds each Flux object
+  of a pull request of the App until then.

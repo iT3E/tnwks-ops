@@ -32,8 +32,12 @@ paths = [
   "security/**",
   # security/tests/test_audit_policy.py reads each cluster's audit policy.
   "talos/*/patches/audit-policy*.yaml",
-  # validate_health.py scans every manifest.
+  # validate_health.py scans every manifest, and
+  # tests/test_flux_admission.py checks that the lists of the admission policy
+  # of the Flux children are the class of git, and that its class folders are
+  # the kubernetes/ folders of the class of Owner label.
   "kubernetes/**",
+  ".github/scripts/owner-label-check.py",
   "bin/site-failover-apps.json",
   "infrastructure/ansible/roles/windows_observability_storage/**",
   "infrastructure/ansible/roles/windows_wsl_maintenance/**",

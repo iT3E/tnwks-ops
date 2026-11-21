@@ -29,6 +29,12 @@
 # - privileged-pod: make a pod spec with privileged, a host path, the host
 #   network, PID or IPC namespace, a host port or an added capability, in
 #   any namespace;
+# - operator-pods: make an object that an operator turns into a pod from a
+#   template of its own: the runner sets (actions.github.com), the sandboxes
+#   (agents.x-k8s.io, extensions.agents.x-k8s.io), a database pooler, or a
+#   database cluster with a privileged container or an added capability
+#   (postgresql.cnpg.io). A plain database cluster stays allowed: the
+#   children of the apps outside the class make one each;
 # - takeover: change an object whose owner labels name a child of the class.
 #
 # For each request of the controllers:
@@ -501,6 +507,12 @@ spec:
           c.?securityContext.?privileged.orValue(false) == true ||
           c.?securityContext.?capabilities.?add.orValue([]).size() > 0 ||
           c.?ports.orValue([]).exists(p, p.?hostPort.orValue(0) != 0))
+    - name: operatorPods
+      expression: >-
+        variables.group in ['actions.github.com', 'agents.x-k8s.io', 'extensions.agents.x-k8s.io'] ||
+        (variables.group == 'postgresql.cnpg.io' && (variables.kind == 'Pooler' || (variables.kind == 'Cluster' && (
+          object.?spec.?securityContext.?privileged.orValue(false) == true ||
+          object.?spec.?securityContext.?capabilities.?add.orValue([]).size() > 0))))
     - name: oldLabels
       expression: "oldObject != null ? oldObject.metadata.?labels.orValue({}) : {}"
     - name: oldClass
@@ -546,6 +558,11 @@ spec:
       messageExpression: >-
         'flux-child-scope/privileged-pod: ' + variables.child + ' is outside the class, so the pod spec of ' +
         variables.what + ' may have no privileged container, host path, host network, PID or IPC, host port or added capability'
+      reason: Forbidden
+    - expression: "!variables.outside || !variables.operatorPods"
+      messageExpression: >-
+        'flux-child-scope/operator-pods: ' + variables.child + ' is outside the class and may not apply ' +
+        variables.what + ', from which an operator makes a pod of its own template'
       reason: Forbidden
     - expression: "!variables.outside || !variables.oldClass"
       messageExpression: >-
