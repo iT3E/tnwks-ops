@@ -437,10 +437,12 @@ spec:
           # (OpenClaw 2026.11.3, dispatch-from-config). So it catches a turn
           # that never ends. It does not catch a final reply that the channel
           # sends after the turn ended and that then hangs or fails: that
-          # message counts as ended. A quiet evening has no message, so no
-          # gap, and a group message that needs no reply ends as skipped. A
-          # normal turn ends in minutes. Both counters start again at a
-          # restart of the pod. A turn that ends in an error is on the board.
+          # message counts as ended. It does not catch a channel whose poll
+          # stops either: no message reaches the agent, so no gap. A quiet
+          # evening has no message, so no gap, and a group message that needs
+          # no reply ends as skipped. A normal turn ends in minutes. Both
+          # counters start again at a restart of the pod. A turn that ends in
+          # an error is on the board.
           expr: |
             sum by (job, openclaw_channel) (openclaw_message_received_total{job=~"openclaw-agents-.+"})
               - (

@@ -706,9 +706,10 @@ So the alert catches a turn that never ends (a model call, a tool or the
 send of a streamed part that hangs, or a turn that waits in the queue of the
 session), and the person who wrote gets no answer. It does not catch a final
 reply that the channel sends after the turn ended and that then hangs or
-fails: that message counts as ended. A send that fails with an error shows
-on the board ("Replies that failed"), but only for a reply that is not
-streamed. A quiet evening has no
+fails: that message counts as ended. It does not catch a channel whose
+poll stops either: no message reaches the agent, so there is no gap. A send
+that fails with an error shows on the board ("Replies that failed"), but
+only for a reply that is not streamed. A quiet evening has no
 message, so it does not fire. A turn that ends in an error does not fire
 it: the Messages tab of the AI board shows those ("Turns by outcome").
 
@@ -722,6 +723,13 @@ it: the Messages tab of the AI board shows those ("Turns by outcome").
    after `starting provider`: they hold chat content and the name of the bot.
 3. The flows of the pod to the chat service in Hubble (dropped or not
    answered).
+
+**A count that is lost.** On one path the product records no end: a
+refresh of the session that fails twice leaves the turn idle with no end.
+The gap then stays at 1 until the pod restarts, and the alert fires with no
+hang (and hides a real hang on that channel until the restart). A gap that
+stays while newer messages of the same channel end is such a lost count:
+delete the pod, with the go of the owner.
 
 **Seen so far.** Not as this alert. On 2026-11-20 from 20:13 UTC both
 agents logged timeouts to the chat service. The product started the
