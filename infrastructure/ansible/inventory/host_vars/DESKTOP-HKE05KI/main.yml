@@ -60,7 +60,7 @@ wsl_watchdog_args: -KeepAliveTask tnwks-wsl-keepalive
 # secrets.sops.yml next to this file. The play stops before any change while
 # one of them is missing.
 wsl_move: true
-# The owner is often signed in here: the window stops at its step 1 while a
+# A person may be signed in here: the window stops at its step 1 while a
 # session of the present account is on the host, and its way back does not
 # restart the host while one is on.
 wsl_move_session_check: true
