@@ -1,0 +1,3 @@
+kind: Changed
+body: 'ai: the model bridge 0.3.0 logs a plan_limit line for each limit window of the Claude plan and the token counts of each answer on its call line. The AI board and the alert ModelPlanNearLimit read them.'
+time: 2026-11-21T00:41:00.000000000Z

@@ -10,6 +10,8 @@
 # AgentBackupMoverConfigMapDenied reads a counter of the API server that only
 # homelab-wsl keeps (kubernetes/clusters/wsl/apps/kustomization.yaml).
 # AgentBackupRepositoryNotReady reads the phase gauge of the backup operator.
+# ModelPlanNearLimit reads the record homelab:ai_plan_state
+# (observability/rules.py): the newest status of each window of the Claude plan.
 # Already covered elsewhere, so not here: a failed or late snapshot of a
 # state volume (the kopiur chart's rules, KopiurLastBackupFailed and
 # KopiurBackupStale, match each SnapshotPolicy), a repository in Failed or
@@ -400,3 +402,24 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#modelbridgeratelimited"
             summary: "The limit of the Claude plan stopped a call of the {{ $labels.domain }} trust domain."
             description: "The engine_error lines of the bridge are in Loki ({namespace=\"ai\", app=\"model-bridge\"} |= \"engine_error\"); the calls of that trust domain fail until the limit resets."
+
+        - alert: ModelPlanNearLimit
+          # The newest plan_limit line of the model bridge says that a window
+          # of the Claude plan is near its limit (allowed_warning: the vendor's
+          # own warning threshold) or at it (rejected), and the window did not
+          # reset since. The windows are the five hour window and the week
+          # windows that stop all calls; the overage windows are not limits.
+          # It warns in the chat and never pages: calls still work, and the
+          # owner can slow the agents down before the limit stops them. It
+          # resolves when the window resets or a newer line says allowed. A
+          # stop at the limit itself is ModelBridgeRateLimited.
+          expr: |
+            max by (window) (homelab:ai_plan_state{window=~"five_hour|seven_day|seven_day_opus|seven_day_sonnet"}) >= 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-ai?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#modelplannearlimit"
+            summary: "The {{ $labels.window }} window of the Claude plan is near its limit."
+            description: "The AI board, tab Limits and security, shows the use and the reset time of each window. The plan_limit lines of the bridge are in Loki ({namespace=\"ai\", app=\"model-bridge\"} |= \"plan_limit\")."

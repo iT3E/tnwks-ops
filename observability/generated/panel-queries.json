@@ -1275,7 +1275,7 @@
     "dashboard": "tnwks-ai",
     "tab": "Parts",
     "title": "AI alerts firing",
-    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
     "unit": "short",
     "kiosk": false
   },
@@ -1485,6 +1485,78 @@
     "title": "Last restore test",
     "expr": "max by (k8s_cluster, trust_domain, check, result) (homelab:ai_restore_result_timestamp_seconds{k8s_cluster=~\"$cluster\"}) * 1000",
     "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Five hour window used",
+    "expr": "max(homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\",window=\"five_hour\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Five hour window resets in",
+    "expr": "max(homelab:ai_plan_reset_timestamp_seconds{k8s_cluster=~\"$cluster\",window=\"five_hour\"}) - time()",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Week used",
+    "expr": "max(homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\",window=\"seven_day\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Week resets in",
+    "expr": "max(homelab:ai_plan_reset_timestamp_seconds{k8s_cluster=~\"$cluster\",window=\"seven_day\"}) - time()",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "State of each plan window",
+    "expr": "max by (k8s_cluster, window) (homelab:ai_plan_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Plan use over time",
+    "expr": "max by (k8s_cluster, window) (homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Age of the last reading",
+    "expr": "time() - max by (k8s_cluster, window) (homelab:ai_plan_observed_timestamp_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Model tokens by trust domain",
+    "expr": "sum by (k8s_cluster, trust_domain, token) (label_replace(increase(homelab_model_bridge_tokens_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"domain\", \"(.+)\"))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "title": "Model tokens in the range",
+    "expr": "sum by (k8s_cluster, trust_domain, token) (label_replace(increase(homelab_model_bridge_tokens_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"domain\", \"(.+)\")) > 0",
+    "unit": "short",
     "kiosk": false
   },
   {

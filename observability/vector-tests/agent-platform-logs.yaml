@@ -1888,7 +1888,7 @@ tests:
         assert_eq!(.domain, "pilot")
 
         '
-- name: 'gauge: a call line of the bridge is not counted'
+- name: 'gauge: a call line of the bridge with no token count is not counted'
   inputs:
   - insert_at: platform_gauges
     type: log
@@ -1944,3 +1944,189 @@ tests:
         assert_eq!(.tags, {"pod_namespace": "agents-pilot", "app": "agent", "check": "instruction-file", "result": "new"})
 
         '
+# The use of the Claude plan, from the plan_limit and call lines of the bridge
+# (the contract of the bridge's own README).
+- name: 'plan: a plan_limit line gives the four values of its window'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"ts":"2026-11-21T03:00:00.000Z","event":"plan_limit","domain":"finance","window":"five_hour","limiting":true,"status":"allowed","utilization":0.42,"resets_at":1795224121,"threshold":null}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+      timestamp: '2026-11-21T03:00:00Z'
+  outputs:
+  - extract_from: platform_gauges
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"gauge": "plan", "window": "five_hour", "status": 0, "utilization": 0.42, "reset": 1795224121, "time": 1795230000})
+
+        '
+- name: 'plan: the status words become numbers'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"plan_limit","domain":"main","window":"seven_day","status":"allowed_warning","utilization":0.95,"resets_at":1795652521}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"plan_limit","domain":"main","window":"seven_day_opus","status":"rejected","utilization":1,"resets_at":1795652521}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  outputs:
+  - extract_from: platform_gauges
+    conditions:
+    - type: vrl
+      source: 'assert!((.window == "seven_day" && .status == 1 && .utilization == 0.95) || (.window == "seven_day_opus" && .status == 2 && .utilization == 1.0))
+
+        '
+- name: 'plan: a value that is missing, null, out of range or not a number is -1, and an unknown name is other'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"plan_limit","domain":"main","window":"Some Window SECRET","status":"maybe","utilization":null,"resets_at":"tomorrow"}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"plan_limit","domain":"main","window":"other","status":"other","utilization":11,"resets_at":12}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"plan_limit","window":"overage","utilization":"0.5"}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  outputs:
+  - extract_from: platform_gauges
+    conditions:
+    - type: vrl
+      source: 'assert!(includes(["other", "overage"], .window))
+
+        assert_eq!(.status, -1)
+
+        assert_eq!(.utilization, -1.0)
+
+        assert_eq!(.reset, -1)
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        assert_eq!(keys(.), ["gauge", "reset", "status", "time", "utilization", "window"])
+
+        '
+- name: 'plan: the gauges have only the window, so the newest line of any trust domain sets them'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"plan_limit","domain":"finance","window":"five_hour","status":"allowed","utilization":0.3,"resets_at":1795224121}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"plan_limit","domain":"main","window":"five_hour","status":"allowed","utilization":0.31,"resets_at":1795224121}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  outputs:
+  - extract_from: plan_metrics
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.namespace, "homelab")
+
+        assert!(includes(["model_bridge_plan_utilization_ratio", "model_bridge_plan_reset_timestamp_seconds", "model_bridge_plan_status", "model_bridge_plan_observed_timestamp_seconds"], .name))
+
+        assert_eq!(.tags, {"window": "five_hour"})
+
+        assert_eq!(.kind, "absolute")
+
+        '
+- name: 'tokens: a call line with an answer gives its counts, by trust domain and model'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"ts":"2026-11-21T03:00:00.000Z","event":"call","domain":"main","model":"claude-opus-5-5","conversation":"abc123","mode":"new","effort":null,"status":200,"ms":311,"dropped":[],"cache_marks_removed":0,"input_tokens":11,"output_tokens":22,"cache_read_tokens":0,"cache_write_tokens":5}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  outputs:
+  - extract_from: platform_gauges
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"gauge": "tokens", "domain": "main", "model": "claude-opus-5-5", "input": 11, "output": 22, "cache_read": 0, "cache_write": 5})
+
+        '
+- name: 'tokens: an unknown domain or model is other, and a count that is not a whole number is 0'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"call","domain":"SECRET domain","model":"some-model-SECRET","input_tokens":-3,"output_tokens":"22","cache_read_tokens":1.5,"cache_write_tokens":7}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  outputs:
+  - extract_from: platform_gauges
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"gauge": "tokens", "domain": "other", "model": "other", "input": 0, "output": 0, "cache_read": 0, "cache_write": 7})
+
+        '
+- name: 'tokens: a call line with no answer, or no count in range, gives no sample'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"call","domain":"main","model":"claude-opus-5-5","status":502}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"call","domain":"main","model":"claude-opus-5-5","status":200,"input_tokens":200000000}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  no_outputs_from:
+  - platform_gauges
+- name: 'tokens: the counter has only domain, model and token'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"call","domain":"finance","model":"claude-opus-5-5","input_tokens":11,"output_tokens":22,"cache_read_tokens":33,"cache_write_tokens":44}'
+      kubernetes.container_name: model-bridge
+      kubernetes.pod_namespace: ai
+  outputs:
+  - extract_from: token_metrics
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.name, "model_bridge_tokens_total")
+
+        assert_eq!(.namespace, "homelab")
+
+        assert_eq!(.kind, "incremental")
+
+        assert!(includes(["input", "output", "cache_read", "cache_write"], .tags.token))
+
+        assert_eq!(keys(object!(.tags)), ["domain", "model", "token"])
+
+        assert_eq!(.tags.domain, "finance")
+
+        assert_eq!(.tags.model, "claude-opus-5-5")
+
+        '
+- name: 'plan: a plan line of another container is not counted'
+  inputs:
+  - insert_at: platform_gauges
+    type: log
+    log_fields:
+      message: '{"event":"plan_limit","window":"five_hour","status":"allowed","utilization":0.4}'
+      kubernetes.container_name: agent
+      kubernetes.pod_namespace: agents-main
+  no_outputs_from:
+  - platform_gauges

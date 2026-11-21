@@ -94,6 +94,36 @@ tests:
 
   # A restart of the platform log agent reads the backup log again from its
   # start, so an old line comes back as a new sample with its old time.
+  # The record homelab:ai_plan_state (observability/rules.py, which tests it)
+  # is given here as its own series: 1 allowed, 2 near the limit, 3 at it.
+  - name: a plan window near its limit warns after 5 minutes, and the overage window never does
+    interval: 1m
+    input_series:
+      - series: homelab:ai_plan_state{k8s_cluster="one", window="five_hour"}
+        values: 1x10 2x20 1x10
+      - series: homelab:ai_plan_state{k8s_cluster="one", window="seven_day"}
+        values: 1x40
+      - series: homelab:ai_plan_state{k8s_cluster="one", window="seven_day_opus"}
+        values: _x10 3x10 _x20
+      - series: homelab:ai_plan_state{k8s_cluster="one", window="seven_day_overage_included"}
+        values: 3x40
+    alert_rule_test:
+      - alertname: ModelPlanNearLimit
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: ModelPlanNearLimit
+        eval_time: 13m
+        exp_alerts: []
+      - alertname: ModelPlanNearLimit
+        eval_time: 17m
+        exp_alerts:
+          - exp_labels: {severity: warning, window: five_hour}
+          - exp_labels: {severity: warning, window: seven_day_opus}
+      # A newer line says allowed, and the week window reset (no record).
+      - alertname: ModelPlanNearLimit
+        eval_time: 35m
+        exp_alerts: []
+
   - name: an old line read again does not hide a check that stopped
     interval: 2m
     input_series:

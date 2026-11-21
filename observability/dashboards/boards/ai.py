@@ -61,6 +61,19 @@ FAILED = 'status=~"[45].."'
 BRIDGE = "homelab_model_bridge_engine_error_timestamp_seconds"
 LIMIT = 'kind="rate_limit"'
 INSTRUCTION_FILE = 'check="instruction-file"'
+# The use of the Claude plan, from the lines of the model bridge (observability/rules.py,
+# plan_records; docs/apps/agent-platform.md, "Plan use").
+PLAN_USED = "homelab:ai_plan_utilization_ratio"
+PLAN_RESET = "homelab:ai_plan_reset_timestamp_seconds"
+PLAN_STATE = "homelab:ai_plan_state"
+PLAN_SEEN = "homelab:ai_plan_observed_timestamp_seconds"
+FIVE_HOUR = 'window="five_hour"'
+WEEK = 'window="seven_day"'
+PLAN_WORDS = (("0", "Not given"), ("1", "Allowed"), ("2", "Near the limit"), ("3", "At the limit"))
+NO_READING = ("Unknown: no reading. No model call through the bridge in the last 8 days, the window "
+              "reset after the last call, or the vendor did not give the value")
+NO_CALLS = "None: no model call through the bridge in the range"
+BRIDGE_TOKENS = "homelab_model_bridge_tokens_total"
 DENIALS = "apiserver_validating_admission_policy_check_total"
 MOVER_DENY = 'policy="agents-backup-mover-configmaps",enforcement_action="deny"'
 # The series of the model gateway (kubernetes/apps/ai/litellm/app/configmap.yaml,
@@ -110,6 +123,11 @@ def call_rate(name: str, by: str) -> str:
 
 def tokens(window: str, by: str) -> str:
     return f"{calls(TOKENS_IN, window, by)} + {calls(TOKENS_OUT, window, by)}"
+
+
+def bridge_tokens(window: str) -> str:
+    """The increase of the token counter of the bridge in a window; its label domain is the trust domain."""
+    return by_trust_domain(f"increase({selector(BRIDGE_TOKENS)}[{window}])", "domain", "(.+)")
 
 
 def events(series: str, label: str = "pod_namespace", pattern: str = "agents-(.+)") -> str:
@@ -230,6 +248,50 @@ def board() -> Board:
                   "table"),
             ],
             "Limits and security": [
+                p("Five hour window used", f"max({selector(PLAN_USED, FIVE_HOUR)})", "percentunit",
+                  "How much of the five hour window of the Claude plan is used, from the newest reading of the model "
+                  "bridge. At 100% the calls of each trust domain stop until the window resets. The bridge reads the "
+                  "plan on each answer, and logs a reading when the use moves by a whole percent, so the share can "
+                  "be up to one percent low.", "stat", empty=NO_READING),
+                p("Five hour window resets in", f"max({selector(PLAN_RESET, FIVE_HOUR)}) - time()", "s",
+                  "The time until the five hour window starts again at 0%. The window starts with the first call "
+                  "after the last reset.", "stat", empty=NO_READING),
+                p("Week used", f"max({selector(PLAN_USED, WEEK)})", "percentunit",
+                  "How much of the weekly window of the Claude plan is used, from the newest reading of the model "
+                  "bridge. At 100% the calls of each trust domain stop until the week resets.",
+                  "stat", empty=NO_READING),
+                p("Week resets in", f"max({selector(PLAN_RESET, WEEK)}) - time()", "s",
+                  "The time until the weekly window starts again at 0%.", "stat", empty=NO_READING),
+                p("State of each plan window", f"max by (k8s_cluster, window) ({selector(PLAN_STATE)})", "state",
+                  "One row for each window of the plan that the bridge read: Allowed, Near the limit (the warning "
+                  "of the vendor, which also sends the alert ModelPlanNearLimit to the chat), or At the limit (calls "
+                  "stop). Not given: the vendor sent the use of the window but no status, as it does for a window "
+                  "that does not limit now. A row goes when its window resets. "
+                  "five_hour is the five hour window, seven_day the week; seven_day_opus and seven_day_sonnet are "
+                  "week windows of one model family, and the overage rows are extra use, not a limit.",
+                  "table", empty=NO_READING, states=PLAN_WORDS),
+                p("Plan use over time", f"max by (k8s_cluster, window) ({selector(PLAN_USED)})", "percentunit",
+                  "The share used of each window of the plan, from the newest reading at each time. A line drops to "
+                  "nothing when its window resets, and comes back with the next call.",
+                  empty="Unknown: no reading in the range. No model call through the bridge"),
+                p("Age of the last reading", f"time() - max by (k8s_cluster, window) ({selector(PLAN_SEEN)})", "s",
+                  "The time since the bridge last logged a reading of each window. The bridge logs one when the use, "
+                  "the status or the reset time moves, and at most every 30 minutes while calls go on, so an old "
+                  "reading with no calls since is still true.",
+                  "table", column="Age", empty=NO_READING),
+                p("Model tokens by trust domain",
+                  f"sum by (k8s_cluster, trust_domain, token) ({bridge_tokens('$__rate_interval')})",
+                  "short",
+                  "The tokens of the calls through the bridge, by trust domain and kind: input, output, cache_read "
+                  "(input read again from the cache, the cheapest kind) and cache_write. All trust domains use the "
+                  "same plan, so this says which domain uses it.",
+                  empty=NO_CALLS),
+                p("Model tokens in the range",
+                  f"sum by (k8s_cluster, trust_domain, token) ({bridge_tokens('$__range')}) > 0",
+                  "short",
+                  "The tokens of the calls through the bridge in the selected range, by trust domain and kind. A "
+                  "restart of the log agent starts the count again; the increase still counts across it.",
+                  "table", column="Tokens", empty=NO_CALLS),
                 p("Plan limit reached",
                   f"max by (k8s_cluster, trust_domain) ({events(selector(BRIDGE, LIMIT), 'domain', '(.+)')}) * 1000 > $__from",
                   "dateTimeAsIso",

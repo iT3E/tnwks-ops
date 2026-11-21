@@ -5295,7 +5295,7 @@
     "dashboard": "tnwks-ai",
     "tab": "Parts",
     "panel": "AI alerts firing",
-    "query": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "query": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
     "unit": "short",
     "query_mode": "instant",
     "inputs": [
@@ -6032,6 +6032,281 @@
     "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
     "scope": "selected sites; explicitly described shared sources may span sites",
     "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Five hour window used",
+    "query": "max(homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\",window=\"five_hour\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_utilization_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_utilization_ratio",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Five hour window resets in",
+    "query": "max(homelab:ai_plan_reset_timestamp_seconds{k8s_cluster=~\"$cluster\",window=\"five_hour\"}) - time()",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_reset_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Week used",
+    "query": "max(homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\",window=\"seven_day\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_utilization_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_utilization_ratio",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Week resets in",
+    "query": "max(homelab:ai_plan_reset_timestamp_seconds{k8s_cluster=~\"$cluster\",window=\"seven_day\"}) - time()",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_reset_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "State of each plan window",
+    "query": "max by (k8s_cluster, window) (homelab:ai_plan_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_status",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Plan use over time",
+    "query": "max by (k8s_cluster, window) (homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "homelab:ai_plan_utilization_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_utilization_ratio",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading in the range. No model call through the bridge",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Age of the last reading",
+    "query": "time() - max by (k8s_cluster, window) (homelab:ai_plan_observed_timestamp_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_observed_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Model tokens by trust domain",
+    "query": "sum by (k8s_cluster, trust_domain, token) (label_replace(increase(homelab_model_bridge_tokens_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"domain\", \"(.+)\"))",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "homelab_model_bridge_tokens_total"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_tokens_total",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None: no model call through the bridge in the range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Model tokens in the range",
+    "query": "sum by (k8s_cluster, trust_domain, token) (label_replace(increase(homelab_model_bridge_tokens_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"domain\", \"(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_model_bridge_tokens_total"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_tokens_total",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None: no model call through the bridge in the range",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/agent-platform-runbook.md",
     "owner": "homelab operator"
