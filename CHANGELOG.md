@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.249.1 - 2026-11-21
+
+### Security
+
+* ai: the browser tool (playwright-mcp) gets a network policy. In: the MCP port from the central MCP gateway and the kubelet. Out: the fetch proxy of the main agent and DNS for its name only. Each peer is named at both WSL sites, because the app moves between them. Its internal ingress goes, with its name on the router and its entry in the ingress probe of the evidence collector. A new doc, docs/apps/playwright-mcp.md, and a test, observability/tests/test_browser_pod.py.
+
 ## v2.249.0 - 2026-11-21
 
 ### Added
