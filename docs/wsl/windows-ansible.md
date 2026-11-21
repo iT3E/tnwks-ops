@@ -1114,7 +1114,8 @@ Per host, `wsl_move` (`group_vars/windows_hosts.yml`, off by default) adds
 the role `windows_wsl_move`: step 3 of the account change (Design Doc 0004,
 section 9). It makes the account that owns the distro, gives it its rights,
 and puts the procedure of the move window on the host. No apply starts the
-window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
+window. Site 2 (`host_vars/WSL-02`) has it on, and site 1 in the phase
+`move` (step 3), with the session check on. Each other host has it off.
 
 - **The start tasks of the new account.** `wsl_move_new_start_tasks`
   (`group_vars/windows_hosts.yml`) is the copy of each start task that the
@@ -1182,7 +1183,8 @@ window. Site 2 (`host_vars/WSL-02`) has it on. Each other host has it off.
   of the move ran on. At each apply, before any write, the play reads the
   installed version and stops on another one.
 - **Paths.** The role folder is `C:\ProgramData\tnwks-wsl-move`, with
-  `disk`, `state` and `log` under it. Each path is in the long, normalized
+  `disk`, `state` and `log` under it. On site 1 the disk file is on `E:`, so
+  its host variables put the role folder at `E:\tnwks-wsl-move`. Each path is in the long, normalized
   form (a drive, then names joined by one backslash). The folder of the new
   disk file (`wsl_move_disk_dir`) is on the volume of the disk file today,
   as the move is a rename and never a copy. The play stops before any
