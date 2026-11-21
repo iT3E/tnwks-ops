@@ -65,6 +65,8 @@ resources:
   # What a Flux child outside the "ask first" class may apply
   # (docs/operations/flux-admission.md). Both WSL clusters.
   - ../../../apps/flux-system/admission/ks.yaml
+  # The reduced substitution Secret of the children outside the class.
+  - ../../../apps/flux-system/substitution/ks.yaml
   - ../../../apps/kube-system
   # CNI: Cilium (shared HelmRelease; IPAM mode and pool from cluster-settings).
   - ../../../apps/kube-system/cilium/ks.yaml

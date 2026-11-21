@@ -250,13 +250,13 @@ def test_the_probe_key_of_main_may_list_and_read_the_facts_of_a_path_only():
     assert '(mcp.methodName == "tools/list" || mcp.tool.name == "get_file_info")' in rule["allow"]
 
 
-def test_the_gateway_takes_the_probe_of_main_and_not_yet_its_agent():
+def test_the_gateway_takes_the_probe_of_main_and_its_agent():
     (policy,) = [d for d in docs(GATEWAY_POLICY) if d["kind"] == "CiliumNetworkPolicy"]
     into = [(p["matchLabels"]["io.kubernetes.pod.namespace"],
              p["matchLabels"].get("app.kubernetes.io/component") or p["matchLabels"].get("app.kubernetes.io/name"))
             for rule in policy["spec"]["ingress"] for p in rule.get("fromEndpoints", [])]
     assert ("agents-main", "mcp-gateway-probe") in into
-    assert ("agents-main", "agent") not in into
+    assert ("agents-main", "agent") in into
 
 
 # The container test: the gateway of the cluster with this config, the vault
@@ -369,3 +369,94 @@ def test_the_probe_of_main_skips_and_passes_with_no_key(vault_lab):
     assert code == 0
     assert got["vault: probe key"] == got["other vault: probe key"] == "skipped: the key is pending"
     assert got["vault: no key: tools/list"] == "refused: HTTP 401"
+
+
+# The main agent and its share (step D)
+
+
+AGENT = MAIN / "agent/app/deployment.yaml"
+OPENCLAW = MAIN / "agent/config/openclaw.json"
+
+
+def agent_pod() -> dict:
+    (d,) = [x for x in docs(AGENT) if x["kind"] == "Deployment"]
+    return d["spec"]["template"]["spec"]
+
+
+def test_the_agent_mounts_the_share_read_only_at_its_root_where_finance_does():
+    """`ro` on the volume is not enough: the kubelet takes the flag from the
+    pod, so the claim and each mount say readOnly. No subPath on the share."""
+    main = agent_pod()
+    (fin,) = [x for x in docs(FINANCE / "agent/app/deployment.yaml") if x["kind"] == "Deployment"]
+    finance = fin["spec"]["template"]["spec"]
+    (volume,) = [v for v in main["volumes"] if v["name"] == "vault"]
+    assert volume == {"name": "vault", "persistentVolumeClaim": {"claimName": "vault-ro", "readOnly": True}}
+
+    def users(spec):
+        return {c["name"]: [m for m in c.get("volumeMounts", []) if m["name"] == "vault"]
+                for c in spec.get("initContainers", []) + spec["containers"]}
+
+    mains, fins = users(main), users(finance)
+    assert {n for n, m in mains.items() if m} == {n for n, m in fins.items() if m}
+    for name, mounts in mains.items():
+        for m in mounts:
+            assert m == {"name": "vault", "mountPath": "/vault", "readOnly": True}, name
+    # The share of finance never: R6.
+    assert "agents-finance" not in AGENT.read_text()
+
+
+def test_the_index_of_the_agent_polls_and_reads_the_share():
+    c = json.loads(OPENCLAW.read_text())
+    paths = [p["path"] for p in c["memory"]["search"]["extraPaths"]]
+    assert paths == ["/vault"]
+    # The gateway watches the share for the index; a change from the vault
+    # server gives no file event on NFS, so its watch polls.
+    (agent,) = [c for c in agent_pod()["containers"] if c["name"] == "agent"]
+    env = {e["name"]: e.get("value") for e in agent["env"]}
+    assert env["CHOKIDAR_USEPOLLING"] == "1"
+
+
+# The tools that write the share. Until the seed of the share (step F, at the
+# cutover) the agent lists the six read tools only: the seed stops at a share
+# that is not empty (share-not-empty), so a note of the agent before it would
+# stop the seed. The step of the seed adds these three again.
+WRITES = {"write_file", "edit_file", "create_directory"}
+
+
+def test_the_agent_calls_the_vault_route_of_main_with_its_key_and_the_read_tools():
+    c = json.loads(OPENCLAW.read_text())
+    entry = c["mcp"]["servers"]["vault"]
+    assert entry["url"] == "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp"
+    assert entry["headers"] == {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"}
+    (rule,) = routes()["main-vault"]["policies"]["mcpAuthorization"]["rules"]
+    nine = re.findall(r'"([a-z_]+)"', rule["allow"].split("]")[0])
+    assert WRITES <= set(nine)
+    assert sorted(entry["toolFilter"]["include"]) == sorted(set(nine) - WRITES)
+    assert "vault__*" in c["tools"]["sandbox"]["tools"]["alsoAllow"]
+
+
+def test_the_values_check_of_main_finds_one_hash_the_one_of_the_client_main():
+    pod = agent_pod()
+    (check,) = [c for c in pod["initContainers"] if c["name"] == "values-check"]
+    (program,) = re.findall(r"awk '([^']+)' /gateway/config.yaml", check["command"][2])
+    found = subprocess.run(["awk", program, str(CONFIG)], capture_output=True, text=True,
+                           check=True).stdout.split()
+    (agent,) = [k for k in routes()["main-vault"]["policies"]["apiKey"]["keys"]
+                if k["metadata"]["client"] == "main"]
+    assert found == [agent["keyHash"]]
+
+
+def test_a_real_probe_key_of_main_has_its_secret_listed():
+    """The hash of main-probe and the Secret of its key go in one commit: a
+    real hash with no Secret would fail each run of the probe with a 401,
+    and a Secret with the placeholder would be a key that no route takes."""
+    (probe,) = [k["keyHash"] for k in routes()["main-vault"]["policies"]["apiKey"]["keys"]
+                if k["metadata"]["client"] == "main-probe"]
+    resources = yaml.safe_load((MAIN / "checks/app/kustomization.yaml").read_text())["resources"]
+    listed = "./secret-mcp-gateway-probe.sops.yaml" in resources
+    assert HASH.match(probe)
+    assert listed is not bool(PLACEHOLDER.match(probe)), "the hash of main-probe and its Secret go together"
+    if listed:
+        (secret,) = docs(MAIN / "checks/app/secret-mcp-gateway-probe.sops.yaml")
+        assert secret["metadata"]["name"] == "mcp-gateway-probe-secret"
+        assert set(secret["stringData"]) == {"PROBE_KEY"}

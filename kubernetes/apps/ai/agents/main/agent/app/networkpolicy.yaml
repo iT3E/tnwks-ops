@@ -6,9 +6,10 @@
 # domain and two host names, the Telegram Bot API and the Brave Search API
 # (and DNS, through allow-dns). Nothing else: no model vendor, no update or
 # telemetry service, no other trust domain, no web site but through the
-# fetch proxy, and no MCP gateway (no MCP tool in this step; the vault route
-# comes with task 3.37). The pilot's policy, for agents-main, and the fetch
-# proxy.
+# fetch proxy, and not the vault server (the MCP gateway stands between). It
+# also reaches the MCP gateway, for the vault route of main (task 3.37).
+# The pilot's policy, for agents-main, with the fetch proxy and the MCP
+# gateway.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -51,6 +52,19 @@ spec:
       toPorts:
         - ports:
             - port: "4318"
+              protocol: TCP
+    # The MCP gateway (kubernetes/apps/ai/mcp-gateway), with the key of
+    # this agent: the vault tools of main (route main-vault). The MCP
+    # client is in the gateway process of the product, so no sandbox gets
+    # this route.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "3000"
               protocol: TCP
     # The fetch proxy (../../fetch-proxy): the web fetch of the gateway,
     # to any public site on port 443, as a CONNECT. The proxy checks the

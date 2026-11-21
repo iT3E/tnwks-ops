@@ -156,6 +156,18 @@ def wan(direction: str, picked: bool = False) -> str:
     return f'wan:client_app_{direction}_bits:rate2m' + ('{client=~"$client"}' if picked else "")
 
 
+def reachability(target: str) -> str:
+    """A device smokeping pings (target: its series' labels), as a state from the share of
+    pings lost over the last minute: 1 under 10%, 2 losing pings, 3 over half (its alert's
+    line). Unknown (0) while the probe's own path is losing pings too (the router hop, and
+    SW03 on the way to the management VLANs), as its alert is quiet then. No series, no
+    value: the panel's Unknown. Only site 1 probes, so the site filter doesn't apply."""
+    loss = f"max(smokeping:loss_ratio:rate1m{{{target}}})"
+    path = 'max(smokeping:loss_ratio:rate1m{role=~"lan|switch"})'
+    state = f"({loss} < bool 0.1) + 2 * ({loss} >= bool 0.1) * ({loss} <= bool 0.5) + 3 * ({loss} > bool 0.5)"
+    return f"(({state}) and on () ({path} < 0.1)) or on () (0 * {loss})"
+
+
 def worst(*sources: str) -> str:
     """One state for many: Failed > Degraded > Unknown > Healthy over every source's
     states. Standby, Not applicable and Maintenance don't count against it. Each

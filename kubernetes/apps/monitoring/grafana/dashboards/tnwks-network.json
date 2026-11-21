@@ -3314,6 +3314,437 @@
         "kind": "Panel",
         "spec": {
           "id": 27,
+          "title": "Radio gateway reachability",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background_solid",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "1": {
+                          "text": "Reachable",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Losing pings",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Unreachable",
+                          "color": "#c4302b"
+                        },
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Whether the EP-R6 (sce-ep01, 10.10.140.140), the gateway of the radio network 10.60.10.0/24, answers smokeping's pings: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioGatewayUnreachable fires after 4 minutes of that). Unknown while the router hop or SW03 lose pings too, as the probe's own path is at fault then, and when the EP-R6 isn't probed. Pings only: nothing reads the radios or a UISP controller. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-27": {
+        "kind": "Panel",
+        "spec": {
+          "id": 28,
+          "title": "Radio gateway packet loss",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge\"})",
+                        "instant": false,
+                        "legendFormat": "{{name}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of pings lost over each minute: the EP-R6 (sce-ep01) beside the router hop (sce-rtr01). Both rising together is the probe's path, not the gateway. Only site 1 probes it, so the site filter doesn't apply; no sce-ep01 line means the EP-R6 isn't probed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-28": {
+        "kind": "Panel",
+        "spec": {
+          "id": 29,
+          "title": "Radio gateway latency",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge\"})",
+                        "instant": false,
+                        "legendFormat": "{{name}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "p90 round trip over each minute to the EP-R6 and the router hop. A lost ping has no round trip, so an unreachable gateway is a gap here and 100% on packet loss. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-29": {
+        "kind": "Panel",
+        "spec": {
+          "id": 30,
+          "title": "VLAN 140 traffic",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (direction) (label_replace(rate(mktxp_interface_rx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"from VLAN 140\", \"\", \"\") or label_replace(rate(mktxp_interface_tx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"to VLAN 140\", \"\", \"\"))",
+                        "instant": false,
+                        "legendFormat": "{{direction}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The router's counters on its VLAN 140 interface, where the EP-R6 is the only client. Nothing received for hours means nothing comes from the radio network, whatever the pings say. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-30": {
+        "kind": "Panel",
+        "spec": {
+          "id": 31,
+          "title": "Radio network Internet traffic",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (client, direction) (label_replace(wan:client_app_receive_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"up\", \"\", \"\"))",
+                        "instant": false,
+                        "legendFormat": "{{client}} {{direction}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bps",
+                  "links": [
+                    {
+                      "title": "Open WAN clients",
+                      "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__field.labels.client:percentencode}",
+                      "oneClick": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The radio network's Internet traffic from flow export, down and up. The EP-R6 masquerades the network, so it is one device, named sce-ep01 from its DHCP lease. Click a line for its apps and destinations on WAN clients. A gap is a time the network sent nothing to the Internet, or flow export saw nothing (compare VLAN 140 traffic).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-31": {
+        "kind": "Panel",
+        "spec": {
+          "id": 32,
           "title": "Router BGP session resets",
           "links": [
             {
@@ -3523,10 +3954,10 @@
           "description": "Times each of the router's BGP sessions restarted in the range: its uptime went back. A session that dropped and came back between scrapes still counts. Only site 1 observes the router.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-27": {
+      "panel-32": {
         "kind": "Panel",
         "spec": {
-          "id": 28,
+          "id": 33,
           "title": "Cilium BGP session changes",
           "links": [
             {
@@ -3736,10 +4167,10 @@
           "description": "State changes of each node's Cilium BGP session with its distro's FRR in the range. Sampled at each scrape, so a shorter flap can be missed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-28": {
+      "panel-33": {
         "kind": "Panel",
         "spec": {
-          "id": 29,
+          "id": 34,
           "title": "Path hop changes",
           "links": [
             {
@@ -4403,7 +4834,7 @@
                           "kind": "AutoGridLayout",
                           "spec": {
                             "columnWidthMode": "narrow",
-                            "rowHeightMode": "standard",
+                            "rowHeightMode": "short",
                             "items": [
                               {
                                 "kind": "AutoGridLayoutItem",
@@ -4413,7 +4844,25 @@
                                     "name": "panel-26"
                                   }
                                 }
-                              },
+                              }
+                            ],
+                            "maxColumnCount": 6,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
                               {
                                 "kind": "AutoGridLayoutItem",
                                 "spec": {
@@ -4429,6 +4878,82 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-28"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-29"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-30"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Radio gateway"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-31"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-32"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-33"
                                   }
                                 }
                               }

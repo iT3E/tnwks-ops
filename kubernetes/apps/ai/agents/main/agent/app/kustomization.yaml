@@ -19,7 +19,8 @@
 #    names its Secrets, and with no replica nothing reads them.
 # 3b. In git: the owner's values (R4), in three files that are not listed yet:
 #    ./secret.sops.yaml (Secret agent-secret: OPENCLAW_GATEWAY_TOKEN,
-#    LITELLM_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM),
+#    LITELLM_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM, and since
+#    task 3.37 MCP_GATEWAY_KEY),
 #    ./secret-search.sops.yaml (Secret agent-search-secret: BRAVE_API_KEY,
 #    the search key of main) and ./secret-telegram-groups.sops.yaml (Secret
 #    agent-telegram-groups: telegram-groups.json, the one group of the
@@ -37,8 +38,10 @@
 # follows the first nightly snapshot with the state in it.
 # The tool set of M7a, first step: built-in tools of the product, web search
 # with its own key, web fetch through the fetch proxy (../../fetch-proxy),
-# images through the model. No MCP tool, no finance app,
-# no vault (task 3.37), no Signal and no scheduled job yet.
+# images through the model, and the vault of main (task 3.37): the share
+# read only for the index, and the vault tools through the central MCP
+# gateway with MCP_GATEWAY_KEY (the key of the client main, its hash in the
+# gateway's config). No finance app, no Signal and no scheduled job yet.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -59,6 +62,11 @@ resources:
 # one rollout (docs/apps/agent-platform.md, "A start of the agent pod").
 # Reloader watches the Secrets only (deployment.yaml).
 configMapGenerator:
+  # The config of the MCP gateway, the same file, for the values check of
+  # the agent pod: it holds hashes and tool rules, no secret.
+  - name: agent-mcp-gateway-config
+    files:
+      - config.yaml=../../../../mcp-gateway/app/config/config.yaml
   # The config of the agent (../config), with no ${VAR} substitution: each
   # ${NAME} in openclaw.json is for the product, which reads it from an env
   # var of the pod when it loads the config. The file of the Telegram group

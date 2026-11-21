@@ -18,8 +18,8 @@ resources:
   # (vault-share/ks.yaml).
   - ./vault-share/ks.yaml
   # The vault server of the share, behind the central MCP gateway
-  # (vault-server/ks.yaml). No pod of main mounts the share or calls the
-  # route yet.
+  # (vault-server/ks.yaml). The main agent mounts the share read only and
+  # calls the route (agent/app).
   - ./vault-server/ks.yaml
   # The nightly snapshot of the share (vault-backup/ks.yaml), to the
   # repository of main.

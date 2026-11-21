@@ -3,6 +3,42 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.260.1 - 2026-11-21
+
+### Fixed
+
+* ci: the observability contracts job has 25 minutes again instead of 15. Its runs of 2026-11-21 took 690 to 885 s, and two stopped at the limit; the split of the long tests had brought it down to 15.
+
+## v2.260.0 - 2026-11-21
+
+### Added
+
+* monitoring: the EP-R6 (sce-ep01), the gateway of the radio network, is watched. smokeping pings it once a second (role edge), and RadioGatewayUnreachable fires when it loses over half its pings for 4 minutes while the router and SW03 answer (RadioGatewayProbeMissing when nothing probes it). The Network & Routing board has a Radio gateway tab: its reachability as a state, loss and latency beside the router hop, the router's VLAN 140 traffic and its Internet traffic from flow export. The Internet board's probe panels show only the Internet targets and the router hop
+
+## v2.259.0 - 2026-11-21
+
+### Added
+
+* agents: the main agent gets its vault (task 3.37, step D): the claim vault-ro of the main share at /vault in the gateway, its repair step and its index step, read only on the claim and each mount with no subPath; the index reads /vault (Markdown) and polls; the six read tools of the vault through the route main-vault of the MCP gateway with MCP_GATEWAY_KEY (the three write tools come with the seed of the share, which stops at a share that is not empty), and the values check stops the start when its hash is not the one of the client main; the egress of the agent to the gateway and the ingress of the gateway from it. A merge starts one new agent pod.
+
+## v2.258.0 - 2026-11-21
+
+### Added
+
+* mikrotik: the router lets the desktop ping the EP-R6 (sce-ep01), the gateway of the radio network: ICMP from the monitoring list to 10.10.140.140 only, so smokeping can watch it. Its SSH and web UI stay VPN-only
+
+## v2.257.0 - 2026-11-21
+
+### Changed
+
+* site 1 Windows host: Ansible logs in as the administrator account (step 4 of the account change). The desktop user, the tasks and the disk path stay with the present account by their own values
+
+## v2.256.5 - 2026-11-21
+
+### Security
+
+* Flux: the class Kustomization flux-substitution makes the reduced Secret cluster-secrets-apps on both sites, with only the keys of cluster-secrets that the children outside the "ask first" class use; no child reads it yet. CI checks that each variable of a child outside the class is a key of it or a setting of the site
+
 ## v2.256.4 - 2026-11-21
 
 ### Security
