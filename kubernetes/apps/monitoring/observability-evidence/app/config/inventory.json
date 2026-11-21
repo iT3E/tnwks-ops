@@ -778,8 +778,7 @@
         "kind": "deployment",
         "workload": "playwright-mcp",
         "clusters": [
-          "homelab-wsl",
-          "homelab-wsl-02"
+          "homelab-wsl"
         ]
       }
     ],

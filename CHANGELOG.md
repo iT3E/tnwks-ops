@@ -3,6 +3,24 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.253.0 - 2026-11-21
+
+### Changed
+
+* windows: site 1 takes the phase ready of the move of the monitoring data (observability_storage_mount): the distro makes the file of 19 GiB once, its timer stays off, and the VHDX keeps the data
+
+## v2.252.0 - 2026-11-21
+
+### Changed
+
+* ai: the browser tool (playwright-mcp) runs at homelab-wsl only, with one replica, beside the central MCP gateway and the fetch proxy of the main agent. homelab-wsl-02 no longer deploys it, its Service is local to the cluster (not global in the mesh), and its network policy names this cluster only. The AI board has it at homelab-wsl, and Not applicable at homelab-wsl-02. It still loads no page: no route of the gateway names it, and the fetch proxy lets in the agent pod of main only.
+
+## v2.251.0 - 2026-11-21
+
+### Added
+
+* site 1 Windows host: the encrypted host variables hold the password of the administrator account, for step 1 of the account change (the same key as site 2). No role reads it
+
 ## v2.250.1 - 2026-11-21
 
 ### Security

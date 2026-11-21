@@ -27,10 +27,10 @@ resources:
   # Restarts workloads annotated reloader.stakater.com/auto when their
   # ConfigMaps or Secrets change (the evidence collector, mosquitto, Grafana).
   - ../../../apps/kube-system/reloader/ks.yaml
-  # Apps (one at a time, docs/wsl/multi-site.md). playwright-mcp: stateless,
-  # the pilot of moving an app to homelab-wsl-02.
+  # The ai namespace stays, empty: the browser tool (playwright-mcp) runs at
+  # homelab-wsl only (docs/apps/playwright-mcp.md), and Flux does not prune
+  # this namespace (prune: disabled).
   - ../../../apps/ai/namespace.yaml
-  - ../../../apps/ai/playwright-mcp/ks.yaml
   # Monitoring of this cluster: Prometheus (kube-prometheus-stack) and
   # Alertmanager to the War Room, alerts labelled cluster=homelab-wsl-02.
   - ../../../apps/monitoring/namespace.yaml

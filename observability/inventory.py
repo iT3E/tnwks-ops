@@ -94,9 +94,9 @@ AI_PARTS = [
      "workload": "mcp-gateway"},
     {"trust_domain": "shared", "part": "Sandbox controller", "namespace": "agent-sandbox-system",
      "kind": "deployment", "workload": "agent-sandbox-controller"},
-    # One site at a time (docs/wsl/multi-site.md): Standby where it is at zero.
+    # Beside the MCP gateway and the fetch proxy (docs/apps/playwright-mcp.md).
     {"trust_domain": "shared", "part": "Browser tool server", "namespace": "ai", "kind": "deployment",
-     "workload": "playwright-mcp", "clusters": ["homelab-wsl", "homelab-wsl-02"]},
+     "workload": "playwright-mcp"},
 ]
 # Each CronJob of the domain, and the longest time since its last good run:
 # a day and two hours for a daily check, two runs and slack for the others.

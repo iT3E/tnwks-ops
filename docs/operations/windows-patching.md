@@ -372,10 +372,10 @@ Tiers as in [multi-site.md](../wsl/multi-site.md#apps).
 | --- | --- |
 | Warm (Mealie, Home Assistant, Firefly, storefront API) | planned switchover to the other site in phase 2, back in phase 7. Home Assistant runs without Z-Wave meanwhile |
 | Moves, state per site (Frigate, mosquitto) | scaled over in phase 2 without the data steps, back in phase 7. Frigate detects on the RTX 3080 on `WSL-02` |
-| Stateless (sites, playwright-mcp) | scaled over in phase 2, back in phase 7 |
+| Stateless (sites) | scaled over in phase 2, back in phase 7 |
 | Cold (media stack, Immich) | stops with the host in phase 3, starts with it in phase 6 |
 | Pinned (zwave-js-ui: Z-Stick) | down for the window, announced in phase 2; accepted |
-| Not placed (monitoring, the OpenClaw gateway on wsl-01) | down for the window. The other site's Prometheus watches the patched site |
+| Not placed (monitoring, the OpenClaw gateway and the browser tool on wsl-01) | down for the window. The other site's Prometheus watches the patched site |
 
 When `WSL-02` is patched, its own apps (wsl-02-primary, mostly cold) stop
 with it, and the replicas it holds for wsl-01 pause and catch up

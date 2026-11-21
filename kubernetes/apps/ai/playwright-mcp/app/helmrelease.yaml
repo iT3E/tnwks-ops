@@ -27,10 +27,10 @@ spec:
   values:
     controllers:
       playwright-mcp:
-        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"): the
-        # default here, per cluster in cluster-settings, at runtime in
-        # site-overrides.
-        replicas: ${PLAYWRIGHT_MCP_REPLICAS:=1}
+        # homelab-wsl only, beside the central MCP gateway and the fetch proxy
+        # of the main agent (docs/apps/playwright-mcp.md). It does not move
+        # between the sites.
+        replicas: 1
         annotations:
           reloader.stakater.com/auto: "true"
         containers:
@@ -89,12 +89,9 @@ spec:
     service:
       app:
         controller: playwright-mcp
-        # Global across the WSL sites (Cilium Cluster Mesh): the MCP gateway
-        # at homelab-wsl reaches this app wherever it runs. No ingress: an
-        # agent reaches it through the gateway only (networkpolicy.yaml).
-        annotations:
-          service.cilium.io/global: "true"
-          service.cilium.io/affinity: local
+        # Local to this cluster: its only caller, the central MCP gateway,
+        # runs here too. No ingress: an agent reaches it through the gateway
+        # only (networkpolicy.yaml).
         ports:
           http:
             port: 8000
