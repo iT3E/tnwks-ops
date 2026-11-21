@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.250.0 - 2026-11-21
+
+### Added
+
+* site 1 monitoring: the data of Prometheus can move from the VHDX that a Windows task attaches into a file of 19 GiB on the disk of the distro, ext4, mounted by a loop device at the same point (role wsl_observability_file, phases vhdx, ready and file of observability_storage_mount). With the file, the mount task is disabled and stays with the VHDX as the way back, and a compaction leaves a disabled task disabled
+
 ## v2.249.1 - 2026-11-21
 
 ### Security
