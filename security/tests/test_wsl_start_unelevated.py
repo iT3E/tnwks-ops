@@ -334,8 +334,11 @@ def test_the_switch_is_off_by_default_and_on_for_site_2_first():
     group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
     assert group["wsl_start_unelevated"] is False
     assert group["wsl_start_unelevated_done"] is False
+    # Site 2 first, then site 1 with the move of its distro (test_wsl_move_role.py).
     switched = {name for name, data in windows_hosts().items() if data["wsl_start_unelevated"]}
-    assert switched == {"WSL-02"}
+    assert switched == {"WSL-02", "DESKTOP-HKE05KI"}
+    done = {name for name, data in windows_hosts().items() if data["wsl_start_unelevated_done"]}
+    assert done <= {"WSL-02"}
 
 
 def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet():
