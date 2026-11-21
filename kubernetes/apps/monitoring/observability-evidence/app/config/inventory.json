@@ -584,11 +584,6 @@
       "vip": "10.10.95.10"
     },
     {
-      "name": "playwright-mcp",
-      "host": "playwright-mcp.internal.tnwks.us",
-      "vip": "10.10.95.200"
-    },
-    {
       "name": "qbittorrent",
       "host": "qbittorrent.internal.tnwks.us",
       "vip": "10.10.95.200"

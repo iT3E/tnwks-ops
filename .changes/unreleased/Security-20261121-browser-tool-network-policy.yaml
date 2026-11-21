@@ -1,3 +1,3 @@
 kind: Security
-body: 'ai: the browser tool (playwright-mcp) gets a network policy. In: the MCP port from the central MCP gateway, the internal ingress and the kubelet. Out: the fetch proxy of the main agent and DNS for its name only. Each peer is named at both WSL sites, because the app moves between them. A new doc, docs/apps/playwright-mcp.md, and a test, observability/tests/test_browser_pod.py.'
+body: 'ai: the browser tool (playwright-mcp) gets a network policy. In: the MCP port from the central MCP gateway and the kubelet. Out: the fetch proxy of the main agent and DNS for its name only. Each peer is named at both WSL sites, because the app moves between them. Its internal ingress goes, with its name on the router and its entry in the ingress probe of the evidence collector. A new doc, docs/apps/playwright-mcp.md, and a test, observability/tests/test_browser_pod.py.'
 time: 2026-11-21T10:00:00.000000+00:00

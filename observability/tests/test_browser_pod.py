@@ -5,9 +5,12 @@ app, lets in the central MCP gateway and the kubelet on the MCP port, and
 lets out the fetch proxy of the main agent and DNS for its name only. Each
 peer names a cluster of the mesh, and each cluster that runs the app sets
 both names. The app runs at one site at a time, so a peer that runs at the
-other site is named there too.
+other site is named there too. The app has no ingress and no name on the
+router, and the ingress probe of the evidence collector does not look for
+one.
 """
 
+import json
 from pathlib import Path
 
 import yaml
@@ -71,11 +74,7 @@ def test_the_gateway_and_the_kubelet_come_in_on_the_mcp_port_only():
         assert set(rule) <= {"fromEndpoints", "fromEntities", "toPorts"}, rule
         assert rule["toPorts"] == [{"ports": [{"port": PORT, "protocol": "TCP"}]}]
         assert rule.get("fromEntities", ["host"]) == ["host"]
-    sources = [s for rule in ingress for s in rule.get("fromEndpoints", [])]
-    allowed = at_both_sites("ai", **{"app.kubernetes.io/name": "mcp-gateway"}) + at_both_sites(
-        "networking", **{"app.kubernetes.io/name": "ingress-nginx",
-                         "app.kubernetes.io/instance": "ingress-nginx-internal"})
-    assert all(s in allowed for s in sources), sources
+    assert len(ingress) == 2
 
 
 def test_the_pod_reaches_the_fetch_proxy_and_dns_for_its_name_only():
@@ -130,3 +129,17 @@ def test_only_the_wsl_clusters_run_the_app():
 def test_the_server_keeps_its_session_isolation():
     app = values()["controllers"]["playwright-mcp"]["containers"]["app"]
     assert "--isolated" in app["args"]
+
+
+def test_the_app_has_no_ingress():
+    assert "ingress" not in values()
+    assert "INTERNAL_DOMAIN" not in RELEASE.read_text()
+
+
+def test_no_router_name_and_no_ingress_probe_for_the_app():
+    records = (ROOT / "infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf").read_text()
+    assert "playwright" not in records
+    for path in (ROOT / "observability/generated/inventory.json",
+                 ROOT / "kubernetes/apps/monitoring/observability-evidence/app/config/inventory.json"):
+        names = [n["name"] for n in json.loads(path.read_text())["ingress"]]
+        assert names and "playwright-mcp" not in names, path

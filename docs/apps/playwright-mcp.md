@@ -18,14 +18,14 @@ Upstream: [GitHub](https://github.com/microsoft/playwright-mcp)
 | --- | --- |
 | App | Deployment `playwright-mcp`, port 8000 (`/mcp`, and the legacy `/sse`) |
 | Service | `playwright-mcp`, global across the WSL sites (Cilium Cluster Mesh) |
-| Ingress | `playwright-mcp`, `nginx-internal` |
+| Ingress | None: an agent reaches it through the gateway only |
 | Network policy | CiliumNetworkPolicy `playwright-mcp` (`app/networkpolicy.yaml`) |
 | Data | None: `--isolated` gives each session a fresh browser profile in memory, and `/tmp` and the home directory are `emptyDir` |
 
 ## Network policy
 
-- **In:** port 8000 from the central MCP gateway, from the internal
-  ingress, and from the host (the kubelet's TCP probes). No other pod.
+- **In:** port 8000 from the central MCP gateway, and from the host (the
+  kubelet's TCP probes). No other pod, and no ingress.
 - **Out:** the fetch proxy of the main agent on port 8080, and DNS for the
   name of the fetch proxy only. No other pod, no service of the cluster,
   no address of the house and no web site directly.

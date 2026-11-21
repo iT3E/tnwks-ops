@@ -469,7 +469,7 @@ the BGP hold time (9 s; a clean FRR stop moves it at once):
 | VIP | Preferred | Names (router site records, `dns-sites.tf`) |
 | --- | --- | --- |
 | `10.10.95.10` | homelab-wsl | `hass`, `firefly`, `grafana`, `grafana-embed`, `mealie-embed` |
-| `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `playwright-mcp`, `unifi` |
+| `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `unifi` |
 
 Both are the internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
 `-vip-wsl-02`, `externalTrafficPolicy: Cluster`). Either site's ingress serves
