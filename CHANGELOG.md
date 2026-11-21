@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.256.5 - 2026-11-21
+
+### Security
+
+* Flux: the class Kustomization flux-substitution makes the reduced Secret cluster-secrets-apps on both sites, with only the keys of cluster-secrets that the children outside the "ask first" class use; no child reads it yet. CI checks that each variable of a child outside the class is a key of it or a setting of the site
+
 ## v2.256.4 - 2026-11-21
 
 ### Security
