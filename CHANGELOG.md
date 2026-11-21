@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.260.0 - 2026-11-21
+
+### Added
+
+* monitoring: the EP-R6 (sce-ep01), the gateway of the radio network, is watched. smokeping pings it once a second (role edge), and RadioGatewayUnreachable fires when it loses over half its pings for 4 minutes while the router and SW03 answer (RadioGatewayProbeMissing when nothing probes it). The Network & Routing board has a Radio gateway tab: its reachability as a state, loss and latency beside the router hop, the router's VLAN 140 traffic and its Internet traffic from flow export. The Internet board's probe panels show only the Internet targets and the router hop
+
 ## v2.259.0 - 2026-11-21
 
 ### Added
