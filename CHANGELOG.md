@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.260.2 - 2026-11-21
+
+### Fixed
+
+* windows: site 1 states its UDP relays and its bound USB device, so the play of the move window renders the same configs of the procedure as the play of the host, with the copies of both relays among the start tasks of the new account
+
 ## v2.260.1 - 2026-11-21
 
 ### Fixed
