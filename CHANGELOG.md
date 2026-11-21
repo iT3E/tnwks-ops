@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.247.1 - 2026-11-21
+
+### Fixed
+
+* observability: the token counter of the model bridge (homelab_model_bridge_tokens_total) lives as long as the platform log agent. The exporter of Vector dropped it 1 to 2 minutes after the last call line, and its sample kept the time of the line, so the token panels of the AI board counted the first call as 0 and later calls only in part. A static_metrics source now adds 0 to each declared series at the start and every 30 seconds, and each sample has the time it was counted.
+
 ## v2.247.0 - 2026-11-21
 
 ### Changed
