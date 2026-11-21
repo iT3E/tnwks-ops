@@ -97,6 +97,24 @@ def is_class_path(path: str) -> bool:
     return any((p + "/").startswith(c) for c in CLASS_PATHS)
 
 
+# The API groups of the two Flux kinds that the walk reads.
+KUSTOMIZE_GROUP = "kustomize.toolkit.fluxcd.io"
+HELM_GROUP = "helm.toolkit.fluxcd.io"
+
+
+def api_group(doc: dict) -> str:
+    """The API group of a document, exactly: the part of apiVersion before
+    the "/", or "" for the core group ("v1")."""
+    group, slash, _ = str(doc.get("apiVersion", "")).partition("/")
+    return group if slash else ""
+
+
+def is_kind(doc: dict, group: str, kind: str) -> bool:
+    """A document of that kind in that API group, with no prefix or
+    substring match."""
+    return doc.get("kind") == kind and api_group(doc) == group
+
+
 def norm(path: str) -> str:
     return path.removeprefix("./").rstrip("/")
 
@@ -162,8 +180,7 @@ def build(path: Path) -> Build:
 
 
 def flux_kustomizations(docs: list[dict]) -> list[dict]:
-    return [d for d in docs if d.get("kind") == "Kustomization"
-            and str(d.get("apiVersion", "")).startswith("kustomize.toolkit.fluxcd.io/")]
+    return [d for d in docs if is_kind(d, KUSTOMIZE_GROUP, "Kustomization")]
 
 
 @dataclass
@@ -225,10 +242,9 @@ def lists() -> dict:
                     parents.setdefault(c.key, set()).update(
                         f"{d['kind']}/{d['metadata'].get('namespace', '')}/{d['metadata']['name']}"
                         for d in c.build.docs
-                        if d.get("kind") and not (d["kind"] == "Kustomization"
-                                                  and "fluxcd.io" in str(d.get("apiVersion", ""))))
+                        if d.get("kind") and not is_kind(d, KUSTOMIZE_GROUP, "Kustomization"))
             for d in c.build.docs:
-                if d.get("kind") == "HelmRelease" and str(d.get("apiVersion", "")).startswith("helm.toolkit.fluxcd.io/"):
+                if is_kind(d, HELM_GROUP, "HelmRelease"):
                     sites[site]["helmreleases"] += 1
                     key = f"{namespace_of(d, c)}/{d['metadata']['name']}"
                     if cls:
