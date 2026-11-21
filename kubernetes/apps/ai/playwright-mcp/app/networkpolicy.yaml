@@ -1,0 +1,77 @@
+---
+# The browser tool (docs/apps/playwright-mcp.md). In: the MCP port from the
+# central MCP gateway, and from the host (the kubelet) for the socket probes.
+# The app has no ingress.
+# Out: the fetch proxy of the main agent and DNS for its name only. No other
+# pod, no service of the cluster, no address of the house and no web site
+# but through the fetch proxy. The flags of origins of the server are not a
+# security boundary, so this policy is the wall.
+#
+# The app runs at one site at a time (docs/wsl/multi-site.md), and the
+# gateway and the fetch proxy run at homelab-wsl only. Both WSL clusters are
+# one Cilium Cluster Mesh, so each peer is named at this cluster and at the
+# other one: the rule holds at either site.
+#
+# The fetch proxy lets in the agent pod of main only, and its Service is not
+# global, so the browser has no way to a web site yet. The route of the
+# gateway, the proxy flag of the browser and the rule of the proxy for the
+# browser come together in a later step.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: playwright-mcp
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: playwright-mcp
+  ingress:
+    # The central MCP gateway (kubernetes/apps/ai/mcp-gateway).
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+    # The kubelet: the TCP probes of the socket.
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+  egress:
+    # The fetch proxy of the main agent (kubernetes/apps/ai/agents/main/fetch-proxy).
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: fetch-proxy
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: fetch-proxy
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # DNS for the name of the fetch proxy, and no other name: DNS would be a
+    # way out too.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: fetch-proxy.agents-main.svc.cluster.local
