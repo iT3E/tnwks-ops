@@ -1,3 +1,0 @@
-kind: Added
-body: 'observability: the AI board shows the metrics of the personal agents (step 3 of task 5.23): messages in, turns by outcome and trigger, replies sent and failed, the time to send a reply, stuck sessions and failovers. The pilot agent sends its metrics first (finance and main follow, each in its own change), and Alloy keeps 8 instruments, the listed labels of each and their declared values (other for each other value), cuts the resource to the service name (undeclared for each other name), and writes to the OTLP path of Prometheus. The network rule of Prometheus lets Alloy of the same site write there and no reader, and the daily CronJob prometheus-rule-check proves that a reader can not write.'
-time: 2026-11-20T19:00:00.000000000Z
