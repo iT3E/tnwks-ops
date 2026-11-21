@@ -868,7 +868,7 @@ admits only the senders of git. Alloy forwards each span to Tempo.
 
 The CiliumNetworkPolicy `alloy`
 (`kubernetes/apps/monitoring/alloy/app/networkpolicy.yaml`) says who may
-open a connection to the pod of Alloy on each site, and on which port. It
+open a connection to the pod of Alloy on site 1, and on which port. It
 has no HTTP rules, so the proxy of Cilium is not in the path. Before it, each
 pod of either cluster could send OTLP to the receiver of the agents: false
 series of the product into Prometheus, and a false span of a completed turn
@@ -884,11 +884,12 @@ into Tempo, which could hide a missed heartbeat.
 - **12345, the HTTP server.** Prometheus of the same site (the scrape), and
   the kubelet probes from the local host. The config reloader and a `kubectl
   port-forward` enter on the loopback of the pod.
-- **Where the list came from.** The flow log of Cilium (Hubble, both sites,
+- **Where the list came from.** The flow log of Cilium (Hubble, site 1,
   2026-11-21): the three agent pods on 4318, Prometheus and the host on
   12345. Git for the rest: the supervisors (no run in that window), the
   test span (05:27 UTC) and the Faro ingress (no browser in that window).
-  Site 2 runs no Alloy pod today; the rule is the same there.
+  Alloy runs on site 1 only (`kubernetes/apps/monitoring` is in the app
+  list of site 1), so this rule exists on site 1 only.
   `observability/tests/test_alloy_policy.py` fails when a file of git names
   the receiver and the rule does not know its pod, and when an egress rule
   of a trust domain to Alloy has no line in it.

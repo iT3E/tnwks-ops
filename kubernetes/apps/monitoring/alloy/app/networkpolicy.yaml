@@ -6,7 +6,7 @@
 # receiver of the agents: false series of the product into Prometheus,
 # and a false span of a completed turn into Tempo.
 #
-# The senders, from the flow log of Cilium (Hubble, both sites, 2026-11-21)
+# The senders, from the flow log of Cilium (Hubble, site 1, 2026-11-21)
 # and from git:
 #   4318, the OTLP receiver of the agents: the agent pod of each personal
 #     trust domain (main, finance, pilot: diagnostics.otel in openclaw.json);
@@ -23,8 +23,9 @@
 #
 # Both WSL clusters are one Cilium Cluster Mesh. A selector without the
 # cluster label selects this cluster only (policy-default-local-cluster), so
-# each selector names its cluster. Site 2 runs no agent: its rule names the
-# same pods, and none exists there.
+# each selector names its cluster. Alloy runs on site 1 only
+# (kubernetes/apps/monitoring is in the app list of site 1), so this rule
+# exists on site 1 only.
 #
 # A new sender adds its pod below in the same PR. Without it, its
 # connections are dropped and Hubble shows them as POLICY_DENIED.
