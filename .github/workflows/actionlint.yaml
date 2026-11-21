@@ -68,5 +68,8 @@ jobs:
       - name: Test the owner label check
         run: python3 -m unittest discover -s .github/scripts -p test_owner_label_check.py
 
+      - name: Test the gates of agent branches
+        run: python3 -m unittest discover -s .github/scripts -p test_ci_gates.py
+
       - name: Test the call step of the platform review
         run: python3 -m unittest discover -s .github/scripts -p test_renovate_review_call.py

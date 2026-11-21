@@ -36,8 +36,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Who the run is for (pr-trust.yaml, owner-label-check.py --trust of
+  # main): "true" only for the owner and Renovate with nobody else's push on
+  # the branch. Anyone else gets the files of main where the branch could
+  # change what runs: bin/ci-changes and .github/ci (job Changes), the
+  # scripts of the rendered diff, and the Terraform plan only after the
+  # approval of the owner.
+  trust:
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/pr-trust.yaml
+
   changes:
     name: Changes
+    needs: trust
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
@@ -73,20 +87,33 @@ jobs:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           SHA: ${{ github.sha }}
+          TRUSTED: ${{ needs.trust.outputs.trusted }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
+          changes=bin/ci-changes
+          if [ "$TRUSTED" != true ] && [ "$EVENT" != push ]; then
+            # bin/ci-changes finds .github/ci/domains.toml next to itself.
+            main="$RUNNER_TEMP/main"
+            mkdir -p "$main"
+            git archive "origin/${DEFAULT_BRANCH}" bin/ci-changes .github/ci | tar -x -C "$main"
+            changes="$main/bin/ci-changes"
+            echo "::notice::not the owner or Renovate alone: bin/ci-changes and .github/ci of main choose the jobs" >&2
+          fi
           case "$EVENT" in
-            pull_request) bin/ci-changes --base "$PR_BASE" --head "$PR_HEAD" ;;
-            push) bin/ci-changes --base "$PUSH_BEFORE" --head "$SHA" ;;
-            *) bin/ci-changes --all ;;
+            pull_request) python3 -I "$changes" --base "$PR_BASE" --head "$PR_HEAD" ;;
+            push) python3 -I "$changes" --base "$PUSH_BEFORE" --head "$SHA" ;;
+            *) python3 -I "$changes" --all ;;
           esac | tee -a "$GITHUB_OUTPUT"
 
   kubernetes:
-    needs: changes
+    needs: [trust, changes]
     if: needs.changes.outputs.kubernetes == 'true'
     permissions:
       contents: read
       pull-requests: write
     uses: ./.github/workflows/kubernetes.yaml
+    with:
+      trusted: ${{ needs.trust.outputs.trusted }}
 
   observability:
     needs: changes
@@ -141,7 +168,7 @@ jobs:
   # only: on a push to main, deploy.yaml applies instead (and with no PR,
   # terraform.yaml would route every root to the approval gate).
   terraform:
-    needs: changes
+    needs: [trust, changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.terraform != '[]'
     permissions:
       contents: read
@@ -150,6 +177,7 @@ jobs:
     with:
       roots: ${{ needs.changes.outputs.terraform }}
       mode: plan
+      trusted: ${{ needs.trust.outputs.trusted }}
     secrets:
       TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
 
@@ -157,6 +185,7 @@ jobs:
     name: "Build Success"
     if: ${{ !cancelled() }}
     needs:
+      - trust
       - changes
       - kubernetes
       - observability

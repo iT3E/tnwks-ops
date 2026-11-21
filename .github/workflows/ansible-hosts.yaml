@@ -10,7 +10,15 @@ name: "Ansible Hosts"
 #   push to main   apply
 #   schedule       nightly --check, counts written to the site's Windows host
 #                  for Prometheus (WindowsHostConfigDrift)
-#   dispatch       check, drift or apply, by hand
+#   dispatch       check, drift or apply, by hand, on main only
+#
+# A PR runs the check on the hosts at once only for the owner alone (his
+# PR, his event, nobody else's push on the branch: pr-trust.yaml). Every
+# other PR of this repository waits in the job "approve" for the owner
+# (environment external-contributions): he approves only after he reads the
+# whole diff, since the check runs the code of the branch on each host. An
+# apply waits in the job "apply gate" (environment prod, which takes
+# protected branches only, as for the Terraform and EdgeOS applies).
 #
 # The repo is public, so are these logs: the job log and the PR comment carry
 # only recap counts and task names (scripts/ci-report.py). The full output,
@@ -43,13 +51,21 @@ env:
   LOG_RECIPIENT: age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
 
 jobs:
+  trust:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/pr-trust.yaml
+
   plan:
-    # Never run fork or third-party code against the hosts. Fork PRs also
-    # need approval for any workflow at all (repo setting).
+    # Never run fork code against the hosts (fork PRs also need approval
+    # for any workflow at all, a repo setting), and a hand start on main
+    # only. This job holds no secret and runs on a hosted runner.
     if: >-
-      github.event_name != 'pull_request' || (
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        github.event.pull_request.user.login == 'iT3E')
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main') && (
+        github.event_name != 'pull_request' ||
+        github.event.pull_request.head.repo.full_name == github.repository)
     name: plan
     runs-on: ubuntu-26.04
     timeout-minutes: 20
@@ -168,9 +184,53 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
-  run:
+  # The owner lets the check of a PR run on the hosts after he reads the
+  # whole diff: every PR but his own alone.
+  approve:
+    needs: [trust, plan]
+    if: >-
+      !cancelled() && needs.plan.result == 'success' &&
+      github.event_name == 'pull_request' && needs.plan.outputs.sites != '[]' && !(
+        needs.trust.outputs.trusted == 'true' &&
+        github.event.pull_request.user.login == github.repository_owner)
+    name: approve
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    environment:
+      name: external-contributions
+      deployment: false
+    permissions: {}
+    steps:
+      - name: Approved
+        run: echo "::notice::the owner approved the host check of this branch"
+
+  # An apply runs from main only: the environment prod takes protected
+  # branches only, and the step checks the ref too.
+  apply-gate:
     needs: plan
-    if: needs.plan.outputs.sites != '[]'
+    if: needs.plan.outputs.mode == 'apply' && needs.plan.outputs.sites != '[]'
+    name: apply gate
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    environment: prod
+    permissions: {}
+    steps:
+      - name: Main only
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          [ "$REF" = refs/heads/main ] || { echo "::error::an apply runs from main only"; exit 1; }
+
+  run:
+    needs: [trust, plan, approve, apply-gate]
+    if: >-
+      !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.sites != '[]' &&
+      (needs.plan.outputs.mode != 'apply' || needs.apply-gate.result == 'success') && (
+        github.event_name != 'pull_request' ||
+        needs.approve.result == 'success' || (
+          needs.approve.result == 'skipped' &&
+          needs.trust.outputs.trusted == 'true' &&
+          github.event.pull_request.user.login == github.repository_owner))
     name: ${{ needs.plan.outputs.mode }} ${{ matrix.site.name }}
     strategy:
       fail-fast: false

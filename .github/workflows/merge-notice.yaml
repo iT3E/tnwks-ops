@@ -1,0 +1,76 @@
+---
+name: "Merge notice"
+
+# Each merge of the App of the main agent posts one notice to the owner's
+# direct chat: the PR number, its title, its files and its body (the reason
+# of the agent), as plain text (docs/operations/ci.md, "Agent pull
+# requests"). It runs on every push to main, with no path filter, and its
+# steps are inline: no checkout, no script and no action of this
+# repository, so a merge of the App can not change or skip it. The App has
+# no Workflows permission, so it can not change this file.
+#
+# The App is the repository variable MAIN_AGENT_APP (its bot login,
+# "<slug>[bot]"). Until the owner sets it, no merge is the App's and the job
+# does not run. The bot token and the chat ID are secrets of the
+# environment merge-notice (MERGE_NOTICE_BOT_TOKEN, MERGE_NOTICE_CHAT_ID),
+# which allows the branch main only. No agent holds them.
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  notice:
+    name: notice
+    if: vars.MAIN_AGENT_APP != '' && github.actor == vars.MAIN_AGENT_APP
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    environment: merge-notice
+    permissions:
+      contents: read # the compare API
+      pull-requests: read # the PR of the merge
+    steps:
+      - name: Post the notice
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BOT_TOKEN: ${{ secrets.MERGE_NOTICE_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.MERGE_NOTICE_CHAT_ID }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+            echo "::error::the secrets of the environment merge-notice are missing"
+            exit 1
+          fi
+          api() {
+            curl -fsS --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/$1"
+          }
+          pr="$(api "commits/${AFTER}/pulls" | jq -c 'map(select(.merged_at != null)) | first // {}')"
+          compare="$(api "compare/${BEFORE}...${AFTER}")"
+          files="$(jq -r '[.files[]?.filename] | .[:40] | join("\n")' <<<"$compare")"
+          count="$(jq -r '.files | length' <<<"$compare")"
+          text="$(jq -r --arg actor "$ACTOR" --arg files "$files" --arg count "$count" \
+            --arg commit "${SERVER}/${REPO}/commit/${AFTER}" '
+            "Merged by " + $actor + ": " +
+            (if .number then "#" + (.number | tostring) + " " + (.title // "") else "a push with no PR" end) +
+            "\n\nFiles (" + $count + "):\n" + $files +
+            "\n\nReason:\n" + ((.body // "") | .[:1500]) +
+            "\n\n" + (.html_url // $commit)' <<<"$pr")"
+          text="${text:0:4000}"
+          for attempt in 1 2 3; do
+            if curl -fsS -o /dev/null "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${CHAT_ID}" --data-urlencode "text=${text}" \
+                --data-urlencode "disable_web_page_preview=true"; then
+              echo "posted the notice of ${AFTER}"
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::error::the notice did not post"
+          exit 1

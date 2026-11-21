@@ -122,6 +122,35 @@ owner his. Each comes from `main`, so a branch can not change it.
     push checks, no apply.
 - **A draft waits.** A pull request of the owner (or of a session with his
   login) that waits for his gate is a draft (AGENTS.md).
+- **The gates that run branch code** with a secret, a write token or on a
+  runner of the house ask `owner-label-check.py --trust` of `main` first
+  (`.github/workflows/pr-trust.yaml`): trusted only when the author and the
+  actor of the event are the owner or Renovate and nobody else pushed to
+  the branch. Otherwise:
+  - the job Changes runs `bin/ci-changes` and `.github/ci/` of `main`;
+  - the rendered diff runs `.github/flate/` and its comment script of
+    `main`;
+  - the Terraform plan waits for the owner (environment
+    `external-contributions`), and only Terraform Cloud roots plan;
+  - the EdgeOS plan does not run;
+  - the host check (`ansible-hosts.yaml`) waits in the job "approve" for the
+    owner (environment `external-contributions`), for every PR but his own
+    alone. He approves only after he reads the whole diff: the check runs
+    the code of the branch on each host.
+- **Hand starts.** The host workflow and the link check run a hand start on
+  `main` only. An apply of the host workflow also waits in the job "apply
+  gate" (environment `prod`, which takes protected branches only, as for
+  the Terraform and EdgeOS applies).
+- **The privacy check and the secret scan** (the reusable workflows of
+  github-workflows) run the checker, the allow file and the scan config of
+  `main` for every other author or actor, fail a new allow marker, and
+  check the PR body of every author but Renovate. The privacy check also
+  runs on each push to a branch under `agent/`, with or without a PR.
+- **The merge notice** (`merge-notice.yaml`) posts each merge of the App
+  (the repository variable `MAIN_AGENT_APP`) to the owner's direct chat:
+  the PR, its files and its body. Its steps are inline, with no checkout
+  and no path filter, and its bot token and chat ID are secrets of the
+  environment `merge-notice` (branch `main` only).
 
 ## Terraform: plan in CI, apply in Deploy
 
