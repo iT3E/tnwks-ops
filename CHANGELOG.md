@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.252.0 - 2026-11-21
+
+### Changed
+
+* ai: the browser tool (playwright-mcp) runs at homelab-wsl only, with one replica, beside the central MCP gateway and the fetch proxy of the main agent. homelab-wsl-02 no longer deploys it, its Service is local to the cluster (not global in the mesh), and its network policy names this cluster only. The AI board has it at homelab-wsl, and Not applicable at homelab-wsl-02. It still loads no page: no route of the gateway names it, and the fetch proxy lets in the agent pod of main only.
+
 ## v2.251.0 - 2026-11-21
 
 ### Added
