@@ -361,7 +361,7 @@ routes:
             name: Authorization
             prefix: "Bearer "
         keys:
-          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
             metadata: {client: main, route: main-cluster}
       # A large list or a long log can take longer than the 10 s of the
       # gateway: 30 s, the proposal of the design. The rehearsal measures
@@ -415,7 +415,7 @@ routes:
             name: Authorization
             prefix: "Bearer "
         keys:
-          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
             metadata: {client: main, route: main-flux}
       # A trace or a long log can take longer than the 10 s of the gateway:
       # 30 s, as for the cluster server.
@@ -470,7 +470,7 @@ routes:
             name: Authorization
             prefix: "Bearer "
         keys:
-          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
             metadata: {client: main, route: main-terraform}
       # A search of the registry can take longer than the 10 s of the
       # gateway: 30 s, as for the other read servers.
