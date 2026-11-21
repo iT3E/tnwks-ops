@@ -8,6 +8,7 @@ fields the script reads, with neutral logins and IDs.
 """
 from __future__ import annotations
 
+import base64
 import copy
 import importlib.util
 import sys
@@ -92,6 +93,22 @@ def pr(labels: list[str], head: str = HEAD, head_repo: str | None = REPO, user: 
         },
         "base": {"ref": base, "repo": {"full_name": REPO, "default_branch": "main"}},
     }
+
+
+def ready(f: dict) -> dict:
+    """A file of the files API as gather() leaves it: a plain file, with no
+    Flux object and no diff, unless the test says otherwise. A file with
+    "raw" stays as it is."""
+    if f.pop("raw", False):
+        return f
+    f = dict(f)
+    if f.get("status") != "removed":
+        f.setdefault("mode", "100644")
+        f.setdefault("patch", "")
+    if any((n or "").startswith("kubernetes/") for n in (f.get("filename"), f.get("previous_filename"))):
+        f.setdefault("head", None)
+        f.setdefault("base", None)
+    return f
 
 
 def decide(p, events, push=PUSH, missing=(), head=HEAD):
@@ -369,7 +386,7 @@ class AgentApp(unittest.TestCase):
     def go(self, p, events=(), pushes=None, files=()):
         pushes = [entry(p["user"])] if pushes is None else pushes
         return check.decide(p, list(events), pushes[0] if pushes else None, [], HEAD, OWNER_ID,
-                            pushes=pushes, files=list(files))
+                            pushes=pushes, files=[ready(f) for f in files])
 
     def test_another_author_waits_for_owner_approved(self):
         for author in (OTHER_USER, REVIEWER_BOT, WORKFLOW_BOT):
@@ -412,7 +429,8 @@ class AgentApp(unittest.TestCase):
         self.assertTrue(self.go(pr(["type/patch"]), pushes=[entry(DEPS_BOT)]).ok)
 
     def test_the_app_outside_the_class_passes_at_once(self):
-        files = [{"filename": "kubernetes/apps/selfhosted/example/app/helmrelease.yaml"}, {"filename": "docs/a.md"}]
+        files = [{"filename": "kubernetes/apps/selfhosted/example/app/configmap.yaml", "head": CONFIGMAP,
+                  "base": CONFIGMAP, "patch": "@@ -1 +1 @@\n-  a: b\n+  a: c"}, {"filename": "docs/a.md"}]
         v = self.go(pr([], user=AGENT_APP, changed_files=2), files=files)
         self.assertTrue(v.ok, v.message)
 
@@ -454,6 +472,94 @@ class AgentApp(unittest.TestCase):
         self.assertIn("another repository", v.message)
 
 
+CONFIGMAP = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: example\ndata:\n  a: b\n"
+HELMRELEASE = "---\napiVersion: helm.toolkit.fluxcd.io/v2\nkind: HelmRelease\nmetadata:\n  name: example\n"
+APP = "kubernetes/apps/selfhosted/example/"
+
+
+class Content(unittest.TestCase):
+    """The content rule: what a PR of the App outside the class may not hold."""
+
+    def setUp(self):
+        check.MAIN_AGENT_APP = AGENT_APP["login"]
+
+    def tearDown(self):
+        check.MAIN_AGENT_APP = ""
+
+    def go(self, *files):
+        return check.decide(pr([], user=AGENT_APP, changed_files=len(files)), [], entry(AGENT_APP), [], HEAD,
+                            OWNER_ID, pushes=[entry(AGENT_APP)], files=[ready(f) for f in files])
+
+    def held(self, why, *files):
+        v = self.go(*files)
+        self.assertFalse(v.ok, files)
+        self.assertIn("owner/approved tier (", v.message)
+        self.assertIn(why, v.message)
+
+    def test_a_new_flux_object_holds_the_app(self):
+        for kind in ("helm.toolkit.fluxcd.io/v2", "kustomize.toolkit.fluxcd.io/v1", "source.toolkit.fluxcd.io/v1",
+                     "notification.toolkit.fluxcd.io/v1beta3", "image.toolkit.fluxcd.io/v1beta2"):
+            self.held("a Flux object", {"filename": APP + "app/x.yaml", "status": "added",
+                                         "head": f"apiVersion: {kind}\nkind: X\n"})
+
+    def test_a_change_of_a_flux_object_holds_the_app(self):
+        self.held("a Flux object", {"filename": APP + "app/helmrelease.yaml", "status": "modified",
+                                     "head": HELMRELEASE, "base": HELMRELEASE, "patch": "+  interval: 1h"})
+
+    def test_a_flux_object_at_the_base_only_holds_the_app(self):
+        # A Kustomization turned into a ConfigMap, or deleted.
+        self.held("a Flux object", {"filename": APP + "ks.yaml", "status": "modified", "head": CONFIGMAP,
+                                     "base": "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n"})
+        self.held("a Flux object", {"filename": APP + "ks.yaml", "status": "removed", "base": HELMRELEASE})
+
+    def test_a_flux_object_in_json_or_quoted_holds_the_app(self):
+        self.held("a Flux object", {"filename": APP + "app/x.json", "status": "added",
+                                     "head": '{"apiVersion": "kustomize.toolkit.fluxcd.io/v1"}'})
+        self.held("a Flux object", {"filename": APP + "app/x.yaml", "status": "added",
+                                     "head": "apiVersion: 'helm.toolkit.fluxcd.io/v2'\n"})
+
+    def test_an_admission_object_holds_the_app(self):
+        for kind in ("ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "MutatingAdmissionPolicy",
+                     "ValidatingWebhookConfiguration", "MutatingWebhookConfiguration"):
+            self.held("an admission object", {"filename": APP + "app/x.yaml", "status": "added",
+                                               "head": f"apiVersion: admissionregistration.k8s.io/v1\nkind: {kind}\n"})
+
+    def test_a_sops_file_of_another_folder_by_a_relative_path_holds_the_app(self):
+        # A test object of the design: a reference to a SOPS file of the class.
+        patch = "@@ -1,2 +1,3 @@\n resources:\n   - ./helmrelease.yaml\n+  - ../../../../ai/agents/main/secret.sops.yaml"
+        self.held("a path out of its folder", {"filename": APP + "app/kustomization.yaml", "head": "x", "base": "x",
+                                                "patch": patch})
+
+    def test_other_paths_out_of_the_folder_hold_the_app(self):
+        for line in ("+  - ../../../../components/volsync", "+path:../../../other/app", "+  - ./a/../../../other",
+                     '+  "files": ["../../../x.yaml"]', "+  - ../..", "+  - ../../../../../../etc"):
+            self.held("a path out of its folder", {"filename": APP + "app/kustomization.yaml", "patch": line})
+
+    def test_paths_in_the_folder_and_other_dots_pass(self):
+        for line in ("+  - ../base", "+  - ./helmrelease.yaml", "+  version: 1..2", "+  note: wait...",
+                     "-  - ../../../../components/volsync", " - ../../../../components/volsync", "+++ b/x"):
+            v = self.go({"filename": APP + "app/overlay/kustomization.yaml", "patch": line})
+            self.assertTrue(v.ok, (line, v.message))
+
+    def test_a_path_out_of_a_folder_outside_kubernetes_passes(self):
+        self.assertTrue(self.go({"filename": "docs/a.md", "patch": "+see ../../kubernetes/apps/ai"}).ok)
+
+    def test_a_link_holds_the_app(self):
+        # A test object of the design: a link to a SOPS file of the class.
+        self.held("a link or a submodule", {"filename": APP + "app/secret.sops.yaml", "mode": "120000"})
+        self.held("a link or a submodule", {"filename": "docs/link", "mode": "120000"})
+        self.held("a link or a submodule", {"filename": "vendor/module", "mode": "160000"})
+
+    def test_a_removed_link_passes(self):
+        self.assertTrue(self.go({"filename": "docs/link", "status": "removed"}).ok)
+
+    def test_what_could_not_be_read_holds_the_app(self):
+        self.held("the mode of", {"raw": True, "filename": "docs/a.md", "status": "added"})
+        self.held("the content of", {"raw": True, "filename": APP + "app/x.yaml", "mode": "100644", "patch": ""})
+        self.held("the diff of", {"raw": True, "filename": APP + "app/x.bin", "mode": "100644", "head": None,
+                                  "base": None})
+
+
 class AgentRun(unittest.TestCase):
     def setUp(self):
         check.MAIN_AGENT_APP = AGENT_APP["login"]
@@ -471,6 +577,64 @@ class AgentRun(unittest.TestCase):
         api = FakeAPI(routes(pr([], user=OWNER), [[]], push=[entry(OWNER)]))
         self.assertTrue(check.run(api, REPO, 42, HEAD, OWNER_ID, sleep=lambda s: None).ok)
         self.assertFalse(any("/files" in c for c in api.calls))
+
+    def content_routes(self, files, tree, texts):
+        p = pr([], user=AGENT_APP, changed_files=len(files))
+        p["base"]["sha"] = OLD_HEAD
+        r = routes(p, [[]], push=[entry(AGENT_APP)])
+        r[f"{BASE}/pulls/42/files?per_page=100"] = (200, files, {})
+        r[f"{BASE}/git/trees/{HEAD}?recursive=1"] = tree
+        for (path, ref), text in texts.items():
+            body = None if text is None else {"type": "file", "encoding": "base64",
+                                              "content": base64.b64encode(text.encode()).decode()}
+            r[f"{BASE}/contents/{path}?ref={ref}"] = (404, None, {}) if text is None else (200, body, {})
+        return FakeAPI(r)
+
+    def run_check(self, api):
+        return check.run(api, REPO, 42, HEAD, OWNER_ID, sleep=lambda s: None)
+
+    def test_the_content_is_read_from_the_tree_and_the_contents_api(self):
+        path = APP + "app/configmap.yaml"
+        files = [{"filename": path, "status": "modified", "patch": "+  a: c"}, {"filename": "docs/a.md", "patch": ""}]
+        tree = (200, {"truncated": False, "tree": [{"path": path, "mode": "100644"},
+                                                   {"path": "docs/a.md", "mode": "100644"}]}, {})
+        api = self.content_routes(files, tree, {(path, HEAD): CONFIGMAP, (path, OLD_HEAD): CONFIGMAP})
+        v = self.run_check(api)
+        self.assertTrue(v.ok, v.message)
+        self.assertFalse(any("docs/a.md" in c and "/contents/" in c for c in api.calls))
+        api = self.content_routes(files, tree, {(path, HEAD): HELMRELEASE, (path, OLD_HEAD): CONFIGMAP})
+        self.assertIn("a Flux object", self.run_check(api).message)
+
+    def test_a_new_file_is_not_read_at_the_base(self):
+        path = APP + "app/configmap.yaml"
+        files = [{"filename": path, "status": "added", "patch": "+a: b"}]
+        tree = (200, {"truncated": False, "tree": [{"path": path, "mode": "100644"}]}, {})
+        api = self.content_routes(files, tree, {(path, HEAD): CONFIGMAP})
+        self.assertTrue(self.run_check(api).ok)
+        self.assertFalse(any(f"ref={OLD_HEAD}" in c for c in api.calls))
+
+    def test_a_link_in_the_tree_holds_the_app(self):
+        path = APP + "app/secret.sops.yaml"
+        files = [{"filename": path, "status": "added", "patch": "+../../../../ai/x.sops.yaml"}]
+        tree = (200, {"truncated": False, "tree": [{"path": path, "mode": "120000"}]}, {})
+        api = self.content_routes(files, tree, {(path, HEAD): "x"})
+        self.assertIn("a link or a submodule", self.run_check(api).message)
+
+    def test_a_tree_that_is_not_whole_or_a_content_that_is_not_a_file_fails(self):
+        path = APP + "app/configmap.yaml"
+        files = [{"filename": path, "status": "added", "patch": "+a: b"}]
+        api = self.content_routes(files, (200, {"truncated": True, "tree": []}, {}), {(path, HEAD): CONFIGMAP})
+        self.assertIn("could not read", self.run_check(api).message)
+        tree = (200, {"truncated": False, "tree": [{"path": path, "mode": "100644"}]}, {})
+        api = self.content_routes(files, tree, {})
+        api.routes[f"{BASE}/contents/{path}?ref={HEAD}"] = (200, {"type": "file", "encoding": "none"}, {})
+        self.assertIn("could not read", self.run_check(api).message)
+
+    def test_too_many_files_under_kubernetes_fail(self):
+        files = [{"filename": f"{APP}app/{n}.yaml", "status": "added", "patch": ""}
+                 for n in range(check.MAX_CONTENT_FILES + 1)]
+        api = self.content_routes(files, (200, {"truncated": False, "tree": []}, {}), {})
+        self.assertIn("could not read", self.run_check(api).message)
 
     def test_unreadable_files_fail(self):
         api = FakeAPI(routes(pr([], user=AGENT_APP), [[]], push=[entry(AGENT_APP)]))
@@ -565,7 +729,7 @@ class Base(unittest.TestCase):
     def go(self, p, events=(), pushes=None, files=(), commits=()):
         pushes = [entry(p["user"])] if pushes is None else pushes
         return check.decide(p, list(events), pushes[0] if pushes else None, [], HEAD, OWNER_ID,
-                            pushes=pushes, files=list(files), commits=list(commits))
+                            pushes=pushes, files=[ready(f) for f in files], commits=list(commits))
 
     def test_an_app_pr_to_another_base_fails_even_outside_the_class(self):
         v = self.go(pr([], user=AGENT_APP, base="x"), files=[{"filename": "docs/a.md"}])

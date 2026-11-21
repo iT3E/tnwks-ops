@@ -26,7 +26,15 @@ reports on HEAD_SHA, the head commit of the event, and passes or fails:
     author or the committer of one of its commits;
   - its author is that App, and it touches a path of the "ask first" class
     (ASK_FIRST and ASK_FIRST_NAMES below), as a file or as the old name of
-    a renamed file.
+    a renamed file;
+  - its author is that App, and its content reaches past the class
+    (content() below): it adds or changes a link or a submodule; or a file
+    under kubernetes/ that holds a Flux object or an admission object at
+    its head or at its base; or it adds a path with ".." out of the folder
+    of its file under kubernetes/. Flux applies each manifest outside the
+    class with full rights, and the admission policy of the Flux children
+    (kubernetes/apps/flux-system/admission) can not see a Flux source, an
+    admission object or a file that a path or a link reaches.
 - Two rules fail a PR of that App, or a PR that one of the other three
   rules holds, whatever its labels:
   - its base is not the default branch: its checks ran against that base,
@@ -66,8 +74,10 @@ Stdlib only. Exit 0 passes, 1 fails, with one ::error:: annotation.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
+import posixpath
 import re
 import sys
 import time
@@ -160,6 +170,20 @@ SKIP = re.compile(
     r"\[\s*(?:skip\s+ci|ci\s+skip|no\s+ci|skip\s+actions|actions\s+skip)\s*\]|skip-checks\s*:\s*true",
     re.IGNORECASE,
 )
+# The content rule (content() below), for a PR of the App outside the class.
+# Flux applies kubernetes/: a file there that holds a Flux object (each kind
+# of *.toolkit.fluxcd.io) or an admission object, at the head or at the
+# base of the PR, holds it. So does a line it adds with a path that leaves
+# the folder of its file (for kubernetes/apps/<namespace>/<app>/, the
+# folder of the app), and a link or a submodule anywhere (tree modes).
+APPLIED = "kubernetes/"
+FLUX_OBJECT = re.compile(r"""apiVersion["']?\s*:\s*["']?[A-Za-z0-9.-]*toolkit\.fluxcd\.io/""")
+ADMISSION_OBJECT = re.compile(
+    r"""kind["']?\s*:\s*["']?(?:Validating|Mutating)(?:AdmissionPolicy(?:Binding)?|WebhookConfiguration)\b"""
+)
+LINK_MODES = ("120000", "160000")
+PATH_TOKEN = re.compile(r"""[^\s"'`,:=\[\]{}()<>|;]+""")
+MAX_CONTENT_FILES = 100
 BASE_CHANGES = ("base_ref_changed", "automatic_base_change_succeeded")
 MAX_PAGES = 20
 ATTEMPTS = 3
@@ -247,6 +271,65 @@ def ask_first(files: list[dict]) -> list[str]:
     return hits
 
 
+def folder_of(path: str) -> str:
+    """The folder that a path in a file may not leave: the folder of the app
+    for kubernetes/apps/<namespace>/<app>/..., else the folder of the file."""
+    parts = path.split("/")
+    if parts[:2] == ["kubernetes", "apps"] and len(parts) >= 5:
+        return "/".join(parts[:4]) + "/"
+    return posixpath.dirname(path) + "/"
+
+
+def path_out(path: str, patch: str) -> str | None:
+    """The first path with a ".." segment, in a line that the diff adds, that
+    leaves the folder of the file, or None."""
+    folder = folder_of(path)
+    for line in patch.splitlines():
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        for token in PATH_TOKEN.findall(line[1:]):
+            if ".." not in token.split("/"):
+                continue
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(path), token))
+            if not (target + "/").startswith(folder):
+                return token
+    return None
+
+
+def content(files: list[dict]) -> str | None:
+    """Why the content of a PR of the App reaches past the class, or None.
+
+    gather() puts on each file its mode at the head ("mode"), and for a file
+    under kubernetes/ its text at the head and at the base ("head", "base",
+    None when it is not there); the files API gives the diff ("patch"). A
+    field that is missing holds the PR."""
+    for f in files:
+        names = [n for n in (f.get("filename"), f.get("previous_filename")) if n]
+        name = safe(names[0]) if names else "a file"
+        removed = f.get("status") == "removed"
+        if not removed:
+            if "mode" not in f:
+                return f"the mode of {name} could not be read"
+            if f["mode"] in LINK_MODES:
+                return f"it adds or changes a link or a submodule: {name}"
+        if not any(n.startswith(APPLIED) for n in names):
+            continue
+        if "head" not in f or "base" not in f:
+            return f"the content of {name} could not be read"
+        for text in (f["head"], f["base"]):
+            if text and FLUX_OBJECT.search(text):
+                return f"it adds or changes a file with a Flux object: {name}"
+            if text and ADMISSION_OBJECT.search(text):
+                return f"it adds or changes a file with an admission object: {name}"
+        if not removed:
+            if not isinstance(f.get("patch"), str):
+                return f"the diff of {name} could not be read"
+            out = path_out(f["filename"], f["patch"])
+            if out:
+                return f"{name} names a path out of its folder: {safe(out)}"
+    return None
+
+
 def skip_marker(pr: dict, commits: list[dict]) -> str | None:
     """Where the PR holds a skip instruction of GitHub Actions, or None."""
     for where in ("title", "body"):
@@ -285,7 +368,7 @@ def forced(pr: dict, pushes: list[dict], files: list[dict] | None, owner_id: int
     hits = ask_first(files)
     if hits:
         return f"it touches the ask-first class: {safe(hits[0])}"
-    return None
+    return content(files)
 
 
 def decide(
@@ -448,6 +531,40 @@ def activity(fetch: Fetch, repo: str, pr: dict) -> list[dict]:
     raise RuntimeError(f"more than {MAX_PAGES} pages of activity; refusing to decide on part of them")
 
 
+def text_at(fetch: Fetch, base: str, path: str, ref: str) -> str | None:
+    """The text of a file at a commit, or None when it is not there."""
+    status, body, _ = fetch(f"{base}/contents/{urllib.parse.quote(path)}?ref={ref}")
+    if status == 404:
+        return None
+    if status != 200 or not isinstance(body, dict) or body.get("type") != "file" or body.get("encoding") != "base64":
+        raise RuntimeError(f"GET the content of {path} returned {status}")
+    return base64.b64decode(body.get("content") or "").decode("utf-8", errors="replace")
+
+
+def read_content(fetch: Fetch, base: str, pr: dict, files: list[dict]) -> None:
+    """Puts on each file what content() reads: its mode in the tree of the
+    head, and for a file under kubernetes/ its text at the head and at the
+    base of the PR."""
+    head, base_sha = pr["head"]["sha"], pr["base"]["sha"]
+    if not (re.fullmatch(r"[0-9a-f]{40}", head) and re.fullmatch(r"[0-9a-f]{40}", base_sha)):
+        raise RuntimeError("the head or the base of the PR is not a commit")
+    applied = [f for f in files if any((n or "").startswith(APPLIED)
+                                       for n in (f.get("filename"), f.get("previous_filename")))]
+    if len(applied) > MAX_CONTENT_FILES:
+        raise RuntimeError(f"more than {MAX_CONTENT_FILES} files under {APPLIED} to read")
+    tree = get(fetch, f"{base}/git/trees/{head}?recursive=1")
+    if not isinstance(tree, dict) or tree.get("truncated") or not isinstance(tree.get("tree"), list):
+        raise RuntimeError("the tree of the head could not be read whole")
+    modes = {e.get("path"): e.get("mode") for e in tree["tree"]}
+    for f in files:
+        if f.get("status") != "removed":
+            f["mode"] = modes.get(f.get("filename"))
+    for f in applied:
+        f["head"] = None if f.get("status") == "removed" else text_at(fetch, base, f["filename"], head)
+        old = f.get("previous_filename") or f["filename"]
+        f["base"] = None if f.get("status") == "added" else text_at(fetch, base, old, base_sha)
+
+
 def gather(fetch: Fetch, repo: str, pr_number: int) -> tuple[dict, list, list[dict], list[str], list[dict] | None, list[dict]]:
     base = f"{API}/repos/{repo}"
     pr = get(fetch, f"{base}/pulls/{pr_number}")
@@ -463,6 +580,8 @@ def gather(fetch: Fetch, repo: str, pr_number: int) -> tuple[dict, list, list[di
     files = None
     if is_agent(pr.get("user") or {}):
         files = get_all(fetch, f"{base}/pulls/{pr_number}/files?per_page=100")
+        if not ask_first(files):
+            read_content(fetch, base, pr, files)
     commits = get_all(fetch, f"{base}/pulls/{pr_number}/commits?per_page=100")
     return pr, events, pushes, missing, files, commits
 

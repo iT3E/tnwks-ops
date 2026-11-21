@@ -107,7 +107,18 @@ owner his. Each comes from `main`, so a branch can not change it.
     `kube-system`, identity, the network edge, certificates, the runners
     of the house, backups, monitoring, the security scanners, and the list
     of namespaces), plus a `.gitattributes` file in any folder. The agent
-    asks the owner in the chat, and the merge waits for his label.
+    asks the owner in the chat, and the merge waits for his label;
+  - its author is that App, and its content reaches past the class: it
+    adds or changes a link or a submodule (the tree of the head), a file
+    under `kubernetes/` that holds a Flux object (any kind of
+    `*.toolkit.fluxcd.io`) or an admission object at its head or its base,
+    or a line with a path whose `..` leaves the folder of its file (the
+    folder of the app under `kubernetes/apps/<namespace>/<app>/`). Flux
+    applies each manifest outside the class with full rights, and the
+    admission policy of the Flux children
+    ([`flux-admission.md`](flux-admission.md)) can not see a Flux source,
+    an admission object, or a file that a path or a link reaches (a SOPS
+    file of the class). A file it can not read holds the pull request too.
 - **Two rules fail** a pull request of that App, or one that a rule above
   holds, whatever its labels:
   - its base is not `main`. Its checks ran against that base, and a green
