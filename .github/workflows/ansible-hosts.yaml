@@ -13,8 +13,9 @@ name: "Ansible Hosts"
 #   dispatch       check, drift or apply, by hand, on main only
 #
 # A PR runs the check on the hosts at once only for the owner alone (his
-# PR, his event, nobody else's push on the branch: pr-trust.yaml). Every
-# other PR of this repository waits in the job "approve" for the owner
+# PR, his event, nobody else's push on the branch: pr-trust.yaml). A PR of
+# Renovate runs nothing, as before: no plan, no wait, no host. Every other
+# PR of this repository waits in the job "approve" for the owner
 # (environment external-contributions): he approves only after he reads the
 # whole diff, since the check runs the code of the branch on each host. An
 # apply waits in the job "apply gate" (environment prod, which takes
@@ -61,11 +62,15 @@ jobs:
   plan:
     # Never run fork code against the hosts (fork PRs also need approval
     # for any workflow at all, a repo setting), and a hand start on main
-    # only. This job holds no secret and runs on a hosted runner.
+    # only. This job holds no secret and runs on a hosted runner. A PR of
+    # Renovate runs nothing, as before this job had the gates: a plan would
+    # add a check that its automerge waits for, and a host check a click of
+    # the owner.
     if: >-
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main') && (
-        github.event_name != 'pull_request' ||
-        github.event.pull_request.head.repo.full_name == github.repository)
+        github.event_name != 'pull_request' || (
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'renovate[bot]'))
     name: plan
     runs-on: ubuntu-26.04
     timeout-minutes: 20

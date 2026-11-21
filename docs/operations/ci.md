@@ -125,9 +125,14 @@ owner his. Each comes from `main`, so a branch can not change it.
 - **The gates that run branch code** with a secret, a write token or on a
   runner of the house ask `owner-label-check.py --trust` of `main` first
   (`.github/workflows/pr-trust.yaml`): trusted only when the author and the
-  actor of the event are the owner or Renovate and nobody else pushed to
-  the branch. Otherwise:
-  - the job Changes runs `bin/ci-changes` and `.github/ci/` of `main`;
+  actor of the event are the owner or Renovate, the base is `main`, nobody
+  else pushed to the branch, no other bot made one of its commits, and the
+  newest push of the branch made the head (it reads again when the API
+  lags). Otherwise:
+  - the job Changes runs `bin/ci-changes` and `.github/ci/` of `main`,
+    from the merge base with `main`, and fails when the base of the PR is
+    not `main`. It runs before any code of the branch in that job, which
+    could change the PATH or the env of the steps after it;
   - the rendered diff runs `.github/flate/` and its comment script of
     `main`;
   - the Terraform plan waits for the owner (environment
@@ -135,22 +140,26 @@ owner his. Each comes from `main`, so a branch can not change it.
   - the EdgeOS plan does not run;
   - the host check (`ansible-hosts.yaml`) waits in the job "approve" for the
     owner (environment `external-contributions`), for every PR but his own
-    alone. He approves only after he reads the whole diff: the check runs
-    the code of the branch on each host.
+    alone and Renovate's. He approves only after he reads the whole diff:
+    the check runs the code of the branch on each host. A PR of Renovate
+    runs nothing in that workflow, as before: no plan, no wait, no host.
 - **Hand starts.** The host workflow and the link check run a hand start on
   `main` only. An apply of the host workflow also waits in the job "apply
   gate" (environment `prod`, which takes protected branches only, as for
   the Terraform and EdgeOS applies).
 - **The privacy check and the secret scan** (the reusable workflows of
   github-workflows) run the checker, the allow file and the scan config of
-  `main` for every other author or actor, fail a new allow marker, and
-  check the PR body of every author but Renovate. The privacy check also
-  runs on each push to a branch under `agent/`, with or without a PR.
+  `main` for every other author or actor, fail a new allow marker in any
+  commit of the branch, fail a PR whose base is not `main`, and check the
+  PR body of every author but Renovate. Both also run on each push to a
+  branch under `agent/`, with or without a PR.
 - **The merge notice** (`merge-notice.yaml`) posts each merge of the App
-  (the repository variable `MAIN_AGENT_APP`) to the owner's direct chat:
+  (`MAIN_AGENT_APP` in the script on `main`) to the owner's direct chat:
   the PR, its files and its body. Its steps are inline, with no checkout
   and no path filter, and its bot token and chat ID are secrets of the
-  environment `merge-notice` (branch `main` only).
+  environment `merge-notice` (branch `main` only). A failed notice opens
+  an issue assigned to the owner, as the mail of a failed run goes to the
+  App.
 
 ## Terraform: plan in CI, apply in Deploy
 

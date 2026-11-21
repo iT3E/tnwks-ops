@@ -76,14 +76,15 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - name: Test bin/ci-changes
-        run: python3 -m unittest discover -s .github/scripts -p test_ci_changes.py
-
+      # Domains runs before any code of the branch: a step of the branch
+      # could put a program of its own on the PATH (GITHUB_PATH) or set the
+      # env (GITHUB_ENV) of each later step.
       - name: Domains
         id: domains
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           SHA: ${{ github.sha }}
@@ -91,19 +92,32 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           changes=bin/ci-changes
+          base="$PR_BASE"
           if [ "$TRUSTED" != true ] && [ "$EVENT" != push ]; then
+            if [ "$EVENT" = pull_request ] && [ "$PR_BASE_REF" != "$DEFAULT_BRANCH" ]; then
+              # The jobs of another base would stay green on the head when
+              # the base changes to main later.
+              echo "::error::not the owner or Renovate alone, and the base is not ${DEFAULT_BRANCH}; change the base to ${DEFAULT_BRANCH} and push again"
+              exit 1
+            fi
             # bin/ci-changes finds .github/ci/domains.toml next to itself.
             main="$RUNNER_TEMP/main"
             mkdir -p "$main"
             git archive "origin/${DEFAULT_BRANCH}" bin/ci-changes .github/ci | tar -x -C "$main"
             changes="$main/bin/ci-changes"
+            if [ "$EVENT" = pull_request ]; then
+              base="$(git merge-base "origin/${DEFAULT_BRANCH}" "$PR_HEAD")"
+            fi
             echo "::notice::not the owner or Renovate alone: bin/ci-changes and .github/ci of main choose the jobs" >&2
           fi
           case "$EVENT" in
-            pull_request) python3 -I "$changes" --base "$PR_BASE" --head "$PR_HEAD" ;;
+            pull_request) python3 -I "$changes" --base "$base" --head "$PR_HEAD" ;;
             push) python3 -I "$changes" --base "$PUSH_BEFORE" --head "$SHA" ;;
             *) python3 -I "$changes" --all ;;
           esac | tee -a "$GITHUB_OUTPUT"
+
+      - name: Test bin/ci-changes
+        run: python3 -m unittest discover -s .github/scripts -p test_ci_changes.py
 
   kubernetes:
     needs: [trust, changes]
