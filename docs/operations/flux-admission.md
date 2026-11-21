@@ -86,6 +86,28 @@ HelmRelease (a finalizer, an annotation) passes the last three rules.
   the next reconcile of `flux-admission` (30 minutes, or 1 minute after a
   failure), unless that Kustomization is suspended.
 
+## Remote sources
+
+kustomize-controller runs with `--no-remote-bases=true` on both sites (a
+patch in `kubernetes/clusters/<site>/flux-system/kustomization.yaml`). A
+kustomization that names a remote base or resource (a URL, a git address)
+then fails its build, so a URL in a folder outside the class can not bring
+in a manifest that the policy can not see, such as an admission object. No
+build of the clusters uses one: only `kubernetes/bootstrap`, which no
+Kustomization builds, and a CI test keeps it so.
+
+- **How it is applied.** The Kustomization `flux-system` applies the
+  patched Deployment at its next reconcile (10 minutes). The Deployment
+  rolls: the new pod starts, takes the leader lease when the old pod
+  releases it at its stop (a few seconds, at most the lease of 35 seconds),
+  and the old pod goes. Reconciles of Kustomizations wait for that time
+  and then go on; an apply that was running is retried. No object changes,
+  and the helm controller does not restart.
+- **The way back.** Revert the change; Flux rolls the controller again. By
+  hand, the owner suspends `flux-system`
+  (`flux suspend kustomization flux-system -n flux-system`), removes the
+  argument from the Deployment, and resumes after the revert is on `main`.
+
 ## Roll-out
 
 1. The binding starts with `Audit` and `Warn`. A request that a rule refuses
