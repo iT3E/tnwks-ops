@@ -45,6 +45,7 @@ CASES = [
     ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "run-0123456789abcdef0123"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "workflow-providers-29900000"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-workflows", "job_name": "workflow-sweep-29900000"}, "null"),
+    ({"alertname": "KubeJobFailed", "namespace": "agents-main", "job_name": "github-token-29900000"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "platform-check-probe-29900000"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-main", "job_name": "platform-check-isolation-29900000"}, "null"),
     ({"alertname": "KubeJobFailed", "namespace": "agents-finance", "job_name": "platform-check-firefly-probe-29900000"}, "null"),

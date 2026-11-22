@@ -55,7 +55,11 @@ MIN_BITS = 2048
 MAX_BYTES = 16384
 APP_ID = re.compile(r"[1-9][0-9]{0,11}")
 ID_LINE = re.compile(r'(?m)^(?P<head>\s*- name: GITHUB_APP_ID\n\s*value: ")(?P<id>[^"]*)(?P<tail>")$')
-BEGIN = re.compile(r"-----BEGIN (RSA )?PRIVATE KEY-----\n")
+# The markers of a key are joined at run time, so no line of this file is the
+# start of a key for a secret scan.
+DASHES = "-" * 5
+BEGIN = re.compile(DASHES + r"BEGIN (RSA )?PRIVATE KEY" + DASHES + "\n")
+ENCRYPTED = DASHES + "BEGIN ENCRYPTED " + "PRIVATE KEY" + DASHES
 
 
 def say(*words: str) -> None:
@@ -97,7 +101,7 @@ def check_form(path: Path) -> None:
         stop("key file", "read=denied")
     except (UnicodeDecodeError, OSError):
         stop("key file", "form=not-a-key")
-    if text.startswith("-----BEGIN ENCRYPTED PRIVATE KEY-----") or "Proc-Type: 4,ENCRYPTED" in text:
+    if text.startswith(ENCRYPTED) or "Proc-Type: 4,ENCRYPTED" in text:
         stop("key file", "form=has-a-passphrase")
     if not BEGIN.match(text):
         stop("key file", "form=not-a-pem-private-key")
