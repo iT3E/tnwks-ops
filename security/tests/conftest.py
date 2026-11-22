@@ -3,8 +3,7 @@
 `pwsh` marks a test that runs PowerShell. Each start of PowerShell takes about
 two seconds on a runner, so .github/workflows/observability.yaml runs these
 tests in their own job (`-m pwsh`), and the `contracts` job runs the others
-(`-m "not pwsh"`, with `-n auto` on its command line). Each test is in exactly
-one of the two.
+(`-m "not pwsh"`). Each test is in exactly one of the two.
 
 A run of the `pwsh` tests alone (`-m pwsh`, as that job runs them) uses one
 pytest-xdist worker for each CPU, unless the command line gives `-n` itself
