@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.288.0 - 2026-11-22
+
+### Added
+
+* Agent platform: the platform Vector also counts one fixed log line of the approval plugin, when it refuses each tool call (pattern plugin_refuse of homelab_agent_channel_error_lines_total; only the count leaves the node), and AgentPluginRefusingTools warns for an hour after such a line
+
 ## v2.287.1 - 2026-11-22
 
 ### Fixed
