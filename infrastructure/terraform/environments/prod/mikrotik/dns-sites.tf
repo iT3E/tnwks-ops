@@ -141,5 +141,16 @@ locals {
       match_subdomain = true
       comment         = "shared VIP (homelab-wsl-02 first): qbittorrent"
     }
+    # The manager of Wazuh for the agents, on a VIP of its own (TCP 1517, not the ingress), as mqtt: the name and the
+    # address are WAZUH_AGENTS_HOST and WAZUH_AGENTS_LB_ADDR of kubernetes/clusters/wsl-02/cluster-settings.yaml
+    # (kubernetes/apps/security/wazuh/README.md; security/tests/test_wazuh_manifests.py checks that they match).
+    vip_wazuh_agents = {
+      name            = "wazuh-agents.internal.tnwks.us"
+      address         = "10.10.95.201"
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "shared VIP (homelab-wsl-02 only): wazuh agents, 1517"
+    }
   }
 }

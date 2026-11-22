@@ -195,9 +195,11 @@ the BGP advertisement of the nodes (`kubernetes/apps/kube-system/cilium/bgp`).
 Only homelab-wsl-02 lists this app, so only its nodes announce the address. A
 host reaches it over the routed network, from a network that the router lets
 reach the shared VIPs. The agents dial `WAZUH_AGENTS_HOST`, which resolves to
-the VIP once its site record exists (see "The merges that list it"). Until
-then the name answers with the `internal.tnwks.us` wildcard, which is not the
-server, so the agents (a later workstream) wait for that record.
+the VIP through its site record, `vip_wazuh_agents` in
+`infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf` (see "The
+merges that list it"). Without that record the name answers with the
+`internal.tnwks.us` wildcard, which is not the server, so no agent (a later
+workstream) enrolls before the record is applied.
 
 ## Certificates
 
@@ -549,23 +551,13 @@ site 2 on the owner's go.
    site until `flux-admission` has reconciled, and nothing is pruned (Flux
    prunes only after an apply succeeds). Read `flux-admission` Ready first,
    then the parent of the apps on both sites.
-2. The owner adds the site record of the agents' name, in
-   `infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf`
-   (`site_dns_records`), and applies it:
-
-   ```hcl
-       vip_wazuh_agents = {
-         name            = "wazuh-agents.internal.tnwks.us"
-         address         = "10.10.95.201"
-         type            = "A"
-         ttl             = "5m"
-         match_subdomain = true
-         comment         = "shared VIP (homelab-wsl-02 only): wazuh agents, 1517"
-       }
-   ```
-
-   The name and the address are the values of the cluster-settings. No
-   agent enrolls before this record exists.
+2. The site record of the agents' name: done by its own change, which adds
+   `vip_wazuh_agents` to `site_dns_records` in
+   `infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf`. The
+   Deploy workflow applies it at the merge (the root `prod/mikrotik`). The
+   name and the address are the values of the cluster-settings, and
+   `test_the_site_record_of_the_agents_is_that_of_the_cluster_settings`
+   checks that they match. No agent enrolls before this record is applied.
 3. After the first start of the server, the owner, or the session the
    owner names for it, makes the account user once, with `admin`, from
    `account-user.json` (see "Accounts"). The password of `admin` is read

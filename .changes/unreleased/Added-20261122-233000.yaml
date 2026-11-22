@@ -1,0 +1,3 @@
+kind: Added
+body: 'mikrotik: the router answers wazuh-agents.internal.tnwks.us with the shared VIP of the Wazuh manager for the agents (10.10.95.201, homelab-wsl-02 only, TTL 5m), above the internal.tnwks.us wildcard. The name and the address are WAZUH_AGENTS_HOST and WAZUH_AGENTS_LB_ADDR of the cluster-settings of homelab-wsl-02, and a test checks that they match.'
+time: 2026-11-22T23:30:00.000000000Z
