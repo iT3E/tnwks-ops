@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.284.0 - 2026-11-22
+
+### Added
+
+* agents: the manifests of the host server of the main agent at site 1 (ssh-mcp from the image of ours, a proxy in its pod that sets its token, the network rule) and its gateway route with a key of its own and the six read tools; the audit log of the server has a volume of its own, its config a folder of mode 0700, and its lab a fake host that proves a read returns output; not applied until the values of its Secret exist
+
 ## v2.283.0 - 2026-11-22
 
 ### Added
