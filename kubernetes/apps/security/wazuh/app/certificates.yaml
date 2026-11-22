@@ -120,8 +120,13 @@ spec:
     encoding: PKCS8
     rotationPolicy: Always
 ---
-# The client certificate of the manager for the indexer (the vendor's
-# manager.pem, installed as indexer-connector.pem).
+# The client certificate of the manager for its TLS connection to the indexer
+# (the vendor's manager.pem, installed as indexer-connector.pem). It is no
+# login: the manager logs in as the user wazuh-manager, with the password of
+# WAZUH_INDEXER_MANAGER_PASSWORD from its keystore (wazuh-kubernetes
+# v5.0.0-rc2, docs/ref/credentials.md), and the security configuration of
+# the image keeps the client certificate domain off (OpenSearch security
+# 3.6.0.0, config/config.yml, clientcert_auth_domain).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

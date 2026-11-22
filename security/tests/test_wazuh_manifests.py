@@ -212,9 +212,18 @@ def test_the_indexer_runs_one_node_with_no_privileged_init():
     inits = {c["name"]: c for c in spec["template"]["spec"]["initContainers"]}
     assert inits["increase-the-vm-max-map-count"] == {"name": "increase-the-vm-max-map-count", "$patch": "delete"}
     env = {e["name"]: e for e in spec["template"]["spec"]["containers"][0]["env"]}
-    for name in ("cluster.initial_cluster_manager_nodes", "discovery.seed_hosts", "node.max_local_storage_nodes",
-                 "NODES_DN"):
+    for name in ("node.max_local_storage_nodes", "NODES_DN"):
         assert env[name].get("$patch") == "delete", name
+    # The opensearch.yml of the image names node-1 as the initial cluster
+    # manager and sets no discovery type: the vendor's variable of the initial
+    # cluster manager (wazuh-indexer-0) stays, and the seed is this one pod, by
+    # a name of its certificate.
+    assert "cluster.initial_cluster_manager_nodes" not in env
+    assert "discovery.type" not in env
+    assert env["discovery.seed_hosts"]["value"] == "wazuh-indexer-0.wazuh-indexer"
+    certs = list(yaml.safe_load_all((APP / "app/certificates.yaml").read_text()))
+    (node,) = [d for d in certs if d and d["metadata"]["name"] == "wazuh-indexer-node"]
+    assert "wazuh-indexer-0.wazuh-indexer" in node["spec"]["dnsNames"]
     assert env["plugins.content_manager.telemetry.enabled"]["value"] == "false"
     assert env["node.store.allow_mmap"]["value"] == "false"
 

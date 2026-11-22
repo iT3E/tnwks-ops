@@ -1,6 +1,6 @@
 {
   "notes": [
-    "The account user of the Wazuh indexer, which step 1 runs as (kubernetes/apps/security/wazuh/README.md, 'Accounts'). The owner makes it once with admin through the Security API, because it grants access: a PUT of the user with the hash of its password, and an add of the user to the role mapping of the reserved role security_rest_api_access. This file holds no hash and no password. Step 1 never reads it, and never touches this user.",
+    "The account user of the Wazuh indexer, which step 1 runs as (kubernetes/apps/security/wazuh/README.md, 'Accounts'). The owner makes it once with admin through the Security API, because it grants access: a PUT of the user with the hash of its password, and a PUT of the role mapping of the reserved role security_rest_api_access with the user (the image has no mapping for that role; if one exists, the owner adds the user to its users and keeps the others). This file holds no hash and no password. Step 1 never reads it, and never touches this user.",
     "Its name is the key username of the Secret wazuh-accounts-user, and its password the key password. It carries no mark of step 1."
   ],
   "user": "tnwks-accounts",

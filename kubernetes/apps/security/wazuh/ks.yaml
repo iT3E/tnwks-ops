@@ -146,12 +146,18 @@ spec:
                 resources:
                   requests:
                     storage: 15Gi
-    # The indexer: one node with single-node discovery (the default of the
-    # image's opensearch.yml), so the settings of a cluster of three go. The
-    # privileged init container that sets vm.max_map_count goes: the
-    # namespace enforces the baseline level, and with single-node discovery
-    # OpenSearch does not enforce its bootstrap checks. node.store.allow_mmap
-    # false keeps the indexer off memory maps, so it needs no node sysctl.
+    # The indexer: one node. The opensearch.yml of the image names the
+    # initial cluster manager node-1 and sets no discovery type (wazuh-indexer
+    # v5.0.0-rc2, distribution/src/config/opensearch.prod.yml), so the
+    # vendor's variable cluster.initial_cluster_manager_nodes (wazuh-indexer-0)
+    # stays, and discovery.seed_hosts names this one pod by a name of its
+    # certificate (transport.ssl.enforce_hostname_verification). The settings
+    # of a cluster of three go. The privileged init container that sets
+    # vm.max_map_count goes: the namespace enforces the baseline level.
+    # OpenSearch enforces its bootstrap checks (the node publishes a
+    # non-loopback address), and node.store.allow_mmap false keeps the
+    # indexer off memory maps, so the check of vm.max_map_count does not apply
+    # and the indexer needs no node sysctl.
     # The heap is half of the memory line. The update check ping of the
     # Content Manager is off. A volume of 30 GiB (Design Doc 0004, 10.1).
     - target:
@@ -211,10 +217,8 @@ spec:
                   env:
                     - name: OPENSEARCH_JAVA_OPTS
                       value: "-Xms1536m -Xmx1536m -Dlog4j2.formatMsgNoLookups=true"
-                    - name: cluster.initial_cluster_manager_nodes
-                      $patch: delete
                     - name: discovery.seed_hosts
-                      $patch: delete
+                      value: "wazuh-indexer-0.wazuh-indexer"
                     - name: node.max_local_storage_nodes
                       $patch: delete
                     - name: NODES_DN

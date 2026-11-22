@@ -7,10 +7,11 @@
   ],
   "roles": {
     "tnwks-settings": {
-      "description": "Step 2: the ISM policies of tnwks, the move of the indices of their streams to them, the raw events setting, and the document count of the streams that hold none. No Security API.",
+      "description": "Step 2: the ISM policies of tnwks, the move of the indices of their streams to them, the raw events setting (the Setup plugin writes its document in .wazuh-settings with the rights of the caller, as a bulk request: the cluster action indices:data/write/bulk and the index actions on .wazuh-settings), and the document count of the streams that hold none. No Security API, and no read of a document.",
       "cluster_permissions": [
         "cluster:admin/opendistro/ism/*",
-        "cluster:admin/setup/settings/update"
+        "cluster:admin/setup/settings/update",
+        "indices:data/write/bulk"
       ],
       "index_permissions": [
         {
@@ -37,6 +38,15 @@
           ],
           "allowed_actions": [
             "indices:monitor/stats"
+          ]
+        },
+        {
+          "index_patterns": [
+            ".wazuh-settings"
+          ],
+          "allowed_actions": [
+            "indices:data/write/index",
+            "indices:data/write/bulk[s]"
           ]
         }
       ]

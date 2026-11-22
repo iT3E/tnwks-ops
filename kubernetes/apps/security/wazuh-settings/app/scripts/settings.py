@@ -63,6 +63,10 @@ AGE = re.compile(r"[1-9][0-9]*d")
 RETRY = {"count": 3, "backoff": "exponential", "delay": "1m"}
 # The size and count of the shipped rollover, kept as a second condition.
 SHIPPED_ROLLOVER = {"min_doc_count": 200000000, "min_primary_shard_size": "20gb"}
+# The ISM API gives a rollover back with copy_alias, false by default
+# (OpenSearch index-management, RolloverAction): the job writes it, so that a
+# policy it wrote compares equal and is not written again at each run.
+ROLLOVER_DEFAULTS = {"copy_alias": False}
 # The streams that hold no document: raw events are off, and no response can run.
 EMPTY_STREAMS = ("wazuh-events-raw-v5", "wazuh-active-responses")
 SOURCE = "wazuh-settings"
@@ -93,7 +97,7 @@ def build_policies(cfg: dict) -> dict:
             "states": [
                 {"name": "hot",
                  "actions": [{"retry": RETRY, "rollover": {"min_index_age": cfg["rollover_age"],
-                                                           **SHIPPED_ROLLOVER}}],
+                                                           **SHIPPED_ROLLOVER, **ROLLOVER_DEFAULTS}}],
                  "transitions": [{"state_name": "delete", "conditions": {"min_index_age": delete_age}}]},
                 {"name": "delete", "actions": [{"retry": RETRY, "delete": {}}], "transitions": []},
             ],

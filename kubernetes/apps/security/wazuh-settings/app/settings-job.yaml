@@ -16,7 +16,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wazuh-settings-git-b81d04b99c
+  name: wazuh-settings-git-e6d192d406
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:

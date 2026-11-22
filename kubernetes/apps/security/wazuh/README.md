@@ -25,11 +25,21 @@ The patches of `security-wazuh-server`:
 
 - A node selector on each pod, a request and a memory limit on each
   container (see "Memory"), and no CPU limit, as for the other apps here.
-- One indexer node with single-node discovery, which is the default of the
-  indexer image. The vendor's privileged init container that sets
-  `vm.max_map_count` is gone, so each pod meets the `baseline` level of the
-  namespace. `node.store.allow_mmap: false` keeps the indexer off memory
-  maps, so it needs no sysctl of the node.
+- One indexer node. The `opensearch.yml` of the image names `node-1` as the
+  initial cluster manager and sets no discovery type
+  ([opensearch.prod.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/opensearch.prod.yml#L2-L4)),
+  so the vendor's variable `cluster.initial_cluster_manager_nodes`
+  (`wazuh-indexer-0`) stays, and `discovery.seed_hosts` is this one pod, by
+  a name of its certificate, because the image enforces host name
+  verification on the transport. The vendor's privileged init container that
+  sets `vm.max_map_count` is gone, so each pod meets the `baseline` level of
+  the namespace. OpenSearch enforces its bootstrap checks, because the node
+  publishes an address that is not a loopback, and
+  `node.store.allow_mmap: false` keeps the indexer off memory maps, so the
+  check of `vm.max_map_count` does not apply and the indexer needs no sysctl
+  of the node
+  ([BootstrapChecks.java](https://github.com/opensearch-project/OpenSearch/blob/3.6.0/server/src/main/java/org/opensearch/bootstrap/BootstrapChecks.java#L201-L205),
+  [the check](https://github.com/opensearch-project/OpenSearch/blob/3.6.0/server/src/main/java/org/opensearch/bootstrap/BootstrapChecks.java#L461-L470)).
 - The indexer heap at 1536 MiB, half of its memory line.
 - `plugins.content_manager.telemetry.enabled: false`: the daily ping of the
   update check service of the Content Manager is off
@@ -86,6 +96,14 @@ the next start of the pod. What it sets, against the schema of the manager
 - The cluster key in the file is not a valid key, so the schema refuses it
   and the manager does not start if the image does not write the key of
   the Secret `wazuh-cluster-key`.
+- The manager logs in to the indexer as the user `wazuh-manager`, with
+  `WAZUH_INDEXER_MANAGER_PASSWORD` of `manager-credentials`, which the image
+  stores in the keystore of the manager
+  ([credentials](https://github.com/wazuh/wazuh-kubernetes/blob/v5.0.0-rc2/docs/ref/credentials.md#L123)).
+  The client certificate of `wazuh-manager-indexer-client` serves the TLS
+  connection only: the security configuration of the image keeps the client
+  certificate domain off
+  ([config.yml, OpenSearch security](https://github.com/opensearch-project/security/blob/3.6.0.0/config/config.yml#L142-L145)).
 
 ## Network
 
@@ -167,7 +185,7 @@ this repository from `../wazuh-settings/app/config/accounts.json`:
 
 | User | Role | For |
 | --- | --- | --- |
-| `tnwks-settings` | `tnwks-settings`: the ISM APIs on the patterns of the four streams of "Retention", the raw events setting, and the index stats of the two streams that hold no document. No Security API, and no read of a document | Step 2 |
+| `tnwks-settings` | `tnwks-settings`: the ISM APIs on the patterns of the four streams of "Retention", the raw events setting with a write of the settings document in `.wazuh-settings` (the Setup plugin indexes it with the rights of the caller, which OpenSearch runs as a bulk request: the cluster action `indices:data/write/bulk`, and `indices:data/write/index` and `indices:data/write/bulk[s]` on that index, [SettingsIndex.java](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/plugins/setup/src/main/java/com/wazuh/setup/index/SettingsIndex.java#L106-L113)), and the index stats of the two streams that hold no document. No Security API, and no read of a document | Step 2 |
 | `tnwks-converter` | `tnwks-converter`: a read of the index names of "Contract", with field-level security on the agent snapshots, and the index stats (the size) of each index of Wazuh | The converter |
 
 Step 1 runs only when its files change: `accounts.json`, `indexer.py` and
@@ -186,8 +204,12 @@ It runs as the account user, which the owner makes once, by hand, with
 user mapped to the reserved role `security_rest_api_access`, with its name
 and password in `wazuh-accounts-user`. The file holds no hash, and step 1
 never reads it. The owner applies it through the Security API: a `PUT` of
-the user with the hash of its password, and an add of the user to the role
-mapping of `security_rest_api_access`. The image of the indexer gives the
+the user with the hash of its password, and a `PUT` of the role mapping of
+`security_rest_api_access` with the user. The role mappings of the image have
+no mapping for that role (as the defaults of the security plugin,
+[roles_mapping.yml](https://github.com/opensearch-project/security/blob/3.6.0.0/config/roles_mapping.yml)),
+so the `PUT` makes it; if a mapping exists, the owner adds the user to its
+`users` and keeps the others. The image of the indexer gives the
 Security API to that role and to `all_access` only
 ([opensearch.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/build-scripts/docker/config/opensearch.yml#L49-L51)). That role can make, change and delete users, roles
 and role mappings that are neither reserved nor hidden, so it can also give
@@ -360,7 +382,7 @@ What other apps and workstreams read from here:
 These files are written from the vendor's sources at the tag, and checked
 by the tests below. These points hold only after the test cluster runs them:
 
-- That each patched pod starts: single-node discovery with the vendor's
+- That each patched pod starts: one node with the vendor's
   remaining settings, `node.store.allow_mmap`, the heap, the init
   containers in their new order, and the projected certificate volumes.
 - That the indexer takes the DNs of the cert-manager certificates, and
@@ -368,8 +390,6 @@ by the tests below. These points hold only after the test cluster runs them:
 - That the strict loader of the manager accepts `wazuh-manager.conf`, and
   that the copy of the image gives it the owner and mode that the manager
   needs.
-- That the manager authenticates to the indexer with the client
-  certificate of `wazuh-manager-indexer-client`.
 - That the Content Manager reaches its feed through `wazuh-indexer-feed`
   only (the snapshot download can use another host).
 - The role permissions of `tnwks-settings` and `tnwks-converter`, the FLS

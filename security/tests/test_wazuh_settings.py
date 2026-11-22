@@ -158,9 +158,18 @@ class FakeIndexer:
                 if name not in self.policies:
                     return 404, None
                 p = self.policies[name]
+                # As the ISM API gives a policy back: the defaults it fills in
+                # (copy_alias of a rollover) and the fields it adds.
+                policy = copy.deepcopy(p["policy"])
+                for state in policy.get("states") or []:
+                    for action in state.get("actions") or []:
+                        if "rollover" in action:
+                            action["rollover"].setdefault("copy_alias", False)
+                for template in policy.get("ism_template") or []:
+                    template["last_updated_time"] = 1
                 return 200, {"_id": name, "_seq_no": p["seq"], "_primary_term": p["term"],
-                             "policy": {**copy.deepcopy(p["policy"]), "policy_id": name,
-                                        "last_updated_time": 1}}
+                             "policy": {**policy, "policy_id": name, "last_updated_time": 1,
+                                        "schema_version": 27, "error_notification": None}}
             if name in self.policies and f"if_seq_no={self.policies[name]['seq']}" not in path:
                 return 409, {"error": {"type": "version_conflict_engine_exception"}}
             self.seq += 1
@@ -552,7 +561,9 @@ def test_each_policy_rolls_over_by_age_and_deletes_by_index_age():
     assert not set(policies) & settings_step.SHIPPED_POLICY_IDS
     for policy in policies.values():
         hot, delete = policy["states"]
-        assert set(hot["actions"][0]["rollover"]) == {"min_index_age", "min_doc_count", "min_primary_shard_size"}
+        assert set(hot["actions"][0]["rollover"]) == {"min_index_age", "min_doc_count", "min_primary_shard_size",
+                                                      "copy_alias"}
+        assert hot["actions"][0]["rollover"]["copy_alias"] is False
         (transition,) = hot["transitions"]
         assert set(transition["conditions"]) == {"min_index_age"}
         assert delete["actions"][0]["delete"] == {}
@@ -606,9 +617,17 @@ def test_the_converter_reads_no_host_field_and_no_event():
 def test_the_user_for_settings_has_no_security_api_and_reads_no_document():
     role = accounts()["roles"]["tnwks-settings"]
     assert "restapi" not in json.dumps(role) and "security" not in json.dumps(role["cluster_permissions"])
+    assert role["cluster_permissions"] == ["cluster:admin/opendistro/ism/*", "cluster:admin/setup/settings/update",
+                                           "indices:data/write/bulk"]
     for permission in role["index_permissions"]:
         assert "read" not in permission["allowed_actions"]
-        assert not [a for a in permission["allowed_actions"] if a.startswith("indices:data")]
+        if permission["index_patterns"] == [".wazuh-settings"]:
+            # The Setup plugin indexes the settings document with the rights of
+            # the caller (wazuh-indexer-plugins v5.0.0-rc2, SettingsIndex.java),
+            # which OpenSearch runs as a bulk request.
+            assert permission["allowed_actions"] == ["indices:data/write/index", "indices:data/write/bulk[s]"]
+        else:
+            assert not [a for a in permission["allowed_actions"] if a.startswith("indices:data")]
 
 
 @pytest.mark.parametrize("prefix", sorted(HASHED))
@@ -738,3 +757,17 @@ def test_the_account_user_file_grants_the_security_api_and_holds_no_hash():
     # Step 1 never reads it: no Job mounts it.
     kustomization = yaml.safe_load((APP / "kustomization.yaml").read_text())
     assert not [f for g in kustomization["configMapGenerator"] for f in g["files"] if "account-user" in f]
+
+
+def test_step2_writes_no_policy_again_when_the_api_gives_it_back_with_its_defaults(tmp_path):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    assert run2(fake, argv)[0] == 0
+    seqs = {name: p["seq"] for name, p in fake.policies.items() if name.startswith("tnwks-")}
+    code, lines = run2(fake, argv)
+    assert code == 0, lines
+    assert {name: p["seq"] for name, p in fake.policies.items() if name.startswith("tnwks-")} == seqs
+    assert [line for line in lines if line.startswith("policy ")] == [
+        f"policy {name}: unchanged" for name in seqs]
+    assert not [line for line in lines if "change_policy" in line]
