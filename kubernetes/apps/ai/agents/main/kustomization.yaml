@@ -40,3 +40,6 @@ resources:
   # its prompt (docs/apps/host-mcp.md). The way back is to remove this line:
   # Flux then prunes its pod, Service, policy and Secret.
   - ./host-mcp/ks.yaml
+  # The token job of the App of main (github-token/ks.yaml) is listed only
+  # with its key, which the owner puts in with bin/main-app-key
+  # (docs/apps/github-token.md, "The key").
