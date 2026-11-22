@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.264.1 - 2026-11-22
+
+### Security
+
+* monitoring: a network rule for Alloy. Its OTLP receiver (4318) takes the agent pods of main, finance and pilot, the sandbox supervisors of agents-workflows and the daily test span only, so no other pod can write false series of the agents into Prometheus or a false span into Tempo. The Faro port takes the public ingress, and the HTTP server Prometheus of the site and the kubelet probes.
+
 ## v2.264.0 - 2026-11-22
 
 ### Added
