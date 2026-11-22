@@ -17,8 +17,9 @@ permissions:
   contents: read
 
 # Three tiers, and the jobs of a run start together. `contracts` checks
-# generated resources, schemas and the rules written by hand whenever the
-# observability domain is on (validate_health.py scans all of kubernetes/).
+# generated resources and schemas, and `tests` runs observability/tests (the
+# rules written by hand among them), whenever the observability domain is on
+# (validate_health.py scans all of kubernetes/, and the tests read it).
 # `rule-tests` and `powershell` are the long tests: they read nothing in
 # kubernetes/, and run only when what they read changed (the
 # observability_long_tests domain, passed as `long_tests`). `rehearsals`
@@ -28,9 +29,9 @@ permissions:
 jobs:
   contracts:
     runs-on: ubuntu-26.04
-    # The runs of 2026-11-21 took 690 to 885 s, and two stopped at the
-    # limit of 15 minutes. 25 leaves room for a slow runner.
-    timeout-minutes: 25
+    # About 2 minutes: the tests of observability/tests, which were 13 of
+    # its 15, are the `tests` job.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,7 +50,6 @@ jobs:
         run: |
           uv run --project observability python observability/generate.py --check
           uv run --project observability ruff check observability
-          uv run --project observability pytest observability/tests -q
           uv run --project observability python observability/validate.py
           uv run --project observability python observability/validate_health.py
       - name: Native storage safety contracts and disposable mount rehearsal
@@ -75,6 +75,48 @@ jobs:
           uv run --project observability ruff check --config observability/pyproject.toml security
           uv run --project observability pytest security/tests -q -m "not pwsh"
 
+  # The tests of observability/tests. They start containers and wait for
+  # them: one after the other, in `contracts`, they took 13 minutes. A runner
+  # has one pytest-xdist worker for each CPU, and a file stays whole on one
+  # worker (loadfile): the tests of a file share its containers, and some
+  # need its order. The containers use the 4 CPUs of a runner, so the parts
+  # of the matrix are runners. The lab of the scheduled jobs is the longest
+  # file, and has a runner to itself. `others` is each file that no other
+  # part names: test_ci_parts.py checks that no file is in no part.
+  # --durations names the slowest tests of a run.
+  tests:
+    name: tests (${{ matrix.part }})
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: scheduled-jobs
+            select: observability/tests/test_agent_automations.py
+          - part: others
+            select: observability/tests --ignore=observability/tests/test_agent_automations.py
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          # PR caches are scoped to their PR and no other PR can read them;
+          # saving one per PR evicted the main entries every PR restores from.
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+          prune-cache: true
+          cache-dependency-glob: observability/uv.lock
+      - name: Install pinned toolchain
+        run: uv sync --project observability --locked --python 3.13
+      - name: Tests
+        env:
+          SELECT: ${{ matrix.select }}
+        run: |
+          read -ra select <<<"$SELECT"
+          uv run --project observability pytest "${select[@]}" -q -n auto --dist loadfile --durations=15
+
   # promtool on the generated rule tests: the recording rules and failure
   # fixtures of observability/, and the rules of the control registry that
   # give "no evidence" for an absent result. They hold days of simulated
@@ -89,7 +131,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # rule-tests-week.yaml runs in `contracts` (test_week_rule_tests.py).
+          # rule-tests-week.yaml runs in `tests` (test_week_rule_tests.py).
           - suite: observability
             files: observability/generated/rule-tests.yaml
           - suite: security
@@ -117,11 +159,21 @@ jobs:
 
   # The tests of security/ that start PowerShell (the `pwsh` mark,
   # security/tests/conftest.py): the host check of a Windows host and the
-  # folder ACL module.
+  # folder ACL module. One runner took 7.5 minutes for them with a worker on
+  # each CPU, so the runners of the matrix share them: `--shard I/N` of
+  # conftest.py puts each test in exactly one shard. For more runners, add
+  # the shards here (test_pwsh_parallel.py checks that none is missing).
+  # Some of the tests take a minute and most a second, so a worker with no
+  # test left takes one from another (worksteal).
   powershell:
+    name: powershell (${{ matrix.shard }})
     if: inputs.long_tests
     runs-on: ubuntu-26.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/3", "2/3", "3/3"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -137,7 +189,9 @@ jobs:
       - name: Install pinned toolchain
         run: uv sync --project observability --locked --python 3.13
       - name: PowerShell tests
-        run: uv run --project observability pytest security/tests -q -m pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: uv run --project observability pytest security/tests -q -m pwsh --shard "$SHARD" --dist worksteal --durations=15
 
   rehearsals:
     if: inputs.rehearse

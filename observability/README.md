@@ -71,11 +71,16 @@ uv sync --project observability --locked --python 3.13
 uv run --project observability python observability/generate.py --check
 uv run --project observability python observability/rule_tests.py observability/generated/rule-tests.yaml
 uv run --project observability ruff check observability
-uv run --project observability pytest observability/tests -q
+uv run --project observability pytest observability/tests -q -n auto --dist loadfile
 uv run --project observability python observability/validate.py
 uv run --project observability python observability/rehearse_archive.py
 uv run --project observability python observability/rehearse_grafana.py --browser --renderer
 ```
+
+The tests start containers and wait for them: about 12 minutes one after the
+other, and under 5 with `-n auto --dist loadfile` (as CI runs them). `loadfile`
+keeps a file on one worker, because the tests of a file share its containers.
+Leave the two options out for `--pdb` or `-s`, or for one test.
 
 Generation/validation needs `kustomize` or `kubectl kustomize`; neither contacts a
 cluster. Archive rehearsal needs Docker and OpenSSL. It uses loopback ports

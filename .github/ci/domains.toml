@@ -60,7 +60,7 @@ paths = [
 # The long tests: promtool on the generated rule tests (days of simulated
 # time) and the tests that start PowerShell. They read the generated files,
 # the registry and the Ansible roles, and nothing in kubernetes/: a manifest
-# change runs `contracts` without them.
+# change runs `contracts` and `tests` without them.
 [domains.observability_long_tests]
 paths = [
   "observability/**",

@@ -41,7 +41,7 @@ children do not apply to it.
 After a change of the class, of a cluster tree or of a namespace, run
 `python3 kubernetes/apps/flux-system/admission/classlist.py write` and
 commit the policy. The CI test fails until the lists are the ones of git.
-It is `observability/tests/test_flux_admission.py`, in the job `contracts`
+It is `observability/tests/test_flux_admission.py`, in the job `tests`
 of the Observability workflow. That job runs on each change under
 `kubernetes/` and of `.github/scripts/owner-label-check.py`
 (`.github/ci/domains.toml`), and `Build Success`, a required check of

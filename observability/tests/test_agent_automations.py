@@ -6,7 +6,7 @@ The container tests start the product of the agent image (deployment.yaml,
 by digest) with the config of finance and test values, on an internal
 network with a fake model gateway and a fake MCP server at the names of the
 config. Then the sync script of the pod runs next to it, as the pod runs it,
-with one change: a pass each few seconds, not each hour. The tests change
+with one change: a pass each second, not each hour. The tests change
 the list between passes. They need Docker: without it a test is skipped,
 except in CI, where it fails.
 """
@@ -33,7 +33,7 @@ PROBE = AGENTS / "finance/checks/app/mcp-gateway-probe.yaml"
 ZONE = "Europe/Vienna"
 CHAT = "111111111"
 TOKEN = "test-gateway-token"
-EVERY = 5
+EVERY = 1
 
 
 def agent_pod() -> dict:
