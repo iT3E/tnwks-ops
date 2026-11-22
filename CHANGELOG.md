@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.281.0 - 2026-11-22
+
+### Added
+
+* security: a runbook for the alerts of the security platform (docs/apps/security-platform-runbook.md), one section for each of its 15 alerts, and each of those alerts links to its section (runbook_url)
+
 ## v2.280.3 - 2026-11-22
 
 ### Fixed
