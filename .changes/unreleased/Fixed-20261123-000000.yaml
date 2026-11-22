@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'mikrotik: the REST accept of the CI runner tunnel (rule 590) writes its source as the prefix 10.10.32.10/31, the same two addresses as the range before. RouterOS stores an IPv4 range that is exactly one prefix as that prefix, and the provider compares src_address as written, so the plan of the root is empty when nothing changes.'
+time: 2026-11-23T00:00:00.000000000Z
