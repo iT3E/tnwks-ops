@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.280.1 - 2026-11-22
+
+### Fixed
+
+* playwright-mcp: the browser of main takes the Host that the central MCP gateway sends (the name of its Service with no port), so the route main-browser answers; the route is not live for use yet
+
 ## v2.280.0 - 2026-11-22
 
 ### Added
