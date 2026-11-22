@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.296.0 - 2026-11-22
+
+### Added
+
+* security: homelab-wsl-02 lists the Wazuh server, with its four SOPS Secrets. The Service of the agents is a shared VIP of the half of 10.10.95.0/24 that the router prefers on site 2, announced over BGP, and the agents dial wazuh-agents.internal.tnwks.us once its site record exists. The daily settings CronJob moves to 08:22 UTC, after the daily jobs of the node end. The settings of the indexer stay unlisted.
+
 ## v2.295.0 - 2026-11-22
 
 ### Changed
