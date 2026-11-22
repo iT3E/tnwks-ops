@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.291.0 - 2026-11-22
+
+### Changed
+
+* agents: the host server of main, not applied yet, moves to the image 0.2.0, the upstream ssh-mcp v2.27.1, with the same tools and settings; upstream changed its command classifier only
+
 ## v2.290.1 - 2026-11-22
 
 ### Security
