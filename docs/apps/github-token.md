@@ -112,15 +112,19 @@ Read `flux-admission` and then `cluster-apps` Ready at the commit of the
 merge. If `cluster-apps` reports a refusal of `flux-child-scope` for
 `agents-main-github-token`, it applies at its next run, in 30 minutes at
 most (its interval, with no retry interval), and nothing is lost: the
-code host server still reads its stopgap token until its own switch. The
-short cut, which is a write: when `flux-admission` is Ready at the commit
-of the merge, `flux -n flux-system reconcile kustomization cluster-apps`.
+code host server still reads its stopgap token until its own switch. In
+that time the CronJob is absent, so `MainGithubTokenStale` fires after 5
+minutes (its clause `absent()`). It ends by itself when the child applies:
+do not chase it. The short cut, which is a write and ends it sooner: when
+`flux-admission` is Ready at the commit of the merge,
+`flux -n flux-system reconcile kustomization cluster-apps`.
 
 Then, read only:
 
 | Read | Pass rule |
 | --- | --- |
-| `flux -n flux-system get kustomization flux-admission cluster-apps` | Both Ready at the commit of the merge |
+| `flux -n flux-system get kustomization flux-admission` | Ready at the commit of the merge |
+| `flux -n flux-system get kustomization cluster-apps` | Ready at the commit of the merge, after `flux-admission` |
 | `flux -n flux-system get kustomization agents-main-github-token` | Ready, at the commit of the merge |
 | `kubectl -n agents-main get cronjob github-token` | Present, not suspended |
 | The first run at minute 13 or 43, or one made with `create job --from` | The line `github-token result=ok` and no `result=drift` line |

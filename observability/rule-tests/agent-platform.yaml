@@ -161,6 +161,29 @@ tests:
         exp_alerts:
           - exp_labels: {severity: warning, namespace: agents-main, cronjob: github-token}
 
+  - name: a healthy token job of main, created long ago, never fires
+    interval: 1m
+    input_series:
+      # Created at 0; a good run at 13m, 43m, 73m, 103m and 133m (the value
+      # is the time of the last success, in seconds).
+      - series: kube_cronjob_created{namespace="agents-main", cronjob="github-token"}
+        values: 0x180
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-main", cronjob="github-token"}
+        values: _x12 780x29 2580x29 4380x29 6180x29 7980x47
+    alert_rule_test:
+      - alertname: MainGithubTokenStale
+        eval_time: 40m
+        exp_alerts: []
+      - alertname: MainGithubTokenStale
+        eval_time: 70m
+        exp_alerts: []
+      - alertname: MainGithubTokenStale
+        eval_time: 100m
+        exp_alerts: []
+      - alertname: MainGithubTokenStale
+        eval_time: 160m
+        exp_alerts: []
+
   - name: a token job of main that never passed
     interval: 1m
     input_series:

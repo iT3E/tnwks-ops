@@ -251,8 +251,8 @@ job before any token, and shows as
 
 **What it means.** The token job of the App of main (`github-token` in
 `agents-main`) has had no good run in 35 minutes, or its CronJob is gone.
-Two runs in a row failed or did not run (suspended, not applied, an image
-that does not pull). The token in the Secret `github-mcp-app-token` lives
+It runs twice an hour, so the last run failed or did not run (suspended,
+not applied, an image that does not pull). The token in the Secret `github-mcp-app-token` lives
 one hour from its last good run, so about 25 minutes are left before a call
 of the code host server gets 401.
 

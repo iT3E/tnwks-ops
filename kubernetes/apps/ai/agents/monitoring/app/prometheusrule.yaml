@@ -137,10 +137,10 @@ spec:
 
         - alert: MainGithubTokenStale
           # A dead man's switch, the pattern of WorkflowProvidersStale: no
-          # good run of the token job of the App of main in 35 minutes (two
-          # runs an hour, plus the `for`), so two runs in a row failed or did
-          # not run (suspended, the CronJob gone, an image that does not
-          # pull). AgentPlatformCronJobFailed fires on a failed Job only. The
+          # good run of the token job of the App of main in 35 minutes (30
+          # minutes plus the `for`). It runs twice an hour, so the last run
+          # failed or did not run (suspended, the CronJob gone, an image that
+          # does not pull). AgentPlatformCronJobFailed fires on a failed Job only. The
           # token in the Secret lives one hour from its last good run, so
           # this leaves about 25 minutes before a call of the code host
           # server gets 401 (docs/apps/github-token.md).
