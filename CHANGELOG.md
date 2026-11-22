@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.294.0 - 2026-11-22
+
+### Changed
+
+* renovate: an update of the image of the host server of main waits 7 days after its release and is reviewed (impact/high, no automerge), as for the other MCP servers
+
 ## v2.293.0 - 2026-11-22
 
 ### Changed
