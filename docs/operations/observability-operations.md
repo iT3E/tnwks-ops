@@ -54,7 +54,7 @@ WSL-02, which has that cluster's kubeconfig
   bytes of its 90-day streams in a day, before compression.
   `WslDriveSpaceLow`: the drive under the WSL disk of WSL-02 has less than
   100 GB free (evaluated by site 1, which scrapes both Windows hosts).
-- **Room on site 1:** three alerts of the group `homelab.capacity`
+- **Room on site 1:** two alerts of the group `homelab.capacity`
   (`observability/rules.py`) on the kubelet's `node_memory_working_set_bytes`
   of each node container of homelab-wsl, scraped on that site. Each node
   container has a Docker memory limit: 13 GiB for a worker
@@ -62,21 +62,23 @@ WSL-02, which has that cluster's kubeconfig
   for the control plane (`memory_controlplanes`).
   `observability/tests/test_node_container_memory.py` holds the rules equal
   to the inventory.
-  - `WorkerContainerMemoryNearLimit` (warning): a worker past 90% of its
-    limit for 5 minutes.
-  - `WorkerContainerMemoryAtLimit` (critical): a worker past 95% for 2
-    minutes.
+  - `WorkerContainerMemoryNearLimit`: a worker past 90% of its limit for 5
+    minutes is a warning, and past 95% for 2 minutes it is critical. While
+    the critical one fires, the inhibit rule of Alertmanager holds back the
+    warning of the same name. It does not compare the node, so it also holds
+    back the warning of the other worker: read both nodes (step 1).
   - `ControlPlaneContainerMemoryNearLimit` (warning): the control plane
-    past 90% for 15 minutes.
+    past 98% for 15 minutes.
 
   What the numbers mean:
   - The kubelet does not see these limits. It reports the memory of the
-    whole WSL VM, so its allocatable memory is the VM, the scheduler keeps
-    placing pods by their requests against the VM, and the kubelet does not
-    evict, because it sees free memory.
-  - So today the pod limit of the kubelet (110, its default) is the only
-    stop below the memory limit of a worker. A higher pod limit removes that
-    stop.
+    whole WSL VM, so its allocatable memory is the VM, the scheduler places
+    pods by their requests against the memory of the VM, and the kubelet
+    does not evict, because it sees free memory.
+  - The scheduler has no stop at the memory limit of a worker. The pod
+    limit of the kubelet (110) stops it on worker 1 today, near 92% at
+    today's pod sizes. It does not stop it on worker 2, whose pods are
+    larger. A higher pod limit removes the one stop on worker 1.
   - These alerts warn. They do not stop the scheduler, and a rollout or a
     burst of Jobs can cross from 90% to the limit in minutes; that is why
     the rules of a worker wait 5 and 2 minutes.
@@ -85,13 +87,20 @@ WSL-02, which has that cluster's kubeconfig
     does not evict first.
   - The control plane runs no workload pods. Its working set also counts
     active file pages, for example of the database file of etcd, which the
-    kernel can take back before it kills. No series in Prometheus separates
-    them: the chart drops cAdvisor's series of the node's own cgroup. Read
-    the summary of the kubelet (below): `rssBytes` is the anonymous memory,
-    which the kernel can not take back, and the working set less
-    `rssBytes` is mostly file pages. Judge the alert by `rssBytes` against
-    4 GiB. At the time of this change, the control plane was past 90%, so
-    the rule fires as soon as it is live.
+    kernel can take back before it kills. So the working set sits well past
+    90% while the anonymous memory is far lower, and the rule waits for 98%:
+    there the kernel has almost nothing left to take back. At the time of
+    this change the control plane was past 90% and under 98%, so the rule is
+    quiet. No series in Prometheus separates the file pages: the chart drops
+    cAdvisor's series of the node's own cgroup. Read the summary of the
+    kubelet (step 1): `rssBytes` is the anonymous memory, which the kernel
+    can not take back, and the working set less `rssBytes` is mostly file
+    pages.
+  - Open task: bring the RSS of the node's own cgroup
+    (`container_memory_rss` with `id="/"`) into Prometheus on site 1, by one
+    narrow relabel of the kubelet's cAdvisor scrape that keeps that series
+    from the chart's drop, and alert on it, for example past 85% of the
+    limit.
 
   Steps, read only first:
   1. The memory of each node:

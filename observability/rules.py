@@ -550,8 +550,8 @@ def capacity_alerts():
     steps = " docs/operations/observability-operations.md, Room on site 1, has the steps."
     worker_limit = (f"The node container of a worker of {SITE1_CLUSTER} has a memory limit of {SITE1_WORKER_LIMIT_GIB} GiB"
                     " (memory_workers of talos_clusters in the Ansible inventory). The scheduler and the evictions of the"
-                    " kubelet do not see it, because the node reports the memory of the whole WSL VM: only the pod limit"
-                    " of the kubelet stops the scheduler. This alert warns; it stops nothing.")
+                    " kubelet do not see it, because the node reports the memory of the whole WSL VM: the scheduler places"
+                    " pods against the memory of the VM. This alert warns; it stops nothing.")
 
     return [
         # The working set of the node's root cgroup, which is the node container
@@ -567,14 +567,17 @@ def capacity_alerts():
                                          " and move or shrink one. The limit is memory_nodes of talos_clusters in the Ansible inventory.")}},
         # The same figure for the nodes of homelab-wsl, scraped there
         # (kubernetes/clusters/wsl/apps). A worker can fill in minutes (a
-        # rollout, or Jobs that all land on it), so its rules wait less.
+        # rollout, or Jobs that all land on it), so its rules wait less. One
+        # name with two severities: Alertmanager's inhibit rule holds the
+        # warning back while the critical one fires. It does not compare the
+        # node, so it holds the warning of the other worker back too.
         {"alert": "WorkerContainerMemoryNearLimit",
          "expr": site1_memory("worker", SITE1_WORKER_LIMIT_GIB, 0.9),
          "for": "5m", "labels": {"severity": "warning"},
          "annotations": {"summary": "{{ $labels.node }} is above 90% of the memory limit of its node container",
                          "dashboard_url": board("tnwks-kubernetes"),
                          "description": (worker_limit + " Find the largest pods of the node, and move or shrink one." + steps)}},
-        {"alert": "WorkerContainerMemoryAtLimit",
+        {"alert": "WorkerContainerMemoryNearLimit",
          "expr": site1_memory("worker", SITE1_WORKER_LIMIT_GIB, 0.95),
          "for": "2m", "labels": {"severity": "critical"},
          "annotations": {"summary": "{{ $labels.node }} is above 95% of the memory limit of its node container",
@@ -583,18 +586,21 @@ def capacity_alerts():
                                          " BestEffort pods first, and the kubelet does not evict before. Move a large pod off"
                                          " the node now." + steps)}},
         # The control plane runs no workload pods (its taint), so its memory
-        # moves slowly, and its working set counts file pages that the kernel
-        # can take back.
+        # moves slowly. Its working set counts active file pages, such as the
+        # database file of etcd, which the kernel can take back, and it sits
+        # well past 90% while its anonymous memory does not. At 98% for 15
+        # minutes the kernel has almost nothing left to take back.
         {"alert": "ControlPlaneContainerMemoryNearLimit",
-         "expr": site1_memory("controlplane", SITE1_CONTROLPLANE_LIMIT_GIB, 0.9),
+         "expr": site1_memory("controlplane", SITE1_CONTROLPLANE_LIMIT_GIB, 0.98),
          "for": "15m", "labels": {"severity": "warning"},
-         "annotations": {"summary": "{{ $labels.node }} is above 90% of the memory limit of its node container",
+         "annotations": {"summary": "{{ $labels.node }} is above 98% of the memory limit of its node container",
                          "dashboard_url": board("tnwks-kubernetes"),
                          "description": (f"The node container of the control plane of {SITE1_CLUSTER} has a memory limit of"
                                          f" {SITE1_CONTROLPLANE_LIMIT_GIB} GiB (memory_controlplanes of talos_clusters in the"
                                          " Ansible inventory). It runs the API server and etcd. Its working set also counts"
-                                         " active file pages, such as the database file of etcd, which the kernel can take back:"
-                                         " compare rssBytes in the summary of the kubelet before you act." + steps)}},
+                                         " active file pages, such as the database file of etcd, which the kernel can take back."
+                                         " At 98% little is left to take back: compare rssBytes in the summary of the kubelet,"
+                                         " and find what grew." + steps)}},
         {"alert": "LokiSecurityIngestAbovePlan",
          "expr": ('sum by (k8s_cluster) (increase(loki_distributor_bytes_received_total'
                   f'{{retention_hours="{SECURITY_RETENTION_HOURS}"}}[1d])) > 2 * {SECURITY_INGEST_PLAN_GB}e9'),
@@ -2206,7 +2212,9 @@ def capacity_fixtures():
 
     def expected(name, **labels):
         """The alert as promtool sees it: its annotations with the labels filled in."""
-        rule = next(rule for rule in capacity_alerts() if rule["alert"] == name)
+        severity = labels.pop("severity", "warning")
+        rule = next(rule for rule in capacity_alerts()
+                    if rule["alert"] == name and rule["labels"]["severity"] == severity)
         labels = {"k8s_cluster": site, **labels}
         annotations = {}
         for key, text in rule["annotations"].items():
@@ -2260,41 +2268,45 @@ def capacity_fixtures():
              node("other-worker-1", int(12 * gib)),
          ], "alert_rule_test": [
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "4m", "exp_alerts": []},
-             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "6m", "exp_alerts": [
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": [
                  expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1")]},
-             {"alertname": "WorkerContainerMemoryAtLimit", "eval_time": "20m", "exp_alerts": []},
          ]},
-        {"name": "a worker of site 1 past 95% of its limit is critical after 2 minutes", "interval": "1m",
+        {"name": "a worker of site 1 past 95% of its limit is critical after 2 minutes, and also warns after 5", "interval": "1m",
          "input_series": [
              # 12.5 of 13 GiB: 96%.
              site1_node("lab-worker-1", int(12.5 * gib)),
          ], "alert_rule_test": [
-             {"alertname": "WorkerContainerMemoryAtLimit", "eval_time": "1m", "exp_alerts": []},
-             {"alertname": "WorkerContainerMemoryAtLimit", "eval_time": "3m", "exp_alerts": [
-                 expected("WorkerContainerMemoryAtLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1")]},
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "1m", "exp_alerts": []},
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "3m", "exp_alerts": [
+                 expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1",
+                          severity="critical")]},
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "6m", "exp_alerts": [
-                 expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1")]},
+                 expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1"),
+                 expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1",
+                          severity="critical")]},
          ]},
         {"name": "a worker of site 1 at 89% of its limit does not alert", "interval": "1m",
          "input_series": [site1_node("lab-worker-1", int(0.89 * SITE1_WORKER_LIMIT_GIB * gib))],
          "alert_rule_test": [
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
-             {"alertname": "WorkerContainerMemoryAtLimit", "eval_time": "20m", "exp_alerts": []},
          ]},
-        {"name": "the control plane of site 1 past 90% of its limit warns after 15 minutes; a worker at the same figure does not",
+        {"name": "the control plane of site 1 past 98% of its limit warns after 15 minutes; a worker at the same figure does not",
          "interval": "1m",
          "input_series": [
-             # 3.7 of 4 GiB: 92%.
-             site1_node("lab-controlplane-1", int(3.7 * gib)),
-             site1_node("lab-worker-1", int(3.7 * gib)),
-             node("other-controlplane-1", int(3.7 * gib)),
+             # 3.95 of 4 GiB: 99%.
+             site1_node("lab-controlplane-1", int(3.95 * gib)),
+             site1_node("lab-worker-1", int(3.95 * gib)),
+             node("other-controlplane-1", int(3.95 * gib)),
          ], "alert_rule_test": [
              {"alertname": "ControlPlaneContainerMemoryNearLimit", "eval_time": "14m", "exp_alerts": []},
              {"alertname": "ControlPlaneContainerMemoryNearLimit", "eval_time": "16m", "exp_alerts": [
                  expected("ControlPlaneContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-controlplane-1")]},
          ]},
-        {"name": "the control plane of site 1 at 89% of its limit does not alert", "interval": "1m",
-         "input_series": [site1_node("lab-controlplane-1", int(0.89 * SITE1_CONTROLPLANE_LIMIT_GIB * gib))],
+        {"name": "the control plane of site 1 at 97% of its limit does not alert, nor at 92%", "interval": "1m",
+         "input_series": [
+             site1_node("lab-controlplane-1", int(0.97 * SITE1_CONTROLPLANE_LIMIT_GIB * gib)),
+             site1_node("lab-controlplane-2", int(0.92 * SITE1_CONTROLPLANE_LIMIT_GIB * gib)),
+         ],
          "alert_rule_test": [
              {"alertname": "ControlPlaneContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
          ]},

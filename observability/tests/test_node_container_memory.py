@@ -48,18 +48,20 @@ def test_the_limit_of_worker_1_of_site_2_is_the_one_of_the_inventory():
 
 
 def test_each_alert_reads_its_site_and_states_its_limit():
-    alerts = {rule["alert"]: rule for rule in rules.capacity_alerts()}
-    for name, role, share, limit, wait, severity in [
-            ("WorkerContainerMemoryNearLimit", "worker", 0.9, rules.SITE1_WORKER_LIMIT_GIB, "5m", "warning"),
-            ("WorkerContainerMemoryAtLimit", "worker", 0.95, rules.SITE1_WORKER_LIMIT_GIB, "2m", "critical"),
-            ("ControlPlaneContainerMemoryNearLimit", "controlplane", 0.9, rules.SITE1_CONTROLPLANE_LIMIT_GIB, "15m", "warning")]:
-        rule = alerts[name]
+    alerts = {(rule["alert"], rule["labels"]["severity"]): rule for rule in rules.capacity_alerts()}
+    assert len(alerts) == len(rules.capacity_alerts())
+    for name, severity, role, share, limit, wait in [
+            ("WorkerContainerMemoryNearLimit", "warning", "worker", 0.9, rules.SITE1_WORKER_LIMIT_GIB, "5m"),
+            ("WorkerContainerMemoryNearLimit", "critical", "worker", 0.95, rules.SITE1_WORKER_LIMIT_GIB, "2m"),
+            ("ControlPlaneContainerMemoryNearLimit", "warning", "controlplane", 0.98,
+             rules.SITE1_CONTROLPLANE_LIMIT_GIB, "15m")]:
+        rule = alerts[name, severity]
         assert f'k8s_cluster="{rules.SITE1_CLUSTER}"' in rule["expr"], name
         assert f'node=~".+-{role}-[0-9]+"' in rule["expr"], name
         assert rule["expr"].endswith(f"> {share} * {limit} * 1024^3"), name
-        assert (rule["for"], rule["labels"]["severity"]) == (wait, severity), name
+        assert rule["for"] == wait, name
         assert f"{limit} GiB" in rule["annotations"]["description"], name
-    site2 = alerts["NodeContainerMemoryNearLimit"]["expr"]
+    site2 = alerts["NodeContainerMemoryNearLimit", "warning"]["expr"]
     assert site2.endswith(f"> 0.9 * {rules.CAPACITY_NODE_LIMIT_GIB} * 1024^3")
 
 
@@ -87,3 +89,40 @@ def test_each_site_scrapes_the_working_set_of_its_nodes():
         assert found["resourcePath"] == "/metrics/resource", site
         assert found["resourceMetricRelabelings"] == [
             {"sourceLabels": ["__name__"], "regex": "node_memory_working_set_bytes", "action": "keep"}], site
+
+
+ALERTMANAGER = ROOT / "kubernetes/apps/monitoring/alertmanager/app/config/alertmanager.yml"
+
+
+def held(alert, sources):
+    """Whether Alertmanager holds `alert` while each of `sources` fires: the
+    matchers of an inhibit rule, and the same value (or no value on both) of
+    each `equal` label (as security/tests/test_host_check_scrape.py)."""
+    def matches(labels, matchers):
+        for matcher in matchers:
+            name, value = re.fullmatch(r'(\w+) = "([^"]*)"', matcher).groups()
+            if labels.get(name, "") != value:
+                return False
+        return True
+
+    for rule in yaml.safe_load(ALERTMANAGER.read_text())["inhibit_rules"]:
+        if not matches(alert, rule["target_matchers"]):
+            continue
+        for source in sources:
+            if matches(source, rule["source_matchers"]) and all(
+                    alert.get(name, "") == source.get(name, "") for name in rule["equal"]):
+                return True
+    return False
+
+
+def test_the_critical_worker_alert_holds_back_the_warning_of_the_same_node():
+    def worker(node, severity):
+        # The labels of the rule, and the external label of the Prometheus of site 1.
+        return {"alertname": "WorkerContainerMemoryNearLimit", "severity": severity,
+                "k8s_cluster": rules.SITE1_CLUSTER, "node": node, "cluster": rules.SITE1_CLUSTER}
+
+    assert held(worker("lab-worker-1", "warning"), [worker("lab-worker-1", "critical")])
+    assert not held(worker("lab-worker-1", "critical"), [worker("lab-worker-1", "warning")])
+    # The inhibit rule compares the alert name and labels that these alerts
+    # do not carry, not the node: while one worker is critical, the warning
+    # of the other worker is held back too (the runbook says so).
