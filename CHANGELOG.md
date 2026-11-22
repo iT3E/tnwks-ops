@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.270.0 - 2026-11-22
+
+### Added
+
+* tools: a device-access pod on homelab-wsl, with its own peer on the router's CI tunnel (wg03), reaches the EP-R6 and the two radios behind it over SSH and the radios' web UI, for an operator who execs into it; the router lets every wg03 peer reach the radios' SSH, only that pod their web UI, and only the runners its REST API
+
 ## v2.269.0 - 2026-11-22
 
 ### Added
