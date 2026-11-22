@@ -52,9 +52,11 @@ spec:
             args:
               - --port=8000
               - --host=0.0.0.0
-              # Requests arrive with the Service name as Host. Only that
-              # name: the central MCP gateway is the one caller.
-              - --allowed-hosts=playwright-mcp.ai.svc.cluster.local:8000
+              # Only the Host that the central MCP gateway, the one caller,
+              # sends: the name of the Service with no port. The server
+              # matches the whole Host exactly, and agentgateway 1.7.0 sets
+              # the host name of the target as Host, without its port.
+              - --allowed-hosts=playwright-mcp.ai.svc.cluster.local
               # A browser context of its own, in memory, for each session.
               - --isolated
               - --headless

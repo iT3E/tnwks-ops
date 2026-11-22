@@ -26,6 +26,7 @@ each session. It needs Docker: without it a test is skipped, except in CI.
 import hashlib
 import json
 import subprocess
+import urllib.parse
 import uuid
 from pathlib import Path
 
@@ -79,6 +80,11 @@ def dump() -> dict:
 def app() -> dict:
     (release,) = docs(RELEASE)
     return release["spec"]["values"]["controllers"]["playwright-mcp"]["containers"]["app"]
+
+
+def allowed_hosts() -> str:
+    (flag,) = [a for a in app()["args"] if a.startswith("--allowed-hosts=")]
+    return flag.split("=", 1)[1]
 
 
 def rule() -> list[str]:
@@ -152,7 +158,7 @@ def test_no_other_route_names_the_browser():
 def test_the_browser_has_the_flags_of_the_design():
     args = app()["args"]
     assert {"--isolated", "--headless", "--no-webmcp", "--block-service-workers"} <= set(args)
-    assert f"--allowed-hosts={SERVICE}:{PORT}" in args
+    assert f"--allowed-hosts={SERVICE}" in args
     assert "--proxy-server=http://fetch-proxy.agents-main.svc.cluster.local:8080" in args
     assert any(a.startswith("--redact-url-params=") for a in args)
     # No capability, no shared context, no state, no secrets, no saved session.
@@ -225,10 +231,15 @@ def test_the_switch_names_the_route_or_nothing():
 
 # The lab: the gateway at its pin, a fake browser with a page for each session
 
+# The fake browser checks the Host header as the server of the pinned image
+# does (playwright-core, installHttpTransport): the whole Host, in lower case,
+# must be one of --allowed-hosts, else a 403. The hosts come from the flag of
+# git, so the lab sees the Host that the gateway at its pin really sends.
 FAKE_BROWSER = r'''
 import json, itertools, sys, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 TOOLS = json.loads(sys.argv[1])
+ALLOWED = [h.lower() for h in sys.argv[2].split(",")]
 PAGES, LOCK, IDS = {}, threading.Lock(), itertools.count(1)
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -243,12 +254,22 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+    def blocked(self):
+        host = (self.headers.get("Host") or "").lower()
+        if host and host not in ALLOWED:
+            self.reply({"error": "Access is only allowed at " + ", ".join(ALLOWED)}, code=403)
+            return True
+        return False
     def do_GET(self):
-        self.reply(None, code=405)
+        if not self.blocked():
+            self.reply(None, code=405)
     def do_DELETE(self):
-        self.reply(None)
+        if not self.blocked():
+            self.reply(None)
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        if self.blocked():
+            return
         sid, method = self.headers.get("mcp-session-id"), body.get("method")
         if method == "initialize":
             new = f"page{next(IDS)}"
@@ -340,7 +361,7 @@ def lab():
         run([tool, "network", "create", "--internal", net])
         run([tool, "run", "-d", "--name", names[1], "--network", net, "--network-alias", SERVICE,
              "--read-only", "--cap-drop", "ALL", "--user", "65534", PYTHON, "python3", "-I", "-c", FAKE_BROWSER,
-             json.dumps([t["name"] for t in dump()["tools"]])])
+             json.dumps([t["name"] for t in dump()["tools"]]), allowed_hosts()])
         run([tool, "run", "-d", "--name", names[0], "--network", net,
              "--network-alias", "mcp-gateway.ai.svc.cluster.local", "--read-only", "--tmpfs", "/tmp",
              "--cap-drop", "ALL", "--user", "65532", "-v", f"{work}/config.yaml:/config/config.yaml:ro",
@@ -399,6 +420,31 @@ def run_probe(lab: dict, key: str | None) -> tuple[int, dict[str, str]]:
     lines = [json.loads(line) for line in result.stdout.splitlines()]
     return result.returncode, {line["target"]: line["got"] for line in lines if line["ok"]} | {
         "failed": [line for line in lines if not line["ok"]]}
+
+
+def test_the_allowed_host_is_the_host_that_the_gateway_sends():
+    """agentgateway 1.7.0 sets the host name of the target as Host, without
+    its port (the default hostname rewrite), and the server matches the whole
+    Host. So the flag names the host of the target URL with no port, and no
+    wildcard."""
+    (backend,) = route(ROUTE)["backends"]
+    (target,) = backend["mcp"]["targets"]
+    assert allowed_hosts() == urllib.parse.urlsplit(target["mcp"]["host"]).hostname == SERVICE
+
+
+def test_the_lab_server_refuses_another_host(lab):
+    """The Host check of the lab server is on: a request with the port in
+    the Host, straight to the server, gets the 403 of the real server."""
+    code = ("import urllib.request, urllib.error, sys\n"
+            "r = urllib.request.Request(sys.argv[1], b'{}', {'Host': sys.argv[2], 'Content-Type': 'application/json'})\n"
+            "try:\n"
+            "    print(urllib.request.urlopen(r, timeout=10).status)\n"
+            "except urllib.error.HTTPError as e:\n"
+            "    print(e.code)\n")
+    result = run([lab["tool"], "run", "--rm", "--network", lab["net"], "--read-only", "--cap-drop", "ALL",
+                  "--user", "65534", PYTHON, "python3", "-I", "-c", code, f"http://{SERVICE}:{PORT}/mcp",
+                  f"{SERVICE}:{PORT}"])
+    assert result.stdout.strip() == "403"
 
 
 def test_the_probe_of_main_lists_the_rule_and_calls_nothing(lab):
