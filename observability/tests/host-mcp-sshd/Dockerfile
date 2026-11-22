@@ -9,7 +9,7 @@ ARG BASE=alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d
 FROM ${BASE}
 RUN apk add --no-cache openssh-server bash coreutils procps \
  && adduser -D -s /bin/bash agent \
- && passwd -u agent >/dev/null 2>&1 || true \
+ && { passwd -u agent >/dev/null 2>&1 || true; } \
  && install -d -o agent -g agent -m 700 /home/agent/.ssh \
  && echo "root only" > /etc/lab-root-only && chmod 600 /etc/lab-root-only \
  && echo "lab host ok" > /etc/lab-motd && chmod 644 /etc/lab-motd \

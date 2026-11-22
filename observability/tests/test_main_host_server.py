@@ -24,7 +24,8 @@ environment and the volumes of the manifest, so a path that the server
 writes and the manifest does not give fails the lab. A read through the
 gateway must come back with no error and with the output of the command,
 under the role viewer on the group prod; a command of another class and a
-command of the denylist are refused by the server. It needs Docker: without
+command of the denylist are refused by the server; a file list and a file
+that the user may read come back, and a file of root only fails. It needs Docker: without
 it a test is skipped, except in CI. The fake host is built from its
 Dockerfile, or taken from HOST_MCP_LAB_SSHD_IMAGE (an image of the same
 recipe, for a run with no network).
@@ -95,6 +96,17 @@ def test_the_dump_is_of_the_pinned_image_and_the_rule_names_the_six_reads():
     names = {t["name"] for t in dump["tools"]}
     assert names == set(READS) | set(WRITES) | set(NEVER)
     assert rule() == READS
+
+
+def test_the_key_of_the_route_is_the_placeholder_and_matches_no_key_in_use():
+    # At the merge the route goes live with no working key: the hash is the
+    # placeholder, which no key has, and no other route uses it. The pull
+    # request of the key replaces it, and this test with it.
+    (key,) = route(ROUTE)["policies"]["apiKey"]["keys"]
+    assert PLACEHOLDER.match(key["keyHash"]), key["keyHash"]
+    in_use = {k["keyHash"] for x in yaml.safe_load(CONFIG.read_text())["routes"] if x["name"] != ROUTE
+              for k in x["policies"]["apiKey"]["keys"]}
+    assert key["keyHash"] not in in_use
 
 
 def test_the_route_takes_a_key_of_its_own_that_the_plugin_reads():
@@ -268,16 +280,21 @@ for name in json.loads(sys.argv[3]):
     err = (body or {}).get("error") or {}
     out[name] = ("refused: gateway" if code == 400 and err.get("message") == "unknown resource"
                  else "passed the gateway" if code == 200 and body and "result" in body else f"other: {code}")
-def read(command):
-    code, body = post(GW, "tools/call", {"name": "read-command", "arguments": {"command": command, "profile": "agent"}}, KEY)
+def call(name, arguments):
+    code, body = post(GW, "tools/call", {"name": name, "arguments": {**arguments, "profile": "agent"}}, KEY)
     result = (body or {}).get("result")
     if code != 200 or not isinstance(result, dict):
         return {"outcome": f"other: {code}", "text": ""}
     text = " ".join(c.get("text", "") for c in result.get("content", []) if isinstance(c, dict))
-    return {"outcome": "error" if result.get("isError") else "ok", "text": text[:400]}
+    return {"outcome": "error" if result.get("isError") else "ok", "text": text[:8000]}
+def read(command):
+    return call("read-command", {"command": command})
 out["read"] = read("uptime")
 out["read of another class"] = read("touch /tmp/lab-write")
 out["read of the denylist"] = read("ping -c 1 lab-distro")
+out["file list"] = call("sftp-list", {"remotePath": "/etc", "maxEntries": 500})
+out["file read"] = call("sftp-download", {"remotePath": "/etc/lab-motd"})
+out["file read, root only"] = call("sftp-download", {"remotePath": "/etc/lab-root-only"})
 out["no key"] = post(GW, "tools/list", {})[0]
 out["main key"] = post(GW, "tools/list", {}, sys.argv[7])[0]
 out["main key, cluster route"] = post(GW.replace("/main-host/", "/main-cluster/"), "tools/list", {}, sys.argv[7])[0]
@@ -442,6 +459,12 @@ def test_the_lab_route_lists_the_reads_and_refuses_the_rest(lab):
     assert out["read of another class"]["text"].startswith("POLICY_DENIED: Role \"viewer\" on host group \"prod\"")
     assert out["read of the denylist"]["outcome"] == "error"
     assert "[policy].denylist" in out["read of the denylist"]["text"]
+    # The two file reads: a list, and a file that the user may read; a file
+    # of root only fails by the file rights of the host.
+    assert out["file list"]["outcome"] == "ok" and "/etc/lab-motd" in out["file list"]["text"], out["file list"]
+    assert out["file read"]["outcome"] == "ok" and "lab host ok" in out["file read"]["text"], out["file read"]
+    assert out["file read, root only"]["outcome"] == "error", out["file read, root only"]
+    assert "root only" not in out["file read, root only"]["text"]
     for name in WRITES + NEVER:
         assert out[name] == "refused: gateway", name
     assert out["no key"] == 401

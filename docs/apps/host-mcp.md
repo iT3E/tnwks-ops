@@ -45,9 +45,7 @@ Manifests: `kubernetes/apps/ai/agents/main/host-mcp/`.
   host, each with the address of its target, port 22, the key
   `/keys/agent_ed25519` and its pinned host key. Both take
   `role = "viewer"` and `group = "prod"`: in the role bindings of the
-  server, a viewer on a prod group runs read-only commands only. The lab
-  proved each line of the proposed read list under it
-  ([host-mcp-read-list.md](host-mcp-read-list.md)). The denylist names
+  server, a viewer on a prod group runs read-only commands only. The denylist names
   `dig`, `nslookup`, `host`, `ping` and `traceroute`.
 - The token is a flag of the server, so its command line holds it. The pod
   shares no process namespace, the spec holds only the reference to the
@@ -72,21 +70,23 @@ place for the line. So `XDG_DATA_HOME` is `/audit`, an emptyDir of its own
 with a limit of 64Mi. In the lab a line was 270 to 330 bytes, so the limit
 holds about 200,000 calls; past it, the kubelet evicts the pod.
 
-**The log is lost at each new pod**, and no other container reads it. A
-volume that lasts is a later choice, for the write step. Until then the
-lasting records of a host call are:
+**The log is lost at each pod restart.** It is a file on an emptyDir, and
+no other container reads it. The approved design text says that the log
+agent ships the audit log of the server. This manifest does not do that, so
+it is an open item at the owner's gate before the apply. Until his answer,
+the records of a host call are:
 
+- **The session store of the main agent**, on its own volume: each tool
+  call with its arguments, its result and any yes of the owner.
 - **The access log of the central MCP gateway**, in Loki for 14 days (its
   pod ships its log, `logs.home.arpa/ship`): one line for each request with
   the route, the MCP method, the target, the tool, the status and the client
-  of the key. It never holds the arguments or the result, so not the command.
-- **The session store of the main agent**, on its own volume: the tool call
-  with its arguments, as each tool call of a session (Design Doc, section
-  4.2.6: "The product records the yes").
-- **Not the log of the host approval plugin.** The plugin writes a line when
-  it loads and for each call that it refuses, not for a card or a listed
-  read, and the agent container of main does not ship its log to Loki
-  (`vector.dev/exclude-containers: agent`). Its lines stay on the node only.
+  of the key. It never holds the arguments or the result.
+
+The log of the host approval plugin is not a record of a host call: the
+plugin writes a line when it loads and for each call that it refuses, and
+the agent container of main does not ship its log
+(`vector.dev/exclude-containers: agent`).
 
 The lab of the pod (all six read tools, the user, the read-only root, the
 environment and the volumes of the manifest) found three writes and no
@@ -131,7 +131,10 @@ manifest, each emptyDir with the owner and mode that the kubelet gives it,
 so a path that the server needs and the manifest does not give fails the
 test. The route lists the six reads; a read through the gateway comes back
 with no error and with the output of the command, as viewer on prod; the
-server refuses a command of another class and one of the denylist; each
+server refuses a command of another class and one of the denylist; a file
+list and a file that the user may read come back, and a file of root only
+fails by the file rights of the host; the hash of the key of the route is
+the placeholder, which matches no key in use; each
 other tool is refused at the gateway; the key of main gets a 401 on this
 route and passes on a route of main; the server refuses a call with no
 token, the proxy sets it; and no log holds the token or a key. The fake
@@ -151,7 +154,7 @@ plugin in the agent image repository), or taken from
 | The profiles: one for each target, the user of the agent | The lead, from the reads above | `config.toml` of the Secret |
 | The bearer token of the server | The lead (a key inside the cluster) | `HOST_MCP_TOKEN` of the Secret |
 | `MCP_HOST_KEY` and its hash on `main-host` | The lead (a key inside the cluster) | `agent-secret` of main, and the route |
-| The read list of the plugin | The owner's gate: nine lines for the profile `agent` are proposed in [host-mcp-read-list.md](host-mcp-read-list.md), not in the config | `readList` in the config of the agent |
+| The read list of the plugin | Empty until the owner's gate | `readList` in the config of the agent |
 | The pod at site 2 | A later step: site 2 runs no part of the AI domain yet | The cluster of site 2, with a global Service |
 
 When the Secret exists, a pull request adds `secret-host-mcp.sops.yaml`
