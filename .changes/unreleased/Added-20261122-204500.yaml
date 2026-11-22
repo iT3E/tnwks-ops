@@ -1,3 +1,0 @@
-kind: Added
-body: 'security: homelab-wsl-02 lists the settings of the Wazuh indexer, with their SOPS Secrets. Step 1 makes the users of accounts.json, and step 2 writes the retention policies of tnwks (a rollover at 30 days, a delete at 120 days, 60 days for metrics), turns raw events off, and moves the first index of each stream onto its policy. ISM runs the steps of those policies with the role tnwks-settings, so the role holds the index stats and the rollover on the stream names and the index stats and the delete on their backing indices. Step 2 counts the indices at a failed step of ISM and fails when there is one, and step 1 waits for the indexer. The Secret of the converter''s reader is in git and not listed yet.'
-time: 2026-11-22T20:45:00.000000000Z
