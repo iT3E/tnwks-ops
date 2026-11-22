@@ -1567,9 +1567,9 @@ tests:
   interval: 1m
   input_series:
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl-02",node="homelab-wsl-02-worker-1"}
-    values: 17716740096+0x30
+    values: 21732534517+0x30
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl-02",node="homelab-wsl-02-worker-2"}
-    values: 17716740096+0x30
+    values: 21732534517+0x30
   alert_rule_test:
   - alertname: NodeContainerMemoryNearLimit
     eval_time: 10m
@@ -1585,14 +1585,14 @@ tests:
         summary: homelab-wsl-02-worker-1 is above 90% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl-02
         runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#nodecontainermemorynearlimit
-        description: The node container has a memory limit of 18 GiB. The scheduler does not see it, because the
+        description: The node container has a memory limit of 22 GiB. The scheduler does not see it, because the
           node reports the memory of the whole WSL VM. Find the largest pods of the node, and move or shrink one.
           The limit is memory_nodes of talos_clusters in the Ansible inventory.
 - name: a node container at 89% of its memory limit does not alert
   interval: 1m
   input_series:
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl-02",node="homelab-wsl-02-worker-1"}
-    values: 17179869184+0x30
+    values: 21023864913+0x30
   alert_rule_test:
   - alertname: NodeContainerMemoryNearLimit
     eval_time: 20m

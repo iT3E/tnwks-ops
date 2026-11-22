@@ -396,7 +396,7 @@ plan.
 
 **What it means.** Worker 1 of homelab-wsl-02, where the parts of the
 platform run, is past 90% of the memory limit of its node container for 15
-minutes. The limit is 18 GiB (`memory_nodes` of `talos_clusters` in the
+minutes. The limit is 22 GiB (`memory_nodes` of `talos_clusters` in the
 Ansible inventory, and `CAPACITY_NODE_LIMIT_GIB` in `observability/rules.py`).
 The scheduler does not see it, because the node reports the memory of the
 whole WSL VM. This alert warns; it stops nothing.

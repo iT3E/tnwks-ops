@@ -507,7 +507,7 @@ def network_records():
 # (talos_clusters.wsl-02.memory_nodes in the Ansible inventory). No series
 # carries that limit, so it is stated again here.
 CAPACITY_NODE = "homelab-wsl-02-worker-1"
-CAPACITY_NODE_LIMIT_GIB = 18
+CAPACITY_NODE_LIMIT_GIB = 22
 # Loki there keeps a stream with the label security_stream for 90 days
 # (kubernetes/clusters/wsl-02/apps), and counts the bytes it takes in by
 # retention period, before compression. The plan for those streams, in the
@@ -2368,17 +2368,17 @@ def capacity_fixtures():
     return [
         {"name": "a node container past 90% of its memory limit alerts; another node at the same figure does not", "interval": "1m",
          "input_series": [
-             # 16.5 of 18 GiB: 92%.
-             node(CAPACITY_NODE, int(16.5 * gib)),
+             # 92% of the limit.
+             node(CAPACITY_NODE, int(0.92 * CAPACITY_NODE_LIMIT_GIB * gib)),
              # A node with no limit of its own here.
-             node("homelab-wsl-02-worker-2", int(16.5 * gib)),
+             node("homelab-wsl-02-worker-2", int(0.92 * CAPACITY_NODE_LIMIT_GIB * gib)),
          ], "alert_rule_test": [
              {"alertname": "NodeContainerMemoryNearLimit", "eval_time": "10m", "exp_alerts": []},
              {"alertname": "NodeContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": [
                  expected("NodeContainerMemoryNearLimit", node=CAPACITY_NODE)]},
          ]},
         {"name": "a node container at 89% of its memory limit does not alert", "interval": "1m",
-         "input_series": [node(CAPACITY_NODE, int(16 * gib))],
+         "input_series": [node(CAPACITY_NODE, int(0.89 * CAPACITY_NODE_LIMIT_GIB * gib))],
          "alert_rule_test": [
              {"alertname": "NodeContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
          ]},

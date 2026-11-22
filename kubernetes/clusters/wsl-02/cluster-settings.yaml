@@ -87,7 +87,7 @@ data:
   # can be created.
   SERVICE_MONITOR_ENABLED: "true"
   # The node of the security platform's pods (kubernetes/apps/security/README.md):
-  # worker 1, the node container with the 18 GiB limit.
+  # worker 1, the node container with the 22 GiB limit.
   SECURITY_NODE: "homelab-wsl-02-worker-1"
   # The bucket of the AWS trail (the output security_trail_bucket of
   # infrastructure/terraform/environments/prod/aws): the trail copy job reads it.

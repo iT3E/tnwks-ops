@@ -56,8 +56,8 @@ rolls the node containers onto `versions.yaml`, one at a time, with
 ## Node memory
 
 The control plane has a limit of 4 GiB and each worker 13 GiB
-(`talos_clusters.wsl-02`), except worker 1, which has 18 GiB
-(`memory_nodes`): 35 GiB of limits inside WSL-02's 45 GB VM (`wsl_memory`,
+(`talos_clusters.wsl-02`), except worker 1, which has 22 GiB
+(`memory_nodes`): 39 GiB of limits inside WSL-02's 45 GB VM (`wsl_memory`,
 role `windows_host_settings`). `task talos:memory:wsl-02`
 (`06-talos-node-memory.yml -e talos_target=wsl-02`) sets a node's own limit
 on its running container, with no restart. A roll keeps it. The play sets
