@@ -86,17 +86,36 @@ HelmRelease (a finalizer, an annotation) passes the last three rules.
 
 ## Substitution
 
-The class Kustomization `flux-substitution`
-(`kubernetes/apps/flux-system/substitution`) makes the reduced Secret
+The class Kustomization `flux-substitution` makes the reduced Secret
 `cluster-secrets-apps` on each site: the keys of `cluster-secrets` that the
 children outside the class use, and no other. Flux fills its template from
 `cluster-secrets`. A later change gives it to the children outside the class
 in place of the full Secret; until then no child reads it.
 
+Each site has a template of its own, because the two `cluster-secrets` do
+not hold the same keys:
+
+| Site (`kubernetes/clusters/<site>`) | Kustomization file | Template |
+| --- | --- | --- |
+| `wsl` | `kubernetes/apps/flux-system/substitution/ks.yaml` | `kubernetes/apps/flux-system/substitution/app/secret.yaml` |
+| `wsl-02` | `kubernetes/clusters/wsl-02/apps/flux-substitution-ks.yaml` | `kubernetes/clusters/wsl-02/apps/flux-substitution/secret.yaml` |
+
+Flux substitutes in strict mode: it is the default of kustomize-controller
+since v1.9, and no flag of ours sets it. A bare `${VAR}` whose key is
+missing stops the build of the whole Kustomization (`BuildFailed`, "variable
+not set (strict mode)"). A key with an empty value is not missing: the
+variable becomes an empty string. So a template names only the keys of the
+`cluster-secrets` of its site, and gets no empty default for a key that the
+site lacks: with one, a child outside the class would get an empty value
+where today its build stops.
+
 When a child outside the class starts to use a key of `cluster-secrets`, add
-the key to the template (a change of the class). The CI test fails until
-each variable of a child outside the class is a key of the template or a
-setting of the site.
+the key to the template of each site that runs the child (a change of the
+class). The CI tests fail until each variable of a template is a key of the
+`cluster-secrets` of its site (the key names of
+`kubernetes/clusters/<site>/cluster-secrets.sops.yaml`, read with no value),
+and each variable of a child outside the class is a key of the template of
+its site or a setting of the site.
 
 ## Failure and deletion
 
