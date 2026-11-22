@@ -220,8 +220,9 @@ MONITORING_ZONE_RULES = {
     # radio network, and the three devices behind it in 10.60.10.0/24 (static
     # route via the EP-R6, out VLAN 140, so the same pair): the LiteAP radio,
     # the LiteBeam radio and the airCube at the far end of the radio link. ICMP
-    # to those four addresses only, one rule each (.43, .45 and .46 are not one
-    # range): SSH and the web UIs stay VPN-only.
+    # to those four addresses, one rule each (.43, .45 and .46 are not one
+    # range). snmp-exporter reads the two radios over SNMP (udp/161), not the
+    # airCube or the EP-R6. Everything else (SSH, the web UIs) stays VPN-only.
     ("unifi-frontend-910", "UISP-140"): [
         {
             "description": "smokeping (WSL cluster) pings of the EP-R6",
@@ -246,6 +247,20 @@ MONITORING_ZONE_RULES = {
             "protocol": "icmp",
             "src_address_list": "monitoring",
             "dst_address": "10.60.10.46",
+        },
+        {
+            "description": "snmp-exporter (WSL cluster) reads the LiteAP radio",
+            "protocol": "udp",
+            "dst_port": "161",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.45",
+        },
+        {
+            "description": "snmp-exporter (WSL cluster) reads the LiteBeam radio",
+            "protocol": "udp",
+            "dst_port": "161",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.43",
         },
     ],
 }

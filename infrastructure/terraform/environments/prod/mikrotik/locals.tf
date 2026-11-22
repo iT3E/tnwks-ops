@@ -19,7 +19,7 @@
 ##   Address lists        5 (11 members)
 ##   Port lists           1
 ##   Zone-pair chains     20
-##   Firewall accepts     18 (expanded from VyOS tcp_udp / port-limit splits)
+##   Firewall accepts     20 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
@@ -533,6 +533,20 @@ locals {
           src_address_list = "monitoring"
           dst_address      = "10.60.10.46"
           protocol         = "icmp"
+        },
+        {
+          comment          = "snmp-exporter (WSL cluster) reads the LiteAP radio"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.45"
+          protocol         = "udp"
+          dst_port         = "161"
+        },
+        {
+          comment          = "snmp-exporter (WSL cluster) reads the LiteBeam radio"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.43"
+          protocol         = "udp"
+          dst_port         = "161"
         },
       ]
     }
