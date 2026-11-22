@@ -10,7 +10,14 @@ own section here (`runbook_url`).
 - **Read only, unless the step says "owner approval".** The read-only steps
   are `get`, `describe`, `logs`, a Loki or Prometheus query in Grafana, a
   look at the board, and a read of git. Each other step waits for a yes of
-  the owner at that time.
+  the owner at that time. A read on a Windows host (a service, a scheduled
+  task, an agent, a log or a file there) is not in that list, so it waits
+  for the owner too.
+- **The cluster of each read.** The `kubectl` reads in the namespace
+  `security` are for the cluster of site 2, homelab-wsl-02, where the parts
+  of the platform run. Trivy Operator runs on both clusters: for it, read
+  the cluster in the label `k8s_cluster` of the alert, homelab-wsl or
+  homelab-wsl-02.
 - **A fix goes through git.** Change the file in a pull request, and Flux
   applies the merge. Don't edit, patch or scale an object on the cluster by
   hand: Flux puts it back at its next reconcile, and git no longer says what
@@ -32,7 +39,9 @@ own section here (`runbook_url`).
   `{namespace="security", app="security-converter"}` (the converter),
   `app="prowler"` (the Prowler runs), `app="api-checks"`, `app="trivy-operator"`
   and `app="trivy-scan-job"`, `app="aws-credentials"` (the refresher) and
-  `app="trail-copy"`. The Vector aggregator of each cluster is
+  `app="trail-copy"`. Trivy Operator also runs on homelab-wsl, and its logs
+  there (`app="trivy-operator"`, `app="trivy-scan-job"`) are in the Loki of
+  homelab-wsl. The Vector aggregator of each cluster is
   `{namespace="monitoring", app="vector-aggregator"}`. The security streams
   have the label `security_stream` (`k8s-audit`, `routeros`, `findings`;
   `kubernetes/apps/monitoring/vector/README.md`, "The security streams").
@@ -79,7 +88,8 @@ the systems behind that site.
 
    For Prowler, the log of the run in Loki
    (`kubernetes/apps/security/prowler/README.md`, "Read a run"). For the
-   host check and Wazuh, the task or the agent on the host. For a stream,
+   host check and Wazuh, the task or the agent on the host (owner
+   approval: a read on a Windows host). For a stream,
    the newest line of its `security_stream` in Loki.
 3. The log of the converter, `{namespace="security", app="security-converter"}`.
    It serves the time of each source from Loki and from the files of
@@ -119,9 +129,10 @@ with the same `behind_site`, and `PeerSiteUnreachable` of that site
    during the window").
 
 **The fix.** If the site is away, its power or its link comes back first.
-If the site is up, read the service `windows_exporter` on its host, and the
-firewall rule `windows_exporter (Prometheus)`, which admits the address of
-site 2 (`windows_monitoring_remote_extra` in the host_vars of that host). A
+If the site is up, the owner reads the service `windows_exporter` on its
+host, and the firewall rule `windows_exporter (Prometheus)`, which admits
+the address of site 2 (`windows_monitoring_remote_extra` in the host_vars
+of that host); a read on the host is owner approval. A
 change of either is an apply of the Windows play (owner approval,
 [`docs/wsl/windows-ansible.md`](../wsl/windows-ansible.md)).
 
@@ -437,8 +448,12 @@ of WSL does not give back space that the distro freed until it is
 compacted. On a host in the phase `done` of the move, the compaction is
 the task of SYSTEM `tnwks-vhdx-compact-system`, run on demand
 ([`docs/wsl/windows-ansible.md`](../wsl/windows-ansible.md), "The start
-tasks of the account that owns the distro"). It stops the distro for its
-run, so it is owner approval.
+tasks of the account that owns the distro"). Before the phase `done`, it
+is the older task `tnwks-vhdx-compact` of the same role
+(`windows_wsl_maintenance`). Each runs `wsl --shutdown`, which ends each
+running distribution of the account that owns the distro and its WSL VM,
+so the cluster of site 2 and the platform stop for the run, not only the
+distro. The compaction is owner approval.
 
 **When it ends.** When the drive has 100 GB free again.
 
