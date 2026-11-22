@@ -713,12 +713,12 @@ def test_only_windows_host_settings_writes_the_wslconfig_of_the_new_account_once
     assert write["when"] == "wsl_move_phase != 'done'"
     settings = yaml.safe_load((ANSIBLE / "roles/windows_host_settings/defaults/main.yml").read_text())
     assert settings["wslconfig_path"] == "C:\\Users\\{{ windows_desktop_user }}\\.wslconfig"
-    site2 = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
-    assert site2["wslconfig_write"] is True
-    # Site 1 has a cluster: it set the write only for the first apply of the phase done, whose file was the copy
-    # of the move with its own comments, and keeps the default (check only) after that apply.
-    site1 = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI/main.yml").read_text())
-    assert site1["wsl_move_done"] is True and "wslconfig_write" not in site1
+    # Both sites run a cluster: each keeps the default (check only). A write of .wslconfig takes effect only at
+    # the next wsl --shutdown, which stops the cluster, so it is an apply by hand with that stop planned.
+    assert settings["wslconfig_write"] is False
+    for host in ("WSL-02", "DESKTOP-HKE05KI"):
+        values = yaml.safe_load((ANSIBLE / f"inventory/host_vars/{host}/main.yml").read_text())
+        assert values["wsl_move_done"] is True and "wslconfig_write" not in values, host
 
 
 @needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
