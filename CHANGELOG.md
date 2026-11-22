@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.260.3 - 2026-11-22
+
+### Fixed
+
+* Flux admission: classlist.py and the render of the test harness take the API group of a document exactly (the part of apiVersion before the "/"), through one helper, in place of a prefix or substring match. The class lists, the policy and the cluster lists stay the same; a test checks the helper with groups that a prefix or substring match would take
+
 ## v2.260.2 - 2026-11-21
 
 ### Fixed

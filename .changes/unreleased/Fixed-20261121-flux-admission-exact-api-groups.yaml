@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Flux admission: classlist.py and the render of the test harness take the API group of a document exactly (the part of apiVersion before the "/"), through one helper, in place of a prefix or substring match. The class lists, the policy and the cluster lists stay the same; a test checks the helper with groups that a prefix or substring match would take'
-time: 2026-11-21T22:30:00.000000+00:00
