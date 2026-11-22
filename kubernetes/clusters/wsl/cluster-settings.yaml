@@ -136,6 +136,9 @@ data:
 
   # Windows host (WSL gateway) — windows_exporter target
   WINDOWS_HOST_IP: "172.26.80.1"
+  # The address at which a pod of site 1 reaches the SSH server of the distro (the
+  # gateway of the Docker network of the nodes): the host server of main dials it.
+  HOST_MCP_DISTRO_ADDR: "10.5.0.1"
   # The Windows computer name (the `instance` of its metrics), and the other
   # site's Windows host, scraped over the LAN (kube-prometheus-stack).
   WINDOWS_HOST_NAME: "DESKTOP-HKE05KI"

@@ -3,8 +3,11 @@
 
 The static tests read the files:
 
-- The Flux Kustomization is not listed until the values of its Secret
-  exist.
+- The Flux Kustomization is not listed until the owner's apply of the
+  agent user and his gates. The Secret is in git with ciphertext only, the
+  three keys of the server and the recipients of the other Secrets of the
+  namespace. The address of the SSH server of the distro is set in the
+  cluster settings of site 1.
 - The pod runs the image of ours by digest with the flags of the design,
   with no shared process namespace. The token, the config and the SSH key
   come from the Secret by reference only. The proxy is the one port of the
@@ -32,6 +35,7 @@ recipe, for a run with no network).
 """
 
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -51,6 +55,8 @@ ROOT = Path(__file__).resolve().parents[2]
 MAIN = ROOT / "kubernetes/apps/ai/agents/main"
 APP = MAIN / "host-mcp/app"
 DEPLOYMENT = APP / "deployment.yaml"
+SECRET = APP / "secret-host-mcp.sops.yaml"
+SETTINGS = ROOT / "kubernetes/clusters/wsl/cluster-settings.yaml"
 POLICY = APP / "networkpolicy.yaml"
 TEMPLATE = APP / "proxy/default.conf.template"
 AGENT_CONFIG = MAIN / "agent/config/openclaw.json"
@@ -84,10 +90,55 @@ def plugin() -> dict:
     return json.loads(AGENT_CONFIG.read_text())["plugins"]["entries"]["host-approval"]["config"]
 
 
-def test_the_server_is_not_applied_until_its_secret_exists():
+def test_the_server_is_not_applied_until_the_owner_s_gates():
     k = yaml.safe_load((MAIN / "kustomization.yaml").read_text())
     assert "./host-mcp/ks.yaml" not in k["resources"]
-    assert not (APP / "secret-host-mcp.sops.yaml").exists()
+    assert "host-mcp" not in " ".join(k["resources"])
+
+
+def sops_secret(path: Path) -> dict:
+    (d,) = docs(path)
+    return d
+
+
+def test_the_secret_holds_ciphertext_only_for_the_three_keys():
+    # No value is printed in a failure message.
+    secret = sops_secret(SECRET)
+    assert (secret["kind"], secret["metadata"]["name"], secret["metadata"]["namespace"]) == (
+        "Secret", "host-mcp-secret", "agents-main")
+    assert "data" not in secret
+    assert sorted(secret["stringData"]) == sorted(["config.toml", "agent_ed25519", "HOST_MCP_TOKEN"])
+    plain = [k for k, v in secret["stringData"].items()
+             if not re.fullmatch(r"ENC\[AES256_GCM,data:[A-Za-z0-9+/=]+,iv:[^\]]+\]", str(v))]
+    assert plain == [], f"keys with no ciphertext: {plain}"
+    assert secret["sops"]["encrypted_regex"] == "^(data|stringData)$"
+    # The server reads these keys from it, and the app lists it.
+    assert "./secret-host-mcp.sops.yaml" in yaml.safe_load((APP / "kustomization.yaml").read_text())["resources"]
+
+
+def test_the_secret_has_the_recipients_of_the_other_secrets_of_the_namespace():
+    def recipients(path):
+        return sorted(a["recipient"] for a in sops_secret(path)["sops"]["age"])
+    others = [p for p in sorted(MAIN.glob("*/app/*.sops.yaml")) if p != SECRET]
+    assert others
+    mine = recipients(SECRET)
+    assert mine
+    differ = [str(p.relative_to(MAIN)) for p in others if recipients(p) != mine]
+    assert differ == [], f"other recipients than these files: {differ}"
+
+
+def test_the_address_of_the_distro_is_set_at_site_1():
+    # No value is printed in a failure message: each assert is on a bool.
+    data = yaml.safe_load(SETTINGS.read_text())["data"]
+    assert "HOST_MCP_DISTRO_ADDR" in data
+    value = str(data["HOST_MCP_DISTRO_ADDR"])
+    try:
+        is_address = ipaddress.ip_address(value).version == 4
+    except ValueError:
+        is_address = False
+    assert is_address is True, "HOST_MCP_DISTRO_ADDR is not an IPv4 address"
+    is_windows = value == str(data["WINDOWS_HOST_IP"])
+    assert is_windows is False, "HOST_MCP_DISTRO_ADDR is the address of the Windows host"
 
 
 def test_the_dump_is_of_the_pinned_image_and_the_rule_names_the_six_reads():
