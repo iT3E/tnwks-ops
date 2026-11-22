@@ -96,11 +96,6 @@ wsl_move_done: true
 # account out of windows_sshd_allow_users in secrets.sops.yml. Its apply is
 # the point of no return of the move.
 wsl_move_present_removed: true
-# The done switch: the .wslconfig of the new account is the copy that the
-# move wrote (the keys of the present account, with its own comments), so
-# the first apply of the phase done writes the template, with the same
-# values. WSL reads it at its next start. Drop this after that apply.
-wslconfig_write: true
 # The disk file of the distro is on E:, and the move is a rename in one
 # volume, never a copy: the folder of the procedure and the folder of the
 # moved file are on E: too. Here so that the compaction and the host check

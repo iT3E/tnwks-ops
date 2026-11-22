@@ -34,7 +34,7 @@ any time of day (the last rule in `.github/renovate/autoMerge.json5`,
 | Repo | Language | Image | Pinned here as |
 | --- | --- | --- | --- |
 | `iT3E/tnwks-packing-api` | Go | `ghcr.io/it3e/tnwks-packing-api` | `:<version>@sha256` (`kubernetes/apps/production/packing-api`) |
-| the storefront API | Go | `ghcr.io/it3e/<repo>` | `:<version>@sha256` (`kubernetes/apps/production/*-things-api`) |
+| the storefront API | Go | `ghcr.io/it3e/<repo>` | `:<version>@sha256` (`kubernetes/apps/production/things-api`) |
 | `iT3E/tnwks-finance-sync` | Python | `ghcr.io/it3e/tnwks-finance-sync` | `:<version>@sha256` (`kubernetes/apps/production/finance-sync`) |
 | `iT3E/tnwks-transcriber` | Python | `ghcr.io/it3e/tnwks-transcriber` | `:<version>@sha256` (`kubernetes/apps/production/transcriber`) |
 | `iT3E/tnwks-transcriber-web` | Node (Angular) | `ghcr.io/it3e/tnwks-transcriber-web` | `:<version>@sha256` (`kubernetes/apps/production/transcriber`) |

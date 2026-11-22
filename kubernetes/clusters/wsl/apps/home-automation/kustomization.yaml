@@ -13,5 +13,6 @@ resources:
   - ../../../../apps/home-automation/mosquitto/shared-vip-ks.yaml
   - ../../../../apps/home-automation/peloton-to-garmin/ks.yaml
   # zwave-js-ui: WSL-specific Flux Kustomization with patches to pin to
-  # homelab-wsl-worker-2 and re-point the USB hostPath to /dev/ttyACM0.
+  # homelab-wsl-worker-2 and mount the folder /hostdev (the distro's /dev)
+  # in place of the by-id node; the application opens /hostdev/ttyACM0.
   - ./zwave-js-ui-ks.yaml
