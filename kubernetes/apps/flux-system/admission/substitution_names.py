@@ -4,8 +4,9 @@ the class, before they substitute from the reduced Secret
 
     python3 kubernetes/apps/flux-system/admission/substitution_names.py
 
-The owner runs it by hand, with the key that decrypts the files (sops on the
-PATH, as bin/sops gives it in the repo). For each site, it decrypts each
+The owner or the lead runs it by hand, on the workstation, never in CI,
+with the key that decrypts the files (sops on the PATH, as bin/sops gives
+it in the repo). For each site, it decrypts each
 encrypted file of the build of each child outside the class into the memory
 of this process, finds each variable of Flux that needs a definition, and
 prints only the path of the file and the names that are neither keys of the
@@ -19,7 +20,7 @@ that turns substitution off, ${NAME} and each form that reads the value need
 a definition, a form with a default does not, and an escape is no variable.
 A form that Flux can not read stops the build too: it prints as
 <a form that Flux can not read>, with no text of the file. A decrypted text
-that is not YAML prints its path only. It prints, writes and logs no value:
+that is not YAML, or is nested too deep to read, prints its path only. It prints, writes and logs no value:
 the decrypted text stays in a variable of this process, and the error output
 of sops and of the parser is dropped.
 
@@ -74,11 +75,12 @@ def names(text: str) -> set[str]:
     none of it shows."""
     try:
         docs = [d for d in yaml.safe_load_all(text) if isinstance(d, dict)]
-    except yaml.YAMLError:
-        # The error of the parser quotes the text, so it is dropped.
+        found = [name for doc in docs if not classlist.substitution_off(doc)
+                 for name in classlist.flux_variables(classlist.flux_text(doc))]
+    except (yaml.YAMLError, RecursionError):
+        # The error of the parser quotes the text, so it is dropped; a text
+        # nested too deep stops the parser or the dump in the same way.
         raise Unparsed() from None
-    found = (name for doc in docs if not classlist.substitution_off(doc)
-             for name in classlist.flux_variables(classlist.flux_text(doc)))
     return {classlist.UNREADABLE + ">" if name.startswith(classlist.UNREADABLE) else name for name in found}
 
 

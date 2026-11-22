@@ -65,6 +65,16 @@ build. Another form that could change a `spec.path` (a JSON patch of the
 spec of a Kustomization, or a patch of a `spec.path` with a target) stops
 `classlist.py`.
 
+The walk reads this repository only. A Kustomization that it reaches with
+a `sourceRef` other than the GitRepository `flux-system` of the namespace
+`flux-system` stops it, with the name of that Kustomization: the objects of
+another source are not in git, so the lists can not hold them. A
+`spec.path` (or a component) that is not in the repository stops it too,
+as a build of nothing would pass with no object. A file with such a child
+that no cluster lists is not reached, so it does not stop the walk. To
+apply the manifests of another project, vendor them into a folder of this
+repository; to trust another source is a change of the design.
+
 ## The rules
 
 A child outside the class may not:

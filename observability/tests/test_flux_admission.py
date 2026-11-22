@@ -102,6 +102,69 @@ def test_the_walk_reads_one_form_of_a_patch_of_a_path(tmp_path, monkeypatch, pat
     assert web["spec"]["path"] == want
 
 
+SOURCE_TREE = {
+    "kubernetes/clusters/lab/kustomization.yaml": "resources: [./apps.yaml]\n",
+    "kubernetes/clusters/lab/apps.yaml": (
+        "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n"
+        "metadata: {name: cluster-apps, namespace: flux-system}\n"
+        "spec: {path: ./kubernetes/clusters/lab/apps, sourceRef: {kind: GitRepository, name: flux-system}}\n"),
+    "kubernetes/clusters/lab/apps/kustomization.yaml": "resources: [./web.yaml]\n",
+    "kubernetes/apps/web/app/configmap.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: web}\n",
+    "kubernetes/apps/web/component/configmap.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: extra}\n",
+    # A file with a child of another source that no cluster lists.
+    "kubernetes/apps/other/ks.yaml": (
+        "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n"
+        "metadata: {name: other, namespace: flux-system}\n"
+        "spec: {path: ./vendor, sourceRef: {kind: GitRepository, name: vendor, namespace: security}}\n"),
+}
+OWN = {"kind": "GitRepository", "name": "flux-system"}
+
+
+@pytest.mark.parametrize(("namespace", "spec", "error"), [
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": OWN}, None),
+    ("flux-system", {"path": "kubernetes/apps/web/app/", "sourceRef": {**OWN, "namespace": "flux-system"}}, None),
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": OWN, "components": ["../component"]}, None),
+    # Another source: its objects are not in this repository.
+    ("flux-system", {"path": "./vendor", "sourceRef": {"kind": "GitRepository", "name": "vendor",
+                                                      "namespace": "security"}},
+     "flux-system/web: the source GitRepository security/vendor is not the GitRepository flux-system/flux-system"),
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": {**OWN, "namespace": "security"}},
+     "flux-system/web: the source GitRepository security/flux-system"),
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": {"kind": "OCIRepository", "name": "flux-system"}},
+     "flux-system/web: the source OCIRepository flux-system/flux-system"),
+    ("flux-system", {"path": "./kubernetes/apps/web/app"}, "flux-system/web: the source None flux-system/None"),
+    # The namespace of a sourceRef is the one of the Kustomization by default.
+    ("security", {"path": "./kubernetes/apps/web/app", "sourceRef": OWN},
+     "security/web: the source GitRepository security/flux-system"),
+    # A path that is not in the repository: a build of nothing.
+    ("flux-system", {"path": "./kubernetes/apps/web/missing", "sourceRef": OWN},
+     "flux-system/web: the path kubernetes/apps/web/missing is not in the repository"),
+    ("flux-system", {"path": "../outside", "sourceRef": OWN},
+     "flux-system/web: the path ../outside is not in the repository"),
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": OWN, "components": ["../none"]},
+     "flux-system/web: the path kubernetes/apps/web/app/../none is not in the repository"),
+])
+def test_the_walk_stops_at_a_child_that_it_can_not_read_from_this_repository(
+        tmp_path, monkeypatch, namespace, spec, error):
+    root = tmp_path / "repo"
+    (tmp_path / "outside").mkdir()
+    web = {"apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+           "metadata": {"name": "web", "namespace": namespace}, "spec": spec}
+    for name, text in {**SOURCE_TREE, "kubernetes/clusters/lab/apps/web.yaml": yaml.safe_dump(web)}.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    monkeypatch.setattr(classlist, "ROOT", root)
+    if error:
+        with pytest.raises(classlist.UnreadKustomization, match=re.escape(error)):
+            classlist.walk("lab")
+        return
+    children = classlist.walk("lab")
+    # The unlisted file of another source is not reached, so it does not stop the walk.
+    assert sorted(children) == ["flux-system/cluster-apps", "flux-system/web"]
+    want = ["web", "extra"] if spec.get("components") else ["web"]
+    assert [d["metadata"]["name"] for d in children["flux-system/web"].build.docs] == want
+
+
 def test_only_the_parents_of_the_apps_read_files_outside_the_class():
     # A child of the class whose build reads a file outside the class would
     # apply that file with the rights of the class. The two parents of the
