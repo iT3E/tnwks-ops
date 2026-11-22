@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.292.1 - 2026-11-22
+
+### Fixed
+
+* ansible: invoke-elevated.sh fails, with one line that says why, when the elevated process does not start or gives no exit code, so `task wsl-host:sshd` and `sshd-check` fail and do not end green on a script that did not run
+
 ## v2.292.0 - 2026-11-22
 
 ### Changed

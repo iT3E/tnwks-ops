@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'ansible: invoke-elevated.sh fails, with one line that says why, when the elevated process does not start or gives no exit code, so `task wsl-host:sshd` and `sshd-check` fail and do not end green on a script that did not run'
-time: 2026-11-22T12:00:00.000000000Z
