@@ -21,7 +21,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wazuh-accounts-6792a82811
+  name: wazuh-accounts-346089b3b5
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
@@ -57,6 +57,7 @@ spec:
             - --accounts=/app/accounts.json
             - --user=/secrets/user
             - --hashes=/secrets/hashes
+            - --login-wait=300
           env:
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"

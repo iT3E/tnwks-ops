@@ -482,11 +482,12 @@ of tnwks as a result series, and adds this file to the table of
   "indices": 9,
   "off_policy": 0,
   "no_policy": 0,
+  "failed": 0,
   "streams": {
-    "events": { "indices": 4, "off_policy": 0, "no_policy": 0 },
-    "findings": { "indices": 2, "off_policy": 0, "no_policy": 0 },
-    "raw-events": { "indices": 1, "off_policy": 0, "no_policy": 0 },
-    "metrics": { "indices": 2, "off_policy": 0, "no_policy": 0 }
+    "events": { "indices": 4, "off_policy": 0, "no_policy": 0, "failed": 0 },
+    "findings": { "indices": 2, "off_policy": 0, "no_policy": 0, "failed": 0 },
+    "raw-events": { "indices": 1, "off_policy": 0, "no_policy": 0, "failed": 0 },
+    "metrics": { "indices": 2, "off_policy": 0, "no_policy": 0, "failed": 0 }
   },
   "documents": { "wazuh-events-raw-v5": 0, "wazuh-active-responses": 0 }
 }
@@ -501,7 +502,8 @@ of tnwks as a result series, and adds this file to the table of
 | `indices` | The indices of the patterns of the four policies of tnwks |
 | `off_policy` | Of those, the indices that are not on the policy of tnwks of their stream, with those that have no policy. Above 0, the age of their data is not the age of git |
 | `no_policy` | Of those, the indices that have no policy at all |
-| `streams` | The same three counts for each stream |
+| `failed` | Of those, the indices whose policy stopped at a failed step of ISM: a step that failed, an action whose retries are used up, or a failed policy. Above 0, ISM does not apply the ages of git to them, and the run failed |
+| `streams` | The same four counts for each stream |
 | `documents` | The count of documents in each stream that must hold none, from the index stats |
 
 The file holds counts and stream names only: no index content, no secret.
