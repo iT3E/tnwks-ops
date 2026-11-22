@@ -24,6 +24,11 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
+      # A finished Job goes after 26 hours, also a failed one. That is a day
+      # and room for the next run to end, so the alert and the AI board see
+      # a failure until a newer run ends, and KubeJobFailed then clears by
+      # itself (docs/apps/agent-platform.md, "A failed Job").
+      ttlSecondsAfterFinished: 93600
       # The worst case, in seconds: the direct calls 130 (thirteen, 10
       # each), then as the sandbox probe less its pod reads (1350). That is
       # 1480.
@@ -210,6 +215,11 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
+      # A finished Job goes after 26 hours, also a failed one. That is a day
+      # and room for the next run to end, so the alert and the AI board see
+      # a failure until a newer run ends, and KubeJobFailed then clears by
+      # itself (docs/apps/agent-platform.md, "A failed Job").
+      ttlSecondsAfterFinished: 93600
       activeDeadlineSeconds: 300
       template:
         metadata:

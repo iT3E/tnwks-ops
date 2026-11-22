@@ -100,7 +100,7 @@ run passed since: the providers job, the sweep, or a daily check
 `platform-check-firefly-probe`, `platform-check-firefly-dns` and
 `platform-check-mcp-gateway-probe`). It resolves at the next
 good run. The chart rule `KubeJobFailed` fires for the same Job and keeps
-firing while the failed Job is kept, so Alertmanager drops it for these Jobs
+firing while the failed Job is kept (26 hours after it ended), so Alertmanager drops it for these Jobs
 and for the run jobs; it stays in the Alertmanager UI. Read this alert for
 the state of now.
 
@@ -2756,7 +2756,7 @@ stopped run and clears 2 hours after the start of its Job. The chart rule
 (7 days). In case B, if the sweep removed the record through the API, its
 Job fails: `AgentPlatformCronJobFailed` fires and clears at the next good
 sweep, and `KubeJobFailed` fires for the failed sweep Job for as long as it
-is kept (the CronJob keeps the last 3 failed Jobs).
+is kept (26 hours after it ended).
 
 **Rollback.** Nothing to roll back: the drill makes runs and deletes them.
 If a sandbox stays past 80 minutes, the alert fires and its section above

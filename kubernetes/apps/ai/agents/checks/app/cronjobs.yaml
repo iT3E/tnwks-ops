@@ -16,6 +16,11 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
+      # A finished Job goes after 26 hours, also a failed one. That is a day
+      # and room for the next run to end, so the alert and the AI board see
+      # a failure until a newer run ends, and KubeJobFailed then clears by
+      # itself (docs/apps/agent-platform.md, "A failed Job").
+      ttlSecondsAfterFinished: 93600
       activeDeadlineSeconds: 600
       template:
         metadata:
@@ -142,6 +147,11 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
+      # A finished Job goes after 26 hours, also a failed one. That is a day
+      # and room for the next run to end, so the alert and the AI board see
+      # a failure until a newer run ends, and KubeJobFailed then clears by
+      # itself (docs/apps/agent-platform.md, "A failed Job").
+      ttlSecondsAfterFinished: 93600
       # The worst case, in seconds (scripts/platform_checks.py): the CLI
       # fetch 120, the gateway add 120, the leftover removal 165 (a gateway
       # delete 60, then a read and a delete 30, a wait 60 and its last read

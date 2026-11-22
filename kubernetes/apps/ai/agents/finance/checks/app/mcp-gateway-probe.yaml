@@ -40,6 +40,11 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
+      # A finished Job goes after 26 hours, also a failed one. That is a day
+      # and room for the next run to end, so the alert and the AI board see
+      # a failure until a newer run ends, and KubeJobFailed then clears by
+      # itself (docs/apps/agent-platform.md, "A failed Job").
+      ttlSecondsAfterFinished: 93600
       # The worst case, in seconds: the straight connection 5, then ten
       # MCP requests of 30 each (300). That is 305.
       activeDeadlineSeconds: 600
