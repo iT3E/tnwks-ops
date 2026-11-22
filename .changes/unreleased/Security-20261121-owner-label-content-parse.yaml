@@ -1,3 +1,0 @@
-kind: Security
-body: 'Owner label: the content rule of a pull request of the App of the main agent parses each file under kubernetes/ as YAML, so anchors, tags and folded scalars read as Flux reads them; it also holds encrypted content whatever the name of its file, a remote source of a kustomization, a file that does not parse, and a repeated key. The parser is PyYAML, pinned by hash; with no parser each such file holds the pull request'
-time: 2026-11-21T21:00:00.000000000Z

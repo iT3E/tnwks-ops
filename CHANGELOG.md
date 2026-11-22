@@ -3,6 +3,14 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.279.1 - 2026-11-22
+
+### Security
+
+* Owner label: a pull request of the App of the main agent outside the "ask first" class also waits for owner/approved when its content reaches past the class: a link or a submodule, a file under kubernetes/ that holds a Flux object or an admission object, or a path with ".." that leaves the folder of its file. A file it can not read holds the pull request too
+* Owner label: until the Flux children outside the "ask first" class decrypt with a key of their own, a pull request of the App of the main agent that adds, changes or removes an encrypted file (".sops." in its name) waits for owner/approved
+* Owner label: the content rule of a pull request of the App of the main agent parses each file under kubernetes/ as YAML, so anchors, tags and folded scalars read as Flux reads them; it also holds encrypted content whatever the name of its file, a remote source of a kustomization, a file that does not parse, and a repeated key. The parser is PyYAML, pinned by hash; with no parser each such file holds the pull request
+
 ## v2.279.0 - 2026-11-22
 
 ### Added
