@@ -8,9 +8,10 @@
 # A normal local user: a member of Users only, in no admin group. Its
 # password is random, made here and kept nowhere: the host server signs in
 # with its key. It may not log on at the keyboard or by Remote Desktop, and
-# it has no tile on the sign-in screen. Its key holds only for the address
-# from which the cluster connects (the address of the distro: the cluster is
-# NAT behind it), with no forwarding and no terminal, in a file that
+# it has no tile on the sign-in screen. Its key holds only for the source
+# network of the cluster as Windows sees it: the WSL network of the host (the
+# distro and the Windows host itself), because the cluster is NAT behind the
+# distro. No forwarding and no terminal, in a file that
 # only SYSTEM and the Administrators can change. Role windows_sshd points
 # the Match block of the user at that file, so a key file in the profile of
 # the user counts for nothing.

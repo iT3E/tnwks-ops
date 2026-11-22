@@ -5,8 +5,10 @@ The static tests read the two roles: each task that can change a host runs in ch
 unless host_mcp_agent_apply is true, and each is in the list of the drift assert, which
 fails a run that finds a difference and has no flag.
 
-The container test runs the role of the distro with Ansible itself, as root in a Debian
-container with no network, against the states that a CI apply from main can meet:
+The container test runs the role of the distro with Ansible itself in a Debian container
+with no network. As on the distro, Ansible connects as an admin that is not root, becomes
+root with a password, and has no ACL tool. It meets the states that a CI apply from main
+can meet:
 
 - the switch off: the role is skipped, and nothing changes;
 - the switch on, the user missing, no flag: the run fails with the drift message, and
@@ -17,7 +19,9 @@ container with no network, against the states that a CI apply from main can meet
 - the switch on, the user present and equal: the checks pass with changed=0, in an apply
   and a check run with no flag, and in a check run with the flag;
 - the switch on, the key file different, no flag: the run fails with the drift message,
-  and the file stays as it was.
+  and the file stays as it was;
+- a drop to the account that fails, or that stays root: the run stops at the check of
+  the drop, so a read that did not run as the account can not pass as "read none".
 
 The SSH server and sudo of the container are stubs that answer as the distro does (key
 sign-in, no sudo rule). The test needs Docker and the uv image: without Docker it is
@@ -30,6 +34,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import uuid
@@ -119,6 +124,25 @@ def test_the_flag_is_off_in_git_and_a_check_run_is_check_only():
     assert found == [], f"files that define the flag of the guard: {found}"
 
 
+def test_no_task_becomes_the_account_and_each_read_as_it_drops_with_runuser():
+    """A become_user of an account that is not root makes Ansible share its
+    module files with it, which fails on the distro: the connection user is
+    an admin that is not root and no ACL tool is installed. So no task of the
+    two roles becomes another user, and the reads as the account run as root
+    and drop with runuser, after a check that the drop gives the account."""
+    for role in (WINDOWS, DISTRO):
+        for task in flat(load(role / "tasks/main.yml")):
+            assert "become_user" not in task and "ansible_become_user" not in (task.get("vars") or {}), task["name"]
+    tasks = {t["name"]: t for t in flat(load(DISTRO / "tasks/main.yml"))}
+    names = list(tasks)
+    who = tasks["The reads below run as the account"]["ansible.builtin.command"]["argv"]
+    read = tasks["Try a read of each private path as the account, and of one control"]
+    assert who == ["runuser", "-u", "{{ host_mcp_agent_user }}", "--", "id", "-un"]
+    assert read["ansible.builtin.command"]["argv"][:4] == ["runuser", "-u", "{{ host_mcp_agent_user }}", "--"]
+    assert read["loop"].startswith("{{ [host_mcp_agent_read_control] + ")
+    assert names.index("The reads below run as the account") < names.index(read["name"])
+
+
 def test_the_comment_of_the_distro_account_is_one_that_useradd_takes():
     # useradd refuses a ":" or a newline in the comment field; the container test found it.
     comment = load(DISTRO / "defaults/main.yml")["host_mcp_agent_description"]
@@ -157,6 +181,13 @@ EOF
 chmod 755 /usr/sbin/sshd /usr/local/bin/sudo
 # The account of the distro, its home closed to others as on the distro (mode 0750).
 useradd -m adult1 && chmod 750 /home/adult1
+# The connection user: an admin that is not root and becomes root with a
+# password, as on the distro. Its home is not under /home, so that its
+# Ansible files are not in the state that the test compares. No ACL tool is
+# installed, as on the distro.
+useradd -m -d /var/lib/operator1 operator1
+echo "root:$LAB_BECOME" | chpasswd
+if command -v setfacl; then exit 1; fi
 """
 # What the run must not change, when it changes nothing: the accounts and the homes.
 STATE = "cat /etc/passwd /etc/shadow /etc/group; find /home -printf '%p %u %g %m %s\\n' | sort; " \
@@ -177,12 +208,16 @@ def lab(tmp_path_factory):
     work = tmp_path_factory.mktemp("guard")
     entry = next(r for p in load(ANSIBLE / "playbooks/wsl-distro.yml") for r in p["roles"]
                  if isinstance(r, dict) and r.get("role") == "wsl_host_mcp_user")
-    play = [{"name": "lab", "hosts": "lab", "gather_facts": False,
+    (distro,) = load(ANSIBLE / "playbooks/wsl-distro.yml")
+    play = [{"name": "lab", "hosts": "lab", "gather_facts": False, "become": distro["become"],
              "roles": [{"role": entry["role"], "when": entry["when"]}]}]
     (work / "play.yml").write_text(yaml.safe_dump(play, sort_keys=False))
+    become = secrets.token_hex(16)
     inventory = {"all": {"hosts": {"lab": {"ansible_connection": "local",
                                            "ansible_python_interpreter": "{{ ansible_playbook_python }}",
-                                           "ansible_become_method": "su"}}}}
+                                           "ansible_become_method": "su",
+                                           # Made for this run; the lab has no other use for it.
+                                           "ansible_become_password": become}}}}
     (work / "hosts.yml").write_text(yaml.safe_dump(inventory))
     (work / "ansible.cfg").write_text("[defaults]\nretry_files_enabled = false\nnocolor = true\n"
                                       "roles_path = /w/infrastructure/ansible/roles\n")
@@ -200,13 +235,14 @@ def lab(tmp_path_factory):
     subprocess.run([tool, "run", "-d", "--name", name, *network, *options, UV_IMAGE, "sleep", "infinity"],
                    check=True, capture_output=True, text=True, timeout=600)
     try:
-        def sh(script: str, check: bool = True) -> subprocess.CompletedProcess:
-            result = subprocess.run([tool, "exec", name, "sh", "-c", script], capture_output=True, text=True,
-                                    timeout=900, check=False)
+        def sh(script: str, check: bool = True, user: str = "root") -> subprocess.CompletedProcess:
+            home = ["-e", "HOME=/var/lib/operator1"] if user == "operator1" else []
+            result = subprocess.run([tool, "exec", "--user", user, *home, name, "sh", "-c", script],
+                                    capture_output=True, text=True, timeout=900, check=False)
             if check:
                 assert result.returncode == 0, (result.stdout + result.stderr)[-4000:]
             return result
-        sh(STUBS)
+        sh(f"LAB_BECOME={become}\n{STUBS}")
         sh("uv sync -q --locked --project /w/infrastructure/ansible --link-mode=copy")
 
         def play_(enabled: bool, apply: bool, check: bool = False) -> subprocess.CompletedProcess:
@@ -217,7 +253,7 @@ def lab(tmp_path_factory):
                 extra += " --check --diff"
             return sh("cd /tmp && /opt/venv/bin/ansible-playbook -i /lab/hosts.yml /lab/play.yml "
                       f"-e @/w/infrastructure/ansible/inventory/group_vars/all/host_mcp.yml -e @/lab/values.json {extra}",
-                      check=False)
+                      check=False, user="operator1")
         yield {"sh": sh, "play": play_}
     finally:
         subprocess.run([tool, "rm", "-f", name], capture_output=True, check=False)
@@ -279,6 +315,19 @@ def test_the_states_that_a_ci_apply_from_main_meets(lab):
         assert check.returncode == 0, check.stdout[-3000:]
         assert recap(check)["changed"] == 0 and DRIFT not in check.stdout
     assert sh(STATE).stdout == after
+
+    # A drop to the account that fails, or that does not drop: the run stops
+    # at the check of the drop, and a failed read can not pass as "read none".
+    sh("cp /usr/sbin/runuser /usr/sbin/runuser.lab")
+    for stub, label in (("exit 1", "a drop that fails"), ('shift 3; exec "$@"', "a drop that stays root")):
+        sh(f"printf '#!/bin/sh\\n{stub}\\n' > /usr/sbin/runuser && chmod 755 /usr/sbin/runuser")
+        failed = play(enabled=True, apply=False)
+        assert failed.returncode != 0, label
+        stop = failed.stdout.index("fatal: [lab]")
+        assert "The reads below run as the account]" in failed.stdout[failed.stdout.rfind("TASK [", 0, stop):stop], label
+        assert recap(failed)["failed"] == 1, label
+        assert sh(STATE).stdout == after, label
+    sh("mv /usr/sbin/runuser.lab /usr/sbin/runuser")
 
     # The key file different: drift, and the file stays as it is.
     sh("printf 'other\\n' > /home/agent1/.ssh/authorized_keys")

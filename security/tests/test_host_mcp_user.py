@@ -62,6 +62,21 @@ def test_the_switch_is_off_and_the_values_are_empty_in_git():
             assert not set(data) & set(VALUES), path
 
 
+def test_the_switch_is_on_for_site_1_only():
+    # The group variables of the site turn it on, for its two hosts; no other
+    # plain file of the inventory sets it.
+    assert load(INVENTORY / "group_vars/site_wsl.yml")["host_mcp_agent_enabled"] is True
+    setters = []
+    for path in INVENTORY.rglob("*.yml"):
+        if ".sops." in path.name:
+            continue
+        data = load(path) or {}
+        if isinstance(data, dict) and "host_mcp_agent_enabled" in data:
+            setters.append(str(path.relative_to(INVENTORY)))
+    assert sorted(setters) == ["group_vars/all/host_mcp.yml", "group_vars/site_wsl.yml"]
+    assert "host_mcp_agent_enabled" not in (load(INVENTORY / "group_vars/site_wsl02.yml") or {})
+
+
 def test_the_playbooks_run_each_role_only_where_the_site_turns_it_on():
     windows = next(p for p in load(ANSIBLE / "playbooks/windows-host.yml") if p.get("hosts") == "windows_hosts")
     roles = [r["role"] for r in windows["roles"]]

@@ -198,26 +198,50 @@
       check_mode: false
       no_log: true
 
-    - name: Try a read of each private path as the account
+    # The reads run as root and drop to the account inside the command
+    # (runuser, no shell). A become_user of the account would make Ansible
+    # share its module files with it: on the distro, where the connection
+    # user is an admin that is not root and no ACL tool is installed, that
+    # fails before the read runs.
+    - name: The reads below run as the account
       ansible.builtin.command:
-        argv: [test, -r, "{{ item.path }}"]
-      become: true
-      become_user: "{{ host_mcp_agent_user }}"
+        argv: [runuser, -u, "{{ host_mcp_agent_user }}", --, id, -un]
+      register: host_mcp_agent_as
+      changed_when: false
+      failed_when: host_mcp_agent_as.rc != 0 or host_mcp_agent_as.stdout != host_mcp_agent_user
+      check_mode: false
+      no_log: true
+
+    # The control is a path that each account reads: if the drop fails, its
+    # read fails too, so a failed drop can not pass as "read none".
+    - name: Try a read of each private path as the account, and of one control
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ host_mcp_agent_user }}", --, test, -r, "{{ item.path }}"]
       register: host_mcp_agent_read
       changed_when: false
       failed_when: false
       check_mode: false
       no_log: true
-      loop: "{{ host_mcp_agent_private_paths_distro + host_mcp_agent_private_paths_distro_extra }}"
+      loop: "{{ [host_mcp_agent_read_control] + host_mcp_agent_private_paths_distro + host_mcp_agent_private_paths_distro_extra }}"
+      vars:
+        host_mcp_agent_read_control: {label: "the control /etc/passwd", path: /etc/passwd, control: true}
 
     # The labels only: a path can hold the name of an account.
-    - name: The account read none of them
+    - name: The account read the control and none of the private paths
       ansible.builtin.assert:
-        that: host_mcp_agent_readable | length == 0
-        fail_msg: "The user of the host server can read: {{ host_mcp_agent_readable | join('; ') }}. Nothing is changed: an admin looks first."
+        that:
+          - host_mcp_agent_read.results[0].item.control | default(false)
+          - host_mcp_agent_read.results[0].rc == 0
+          - host_mcp_agent_readable | length == 0
+        fail_msg: >-
+          The user of the host server can read: {{ host_mcp_agent_readable | join('; ') }}, or it could not
+          read the control (rc {{ host_mcp_agent_read.results[0].rc }}), so the try proves nothing. Nothing
+          is changed: an admin looks first.
         quiet: true
       vars:
-        host_mcp_agent_readable: "{{ host_mcp_agent_read.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | map(attribute='label') | list }}"
+        host_mcp_agent_readable: >-
+          {{ host_mcp_agent_read.results[1:] | selectattr('rc', 'equalto', 0) | map(attribute='item')
+          | map(attribute='label') | list }}
 
     - name: Read the items of the home of the account
       ansible.builtin.command:
