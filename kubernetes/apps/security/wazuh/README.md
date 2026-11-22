@@ -242,17 +242,17 @@ runs when `accounts.json`, its script or a hash changes: a change of a file
 gives the Job a new name, and at a change of a hash only (in
 `wazuh-accounts-hashes`) the owner deletes the Job.
 
-It runs as the account user, which the owner makes once, by hand, with
-`admin`, from `../wazuh-settings/app/config/account-user.json`: an internal
+It runs as the account user, which the owner, or the session the owner
+names for it, makes once with `admin`, from `../wazuh-settings/app/config/account-user.json`: an internal
 user mapped to the reserved role `security_rest_api_access`, with its name
 and password in `wazuh-accounts-user`. The file holds no hash, and step 1
-never reads it. The owner applies it through the Security API: a `PUT` of
+never reads it. It is applied through the Security API: a `PUT` of
 the user with the hash of its password, and a `PUT` of the role mapping of
 `security_rest_api_access` with the user. The role mappings of the image have
 no mapping for that role (as the defaults of the security plugin,
 [roles_mapping.yml](https://github.com/opensearch-project/security/blob/3.6.0.0/config/roles_mapping.yml)),
-so the `PUT` makes it; if a mapping exists, the owner adds the user to its
-`users` and keeps the others. The image of the indexer gives the
+so the `PUT` makes it; if a mapping exists, the user is added to its
+`users` and the others stay. The image of the indexer gives the
 Security API to that role and to `all_access` only
 ([opensearch.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/build-scripts/docker/config/opensearch.yml#L49-L51)). That role can make, change and delete users, roles
 and role mappings that are neither reserved nor hidden, so it can also give
@@ -475,6 +475,11 @@ What other apps and workstreams read from here:
 
 ## The merges that list it
 
+Before the first merge, the memory limit of the node container of worker 1
+of homelab-wsl-02 goes up to the figure of `../README.md`, "Placement" (a
+change of its own), so the server fits in the budget of `../README.md`,
+"Memory".
+
 1. The first merge lists `ks.yaml` in the apps of homelab-wsl-02, with:
    - `WAZUH_AGENTS_LB_ADDR` and `WAZUH_AGENTS_HOST` in the cluster-settings
      of homelab-wsl-02;
@@ -503,9 +508,11 @@ What other apps and workstreams read from here:
 
    The name and the address are the values of the cluster-settings. No
    agent enrolls before this record exists.
-3. After the first start of the server, the owner makes the account user
-   with `admin` from `account-user.json` (see "Accounts"). The Secrets of
-   `../wazuh-settings` are made then.
+3. After the first start of the server, the owner, or the session the
+   owner names for it, makes the account user once, with `admin`, from
+   `account-user.json` (see "Accounts"). The password of `admin` is read
+   from its Secret into the call and is never shown or stored outside it.
+   The Secrets of `../wazuh-settings` are made then.
 4. A second merge, the owner's, adds `../wazuh-settings/ks.yaml`. It first
    applies the retention policies, and ISM deletes the data older than its
    ages (see "The merges that delete data").
