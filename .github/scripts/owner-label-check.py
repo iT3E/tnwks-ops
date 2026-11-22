@@ -208,6 +208,10 @@ KUSTOMIZE_CHARTS = ("helmCharts", "helmGlobals", "helmChartInflationGenerator")
 # host name before the first slash ("github.com/<owner>/<repo>//<path>").
 REMOTE = re.compile(r"://|^git@|^git::|[?&](?:ref|version|timeout|submodules)=|^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::[0-9]+)?/")
 FLUX_OBJECT = re.compile(r"""apiVersion["']?\s*:\s*["']?[A-Za-z0-9.-]*toolkit\.fluxcd\.io/""")
+# The group of each Flux API anywhere in an apiVersion, matched on the lower
+# case form of it, and the API of a kustomize file at the start of one.
+FLUX_GROUP = re.compile(r"toolkit\.fluxcd\.io")
+KUSTOMIZE_API = re.compile(r"kustomize\.config\.k8s\.io/")
 ADMISSION_OBJECT = re.compile(
     r"""kind["']?\s*:\s*["']?(?:Validating|Mutating)(?:AdmissionPolicy(?:Binding)?|WebhookConfiguration)\b"""
 )
@@ -429,11 +433,11 @@ def file_content(path: str, text: str) -> str | None:
             if ("apiVersion" in m and not isinstance(api, str)) or ("kind" in m and not isinstance(kind, str)):
                 return "an apiVersion or a kind that is not a string"
             group = (api or "").strip().lower().split("/")[0] if "/" in (api or "") else ""
-            if "toolkit.fluxcd.io" in (api or "").lower():
+            if FLUX_GROUP.search((api or "").lower()):
                 return "a Flux object"
             if group == ADMISSION_GROUP or (kind or "").strip() in ADMISSION_KINDS:
                 return "an admission object"
-        if isinstance(doc, dict) and (kustomize_file or str(doc.get("apiVersion", "")).startswith("kustomize.config.k8s.io/")):
+        if isinstance(doc, dict) and (kustomize_file or KUSTOMIZE_API.match(str(doc.get("apiVersion", "")))):
             source = remote(doc)
             if source:
                 return f"a remote source: {safe(source)}"
