@@ -83,9 +83,9 @@ spec:
               protocol: TCP
 ---
 # The readers of the indexer in this namespace, on 9200, each with a user of
-# its own (README.md, "Accounts"): the settings job (../../wazuh-settings)
-# and the converter (../../converter), which reads the index names of
-# README.md, "Contract". The egress side is in the policy of each app.
+# its own (README.md, "Accounts"): the two steps of the settings
+# (../../wazuh-settings) and the converter (../../converter), which reads
+# the index names of README.md, "Contract". The egress side is in the policy of each app.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -96,6 +96,8 @@ spec:
       app: wazuh-indexer
   ingress:
     - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: wazuh-accounts
         - matchLabels:
             app.kubernetes.io/name: wazuh-settings
         - matchLabels:

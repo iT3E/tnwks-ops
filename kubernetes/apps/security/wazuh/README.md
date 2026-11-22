@@ -6,7 +6,7 @@ one manager node, one indexer node and the dashboard, at the tag
 converter (`../converter`) reads the state of the hosts from the indexer.
 
 No cluster lists this app yet. It starts nothing until a pull request adds
-`ks.yaml` and `../wazuh-settings/ks.yaml` to
+`ks.yaml`, and then `../wazuh-settings/ks.yaml`, to
 `kubernetes/clusters/wsl-02/apps/kustomization.yaml` (see "Before the merge
 that lists it").
 
@@ -56,7 +56,8 @@ The lines of `../README.md`, "Memory":
 | `wazuh-indexer` | 3 GiB | 3 GiB (heap 1536 MiB) |
 | `wazuh-manager` | 1280 MiB | 1280 MiB |
 | `wazuh-dashboard` | 320 MiB | 320 MiB |
-| `wazuh-settings` (`../wazuh-settings`, a CronJob) | 64 MiB | 128 MiB |
+| `wazuh-accounts` (`../wazuh-settings`, step 1, a Job) | 64 MiB | 128 MiB |
+| `wazuh-settings` (`../wazuh-settings`, step 2, a Job and a CronJob) | 64 MiB | 128 MiB |
 
 The init containers run before the main container of their pod, one at a
 time, each with a limit of 128 MiB or less. In Wazuh 5.0 the indexer
@@ -98,7 +99,7 @@ the manager to the indexer on 9200, the dashboard to the manager API on
 | `wazuh-dns` | The three parts | DNS of this cluster, through Cilium's DNS proxy |
 | `wazuh-indexer-feed` | The indexer | `api.pre.cloud.wazuh.com:443`, the default CTI API of the Content Manager at `v5.0.0-rc2` |
 | `wazuh-agents` | world, a node of either cluster (through the LAN bridge) | The manager on 1517 |
-| `wazuh-indexer-readers` | The settings job and the converter | The indexer on 9200 |
+| `wazuh-indexer-readers` | The two steps of the settings and the converter | The indexer on 9200 |
 
 The vendor's `manager-egress-external.yaml` (any address on 443) is not
 applied. The manager and the dashboard have no route out of the cluster, so
@@ -115,6 +116,8 @@ listener, the manager API and the dashboard. No key is in git. The indexer
 reads its node DN and the admin DN from the certificates at each start, so
 the DNs are ours (`O=tnwks`). Each leaf lasts 90 days and renews 30 days
 before its end, and Reloader restarts the workload when its Secret changes.
+A restart of the indexer drops a move of ISM policy that waits, so step 2 of
+the settings starts no move in the hour before a renewal (see "Retention").
 
 The certificate of the agent listener names `${WAZUH_AGENTS_HOST}` and
 `${WAZUH_AGENTS_LB_ADDR}`. An enrollment token pins the CA, so a rebuild of
@@ -123,69 +126,192 @@ stricter later step is a CA in SOPS, as `observability-pki` has.
 
 ## Secrets
 
-The owner makes each one as a SOPS file in this app or in
-`../wazuh-settings`, and lists it in that app's `kustomization.yaml`. No
-session reads them.
+The owner makes each one as a SOPS file in the app of the table, and lists
+it in that app's `kustomization.yaml`. No session reads them, and no
+password and no hash is in a plain file of this repository. Each password is
+only in the container of the part that logs in with it.
 
-| Secret | Key | Content |
-| --- | --- | --- |
-| `indexer-credentials` | `wazuh-credentials` | The lines `WAZUH_INDEXER_ADMIN_PASSWORD=`, `WAZUH_INDEXER_KIBANASERVER_PASSWORD=`, `WAZUH_INDEXER_MANAGER_PASSWORD=` |
-| `manager-credentials` | `wazuh-credentials` | `WAZUH_INDEXER_MANAGER_PASSWORD=`, `WAZUH_MANAGER_API_PASSWORD=`, `WAZUH_MANAGER_WUI_PASSWORD=` |
-| `dashboard-credentials` | `wazuh-credentials` | `WAZUH_INDEXER_KIBANASERVER_PASSWORD=`, `WAZUH_MANAGER_WUI_PASSWORD=` |
-| `wazuh-cluster-key` | `key` | 32 characters from `A-Z a-z 0-9` |
-| `wazuh-settings-accounts` | `username`, `password` | The account user of the settings job (see "Accounts") |
-| `wazuh-settings-user` | `password` | The password of `tnwks-settings` |
-| `wazuh-converter-reader` | `password` | The password of `tnwks-converter` |
+| Secret | App | Key | Content | Mounted by |
+| --- | --- | --- | --- | --- |
+| `indexer-credentials` | this app | `wazuh-credentials` | The lines `WAZUH_INDEXER_ADMIN_PASSWORD=`, `WAZUH_INDEXER_KIBANASERVER_PASSWORD=`, `WAZUH_INDEXER_MANAGER_PASSWORD=` | The indexer |
+| `manager-credentials` | this app | `wazuh-credentials` | `WAZUH_INDEXER_MANAGER_PASSWORD=`, `WAZUH_MANAGER_API_PASSWORD=`, `WAZUH_MANAGER_WUI_PASSWORD=` | The manager |
+| `dashboard-credentials` | this app | `wazuh-credentials` | `WAZUH_INDEXER_KIBANASERVER_PASSWORD=`, `WAZUH_MANAGER_WUI_PASSWORD=` | The dashboard |
+| `wazuh-cluster-key` | this app | `key` | 32 characters from `A-Z a-z 0-9` | The manager |
+| `wazuh-accounts-user` | `../wazuh-settings` | `username`, `password` | The account user (see "Accounts") | Step 1 only |
+| `wazuh-accounts-hashes` | `../wazuh-settings` | `tnwks-settings`, `tnwks-converter`: one key for each user of `accounts.json` | The bcrypt hash of the password of that user | Step 1 only |
+| `wazuh-settings-user` | `../wazuh-settings` | `password` | The password of `tnwks-settings` | Step 2 only |
+| `wazuh-converter-reader` | `../converter` | `password` | The password of `tnwks-converter` | The converter only. The change that adds the Wazuh source to the converter adds it |
 
 The password rule of the Wazuh images: 12 to 64 characters from
 `A-Z a-z 0-9 . , _ + : @ % ^ = ~ -`, with at least one lowercase letter,
 one uppercase letter, one digit and one symbol
 ([credentials](https://github.com/wazuh/wazuh-kubernetes/blob/v5.0.0-rc2/docs/ref/credentials.md)).
-The settings job holds its users to the same rule. Each part stores its
-passwords at its first start: a later change of a Secret changes nothing,
-and a password changes with the vendor's `password-tool.sh` (same page).
+The users of `accounts.json` follow the same rule, and step 2 refuses a
+password of `tnwks-settings` that breaks it. The owner makes each hash from
+its password with a bcrypt tool, as the hash tool of the OpenSearch security
+plugin (`plugins/opensearch-security/tools/hash.sh`).
+
+The vendor's parts store their passwords at their first start: a later
+change of one of their Secrets changes nothing, and a password changes with
+the vendor's `password-tool.sh` (same page). A password of a user of
+`accounts.json` changes in one merge of the owner: the new password in the
+Secret of the part that logs in, and its hash in `wazuh-accounts-hashes`.
+Then the owner deletes the Job of step 1, and Flux runs it again.
 
 ## Accounts
 
 The indexer has the vendor's accounts (`admin`, `kibanaserver`,
-`wazuh-manager`) from `indexer-credentials`. The settings job
-(`../wazuh-settings`) makes the accounts of this repository from
-`../wazuh-settings/app/config/accounts.json`:
+`wazuh-manager`) from `indexer-credentials`. Step 1 of the settings
+(`../wazuh-settings`, the Job `wazuh-accounts-<hash>`) makes the accounts of
+this repository from `../wazuh-settings/app/config/accounts.json`:
 
 | User | Role | For |
 | --- | --- | --- |
-| `tnwks-settings` | `tnwks-settings`: the ISM APIs, the raw events setting, and a read of the raw events stream. No Security API | The settings step of the job |
-| `tnwks-converter` | `tnwks-converter`: a read of the index names of "Contract", with field-level security on the agent snapshots | The converter |
+| `tnwks-settings` | `tnwks-settings`: the ISM APIs on the patterns of the four streams of "Retention", the raw events setting, and the index stats of the two streams that hold no document. No Security API, and no read of a document | Step 2 |
+| `tnwks-converter` | `tnwks-converter`: a read of the index names of "Contract", with field-level security on the agent snapshots, and the index stats (the size) of each index of Wazuh | The converter |
 
-The account step of the job runs as an account user that the owner makes
-once, by hand, with `admin`: an internal user mapped to the reserved role
+Step 1 runs only when its files change: `accounts.json`, `indexer.py` and
+`accounts.py`. The name of its Job carries the first 10 hex digits of the
+sha256 of the three files, one after another, so a change makes a new Job,
+Flux runs it once, and prune removes the old one. It does not run each day.
+`security/tests/test_wazuh_settings.py` fails when the name does not match
+the files, and names the right one. To run it again with the same files,
+for example after a failure, delete the Job: Flux makes it again.
+
+It runs as the account user, which the owner makes once, by hand, with
+`admin`: an internal user mapped to the reserved role
 `security_rest_api_access`, with its name and password in
-`wazuh-settings-accounts`. That role can make users, roles and role mappings
-that are not reserved. Which form step 2 uses is open at the design gate:
-this split, or `admin` for both steps (simpler), or the admin certificate
-later (stricter).
+`wazuh-accounts-user`. That role can make, change and delete users, roles
+and role mappings that are neither reserved nor hidden, so it can also give
+itself wide rights on the data
+([API permissions, OpenSearch](https://github.com/opensearch-project/documentation-website/blob/d4a12efae197ed01306f752eb1406072ad18bb58/_security/access-control/api.md#L67)).
+Only the pod of step 1 mounts its Secret.
+
+What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
+
+- It owns only what carries its mark: the attribute
+  `tnwks_managed_by: wazuh-accounts` on a user, and a description that
+  starts with `[wazuh-accounts]` on a role or a role mapping.
+- It never touches a resource that is reserved, hidden or static, a user of
+  the vendor, or the account user. Each name of `accounts.json` starts with
+  `tnwks-`, and a name of the vendor or of the account user stops the run.
+- When a name of `accounts.json` exists without its mark, or is reserved,
+  hidden or static, it stops before any write.
+- It writes each role, user and role mapping that is missing or differs,
+  and sets the hash of each user from `wazuh-accounts-hashes`. It holds no
+  password of a user that it makes.
+- It deletes each user, role and role mapping that carries its mark and that
+  `accounts.json` no longer names.
+- It reads back what carries its mark, and fails when it is not what
+  `accounts.json` says.
 
 ## Retention
 
 The shipped ISM policies of the streams roll over only at 20 GB for each
-primary shard, so at the volume of tnwks they delete nothing, and the Setup
-plugin writes them again at each start
+primary shard or 200,000,000 documents, and ISM deletes an index only after
+its rollover. At the volume of tnwks the write index never rolls over, so
+the shipped policies delete nothing. The Setup plugin writes its own policies
+again by their IDs at each election of a cluster manager, which includes each
+restart, and the vendor says that its deletion ages "cannot be used as
+privacy or compliance statements"
 ([retention](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/docs/ref/modules/setup/retention.md)).
-The settings job writes a policy of tnwks for each stream under its own ID
-(`tnwks-stream-<stream>`, priority 1), from
-`../wazuh-settings/app/config/retention.json`:
+So step 2 of the settings writes a policy of tnwks for four streams, under
+IDs of its own (`tnwks-stream-<stream>`, priority 1, above the shipped
+priority 0), from `../wazuh-settings/app/config/retention.json`. This is the
+way that the vendor gives for a custom policy (same page).
 
 | Value | Now | Open at the design gate |
 | --- | --- | --- |
 | `rollover_age` | 30 days | |
-| `delete_age` (events, findings, raw events, active responses) | 120 days | 90 days as a floor (120 days) or as a ceiling (90 days). The file holds the floor |
+| `delete_age` (host events, findings, raw events) | 120 days | 90 days as a floor (120 days) or as a ceiling (90 days). The file holds the floor, the recommended answer of the open decision |
 | `metrics_delete_age` | 60 days | |
 | `index_raw_events` | `false` | |
 
-One edit of `delete_age` changes four policies. The job moves the backing
-indices that exist to the new policy or version and waits until ISM reports
-it. Do not restart the indexer while a run waits: a restart drops a pending
-change.
+Each policy rolls over at `rollover_age` and deletes an index at its delete
+age, counted from the creation of the index, so a record stays from the
+delete age less `rollover_age` up to the delete age. ISM acts at each run of
+its job: each 5 minutes by default, with a random delay of up to 60% of that
+([ISM settings](https://github.com/opensearch-project/documentation-website/blob/d4a12efae197ed01306f752eb1406072ad18bb58/_im-plugin/ism/settings.md#L19-L20)).
+
+What each store of Wazuh keeps, at `v5.0.0-rc2`:
+
+| Store | Its rule here |
+| --- | --- |
+| Host events, `wazuh-events-v5-<category>` | `tnwks-stream-events`: a rollover at 30 days and a delete at 120 days |
+| Findings, `wazuh-findings-v5-<category>` | `tnwks-stream-findings`: the same ages |
+| Raw events, `wazuh-events-raw-v5` | Off: step 2 sets `engine.index_raw_events` to `false`, the default at the tag ([settings API](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/docs/ref/modules/setup/api-reference.md)). `tnwks-stream-raw-events`, with the ages of host events, guards the stream. Step 2 writes the count of its documents to `indices.json` |
+| Metrics, `wazuh-metrics-*` | `tnwks-stream-metrics`: a rollover at 30 days and a delete at 60 days |
+| Active responses, `wazuh-active-responses` | The shipped rule: a rollover by size and a delete at 3 days. The design of effort 0004 runs no active response, so the stream holds no document. Step 2 writes the count of its documents to `indices.json` |
+| AI assistant sessions, `wazuh-ai-assistant-sessions` | The shipped rule: a rollover at 1 day and a delete at 7 days ([the policy](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/plugins/setup/src/main/resources/policies/ai-assistant-sessions-policy.json)) |
+| The alert history of the Alerting plugin, `.opendistro-alerting-alert-history-*` | The default of the plugin: it deletes each history index at 60 days ([alerting settings, OpenSearch](https://github.com/opensearch-project/documentation-website/blob/d4a12efae197ed01306f752eb1406072ad18bb58/_observing-your-data/alerting/settings.md#L70)) |
+| The audit log of the security plugin | The tag ships no policy for it ([the policies](https://github.com/wazuh/wazuh-indexer-plugins/tree/v5.0.0-rc2/plugins/setup/src/main/resources/policies)). Whether the pinned image writes it is not known yet (see "Not yet proven on a cluster"). If it does, a stream with the vendor's ages of its later policy (a rollover at 30 days and a delete at 90 days) goes into `retention.json` |
+| The state indices: `wazuh-states-*`, `wazuh-agent-config`, `wazuh-agent-stats` | No age. Each holds one document for each item, written again at each report ([the Setup plugin](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/docs/ref/modules/setup/index.md)). The owner removes the agent of a host that leaves tnwks |
+| The rotated logs of the manager, on its volume | 31 days, the default of the manager ([task manager](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/docs/ref/modules/task_manager/configuration.md#L274)) |
+| `alerts.json` and `archives.json`, on the volume of the manager | Whether the manager writes them by default at the tag is not known yet (see "Not yet proven on a cluster") |
+
+### The merges that delete data
+
+The merge that first lists `../wazuh-settings/ks.yaml` applies the policies,
+and ISM then deletes each index older than its age. A merge that lowers an
+age does the same at the new age. Deleted data has no way back. Each such
+merge is the owner's.
+
+`security/tests/test_wazuh_settings.py` pins each age of each policy
+(`PINNED`). A change of an age, or a stream that goes, fails CI until the
+same change edits the pin, and the message names a lowered age as a merge
+that deletes data. The pin is in the test, not a compare with the base
+branch: it runs on each run of CI, with no need of the history of git, and a
+lower age needs a deliberate edit that the review sees.
+
+### No restart while a move waits
+
+Step 2 moves each index that is not on the current version of its policy
+(`change_policy`, or `add` for an index with no policy), and waits until the
+ISM explain API names the new version on each one. A restart of the indexer
+before that drops the move (same page, "Opting in to a hard time ceiling").
+What restarts the indexer:
+
+- Reloader, when a certificate of the indexer or the CA renews (the
+  annotation of the StatefulSet in `ks.yaml`). Step 2 reads the end of the
+  certificate that the indexer serves and of the CA, and starts no move in
+  the hour before either one renews (`--renew-before=720h`, the
+  `renewBefore` of `app/certificates.yaml`, and `--margin=3600`, more than
+  the deadline of a run). It still writes its counts, and the next run
+  moves. The node and admin certificates of the indexer come from one apply,
+  with the same duration and `renewBefore`, so the certificate that the
+  indexer serves stands for both.
+- A merge that changes the StatefulSet of the indexer, its configuration or
+  its Secrets, or the tag. Merge such a change apart from a change of
+  `retention.json`, and not while a run of step 2 runs:
+  `kubectl -n security get jobs -l app.kubernetes.io/name=wazuh-settings`
+  shows no active Job.
+
+When a restart drops a move all the same, the index keeps its old policy,
+the count of `indices.json` is above zero, and the next run moves it again.
+
+### What step 2 does
+
+Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
+`tnwks-settings` at each merge that changes its files (the Job
+`wazuh-settings-git-<hash>`, named as the Job of step 1 from
+`retention.json`, `indexer.py` and `settings.py`) and once a day (the CronJob
+`wazuh-settings`, at 07:17 UTC). Both run one pod. In this order, it:
+
+1. waits up to 300 seconds until `tnwks-settings` can log in;
+2. writes each policy of tnwks that is missing or differs, and never a
+   shipped policy ID;
+3. sets `engine.index_raw_events`. The tag documents no read of the setting,
+   so the check is the answer of the API and the count of documents in the
+   raw events stream;
+4. moves the indices (see above), and waits up to 900 seconds for ISM;
+5. counts the indices of the four patterns that are not on the policy of
+   tnwks of their stream, with those that have no policy, and the documents
+   of the raw events and active responses streams, from the index stats. It
+   writes them to `wazuh-settings/indices.json` on the volume of results
+   (`security/converter/README.md`, "The count file of the Wazuh settings").
+
+A run fails, and `KubeJobFailed` fires, at the first error, and when a move
+does not apply in time (after it writes the counts).
 
 ## Contract
 
@@ -204,15 +330,16 @@ What other apps and workstreams read from here:
 1. The owner adds `WAZUH_AGENTS_LB_ADDR` (a free address of the
    LoadBalancer pool) and `WAZUH_AGENTS_HOST` to the cluster-settings of
    homelab-wsl-02.
-2. The owner makes the Secrets of "Secrets" and lists them.
-3. The test cluster of task 8.2 has run this overlay at the pinned tag (see
-   "Not yet proven on a cluster").
-4. The listing adds `ks.yaml` and `../wazuh-settings/ks.yaml` to the apps of
-   homelab-wsl-02, and runs
+2. The owner makes the Secrets of this app ("Secrets") and lists them.
+3. The test cluster of task 8.2 has run this overlay and the two steps at
+   the pinned tag (see "Not yet proven on a cluster").
+4. A first merge adds `ks.yaml` to the apps of homelab-wsl-02, and runs
    `python3 kubernetes/apps/flux-system/admission/classlist.py write`.
 5. After the first start of the server, the owner makes the account user
-   (see "Accounts"). Until then the settings job fails each day and
-   `KubeJobFailed` fires.
+   with `admin` (see "Accounts"), and the Secrets of `../wazuh-settings`.
+6. A second merge, the owner's, adds `../wazuh-settings/ks.yaml`. It first
+   applies the retention policies, and ISM deletes the data older than its
+   ages (see "The merges that delete data").
 
 ## Not yet proven on a cluster
 
@@ -234,10 +361,17 @@ by the tests below. These points hold only after the test cluster runs them:
 - The role permissions of `tnwks-settings` and `tnwks-converter`, the FLS
   of the agent snapshots, and whether `.wazuh-cti-consumers` is a system
   index that a role can not read.
-- That the ISM explain API reports `policy_seq_no`, and that a change to
-  the same policy ID takes its new version.
+- That the Security API keeps the attributes of a user and the description
+  of a role mapping as step 1 writes them, and takes a `hash` in place of a
+  password.
+- That the ISM explain API takes a list of patterns, lists an index with no
+  policy, and reports `policy_seq_no`, and that a change to the same policy
+  ID takes its new version.
+- That the index stats of a data stream name give its count of documents.
 - The default of `engine.index_raw_events`, the index names with live
   documents, and the count of shards at idle.
+- Whether the pinned image writes the audit log of the security plugin, and
+  whether the manager writes `alerts.json` or `archives.json` by default.
 
 ## Tests
 
@@ -247,5 +381,7 @@ by the tests below. These points hold only after the test cluster runs them:
   Secrets that nothing in git holds, and the configuration of the manager.
   A render of the overlay against a local copy of the vendor's files runs
   when `WAZUH_KUBERNETES_DIR` names that copy and `kustomize` is installed.
-- `security/tests/test_wazuh_settings.py`: the settings job against a fake
-  indexer API.
+- `security/tests/test_wazuh_settings.py`: the two steps against a fake
+  indexer API; the pin of each age; the hash in the name of each Job; each
+  Secret in the one pod that uses it; the guard of a renewal; no password
+  and no hash in git.

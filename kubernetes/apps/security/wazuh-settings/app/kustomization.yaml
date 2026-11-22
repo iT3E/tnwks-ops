@@ -2,23 +2,31 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: security
-# The Secrets of the job are SOPS files that the owner makes and lists here
-# before a cluster lists this app (../../wazuh/README.md, "Secrets"):
-#   - ./secret-accounts.sops.yaml
-#   - ./secret-settings-user.sops.yaml
-#   - ./secret-converter-reader.sops.yaml
+# The Secrets of the two steps are SOPS files that the owner makes and lists
+# here before a cluster lists this app (../../wazuh/README.md, "Secrets"):
+#   - ./secret-accounts-user.sops.yaml     (step 1 only)
+#   - ./secret-accounts-hashes.sops.yaml   (step 1 only)
+#   - ./secret-settings-user.sops.yaml     (step 2 only)
+# The password of tnwks-converter is in the Secret of the converter
+# (../../converter), not here.
 resources:
   - ./networkpolicy.yaml
-  - ./cronjob.yaml
+  - ./accounts-job.yaml
+  - ./settings-job.yaml
+  - ./settings-cronjob.yaml
 configMapGenerator:
+  # The files of each step, which the hash in the name of its Job covers.
   # Tests: security/tests/test_wazuh_settings.py.
-  - name: wazuh-settings-scripts
-    files:
-      - ./scripts/apply.py
-  - name: wazuh-settings-config
+  - name: wazuh-accounts-files
     files:
       - ./config/accounts.json
+      - ./scripts/indexer.py
+      - ./scripts/accounts.py
+  - name: wazuh-settings-files
+    files:
       - ./config/retention.json
+      - ./scripts/indexer.py
+      - ./scripts/settings.py
 generatorOptions:
   disableNameSuffixHash: true
   annotations:

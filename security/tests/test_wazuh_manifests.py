@@ -1,5 +1,5 @@
-"""The Wazuh server (kubernetes/apps/security/wazuh) and its settings job
-(kubernetes/apps/security/wazuh-settings): the files of this repository.
+"""The Wazuh server (kubernetes/apps/security/wazuh) and the two steps of its
+settings (kubernetes/apps/security/wazuh-settings): the files of this repository.
 
 No cluster lists these apps yet, so the render of CI does not build them. These
 tests read the files: the tag and the files of the vendor that stay, the images
@@ -49,8 +49,11 @@ MEMORY_ROWS = {
     "wazuh-indexer": "Wazuh indexer (step 2)",
     "wazuh-manager": "Wazuh manager (step 2)",
     "wazuh-dashboard": "Wazuh dashboard (step 2)",
+    "wazuh-accounts": "Wazuh account job (step 2)",
     "wazuh-settings": "Wazuh settings job (step 2)",
 }
+# The workloads of the settings, in ../wazuh-settings/app.
+SETTINGS_WORKLOADS = ("accounts-job.yaml", "settings-job.yaml", "settings-cronjob.yaml")
 
 
 def docs(path: Path) -> list[dict]:
@@ -87,6 +90,16 @@ def memory_table() -> dict:
         if len(cells) == 3 and cells[0] in MEMORY_ROWS.values():
             rows[cells[0]] = mib(re.match(r"\d+(?:\.\d+)? (?:GiB|MiB)", cells[2]).group(0))
     return rows
+
+
+def settings_pods() -> dict:
+    """The pod spec of each workload of the settings, by file name."""
+    found = {}
+    for name in SETTINGS_WORKLOADS:
+        (workload,) = docs(SETTINGS / "app" / name)
+        spec = workload["spec"]
+        found[name] = (spec["jobTemplate"]["spec"] if "jobTemplate" in spec else spec)["template"]["spec"]
+    return found
 
 
 def our_files() -> list[Path]:
@@ -150,9 +163,9 @@ def test_each_image_is_pinned_by_digest():
     (hack,) = [c for c in patches()[("StatefulSet", "wazuh-indexer")]["spec"]["template"]["spec"]["initContainers"]
                if c["name"] == "volume-mount-hack"]
     assert hack["image"] == "wazuh/wazuh-indexer:5.0.0-rc2"
-    (cron,) = docs(SETTINGS / "app/cronjob.yaml")
-    (job,) = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"]
-    assert DIGEST.search(job["image"])
+    for name, spec in settings_pods().items():
+        (job,) = spec["containers"]
+        assert DIGEST.search(job["image"]), name
 
 
 def test_each_workload_has_the_node_selector():
@@ -160,9 +173,8 @@ def test_each_workload_has_the_node_selector():
         if kind in ("StatefulSet", "Deployment"):
             assert body["spec"]["template"]["spec"]["nodeSelector"] == {
                 "kubernetes.io/hostname": "${SECURITY_NODE}"}, name
-    (cron,) = docs(SETTINGS / "app/cronjob.yaml")
-    assert cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["nodeSelector"] == {
-        "kubernetes.io/hostname": "${SECURITY_NODE}"}
+    for name, spec in settings_pods().items():
+        assert spec["nodeSelector"] == {"kubernetes.io/hostname": "${SECURITY_NODE}"}, name
 
 
 def test_the_memory_lines_are_those_of_the_readme():
@@ -173,9 +185,9 @@ def test_the_memory_lines_are_those_of_the_readme():
         if kind in ("StatefulSet", "Deployment"):
             for c in body["spec"]["template"]["spec"]["containers"]:
                 found[c["name"]] = c["resources"]
-    (cron,) = docs(SETTINGS / "app/cronjob.yaml")
-    for c in cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"]:
-        found[c["name"]] = c["resources"]
+    for spec in settings_pods().values():
+        for c in spec["containers"]:
+            found[c["name"]] = c["resources"]
     assert set(found) == set(MEMORY_ROWS)
     for container, row in MEMORY_ROWS.items():
         limits = found[container]["limits"]
@@ -261,10 +273,10 @@ def test_no_secret_is_in_git():
         assert not [r for r in body["resources"] if "secret" in r]
 
 
-def test_the_job_mounts_the_certificate_of_the_ca_and_not_its_key():
-    (cron,) = docs(SETTINGS / "app/cronjob.yaml")
-    volumes = {v["name"]: v for v in cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["volumes"]}
-    assert volumes["ca"]["secret"] == {"secretName": "wazuh-ca", "items": [{"key": "ca.crt", "path": "ca.crt"}]}
+def test_the_jobs_mount_the_certificate_of_the_ca_and_not_its_key():
+    for name, spec in settings_pods().items():
+        volumes = {v["name"]: v for v in spec["volumes"]}
+        assert volumes["ca"]["secret"] == {"secretName": "wazuh-ca", "items": [{"key": "ca.crt", "path": "ca.crt"}]}, name
 
 
 def test_the_manager_configuration():

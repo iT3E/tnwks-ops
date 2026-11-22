@@ -1,16 +1,19 @@
 ---
-# The settings job. Out: the indexer on 9200, and DNS through Cilium's DNS
-# proxy. Nothing else: no API server, no internet. Nothing calls it. The
-# ingress side of 9200 is in ../../wazuh/app/networkpolicy.yaml
-# (wazuh-indexer-readers). default-deny (../../namespace.yaml) denies the rest.
+# The two steps of the settings of the Wazuh indexer. Out: the indexer on 9200,
+# and DNS through Cilium's DNS proxy. Nothing else: no API server, no
+# internet. Nothing calls them. The ingress side of 9200 is in
+# ../../wazuh/app/networkpolicy.yaml (wazuh-indexer-readers). default-deny
+# (../../namespace.yaml) denies the rest.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
   name: wazuh-settings
 spec:
   endpointSelector:
-    matchLabels:
-      app.kubernetes.io/name: wazuh-settings
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["wazuh-accounts", "wazuh-settings"]
   egress:
     - toEndpoints:
         - matchLabels:

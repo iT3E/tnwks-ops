@@ -1,7 +1,8 @@
 ---
-# The settings job of the Wazuh indexer (../wazuh/README.md): the accounts and the
-# retention from git, each day. homelab-wsl-02 only, with the server
-# (../wazuh). No cluster lists this file yet.
+# The settings of the Wazuh indexer from git (../wazuh/README.md): step 1, the
+# accounts, at a change of its files, and step 2, the retention, at a change of
+# its files and each day. homelab-wsl-02 only, with the server (../wazuh). No
+# cluster lists this file yet.
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -12,6 +13,8 @@ spec:
   dependsOn:
     # The CA Secret wazuh-ca, and the indexer it calls.
     - name: security-wazuh-server
+    # The claim security-results, where step 2 writes its counts.
+    - name: security-converter
   path: ./kubernetes/apps/security/wazuh-settings/app
   prune: true
   sourceRef:
