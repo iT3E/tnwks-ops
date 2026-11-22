@@ -381,10 +381,14 @@ def lab():
         main_old, "sha256:" + hashlib.sha256(main_key.encode()).hexdigest()))
     # New keys of the run: the key of the user and the host key of the fake host.
     (work / "k").mkdir()
-    made = run([tool, "run", "--rm", "--network", "none", "--user", f"{os.getuid()}:{os.getgid()}",
+    # ssh-keygen needs a passwd entry for its user, and the user of the caller
+    # (the runner in CI) has none in the image. So the keys are made as root
+    # in the container, then given to the caller, who can remove them.
+    made = run([tool, "run", "--rm", "--network", "none", "--user", "0:0",
                 "-v", f"{work}/k:/k", "--entrypoint", "sh", sshd, "-c",
-                'ssh-keygen -q -t ed25519 -N "" -f /k/agent && ssh-keygen -q -t ed25519 -N "" -f /k/host'
-                ' && chmod 644 /k/agent /k/host && ssh-keygen -l -E sha256 -f /k/host.pub'])
+                ('ssh-keygen -q -t ed25519 -N "" -f /k/agent && ssh-keygen -q -t ed25519 -N "" -f /k/host'
+                 f" && chmod 644 /k/agent /k/host && chown {os.getuid()}:{os.getgid()} /k/agent /k/agent.pub"
+                 " /k/host /k/host.pub && ssh-keygen -l -E sha256 -f /k/host.pub")])
     (fingerprint,) = re.findall(r"SHA256:[A-Za-z0-9+/]{43}", made.stdout)
     (work / "secret").mkdir()
     (work / "secret/config.toml").write_text(SERVER_CONFIG.format(host=LAB_HOST, fingerprint=fingerprint))
