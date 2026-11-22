@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.267.0 - 2026-11-22
+
+### Removed
+
+* monitoring: the legacy UNMS Overview board is removed, because its data source (the UISP instance) is gone and its saved panel settings held identifying values.
+
 ## v2.266.0 - 2026-11-22
 
 ### Added
