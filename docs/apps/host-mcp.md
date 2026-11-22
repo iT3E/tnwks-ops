@@ -148,7 +148,7 @@ plugin in the agent image repository), or taken from
 | Item | State | Where |
 | --- | --- | --- |
 | The Secret `host-mcp-secret`: the profiles with the pinned host key of each target, the private key of the agent user, the bearer token | In git, encrypted to the recipients of the other Secrets of `agents-main`; not applied, because no Kustomization that Flux applies lists the folder. Each value was made or read by a script, and none was typed or shown | `app/secret-host-mcp.sops.yaml`, a resource of `app/kustomization.yaml` |
-| The values of the agent user at site 1: its name, its public key and the source address of its key | In the host secrets of the Windows host and of the distro, with the switch of the role off | The host variables of the Ansible tree |
+| The values of the agent user at site 1: its name, its public key and the source network of its key | In the host secrets of the Windows host and of the distro, with the switch of the role off | The host variables of the Ansible tree |
 | The address at which the pod reaches the SSH server of the distro | Set | `HOST_MCP_DISTRO_ADDR` in the cluster settings of site 1 |
 
 ## What waits
