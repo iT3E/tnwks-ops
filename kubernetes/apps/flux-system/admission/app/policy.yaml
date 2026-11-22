@@ -65,10 +65,11 @@
 #
 # failurePolicy Fail: an error of an expression refuses the request of the
 # controller, so one child fails its apply and the rest go on. The binding
-# starts with Audit and Warn: a refusal is an audit annotation, a warning in
-# the log of the controller and a count of the metric
-# apiserver_validating_admission_policy_check_total{policy="flux-child-scope"};
-# a later change turns it to Deny after a read of both sites.
+# started with Audit and Warn, and is Deny and Audit after a read of the
+# audit counts of both sites: a refusal fails the apply of that child, counts
+# in apiserver_validating_admission_policy_check_total{policy="flux-child-scope",
+# enforcement_action="deny"}, and keeps its annotation (with the name of the
+# object) in the audit stream.
 #
 # The lists between the BEGIN and END lines are the class of git: run
 # `python3 kubernetes/apps/flux-system/admission/classlist.py write` after a
@@ -643,4 +644,4 @@ metadata:
   name: flux-child-scope
 spec:
   policyName: flux-child-scope
-  validationActions: ["Audit", "Warn"]
+  validationActions: ["Deny", "Audit"]

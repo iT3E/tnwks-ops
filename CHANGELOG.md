@@ -3,6 +3,24 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.292.2 - 2026-11-22
+
+### Security
+
+* Flux: the admission policy flux-child-scope denies and audits. After a read of its audit counts on both sites, a request of a Flux child outside the "ask first" class that a rule refuses now fails the apply of that child, and its audit annotation keeps the name of the object
+
+## v2.292.1 - 2026-11-22
+
+### Fixed
+
+* ansible: invoke-elevated.sh fails, with one line that says why, when the elevated process does not start or gives no exit code, so `task wsl-host:sshd` and `sshd-check` fail and do not end green on a script that did not run
+
+## v2.292.0 - 2026-11-22
+
+### Changed
+
+* security: the Wazuh server builds a byte-for-byte copy of the manifests of wazuh-kubernetes v5.0.0-rc2 in this repository (kubernetes/apps/security/wazuh/server), checked against its sha256 sums, in place of a GitRepository of the vendor. No cluster lists it yet.
+
 ## v2.291.1 - 2026-11-22
 
 ### Fixed

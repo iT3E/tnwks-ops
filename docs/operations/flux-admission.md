@@ -235,17 +235,18 @@ Kustomization builds, and a CI test keeps it so.
 
 ## Roll-out
 
-1. The binding starts with `Audit` and `Warn`. A request that a rule refuses
-   passes, with an audit annotation, a warning in the log of the controller
-   and a count of `apiserver_validating_admission_policy_check_total`.
-2. After one reconcile cycle on both sites, the owner reads the result
-   (below), with the positive control of each site. A reconcile applies the
-   output of a chart only at a Helm install or upgrade, so the read also
-   needs a replay of the chart output of both sites, rendered from git, on
-   the throwaway API server of the tests: no refusal, or only objects of
-   apps that then join the class.
-3. A second change turns the binding to `Deny`. It also changes
-   `test_the_binding_is_still_audit_and_warn`.
+1. The binding started with `Audit` and `Warn`. A request that a rule
+   refuses passed, with an audit annotation, a warning in the log of the
+   controller and a count of `apiserver_validating_admission_policy_check_total`.
+2. After one reconcile cycle on both sites, a read of the result (below),
+   with the positive control of each site and a replay of the chart output
+   of both sites, rendered from git, on the throwaway API server of the
+   tests, found no refusal, or only objects of apps that then joined the
+   class.
+3. The binding is `Deny` and `Audit` now. A refused request fails the
+   apply of that child only, counts with `enforcement_action` "deny", and
+   keeps its audit annotation, with the name of the object, in the audit
+   stream (below).
 
 The objects that the rules refuse on 2026-11-21, from the replay of the 1680
 live objects with a Flux owner of site 1 on a throwaway API server, and from
@@ -343,7 +344,8 @@ a Kustomization with a class path, and a privileged pod in `home-automation`,
 as `helm-controller`, with the owner labels of a HelmRelease outside the
 class. Each object adds to the count of the site, so the run is the positive
 control of the read (above). The API server stores nothing. With `Audit` and
-`Warn` each object passes with a warning. With `Deny` each one is refused.
+`Warn` each object passes with a warning. With `Deny` and `Audit` each one
+is refused.
 The owner runs it with a kubeconfig that may impersonate:
 
 ```bash
