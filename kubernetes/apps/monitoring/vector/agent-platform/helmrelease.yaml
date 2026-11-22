@@ -61,6 +61,15 @@ spec:
                   fieldRef:
                     apiVersion: v1
                     fieldPath: metadata.namespace
+              # The reader of the file sources logs nothing: at the pinned
+              # Vector it writes the first 1000 bytes of a line over
+              # max_line_bytes to its own log at ERROR, and the agent_channel
+              # source reads a log that must not leave the node. The cost:
+              # the lines of the reader (a new file, a long line, a read
+              # error) are not in this log, for the kubernetes_logs sources
+              # too; vector_component_errors_total still counts them.
+              # observability/tests/test_agent_channel_count.py pins it.
+              VECTOR_LOG: "info,vector::internal_events::file::source=off"
             # The gauges of the platform and Vector's own metrics, for the
             # PodMonitor (podmonitor.yaml).
             ports:

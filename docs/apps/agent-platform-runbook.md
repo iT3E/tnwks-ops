@@ -39,14 +39,14 @@ section here (`runbook_url`).
 
 ## The alerts
 
-26 alerts cover the platform: the 19 rules of
-`kubernetes/apps/ai/agents/monitoring/app/` (17 in `prometheusrule.yaml`, 2
+27 alerts cover the platform: the 20 rules of
+`kubernetes/apps/ai/agents/monitoring/app/` (18 in `prometheusrule.yaml`, 2
 in `heartbeat-prometheusrule.yaml`), the 2 rules of the model gateway in
 `kubernetes/apps/ai/litellm/app/prometheusrule.yaml`, and the 5 rules of the
 backup operator (the kopiur chart) that match the snapshot policy, the
 snapshots and the restores of a state volume. The other rules of the backup
 operator are about its repository and its controller, and `backups.md`
-covers them. Each of the 21 rules in `kubernetes/apps/ai/` opens the AI
+covers them. Each of the 22 rules in `kubernetes/apps/ai/` opens the AI
 board in Grafana (`tnwks-ai`), for the site whose Prometheus raised it
 (`observability/tests/test_alert_links.py`). No alert of the platform has
 fired live yet; the rule tests (`observability/tests/test_hand_written_rules.py`)
@@ -725,7 +725,9 @@ send of a streamed part that hangs, or a turn that waits in the queue of the
 session), and the person who wrote gets no answer. It does not catch a final
 reply that the channel sends after the turn ended and that then hangs or
 fails: that message counts as ended. It does not catch a channel whose
-poll stops either: no message reaches the agent, so there is no gap. A send
+poll stops either: no message reaches the agent, so there is no gap.
+`AgentChannelFailing` catches those two cases from the error lines of the
+channel. A send
 that fails with an error shows on the board ("Replies that failed"), but
 only for a reply that is not streamed. A quiet evening has no
 message, so it does not fire. A turn that ends in an error does not fire
@@ -763,6 +765,91 @@ app.kubernetes.io/name=agent`), with the go of the owner: Flux starts it
 again, and the channel starts in about two seconds. The messages of the
 hung turn get no reply; tell the person who wrote. If it comes again, keep
 the log heads of the minutes before it for the cause.
+
+### AgentChannelFailing
+
+**What it means.** The Telegram channel of main or finance (the label
+`pod_namespace`) logged error lines of one pattern (the label `pattern`) in
+the last 30 minutes. The log of the agent container does not ship: the
+platform agent of Vector reads it on the node and counts the lines of four
+fixed patterns, from the source of the product (OpenClaw 2026.11.3). Only
+the count leaves the node ([agent-platform.md](agent-platform.md), "Logs").
+
+- `send_failed`: a call to send or edit a message in the chat failed after
+  its retries, or hung until its timeout (60 seconds for a text), or the
+  final reply (or a block of it) or its final delivery failed, also before
+  the call to the chat API. One line fires the alert: a reply, or a part of
+  it, did not reach the chat. One failure can give two lines (the call and
+  the reply), which does not change the alert. A send of the message tool
+  counts too. The typing cue does not.
+- `poll_stall` and `poll_restart`: the channel saw no completed poll for 2
+  minutes, or its poll ended and starts again after a wait (30 seconds,
+  then longer). The product starts the poll again by itself, so it takes 3
+  lines of one pattern in 30 minutes: the poll stopped, and two restarts
+  did not bring it back. No message reaches the agent while the poll is
+  down.
+- `channel_restart`: the health monitor of the product started the channel
+  again (it was stuck, or its connection was quiet, for 25 to 30 minutes),
+  the restart failed, or the monitor hit its limit of restarts in an hour.
+
+The alert ends 30 minutes after the last line. It does not catch a reply
+that the chat service took and did not show, or a fault that the product
+does not log.
+
+- **False counts.** A false count needs the words of a pattern in a line
+  that the product writes. At the default level the product does not log
+  the text of a message in (only its length), so a member can not type a
+  pattern into the log. An error text that holds content (of a tool, for
+  example) could still hold one. With verbose logging on, the text of each
+  message in is in the log, and a member could add counts at will.
+- **True counts that a member can cause.** A member who blocks the bot, or
+  deletes a message that the agent still edits, makes a send or an edit
+  fail. Each gives one `send_failed` line, so one such act fires the
+  warning, and doing it again keeps it firing. That is acceptable for a
+  warning, which only asks for a read.
+- **Lines that can be missed.** A line that the agent writes while the
+  platform Vector restarts (a change of its config, a restart of the node)
+  can be missed: the new Vector pod is a new series, it reads the lines of
+  the gap from its checkpoint at once, and `increase()` does not count the
+  first sample of a series.
+- **Not seen live yet.** No line of the four patterns has been seen on this
+  cluster yet. The forms come from the source of the release and from the
+  live line `[telegram] outbound send ok`. The first real fault is the
+  first proof.
+
+**First checks.** Read only.
+
+1. The count by agent and pattern, in Grafana Explore on the Prometheus of
+   homelab-wsl:
+   `sum by (pod_namespace, pattern) (increase(homelab_agent_channel_error_lines_total[2h]))`.
+2. The heads of the lines on the pod, and nothing after them:
+   `kubectl -n agents-<name> logs deploy/agent -c agent --since=2h | grep -oE '(send|edit)[A-Za-z]* failed|(fallback delivery|final reply|block reply) failed|Polling stall detected|isolated polling ingress (failed|stopped|restart requested); restarting|health-monitor: (restarting|restart failed|hit)' | sort | uniq -c`.
+   This also shows the typing cue (`sendChatAction failed`), which the
+   count leaves out.
+   The text after these heads can hold a chat ID or chat content: do not
+   copy it into an issue or a pull request. A `Forbidden` send or a
+   `message to edit not found` edit can be an act of a member (the bot
+   blocked, a message deleted); the owner reads that text on the pod.
+3. `AgentTurnNotEnded` and the Messages tab of the AI board: did messages
+   come in, and did their turns end.
+4. The flows of the pod to the chat service in Hubble (dropped or not
+   answered).
+
+**Seen so far.** Not as this alert. On 2026-11-20 both agents logged
+timeouts to the chat service from 20:13 to 20:21 UTC, the health monitor
+started the channel of finance again at 22:25, and main sent nothing for
+two messages ([AgentTurnNotEnded](#agentturnnotended)). That restart of
+finance is the kind of line that `channel_restart` counts. The count came
+after that night, so it was not replayed.
+
+**Fix.** A short break of the chat service ends by itself: the product
+retries, and the alert ends 30 minutes after the last line. Tell the person
+who wrote that a reply may be lost. If the lines go on for more than 30
+minutes, or `channel_restart` comes again, delete the agent pod with the go
+of the owner (`kubectl -n agents-<name> delete pod -l
+app.kubernetes.io/name=agent`); the channel starts in about two seconds.
+If the flows to the chat service are dropped, the cause is the network,
+not the agent: see the network rule of the namespace.
 
 ### AgentHeartbeatMissing
 
@@ -974,9 +1061,12 @@ failed Restore in the same pull request, as the restore steps say.
 
 ## An agent does not answer on its channel
 
-The pod is ready, and a message to the agent gets no answer. No alert reads
-the receive path of a channel; `AgentHeartbeatMissing` fires on the next
-morning when the scheduled turn did not complete.
+The pod is ready, and a message to the agent gets no answer.
+`AgentChannelFailing` fires when the Telegram channel of main or finance
+logs a failed send, a poll that stops or a restart of the channel. A
+channel that takes no message and logs no error has no alert;
+`AgentHeartbeatMissing` fires on the next morning when the scheduled turn
+did not complete.
 
 1. **Read only.** The pod, the sandboxes and the model path:
    ```sh

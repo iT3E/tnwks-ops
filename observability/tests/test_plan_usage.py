@@ -92,9 +92,9 @@ def test_the_series_and_their_bound():
 
 def lab_config(path: str) -> dict:
     """The config as it is, from the lines to the exporter, fed from a file in
-    place of the logs of the pod: its internal_metrics and token_zero sources,
-    the transforms, and its exporter with each of its settings and inputs, on
-    a port of the host. The exporter drops a metric only when an event comes
+    place of the logs of the pod: its internal_metrics, token_zero,
+    agent_channel and channel_zero sources, the transforms, and its exporter
+    with each of its settings and inputs, on a port of the host. The exporter drops a metric only when an event comes
     in (internal_metrics sends them), so a lab without those inputs never
     drops one. Only the flush period and the zero interval are shorter."""
     config = load()
@@ -102,13 +102,14 @@ def lab_config(path: str) -> dict:
             "flush_period_secs": LAB_FLUSH_SECONDS}
     transforms = {name: config["transforms"][name]
                   for name in ("platform_gauges", "platform_gauge_route", "plan_metrics", "token_metrics",
-                               "token_now", "bridge_metrics", "instruction_metrics") if name in config["transforms"]}
+                               "token_now", "bridge_metrics", "instruction_metrics", "agent_channel_count",
+                               "agent_channel_metrics") if name in config["transforms"]}
     transforms["as_pod"] = {"type": "remap", "inputs": ["lines"], "source": (
         '.kubernetes.pod_namespace = "ai"\n.kubernetes.container_name = "model-bridge"\n')}
     transforms["platform_gauges"] = {**transforms["platform_gauges"], "inputs": ["as_pod"]}
     sources = {"lines": {"type": "file", "include": [path], "read_from": "beginning"},
-               **{name: config["sources"][name] for name in ("internal_metrics", "token_zero")
-                  if name in config["sources"]}}
+               **{name: config["sources"][name] for name in ("internal_metrics", "token_zero", "agent_channel",
+                                                             "channel_zero") if name in config["sources"]}}
     if "token_zero" in sources:
         sources["token_zero"] = {**sources["token_zero"], "interval_secs": LAB_ZERO_SECONDS}
     assert set(sink["inputs"]) <= set(sources) | set(transforms), sink["inputs"]

@@ -1901,9 +1901,20 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 
 Not in Loki, on purpose:
 
-- **The agent container of an agent pod.** The pilot's pod excludes it with
+- **The agent container of an agent pod.** Each agent pod excludes it with
   the annotation `vector.dev/exclude-containers: agent`: its log can hold
-  chat content and the name of its bot.
+  chat content and the name of its bot. The agent's log does not ship; a
+  count of fixed error patterns does. For main and finance (the agents with
+  Telegram), the platform agent reads that log on the node only to count
+  the error lines of the channel (the source `agent_channel` and the
+  transform `agent_channel_count`): a line of a known pattern becomes one
+  count with two labels, the namespace and the name of the pattern, and
+  each other line is dropped. No word of a line leaves the node, and the
+  count goes to Prometheus, not to Loki ([Metrics](#metrics)). The file
+  source does not log a discarded line: Vector's own log, which can be read
+  in `monitoring`, holds no byte of a line of the agent, because the reader
+  of the file sources logs nothing (`VECTOR_LOG` in the HelmRelease), and
+  containerd splits a line at 16 KiB.
 - **Every other pod of the trust domains**: the gateways and supervisors of
   `agents-pilot`, `agents-main` and `agents-finance`, the agent pods of main
   and finance, and the Signal daemon (its log holds phone numbers). Read
@@ -1970,6 +1981,20 @@ Each label has the prefix `openclaw.` (in Prometheus `openclaw_`).
   the one before are right. `METRICS_ON` in
   `observability/tests/test_agent_metrics.py` names the agents that send.
 - **The workflow agents** do not send metrics: their runs are short Jobs.
+- **The error lines of the chat channel.** One more series does not come
+  from the metrics of the product: `homelab_agent_channel_error_lines_total`,
+  a counter that the platform agent of Vector serves from the log of the
+  agent container of main and finance ([Logs](#logs)). Its labels are
+  `pod_namespace` (`agents-main` or `agents-finance`) and `pattern`:
+  `send_failed` (a send or an edit of a message that failed after its
+  retries or at its timeout, or a final reply, a block of it or its final
+  delivery that failed),
+  `poll_stall` (no completed poll for 2 minutes), `poll_restart` (the poll
+  ended and starts again after a wait) and `channel_restart` (the health
+  monitor of the product restarted the channel, or could not). The config
+  lists the lines of the product for each (OpenClaw 2026.11.3). Each pair
+  has a series at 0 from the start of the Vector pod, and a restart of that
+  pod starts the counter again. `AgentChannelFailing` reads it.
 
 ## Checks
 
@@ -2026,8 +2051,10 @@ the platform agent for the `instruction-check file=` lines and the bridge
 (`AgentInstructionFileChanged`, `ModelBridgeRateLimited`, and through the
 records of [Plan use](#plan-use) `ModelPlanNearLimit`) ([Logs](#logs)).
 `AgentBackupMoverConfigMapDenied` reads a counter of the API server,
-`AgentBackupRepositoryNotReady` the phase gauge of the backup operator, and
-`AgentTurnNotEnded` two counters of the product ([Metrics](#metrics)).
+`AgentBackupRepositoryNotReady` the phase gauge of the backup operator,
+`AgentTurnNotEnded` two counters of the product ([Metrics](#metrics)), and
+`AgentChannelFailing` the count of the error lines of the chat channel that
+the platform agent makes on the node ([Logs](#logs)).
 
 [`agent-platform-runbook.md`](agent-platform-runbook.md) has a section for
 each alert (what it means, the first checks, what was seen so far, the fix),
@@ -2067,6 +2094,7 @@ policy that `observability/inventory.py` declares
 | `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |
 | `ModelPlanNearLimit` | The newest reading of the five hour window or a week window of the Claude plan is near the limit (`allowed_warning`, the warning of the vendor) or at it (`rejected`), and the window did not reset since ([Plan use](#plan-use)). The overage windows do not fire | 5m | The tab "Limits and security" of the AI board: the use and the reset time of each window. Slow the scheduled work of the agents, or wait for the reset |
 | `AgentTurnNotEnded` | A personal agent took a message and has not ended its turn for 30 minutes: its count of messages in (`openclaw_message_received_total`) is higher than its count of messages that ended (`openclaw_message_processed_total`, completed, skipped or error), by channel ([Metrics](#metrics)). It catches a turn that never ends (a model call, a tool or a streamed part that hangs), not a final reply that hangs or fails after the turn ended. A quiet evening has no message and does not fire | 30m | "Messages with no end" on the Messages tab of the AI board, then [its runbook](agent-platform-runbook.md#agentturnnotended). A restart of the agent pod ends it |
+| `AgentChannelFailing` | The Telegram channel of main or finance logged error lines in the last 30 minutes, by the count of fixed patterns on the node ([Logs](#logs)): one `send_failed` line (a reply or a part of it did not reach the chat) or one `channel_restart` line, or 3 lines of `poll_stall` or of `poll_restart` (the poll stopped and two restarts did not bring it back). It catches the two cases that `AgentTurnNotEnded` does not: a final reply that hangs or fails after the turn ended, and a poll that stops. It ends 30 minutes after the last line | none | The heads of the lines on the pod, then [its runbook](agent-platform-runbook.md#agentchannelfailing) |
 | `ModelGatewayCallsFailing` | At least 3 model calls of the key of a trust domain failed in 15 minutes, and more than half of its calls. One turn with its retries does not fire it | 20m | "Failed model calls by status" on the Model calls tab of the AI board: 429 the limit of the plan, 401 or 403 a key or a model list, 5xx the bridge, Bedrock or the vendor |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,
