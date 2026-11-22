@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.268.0 - 2026-11-22
+
+### Added
+
+* mikrotik: the router lets the desktop read the LiteAP radio (10.60.10.45) and the LiteBeam radio (10.60.10.43) over SNMP: UDP 161 from the monitoring list to those two addresses only, for snmp-exporter; SNMP is not on in the radios yet
+
 ## v2.267.0 - 2026-11-22
 
 ### Removed
