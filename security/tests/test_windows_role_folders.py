@@ -40,6 +40,16 @@ FOLDERS = {
     "host_check_inbox_dir": "inbox",
     # SYSTEM, the Administrators, Users read, and each service reads.
     "coral_detector_root": "coral",
+    # The rehearsal of the account change, on WSL-02 while it runs: a role
+    # folder whose log and disk folders the temporary account writes to.
+    "wsl_rehearsal_dir": "rehearsal",
+    # The rehearsal of the move, on WSL-02 while it runs: a role folder whose
+    # disk and log folders the two temporary accounts write to
+    # (test_wsl_move_rehearsal.py).
+    "wsl_move_rehearsal_dir": "move rehearsal",
+    # The move of the distro: a role folder whose disk and log folders have
+    # rules of their own (test_wsl_move_role.py).
+    "wsl_move_dir": "move",
 }
 # The folders below a role folder that the account writes to, with their own call
 # of the module and a writer. The SYSTEM log of the watchdog has its own call too.
@@ -47,6 +57,7 @@ OWN_RULES = {
     "lan_bridge_dir": ["lan_bridge_ip_dir"],
     "wsl_watchdog_dir": ["wsl_watchdog_log_dir", "wsl_service_log_dir"],
     "udp_relay_dir": ["udp_relay_log_dir"],
+    "usb_attach_dir": ["usb_attach_log_dir"],
 }
 
 
@@ -82,7 +93,8 @@ def var(text: str) -> str:
 
 def test_each_folder_of_a_role_is_in_the_list():
     found = {name for name, (_, value) in defaults().items()
-             if isinstance(value, str) and value.lower().startswith("c:\\programdata\\")}
+             if isinstance(value, str) and value.lower().startswith("c:\\programdata\\")
+             and not value.lower().endswith((".ps1", ".json"))}
     assert found == set(FOLDERS), "a new folder under C:\\ProgramData needs its rules here"
 
 
@@ -111,7 +123,7 @@ def test_each_folder_with_rules_of_its_own_is_below_its_role_folder_and_has_its_
             assert f"{{{{ {child} }}}}" in calls, child
     writers = {var(call["path"]): call.get("writer", "") for role in {r for r, _ in values.values()}
                for call in module_calls(role) if call.get("writer")}
-    assert set(writers) == {"lan_bridge_ip_dir", "wsl_watchdog_log_dir", "udp_relay_log_dir"}
+    assert set(writers) == {"lan_bridge_ip_dir", "wsl_watchdog_log_dir", "udp_relay_log_dir", "usb_attach_log_dir"}
 
 
 def test_the_folders_of_the_host_check_and_the_detector_let_no_user_make_files():
@@ -147,7 +159,7 @@ WRITES = [
     re.compile(r"-WriteIpFile '\{\{ (\w+) \}\}'"),
     re.compile(r"\*&gt;&gt; '\{\{ (\w+) \}\}\\"),
 ]
-WRITER_DIRS = {"lan_bridge_ip_dir", "wsl_watchdog_log_dir", "udp_relay_log_dir"}
+WRITER_DIRS = {"lan_bridge_ip_dir", "wsl_watchdog_log_dir", "udp_relay_log_dir", "usb_attach_log_dir"}
 
 
 def test_each_task_with_no_elevation_writes_only_where_the_account_has_a_write_rule():
@@ -169,8 +181,10 @@ def test_each_task_with_no_elevation_writes_only_where_the_account_has_a_write_r
     assert unelevated == {
         "lan-bridge-ip.xml.j2": ["lan_bridge_ip_dir"],
         "udp-relay.xml.j2": ["udp_relay_log_dir"],
+        "usb-attach.xml.j2": ["usb_attach_log_dir"],
         "wsl-keepalive.xml.j2": [],
         "wsl-watchdog.xml.j2": ["wsl_watchdog_log_dir"],
+        "wsl-stop.xml.j2": [],
     }
     assert values["lan_bridge_ip_file"][1].startswith("{{ lan_bridge_ip_dir }}\\")
 
@@ -315,3 +329,19 @@ def test_readers_none_leaves_users_out_of_the_folder():
     assert [rule.split("|")[0] for rule in folder["rules"]] == [SYSTEM, ADMINS]
     again = run_module(IN_PLACE, items="reset")
     assert again["sets"] == [] and again["changed"] is False, "with Users as readers the folder is in place"
+
+
+def test_the_folder_of_the_rehearsal_is_a_role_folder_with_two_writer_folders():
+    tasks = yaml.safe_load((ROLES / "windows_wsl_rehearsal/tasks/main.yml").read_text())
+    block = next(task for task in tasks if task.get("when") == "wsl_rehearsal_state == 'present'")["block"]
+    folder = next(task for task in block if task["name"] == "Folder of the rehearsal")["tnwks_win_dir_acl"]
+    assert folder == {"path": "{{ wsl_rehearsal_dir }}", "items": "reset",
+                      "keep": ["{{ wsl_rehearsal_log_dir }}", "{{ wsl_rehearsal_disk_dir }}"]}
+    writers = next(task for task in block if task["name"] == "Log and disk folders of the rehearsal")
+    assert writers["tnwks_win_dir_acl"]["writer"] == "{{ wsl_rehearsal_account }}"
+    assert writers["loop"] == folder["keep"]
+
+
+def test_users_may_read_a_folder_unless_the_call_says_readers_none():
+    spec = re.search(r"readers = @\{([^}]*)\}", MODULE.read_text())[1]
+    assert "default = 'users'" in spec and "choices = @('users', 'none')" in spec

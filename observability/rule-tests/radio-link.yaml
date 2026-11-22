@@ -1,0 +1,228 @@
+# Cases for the radio link alerts hop by hop: the EP-R6 (sce-ep01), the LiteAP
+# radio (liteap-gps) behind it and the LiteBeam radio (litebeam-5ac) over the
+# air (kubernetes/apps/monitoring/kube-prometheus-stack/addons/alerts/radio-gateway.yaml).
+# One fault pages once: the hop that failed, never the hops behind it. The loss
+# ratio comes in as the recorded series (wan-latency.yaml records it from the
+# smokeping counters), one sample per 30s; 31 samples cover 15 minutes.
+rule_files:
+  - kubernetes/apps/monitoring/kube-prometheus-stack/addons/alerts/radio-gateway.yaml
+evaluation_interval: 30s
+tests:
+  - name: the LiteAP stops answering while the EP-R6 answers
+    interval: 30s
+    input_series:
+      # Down from 2m30s; the LiteBeam behind it is lost with it.
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: RadioAPUnreachable
+        eval_time: 6m
+        exp_alerts: []
+      - alertname: RadioAPUnreachable
+        eval_time: 7m
+        exp_alerts:
+          - exp_labels: {severity: warning, host: 10.60.10.45, name: liteap-gps}
+      - alertname: RadioStationUnreachable
+        eval_time: 15m
+        exp_alerts: []
+      - alertname: RadioGatewayUnreachable
+        eval_time: 15m
+        exp_alerts: []
+
+  - name: the LiteBeam stops answering while the LiteAP answers (the link is down or the station is off)
+    interval: 30s
+    input_series:
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: RadioStationUnreachable
+        eval_time: 12m
+        exp_alerts: []
+      - alertname: RadioStationUnreachable
+        eval_time: 13m
+        exp_alerts:
+          - exp_labels: {severity: warning, host: 10.60.10.43, name: litebeam-5ac}
+      - alertname: RadioAPUnreachable
+        eval_time: 13m
+        exp_alerts: []
+      - alertname: RadioGatewayUnreachable
+        eval_time: 13m
+        exp_alerts: []
+
+  - name: the EP-R6 down fires only the gateway alert
+    interval: 30s
+    input_series:
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: RadioGatewayUnreachable
+        eval_time: 15m
+        exp_alerts:
+          - exp_labels: {severity: warning, host: 10.10.140.140, name: sce-ep01}
+      - alertname: RadioAPUnreachable
+        eval_time: 15m
+        exp_alerts: []
+      - alertname: RadioStationUnreachable
+        eval_time: 15m
+        exp_alerts: []
+
+  - name: a LiteAP losing some pings is no LiteBeam fault, and not yet its own
+    interval: 30s
+    input_series:
+      # A third lost at the AP end, more than half at the station end behind it.
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0x4 0.3x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0x4 0.6x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: RadioAPUnreachable
+        eval_time: 15m
+        exp_alerts: []
+      - alertname: RadioStationUnreachable
+        eval_time: 15m
+        exp_alerts: []
+
+  - name: the probe's own path losing pings fires nothing on the link
+    interval: 30s
+    input_series:
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0x4 1x26
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0x4 1x26
+      # The router hop drops with them until 10m, then SW03 (the wg01-home path) from 10m.
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x4 1x15 0x10
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x19 1x10
+    alert_rule_test:
+      - alertname: RadioGatewayUnreachable
+        eval_time: 15m
+        exp_alerts: []
+      - alertname: RadioAPUnreachable
+        eval_time: 15m
+        exp_alerts: []
+      - alertname: RadioStationUnreachable
+        eval_time: 15m
+        exp_alerts: []
+
+  - name: a LiteAP reboot of about 2 minutes stays quiet
+    interval: 30s
+    input_series:
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0x4 1x5 0x20
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0x4 1x7 0x18
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: RadioAPUnreachable
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: RadioAPUnreachable
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: RadioStationUnreachable
+        eval_time: 15m
+        exp_alerts: []
+
+  - name: the far end switched off and on again within 5 minutes stays quiet
+    interval: 30s
+    input_series:
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0x4 1x10 0x16
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x30
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: RadioStationUnreachable
+        eval_time: 7m
+        exp_alerts: []
+      - alertname: RadioStationUnreachable
+        eval_time: 15m
+        exp_alerts: []
+
+  - name: a radio target leaves the config while the prober is up
+    interval: 1m
+    input_series:
+      # The LiteBeam's last sample at 9m: absent from 14m (the 5m lookback), firing from 44m.
+      - series: smokeping_requests_total{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0+60x9 _x50
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.43", name="litebeam-5ac"}
+        values: 0x9 _x50
+      - series: smokeping_requests_total{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0+60x60
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="radio", host="10.60.10.45", name="liteap-gps"}
+        values: 0x60
+      - series: smokeping_requests_total{k8s_cluster="homelab-wsl", role="edge", host="10.10.140.140", name="sce-ep01"}
+        values: 0+60x60
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="lan", host="10.10.91.1", name="sce-rtr01"}
+        values: 0x60
+      - series: smokeping:loss_ratio:rate1m{k8s_cluster="homelab-wsl", role="switch", host="10.98.0.251", name="sw03"}
+        values: 0x60
+      - series: up{k8s_cluster="homelab-wsl", job="smokeping-prober"}
+        values: 1x60
+    alert_rule_test:
+      - alertname: RadioLinkProbeMissing
+        eval_time: 40m
+        exp_alerts: []
+      - alertname: RadioLinkProbeMissing
+        eval_time: 50m
+        exp_alerts:
+          - exp_labels: {severity: warning, role: radio, name: litebeam-5ac}
+      - alertname: RadioStationUnreachable
+        eval_time: 50m
+        exp_alerts: []
+      - alertname: RadioGatewayProbeMissing
+        eval_time: 50m
+        exp_alerts: []
+
+  - name: a prober that is down is SmokepingProberDown's, not the link's
+    interval: 1m
+    input_series:
+      - series: up{k8s_cluster="homelab-wsl", job="smokeping-prober"}
+        values: 0x60
+    alert_rule_test:
+      - alertname: RadioLinkProbeMissing
+        eval_time: 50m
+        exp_alerts: []

@@ -1,0 +1,19 @@
+---
+# The cluster server of main: the Kubernetes MCP server of the containers
+# organization, over Streamable HTTP, read only (config.toml). Its one
+# credential is the token of its service account, in its own pod.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml
+# The config gets a hash of its content in its name, so a change of the
+# file is a change of the pod template, and one merge gives one rollout.
+configMapGenerator:
+  - name: cluster-mcp-config
+    files:
+      - config.toml=./config.toml
+    options:
+      annotations:
+        # The config has no ${NAME} for Flux.
+        kustomize.toolkit.fluxcd.io/substitute: disabled

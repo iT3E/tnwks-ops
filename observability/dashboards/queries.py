@@ -32,6 +32,11 @@ IDENTITY = {
     "homelab:database_backup_state": ("namespace", "db_cluster"),
     "homelab:app_rpo_state": ("app",),
     "homelab:other_database_state": ("workload", "engine"),
+    "homelab:ai_part_state": ("trust_domain", "part", "namespace", "kind", "workload"),
+    "homelab:ai_schedule_state": ("trust_domain", "namespace", "cronjob"),
+    "homelab:ai_result_state": ("trust_domain", "check"),
+    "homelab:ai_backup_state": ("trust_domain", "namespace", "policy"),
+    "homelab:ai_backup_age_seconds": ("trust_domain", "namespace", "policy"),
     "homelab:app_rto_state": ("app",),
     "homelab:app_backup_age_seconds": ("app",),
     "homelab:host_state": ("instance", "resource"),
@@ -149,6 +154,26 @@ def wan(direction: str, picked: bool = False) -> str:
     the picked ones ($client). The rules sum away the site label and only site 1's
     router exports flows: no site scope."""
     return f'wan:client_app_{direction}_bits:rate2m' + ('{client=~"$client"}' if picked else "")
+
+
+def reachability(target: str, behind: str = "") -> str:
+    """A device smokeping pings (target: its series' labels), as a state from the share of
+    pings lost over the last minute: 1 under 10%, 2 losing pings, 3 over half (its alert's
+    line). Unknown (0) while the probe's own path is losing pings too (the router hop, and
+    SW03 on the way to the management VLANs), as its alert is quiet then. No series, no
+    value: the panel's Unknown. Only site 1 probes, so the site filter doesn't apply.
+
+    behind: the labels of the hop in front of it on a chain (the radio link). The hop
+    must answer too (under 10% lost, its alert's gate): while it doesn't, or isn't
+    probed, this one is Unknown, never Unreachable or Reachable. Each hop names the one
+    in front of it, so a hop that is down makes every hop behind it Unknown."""
+    loss = f"max(smokeping:loss_ratio:rate1m{{{target}}})"
+    path = 'max(smokeping:loss_ratio:rate1m{role=~"lan|switch"})'
+    gate = f"({path} < 0.1)"
+    if behind:
+        gate += f" and on () (max(smokeping:loss_ratio:rate1m{{{behind}}}) < 0.1)"
+    state = f"({loss} < bool 0.1) + 2 * ({loss} >= bool 0.1) * ({loss} <= bool 0.5) + 3 * ({loss} > bool 0.5)"
+    return f"(({state}) and on () {gate}) or on () (0 * {loss})"
 
 
 def worst(*sources: str) -> str:

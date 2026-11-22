@@ -1,0 +1,30 @@
+---
+# LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
+# lists ./agent/restore-test/ks.yaml, for the restore test of the first nightly
+# snapshot with the state (the owner's go of 2026-11-17). The cleanup is two
+# changes, not one revert. First the line out of that list, with no other
+# edit: Flux deletes the Restore, the scratch volume and the check Job.
+# Then, when they are gone, the name of the snapshot back to its
+# placeholder (agent-state-SET-ME, in restore/restore.yaml), and this
+# directory is a template again. Not both in one change: Flux applies the
+# placeholder to the Restore while it prunes, and the deletion then waits
+# for the health check (60 minutes).
+# The scratch volume of the restore test. An empty claim of the class of
+# `agent-state` (local-path: it binds on the node of its first pod, here the
+# restore mover, on any worker). Flux owns it, so the removal of this
+# directory deletes it, and the reclaim policy Delete of the class wipes its
+# directory on the node. The restored data holds credentials: it must not
+# stay behind.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-state-restore-test
+  labels:
+    app.kubernetes.io/name: agent-restore-test
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      # The size of agent-state (agent/app/pvc.yaml).
+      storage: 10Gi

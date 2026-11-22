@@ -1,0 +1,28 @@
+---
+# LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
+# lists ./vault-backup/restore-test/ks.yaml, for the restore test of the
+# finance share. The cleanup is two changes. First the line out of that
+# list, with no other edit: Flux deletes the Restore, the scratch volume
+# and the check Job. Then, when they are gone, the name of the snapshot
+# back to its placeholder (vault-SET-ME, in restore/restore.yaml and
+# check/job.yaml), and this directory is a template. Not both in one
+# change: Flux applies the placeholder to the Restore while it prunes, and
+# the deletion then waits for the health check (45 minutes).
+# The scratch volume of the restore test of the share. An empty claim of the
+# default class (local-path: it binds on the node of its first pod, here the
+# restore mover, on any worker). Flux owns it, so the second change deletes
+# it, and the reclaim policy Delete of the class wipes its directory on the
+# node. The restored notes are private: they must not stay behind.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-restore-test
+  labels:
+    app.kubernetes.io/name: vault-restore-test
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      # The size of the share (vault-share/app/volumes.yaml).
+      storage: 2Gi

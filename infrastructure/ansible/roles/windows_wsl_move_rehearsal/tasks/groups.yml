@@ -1,0 +1,29 @@
+---
+# Each account of the rehearsal is a member of Users only. The procedure puts
+# A into Administrators only in the steps that the docs name (phases window and
+# wayback), and logs each moment; at the end of each phase, neither account is
+# in any other group.
+- name: The accounts of the rehearsal are in Users only
+  ansible.windows.win_powershell:
+    parameters:
+      Names: "{{ wsl_move_rehearsal_accounts.values() | map(attribute='name') | list }}"
+    script: |
+      param([string[]]$Names)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $sids = @{}
+      foreach ($n in $Names) { $u = Get-LocalUser -Name $n -ErrorAction SilentlyContinue; if ($u) { $sids[$u.SID.Value] = $n } }
+      $found = @()
+      foreach ($g in @(Get-LocalGroup)) {
+          if ($g.SID.Value -eq 'S-1-5-32-545') { continue }
+          $members = @()
+          try { $members = @(Get-LocalGroupMember -SID $g.SID.Value | ForEach-Object { $_.SID.Value }) }
+          catch { $members = @(([ADSI]"WinNT://./$($g.Name),group").Invoke('Members') | ForEach-Object {
+              $raw = [byte[]]$_.GetType().InvokeMember('objectSid', 'GetProperty', $null, $_, $null)
+                  (New-Object Security.Principal.SecurityIdentifier $raw, 0).Value }) }
+          foreach ($m in $members) { if ($sids.ContainsKey($m)) { $found += "$($sids[$m]) in $($g.Name)" } }
+      }
+      $found
+  check_mode: false
+  register: wsl_move_rehearsal_groups
+  failed_when: wsl_move_rehearsal_groups.output | length > 0

@@ -54,7 +54,7 @@ spec:
       containers:
         - name: model-bridge
           # A release, by digest: what runs only changes through git.
-          image: ghcr.io/it3e/tnwks-model-bridge:0.2.3@sha256:dbd5c984064c17f6ce43337c410df4c05da6103709aaaa4b67e56043a3ff8c70
+          image: ghcr.io/it3e/tnwks-model-bridge:0.3.0@sha256:27d126f9cfa230ed1a17e29d77c80d11adb9a03fa56c0f0945a1b21c75617448
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

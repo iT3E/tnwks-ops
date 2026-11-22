@@ -1,0 +1,175 @@
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {"mode": "token"},
+    "controlUi": {"enabled": false}
+  },
+  "update": {"checkOnStart": false},
+  "telemetry": {"enabled": false},
+  "acp": {"enabled": false},
+  "commands": {
+    "config": false,
+    "ownerAllowFrom": ["telegram:${TELEGRAM_ALLOW_FROM}"]
+  },
+  "session": {"dmScope": "per-channel-peer"},
+  "tools": {
+    "elevated": {"enabled": false},
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish",
+      "firefly__delete_*", "firefly__bulk_*", "firefly__trigger_*", "firefly__*export*", "firefly__*attachment*",
+      "firefly__create_rule*", "firefly__update_rule*"],
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get", "web_search", "firefly__*", "vault__*"]}},
+    "web": {"search": {"enabled": true, "provider": "brave"}}
+  },
+  "mcp": {
+    "servers": {
+      "firefly": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/finance/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "get_*", "search_*", "test_rule", "test_rule_group",
+            "create_account", "update_account",
+            "create_transaction", "create_split_transaction", "update_transaction",
+            "create_category", "update_category",
+            "create_budget", "update_budget", "create_budget_limit", "update_budget_limit",
+            "create_bill", "update_bill",
+            "create_tag", "update_tag"
+          ]
+        }
+      },
+      "vault": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/finance-vault/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "read_text_file", "read_multiple_files", "list_directory", "directory_tree",
+            "search_files", "get_file_info",
+            "write_file", "edit_file", "create_directory"
+          ]
+        }
+      }
+    }
+  },
+  "memory": {
+    "search": {
+      "provider": "openai-compatible",
+      "model": "agents-finance-embeddings",
+      "remote": {
+        "baseUrl": "http://litellm-app.ai.svc.cluster.local:4000/v1",
+        "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"}
+      },
+      "sources": ["memory"],
+      "extraPaths": [
+        {"path": "/home/node/data/vault", "pattern": "**/*.md"},
+        {"path": "/vault", "pattern": "**/*.md"}
+      ],
+      "rememberAcrossConversations": false
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/data/state/workspace",
+      "model": {"primary": "litellm/agents-finance"},
+      "modelPolicy": {"allow": ["litellm/agents-finance"]},
+      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw"},
+      "heartbeat": {
+        "every": "24h",
+        "target": "none",
+        "isolatedSession": true,
+        "lightContext": true,
+        "prompt": "This is the daily scheduled check of the platform. Run the shell command `date -u` one time, then reply with its output and nothing else."
+      }
+    }
+  },
+  "models": {
+    "mode": "replace",
+    "catalogRefresh": {"enabled": false},
+    "providers": {
+      "litellm": {
+        "baseUrl": "http://litellm-app.ai.svc.cluster.local:4000",
+        "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"},
+        "api": "anthropic-messages",
+        "models": [
+          {
+            "id": "agents-finance",
+            "name": "Claude Opus 5.5 (agents-finance at the model gateway)",
+            "params": {"canonicalModelId": "claude-opus-5-5"},
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 200000,
+            "maxTokens": 32000
+          }
+        ]
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "allowFrom": ["${TELEGRAM_ALLOW_FROM}"],
+      "groupPolicy": "disabled",
+      "configWrites": false
+    }
+  },
+  "plugins": {
+    "allow": [
+      "active-memory",
+      "brave",
+      "diagnostics-otel",
+      "memory-core",
+      "openshell",
+      "telegram"
+    ],
+    "load": {
+      "paths": [
+        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox"
+      ]
+    },
+    "entries": {
+      "openshell": {
+        "enabled": true,
+        "config": {
+          "mode": "mirror",
+          "from": "docker.io/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+          "gatewayEndpoint": "https://openshell.agents-finance.svc.cluster.local:8080",
+          "policy": "/home/node/config/sandbox-policy.yaml",
+          "autoProviders": false,
+          "timeoutSeconds": 300
+        }
+      },
+      "brave": {"enabled": true},
+      "diagnostics-otel": {"enabled": true},
+      "active-memory": {
+        "enabled": true,
+        "config": {
+          "enabled": true,
+          "agents": ["main"],
+          "allowedChatTypes": ["direct", "group"],
+          "queryMode": "recent",
+          "promptStyle": "recall-heavy",
+          "timeoutMs": 25000,
+          "maxSummaryChars": 220,
+          "logging": true
+        }
+      }
+    }
+  },
+  "diagnostics": {
+    "otel": {
+      "enabled": true,
+      "endpoint": "http://alloy.monitoring.svc.cluster.local:4318",
+      "protocol": "http/protobuf",
+      "serviceName": "openclaw-agents-finance",
+      "traces": true,
+      "metrics": true,
+      "logs": false,
+      "sampleRate": 1.0
+    }
+  }
+}

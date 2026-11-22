@@ -562,6 +562,109 @@
   {
     "dashboard": "home",
     "tab": "Now",
+    "panel": "AI",
+    "query": "((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"3\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_backup_state",
+      "homelab:ai_part_state",
+      "homelab:ai_result_state",
+      "homelab:ai_schedule_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_absent_ai_part_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_agent_platform_result_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_ai_backup_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_ai_schedule_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_ai_part_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_ai_result_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kopiur_policy_last_backup_success_timestamp_seconds",
+        "producer": "Kopiur controller (PVC backups and restores)",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_cronjob_spec_suspend",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_cronjob_status_last_successful_time",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_deployment_spec_replicas",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_deployment_status_replicas_available",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_owner",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_status_failed",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_status_start_time",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_statefulset_replicas",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_statefulset_status_replicas_ready",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/wsl/multi-site.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
     "panel": "Home",
     "query": "((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 1)",
     "unit": "state",
@@ -721,10 +824,11 @@
     "dashboard": "home",
     "tab": "Now",
     "panel": "Needs attention",
-    "query": "sort_desc(label_replace(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\"), \"board\", \"tnwks-network\", \"\", \"\") or label_replace(label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\"), \"board\", \"tnwks-kubernetes\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, instance, resource) (homelab:host_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Host\", \"\", \"\"), \"board\", \"tnwks-hosts\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\"))",
+    "query": "sort_desc(label_replace(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\"), \"board\", \"tnwks-network\", \"\", \"\") or label_replace(label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\"), \"board\", \"tnwks-kubernetes\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, instance, resource) (homelab:host_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Host\", \"\", \"\"), \"board\", \"tnwks-hosts\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 1 != 4 != 5, \"area\", \"AI part\", \"\", \"\"), \"board\", \"tnwks-ai\", \"\", \"\"))",
     "unit": "state",
     "query_mode": "instant",
     "inputs": [
+      "homelab:ai_part_state",
       "homelab:app_rpo_state",
       "homelab:app_rto_state",
       "homelab:database_backup_state",
@@ -765,6 +869,11 @@
         "availability": "configured"
       },
       {
+        "metric": "homelab_absent_ai_part_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
         "metric": "homelab_app_backup_scheduled",
         "producer": "read-only evidence collector",
         "availability": "configured"
@@ -781,6 +890,11 @@
       },
       {
         "metric": "homelab_collection_success",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_ai_part_info",
         "producer": "read-only evidence collector",
         "availability": "configured"
       },
@@ -3051,6 +3165,193 @@
   },
   {
     "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "panel": "EP-R6 reachability",
+    "query": "(((max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}))",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "smokeping:loss_ratio:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:loss_ratio:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "panel": "LiteAP reachability",
+    "query": "(((max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1) and on () (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}))",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "smokeping:loss_ratio:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:loss_ratio:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "panel": "LiteBeam reachability",
+    "query": "(((max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1) and on () (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}))",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "smokeping:loss_ratio:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:loss_ratio:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "panel": "Radio link packet loss",
+    "query": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge|radio\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "smokeping:loss_ratio:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:loss_ratio:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "panel": "Radio link latency",
+    "query": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge|radio\"})",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "smokeping:rtt_p90:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:rtt_p90:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "panel": "VLAN 140 traffic",
+    "query": "sum by (direction) (label_replace(rate(mktxp_interface_rx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"from VLAN 140\", \"\", \"\") or label_replace(rate(mktxp_interface_tx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"to VLAN 140\", \"\", \"\"))",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_interface_rx_byte_total",
+      "mktxp_interface_tx_byte_total"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_interface_rx_byte_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_interface_tx_byte_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "panel": "Radio network Internet traffic",
+    "query": "sum by (client, direction) (label_replace(wan:client_app_receive_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"up\", \"\", \"\"))",
+    "unit": "bps",
+    "query_mode": "range",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
     "tab": "History",
     "panel": "Router BGP session resets",
     "query": "max by (k8s_cluster, routerboard_name, name) (resets(mktxp_bgp_uptime{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
@@ -3193,7 +3494,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "panel": "WAN p90 latency",
-    "query": "smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\"}",
+    "query": "max by (k8s_cluster, name) (smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "s",
     "query_mode": "range",
     "inputs": [
@@ -3218,7 +3519,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "panel": "WAN latency threshold",
-    "query": "smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\"}",
+    "query": "max by (k8s_cluster, name) (smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "s",
     "query_mode": "range",
     "inputs": [
@@ -3243,7 +3544,7 @@
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "panel": "Packet loss",
-    "query": "smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\"}",
+    "query": "max by (k8s_cluster, name) (smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
     "unit": "percentunit",
     "query_mode": "range",
     "inputs": [
@@ -4984,6 +5285,1323 @@
     "missing": "Unknown \u2014 missing evidence",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "panel": "Parts",
+    "query": "((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_part_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_absent_ai_part_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_ai_part_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_deployment_spec_replicas",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_deployment_status_replicas_available",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_statefulset_replicas",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_statefulset_status_replicas_ready",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "panel": "Checks",
+    "query": "((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_result_state",
+      "homelab:ai_schedule_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_agent_platform_result_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_ai_schedule_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_ai_result_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_cronjob_spec_suspend",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_cronjob_status_last_successful_time",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_owner",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_status_failed",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_status_start_time",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "panel": "Backups",
+    "query": "((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_backup_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_ai_backup_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kopiur_policy_last_backup_success_timestamp_seconds",
+        "producer": "Kopiur controller (PVC backups and restores)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "panel": "Part state",
+    "query": "max by (k8s_cluster, trust_domain, part, namespace, kind, workload) (homelab:ai_part_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_part_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_absent_ai_part_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_ai_part_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_deployment_spec_replicas",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_deployment_status_replicas_available",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_statefulset_replicas",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_statefulset_status_replicas_ready",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Parts",
+    "panel": "AI alerts firing",
+    "query": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentTurnNotEnded|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "ALERTS"
+    ],
+    "sources": [
+      {
+        "metric": "ALERTS",
+        "producer": "local Prometheus alert rules (current state)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Model calls by key",
+    "query": "sum by (k8s_cluster, api_key_alias, requested_model, status_code) (increase(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "litellm_proxy_total_requests_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_proxy_total_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Failed model calls by status",
+    "query": "sum by (k8s_cluster, api_key_alias, requested_model, exception_status) (increase(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "litellm_proxy_failed_requests_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_proxy_failed_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Model calls",
+    "query": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+    "unit": "reqps",
+    "query_mode": "range",
+    "inputs": [
+      "litellm_proxy_total_requests_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_proxy_total_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Share of model calls that failed",
+    "query": "sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_failed_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])) / sum by (k8s_cluster, api_key_alias) (rate(litellm_proxy_total_requests_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "litellm_proxy_failed_requests_metric_total",
+      "litellm_proxy_total_requests_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_proxy_failed_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      },
+      {
+        "metric": "litellm_proxy_total_requests_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Time of a model call (p95)",
+    "query": "histogram_quantile(0.95, sum by (k8s_cluster, api_key_alias, le) (rate(litellm_request_total_latency_metric_bucket{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__rate_interval])))",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "litellm_request_total_latency_metric_bucket"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_request_total_latency_metric_bucket",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Tokens per day",
+    "query": "sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d])) + sum by (k8s_cluster, api_key_alias, requested_model) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[1d]))",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "litellm_input_tokens_metric_total",
+      "litellm_output_tokens_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_input_tokens_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      },
+      {
+        "metric": "litellm_output_tokens_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Model calls",
+    "panel": "Tokens in the range",
+    "query": "sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_input_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range])) + sum by (k8s_cluster, api_key_alias, requested_model, api_provider) (increase(litellm_output_tokens_metric_total{k8s_cluster=~\"$cluster\",api_key_alias!=\"metrics-scrape\"}[$__range]))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "litellm_input_tokens_metric_total",
+      "litellm_output_tokens_metric_total"
+    ],
+    "sources": [
+      {
+        "metric": "litellm_input_tokens_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      },
+      {
+        "metric": "litellm_output_tokens_metric_total",
+        "producer": "model gateway (LiteLLM) Prometheus callback, its keep list and ServiceMonitor",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Messages by channel",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel) (label_replace(increase(openclaw_message_received_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_received_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_received_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Turns by outcome",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_outcome) (label_replace(increase(openclaw_message_processed_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_processed_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_processed_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Messages in",
+    "query": "sum by (k8s_cluster, trust_domain) (label_replace(rate(openclaw_message_received_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "reqps",
+    "query_mode": "range",
+    "inputs": [
+      "openclaw_message_received_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_received_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Turns that ended in an error",
+    "query": "sum by (k8s_cluster, trust_domain) (label_replace(rate(openclaw_message_processed_total{k8s_cluster=~\"$cluster\",openclaw_outcome=\"error\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "reqps",
+    "query_mode": "range",
+    "inputs": [
+      "openclaw_message_processed_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_processed_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Replies sent",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_delivery_kind) (label_replace(increase(openclaw_message_delivery_started_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_delivery_started_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_delivery_started_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Replies that failed",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel, openclaw_delivery_kind, openclaw_errorCategory) (label_replace(increase(openclaw_message_delivery_duration_ms_milliseconds_count{k8s_cluster=~\"$cluster\",openclaw_outcome=\"error\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_delivery_duration_ms_milliseconds_count"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_delivery_duration_ms_milliseconds_count",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Time to send a reply (p95)",
+    "query": "histogram_quantile(0.95, sum by (k8s_cluster, trust_domain, le) (label_replace(rate(openclaw_message_delivery_duration_ms_milliseconds_bucket{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")))",
+    "unit": "ms",
+    "query_mode": "range",
+    "inputs": [
+      "openclaw_message_delivery_duration_ms_milliseconds_bucket"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_delivery_duration_ms_milliseconds_bucket",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Turns by trigger",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_trigger) (label_replace(increase(openclaw_session_turn_created_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\"))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_session_turn_created_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_session_turn_created_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Stuck sessions",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_state) (label_replace(increase(openclaw_session_stuck_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_session_stuck_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_session_stuck_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Messages with no end",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel) (label_replace((sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_received_total{k8s_cluster=~\"$cluster\"}) - (sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_processed_total{k8s_cluster=~\"$cluster\"}) or sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_received_total{k8s_cluster=~\"$cluster\"}) * 0)), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_processed_total",
+      "openclaw_message_received_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_processed_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      },
+      {
+        "metric": "openclaw_message_received_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Model failovers",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_provider, openclaw_model, openclaw_failover_to_model) (label_replace(increase(openclaw_model_failover_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_model_failover_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_model_failover_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Tool calls",
+    "panel": "MCP requests by route",
+    "query": "sum by (k8s_cluster, route, method, status) (increase(agentgateway_requests_total{k8s_cluster=~\"$cluster\"}[$__range]) unless increase(agentgateway_requests_total{k8s_cluster=~\"$cluster\",method=\"GET\",status=\"405\"}[$__range]))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "agentgateway_requests_total"
+    ],
+    "sources": [
+      {
+        "metric": "agentgateway_requests_total",
+        "producer": "MCP gateway (agentgateway) PodMonitor; board queries only, no rule",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Tool calls",
+    "panel": "MCP failed requests",
+    "query": "sum by (k8s_cluster, route, status) (rate(agentgateway_requests_total{k8s_cluster=~\"$cluster\",status=~\"[45]..\"}[$__rate_interval]) unless rate(agentgateway_requests_total{k8s_cluster=~\"$cluster\",status=~\"[45]..\",method=\"GET\",status=\"405\"}[$__rate_interval]))",
+    "unit": "reqps",
+    "query_mode": "range",
+    "inputs": [
+      "agentgateway_requests_total"
+    ],
+    "sources": [
+      {
+        "metric": "agentgateway_requests_total",
+        "producer": "MCP gateway (agentgateway) PodMonitor; board queries only, no rule",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Checks",
+    "panel": "Scheduled check state",
+    "query": "max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab:ai_schedule_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_schedule_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_ai_schedule_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_cronjob_spec_suspend",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_cronjob_status_last_successful_time",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_owner",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_status_failed",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_status_start_time",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Checks",
+    "panel": "Time since the last good run",
+    "query": "max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds{k8s_cluster=~\"$cluster\"}) * 0 + on (k8s_cluster, namespace, cronjob) group_left () (time() - max by (k8s_cluster, namespace, cronjob) (kube_cronjob_status_last_successful_time{k8s_cluster=~\"$cluster\"}))",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_ai_schedule_objective_seconds",
+      "kube_cronjob_status_last_successful_time"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_ai_schedule_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_cronjob_status_last_successful_time",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Checks",
+    "panel": "Result line state",
+    "query": "max by (k8s_cluster, trust_domain, check) (homelab:ai_result_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_result_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_agent_platform_result_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_ai_result_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Checks",
+    "panel": "Workflow run Jobs",
+    "query": "label_replace(count by (k8s_cluster) (kube_job_status_succeeded{k8s_cluster=~\"$cluster\",namespace=\"agents-workflows\",job_name=~\"run-.+\"} > 0), \"result\", \"succeeded\", \"\", \"\") or label_replace(count by (k8s_cluster) (kube_job_status_failed{k8s_cluster=~\"$cluster\",namespace=\"agents-workflows\",job_name=~\"run-.+\",reason!=\"\"} > 0), \"result\", \"failed\", \"\", \"\")",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "kube_job_status_failed",
+      "kube_job_status_succeeded"
+    ],
+    "sources": [
+      {
+        "metric": "kube_job_status_failed",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_job_status_succeeded",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Backups",
+    "panel": "Backup state",
+    "query": "max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_backup_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_ai_backup_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kopiur_policy_last_backup_success_timestamp_seconds",
+        "producer": "Kopiur controller (PVC backups and restores)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Backups",
+    "panel": "Backup age",
+    "query": "max by (k8s_cluster, trust_domain, namespace, policy) (homelab:ai_backup_age_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_backup_age_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_ai_backup_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kopiur_policy_last_backup_success_timestamp_seconds",
+        "producer": "Kopiur controller (PVC backups and restores)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Backups",
+    "panel": "Last restore test",
+    "query": "max by (k8s_cluster, trust_domain, check, result) (homelab:ai_restore_result_timestamp_seconds{k8s_cluster=~\"$cluster\"}) * 1000",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_restore_result_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_agent_platform_result_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Five hour window used",
+    "query": "max(homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\",window=\"five_hour\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_utilization_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_utilization_ratio",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Five hour window resets in",
+    "query": "max(homelab:ai_plan_reset_timestamp_seconds{k8s_cluster=~\"$cluster\",window=\"five_hour\"}) - time()",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_reset_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Week used",
+    "query": "max(homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\",window=\"seven_day\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_utilization_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_utilization_ratio",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Week resets in",
+    "query": "max(homelab:ai_plan_reset_timestamp_seconds{k8s_cluster=~\"$cluster\",window=\"seven_day\"}) - time()",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_reset_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "State of each plan window",
+    "query": "max by (k8s_cluster, window) (homelab:ai_plan_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_status",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Plan use over time",
+    "query": "max by (k8s_cluster, window) (homelab:ai_plan_utilization_ratio{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "homelab:ai_plan_utilization_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_reset_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_model_bridge_plan_utilization_ratio",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading in the range. No model call through the bridge",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Age of the last reading",
+    "query": "time() - max by (k8s_cluster, window) (homelab:ai_plan_observed_timestamp_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ai_plan_observed_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_plan_observed_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no reading. No model call through the bridge in the last 8 days, the window reset after the last call, or the vendor did not give the value",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Model tokens by trust domain",
+    "query": "sum by (k8s_cluster, trust_domain, token) (label_replace(increase(homelab_model_bridge_tokens_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]), \"trust_domain\", \"$1\", \"domain\", \"(.+)\"))",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "homelab_model_bridge_tokens_total"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_tokens_total",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None: no model call through the bridge in the range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Model tokens in the range",
+    "query": "sum by (k8s_cluster, trust_domain, token) (label_replace(increase(homelab_model_bridge_tokens_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"domain\", \"(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_model_bridge_tokens_total"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_tokens_total",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None: no model call through the bridge in the range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Plan limit reached",
+    "query": "max by (k8s_cluster, trust_domain) (label_replace(max_over_time(homelab_model_bridge_engine_error_timestamp_seconds{k8s_cluster=~\"$cluster\",kind=\"rate_limit\"}[$__range]), \"trust_domain\", \"$1\", \"domain\", \"(.+)\")) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_model_bridge_engine_error_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_model_bridge_engine_error_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Instruction file changes",
+    "query": "max by (k8s_cluster, trust_domain, result) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds{k8s_cluster=~\"$cluster\",check=\"instruction-file\"}[$__range]), \"trust_domain\", \"$1\", \"pod_namespace\", \"agents-(.+)\")) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_agent_platform_result_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_agent_platform_result_timestamp_seconds",
+        "producer": "Vector log metrics of the agent platform (kubernetes/apps/monitoring/vector)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Limits and security",
+    "panel": "Mover denials",
+    "query": "max by (k8s_cluster, policy) (max_over_time(apiserver_validating_admission_policy_check_total{k8s_cluster=~\"$cluster\",policy=\"agents-backup-mover-configmaps\",enforcement_action=\"deny\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "apiserver_validating_admission_policy_check_total"
+    ],
+    "sources": [
+      {
+        "metric": "apiserver_validating_admission_policy_check_total",
+        "producer": "Kubernetes API server metrics (kept series only)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
     "owner": "homelab operator"
   },
   {

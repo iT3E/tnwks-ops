@@ -1,0 +1,27 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The cluster server of main (Design Doc, section 4.2.6): the Kubernetes
+# MCP server, read only, behind the central MCP gateway
+# (kubernetes/apps/ai/mcp-gateway, route main-cluster). Its rights are in
+# ../read-access.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-main-cluster-mcp
+  namespace: flux-system
+spec:
+  targetNamespace: agents-main
+  path: ./kubernetes/apps/ai/agents/main/cluster-mcp/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The service account gets its bindings first, so the first calls of
+    # the server do not fail with a 403.
+    - name: agents-main-read-access
+  # Ready only when the server is.
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

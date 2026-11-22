@@ -18,8 +18,8 @@
 ##   DHCP static leases   25
 ##   Address lists        5 (11 members)
 ##   Port lists           1
-##   Zone-pair chains     19
-##   Firewall accepts     14 (expanded from VyOS tcp_udp / port-limit splits)
+##   Zone-pair chains     20
+##   Firewall accepts     24 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
@@ -483,6 +483,32 @@ locals {
           protocol    = "tcp"
           dst_port    = "22"
         },
+        {
+          comment     = "SSH to the LiteAP radio"
+          dst_address = "10.60.10.45"
+          protocol    = "tcp"
+          dst_port    = "22"
+        },
+        {
+          comment     = "SSH to the LiteBeam radio"
+          dst_address = "10.60.10.43"
+          protocol    = "tcp"
+          dst_port    = "22"
+        },
+        {
+          comment     = "device access pod to the LiteAP radio's web UI"
+          src_address = "10.10.32.12"
+          dst_address = "10.60.10.45"
+          protocol    = "tcp"
+          dst_port    = "443"
+        },
+        {
+          comment     = "device access pod to the LiteBeam radio's web UI"
+          src_address = "10.10.32.12"
+          dst_address = "10.60.10.43"
+          protocol    = "tcp"
+          dst_port    = "443"
+        },
       ]
     }
     "190-unifi-frontend-910-switch-mgmt" = {
@@ -502,6 +528,51 @@ locals {
           src_address_list = "monitoring"
           dst_address      = "10.98.0.251"
           protocol         = "icmp"
+        },
+      ]
+    }
+    "200-unifi-frontend-910-UISP-140" = {
+      from    = "unifi-frontend-910"
+      to      = "UISP-140"
+      comment = "From unifi-frontend-910 to UISP-140"
+      rules = [
+        {
+          comment          = "smokeping (WSL cluster) pings of the EP-R6"
+          src_address_list = "monitoring"
+          dst_address      = "10.10.140.140"
+          protocol         = "icmp"
+        },
+        {
+          comment          = "smokeping (WSL cluster) pings of the LiteAP radio"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.45"
+          protocol         = "icmp"
+        },
+        {
+          comment          = "smokeping (WSL cluster) pings of the LiteBeam radio"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.43"
+          protocol         = "icmp"
+        },
+        {
+          comment          = "smokeping (WSL cluster) pings of the airCube"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.46"
+          protocol         = "icmp"
+        },
+        {
+          comment          = "snmp-exporter (WSL cluster) reads the LiteAP radio"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.45"
+          protocol         = "udp"
+          dst_port         = "161"
+        },
+        {
+          comment          = "snmp-exporter (WSL cluster) reads the LiteBeam radio"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.43"
+          protocol         = "udp"
+          dst_port         = "161"
         },
       ]
     }
@@ -647,6 +718,7 @@ locals {
       protocol          = "tcp"
       dst_port          = "443"
       in_interface_list = "vpn-ci"
+      src_address       = "10.10.32.10-10.10.32.11"
     }
   }
 
@@ -955,6 +1027,11 @@ locals {
           public_key      = "PdKrAZoUe0UgjIswaKOaIvLlXh1k811qVo/SJDiD6Bw="
           allowed_address = ["10.10.32.11/32"]
           comment         = "ARC scale set tnwks-ops-runner-wsl-02 (wireproxy sidecar)"
+        }
+        device-access = {
+          public_key      = "ktbzr3XWwhMjWExRCmfHJDwFzhcxHsCGfo4RM8nFCkA="
+          allowed_address = ["10.10.32.12/32"]
+          comment         = "device access pod (homelab-wsl, wireproxy sidecar)"
         }
       }
     }

@@ -11,6 +11,8 @@ it back. The scenario playbooks that use these backups are in
 | Postgres (every app database) | CloudNativePG barman-cloud plugin | WAL continuously, base backup 01:00 | S3 `cnpg/<cluster>/` | 30 days, point-in-time | minutes |
 | App config PVCs (list below) | kopiur (Kopia) | nightly 02:00-03:00 | S3 `kopiur/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
 | Agent platform PVCs (list below) | kopiur (Kopia), repository `agents` | daily, by each policy | S3 `kopiur-agents/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
+| Finance agent PVC (list below, not yet applied) | kopiur (Kopia), repository `agents-finance` | daily | S3 `kopiur-finance/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
+| Main agent PVC (list below, no backup yet) | kopiur (Kopia), repository `agents-main` (not in git yet) | daily | Its own prefix | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
 | UniFi controller | controller auto-backup (`.unf`), `unifi-gdrive-copy` → nfs-server `/gdrive-sync` → `tnwks-gdrive-sync` | 02:00, 02:15, copied 02:30 | controller PVC + Google Drive `Backup/nfs-gdrive-sync/unifi` | 14 on the controller, 30 on the export, 30 in Drive | 24 h |
 | Aruba SW03 config | `tnwks-aruba-backup` | 02:45, saved when changed | Google Drive `Backup/aruba` | 60 versions | 24 h |
 | Everything declarative | git | every merge | GitHub | full history | 0 |
@@ -102,6 +104,9 @@ domains"):
 | --- | --- | --- | --- |
 | Pilot agent | `agents-pilot/agent-state` | `agent-state-v2` | The state of the product (sessions, workspace) and its archives. Mover user 1000 |
 | Pilot Signal daemon | `agents-pilot/signal-state` | `signal-state` | The keys of the test Signal account and the archive of each start. Mover user 65532 |
+| Finance agent | `agents-finance/agent-state` | `agent-state`, in the repository `agents-finance` | The state of the finance agent and its archives. Mover user 1000. In git, not applied until the volume is ([the finance repository](#the-finance-repository)) |
+| Finance share | `agents-finance/vault-ro` | `vault`, in the repository `agents-finance` | The notes of the finance share, read through its read-only claim (an NFS volume, `copyMethod: Direct`). Mover user 1000, the uid of the share ([agent-platform.md](../apps/agent-platform.md), "The vault shares") |
+| Main agent | `agents-main/agent-state` | `agent-state`, in the repository `agents-main` | The state of the main agent and its archives. Mover user 1000. The volume is applied at step 1 of its cutover; the policy is in git and not applied until the repository `agents-main` is `Ready`, which comes in the steps of [the finance repository](#the-finance-repository) |
 
 The snapshots of the pilot agent from before the move (policy `agent-state`)
 stay in the shared repository until they are deleted; the runbook restores
@@ -153,6 +158,19 @@ cert CN homelab-wsl-agent-backups  (Secret kopiur-system/aws-backup-certificate-
   -> 4-hour STS session -> Secret aws-backup-sts-agents in kopiur-system/
        the repository of the agent trust domains; kopiur projects a fresh copy
        into the namespace of the trust domain before every mover run
+```
+
+The finance trust domain has a third chain, the same way
+(`kubernetes/apps/kopiur-system/agents-finance-repository/`): one repository
+for each trust domain.
+
+```
+cert CN homelab-wsl-agents-finance-backups  (Secret kopiur-system/aws-backup-certificate-agents-finance, SOPS)
+  -> CronJob kopiur-system/aws-backup-credentials-agents-finance, every 30 min (:05, :35)
+  -> role tnwks-rolesanywhere-backups-agents-finance: list, read and write kopiur-finance/ only
+  -> 4-hour STS session -> Secret aws-backup-sts-agents-finance in kopiur-system/
+       the repository agents-finance; kopiur projects a fresh copy into
+       agents-finance before every mover run
 ```
 
 - Same trust anchor and CA as the SOPS workstation certificates
@@ -228,6 +246,121 @@ cert CN homelab-wsl-agent-backups  (Secret kopiur-system/aws-backup-certificate-
   it re-bootstraps; then delete any `Pending` Snapshots and create new ones.
   Barman retries WAL on its own.
 
+### The finance repository
+
+One repository for each trust domain: the finance trust domain gets its own
+role, prefix, certificate, password and refresher
+(`kubernetes/apps/kopiur-system/agents-finance-repository/`). The prefix is
+`kopiur-finance/`, not `kopiur-agents-finance/`: the list deny of the bucket
+policy for `agents` matches each prefix that starts with `kopiur-agents`, so
+it would refuse the list of the finance role. The Terraform module refuses
+such a pair.
+
+Set it up in this order, one merge for each step. The repository never
+bootstraps with the placeholder session, and no policy comes before its
+grant:
+
+1. **The role.** The entry `agents-finance` of
+   `rolesanywhere_backups_prefixed` (`environments/prod/aws/main.tf`): the
+   role, the profile, and the two deny statements of the bucket policy for
+   `kopiur-finance/`. The apply runs in the Deploy run of the merge, with
+   no stop of its own: the merge is the approval
+   (`.github/workflows/terraform.yaml`).
+2. **The certificate and the password, before the merge of step 3.** The two
+   SOPS files went into git with the placeholder `pending`, encrypted to the
+   age recipients of `.sops.yaml` only. Add the KMS recipient first, then
+   the values, with no value on the screen:
+
+   ```bash
+   D=kubernetes/apps/kopiur-system/agents-finance-repository/app
+   bin/sops updatekeys -y "$D/secret-certificate.sops.yaml"
+   bin/sops updatekeys -y "$D/secret-password.sops.yaml"
+   T=$(mktemp -d)
+   infrastructure/terraform/environments/prod/aws/rolesanywhere/issue-cert.sh homelab-wsl-agents-finance-backups "$T" 365
+   bin/sops --set "[\"stringData\"][\"tls.crt\"] $(jq -Rs . < "$T/homelab-wsl-agents-finance-backups.pem")" "$D/secret-certificate.sops.yaml"
+   bin/sops --set "[\"stringData\"][\"tls.key\"] $(jq -Rs . < "$T/homelab-wsl-agents-finance-backups.key")" "$D/secret-certificate.sops.yaml"
+   rm -rf "$T"
+   bin/sops --set "[\"stringData\"][\"KOPIA_PASSWORD\"] \"$(openssl rand -hex 32)\"" "$D/secret-password.sops.yaml"
+   # The password check: "ok" for 64 hex characters (the pattern above),
+   # "not ok" for the placeholder or anything else. No value is shown.
+   bin/sops -d --extract '["stringData"]["KOPIA_PASSWORD"]' "$D/secret-password.sops.yaml" \
+     | tr -d '\n' | awk '{ v = v $0 } END { print (v ~ /^[0-9a-f]+$/ && length(v) == 64) ? "ok" : "not ok" }'
+   ```
+
+   Copy `secret-password.sops.yaml` as it is to the off-site kit, next to
+   the age key that opens it ([BCP](disaster-recovery.md#off-site-keys)).
+3. **The session.** The two keys `RA_AGENTS_FINANCE_BACKUPS_PROFILE_ARN` and
+   `RA_AGENTS_FINANCE_BACKUPS_ROLE_ARN` in
+   `kubernetes/clusters/wsl/cluster-settings.yaml`, from the outputs
+   `rolesanywhere_backups_prefixed_profile_arns` and
+   `rolesanywhere_backups_prefixed_role_arns` for `agents-finance`, and the
+   line of `agents-finance-repository/ks.yaml` in
+   `kubernetes/clusters/wsl/apps/kustomization.yaml`. After the merge, run
+   the refresher once:
+
+   ```bash
+   kubectl -n kopiur-system create job --from=cronjob/aws-backup-credentials-agents-finance sts-agents-finance-now
+   kubectl -n kopiur-system get job sts-agents-finance-now   # 1/1
+   kubectl -n kopiur-system get secret aws-backup-sts-agents-finance -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
+   ```
+
+4. **The repository, only when the password check prints `ok`.** Kopia
+   creates the repository with the password it finds at its first
+   bootstrap, the placeholder too, and a new password does not change an
+   existing repository. So run the check of step 2 again on the branch of
+   this step, right before its merge:
+
+   ```bash
+   D=kubernetes/apps/kopiur-system/agents-finance-repository/app
+   bin/sops -d --extract '["stringData"]["KOPIA_PASSWORD"]' "$D/secret-password.sops.yaml" \
+     | tr -d '\n' | awk '{ v = v $0 } END { print (v ~ /^[0-9a-f]+$/ && length(v) == 64) ? "ok" : "not ok" }'
+   ```
+
+   On `not ok`, stop: set the password (step 2) first. On `ok`, list
+   `clusterrepository.yaml` in
+   `agents-finance-repository/app/kustomization.yaml`. It grants
+   `agents-finance`. Then `kubectl get clusterrepository agents-finance`
+   shows `Ready`. (The certificate needs no check of its own: with the
+   placeholder, the refresh of step 3 fails.)
+5. **The policy, after the volume.** At the cutover of the finance agent,
+   list `pvc.yaml` with the inbox pod first, so the volume is made on the
+   node of the agent, then `backup.yaml` in the next pull request
+   (`kubernetes/apps/ai/agents/finance/agent/app/kustomization.yaml`; steps 1
+   and 2 of [The cutover of the finance agent](../apps/agent-platform-runbook.md#the-cutover-of-the-finance-agent)).
+   The first snapshot runs at once (`runOnCreate`):
+   `kubectl -n agents-finance get snapshots`.
+
+The way back is the same steps in the reverse order: the policy first (its
+delete needs the grant, see
+[Move a trust domain to another repository](../apps/agent-platform.md#move-a-trust-domain-to-another-repository)),
+then the repository, then the credentials, then the role. The snapshots stay
+in `kopiur-finance/` after the policy and the repository go. Without the role
+entry the bucket policy no longer keeps that prefix to one role.
+
+The certificate is renewed as the one of the agents repository above, with
+the CN `homelab-wsl-agents-finance-backups` and the file
+`agents-finance-repository/app/secret-certificate.sops.yaml`.
+
+### The main repository
+
+The main trust domain gets its own repository in the same steps as
+[the finance repository](#the-finance-repository), one merge for each
+step, with these names:
+
+| Part | Finance | Main |
+| --- | --- | --- |
+| Entry of `rolesanywhere_backups_prefixed` | `agents-finance` | `agents-main` |
+| Prefix | `kopiur-finance/` | `kopiur-main/` (not `kopiur-agents-main/`, for the reason above) |
+| Certificate CN | `homelab-wsl-agents-finance-backups` | `homelab-wsl-agents-main-backups` |
+| Role | `tnwks-rolesanywhere-backups-agents-finance` | `tnwks-rolesanywhere-backups-agents-main` |
+| Directory | `kopiur-system/agents-finance-repository/` | `kopiur-system/agents-main-repository/` |
+| Keys of `cluster-settings.yaml` | `RA_AGENTS_FINANCE_BACKUPS_PROFILE_ARN`, `RA_AGENTS_FINANCE_BACKUPS_ROLE_ARN` | `RA_AGENTS_MAIN_BACKUPS_PROFILE_ARN`, `RA_AGENTS_MAIN_BACKUPS_ROLE_ARN` |
+| ClusterRepository and its grant | `agents-finance`, grants `agents-finance` | `agents-main`, grants `agents-main` |
+| The policy after the repository | `finance/agent/app/backup.yaml` | `main/agent/app/backup.yaml` |
+
+Step 1, the role, is in `environments/prod/aws/main.tf`. The other steps
+follow it, in the order of the finance repository.
+
 ## Checking backups
 
 ```bash
@@ -239,6 +372,7 @@ kubectl get snapshotpolicies,snapshots -A
 # STS session expiry
 kubectl -n databases get secret aws-backup-sts -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
 kubectl -n kopiur-system get secret aws-backup-sts-agents -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
+kubectl -n kopiur-system get secret aws-backup-sts-agents-finance -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
 kubectl get clusterrepositories
 # Desktop timers (Drive copy of the gdrive-sync export, switch config)
 systemctl list-timers 'tnwks-*.timer'
@@ -252,7 +386,7 @@ Alerts: `PostgresBackupStale` (no base backup in 30 h, per CNPG cluster), `Postg
 stale snapshots; `KopiurBackupStale` is patched in the HelmRelease to skip a
 policy whose schedule is suspended on a standby site, from the collector's
 `homelab_app_backup_scheduled`); `KubeJobFailed` for the credentials CronJobs
-(both refreshers). The desktop
+(each refresher). The desktop
 timers have no alert yet: check the journal.
 
 ## Restoring

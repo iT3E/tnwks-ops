@@ -718,6 +718,327 @@ tests:
       value: 1
     - labels: homelab:other_database_state{k8s_cluster="one",namespace="db",workload="standby",engine="e",app="a"}
       value: 4
+- name: 'AI parts: ready, some, none, zero replicas, gone, and absent by design'
+  interval: 1m
+  input_series:
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="one",trust_domain="main",part="ok",namespace="agents-main",kind="deployment",workload="ok"}
+    values: 1+0x10
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="two",trust_domain="main",part="ok",namespace="agents-main",kind="deployment",workload="ok"}
+    values: 1+0x10
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="one",trust_domain="main",part="some",namespace="agents-main",kind="statefulset",workload="some"}
+    values: 1+0x10
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="two",trust_domain="main",part="some",namespace="agents-main",kind="statefulset",workload="some"}
+    values: 1+0x10
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="one",trust_domain="main",part="down",namespace="agents-main",kind="deployment",workload="down"}
+    values: 1+0x10
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="two",trust_domain="main",part="down",namespace="agents-main",kind="deployment",workload="down"}
+    values: 1+0x10
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="one",trust_domain="main",part="zero",namespace="agents-main",kind="deployment",workload="zero"}
+    values: 1+0x10
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="two",trust_domain="main",part="zero",namespace="agents-main",kind="deployment",workload="zero"}
+    values: 1+0x10
+  - series: kube_deployment_spec_replicas{k8s_cluster="one",namespace="agents-main",deployment="ok"}
+    values: 1+0x10
+  - series: kube_statefulset_replicas{k8s_cluster="one",namespace="agents-main",statefulset="some"}
+    values: 2+0x10
+  - series: kube_deployment_spec_replicas{k8s_cluster="one",namespace="agents-main",deployment="down"}
+    values: 1+0x10
+  - series: kube_deployment_spec_replicas{k8s_cluster="one",namespace="agents-main",deployment="zero"}
+    values: 0+0x10
+  - series: kube_deployment_status_replicas_available{k8s_cluster="one",namespace="agents-main",deployment="ok"}
+    values: 1+0x10
+  - series: kube_statefulset_status_replicas_ready{k8s_cluster="one",namespace="agents-main",statefulset="some"}
+    values: 1+0x10
+  - series: kube_deployment_status_replicas_available{k8s_cluster="one",namespace="agents-main",deployment="down"}
+    values: 0+0x10
+  - series: kube_deployment_status_replicas_available{k8s_cluster="one",namespace="agents-main",deployment="zero"}
+    values: 0+0x10
+  - series: homelab_expected_ai_part_info{k8s_cluster="one",observer_cluster="one",trust_domain="main",part="gone",namespace="agents-main",kind="deployment",workload="gone"}
+    values: 1+0x10
+  - series: homelab_absent_ai_part_info{k8s_cluster="two",observer_cluster="one",trust_domain="main",part="ok",namespace="agents-main",kind="deployment",workload="ok"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:ai_part_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:ai_part_state{k8s_cluster="one",trust_domain="main",part="ok",namespace="agents-main",kind="deployment",workload="ok"}
+      value: 1
+    - labels: homelab:ai_part_state{k8s_cluster="one",trust_domain="main",part="some",namespace="agents-main",kind="statefulset",workload="some"}
+      value: 2
+    - labels: homelab:ai_part_state{k8s_cluster="one",trust_domain="main",part="down",namespace="agents-main",kind="deployment",workload="down"}
+      value: 3
+    - labels: homelab:ai_part_state{k8s_cluster="one",trust_domain="main",part="zero",namespace="agents-main",kind="deployment",workload="zero"}
+      value: 4
+    - labels: homelab:ai_part_state{k8s_cluster="one",trust_domain="main",part="gone",namespace="agents-main",kind="deployment",workload="gone"}
+      value: 0
+    - labels: homelab:ai_part_state{k8s_cluster="two",trust_domain="main",part="ok",namespace="agents-main",kind="deployment",workload="ok"}
+      value: 5
+- name: 'AI scheduled checks: good, stale, failed after a good run, never good, suspended, no evidence'
+  interval: 1m
+  input_series:
+  - series: homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",cronjob="good"}
+    values: 3600+0x110
+  - series: homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",cronjob="stale"}
+    values: 3600+0x110
+  - series: homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",cronjob="failed"}
+    values: 3600+0x110
+  - series: homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",cronjob="never"}
+    values: 3600+0x110
+  - series: homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",cronjob="paused"}
+    values: 3600+0x110
+  - series: homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",cronjob="unseen"}
+    values: 3600+0x110
+  - series: homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",cronjob="recovered"}
+    values: 3600+0x110
+  - series: kube_cronjob_status_last_successful_time{k8s_cluster="one",namespace="agents-main",cronjob="good"}
+    values: 5000+0x110
+  - series: kube_cronjob_status_last_successful_time{k8s_cluster="one",namespace="agents-main",cronjob="stale"}
+    values: 100+0x110
+  - series: kube_cronjob_status_last_successful_time{k8s_cluster="one",namespace="agents-main",cronjob="failed"}
+    values: 1000+0x110
+  - series: kube_cronjob_status_last_successful_time{k8s_cluster="one",namespace="agents-main",cronjob="paused"}
+    values: 5000+0x110
+  - series: kube_cronjob_status_last_successful_time{k8s_cluster="one",namespace="agents-main",cronjob="recovered"}
+    values: 5000+0x110
+  - series: kube_cronjob_spec_suspend{k8s_cluster="one",namespace="agents-main",cronjob="paused"}
+    values: 1+0x110
+  - series: kube_job_owner{k8s_cluster="one",namespace="agents-main",job_name="failed-1",owner_kind="CronJob",owner_name="failed"}
+    values: 1+0x110
+  - series: kube_job_status_start_time{k8s_cluster="one",namespace="agents-main",job_name="failed-1"}
+    values: 4000+0x110
+  - series: kube_job_status_failed{k8s_cluster="one",namespace="agents-main",job_name="failed-1",reason="BackoffLimitExceeded"}
+    values: 1+0x110
+  - series: kube_job_owner{k8s_cluster="one",namespace="agents-main",job_name="never-1",owner_kind="CronJob",owner_name="never"}
+    values: 1+0x110
+  - series: kube_job_status_start_time{k8s_cluster="one",namespace="agents-main",job_name="never-1"}
+    values: 4000+0x110
+  - series: kube_job_status_failed{k8s_cluster="one",namespace="agents-main",job_name="never-1",reason="BackoffLimitExceeded"}
+    values: 1+0x110
+  - series: kube_job_owner{k8s_cluster="one",namespace="agents-main",job_name="recovered-1",owner_kind="CronJob",owner_name="recovered"}
+    values: 1+0x110
+  - series: kube_job_status_start_time{k8s_cluster="one",namespace="agents-main",job_name="recovered-1"}
+    values: 4000+0x110
+  - series: kube_job_status_failed{k8s_cluster="one",namespace="agents-main",job_name="recovered-1",reason="BackoffLimitExceeded"}
+    values: 1+0x110
+  - series: kube_job_status_start_time{k8s_cluster="one",namespace="apps",job_name="good-1"}
+    values: 5500+0x110
+  - series: homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="shared",namespace="ai",cronjob="litellm-key-check"}
+    values: 86400+0x110
+  - series: kube_cronjob_status_last_successful_time{k8s_cluster="one",namespace="ai",cronjob="litellm-key-check"}
+    values: 5000+0x110
+  promql_expr_test:
+  - expr: homelab:ai_schedule_state
+    eval_time: 100m
+    exp_samples:
+    - labels: homelab:ai_schedule_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",cronjob="good"}
+      value: 1
+    - labels: homelab:ai_schedule_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",cronjob="stale"}
+      value: 2
+    - labels: homelab:ai_schedule_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",cronjob="failed"}
+      value: 3
+    - labels: homelab:ai_schedule_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",cronjob="never"}
+      value: 3
+    - labels: homelab:ai_schedule_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",cronjob="paused"}
+      value: 4
+    - labels: homelab:ai_schedule_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",cronjob="unseen"}
+      value: 0
+    - labels: homelab:ai_schedule_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",cronjob="recovered"}
+      value: 1
+    - labels: homelab:ai_schedule_state{k8s_cluster="one",trust_domain="shared",namespace="ai",cronjob="litellm-key-check"}
+      value: 1
+- name: 'AI result lines: the newest line in its window decides, no line is Unknown'
+  interval: 1m
+  input_series:
+  - series: homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="pilot",check="instruction-check"}
+    values: 1+0x60
+  - series: homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="main",check="instruction-check"}
+    values: 1+0x60
+  - series: homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="finance",check="instruction-check"}
+    values: 1+0x60
+  - series: homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="main",check="memory-index"}
+    values: 1+0x60
+  - series: homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="finance",check="automations-sync"}
+    values: 1+0x60
+  - series: homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="workflows",check="app-drift"}
+    values: 1+0x60
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-pilot",app="agent",check="instruction-check",result="first"}
+    values: 1000+0x60
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-main",app="agent",check="instruction-check",result="ok"}
+    values: 1000+0x60
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-main",app="agent",check="instruction-check",result="failed"}
+    values: 2000+0x60
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-finance",app="agent",check="instruction-check",result="failed"}
+    values: 1000+0x60
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-finance",app="agent",check="instruction-check",result="ok"}
+    values: 2000+0x60
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-finance",app="agent",check="automations-sync",result="failed"}
+    values: 3000+0x60
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-workflows",app="agent",check="app-drift",result="ok"}
+    values: 100+0x5
+  promql_expr_test:
+  - expr: homelab:ai_result_state
+    eval_time: 60m
+    exp_samples:
+    - labels: homelab:ai_result_state{k8s_cluster="one",trust_domain="pilot",check="instruction-check"}
+      value: 1
+    - labels: homelab:ai_result_state{k8s_cluster="one",trust_domain="main",check="instruction-check"}
+      value: 3
+    - labels: homelab:ai_result_state{k8s_cluster="one",trust_domain="finance",check="instruction-check"}
+      value: 1
+    - labels: homelab:ai_result_state{k8s_cluster="one",trust_domain="main",check="memory-index"}
+      value: 0
+    - labels: homelab:ai_result_state{k8s_cluster="one",trust_domain="finance",check="automations-sync"}
+      value: 3
+    - labels: homelab:ai_result_state{k8s_cluster="one",trust_domain="workflows",check="app-drift"}
+      value: 0
+- name: 'AI backups: within the objective, past it, no evidence'
+  interval: 1m
+  input_series:
+  - series: homelab_ai_backup_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",policy="fresh"}
+    values: 100+0x10
+  - series: homelab_ai_backup_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",policy="old"}
+    values: 100+0x10
+  - series: homelab_ai_backup_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",policy="none"}
+    values: 100+0x10
+  - series: kopiur_policy_last_backup_success_timestamp_seconds{k8s_cluster="one",namespace="agents-main",policy="fresh"}
+    values: 550+0x10
+  - series: kopiur_policy_last_backup_success_timestamp_seconds{k8s_cluster="one",namespace="agents-main",policy="old"}
+    values: 100+0x10
+  promql_expr_test:
+  - expr: homelab:ai_backup_state
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab:ai_backup_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",policy="fresh"}
+      value: 1
+    - labels: homelab:ai_backup_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",policy="old"}
+      value: 3
+    - labels: homelab:ai_backup_state{k8s_cluster="one",trust_domain="main",namespace="agents-main",policy="none"}
+      value: 0
+  - expr: homelab:ai_backup_age_seconds
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab:ai_backup_age_seconds{k8s_cluster="one",trust_domain="main",namespace="agents-main",policy="fresh"}
+      value: 50
+    - labels: homelab:ai_backup_age_seconds{k8s_cluster="one",trust_domain="main",namespace="agents-main",policy="old"}
+      value: 500
+- name: 'AI plan use: the newest reading of any pod, until its window resets'
+  interval: 10m
+  input_series:
+  - series: homelab_model_bridge_plan_utilization_ratio{k8s_cluster="one",namespace="monitoring",window="five_hour",pod="vector-agent-platform-a"}
+    values: 0.3x6 _x30
+  - series: homelab_model_bridge_plan_reset_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="five_hour",pod="vector-agent-platform-a"}
+    values: 18000x6 _x30
+  - series: homelab_model_bridge_plan_status{k8s_cluster="one",namespace="monitoring",window="five_hour",pod="vector-agent-platform-a"}
+    values: 0x6 _x30
+  - series: homelab_model_bridge_plan_observed_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="five_hour",pod="vector-agent-platform-a"}
+    values: 0x6 _x30
+  - series: homelab_model_bridge_plan_utilization_ratio{k8s_cluster="one",namespace="monitoring",window="five_hour",pod="vector-agent-platform-b"}
+    values: _x12 0.6x6 _x20
+  - series: homelab_model_bridge_plan_reset_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="five_hour",pod="vector-agent-platform-b"}
+    values: _x12 18000x6 _x20
+  - series: homelab_model_bridge_plan_status{k8s_cluster="one",namespace="monitoring",window="five_hour",pod="vector-agent-platform-b"}
+    values: _x12 1x6 _x20
+  - series: homelab_model_bridge_plan_observed_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="five_hour",pod="vector-agent-platform-b"}
+    values: _x12 7200x6 _x20
+  - series: homelab_model_bridge_plan_utilization_ratio{k8s_cluster="one",namespace="monitoring",window="seven_day",pod="vector-agent-platform-a"}
+    values: 0.1x6 _x30
+  - series: homelab_model_bridge_plan_reset_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day",pod="vector-agent-platform-a"}
+    values: 864000x6 _x30
+  - series: homelab_model_bridge_plan_status{k8s_cluster="one",namespace="monitoring",window="seven_day",pod="vector-agent-platform-a"}
+    values: 0x6 _x30
+  - series: homelab_model_bridge_plan_observed_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day",pod="vector-agent-platform-a"}
+    values: 0x6 _x30
+  - series: homelab_model_bridge_plan_utilization_ratio{k8s_cluster="one",namespace="monitoring",window="seven_day_opus",pod="vector-agent-platform-a"}
+    values: -1x6 _x30
+  - series: homelab_model_bridge_plan_reset_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day_opus",pod="vector-agent-platform-a"}
+    values: -1x6 _x30
+  - series: homelab_model_bridge_plan_status{k8s_cluster="one",namespace="monitoring",window="seven_day_opus",pod="vector-agent-platform-a"}
+    values: 2x6 _x30
+  - series: homelab_model_bridge_plan_observed_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day_opus",pod="vector-agent-platform-a"}
+    values: 0x6 _x30
+  promql_expr_test:
+  - expr: homelab:ai_plan_utilization_ratio
+    eval_time: 4h
+    exp_samples:
+    - labels: homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="five_hour"}
+      value: 0.6
+    - labels: homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day"}
+      value: 0.1
+  - expr: homelab:ai_plan_state
+    eval_time: 4h
+    exp_samples:
+    - labels: homelab:ai_plan_state{k8s_cluster="one",window="five_hour"}
+      value: 2
+    - labels: homelab:ai_plan_state{k8s_cluster="one",window="seven_day"}
+      value: 1
+    - labels: homelab:ai_plan_state{k8s_cluster="one",window="seven_day_opus"}
+      value: 3
+  - expr: homelab:ai_plan_reset_timestamp_seconds
+    eval_time: 4h
+    exp_samples:
+    - labels: homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="five_hour"}
+      value: 18000
+    - labels: homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="seven_day"}
+      value: 864000
+  - expr: homelab:ai_plan_observed_timestamp_seconds
+    eval_time: 4h
+    exp_samples:
+    - labels: homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="five_hour"}
+      value: 7200
+    - labels: homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="seven_day"}
+      value: 0
+    - labels: homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="seven_day_opus"}
+      value: 0
+  - expr: homelab:ai_plan_state
+    eval_time: 370m
+    exp_samples:
+    - labels: homelab:ai_plan_state{k8s_cluster="one",window="seven_day"}
+      value: 1
+  - expr: homelab:ai_plan_utilization_ratio
+    eval_time: 370m
+    exp_samples:
+    - labels: homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day"}
+      value: 0.1
+- name: AI restore results keep their time after the line is gone
+  interval: 1m
+  input_series:
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-finance",app="agent",check="restore-check",result="ok"}
+    values: 600+0x5
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-finance",app="agent",check="vault-restore-check",result="failed"}
+    values: _x20 1500+0x5
+  - series: homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-finance",app="agent",check="daily-backup",result="ok"}
+    values: 700+0x5
+  promql_expr_test:
+  - expr: homelab:ai_restore_result_timestamp_seconds
+    eval_time: 3m
+    exp_samples:
+    - labels: homelab:ai_restore_result_timestamp_seconds{k8s_cluster="one",trust_domain="finance",check="restore-check",result="ok"}
+      value: 600
+  - expr: homelab:ai_restore_result_timestamp_seconds
+    eval_time: 90m
+    exp_samples:
+    - labels: homelab:ai_restore_result_timestamp_seconds{k8s_cluster="one",trust_domain="finance",check="restore-check",result="ok"}
+      value: 600
+    - labels: homelab:ai_restore_result_timestamp_seconds{k8s_cluster="one",trust_domain="finance",check="vault-restore-check",result="failed"}
+      value: 1500
+- name: the MCP request panel leaves out the GET with 405 of a client start
+  interval: 1m
+  input_series:
+  - series: agentgateway_requests_total{k8s_cluster="one",route="default/finance",method="GET",status="405"}
+    values: 0+1x20
+  - series: agentgateway_requests_total{k8s_cluster="one",route="default/finance",method="POST",status="200"}
+    values: 0+2x20
+  - series: agentgateway_requests_total{k8s_cluster="one",route="default/finance",method="POST",status="405"}
+    values: 0+1x20
+  promql_expr_test:
+  - expr: sum by (k8s_cluster, route, method, status) (increase(agentgateway_requests_total{k8s_cluster=~".*"}[10m])
+      unless increase(agentgateway_requests_total{k8s_cluster=~".*",method="GET",status="405"}[10m]))
+    eval_time: 20m
+    exp_samples:
+    - labels: '{k8s_cluster="one",route="default/finance",method="POST",status="200"}'
+      value: 20
+    - labels: '{k8s_cluster="one",route="default/finance",method="POST",status="405"}'
+      value: 10
 - name: 'household view: this site''s share, worst app, partial cameras'
   interval: 1m
   input_series:

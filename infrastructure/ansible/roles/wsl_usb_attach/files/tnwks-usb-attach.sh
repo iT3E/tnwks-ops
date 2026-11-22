@@ -1,50 +1,217 @@
 #!/bin/bash
-# tnwks-usb-attach — keep a homelab USB dongle attached into this WSL2 VM.
+# tnwks-usb-attach: keep a homelab USB dongle attached into this WSL2 VM.
 #
-# Inverts the old Windows-driven model (a Scheduled Task on logon/vmswitch
-# events that pushed the attach into WSL). The Windows side now does exactly
-# one thing — start WSL — and WSL owns the rest: a systemd instance of this
-# script runs per dongle and keeps it attached, so a WSL-only restart (dockerd
-# bounce, `wsl --shutdown`, VM OOM) self-heals without any Windows event.
+# A systemd instance of this script runs per dongle (tnwks-usb-attach@<VID:PID>)
+# and keeps it attached, so a start of WSL, a restart of the host and a
+# replug recover with no Windows event and no person.
 #
-# Why this works without elevation: `usbipd bind` (the admin-only, persistent
-# step) is already done — both dongles show Persisted=True. Only `usbipd
-# attach` recurs, and attach into WSL needs no admin. usbipd.exe is reached
-# over WSL/Windows interop by absolute path (appendWindowsPath is off here).
+# It attaches with the Linux usbip client that usbipd-win installs for WSL
+# (WSL/usbip next to usbipd.exe), straight against the usbipd service of the
+# host (TCP 3240). It never runs usbipd.exe: `usbipd attach --wsl` first
+# reads the list of services at the Windows service control manager
+# (usbipd-win 4.3.0: CheckAndReportServerRunning, VBoxUsbMon.IsServiceInstalled,
+# ServiceController.GetDevices), and the service control manager grants the
+# list of services to interactive and service logons, SYSTEM and the
+# Administrators only. A batch logon of a standard account (the account that
+# owns the distro when the tasks run with no elevation, wsl_start_unelevated)
+# is none of them. The usbip client
+# needs no Windows right: the service exports each device that is bound, and
+# the play binds each device (role windows_usb_attach). This is what
+# `usbipd attach --wsl --auto-attach` itself runs in the distro (usbipd-win
+# 4.3.0, Usbipd/Wsl.cs and WSL/auto-attach.sh), with the bus id found again
+# at each try, as the bus id changes at a replug.
 #
-# Chain:
-#   systemd (WantedBy=multi-user.target, Restart=always)
-#     → modprobe vhci_hcd            # usbip client module; unloaded after some
-#     → usbipd.exe attach --auto-attach --hardware-id <VID:PID>
-#         (blocks; re-attaches on detach/replug — covers the Coral firmware
-#          flip where the device re-enumerates at its runtime VID)
+# Each round (every TNWKS_USB_INTERVAL seconds, 5 by default):
+#   1. The device is attached when a USB device with the VID:PID sits on the
+#      vhci_hcd bus of this kernel: nothing to do.
+#   2. Otherwise: remove an empty directory named ttyACM* directly under /dev
+#      (below), load vhci_hcd, find the address of the host (127.0.0.1 in
+#      mirrored networking mode, else the default gateway, which is the host
+#      in NAT mode), find the bus id of the VID:PID in the devices that the
+#      host exports (`usbip list -r`), and attach it (`usbip attach`).
+# A failure (no route yet, the host not reachable yet, the device absent or
+# attached to another client) is logged once and tried again next round. The
+# client calls have time limits (TNWKS_USB_LIST_TIMEOUT, 20 s, and
+# TNWKS_USB_ATTACH_TIMEOUT, 30 s): a host that drops the packets would hold
+# each call for about 2 minutes otherwise.
 #
-# Devices are matched by VID:PID, not busid — the busid changes across
-# replug/reboot. See docs/wsl/usb-passthrough.md.
+# The empty directory: a hostPath volume of type "" whose path does not exist
+# is made by the container runtime as an empty directory. A pod that mounts
+# the node itself and starts before the device leaves a directory at the
+# name where the kernel makes the node, and devtmpfs then makes no node
+# there. The pods mount the folder /hostdev now, which always exists, so this
+# removes one left by an older pod. rmdir only: a directory with content, a
+# link and a device node stay.
+#
+# The worker-2 container binds the whole /dev of the distro at /hostdev, and
+# zwave-js-ui mounts that folder, so a node that appears later reaches it with
+# no restart (docs/wsl/usb-passthrough.md).
+#
+# Usage: tnwks-usb-attach [--once] <VID:PID>
+#   --once: one round, then exit 0 when the device is attached and 1 when not
+#   (the Windows backup task runs this through wsl.exe).
 
 set -euo pipefail
+shopt -s nullglob
 
-# Absolute path: interop PATH injection (appendWindowsPath) is disabled in
-# /etc/wsl.conf, so a bare `usbipd.exe` does not resolve.
-USBIPD="${USBIPD_EXE:-/mnt/c/Program Files/usbipd-win/usbipd.exe}"
+# The usbip client of usbipd-win, a static Linux build, by absolute path
+# (interop appendWindowsPath is off in /etc/wsl.conf).
+USBIP="${USBIP_CLIENT:-/mnt/c/Program Files/usbipd-win/WSL/usbip}"
+USB_DEVICES="${TNWKS_USB_DEVICES:-/sys/bus/usb/devices}"
+DEV_ROOT="${TNWKS_DEV_ROOT:-/dev}"
+INTERVAL="${TNWKS_USB_INTERVAL:-5}"
+LIST_TIMEOUT="${TNWKS_USB_LIST_TIMEOUT:-20}"
+ATTACH_TIMEOUT="${TNWKS_USB_ATTACH_TIMEOUT:-30}"
 
-hwid="${1:-}"
-if [[ -z "$hwid" ]]; then
-  echo "usage: $0 <VID:PID>" >&2
-  exit 2
+HWID=""
+HOST=""
+BUSID=""
+LAST_ERROR=""
+REPORTED=""
+STRAY_REPORTED=""
+
+one_line() {
+  local text="${1//$'\n'/ }"
+  echo "${text%"${text##*[![:space:]]}"}"
+}
+
+report() {
+  if [[ "$1" != "$REPORTED" ]]; then
+    echo "$1"
+    REPORTED="$1"
+  fi
+}
+
+# The device sits on the vhci_hcd bus: a usbip import of this kernel.
+is_attached() {
+  local dev vid pid
+  for dev in "$USB_DEVICES"/*; do
+    [[ -r "$dev/idVendor" && -r "$dev/idProduct" ]] || continue
+    read -r vid <"$dev/idVendor" || continue
+    read -r pid <"$dev/idProduct" || continue
+    [[ "${vid,,}:${pid,,}" == "$HWID" ]] || continue
+    [[ "$(readlink -f "$dev")" == */vhci_hcd* ]] && return 0
+  done
+  return 1
+}
+
+# An empty directory at the name of an ACM node (see the header).
+remove_stray_directories() {
+  local path message
+  for path in "$DEV_ROOT"/ttyACM*; do
+    [[ -d "$path" && ! -L "$path" ]] || continue
+    if rmdir "$path" 2>/dev/null; then
+      echo "removed the empty directory $path at the name of a device node"
+      STRAY_REPORTED=""
+    else
+      message="the directory $path is at the name of a device node and is not empty: left as it is"
+      if [[ "$message" != "$STRAY_REPORTED" ]]; then
+        echo "$message"
+        STRAY_REPORTED="$message"
+      fi
+    fi
+  done
+}
+
+host_address() {
+  local mode="" route
+  if command -v wslinfo >/dev/null 2>&1; then
+    mode="$(wslinfo --networking-mode 2>/dev/null || true)"
+  fi
+  if [[ "${mode//[[:space:]]/}" == "mirrored" ]]; then
+    HOST="127.0.0.1"
+    return 0
+  fi
+  route="$(ip -4 route show default 2>/dev/null || true)"
+  if [[ "$route" =~ ^default\ via\ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+    HOST="${BASH_REMATCH[1]}"
+    return 0
+  fi
+  LAST_ERROR="no default route to the host yet"
+  return 1
+}
+
+# The bus id of the VID:PID among the devices that the host exports. usbip
+# prints each as "<busid>: <vendor> : <product> (<vid>:<pid>)".
+find_busid() {
+  local out line
+  if ! out="$(timeout "$LIST_TIMEOUT" "$USBIP" list -r "$HOST" 2>&1)"; then
+    LAST_ERROR="the host $HOST does not answer yet: $(one_line "${out:-no answer in $LIST_TIMEOUT s}")"
+    return 1
+  fi
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^[[:space:]]*([0-9]+-[0-9.]+):\ .*\(([0-9A-Fa-f]{4}:[0-9A-Fa-f]{4})\)[[:space:]]*$ ]] \
+      && [[ "${BASH_REMATCH[2],,}" == "$HWID" ]]; then
+      BUSID="${BASH_REMATCH[1]}"
+      return 0
+    fi
+  done <<<"$out"
+  LAST_ERROR="the host $HOST exports no device $HWID (absent, or not bound)"
+  return 1
+}
+
+try_attach() {
+  local out i
+  remove_stray_directories
+  if ! out="$(modprobe vhci_hcd 2>&1)"; then
+    LAST_ERROR="modprobe vhci_hcd: $(one_line "$out")"
+    return 1
+  fi
+  host_address || return 1
+  find_busid || return 1
+  if ! out="$(timeout "$ATTACH_TIMEOUT" "$USBIP" attach -r "$HOST" -b "$BUSID" 2>&1)"; then
+    LAST_ERROR="usbip attach of $BUSID from $HOST: $(one_line "${out:-no answer in $ATTACH_TIMEOUT s}")"
+    return 1
+  fi
+  # The kernel enumerates the device a moment after the import.
+  for ((i = 0; i < 10; i++)); do
+    is_attached && return 0
+    sleep 1
+  done
+  LAST_ERROR="usbip attached $BUSID from $HOST, and no $HWID is on the vhci_hcd bus"
+  return 1
+}
+
+round() {
+  if is_attached; then
+    report "$HWID is attached"
+    return 0
+  fi
+  if try_attach; then
+    echo "$HWID is attached (bus id $BUSID from $HOST)"
+    REPORTED="$HWID is attached"
+    return 0
+  fi
+  report "$HWID is not attached: $LAST_ERROR"
+  return 1
+}
+
+main() {
+  local once=0
+  if [[ "${1:-}" == "--once" ]]; then
+    once=1
+    shift
+  fi
+  HWID="${1:-}"
+  HWID="${HWID,,}"
+  if [[ ! "$HWID" =~ ^[0-9a-f]{4}:[0-9a-f]{4}$ ]]; then
+    echo "usage: $0 [--once] <VID:PID>" >&2
+    return 2
+  fi
+  if [[ ! -x "$USBIP" ]]; then
+    echo "the usbip client of usbipd-win is not at '$USBIP': is usbipd-win installed on the Windows host?" >&2
+    return 1
+  fi
+  if ((once)); then
+    round
+    return
+  fi
+  while :; do
+    round || true
+    sleep "$INTERVAL"
+  done
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
 fi
-
-if [[ ! -x "$USBIPD" ]]; then
-  echo "usbipd.exe not found at '$USBIPD' — is usbipd-win installed on the Windows host?" >&2
-  exit 1
-fi
-
-# The usbip client module is what `attach` binds the remote device onto. It is
-# not always autoloaded after a WSL kernel start, and a missing vhci_hcd is the
-# exact failure that wedged USB after the last WSL restart.
-modprobe vhci_hcd
-
-# --auto-attach blocks and re-attaches on detach/unplug. systemd's Restart=always
-# covers the case where usbipd.exe itself exits (e.g. device not yet connected),
-# retrying until the dongle is present.
-exec "$USBIPD" attach --wsl --auto-attach --hardware-id "$hwid"

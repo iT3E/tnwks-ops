@@ -1,0 +1,53 @@
+---
+# The cluster server of main. In: the MCP gateway only
+# (kubernetes/apps/ai/mcp-gateway), which checks the key of each client and
+# lets through only the tools of its route main-cluster; and the kubelet on
+# the node, for the probes. Not the agent pod and not a sandbox: the agent
+# calls the gateway. Out: the API server, and DNS for its one name. The
+# namespace's default deny holds the rest (../../namespace.yaml).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: cluster-mcp
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: cluster-mcp
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+    # DNS for the name of the API server, and no other name: DNS would be a
+    # way out too. The name has fewer dots than ndots (5), so the resolver
+    # asks each name of the search list first: the first two get no such
+    # name, and the third is the Service of the API server.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: kubernetes.default.svc.agents-main.svc.cluster.local
+              - matchName: kubernetes.default.svc.svc.cluster.local
+              - matchName: kubernetes.default.svc.cluster.local

@@ -1,0 +1,139 @@
+---
+# The MCP gateway. In: the MCP port from the agent pod of each trust domain
+# that has a client (finance and main) and from the gateway probe of each
+# domain with a route (finance and main); the metrics port from Prometheus; the readiness port from the host
+# (the kubelet). No sandbox comes in: neither the workload pod nor the
+# supervisor of a sandbox carries the labels of a client. The admin port
+# listens on loopback and no rule names it.
+# Out: the MCP servers that are targets of the config (the finance app, the
+# vault server of finance, the vault server of main and the read servers of
+# main), and DNS for their names only. No app, no other namespace, nothing outside the cluster.
+# A trust domain that gets a client adds its agent pod and its probe below,
+# and its MCP server and its name to the egress, in the same PR as its route.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mcp-gateway
+  namespace: ai
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-gateway
+  ingress:
+    - fromEndpoints:
+        # The finance agent (route /finance/).
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: agent
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The gateway probe of finance
+        # (agents/finance/checks/app/mcp-gateway-probe.yaml).
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: platform-checks
+            app.kubernetes.io/component: mcp-gateway-probe
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The main agent, for its vault route, and the gateway probe of main.
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: agent
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: platform-checks
+            app.kubernetes.io/component: mcp-gateway-probe
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "15020"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "15021"
+              protocol: TCP
+  egress:
+    # The MCP server of the finance app (agents/finance/firefly-mcp), which
+    # holds no token.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: firefly-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    # The vault server of finance (agents/finance/vault-server), route
+    # finance-vault.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: vault-server
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: vault-server
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # The read servers of main (agents/main), one route each.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: cluster-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: flux-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: terraform-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # DNS for the name of each target, and no other name: DNS would be a way
+    # out too.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: firefly-mcp.agents-finance.svc.cluster.local
+              - matchName: vault-server.agents-finance.svc.cluster.local
+              - matchName: vault-server.agents-main.svc.cluster.local
+              - matchName: cluster-mcp.agents-main.svc.cluster.local
+              - matchName: flux-mcp.agents-main.svc.cluster.local
+              - matchName: terraform-mcp.agents-main.svc.cluster.local

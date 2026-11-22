@@ -1,0 +1,15 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tools
+resources:
+  # The Secret device-access: wireproxy.conf, the pod's wg03 peer.
+  - ./secret.sops.yaml
+  - ./helmrelease.yaml
+configMapGenerator:
+  - name: device-access-ssh
+    files:
+      - ssh/device-access.conf
+      - ssh/known_hosts
+generatorOptions:
+  disableNameSuffixHash: true

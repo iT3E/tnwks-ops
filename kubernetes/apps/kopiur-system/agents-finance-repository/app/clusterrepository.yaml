@@ -1,0 +1,62 @@
+---
+# The repository of the finance trust domain, in the backup bucket under
+# kopiur-finance/. Kopia encrypts on the client with its own KOPIA_PASSWORD
+# (kopiur-repository-agents-finance, SOPS; a copy belongs on the off-site key
+# media, docs/operations/backups.md). The S3 session is
+# aws-backup-sts-agents-finance, from the certificate CN
+# homelab-wsl-agents-finance-backups and a role that lists, reads, writes and
+# deletes under kopiur-finance/ only
+# (infrastructure/terraform/modules/aws/rolesanywhere.tf,
+# rolesanywhere_backups_prefixed). The repository is created at its first
+# bootstrap (create absent = enabled).
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: ClusterRepository
+metadata:
+  name: agents-finance
+spec:
+  backend:
+    s3:
+      bucket: "${BACKUP_S3_BUCKET}"
+      prefix: kopiur-finance/
+      endpoint: s3.us-west-2.amazonaws.com
+      region: us-west-2
+      auth:
+        secretRef:
+          name: aws-backup-sts-agents-finance
+          namespace: kopiur-system
+  encryption:
+    passwordSecretRef:
+      name: kopiur-repository-agents-finance
+      namespace: kopiur-system
+      key: KOPIA_PASSWORD
+  allowedNamespaces:
+    list:
+      # kopiur-system: the repository's own Maintenance runs here.
+      - kopiur-system
+      # The finance trust domain, and no other: one repository for each
+      # trust domain. The grant comes before any policy, and goes only after
+      # the last policy of agents-finance is gone (docs/apps/agent-platform.md,
+      # "Move a trust domain to another repository").
+      - agents-finance
+  credentialProjection:
+    allowed: true
+  identityDefaults:
+    hostnameExpr: "namespace"
+    usernameExpr: "namespace + '-' + policyName"
+  maintenance:
+    namespace: kopiur-system
+    schedule:
+      # Off the times of the shared repository (0 */6, 04:30) and of the
+      # agents repository (15 */6, 05:45).
+      quick:
+        cron: "35 */6 * * *"
+        jitter: 10m
+      full:
+        cron: "15 6 * * *"
+        jitter: 30m
+  moverDefaults:
+    cache:
+      contentCacheSizeMb: 256
+      metadataCacheSizeMb: 256
+  scheduleDefaults:
+    timezone: "${TIMEZONE}"

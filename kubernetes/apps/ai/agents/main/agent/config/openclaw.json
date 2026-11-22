@@ -1,0 +1,247 @@
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {"mode": "token"},
+    "controlUi": {"enabled": false}
+  },
+  "update": {"checkOnStart": false},
+  "telemetry": {"enabled": false},
+  "acp": {"enabled": false},
+  "commands": {
+    "config": false,
+    "ownerAllowFrom": ["telegram:${TELEGRAM_ALLOW_FROM}"]
+  },
+  "session": {"dmScope": "per-channel-peer"},
+  "tools": {
+    "elevated": {"enabled": false},
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
+    "sandbox": {"tools": {"alsoAllow": [
+      "memory_search",
+      "memory_get",
+      "web_search",
+      "web_fetch",
+      "message",
+      "progress_card",
+      "vault__*",
+      "cluster__api_resources_list",
+      "cluster__events_list",
+      "cluster__namespaces_list",
+      "cluster__pods_get",
+      "cluster__pods_list_in_namespace",
+      "cluster__pods_log",
+      "cluster__resources_get",
+      "cluster__resources_list",
+      "flux__get_kubernetes_api_versions",
+      "flux__get_kubernetes_events",
+      "flux__get_kubernetes_logs",
+      "flux__get_kubernetes_metrics",
+      "flux__get_kubernetes_resources",
+      "flux__read_flux_doc",
+      "flux__search_flux_docs",
+      "flux__trace_kubernetes_resource",
+      "terraform__get_latest_module_version",
+      "terraform__get_latest_provider_version",
+      "terraform__get_module_details",
+      "terraform__get_policy_details",
+      "terraform__get_provider_capabilities",
+      "terraform__get_provider_details",
+      "terraform__search_modules",
+      "terraform__search_policies",
+      "terraform__search_provider_docs"
+    ]}},
+    "sessions": {"visibility": "all"},
+    "web": {
+      "search": {"enabled": true, "provider": "brave"},
+      "fetch": {"enabled": true, "useTrustedEnvProxy": true}
+    }
+  },
+  "mcp": {
+    "servers": {
+      "vault": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "read_text_file", "read_multiple_files", "list_directory", "directory_tree",
+            "search_files", "get_file_info"
+          ]
+        }
+      },
+      "cluster": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-cluster/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "api_resources_list",
+            "events_list",
+            "namespaces_list",
+            "pods_get",
+            "pods_list_in_namespace",
+            "pods_log",
+            "resources_get",
+            "resources_list"
+          ]
+        }
+      },
+      "flux": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-flux/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "get_kubernetes_api_versions",
+            "get_kubernetes_events",
+            "get_kubernetes_logs",
+            "get_kubernetes_metrics",
+            "get_kubernetes_resources",
+            "read_flux_doc",
+            "search_flux_docs",
+            "trace_kubernetes_resource"
+          ]
+        }
+      },
+      "terraform": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-terraform/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "get_latest_module_version",
+            "get_latest_provider_version",
+            "get_module_details",
+            "get_policy_details",
+            "get_provider_capabilities",
+            "get_provider_details",
+            "search_modules",
+            "search_policies",
+            "search_provider_docs"
+          ]
+        }
+      }
+    }
+  },
+  "memory": {
+    "search": {
+      "provider": "openai-compatible",
+      "model": "agents-main-embeddings",
+      "remote": {
+        "baseUrl": "http://litellm-app.ai.svc.cluster.local:4000/v1",
+        "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"}
+      },
+      "sources": ["memory"],
+      "extraPaths": [
+        {"path": "/vault", "pattern": "**/*.md"}
+      ],
+      "rememberAcrossConversations": false
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/data/state/workspace",
+      "model": {"primary": "litellm/agents-main"},
+      "thinkingDefault": "high",
+      "modelPolicy": {"allow": ["litellm/agents-main"]},
+      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw", "sessionToolsVisibility": "all"},
+      "heartbeat": {
+        "every": "24h",
+        "target": "none",
+        "isolatedSession": true,
+        "lightContext": true,
+        "prompt": "This is the daily scheduled check of the platform. Run the shell command `date -u` one time, then reply with its output and nothing else."
+      }
+    }
+  },
+  "models": {
+    "mode": "replace",
+    "catalogRefresh": {"enabled": false},
+    "providers": {
+      "litellm": {
+        "baseUrl": "http://litellm-app.ai.svc.cluster.local:4000",
+        "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"},
+        "api": "anthropic-messages",
+        "models": [
+          {
+            "id": "agents-main",
+            "name": "Claude Opus 5.5 (agents-main at the model gateway)",
+            "params": {"canonicalModelId": "claude-opus-5-5"},
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 200000,
+            "maxTokens": 32000
+          }
+        ]
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "allowFrom": ["${TELEGRAM_ALLOW_FROM}"],
+      "groupPolicy": "allowlist",
+      "groups": {"$include": "./telegram-groups.json"},
+      "historyLimit": 15,
+      "streaming": {"mode": "partial"},
+      "configWrites": false
+    }
+  },
+  "plugins": {
+    "allow": [
+      "active-memory",
+      "brave",
+      "diagnostics-otel",
+      "memory-core",
+      "openshell",
+      "telegram"
+    ],
+    "load": {
+      "paths": [
+        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox"
+      ]
+    },
+    "entries": {
+      "openshell": {
+        "enabled": true,
+        "config": {
+          "mode": "mirror",
+          "from": "docker.io/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+          "gatewayEndpoint": "https://openshell.agents-main.svc.cluster.local:8080",
+          "autoProviders": false,
+          "timeoutSeconds": 300
+        }
+      },
+      "brave": {"enabled": true},
+      "diagnostics-otel": {"enabled": true},
+      "active-memory": {
+        "enabled": true,
+        "config": {
+          "enabled": true,
+          "agents": ["main"],
+          "allowedChatTypes": ["direct", "group"],
+          "queryMode": "recent",
+          "promptStyle": "recall-heavy",
+          "timeoutMs": 25000,
+          "maxSummaryChars": 220,
+          "logging": true
+        }
+      }
+    }
+  },
+  "diagnostics": {
+    "otel": {
+      "enabled": true,
+      "endpoint": "http://alloy.monitoring.svc.cluster.local:4318",
+      "protocol": "http/protobuf",
+      "serviceName": "openclaw-agents-main",
+      "traces": true,
+      "metrics": true,
+      "logs": false,
+      "sampleRate": 1.0
+    }
+  }
+}

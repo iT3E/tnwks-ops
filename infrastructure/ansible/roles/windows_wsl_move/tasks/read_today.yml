@@ -1,0 +1,97 @@
+---
+# What step 3 reads of today, kept in the state folder: the values of the
+# registration of the distro of the present account, whether it is the
+# default distro of that account, the VM address that WSL keeps for that
+# account, and its .wslconfig. Each file is written only when it is absent,
+# and only while Ansible logs in as the present account, which reads its own
+# registry and profile: a later apply, and an apply after the window, read
+# the kept files. The window sets the values on the new registration, and the
+# check play compares them (section 5.12).
+- name: Read the registration, the VM address and .wslconfig of the present account, only when absent
+  ansible.windows.win_powershell:
+    parameters:
+      Registration: "{{ wsl_move_registration_file }}"
+      Wslconfig: "{{ wsl_move_wslconfig_file }}"
+      Distro: "{{ wsl_move_distro }}"
+      Folder: "{{ wsl_move_present_folder }}"
+      DiskName: "{{ wsl_move_disk_name }}"
+      AsPresent: "{{ wsl_move_as_present | bool }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Registration, [string]$Wslconfig, [string]$Distro, [string]$Folder, [string]$DiskName, [bool]$AsPresent)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $have = (Test-Path -LiteralPath $Registration) -and (Test-Path -LiteralPath $Wslconfig)
+      if ($have) { return }
+      if (-not $AsPresent) {
+          throw 'The reads of today are not kept, and Ansible does not log in as the present account, which reads them. Nothing is changed.'
+      }
+      $lxss = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss'
+      $found = @(Get-ChildItem -LiteralPath $lxss | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } |
+          Where-Object { $_.DistributionName -eq $Distro })
+      if ($found.Count -ne 1) { throw "The present account lists $($found.Count) distros of the name $Distro. Nothing is changed." }
+      $reg = $found[0]
+      $base = "$($reg.BasePath)" -replace '^\\\\\?\\', ''
+      $disk = Join-Path $base $(if ($reg.VhdFileName) { "$($reg.VhdFileName)" } else { $DiskName })
+      if (-not [string]::Equals($disk, (Join-Path $Folder $DiskName), [StringComparison]::OrdinalIgnoreCase)) {
+          throw 'The registration of the present account is not at wsl_move_present_folder. Nothing is changed.'
+      }
+      $root = Get-ItemProperty -LiteralPath $lxss
+      $dwords = [ordered]@{}
+      foreach ($name in 'DefaultUid', 'Flags') {
+          if ($null -ne $reg.$name) { $dwords[$name] = [int64]$reg.$name }
+      }
+      $nat = [ordered]@{}
+      foreach ($p in @($root.PSObject.Properties | Where-Object { $_.Name -like 'Nat*' } | Sort-Object Name)) { $nat[$p.Name] = "$($p.Value)" }
+      $read = [ordered]@{
+          dwords = $dwords
+          kernel_command_line = "$($reg.KernelCommandLine)"
+          default_environment = @($reg.DefaultEnvironment | ForEach-Object { "$_" })
+          default = ("$($root.DefaultDistribution)" -eq $reg.PSChildName)
+          nat = $nat
+      }
+      $profileDir = $env:USERPROFILE
+      $config = Join-Path $profileDir '.wslconfig'
+      $text = if (Test-Path -LiteralPath $config) { [IO.File]::ReadAllText($config) } else { '' }
+      $Ansible.Changed = $true
+      if ($PSCmdlet.ShouldProcess($Registration, 'keep the reads of today')) {
+          if (-not (Test-Path -LiteralPath $Registration)) {
+              [IO.File]::WriteAllText($Registration, ($read | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
+          }
+          if (-not (Test-Path -LiteralPath $Wslconfig)) { [IO.File]::WriteAllText($Wslconfig, $text, (New-Object Text.UTF8Encoding $false)) }
+      }
+  no_log: true
+
+# The window play reads the same kept files (window.yml).
+- name: The kept reads of today
+  ansible.builtin.include_tasks: read_kept.yml
+
+# .wslconfig of the new account: the one section [wsl2] of the present
+# account, with its keys of wsl_move_wslconfig_keys only. Another section or
+# key stops the play, as the new VM must be the VM of today.
+- name: The .wslconfig of the new account, from the present one
+  vars:
+    lines: "{{ wsl_move_wslconfig_present.splitlines() | map('trim') | reject('equalto', '') | reject('match', '^[#;]') | list }}"
+    keys: "{{ lines[1:] | map('regex_replace', '\\s*=.*$', '') | list }}"
+  ansible.builtin.set_fact:
+    wsl_move_wslconfig: |
+      # Managed by tnwks-ops (role windows_wsl_move): the values of the
+      # present account, as step 3 read them.
+      {% for line in lines %}
+      {{ line }}
+      {% endfor %}
+    wsl_move_wslconfig_ok: >-
+      {{ (lines | length > 1) and lines[0] | lower == '[wsl2]'
+         and (keys | reject('in', wsl_move_wslconfig_keys) | list | length == 0)
+         and (keys | unique | length == keys | length)
+         and (lines[1:] | select('match', '^[A-Za-z]+\s*=') | list | length == lines[1:] | length) }}
+  no_log: true
+
+- name: The .wslconfig of the present account has the section [wsl2] and its known keys only
+  ansible.builtin.assert:
+    that: wsl_move_wslconfig_ok | bool
+    fail_msg: >-
+      The .wslconfig of the present account, as step 3 read it, is not one section [wsl2] with the keys
+      {{ wsl_move_wslconfig_keys | join(', ') }} only, each once. Nothing more is changed.
+    quiet: true
+  when: wsl_move_today_read.output | last | default(none, true) is not none

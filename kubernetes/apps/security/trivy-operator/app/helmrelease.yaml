@@ -154,9 +154,10 @@ spec:
           skip-version-check: true
           disable-telemetry: true
           # One layer of an image at a time, not 5 (the default of Trivy
-          # 0.76). Trivy holds each file under 100 MB of the layers it reads
-          # in memory, so 5 layers at once took a scan container to its limit
-          # of 512 MiB on large images (README.md, "Memory"). The chart's
+          # 0.76), and one file at a time inside a layer. Trivy holds each
+          # file under 100 MB of the layers it reads in memory, so 5 layers
+          # at once took a scan container to its limit of 512 MiB on large
+          # images (README.md, "Memory"). The chart's
           # trivy.slow gives --slow, which Trivy 0.76 no longer reads.
           parallel: 1
         # The scan cache of each scan in its own memory. A scan job has one

@@ -178,13 +178,46 @@ EXTRA_ZONE_RULES = {
 # Zone pairs for the CI runner's wg03 tunnel. Processed after every other pair,
 # so a pair added here is numbered last and never renumbers existing ones.
 CI_ZONE_RULES = {
-    # The EP-R6's SSH and nothing else on VLAN 140 (infrastructure/edgeos).
-    ("vpn-ci", "UISP-140"): [{  # CI_ZONE, defined below
-        "description": "CI runner SSH to the EP-R6 (edgeos-sync)",
-        "protocol": "tcp",
-        "dst_port": "22",
-        "dst_address": "10.10.140.140",
-    }],
+    # The EP-R6's SSH (infrastructure/edgeos), and behind it (10.60.10.0/24 is
+    # routed via the EP-R6, out VLAN 140, so the same pair) the SSH of the
+    # LiteAP radio .45 and the LiteBeam radio .43 for every wg03 peer, and their
+    # web UI (airOS Test mode reverts a change by itself) for the device access
+    # pod only. A peer's source address is its key's allowed address, so
+    # 10.10.32.12 is that pod and nothing else. Nothing else on VLAN 140.
+    ("vpn-ci", "UISP-140"): [  # CI_ZONE, defined below
+        {
+            "description": "CI runner SSH to the EP-R6 (edgeos-sync)",
+            "protocol": "tcp",
+            "dst_port": "22",
+            "dst_address": "10.10.140.140",
+        },
+        {
+            "description": "SSH to the LiteAP radio",
+            "protocol": "tcp",
+            "dst_port": "22",
+            "dst_address": "10.60.10.45",
+        },
+        {
+            "description": "SSH to the LiteBeam radio",
+            "protocol": "tcp",
+            "dst_port": "22",
+            "dst_address": "10.60.10.43",
+        },
+        {
+            "description": "device access pod to the LiteAP radio's web UI",
+            "protocol": "tcp",
+            "dst_port": "443",
+            "src_address": "10.10.32.12",
+            "dst_address": "10.60.10.45",
+        },
+        {
+            "description": "device access pod to the LiteBeam radio's web UI",
+            "protocol": "tcp",
+            "dst_port": "443",
+            "src_address": "10.10.32.12",
+            "dst_address": "10.60.10.43",
+        },
+    ],
 }
 
 # Monitoring from the WSL cluster into the management VLANs, without the
@@ -214,6 +247,53 @@ MONITORING_ZONE_RULES = {
             "protocol": "icmp",
             "src_address_list": "monitoring",
             "dst_address": "10.98.0.251",
+        },
+    ],
+    # The monitoring source pings the EP-R6 (role edge), the gateway of the
+    # radio network, and the three devices behind it in 10.60.10.0/24 (static
+    # route via the EP-R6, out VLAN 140, so the same pair): the LiteAP radio,
+    # the LiteBeam radio and the airCube at the far end of the radio link. ICMP
+    # to those four addresses, one rule each (.43, .45 and .46 are not one
+    # range). snmp-exporter reads the two radios over SNMP (udp/161), not the
+    # airCube or the EP-R6. Everything else (SSH, the web UIs) stays VPN-only.
+    ("unifi-frontend-910", "UISP-140"): [
+        {
+            "description": "smokeping (WSL cluster) pings of the EP-R6",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.10.140.140",
+        },
+        {
+            "description": "smokeping (WSL cluster) pings of the LiteAP radio",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.45",
+        },
+        {
+            "description": "smokeping (WSL cluster) pings of the LiteBeam radio",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.43",
+        },
+        {
+            "description": "smokeping (WSL cluster) pings of the airCube",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.46",
+        },
+        {
+            "description": "snmp-exporter (WSL cluster) reads the LiteAP radio",
+            "protocol": "udp",
+            "dst_port": "161",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.45",
+        },
+        {
+            "description": "snmp-exporter (WSL cluster) reads the LiteBeam radio",
+            "protocol": "udp",
+            "dst_port": "161",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.43",
         },
     ],
 }
@@ -355,9 +435,10 @@ WG_PEER_PUBLIC_KEYS = {
 }
 
 # WireGuard listeners with no VyOS source. wg03 is the CI runner's tunnel
-# (docs/network/ci.md): its own zone with no zone pairs, so the terminal
-# forward drop covers everything, and an input accept for REST only. Joined
-# from the LAN only, never the WAN. Private keys come from SOPS
+# (docs/network/ci.md): its own zone whose one zone pair is CI_ZONE_RULES, so
+# the terminal forward drop covers everything else, and an input accept for
+# REST from the runners' addresses only (CI_RUNNER_SOURCES). Joined from the
+# LAN only, never the WAN. Private keys come from SOPS
 # (wireguard_<name>_private_key).
 CI_ZONE = "vpn-ci"
 EXTRA_WIREGUARD = {
@@ -379,9 +460,19 @@ EXTRA_WIREGUARD = {
                 "allowed_address": ["10.10.32.11/32"],
                 "comment": "ARC scale set tnwks-ops-runner-wsl-02 (wireproxy sidecar)",
             },
+            # The pod an operator execs into to reach the EP-R6 and the radios
+            # (kubernetes/apps/tools/device-access). Not a runner: no REST.
+            "device-access": {
+                "public_key": "ktbzr3XWwhMjWExRCmfHJDwFzhcxHsCGfo4RM8nFCkA=",
+                "allowed_address": ["10.10.32.12/32"],
+                "comment": "device access pod (homelab-wsl, wireproxy sidecar)",
+            },
         },
     },
 }
+# The wg03 peers that may use the router's REST API: the two runners, not the
+# device access pod.
+CI_RUNNER_SOURCES = "10.10.32.10-10.10.32.11"
 
 # Admin SSH public keys added on top of the ones ported from VyOS (comment
 # stripped). The VyOS-era RSA key stays for any machine that still has it.
@@ -1272,12 +1363,13 @@ def build_zone_policies(
          "protocol": "udp", "dst_port": "51820,51821", "in_interface_list": OUTSIDE_ZONE},
         # Appended, not inserted, so existing rule numbers never shift.
         # The CI runner (WSL cluster) joins wg03 from the LAN, and through it
-        # reaches the REST API and nothing else.
+        # reaches the REST API. Only the runners' peers: the device access pod
+        # shares the listener and must not.
         {"comment": "WireGuard from the LAN for the CI runner tunnel (wg03)",
          "protocol": "udp", "dst_port": str(EXTRA_WIREGUARD["wg03"]["listen_port"]),
          "in_interface_list": "lan"},
         {"comment": "REST API from the CI runner tunnel (wg03)", "protocol": "tcp",
-         "dst_port": "443", "in_interface_list": CI_ZONE},
+         "dst_port": "443", "in_interface_list": CI_ZONE, "src_address": CI_RUNNER_SOURCES},
     ]):
         input_rules[f"{input_seq + (offset + 1) * 10:03d}-router-service"] = extra
 

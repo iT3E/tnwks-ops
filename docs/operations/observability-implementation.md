@@ -362,6 +362,62 @@ forever; leave the type off.
   `chattr -i` it first. A new worker gets a new volume, and the task finds it.
 - **Reclaim:** the class is `Retain`. Deleting the PVC leaves the data on the disk.
 
+### The data in a file on the distro disk
+
+The move of the distro to a standard account (Design Doc 0004, section 5.13)
+needs a mount with no attach by Windows: WSL attaches a disk only to the VM of
+the caller, and a standard account can not attach a file it does not own. So
+the data moves into a file of 19 GiB on the disk of the distro, formatted ext4
+and mounted by a loop device at the same point. The variable
+`observability_storage_mount` of the Windows host picks the phase. The roles
+`windows_observability_storage` and `wsl_observability_file` (distro play, tag
+`observability-file`) both follow it:
+
+| Phase | Windows host | Distro |
+| --- | --- | --- |
+| `vhdx` (default) | The mount task attaches and mounts the VHDX, as above | The timer of the file is off |
+| `ready` | The same | The script makes the file once: it records a random UUID, then formats with it. The timer is off |
+| `file` | The mount task is disabled and stopped in place. It is not registered again, so its account stays the one that it has. It, its scripts and the VHDX stay | `tnwks-observability-file.timer` mounts the file at the point at the start of the distro and each minute |
+
+`observability-file.py` (in `/usr/local/lib/tnwks-observability`, as root)
+also has `stage` and `unstage`, which mount the file at
+`/var/lib/tnwks-observability/stage` for the copy and unmount it, `release`,
+which unmounts it from the point, and `check`. It never formats a file with
+no record or with another file system, and never mounts the file at two
+places, over another file system or over data. A compaction of the distro
+disk leaves a disabled task disabled, so it does not start the mount task of
+the VHDX again in the phase `file`.
+
+The run order of the move, with the owner's go and time (R4):
+
+The Windows host goes first on the way in, and the distro first on the way
+back, so the two sides are never left in different phases across a restart
+of WSL.
+
+1. The phase `ready`, applied to both hosts. The script makes the file.
+2. Read the used size of the data on the VHDX. It must fit in the file.
+3. Stop Prometheus, and each other pod on the class `local-path-observability`.
+4. `stage`, then copy each claim folder from the point to the stage, with its
+   owners, modes and times. Not the marker `.tnwks-observability-id` (the
+   file has its own) and not `lost+found`. Then `unstage`.
+5. Stop if the drive of the distro disk has less than 30 GiB free after the
+   copy, or if the loop device fails the copy step. The VHDX is untouched, so
+   the way back is to start Prometheus again.
+6. The phase `file`, applied to the Windows host first: the mount task is
+   disabled. Then unmount the VHDX file system from the point, and apply the
+   distro: the timer mounts the file. `check` gives `ready`.
+7. Start Prometheus, and check that each series goes on.
+
+The way back is today's mount, until the proof of site 1: stop Prometheus,
+apply the phase `vhdx` to the distro first (the role stops the timer, then
+releases the file; if that run stops after the timer is off, run `release`
+by hand), then to the Windows host, and start Prometheus. The VHDX holds the
+data of the copy, not the data written to the file after it. This way back
+holds only before step 4 of the account change of the host: after it, the
+mount task can not be registered again for a standard account with no
+password, and the way back of the account change comes first. After the
+proof, the mount task, its scripts and the VHDX go.
+
 ## Grafana on both sites
 
 Grafana is a warm app, like Firefly (`docs/wsl/multi-site.md`, "Apps"): one name,
@@ -703,12 +759,87 @@ a version bump reruns the rehearsal before it ships.
 Sites in both themes: it changes the navigation's highlight and some spacing,
 not the boards, so it stays off.
 
+## The AI board
+
+The AI board (`tnwks-ai`, `observability/dashboards/boards/ai.py`) answers:
+is each part of the agent platform there and ready, do its model calls,
+checks, tool calls and backups work, and did a limit or a security signal
+fire? Step 1 of the board is the data of today. Step 2 adds the series of
+the model gateway. It shows no product metrics and no money.
+
+- **A declared list.** `observability/inventory.py` declares the parts
+  (`AI_PARTS`), the CronJobs (`AI_SCHEDULES`), the `<check> result=` lines
+  of the agent pods (`AI_RESULTS`) and the snapshot policies (`AI_BACKUPS`)
+  of each trust domain, or `shared` for a part that serves each of them.
+  The collector emits each row on each site:
+  `homelab_expected_ai_part_info` where a site runs the part, and
+  `homelab_absent_ai_part_info` where it does not run it by design. Site 2
+  runs no AI part, so each row there is Not applicable. The browser tool
+  server runs at site 1 only, beside the MCP gateway and the fetch proxy.
+  `tests/test_ai_inventory.py` holds the lists to the manifests that Flux
+  applies.
+- **A state for each row** (`ai_records()` in `observability/rules.py`):
+  `homelab:ai_part_state` from kube-state-metrics (Not applicable where the
+  site does not run it, Standby at zero replicas, Unknown with no workload),
+  `homelab:ai_schedule_state` (the last good run of each CronJob against its
+  window, Failed when the newest run failed after it), `homelab:ai_result_state`
+  (the newest line in the window of its check) and `homelab:ai_backup_state`
+  (the last good snapshot against the recovery point objective of 30 hours).
+  A row whose source is gone stays, as Unknown.
+- **Restore tests.** A restore test runs by hand, and its result line lives 5
+  minutes as a series. `homelab:ai_restore_result_timestamp_seconds` keeps
+  the time of the newest line of each result for the local history (15 days).
+- **Model calls** come from the series of the model gateway, by the name of
+  the key of the caller: the key of a trust domain has the name of its
+  domain. Calls and failed calls by name and status, the share that failed,
+  the time of a call (95th percentile) and tokens by day and by range. The
+  keep list of the gateway keeps 4 labels, and the scrape writes
+  `undeclared` for a key that is not declared
+  ([`litellm.md`](../apps/litellm.md#metrics)). The daily refused calls of
+  the key of the scrape (`litellm-key-check`) are left out.
+- **Messages** (question 8) come from the metrics of the product of each
+  personal agent, through the keep list of Alloy to the OTLP path of
+  Prometheus ([`agent-platform.md`](../apps/agent-platform.md#metrics)):
+  messages in by channel, turns by outcome and by trigger, replies sent and
+  replies that failed with the class of the error, the time to send a reply
+  (95th percentile), stuck sessions and failovers to a second model. The
+  trust domain comes from `job` (`openclaw-agents-<domain>`); a sender with
+  another service name reads `undeclared`.
+- **Plan use** comes from the `plan_limit` and `call` lines of the model
+  bridge, through the platform log agent of Vector
+  ([`agent-platform.md`](../apps/agent-platform.md#plan-use)). The tab
+  "Limits and security" starts with it: the use of the five hour window and
+  of the week, the time to each reset, the state of each window, the use
+  over time, the age of the last reading, and the tokens of each trust
+  domain by kind. The panels read the records `homelab:ai_plan_*`
+  (`plan_records()` in `observability/rules.py`), which keep the newest
+  reading of the last 8 days until its window resets, because the bridge
+  logs a reading only when it moves, and Prometheus shows a gauge of a line
+  for 5 minutes only. The token counter lives as long as the pod of the log
+  agent ([`agent-platform.md`](../apps/agent-platform.md#plan-use)). With
+  no reading, a panel says why in plain words.
+- **Tool calls** come from the request series of the MCP gateway, in the
+  board only: no rule reads them (`tests/test_mcp_gateway.py`). The panels
+  leave out the GET with 405 that each start of a client makes
+  ([`mcp-gateway.md`](../apps/mcp-gateway.md#logs-and-metrics)).
+- **Homelab.** The AI tile is the worst of the parts, the checks, the result
+  lines and the backups. Needs attention has a row for each part that is not
+  Healthy, Standby or Not applicable.
+- **Alerts.** Each of the 20 rules in `kubernetes/apps/ai/` opens this board
+  (`tests/test_alert_links.py`). Its runbook is
+  [`agent-platform-runbook.md`](../apps/agent-platform-runbook.md).
+- **No picker of the trust domain yet.** Each table has the trust domain as
+  a column. A picker is an L3 control here
+  (`test_entity_pickers_read_label_values_from_the_board_datasource`), so an
+  L2 picker waits for a change to that rule.
+
 ## Agent traces
 
 The agent platform sends its traces to Alloy on homelab-wsl over OTLP/HTTP:
 `http://alloy.monitoring.svc.cluster.local:4318` (the `otelcol.receiver.otlp
 "agents"` block of `kubernetes/apps/monitoring/alloy/app/helmrelease.yaml`).
-No ingress serves that port. Alloy forwards each span to Tempo.
+No ingress serves that port, and [the network rule of Alloy](#the-network-rule-of-alloy)
+admits only the senders of git. Alloy forwards each span to Tempo.
 
 - **Text filter.** Before Tempo, `otelcol.processor.transform "drop_text"`
   removes the attributes that carry the text of a conversation, on spans and
@@ -732,6 +863,116 @@ No ingress serves that port. Alloy forwards each span to Tempo.
 - The filter removes known names. A new attribute with text, from a new
   product release, passes until it's added here: the trace test of each agent
   image release checks for that.
+
+## The network rule of Alloy
+
+The CiliumNetworkPolicy `alloy`
+(`kubernetes/apps/monitoring/alloy/app/networkpolicy.yaml`) says who may
+open a connection to the pod of Alloy on site 1, and on which port. It
+has no HTTP rules, so the proxy of Cilium is not in the path. Before it, each
+pod of either cluster could send OTLP to the receiver of the agents: false
+series of the product into Prometheus, and a false span of a completed turn
+into Tempo, which could hide a missed heartbeat.
+
+- **4318, the OTLP receiver of the agents.** The agent pod of each personal
+  trust domain (`agents-main`, `agents-finance`, `agents-pilot`), the sandbox
+  supervisors of `agents-workflows` (label `openshell.ai/boundary-role:
+  supervisor`: the supervisor opens each connection that the sandbox policy
+  of a run approves), and the daily test span (`trace-filter-check`).
+- **12347, the Faro receiver.** The public ingress (`ingress-nginx`, class
+  `nginx`), for the browsers of the sites.
+- **12345, the HTTP server.** Prometheus of the same site (the scrape), and
+  the kubelet probes from the local host. The config reloader and a `kubectl
+  port-forward` enter on the loopback of the pod.
+- **Where the list came from.** The flow log of Cilium (Hubble, site 1,
+  2026-11-21): the three agent pods on 4318, Prometheus and the host on
+  12345. Git for the rest: the supervisors (no run in that window), the
+  test span (05:27 UTC) and the Faro ingress (no browser in that window).
+  Alloy runs on site 1 only (`kubernetes/apps/monitoring` is in the app
+  list of site 1), so this rule exists on site 1 only.
+  `observability/tests/test_alloy_policy.py` fails when a file of git names
+  the receiver and the rule does not know its pod, and when an egress rule
+  of a trust domain to Alloy has no line in it.
+- **What stays open.** An agent pod can still send false counts of its own,
+  and any listed sender can send on any OTLP path. An HTTP rule (POST
+  `/v1/traces` and `/v1/metrics` only) is a later step.
+- **A new sender.** Add its pod to the rule in the same PR. Until then its
+  connections are dropped: `hubble observe --to-label
+  app.kubernetes.io/name=alloy --verdict DROPPED` shows them.
+- **Way back.** Revert the PR that added or changed the rule: Flux prunes
+  it, and each sender passes again.
+
+## The network rule of Prometheus
+
+The CiliumNetworkPolicy `prometheus`
+(`kubernetes/apps/monitoring/kube-prometheus-stack/app/networkpolicy.yaml`)
+says who may call the pod of Prometheus on each site, and with which HTTP
+requests. It is the first rule with HTTP rules in this repository, so the
+proxy of Cilium (the `cilium-envoy` DaemonSet) is in the path of each request
+to port 9090 that it admits. It comes before the write path of the AI board
+(step 3 of task 5.23): only the collector may write, so the readers must not.
+
+- **The readers.** On 9090: Grafana of each site (the Prometheus, Local,
+  Site 1 and Site 2 datasources), the Pyrra UI and the internal ingress of
+  the site, the observability evidence of the other site (the readiness and
+  one query), and the LAN bridge of the site (`prometheus-peer`), where the
+  Prometheus and the API checks of the other site federate and query. On
+  10901: Thanos Query of each site. On 8080 and 10902: this Prometheus.
+  The list came from the flow log of Cilium (Hubble, both sites, 30 minutes
+  on 2026-11-20) and from git. `tests/test_prometheus_policy.py` fails when
+  a file of git names a Service or an address of Prometheus and the rule
+  does not know it.
+- **The one writer.** Alloy of the same site may POST
+  `/api/v1/otlp/v1/metrics`, the OTLP path that `enableOTLPReceiver` opens,
+  and nothing else: no query, and no query string. The remote write path
+  (`/api/v1/write`) stays off. The metrics that Alloy writes are the keep
+  list of the agents ([`agent-platform.md`](../apps/agent-platform.md#metrics)).
+- **The daily check.** The CronJob `prometheus-rule-check`
+  (`kube-prometheus-stack/app/rule-check.yaml`, 05:53 UTC, each site) has
+  labels of its own, and the rule names it next to Grafana, so it gets the
+  requests of Grafana. It must get 200 for a query, and 403 for a POST to
+  the OTLP path and to `/api/v1/write`, each with an empty body. Without
+  the rule Prometheus answers 200 and 404 to those, and writes nothing. A
+  failed run fails its Job (`KubeJobFailed`), and the AI board shows its
+  state on the Checks tab. Its log line is `prometheus-rule-check
+  result=pass` or `result=fail`, with a line for each request.
+- **What a reader may send.** GET on each path, and POST on the query paths.
+  The readers through the bridge get GET `/federate` and GET
+  `/api/v1/query` only, and the evidence of the other site GET `/-/ready`
+  and GET `/api/v1/query` only. No reader may write, call the admin API (it is
+  on: `--web.enable-admin-api`) or call `/-/reload` and `/-/quit`. The
+  proxy answers 403 to such a request.
+- **The kubelet probes.** They come from the local host, on 9090 (GET
+  `/-/ready` and `/-/healthy`), and a refused probe makes the pod NotReady.
+  The host gets 9090 with no HTTP rule. Cilium allows the local host
+  (`allow-localhost`), and when a rule with HTTP rules also selects it (the
+  first form did, and the entity `kube-apiserver` does on the control plane
+  node), Cilium sends the probe through the proxy and gives the host no HTTP
+  rule there (`L4Filter.attach`, Cilium 1.19.4). The probe paths are also in
+  the HTTP rules of each entity that can be the host. A `kubectl
+  port-forward` and the calls of the reloader and the sidecar enter on the
+  loopback of the pod.
+- **What the proxy changes.** A request through the bridge arrives as
+  `world` or as a node, because the LoadBalancer keeps the address of the
+  bridge only when Prometheus runs on the node of the VIP. The proxy retries
+  a request that gets a 5xx answer 3 times (Cilium `http-retry-count`), and
+  Prometheus answers 503 to a query that times out: such a query runs up to
+  4 times, until the client stops. The proxy ends a request after 1 hour, or
+  a stream with no data for 5 minutes (`http-stream-idle-timeout`): the
+  queries of today end in 2 minutes. A path in a rule matches the whole
+  path with its query string.
+- **Its first form** sent each request to 9090 through the proxy and let
+  each one pass, with default deny off, so that Hubble showed the method,
+  the path and the source of each request (`hubble observe --type l7`)
+  before this form refused any.
+- **A new reader.** Add its pod to the rule in the same PR. Until then its
+  calls are dropped: `hubble observe --pod
+  monitoring/prometheus-kube-prometheus-stack-prometheus-0 --verdict DROPPED`
+  shows them, and `--type l7 --http-status 403` the requests that the proxy
+  refused. (A filter by the label of the destination misses the flows of
+  the proxy.)
+- **Way back.** Revert the PR that added or changed the rule: Flux prunes
+  the rule, and each reader passes again.
 
 ## Following rollout work
 

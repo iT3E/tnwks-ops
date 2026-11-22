@@ -1,0 +1,66 @@
+---
+# The checks of the rehearsal of the move (role windows_wsl_move_rehearsal,
+# Design Doc 0004, section 9, step 0). Run it by hand between the phases, on
+# the host where the rehearsal is on:
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02
+#
+# It reads only: it starts no task, waits for nothing and writes no file.
+#
+# It checks only a host with the switch wsl_move_rehearsal on, and says so of
+# each host where the switch is off. When no host of the run has it on, the
+# run fails: nothing was checked. After a rehearsal, with the switch off,
+# give it for that run only (the exit check below, or a check of what is
+# left): -e wsl_move_rehearsal=true.
+#
+#   groups    each account of the rehearsal is in Users only
+#   moments   each line of the log of the procedure where an account joins or
+#             leaves Administrators: a join passes only in a run of the
+#             rehearsal's group test (the phases window and wayback), and
+#             each join has its leave in the same run
+#   live      the port proxy, the NAT networks and the registrations of the
+#             account of the host's person are as at the baseline; before the
+#             first restart, the VM processes of the baseline still run
+#
+# After the phase remove, the exit check, with the SIDs that it printed:
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02 \
+#     -e wsl_move_rehearsal_removed_sids=<SID>,<SID>
+#
+#   accounts  no local account of the rehearsal
+#   rights    no holder of the batch right or of the three deny rights is an
+#             account of the rehearsal or one of its SIDs
+#   tiles     no value for the accounts under Winlogon\SpecialAccounts\UserList
+#   tasks     no task of the rehearsal
+#   profiles  no profile of the accounts, and no folder <users folder>\<prefix>*
+#   folder    no folder of the rehearsal
+
+- name: The checks of the rehearsal of the move
+  hosts: windows_hosts
+  gather_facts: false
+  become: false
+  check_mode: true
+  tasks:
+    # A run that checks nothing must not read as clean.
+    - name: Some host of this run has the switch of the rehearsal of the move on
+      ansible.builtin.fail:
+        msg: >-
+          Nothing was checked: the switch wsl_move_rehearsal is off for every host of this run. After a
+          rehearsal, give it for this run only: -e wsl_move_rehearsal=true.
+      when: >-
+        ansible_play_hosts_all | map('extract', hostvars) | map(attribute='wsl_move_rehearsal', default=false)
+        | map('bool') | select | list | length == 0
+
+    - name: Nothing is checked on a host with the switch off
+      ansible.builtin.debug:
+        msg: "Nothing was checked on {{ inventory_hostname }}: the switch wsl_move_rehearsal is off for it."
+      when: not (wsl_move_rehearsal | default(false) | bool)
+
+    - name: Only where the rehearsal of the move is on
+      ansible.builtin.meta: end_host
+      when: not (wsl_move_rehearsal | default(false) | bool)
+
+    - name: The checks
+      ansible.builtin.include_role:
+        name: windows_wsl_move_rehearsal
+        tasks_from: check.yml

@@ -1,0 +1,89 @@
+---
+# The read of the live parts, at the start and the end of each phase. The
+# first read of the rehearsal (the start of setup, before any VM of the
+# rehearsal) is its baseline, in the state folder. Each later read must give
+# the same port proxy, NAT networks and registrations of the account of the
+# host's person. Until the first restart of the host, each VM process of the
+# baseline (the VM of the live distro) must still run with the same start
+# time. A restart starts a new VM for the live distro, and a VM process does
+# not show its account: after the first restart (the phase restart marks the
+# baseline), the lead's read of the nodes covers the live VM.
+
+# The script of the read only reads: each read first makes its copy on the
+# host the role's, at any marker, also in the middle of a window
+# (host_files.yml checks its SHA-256 with the other copies). A check run
+# before the setup has no folder of the rehearsal, and the phase remove reads
+# before it removes that folder: then nothing is copied or read.
+- name: The folder of the rehearsal is on the host
+  ansible.windows.win_stat:
+    path: "{{ wsl_move_rehearsal_dir }}"
+    get_checksum: false
+  register: wsl_move_rehearsal_live_dir
+
+- name: The read of the live parts
+  ansible.windows.win_copy:
+    src: Get-TnwksMoveLiveState.ps1
+    dest: '{{ wsl_move_rehearsal_dir }}\Get-TnwksMoveLiveState.ps1'
+  when: wsl_move_rehearsal_live_dir.stat.exists
+
+- name: The read of the live parts is on the host
+  ansible.windows.win_stat:
+    path: '{{ wsl_move_rehearsal_dir }}\Get-TnwksMoveLiveState.ps1'
+    get_checksum: false
+  register: wsl_move_rehearsal_live_script
+
+- name: The live parts
+  when: wsl_move_rehearsal_live_script.stat.exists
+  block:
+    - name: Read the live parts
+      ansible.windows.win_powershell:
+        parameters:
+          Script: '{{ wsl_move_rehearsal_dir }}\Get-TnwksMoveLiveState.ps1'
+          PresentUser: "{{ windows_desktop_user }}"
+        script: |
+          param([string]$Script, [string]$PresentUser)
+          $Ansible.Changed = $false
+          & $Script -PresentUser $PresentUser
+      check_mode: false
+      register: wsl_move_rehearsal_live
+
+    - name: Keep the baseline of the live parts, at the first read only
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ wsl_move_rehearsal_baseline_file }}"
+          Json: "{{ wsl_move_rehearsal_live.output | last | to_json }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path, [string]$Json)
+          $Ansible.Changed = $false
+          if (Test-Path -LiteralPath $Path) { return }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Path, 'keep the baseline')) { [IO.File]::WriteAllText($Path, $Json) }
+
+    - name: Read the baseline of the live parts
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ wsl_move_rehearsal_baseline_file }}"
+        script: |
+          param([string]$Path)
+          $Ansible.Changed = $false
+          if (Test-Path -LiteralPath $Path) { Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json } else { $null }
+      check_mode: false
+      register: wsl_move_rehearsal_baseline
+
+    - name: The live parts are as at the baseline
+      vars:
+        live_now: "{{ wsl_move_rehearsal_live.output | last }}"
+        base: "{{ wsl_move_rehearsal_baseline.output | last | default(live_now, true) }}"
+        now_vm: "{{ live_now.vm | map('to_json') | list }}"
+      ansible.builtin.assert:
+        that:
+          - live_now.portproxy == base.portproxy
+          - live_now.nat == base.nat
+          - live_now.registrations == base.registrations
+          - (base.restarted | default(false)) or (base.vm | map('to_json') | reject('in', now_vm) | list | length == 0)
+        fail_msg: >-
+          A live part changed: port proxy {{ base.portproxy }} -> {{ live_now.portproxy }};
+          NAT {{ base.nat }} -> {{ live_now.nat }}; registrations {{ base.registrations }} -> {{ live_now.registrations }};
+          VM processes {{ base.vm }} -> {{ live_now.vm }}. The rehearsal stops: run its removal.
+        quiet: true

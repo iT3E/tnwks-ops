@@ -1,0 +1,312 @@
+---
+# The checks of the rehearsal of the account change (role windows_wsl_rehearsal,
+# Design Doc 0004, section 9, step 0). Run it by hand after the apply of the
+# rehearsal, on the host where it is on:
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-rehearsal-check.yml --limit WSL-02
+#
+# It changes no setting. It starts the probe, the write test and the mount
+# test, which are tasks of the temporary account, and reads their results.
+# It reads the token of each WSL process of that account. Each check prints
+# its value and whether it passes, and the play fails when one does not pass.
+#
+#   probe    the task of the account: Medium Mandatory Level, no Administrators
+#            group, the registry hive of the account loaded, its own profile
+#   import   the import exited 0, and a later task of the account (the probe)
+#            finds the distro registered
+#   start    the start task runs, with nobody signed in
+#   tokens   each wsl, wslhost and wslrelay process whose owner is the account
+#            (by WMI): medium integrity, and the Administrators group absent or
+#            deny-only, with at least one wsl.exe. Such a process that this read
+#            can not open fails the check. A VM process (vmmem) is shown and
+#            not counted, and a process of another user is not read
+#   write    as root in the distro: refused, with EACCES or EPERM. Another
+#            answer, such as ENOENT or EIO, fails
+#   mount    wsl --mount --vhd <file> --bare, then wsl --unmount: both exit 0
+#
+# With wsl_rehearsal_state absent (the removal), it reads the exit check
+# instead, and starts no task. It needs the SID of the account, read before
+# the removal (Get-LocalUser tnwks-rehearsal):
+#
+#   cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-rehearsal-check.yml --limit WSL-02 \
+#     -e wsl_rehearsal_removed_sid=<SID>
+#
+#   account   no local account of the rehearsal; the local accounts and the
+#             members of Administrators are shown
+#   rights    no holder of the batch right or of the three deny rights is the
+#             account or its SID; the holders are shown, and a SID of another
+#             origin that names no account is shown as a note
+#   tile      no value for the account under Winlogon\SpecialAccounts\UserList
+#   tasks     no task of the rehearsal
+#   profile   no profile of the account, and no folder <users folder>\<account>*
+#   folder    no folder of the rehearsal
+
+- name: The checks of the rehearsal
+  hosts: windows_hosts
+  gather_facts: false
+  become: false
+  vars_files:
+    - ../roles/windows_wsl_rehearsal/defaults/main.yml
+  tasks:
+    - name: Only where the rehearsal is on
+      ansible.builtin.meta: end_host
+      when: not (wsl_rehearsal | bool)
+
+    - name: Run the checks
+      when: wsl_rehearsal_state == 'present'
+      ansible.windows.win_powershell:
+        parameters:
+          Account: "{{ wsl_rehearsal_account }}"
+          Distro: "{{ wsl_rehearsal_distro }}"
+          Prefix: "{{ wsl_rehearsal_task_prefix }}"
+          LogDir: "{{ wsl_rehearsal_log_dir }}"
+        script: |
+          param([string]$Account, [string]$Distro, [string]$Prefix, [string]$LogDir)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+
+          # --- BEGIN logic (security/tests/test_wsl_rehearsal.py runs this part with fakes)
+          # Each function takes what was read and gives @{ pass; value }.
+          function Test-TnwksProbe($Probe, [string]$Sid, [string]$Account) {
+              if (-not $Probe) { return @{ pass = $false; value = 'the probe task gave no result' } }
+              $admins = @($Probe.administrators)
+              $own = $Probe.profile -match '^[A-Za-z]:\\Users\\' -and (Split-Path -Leaf $Probe.profile) -like "$Account*"
+              $pass = [bool]($Probe.medium -and $Probe.user -eq $Sid -and $admins.Count -eq 0 -and $Probe.hive -and $own)
+              $value = 'integrity {0}; Administrators {1}; hive loaded {2}; profile {3}' -f (@($Probe.integrity_sids) -join ','),
+                  $(if ($admins.Count) { $admins -join ',' } else { 'absent' }), $Probe.hive, $Probe.profile
+              @{ pass = $pass; value = $value }
+          }
+          function Test-TnwksImport($Import, $Probe, [string]$Distro) {
+              if (-not $Import) { return @{ pass = $false; value = 'no result' } }
+              $later = if ($Probe) { @($Probe.distros) } else { @() }
+              @{ pass = [bool]($Import.exit -eq 0 -and $later -contains $Distro)
+                 value = "exit $($Import.exit); distros of the account: $($later -join ',')" }
+          }
+          # Rows: @{ name; id; mine; token }. mine: a wsl, wslhost or wslrelay
+          # process whose owner is the account. token: the read of its token,
+          # or "error ...". Only those rows count; a VM process is shown.
+          function Test-TnwksTokens($Rows) {
+              $own = @($Rows | Where-Object { $_.mine })
+              $failed = @($own | Where-Object { $_.token -like 'error*' })
+              $read = @($own | Where-Object { $_.token -notlike 'error*' })
+              $bad = @($read | Where-Object { $_.token -notmatch ' integrity=0x2000 ' -or $_.token -notmatch ' admins=(absent|deny-only)$' })
+              $clients = @($read | Where-Object { $_.name -eq 'wsl' })
+              $vms = @($Rows | Where-Object { -not $_.mine -and $_.name -like 'vmmem*' })
+              $shown = @($own | ForEach-Object { "$($_.name) $($_.id): $($_.token -replace '^user=\S+ ', '')" }) +
+                  @($vms | ForEach-Object { "$($_.name) $($_.id) (not counted): $($_.token -replace '^user=\S+ ', '')" })
+              @{ pass = [bool]($failed.Count -eq 0 -and $bad.Count -eq 0 -and $clients.Count -gt 0); value = $shown -join '; ' }
+          }
+          # The output holds the one answer line of write-test.sh, and the
+          # warnings that wsl.exe writes to stderr, in either order. Exactly
+          # one answer line, and it is a refusal with EACCES or EPERM.
+          function Test-TnwksWrite($Write) {
+              if (-not $Write) { return @{ pass = $false; value = 'the write task gave no result' } }
+              $answers = @("$($Write.output)" -split "`r?`n" | Where-Object { $_ -match '^(refused \S+ |other \S+ |written$)' })
+              @{ pass = [bool]($answers.Count -eq 1 -and $answers[0] -match '^refused (EACCES|EPERM) ')
+                 value = "$($Write.output) (exit $($Write.exit))" }
+          }
+          function Test-TnwksMount($Mount) {
+              if (-not $Mount) { return @{ pass = $false; value = 'the mount task gave no result' } }
+              @{ pass = [bool]($Mount.mount_exit -eq 0 -and $Mount.unmount_exit -eq 0)
+                 value = "mount exit $($Mount.mount_exit) ($($Mount.mount_output)); unmount exit $($Mount.unmount_exit) ($($Mount.unmount_output))" }
+          }
+          # --- END logic
+
+          function Read-Step([string]$Step) {
+              $path = Join-Path $LogDir "$Step.json"
+              if (-not (Test-Path -LiteralPath $path)) { return $null }
+              Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+          }
+          function Invoke-Step([string]$Step) {
+              $task = "$Prefix-$Step"
+              $before = (Get-ScheduledTaskInfo -TaskName $task).LastRunTime
+              Start-ScheduledTask -TaskName $task
+              $deadline = (Get-Date).AddMinutes(10)
+              do {
+                  Start-Sleep -Seconds 3
+                  $info = Get-ScheduledTaskInfo -TaskName $task
+              } while (((Get-ScheduledTask -TaskName $task).State -eq 'Running' -or $info.LastRunTime -eq $before) -and (Get-Date) -lt $deadline)
+              if ($info.LastTaskResult -ne 0) { return $null }
+              Read-Step $Step
+          }
+          $sid = (Get-LocalUser -Name $Account).SID.Value
+          $results = [ordered]@{}
+
+          $probe = Invoke-Step 'probe'
+          $results.probe = Test-TnwksProbe $probe $sid $Account
+          $results.import = Test-TnwksImport (Read-Step 'import') $probe $Distro
+          $state = "$((Get-ScheduledTask -TaskName "$Prefix-start").State)"
+          $results.start = @{ pass = ($state -eq 'Running'); value = "task state $state" }
+
+          # The token of each WSL process of the account. The owner of a
+          # process comes from WMI, so a process of another user is not opened.
+          # The checks run as SYSTEM (become runas), whose token holds the debug privilege, so they can open them.
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          using System.Security.Principal;
+          public static class TnwksRehearsalToken {
+              [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+              [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+              [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(
+                  IntPtr token, int cls, IntPtr buffer, int length, out int needed);
+              [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+              static IntPtr Info(IntPtr token, int cls) {
+                  int needed;
+                  GetTokenInformation(token, cls, IntPtr.Zero, 0, out needed);
+                  if (needed <= 0) return IntPtr.Zero;
+                  IntPtr buffer = Marshal.AllocHGlobal(needed);
+                  if (!GetTokenInformation(token, cls, buffer, needed, out needed)) { Marshal.FreeHGlobal(buffer); return IntPtr.Zero; }
+                  return buffer;
+              }
+              // "error <code>", or the token: "user=<sid> integrity=<rid> elevation=<type>
+              // admins=<absent|deny-only|enabled>".
+              public static string Read(int pid) {
+                  IntPtr process = OpenProcess(0x1000, false, pid);
+                  if (process == IntPtr.Zero) return "error open " + Marshal.GetLastWin32Error();
+                  IntPtr token;
+                  if (!OpenProcessToken(process, 0x0008, out token)) { int e = Marshal.GetLastWin32Error(); CloseHandle(process); return "error token " + e; }
+                  IntPtr user = IntPtr.Zero, label = IntPtr.Zero, elevation = IntPtr.Zero, groups = IntPtr.Zero;
+                  try {
+                      user = Info(token, 1); label = Info(token, 25); elevation = Info(token, 18); groups = Info(token, 2);
+                      if (user == IntPtr.Zero || label == IntPtr.Zero || elevation == IntPtr.Zero || groups == IntPtr.Zero) return "error info";
+                      string userSid = new SecurityIdentifier(Marshal.ReadIntPtr(user)).Value;
+                      SecurityIdentifier labelSid = new SecurityIdentifier(Marshal.ReadIntPtr(label));
+                      byte[] raw = new byte[labelSid.BinaryLength];
+                      labelSid.GetBinaryForm(raw, 0);
+                      int rid = BitConverter.ToInt32(raw, raw.Length - 4);
+                      int type = Marshal.ReadInt32(elevation);
+                      string admins = "absent";
+                      int count = Marshal.ReadInt32(groups);
+                      int size = Marshal.SizeOf(typeof(IntPtr)) * 2;
+                      for (int i = 0; i < count; i++) {
+                          IntPtr entry = groups + IntPtr.Size + i * size;
+                          SecurityIdentifier sid = new SecurityIdentifier(Marshal.ReadIntPtr(entry));
+                          int attributes = Marshal.ReadInt32(entry + IntPtr.Size);
+                          if (sid.Value == "S-1-5-32-544") admins = (attributes & 0x10) != 0 ? "deny-only" : "enabled";
+                      }
+                      return "user=" + userSid + " integrity=0x" + rid.ToString("x") + " elevation=" + type + " admins=" + admins;
+                  } finally {
+                      foreach (IntPtr p in new[] { user, label, elevation, groups }) if (p != IntPtr.Zero) Marshal.FreeHGlobal(p);
+                      CloseHandle(token); CloseHandle(process);
+                  }
+              }
+          }
+          '@
+          $rows = @()
+          $filter = "Name = 'wsl.exe' OR Name = 'wslhost.exe' OR Name = 'wslrelay.exe' OR Name LIKE 'vmmem%'"
+          foreach ($p in @(Get-CimInstance Win32_Process -Filter $filter)) {
+              $name = $p.Name -replace '\.exe$', ''
+              $owner = Invoke-CimMethod -InputObject $p -MethodName GetOwnerSid -ErrorAction SilentlyContinue
+              $mine = $name -in @('wsl', 'wslhost', 'wslrelay') -and $owner -and $owner.Sid -eq $sid
+              if (-not $mine -and $name -notlike 'vmmem*') { continue }
+              $rows += @{ name = $name; id = $p.ProcessId; mine = $mine; token = [TnwksRehearsalToken]::Read([int]$p.ProcessId) }
+          }
+          $results.tokens = Test-TnwksTokens $rows
+
+          $results.write = Test-TnwksWrite (Invoke-Step 'write')
+          $results.mount = Test-TnwksMount (Invoke-Step 'mount')
+          $results
+      # It starts tasks of the temporary account, so it runs as SYSTEM, as
+      # the role's tasks that act on them do.
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_rehearsal_checks
+
+    - name: The SID of the removed account is given
+      when: wsl_rehearsal_state == 'absent'
+      ansible.builtin.assert:
+        that: (wsl_rehearsal_removed_sid | default('')) is match('^S-1-5-21-[0-9]+-[0-9]+-[0-9]+-[0-9]+$')
+        fail_msg: >-
+          The exit check needs the SID of {{ wsl_rehearsal_account }}, read before the removal:
+          -e wsl_rehearsal_removed_sid=<SID>.
+        quiet: true
+
+    - name: The exit check of the removal
+      when: wsl_rehearsal_state == 'absent'
+      ansible.windows.win_powershell:
+        parameters:
+          Account: "{{ wsl_rehearsal_account }}"
+          RemovedSid: "{{ wsl_rehearsal_removed_sid }}"
+          Prefix: "{{ wsl_rehearsal_task_prefix }}"
+          Dir: "{{ wsl_rehearsal_dir }}"
+          Rights: "{{ ['SeBatchLogonRight'] + wsl_rehearsal_deny_rights }}"
+          UserList: "{{ wsl_rehearsal_userlist_key }}"
+        script: |
+          param([string]$Account, [string]$RemovedSid, [string]$Prefix, [string]$Dir, [string[]]$Rights, [string]$UserList)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $results = [ordered]@{}
+          function Add-Check([string]$Name, [bool]$Pass, [string]$Value) {
+              $results[$Name] = [ordered]@{ pass = $Pass; value = $Value }
+          }
+          $users = @(Get-LocalUser)
+          $admins = @(Get-LocalGroupMember -SID 'S-1-5-32-544' | ForEach-Object { "$($_.Name) ($($_.SID.Value))" })
+          $list = ($users | ForEach-Object { "$($_.Name) enabled=$($_.Enabled)" }) -join ', '
+          Add-Check 'account' (-not ($users.Name -contains $Account)) ("local accounts: {0}; Administrators: {1}" -f $list, ($admins -join ', '))
+
+          # The holders of each right, from the local policy (secedit gives SIDs as *S-1-...).
+          $file = Join-Path $env:TEMP 'tnwks-rehearsal-rights.inf'
+          # No file of an earlier read: the check reads only this export.
+          Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+          # Lines on stderr stay text: under Stop, Windows PowerShell 5.1 stops at the first.
+          $out = & { $ErrorActionPreference = 'Continue'; secedit.exe /export /areas USER_RIGHTS /cfg $file /quiet 2>&1 | ForEach-Object { "$_" } } | Out-String
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $file)) { throw "secedit did not export the rights ($LASTEXITCODE): $out" }
+          $policy = @(Get-Content -LiteralPath $file)
+          Remove-Item -LiteralPath $file -Force
+          $pass = $true
+          $shown = @()
+          foreach ($right in $Rights) {
+              $line = @($policy | Where-Object { $_ -match "^$right\s*=" })
+              $holders = @()
+              if ($line) { $holders = @(($line[0] -split '=', 2)[1].Split(',') | ForEach-Object { $_.Trim().TrimStart('*') } | Where-Object { $_ }) }
+              $named = @()
+              foreach ($h in $holders) {
+                  # The SID of the account fails the check, also when it names
+                  # no account. Another SID that names no account is a note.
+                  if ($h -eq $RemovedSid) { $pass = $false; $named += "$h (the account of the rehearsal)"; continue }
+                  try {
+                      $name = $h
+                      if ($h -like 'S-1-*') { $name = (New-Object Security.Principal.SecurityIdentifier $h).Translate([Security.Principal.NTAccount]).Value }
+                      if ($name -like "*\$Account" -or $name -eq $Account) { $pass = $false }
+                      $named += $name
+                  } catch { $named += "$h (note: names no account, not the SID of the rehearsal)" }
+              }
+              $shown += "{0}: {1}" -f $right, $(if ($named) { $named -join ', ' } else { 'none' })
+          }
+          Add-Check 'rights' $pass ($shown -join '; ')
+          $tile = Get-ItemProperty -LiteralPath $UserList -Name $Account -ErrorAction SilentlyContinue
+          Add-Check 'tile' (-not $tile) $(if ($tile) { "the value $Account is there" } else { 'no value' })
+
+          $tasks = @(Get-ScheduledTask -TaskName "$Prefix-*" -ErrorAction SilentlyContinue | ForEach-Object { $_.TaskName })
+          Add-Check 'tasks' ($tasks.Count -eq 0) $(if ($tasks) { $tasks -join ', ' } else { 'none' })
+          $profiles = @(Get-CimInstance Win32_UserProfile | Where-Object { $_.LocalPath -like "*\$Account*" } | ForEach-Object { $_.LocalPath })
+          # A folder of the account in the users folder with no profile entry
+          # could still hold the disk of a distro.
+          $list = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -Name ProfilesDirectory
+          $usersDir = [Environment]::ExpandEnvironmentVariables($list.ProfilesDirectory)
+          $folders = @(Get-ChildItem -LiteralPath $usersDir -Directory -Force -Filter "$Account*" | ForEach-Object { $_.FullName })
+          $left = @($profiles) + @($folders | Where-Object { $_ -notin $profiles })
+          Add-Check 'profile' ($left.Count -eq 0) $(if ($left) { $left -join ', ' } else { "none (no profile, no folder $usersDir\$Account*)" })
+          Add-Check 'folder' (-not (Test-Path -LiteralPath $Dir)) "$Dir exists: $(Test-Path -LiteralPath $Dir)"
+          $results
+      register: wsl_rehearsal_exit
+
+    - name: The result of the run
+      ansible.builtin.set_fact:
+        wsl_rehearsal_result: "{{ (wsl_rehearsal_checks if wsl_rehearsal_state == 'present' else wsl_rehearsal_exit).output[0] }}"
+
+    - name: The value of each check
+      ansible.builtin.debug:
+        msg: "{{ wsl_rehearsal_result }}"
+
+    - name: Each check passes
+      ansible.builtin.assert:
+        that: wsl_rehearsal_result | dict2items | rejectattr('value.pass') | list | length == 0
+        fail_msg: >-
+          Failed: {{ wsl_rehearsal_result | dict2items | rejectattr('value.pass') | map(attribute='key') | join(', ') }}.
+          {{ 'The change of the host stops before its step 1 (Design Doc 0004, section 9).' if wsl_rehearsal_state == 'present'
+             else 'A part of the rehearsal is left: run the removal again, or remove it by hand.' }}
+        quiet: true

@@ -183,9 +183,9 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\"}",
+                        "expr": "max by (k8s_cluster, name) (smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{name}}",
                         "range": true
                       },
                       "datasource": {
@@ -235,7 +235,7 @@
               }
             }
           },
-          "description": "p90 over the probe histogram; compare with baseline/threshold and packet loss.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "p90 over the probe histogram, per Internet target and the router hop (sce-rtr01); compare with baseline/threshold and packet loss.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -262,9 +262,9 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\"}",
+                        "expr": "max by (k8s_cluster, name) (smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{name}}",
                         "range": true
                       },
                       "datasource": {
@@ -341,9 +341,9 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\"}",
+                        "expr": "max by (k8s_cluster, name) (smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\",role=~\"lan|internet\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{name}}",
                         "range": true
                       },
                       "datasource": {
@@ -394,7 +394,7 @@
               }
             }
           },
-          "description": "Probe packet loss; distinguish a missing series from zero measured loss.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Probe packet loss per Internet target and the router hop; distinguish a missing series from zero measured loss. The APs, SW03 and the radio link are on their own boards.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -685,6 +685,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Traffic"
                       }
                     }
@@ -853,6 +877,13 @@
                       }
                     }
                   ],
+                  "links": [
+                    {
+                      "title": "Open Network & Routing",
+                      "url": "/d/tnwks-network/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -863,7 +894,7 @@
               }
             }
           },
-          "description": "Whether the UISP exporter reached its controller. This is collector evidence, not the radio link's own health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Whether the UISP exporter reached a UISP controller. None is hosted now (docs/network/architecture.md, Not running), so this reads No and says nothing about the radio link. Which hop of the radio link answers (EP-R6, LiteAP, LiteBeam) and whether it passes traffic is on Network & Routing, tab Radio link.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

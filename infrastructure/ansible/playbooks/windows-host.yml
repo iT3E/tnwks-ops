@@ -41,28 +41,54 @@
           tags: [usb-attach]
       tags: [usb-attach]
 
+    # Only when a host has the rehearsal on.
+    - name: Root file system of the rehearsal
+      ansible.builtin.include_role:
+        name: windows_wsl_rehearsal
+        tasks_from: controller.yml
+        apply:
+          tags: [wsl-rehearsal]
+      when: groups['windows_hosts'] | map('extract', hostvars, 'wsl_rehearsal') | select | list | length > 0
+      tags: [wsl-rehearsal]
+
+    # Only when a host has the rehearsal of the move on, at its phase setup.
+    - name: Root file system of the rehearsal of the move
+      ansible.builtin.include_role:
+        name: windows_wsl_move_rehearsal
+        tasks_from: controller.yml
+        apply:
+          tags: [wsl-move-rehearsal]
+      when: groups['windows_hosts'] | map('extract', hostvars, 'wsl_move_rehearsal') | select | list | length > 0
+      tags: [wsl-move-rehearsal]
+
 - name: Windows host
   hosts: windows_hosts
   gather_facts: false
   become: false
   pre_tasks:
     # Before any role, and with each tag (a run with --tags lan-bridge too).
-    # Two roles start a process in the distro from a task that needs admin
-    # rights, and they have no part with no elevation yet: the USB attach
-    # (usbipd) and the monitoring volume (wsl --mount). A host with either one
-    # can not start WSL with no elevation until they do (Design Doc 0004,
-    # section 5.9, and docs/wsl/windows-ansible.md).
+    # One role starts a process in the distro from a task that needs admin
+    # rights, and has no part with no elevation yet: the monitoring volume
+    # (wsl --mount). A host with it can not start WSL with no elevation until
+    # it does (Design Doc 0004, section 5.9, and docs/wsl/windows-ansible.md).
+    # With the monitoring data in the file on the distro disk
+    # (observability_storage_mount file, section 5.13), the mount task is
+    # disabled and the role starts nothing. The USB attach runs with no
+    # elevation with the switch: the play binds each device, and the distro
+    # attaches a bound device with the usbip client, which needs no Windows
+    # right (roles wsl_usb_attach and windows_usb_attach).
     - name: The start with no elevation has each role it needs
       ansible.builtin.assert:
         that:
-          - not (wsl_start_unelevated | bool) or (usb_attach_bound_devices | default([]) | length == 0)
-          - not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool)
+          - >-
+            not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool)
+            or (observability_storage_mount | default('vhdx')) == 'file'
           - not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)
         fail_msg: >-
           On {{ inventory_hostname }}: wsl_start_unelevated_done needs wsl_start_unelevated. And
-          wsl_start_unelevated needs no USB attach and no monitoring volume: their tasks need
-          admin rights and start a process in the distro, so they need a part with no elevation
-          first (Design Doc 0004, section 5.9).
+          wsl_start_unelevated needs no monitoring volume (a volume with observability_storage_mount
+          file is none): its task needs admin rights and starts a process in the distro, so it
+          needs a part with no elevation first (Design Doc 0004, sections 5.9 and 5.13).
         quiet: true
       tags: [always]
 
@@ -105,6 +131,13 @@
       tags: [coral-detector]
     - role: windows_monitoring
       tags: [monitoring]
+    # Step 3 of the account change (Design Doc 0004, section 9): the account
+    # that owns the distro, its folder and the tasks of the window. On per
+    # host, with the owner's go (R4). No apply starts the window. Before the
+    # WSL roles, which register the start tasks of that account.
+    - role: windows_wsl_move
+      when: wsl_move | bool
+      tags: [wsl-move]
     - role: windows_udp_relay
       when: udp_relays | length > 0
       tags: [udp-relay]
@@ -136,3 +169,14 @@
     # Check-only settings; last, so a failed assertion stops nothing else.
     - role: windows_host_settings
       tags: [host-settings]
+    # The rehearsal of the account change (Design Doc 0004, section 9, step
+    # 0). After every other role, so a failed step of it stops no other role.
+    - role: windows_wsl_rehearsal
+      when: wsl_rehearsal | bool
+      tags: [wsl-rehearsal]
+    # The rehearsal of the move (Design Doc 0004, section 9, step 0). Last,
+    # and each phase only when given by hand:
+    #   --tags wsl-move-rehearsal -e wsl_move_rehearsal_phase=<phase>
+    - role: windows_wsl_move_rehearsal
+      when: wsl_move_rehearsal | bool
+      tags: [wsl-move-rehearsal]

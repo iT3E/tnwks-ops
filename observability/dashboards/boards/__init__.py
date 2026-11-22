@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..model import Board
 from . import (
+    ai,
     alerts,
     apps,
     data,
@@ -23,8 +24,8 @@ from . import (
     wifi_clients,
 )
 
-ORDER = (homelab, sites, data, network, internet, wan_clients, wifi, wifi_clients, kubernetes, apps, home, hosts, host,
-         observability, security, alerts, house)
+ORDER = (homelab, sites, data, network, internet, wan_clients, wifi, wifi_clients, kubernetes, apps, ai, home, hosts,
+         host, observability, security, alerts, house)
 
 
 def catalogue() -> list[Board]:

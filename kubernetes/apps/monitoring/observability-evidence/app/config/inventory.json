@@ -584,11 +584,6 @@
       "vip": "10.10.95.10"
     },
     {
-      "name": "playwright-mcp",
-      "host": "playwright-mcp.internal.tnwks.us",
-      "vip": "10.10.95.200"
-    },
-    {
       "name": "qbittorrent",
       "host": "qbittorrent.internal.tnwks.us",
       "vip": "10.10.95.200"
@@ -603,5 +598,518 @@
       "host": "unifi.internal.tnwks.us",
       "vip": "10.10.95.200"
     }
-  ]
+  ],
+  "ai": {
+    "parts": [
+      {
+        "trust_domain": "pilot",
+        "part": "Agent pod",
+        "namespace": "agents-pilot",
+        "kind": "deployment",
+        "workload": "agent",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "part": "Agent pod",
+        "namespace": "agents-main",
+        "kind": "deployment",
+        "workload": "agent",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "part": "Agent pod",
+        "namespace": "agents-finance",
+        "kind": "deployment",
+        "workload": "agent",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "pilot",
+        "part": "Sandbox gateway",
+        "namespace": "agents-pilot",
+        "kind": "statefulset",
+        "workload": "openshell",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "part": "Sandbox gateway",
+        "namespace": "agents-main",
+        "kind": "statefulset",
+        "workload": "openshell",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "part": "Sandbox gateway",
+        "namespace": "agents-finance",
+        "kind": "statefulset",
+        "workload": "openshell",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "workflows",
+        "part": "Sandbox gateway",
+        "namespace": "agents-workflows",
+        "kind": "statefulset",
+        "workload": "openshell",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "part": "Vault server",
+        "namespace": "agents-main",
+        "kind": "deployment",
+        "workload": "vault-server",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "part": "Vault server",
+        "namespace": "agents-finance",
+        "kind": "deployment",
+        "workload": "vault-server",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "part": "Fetch proxy",
+        "namespace": "agents-main",
+        "kind": "deployment",
+        "workload": "fetch-proxy",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "part": "Cluster MCP server",
+        "namespace": "agents-main",
+        "kind": "deployment",
+        "workload": "cluster-mcp",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "part": "Flux MCP server",
+        "namespace": "agents-main",
+        "kind": "deployment",
+        "workload": "flux-mcp",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "part": "Terraform MCP server",
+        "namespace": "agents-main",
+        "kind": "deployment",
+        "workload": "terraform-mcp",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "part": "Finance MCP server",
+        "namespace": "agents-finance",
+        "kind": "deployment",
+        "workload": "firefly-mcp",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "part": "Finance proxy",
+        "namespace": "agents-finance",
+        "kind": "deployment",
+        "workload": "firefly-proxy",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "workflows",
+        "part": "Run receiver",
+        "namespace": "agents-workflows",
+        "kind": "deployment",
+        "workload": "run-receiver",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "part": "Model gateway",
+        "namespace": "ai",
+        "kind": "deployment",
+        "workload": "litellm",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "part": "Model bridge",
+        "namespace": "ai",
+        "kind": "deployment",
+        "workload": "model-bridge",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "part": "MCP gateway",
+        "namespace": "ai",
+        "kind": "deployment",
+        "workload": "mcp-gateway",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "part": "Sandbox controller",
+        "namespace": "agent-sandbox-system",
+        "kind": "deployment",
+        "workload": "agent-sandbox-controller",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "part": "Browser tool server",
+        "namespace": "ai",
+        "kind": "deployment",
+        "workload": "playwright-mcp",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      }
+    ],
+    "schedules": [
+      {
+        "trust_domain": "pilot",
+        "namespace": "agents-pilot",
+        "cronjob": "platform-check-isolation",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "pilot",
+        "namespace": "agents-pilot",
+        "cronjob": "platform-check-probe",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "namespace": "agents-main",
+        "cronjob": "platform-check-isolation",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "namespace": "agents-main",
+        "cronjob": "platform-check-probe",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "namespace": "agents-finance",
+        "cronjob": "platform-check-isolation",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "namespace": "agents-finance",
+        "cronjob": "platform-check-probe",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "workflows",
+        "namespace": "agents-workflows",
+        "cronjob": "platform-check-isolation",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "workflows",
+        "namespace": "agents-workflows",
+        "cronjob": "platform-check-probe",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "namespace": "agents-finance",
+        "cronjob": "platform-check-firefly-probe",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "namespace": "agents-finance",
+        "cronjob": "platform-check-firefly-dns",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "namespace": "agents-main",
+        "cronjob": "platform-check-mcp-gateway-probe",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "namespace": "agents-finance",
+        "cronjob": "platform-check-mcp-gateway-probe",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "workflows",
+        "namespace": "agents-workflows",
+        "cronjob": "workflow-providers",
+        "within": 2100,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "workflows",
+        "namespace": "agents-workflows",
+        "cronjob": "workflow-sweep",
+        "within": 2100,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "namespace": "monitoring",
+        "cronjob": "agent-heartbeat-check",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "namespace": "monitoring",
+        "cronjob": "trace-filter-check",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "namespace": "monitoring",
+        "cronjob": "prometheus-rule-check",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "namespace": "ai",
+        "cronjob": "litellm-key-check",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "shared",
+        "namespace": "flux-system",
+        "cronjob": "flux-admission-objects",
+        "within": 93600,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      }
+    ],
+    "results": [
+      {
+        "trust_domain": "pilot",
+        "check": "instruction-check",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "pilot",
+        "check": "daily-backup",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "pilot",
+        "check": "memory-index",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "check": "instruction-check",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "check": "daily-backup",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
+        "check": "memory-index",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "check": "instruction-check",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "check": "daily-backup",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "check": "memory-index",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "finance",
+        "check": "automations-sync",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "workflows",
+        "check": "app-drift",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      }
+    ],
+    "backups": [
+      {
+        "trust_domain": "pilot",
+        "namespace": "agents-pilot",
+        "policy": "agent-state-v2",
+        "clusters": [
+          "homelab-wsl"
+        ],
+        "within": 108000
+      },
+      {
+        "trust_domain": "main",
+        "namespace": "agents-main",
+        "policy": "agent-state",
+        "clusters": [
+          "homelab-wsl"
+        ],
+        "within": 108000
+      },
+      {
+        "trust_domain": "main",
+        "namespace": "agents-main",
+        "policy": "vault",
+        "clusters": [
+          "homelab-wsl"
+        ],
+        "within": 108000
+      },
+      {
+        "trust_domain": "finance",
+        "namespace": "agents-finance",
+        "policy": "agent-state",
+        "clusters": [
+          "homelab-wsl"
+        ],
+        "within": 108000
+      },
+      {
+        "trust_domain": "finance",
+        "namespace": "agents-finance",
+        "policy": "vault",
+        "clusters": [
+          "homelab-wsl"
+        ],
+        "within": 108000
+      }
+    ]
+  }
 }

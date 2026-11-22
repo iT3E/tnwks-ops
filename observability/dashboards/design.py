@@ -34,6 +34,15 @@ LABELS = {
     # The security board (security/README.md).
     "safeguard": "Safeguard", "title": "Title", "function": "Function", "system": "System",
     "system_type": "Type", "site": "Site of the system", "domain": "Domain", "source": "Source",
+    # The AI board (boards/ai.py).
+    "trust_domain": "Trust domain", "part": "Part", "check": "Check", "policy": "Policy",
+    "result": "Result", "route": "Route", "method": "Method", "status": "Status",
+    "api_key_alias": "Key", "requested_model": "Name asked for", "api_provider": "Provider",
+    "status_code": "Status", "exception_status": "Status", "window": "Plan window", "token": "Kind of token",
+    # The metrics of the product (step 3 of the AI board).
+    "openclaw_channel": "Channel", "openclaw_outcome": "Outcome", "openclaw_delivery_kind": "Kind",
+    "openclaw_errorCategory": "Error", "openclaw_trigger": "Trigger", "openclaw_state": "Session state",
+    "openclaw_provider": "Provider", "openclaw_model": "Model", "openclaw_failover_to_model": "Moved to",
 }
 
 

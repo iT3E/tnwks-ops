@@ -1,0 +1,46 @@
+---
+# Runs one task of an account as SYSTEM, waits for its end, and keeps what it
+# gave in wsl_move_rehearsal_runs[<step>]. wsl_move_rehearsal_run: key (a or
+# b), step, and expect: pass (exit 0, the default), refused (exit 2), or
+# not-run (the task could not start). A task that could not start gives no
+# result of this run, and one of: Windows refused the start, a last result
+# that is not 0 (0x41303 for a task that never ran), or no new run in the
+# wait (ran false), as for a task that ran before: its last result stays the
+# one of its earlier run, also 0.
+- name: "Run the task {{ wsl_move_rehearsal_run.key }}-{{ wsl_move_rehearsal_run.step }}"
+  ansible.windows.win_powershell:
+    parameters:
+      Runner: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksStartTask.ps1'
+      Task: "{{ wsl_move_rehearsal_prefix }}-{{ wsl_move_rehearsal_run.key }}-{{ wsl_move_rehearsal_run.step }}"
+      Result: >-
+        {{ wsl_move_rehearsal_accounts[wsl_move_rehearsal_run.key].log_dir }}\{{ wsl_move_rehearsal_run.step }}.json
+      # A task that can not log on may never show a new run: a short wait.
+      Minutes: "{{ 2 if (wsl_move_rehearsal_run.expect | default('pass')) == 'not-run' else 20 }}"
+    script: |
+      param([string]$Runner, [string]$Task, [string]$Result, [int]$Minutes)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $true
+      & $Runner -Task $Task -Result $Result -Minutes $Minutes
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_run_out
+  failed_when: >-
+    wsl_move_rehearsal_run_out.failed | default(false) or not (
+      ((wsl_move_rehearsal_run.expect | default('pass')) == 'pass'
+        and (wsl_move_rehearsal_run_out.output | last).ran and (wsl_move_rehearsal_run_out.output | last).code == 0
+        and (wsl_move_rehearsal_run_out.output | last).result is not none)
+      or ((wsl_move_rehearsal_run.expect | default('pass')) == 'refused'
+        and (wsl_move_rehearsal_run_out.output | last).code == 2)
+      or ((wsl_move_rehearsal_run.expect | default('pass')) == 'not-run'
+        and ((wsl_move_rehearsal_run_out.output | last).code != 0 or (wsl_move_rehearsal_run_out.output | last).refused | length > 0
+             or not (wsl_move_rehearsal_run_out.output | last).ran)
+        and (wsl_move_rehearsal_run_out.output | last).result is none))
+
+- name: "Keep the result of {{ wsl_move_rehearsal_run.key }}-{{ wsl_move_rehearsal_run.step }}"
+  ansible.builtin.set_fact:
+    wsl_move_rehearsal_runs: >-
+      {{ wsl_move_rehearsal_runs | default({}) | combine({wsl_move_rehearsal_run.step:
+         (wsl_move_rehearsal_runs | default({})).get(wsl_move_rehearsal_run.step, [])
+         + [wsl_move_rehearsal_run_out.output | last]}) }}

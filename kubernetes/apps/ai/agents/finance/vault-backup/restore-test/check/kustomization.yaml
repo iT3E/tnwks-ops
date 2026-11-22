@@ -1,0 +1,14 @@
+---
+# LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
+# lists ./vault-backup/restore-test/ks.yaml, for the restore test of the
+# finance share. The cleanup is two changes. First the line out of that
+# list, with no other edit: Flux deletes the Restore, the scratch volume
+# and the check Job. Then, when they are gone, the name of the snapshot
+# back to its placeholder (vault-SET-ME, in restore/restore.yaml and
+# check/job.yaml), and this directory is a template. Not both in one
+# change: Flux applies the placeholder to the Restore while it prunes, and
+# the deletion then waits for the health check (45 minutes).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./job.yaml

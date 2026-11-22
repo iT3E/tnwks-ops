@@ -8,12 +8,20 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dashboards import catalogue
+from dashboards.boards.ai import ALERT_FILES, alert_names
 
 ROOT = Path(__file__).resolve().parents[2]
 # A generated alert names the site it's about; any other alert, the site whose
 # Prometheus raised it. The Telegram template appends the incident's time range.
+# An alert whose panels sit on a later tab opens that tab: Grafana 13 keeps the
+# open tab in `dtab`, the tab title as slugifyForUrl makes it.
 URL = re.compile(r"https://grafana\.\$\{INTERNAL_DOMAIN\}/d/([a-z0-9-]+)\?var-cluster="
-                 r"\{\{ \$(?:labels\.k8s_cluster|externalLabels\.cluster) \}\}")
+                 r"\{\{ \$(?:labels\.k8s_cluster|externalLabels\.cluster) \}\}(?:&dtab=([a-z0-9-]+))?")
+
+
+def tab_slug(title):
+    """Grafana's slugifyForUrl: lower case, word characters and spaces, spaces to dashes."""
+    return re.sub(r" +", "-", re.sub(r"[^\w ]+", "", title.lower()))
 
 
 def alerts():
@@ -30,7 +38,7 @@ def alerts():
 
 
 def test_every_alert_links_to_a_generated_board_scoped_to_its_site():
-    boards = {board.uid for board in catalogue() if not board.kiosk}
+    boards = {board.uid: board for board in catalogue() if not board.kiosk}
     checked = 0
     for path, rule in alerts():
         if rule.get("labels", {}).get("severity") == "none":
@@ -38,8 +46,26 @@ def test_every_alert_links_to_a_generated_board_scoped_to_its_site():
         url = (rule.get("annotations") or {}).get("dashboard_url", "")
         match = URL.fullmatch(url)
         assert match and match[1] in boards, (str(path), rule["alert"], url)
+        if match[2]:
+            tabs = {tab_slug(title) for title in boards[match[1]].tabs}
+            assert match[2] in tabs, (str(path), rule["alert"], url, sorted(tabs))
         checked += 1
     assert checked > 80
+
+
+def test_each_ai_alert_opens_the_ai_board_scoped_to_its_site():
+    """The 21 alerts of the agent platform, the heartbeat and the model gateway
+    open the AI board, and the board lists the same alerts as firing."""
+    names = []
+    for path, rule in alerts():
+        if not str(path).startswith("kubernetes/apps/ai/"):
+            continue
+        match = URL.fullmatch((rule.get("annotations") or {}).get("dashboard_url", ""))
+        assert match and match[1] == "tnwks-ai", (str(path), rule["alert"])
+        names.append(rule["alert"])
+    assert len(names) == 21
+    assert sorted(names) == alert_names()
+    assert {str(path) for path, _ in alerts() if str(path).startswith("kubernetes/apps/ai/")} == set(ALERT_FILES)
 
 
 REPO_DOC = re.compile(r"https://github\.com/iT3E/tnwks-ops/blob/main/(docs/[^#]+\.md)#([a-z0-9-]+)")

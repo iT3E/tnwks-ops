@@ -1,6 +1,13 @@
 ---
-# The second WSL host (site_wsl02). ansible_user is in secrets.sops.yml next
-# to this file; it owns the WSL distro too.
+# The second WSL host (site_wsl02). ansible_user, in secrets.sops.yml next
+# to this file, is the administrator account (step 4 of the account change,
+# Design Doc 0004, section 9). It does not own the WSL distro.
+
+# The account that owns the WSL distro: the present account until the done
+# switch of the move, then the account that the move made. Both names are in
+# secrets.sops.yml (wsl_move_present_account, wsl_move_new_account).
+windows_desktop_user: >-
+  {{ wsl_move_new_account if wsl_move_phase == 'done' else wsl_move_present_account }}
 
 # The vEthernet (WSL) address, where Install-TnwksWindowsSshd.ps1 binds sshd.
 # Only the distro can reach it, so other controllers jump through the
@@ -9,14 +16,17 @@
 # another subnet.
 ansible_host: 172.25.16.1
 # Replaces group_vars/all/connection.yml for this host: the same pinned host
-# keys, plus the jump. The jump logs in with the distro's key.
+# keys, plus the jump. The jump logs in with the distro's key, as the user
+# of the distro (wsl_distro_user of WSL-02-ubuntu, from the same value: a
+# value of that host that takes hostvars can not be read through hostvars
+# here).
 ansible_ssh_common_args: >-
   -o UserKnownHostsFile={{ inventory_dir }}/known_hosts
   -o StrictHostKeyChecking=yes
   -o ProxyCommand="ssh -W %h:%p -p {{ hostvars['WSL-02-ubuntu'].ansible_port }}
   -o UserKnownHostsFile={{ inventory_dir }}/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes
   -i {{ hostvars['WSL-02-ubuntu'].ansible_ssh_private_key_file }}
-  {{ ansible_user }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}"
+  {{ wsl_move_present_account }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}"
 
 # Not on this host (yet): no Coral, no Z-Stick. An empty list skips the role
 # (playbooks/windows-host.yml).
@@ -41,12 +51,45 @@ wsl_keepalive_enabled: true
 # take it at the next start of the distro (docs/wsl/windows-ansible.md, "Start
 # WSL with no elevation").
 wsl_start_unelevated: true
+# The rehearsal of the account change ran here (role windows_wsl_rehearsal).
+# Its state is absent: the apply removes it.
+wsl_rehearsal: true
+# The rehearsal of the move of a distro to another account (role
+# windows_wsl_move_rehearsal) ended: its switch is off until the next
+# rehearsal, which turns it on here again.
+wsl_move_rehearsal: false
+# Step 3 of the account change (role windows_wsl_move, Design Doc 0004,
+# section 9, step 3), with the owner's go: the account that owns the distro,
+# its tasks, and the procedure of the move window. No apply starts the window.
+# The names of the two accounts, the folder of the disk file today and the
+# version of WSL that the rehearsal of the move ran on are in
+# secrets.sops.yml next to this file. The play stops before any change while
+# one of them is missing.
+wsl_move: true
+# The done switch of the move (section 9, step 6), only after the check play
+# of step 6 passed (playbooks/windows-move-window.yml, -e
+# wsl_move_window=check), with the write test from the distro and the relay.
+# From it, the account that owns the distro is the new account, the copies of
+# the start tasks stay enabled, and the host check reads the rules of the
+# moved disk file. A way back turns it off first.
+wsl_move_done: true
+# The deletion of the tasks of the present account, after the owner took that
+# account out of windows_sshd_allow_users in secrets.sops.yml. Its apply is
+# the point of no return of the move.
+wsl_move_present_removed: true
 # Never sleeps: something put it to sleep three times in two weeks (role
 # windows_power).
 power_no_sleep: true
-# The distro's disk (on C:, where `wsl --install` put it), for the
-# on-demand compaction task.
-vhdx_compact_vhdx: 'C:\Users\{{ ansible_user }}\AppData\Local\wsl\{d3e1f4cf-83d5-47be-8d7a-64fb9e7ebb25}\ext4.vhdx'
+# The distro's disk, for the on-demand compaction task and the host check:
+# the moved file in the folder of the move from the done switch, and before
+# it the file where `wsl --install` put it, on C: in the folder of the
+# present account. The folder of the move is the default of the role
+# windows_wsl_move, here so that the compaction and the host check read it
+# too. The role windows_wsl_move stops the play when this is not the file of
+# the phase.
+wsl_move_disk_dir: 'C:\ProgramData\tnwks-wsl-move\disk'
+vhdx_compact_vhdx: >-
+  {{ wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder }}\ext4.vhdx
 
 # homelab-wsl's Prometheus scrapes both exporters over the LAN (from
 # DESKTOP-HKE05KI's address, where its pods' traffic leaves).

@@ -1,0 +1,159 @@
+---
+# The checks of the rehearsal of the move (playbooks/windows-move-rehearsal-check.yml).
+# Reads only: it starts no task and writes no file. With
+# wsl_move_rehearsal_removed_sids (after the phase remove), the exit check.
+
+- name: The rehearsal is there
+  when: wsl_move_rehearsal_removed_sids | default('') | length == 0
+  block:
+    - name: The accounts are in Users only
+      ansible.builtin.include_tasks: groups.yml
+
+    # Each moment in Administrators is in the log of the procedure. A join
+    # passes only in a run of the rehearsal's group test (mode forward or
+    # wayback, or a boot run with the boot request of the group test), and
+    # each join has its leave in the same run.
+    - name: Read the moments in Administrators from the log
+      ansible.windows.win_powershell:
+        parameters:
+          Log: "{{ wsl_move_rehearsal_log_file }}"
+        script: |
+          param([string]$Log)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $problems = @()
+          $shown = @()
+          if (-not (Test-Path -LiteralPath $Log)) { return [pscustomobject]@{ problems = @(); shown = @('no log') } }
+          # --- BEGIN logic (security/tests/test_wsl_move_rehearsal.py runs this part with fakes)
+          function Test-TnwksGroupLog([string[]]$Lines) {
+              $problems = @(); $shown = @()
+              $req = $null; $mode = ''; $inside = $false
+              foreach ($line in $Lines) {
+                  $f = $line -split ' ', 3
+                  if ($f.Count -lt 3) { continue }
+                  $text = $f[2]
+                  # A leave of the removal is shown. A leave of Administrators there
+                  # means an account was in it outside a stated step: a problem too.
+                  if ($f[1] -eq 'removal') {
+                      $shown += "$($f[0]) removal $text"
+                      if ($text -match '^group: \S+ left Administrators$') { $problems += "the removal took an account out of Administrators: $line" }
+                      continue
+                  }
+                  if ($text -like 'start, request: *') {
+                      if ($inside) { $problems += "a run ended in Administrators: $($f[0])" }
+                      $req = $text.Substring(16) | ConvertFrom-Json; $mode = $f[1]; $inside = $false
+                      continue
+                  }
+                  if ($text -match '^group: \S+ (joined|left) Administrators$') {
+                      $shown += "$($f[0]) $($f[1]) $($Matches[1])"
+                      $test = $req -and $req.rehearsal_group_test -and $mode -in @('forward', 'wayback', 'boot')
+                      if (-not $test) { $problems += "a group step outside the group test: $line" }
+                      if ($Matches[1] -eq 'joined') {
+                          if ($inside) { $problems += "a second join: $line" }
+                          $inside = $true
+                      } else {
+                          if (-not $inside) { $problems += "a leave with no join: $line" }
+                          $inside = $false
+                      }
+                      continue
+                  }
+                  if ($text -like 'result: *') {
+                      if ($inside) { $problems += "a run ended in Administrators: $line" }
+                      $inside = $false; $req = $null
+                  }
+              }
+              if ($inside) { $problems += 'the last run has a join and no leave' }
+              [pscustomobject]@{ problems = $problems; shown = $shown }
+          }
+          # --- END logic
+          Test-TnwksGroupLog @(Get-Content -LiteralPath $Log)
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      check_mode: false
+      register: wsl_move_rehearsal_group_log
+
+    - name: The moments in Administrators
+      ansible.builtin.debug:
+        msg: "{{ (wsl_move_rehearsal_group_log.output | last).shown }}"
+
+    - name: Each moment in Administrators is a stated step
+      ansible.builtin.assert:
+        that: (wsl_move_rehearsal_group_log.output | last).problems | length == 0
+        fail_msg: "{{ (wsl_move_rehearsal_group_log.output | last).problems }}"
+        quiet: true
+
+    - name: The live parts
+      ansible.builtin.include_tasks: live.yml
+
+- name: The exit check of the removal
+  when: wsl_move_rehearsal_removed_sids | default('') | length > 0
+  block:
+    - name: The SIDs of the removed accounts are given
+      ansible.builtin.assert:
+        that: >-
+          wsl_move_rehearsal_removed_sids.split(',') | reject('match', '^S-1-5-21-[0-9]+-[0-9]+-[0-9]+-[0-9]+$') | list | length == 0
+        fail_msg: The exit check needs the SIDs that the phase remove printed, -e wsl_move_rehearsal_removed_sids=<SID>,<SID>.
+        quiet: true
+
+    - name: Read what is left of the rehearsal
+      ansible.windows.win_powershell:
+        parameters:
+          Names: "{{ wsl_move_rehearsal_accounts.values() | map(attribute='name') | list }}"
+          Sids: "{{ wsl_move_rehearsal_removed_sids.split(',') }}"
+          Prefix: "{{ wsl_move_rehearsal_prefix }}"
+          Dir: "{{ wsl_move_rehearsal_dir }}"
+          Rights: "{{ ['SeBatchLogonRight'] + wsl_move_rehearsal_deny_rights }}"
+          UserList: "{{ wsl_move_rehearsal_userlist_key }}"
+        script: |
+          param([string[]]$Names, [string[]]$Sids, [string]$Prefix, [string]$Dir, [string[]]$Rights, [string]$UserList)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $results = [ordered]@{}
+          function Add-Check([string]$Name, [bool]$Pass, [string]$Value) { $results[$Name] = [ordered]@{ pass = $Pass; value = $Value } }
+          $users = @(Get-LocalUser | Where-Object { $_.Name -like "$Prefix*" -or $_.SID.Value -in $Sids } | ForEach-Object { $_.Name })
+          Add-Check 'accounts' ($users.Count -eq 0) $(if ($users) { $users -join ', ' } else { 'none' })
+          $file = Join-Path $env:TEMP 'tnwks-moverh-rights.inf'
+          Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+          $out = & { $ErrorActionPreference = 'Continue'; secedit.exe /export /areas USER_RIGHTS /cfg $file /quiet 2>&1 | ForEach-Object { "$_" } } | Out-String
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $file)) { throw "secedit did not export the rights ($LASTEXITCODE): $out" }
+          $policy = @(Get-Content -LiteralPath $file)
+          Remove-Item -LiteralPath $file -Force
+          $held = @()
+          foreach ($right in $Rights) {
+              $line = @($policy | Where-Object { $_ -match "^$right\s*=" })
+              if (-not $line) { continue }
+              foreach ($h in ($line[0] -split '=', 2)[1].Split(',')) {
+                  $h = $h.Trim().TrimStart('*')
+                  if ($h -in $Sids -or ($Names | Where-Object { $h -eq $_ -or $h -like "*\$_" })) { $held += "$right $h" }
+              }
+          }
+          Add-Check 'rights' ($held.Count -eq 0) $(if ($held) { $held -join ', ' } else { 'no right of the accounts' })
+          $tiles = @($Names | Where-Object { Get-ItemProperty -LiteralPath $UserList -Name $_ -ErrorAction SilentlyContinue })
+          Add-Check 'tiles' ($tiles.Count -eq 0) $(if ($tiles) { $tiles -join ', ' } else { 'no value' })
+          $tasks = @(Get-ScheduledTask -TaskName "$Prefix-*" -ErrorAction SilentlyContinue | ForEach-Object { $_.TaskName })
+          Add-Check 'tasks' ($tasks.Count -eq 0) $(if ($tasks) { $tasks -join ', ' } else { 'none' })
+          $profiles = @(Get-CimInstance Win32_UserProfile | Where-Object {
+              $p = $_; $p.SID -in $Sids -or @($Names | Where-Object { $p.LocalPath -like "*\$_*" }).Count } | ForEach-Object { $_.LocalPath })
+          $list = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -Name ProfilesDirectory
+          $usersDir = [Environment]::ExpandEnvironmentVariables($list.ProfilesDirectory)
+          $folders = @(Get-ChildItem -LiteralPath $usersDir -Directory -Force -Filter "$Prefix*" | ForEach-Object { $_.FullName })
+          $left = @($profiles) + @($folders | Where-Object { $_ -notin $profiles })
+          Add-Check 'profiles' ($left.Count -eq 0) $(if ($left) { $left -join ', ' } else { 'none' })
+          Add-Check 'folder' (-not (Test-Path -LiteralPath $Dir)) "$Dir exists: $(Test-Path -LiteralPath $Dir)"
+          $results
+      check_mode: false
+      register: wsl_move_rehearsal_exit
+
+    - name: The value of each check
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_exit.output | last }}"
+
+    - name: Each check passes
+      ansible.builtin.assert:
+        that: wsl_move_rehearsal_exit.output | last | dict2items | rejectattr('value.pass') | list | length == 0
+        fail_msg: >-
+          Failed: {{ wsl_move_rehearsal_exit.output | last | dict2items | rejectattr('value.pass') | map(attribute='key') | join(', ') }}.
+          A part of the rehearsal is left: run the phase remove again, or remove it by hand.
+        quiet: true

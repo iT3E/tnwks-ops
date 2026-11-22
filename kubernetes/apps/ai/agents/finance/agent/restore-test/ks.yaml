@@ -1,0 +1,78 @@
+---
+# LISTED for one run: kubernetes/apps/ai/agents/finance/kustomization.yaml
+# lists ./agent/restore-test/ks.yaml, for the restore test of the first nightly
+# snapshot with the state (the owner's go of 2026-11-17). The cleanup is two
+# changes, not one revert. First the line out of that list, with no other
+# edit: Flux deletes the Restore, the scratch volume and the check Job.
+# Then, when they are gone, the name of the snapshot back to its
+# placeholder (agent-state-SET-ME, in restore/restore.yaml), and this
+# directory is a template again. Not both in one change: Flux applies the
+# placeholder to the Restore while it prunes, and the deletion then waits
+# for the health check (60 minutes).
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# A restore test of the finance agent's state volume from its backup
+# repository (docs/apps/agent-platform-runbook.md, "Restore the state of an
+# agent"). It writes into a scratch volume only: the agent, its volume
+# `agent-state` and its snapshots stay as they are. Take its line out of
+# ../../kustomization.yaml when the result is read (the two changes above):
+# Flux then deletes the Restore, the scratch volume and the check Job.
+#
+# Two steps, in this order: the Restore fills the scratch volume, then the
+# check Job reads it. dependsOn holds the check until the Restore is
+# Completed, so the check never reads a volume that is still being written.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-restore-test
+  namespace: flux-system
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/agent/restore-test/restore
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The Restore CRD, and the repository the snapshot is in: the
+    # repository of finance (ClusterRepository agents-finance).
+    - name: kopiur-agents-finance-repository
+  # Ready only when the Restore is Completed and the scratch volume is
+  # Bound. kstatus alone calls a Restore with no status yet Current, so the
+  # phase conditions of kopiur decide (Completed: Ready=True; Failed:
+  # Stalled=True).
+  wait: true
+  healthCheckExprs:
+    - apiVersion: kopiur.home-operations.com/v1alpha1
+      kind: Restore
+      current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')
+      failed: status.conditions.exists(e, e.type == 'Stalled' && e.status == 'True')
+  interval: 30m
+  retryInterval: 5m
+  # Longer than the deadline of the restore mover (restore/restore.yaml), so
+  # a stuck restore fails in kopiur first.
+  timeout: 60m
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The check of the restored volume: one Job that reads it and logs only
+# counts, sizes, directory names and archive names. No ${VAR} substitution
+# here: the script of the Job uses shell variables.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-restore-check
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/agent/restore-test/check
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: agents-finance-restore-test
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

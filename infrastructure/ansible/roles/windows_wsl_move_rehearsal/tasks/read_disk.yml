@@ -1,0 +1,88 @@
+---
+# Reads the owner and the rules of a disk file as SYSTEM, and compares them
+# with the rules that it should have (wsl_move_rehearsal_disk_read):
+#   key: a or b, the folder of the file
+#   rule: moved (the rule of window step 4, from wsl_move_rehearsal_disk_owner
+#     and wsl_move_rehearsal_disk_new_mask), saved (the rules that window
+#     step 4 saved and the way back restores), or none (a read only)
+#   wait: seconds to wait for no rule of a VM or of its capability (after a
+#     clean stop of the VM, WSL removes both), 0 by default
+# With the functions of the procedure (wsl_move_rehearsal_procedure_lib):
+# the read with the privileges of SYSTEM, and its compare (Test-TnwksSddl):
+# the owner, whether the rules are protected, every explicit rule, and the
+# inherited rules (not against the saved set, as way back step 3), each
+# account as its SID and each mask as a number. WSL's rules (a VM, and the
+# capability SID of vmWorkerProcess while a VM runs) are allowed as the
+# procedure allows them (Get-TnwksSddlParts), and no deny rule.
+# The result, wsl_move_rehearsal_disk: exists, saved (a saved rule is
+# there), rules_ok, vm (the count of the rules of a VM), capability (the
+# count of the rules of that capability), deny (the count of deny rules),
+# inherits_ok (the file has the inherited rules that its folder gives),
+# gives (those rules), inherited_note (against the saved set: a difference
+# of the inherited rules, not a failed check), and the owner and
+# the rules with the SID of each account masked (<a>, <b>, <sid>, and
+# S-1-5-83-1-<vm> for a VM).
+- name: "Read the rules of the disk file of {{ wsl_move_rehearsal_disk_read.key | upper }}"
+  ansible.windows.win_powershell:
+    parameters:
+      Path: '{{ wsl_move_rehearsal_accounts[wsl_move_rehearsal_disk_read.key].folder }}\{{ wsl_move_rehearsal_disk_name }}'
+      Rule: "{{ wsl_move_rehearsal_disk_read.rule }}"
+      Saved: "{{ wsl_move_rehearsal_acl_file }}"
+      Owner: "{{ wsl_move_rehearsal_disk_owner }}"
+      Mask: "{{ wsl_move_rehearsal_disk_new_mask }}"
+      SidA: "{{ wsl_move_rehearsal_sids.a }}"
+      SidB: "{{ wsl_move_rehearsal_sids.b }}"
+      Wait: "{{ wsl_move_rehearsal_disk_read.wait | default(0) }}"
+      Procedure: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksMoveWindow.ps1'
+      Capability: "{{ wsl_move_rehearsal_vm_capability_sid }}"
+    script: |
+      param([string]$Path, [string]$Rule, [string]$Saved, [string]$Owner, [string]$Mask, [string]$SidA, [string]$SidB, [int]$Wait,
+          [string]$Procedure, [string]$Capability)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      {{ wsl_move_rehearsal_procedure_lib }}
+      function Get-Masked([string]$Text) {
+          foreach ($s in @(@($SidA, '<a>'), @($SidB, '<b>'))) { if ($s[0]) { $Text = $Text -replace ([regex]::Escape($s[0]) + '(?![0-9-])'), $s[1] } }
+          $Text -replace 'S-1-5-83-1(-[0-9]+){4}(?![0-9-])', 'S-1-5-83-1-<vm>' -replace 'S-1-5-21(-[0-9]+)+', '<sid>'
+      }
+      $deadline = (Get-Date).AddSeconds($Wait)
+      do {
+          $exists = [bool](Test-Path -LiteralPath $Path)
+          $sddl = if ($exists) { Get-TnwksSddl $Path } else { '' }
+          $have = Get-TnwksSddlParts $sddl
+          $more = ($have.vm -gt 0 -or $have.capability -gt 0) -and (Get-Date) -lt $deadline
+          if ($more) { Start-Sleep -Seconds 2 }
+      } while ($more)
+      $isSaved = [bool](Test-Path -LiteralPath $Saved)
+      $want = switch ($Rule) {
+          'moved' { 'O:{0}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;{1};;;{2})' -f $(if ($Owner -eq 'new-account') { $SidB } else { 'BA' }), $Mask, $SidB }
+          'saved' { if ($isSaved) { "$(Get-Content -LiteralPath $Saved -Raw)".Trim() } else { '' } }
+          default { '' }
+      }
+      # What the folder gives the file (none with protection), as at a write.
+      $gives = if ($exists) { Get-TnwksFileGives $Path $have } else { '' }
+      # The compare of the procedure. Against the saved set, as way back step 3
+      # compares: the owner, the protection and the explicit rules; the
+      # inherited rules are not part of it (inherits_ok, and inherited_note for
+      # a difference from the saved ones).
+      $ok = $exists -and $want -like 'O:*' -and $(if ($Rule -eq 'saved') { Test-TnwksSddl $Path $want -Saved } else { Test-TnwksSddl $Path $want })
+      $savedInherited = if ($Rule -eq 'saved' -and $want -like 'O:*') { (Get-TnwksSddlParts $want).inherited } else { $have.inherited }
+      [pscustomobject]@{
+          exists = $exists
+          saved = $isSaved
+          rules_ok = [bool]$ok
+          vm = $have.vm
+          capability = $have.capability
+          deny = $have.deny
+          inherits_ok = $exists -and $have.inherited -eq $gives
+          gives = Get-Masked $gives
+          inherited_note = if ($savedInherited -ne $have.inherited) {
+              "the inherited rules differ from the saved set: saved '$(Get-Masked $savedInherited)', now '$(Get-Masked $have.inherited)'" } else { '' }
+          owner = if ($sddl -match 'O:([^:]+?)(?=[GDS]:|$)') { Get-Masked $Matches[1] } else { '' }
+          sddl = Get-Masked $sddl
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_disk

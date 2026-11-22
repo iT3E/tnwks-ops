@@ -17,7 +17,10 @@ run that shows drift.
 | `windows_lan_bridge` (`lan-bridge`)         | `Sync-TnwksLanBridge.ps1` and its `ports.json` (80, 443, 1883, 8080, 2222, 18789), the task `tnwks-lan-bridge-sync`, the firewall rules `tnwks-lan-bridge-<port>`; the script keeps the portproxy entries pointed at WSL at run time |
 | `windows_usb_attach` (`usb-attach`)         | usbipd-win (pinned MSI), the forced bind of the Z-Stick, `Sync-TnwksUsbAttach.ps1` and the task `tnwks-usb-attach` (Z-Stick attach plus worker-2 restart, [usb-passthrough.md](usb-passthrough.md)) |
 | `windows_wsl_maintenance` (`wsl-maintenance`) | `Watch-TnwksWsl.ps1` and the task `tnwks-wsl-watchdog` (every 5 min), `Compact-WslVhdx.ps1` and the on-demand task `tnwks-vhdx-compact` |
-| `windows_observability_storage` (`observability-storage`) | The 20Gi Prometheus disk `C:\WSL\observability.vhdx` and the task `tnwks-observability-mount` (site 1, [observability-implementation.md](../operations/observability-implementation.md#site-1-prometheus-volume)) |
+| `windows_observability_storage` (`observability-storage`) | The 20Gi Prometheus disk `C:\WSL\observability.vhdx` and the task `tnwks-observability-mount` (site 1, [observability-implementation.md](../operations/observability-implementation.md#site-1-prometheus-volume)). Disabled when `observability_storage_mount` is `file`: the data is then in a file on the distro disk ([the data in a file on the distro disk](../operations/observability-implementation.md#the-data-in-a-file-on-the-distro-disk)) |
+| `windows_wsl_rehearsal` (`wsl-rehearsal`) | hosts with `wsl_rehearsal` (WSL-02): a temporary standard account `tnwks-rehearsal` with a distro of its own and five tasks, for the rehearsal of the account change ([below](#the-rehearsal-of-the-account-change)) |
+| `windows_wsl_move_rehearsal` (`wsl-move-rehearsal`) | hosts with `wsl_move_rehearsal` (none until the next rehearsal, which turns it on for WSL-02 only): two temporary standard accounts, a small distro, and the scripts of the move window, run phase by phase by hand ([below](#the-rehearsal-of-the-move)) |
+| `windows_wsl_move` (`wsl-move`) | hosts with `wsl_move` (none until the owner approves it for a host): step 3 of the account change, the account that owns the distro, its folder, and the tasks of the move window ([below](#the-move-of-the-distro)) |
 | `windows_power` (`power`)                   | hosts with `power_no_sleep` (WSL-02): standby (S1-S3) not allowed on the active scheme, plugged in or on battery, and hibernation off, so neither a program nor the Start menu can sleep the host. Skipped elsewhere; how to undo it is in the role's defaults |
 | `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
 | `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
@@ -75,7 +78,11 @@ capability and sets:
 - `sshd_config`: `ListenAddress` = the vEthernet (WSL) address, read from the
   adapter at run time (172.26.80.1); `PasswordAuthentication no`,
   `KbdInteractiveAuthentication no`, `PubkeyAuthentication yes`,
-  `AllowUsers <admin>`, no agent or TCP forwarding.
+  `AllowUsers <admin>`, no agent or TCP forwarding. `AllowUsers` names each
+  account of `windows_sshd_allow_users` (default: `ansible_user`). While a host
+  moves its distro to another account (Design Doc 0004, section 9, step 2), the
+  variables of that host list both accounts. The list must hold `ansible_user`:
+  the role and `task wsl-host:sshd` refuse it otherwise.
 - `administrators_authorized_keys` = the controllers' Ansible keys
   (`windows_sshd_authorized_keys` in `group_vars/windows_hosts.yml`; the
   bootstrap writes the one in `~/.ssh/id_ed25519_winhost.pub`), ACL
@@ -93,7 +100,9 @@ address", and the failure actions restart it until the address is there
 restarted sshd 30s later). Since Ansible itself runs inside WSL, sshd is
 always back by the time anything needs it. The sessions get the admin's full
 token (`High Mandatory Level`), so no `become` is needed
-(`ansible_become: false` in `group_vars/windows_hosts.yml`).
+(`ansible_become: false` in `group_vars/windows_hosts.yml`). The one
+exception is the tasks of the rehearsal that act on a task of its account
+([below](#the-rehearsal-of-the-account-change)).
 
 Verified 2026-11-03: key login works, a password login is refused
 (`Permission denied (publickey)`), and `netstat` shows sshd only on
@@ -121,7 +130,9 @@ the libusb shim build) also runs in check mode, since it only fills
 `win_powershell` scripts with `SupportsShouldProcess`, which compute "would
 change" without changing anything. On a host that never had the role, a
 check run skips the ACL and service-state tasks that need the directory tree
-and the service to exist.
+and the service to exist. A check run of the rehearsal's removal stops no
+task, so the profile of the account can stay loaded: the profile step
+reports the change and does not wait for the unload.
 
 ## Scheduled tasks
 
@@ -145,7 +156,16 @@ Write templates in full. Task Scheduler fills in defaults
 leaves them out reports a change on every run. To add a task: register it once
 by hand or from a draft template, copy `Export-ScheduledTask -TaskName <name>`
 into the template, and check that `--check` reports no change. S4U tasks
-(desktop user, no stored password) register fine over the SSH session.
+(desktop user, no stored password) register fine over the SSH session when
+their principal is the account of the session. For a different account, see
+the option `s4u_user` ([below](#the-rehearsal-of-the-account-change)).
+
+The option `keep_task_enabled_state` (off by default) is for a task that
+another step disables and enables, such as a start task of the move window.
+With it on, the comparison leaves out `Settings/Enabled`, and a registration
+of a task that exists keeps the state that the task has. A new task takes the
+state of its template. No role but the rehearsal of the move sets it, so the
+tasks of the other roles compare and register as before.
 
 ## Start WSL with no elevation
 
@@ -178,10 +198,25 @@ module `tnwks_win_dir_acl` (`playbooks/library`): no inherited rule, the
 Administrators own it, and the account may make and change files but not
 delete the directory or make one in it. The module stops when the path is a
 link or a junction. SYSTEM's `wsl.exe` can not see the distro of the user,
-so a SYSTEM task can not start a process in it. The USB attach and the
-monitoring volume have no part with no elevation yet, and the play refuses
-the switch on a host that runs them (the first task of the play, with each
-tag).
+so a SYSTEM task can not start a process in it. The monitoring volume has
+no part with no elevation yet, and the play refuses the switch on a host
+that runs it (the first task of the play, with each tag). The USB attach
+runs with no elevation with the switch (`-NoElevation`): the play binds each
+device as admin, and the attach script of the distro attaches a bound device
+with the usbip client of usbipd-win, which needs no Windows right. The task
+runs no `usbipd attach` and no `usbipd list`: both read the list of
+services at the Windows service control manager (usbipd-win 4.3.0:
+`CheckAndReportServerRunning`, `VBoxUsbMon.IsServiceInstalled`,
+`ServiceController.GetDevices`), and the service control manager grants the
+list of services to interactive and service logons, SYSTEM and the
+Administrators only, which a batch logon of a standard account is not. It
+reads `usbipd state` and runs the script of the distro once
+([usb-passthrough.md](usb-passthrough.md)), and the watchdog of a host with
+the switch skips its USB attach (`-SkipUsb`). The task logs to
+`C:\ProgramData\tnwks-usb-attach\log`, the folder that its account may
+write. In the move of the distro it has a copy for the account
+that owns the distro (`tnwks-usb-attach-account`), as the UDP relays and the
+address task of the LAN bridge do.
 
 **The folders of the roles.** On each host, with the switch on or off, each
 folder of a role under `C:\ProgramData` gets its rules from the same module,
@@ -202,8 +237,10 @@ each folder, and which task writes where.
 **The services take the change at the next start of WSL**, the start step
 below. The merge and the apply of the switch leave the plays green: the last
 task of `wsl_host_check` (the write test) can fail the distro play only when
-`wsl_start_unelevated_done` is on too. The security result of the check
-shows the write test from the first run, with or without it.
+the done switch of the host is on too: the phase `done` of the move of the
+distro on a host with the move on (`wsl_move_done`), and
+`wsl_start_unelevated_done` on another host. The security result of the
+check shows the write test from the first run, with or without it.
 
 ### Before the merge of the switch for a host
 
@@ -494,6 +531,16 @@ host, use the name from its host_vars.
    the read does not pass, do not open that pull request: do steps 1 to 5
    again, and look harder at step 4.
 
+The done switch also turns on the check `wsl-disk-rules` of the host check
+(role windows_host_check, security/README.md). From the apply of its pull
+request, the host check reads the owner and the rules of the disk file of
+the distro each 6 hours as SYSTEM, and a file that does not have the owner
+and the rules of Design Doc 0004 (section 7, row 27), a missing file and a
+file that it can not read each fail the check. The file must then have the
+rules that the move to the account sets: the account that owns the distro
+as owner, and protected rules for SYSTEM, the Administrators and that
+account, besides the entries that WSL adds for its VM.
+
 What the done switch does not catch: between step 6 and the merge of its
 pull request, the play does not fail on the write test (the security
 result still shows it). And the play trusts the switch: a switch set to
@@ -511,6 +558,843 @@ switch on with the start switch off). Its apply makes the tasks elevated
 again and removes the new tasks. Then do steps 1 to 5 again; with the
 switch off, the keepalive and the watchdog start WSL elevated, as before.
 
+## The rehearsal of the account change
+
+Per host, `wsl_rehearsal` (`group_vars/windows_hosts.yml`, on in
+`host_vars/WSL-02` only) adds the role `windows_wsl_rehearsal`: step 0 of
+the account change (Design Doc 0004, section 9). It does not touch the
+distro, the tasks or the account of today.
+
+| Part | What it is, and who gets what |
+| --- | --- |
+| The account `tnwks-rehearsal` | A local account, a member of Users only. Its password is random, made on the host, and kept nowhere. The play stops if the account is a member of Administrators |
+| The right to log on as a batch job | For `tnwks-rehearsal` only (an S4U task needs it) |
+| No other logon, no tile | `tnwks-rehearsal` may not log on at the keyboard, by Remote Desktop or from the network (`SeDenyInteractiveLogonRight`, `SeDenyRemoteInteractiveLogonRight`, `SeDenyNetworkLogonRight`), and the `SpecialAccounts\UserList` value keeps it off the sign-in screen |
+| `C:\ProgramData\tnwks-rehearsal` | The scripts and the pinned Alpine root file system. Only SYSTEM and the Administrators may change them |
+| `...\log`, `...\disk` | `tnwks-rehearsal` may make and change files: the results of its tasks, and the empty test disk file `mount-test.vhdx` |
+| Five tasks `tnwks-rehearsal-<step>` | As `tnwks-rehearsal`, S4U, no elevation, no trigger: `probe`, `import`, `start` (holds the distro with nobody signed in), `write`, `mount` |
+| The profile of `tnwks-rehearsal` | Its `.wslconfig` (a memory limit, one processor, no swap, no networking key) and its distro `tnwks-rehearsal` |
+
+The tasks of the account run as `tnwks-rehearsal`, by S4U, not as the
+account of the Ansible session. Microsoft's rule for registering tasks
+([Security Contexts for Tasks](https://learn.microsoft.com/en-us/windows/win32/taskschd/security-contexts-for-running-tasks),
+"Security for Registering Tasks") asks an administrator for the password
+of a different account to register an S4U task for it, and SYSTEM counts as
+an administrator there. The account has a random password that nothing
+keeps. So `tnwks_win_scheduled_task` with `s4u_user` makes a new random
+password on the host, sets it on the account, registers the task with it,
+and drops it, once for each task that it must register (none in check mode
+and none when the task compares equal). The password never leaves the
+host. An S4U task stores no password, so a later reset does not touch the
+tasks before it; if one of them ever failed to log on at its start, the
+probe and the import say so. Use `s4u_user` only for an account whose
+password nobody needs. Each registration after the profile exists resets
+the password again, so nothing that needs the account's DPAPI secrets may
+live in that profile. The module refuses, and changes nothing, when the
+account is a member of Administrators, when its Description is not the
+required `s4u_description` (the role passes
+`wsl_rehearsal_account_description`), when it is the account of the
+module's process, or when it has an interactive, network or remote logon
+session open (the account of the Ansible session, or a person signed in).
+Each task that
+registers, starts or stops a task of the account runs as SYSTEM, in its
+own `vars`: `ansible_become: true`,
+`ansible_become_method: ansible.builtin.runas` and
+`ansible_become_user: SYSTEM`. These are the role's tasks "Tasks of the
+temporary account", "The probe makes the profile of the account", "The
+import of the distro" and "The start of the distro, with nobody signed
+in", and "Run the checks" in the check play. runas takes the
+SYSTEM token with the debug privilege of the session and needs no password.
+The first use of become starts the Secondary Logon service (`seclogon`)
+when it is stopped, a change of the host that the role does not declare.
+
+The role is the last of the play, so a failed step of it stops no other
+role. A check run on a host where the account does not exist yet does not
+check the tasks that name the account (its rights, the rules of its two
+folders, its tasks), and says so.
+
+Run the checks after the apply, as the comment of
+`playbooks/windows-rehearsal-check.yml` says. The play reads, and changes
+no setting.
+
+**The removal.** `wsl_rehearsal_state: absent` (the default of the role
+now) removes each part, in this order:
+
+1. When the account has a profile and something of it is left to stop
+   (the start task runs, a process of the account runs, or the list of
+   distros in its hive names one), the play stops the start task. A task
+   of the account then runs `wsl --terminate`, `wsl --unregister` and
+   `wsl --shutdown`. The shutdown stops the VM of that account only: WSL
+   keeps one session for each account. No task of the play runs `wsl.exe`.
+   With no profile, no task of the account ever ran (the first one makes
+   the profile), so it has no hive, no distro and no VM, and the play skips
+   this step and the next. With nothing left to stop, an earlier run did
+   this step, and the play skips it too: each task of the account loads its
+   profile, and the profile must unload before it goes.
+   The task of the removal registers as the tasks of the state present do
+   (`s4u_user`, as SYSTEM, with a new password of the account). When it
+   does not register, the removal stops there: the account and each part
+   of the rehearsal stay, and the message says so.
+2. The play ends any process of the account that is left.
+3. It removes the tasks, the profile (with `.wslconfig` and the hive), the
+   batch right and the three deny rights (before the account, so no SID
+   with no account stays in the policy), the value that hides the tile, the
+   account, the folder (the scripts, the root file system, the test disk
+   file and the results), and the file of the write test. The batch right
+   goes after the profile: the service checks the new password with a
+   batch logon, so while a profile is there, a second run can still do
+   step 1. The play waits up to 2 minutes for the profile to unload. When
+   it stays loaded, the removal stops there, and the message says what
+   stays: run the removal again once the profile unloads, at the latest
+   after the next restart of the host. Each run of an S4U task adds a
+   reference to the profile of its account that the system does not
+   release, so a profile that such a task loaded stays loaded until the
+   next restart of the host.
+
+The same check play then reads the exit check, with the SID of the
+account read before the removal (`-e wsl_rehearsal_removed_sid=<SID>`): no
+account; no holder of the batch right or of a deny right that is the
+account or its SID; no value for the tile; no task; no profile, and no
+folder of the account in the users folder; and no folder of the rehearsal. It shows the local accounts, the members of Administrators and the
+holders of the rights, and a SID of another origin that names no account
+as a note.
+
+## The rehearsal of the move
+
+Per host, `wsl_move_rehearsal` (`group_vars/windows_hosts.yml`) adds the
+role `windows_wsl_move_rehearsal`. The rehearsal ended, and the switch is
+off on every host until the next one, which turns it on in
+`host_vars/WSL-02` only. The role is step 0 of the move of a distro to
+another account (Design Doc 0004, section 9). It runs the scripts of the window on a small distro of its own, with two
+temporary accounts: A in the place of the account that owns the distro
+today, and B in the place of the new account. It does not touch the live
+distro, its registration, its VM or the account of the host's person.
+
+With the switch on, a run does nothing but check its guards. Each phase
+runs only when the lead gives it, in this order, and reads its result:
+
+```sh
+cd infrastructure/ansible
+uv run ansible-playbook playbooks/windows-host.yml --limit 'localhost,WSL-02' --tags wsl-move-rehearsal \
+  -e wsl_move_rehearsal_phase=<phase>
+uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02
+```
+
+The check play checks only a host with the switch on. With the switch off
+for every host of the run it fails, as nothing was checked. After a
+rehearsal, give the switch for that run only: `-e wsl_move_rehearsal=true`.
+
+Each script that runs in a distro goes to `wsl.exe` as base64 in one fixed
+command, and the distro decodes and runs it. Windows PowerShell 5.1 does not
+escape a double quote inside an argument to a native program, so shell text
+passed as an argument breaks at its first quote. The check step reads each
+value by its key, not by its line, and a key that comes twice reads as no
+value.
+
+The file of the script is safe as it is. sh decodes the script to a new
+file from `mktemp`, which makes it with mode 0600 whatever the umask, in
+`/tmp`, and the script removes the file first (`rm -f "$0"`). What is left
+for the real window:
+
+- **The size.** A command line holds at most 32767 characters. A file that a
+  script writes is base64 inside the script, and the script is base64 again,
+  so the command is about 1.8 times the size of the file: a file of about
+  18 KB is the limit. The script refuses a longer command with no change. A
+  larger file needs another way, for example a copy through the Windows file
+  system.
+- **The first line, if the script moves to stdin.** On the stdin of `sh`,
+  `$0` is `/bin/sh`, and `rm -f "$0"` must go.
+- **The copies on the host.** Before each run of the procedure, compare the
+  SHA-256 of each script and config on the host with the release's, and do
+  not start on a difference. Change the copies only when no window is
+  started, never under a started window (as the rehearsal does, below).
+
+The limit of the phase run names `localhost` too: the first play of
+`windows-host.yml` runs on the controller and downloads the pinned root file
+system to its cache, and a limit of `WSL-02` alone skips that play. The setup
+then stops at its first step with a message that names the file and this
+limit. The check play runs on the Windows hosts only, so `WSL-02` is enough.
+
+A check run (`--check`) of any phase reads only: it starts no task, waits
+for nothing and moves no file. The registrations go through
+`tnwks_win_scheduled_task`, which changes nothing in a check run.
+
+| Part | What it is |
+| --- | --- |
+| The accounts `tnwks-moverh-a` and `tnwks-moverh-b` | Local accounts, members of Users only, with a random password that nothing keeps. They may log on as a batch job (S4U needs it), and not at the keyboard, by Remote Desktop or from the network. No tile |
+| `C:\ProgramData\tnwks-moverh` | The scripts, their configs, the pinned Alpine root file system, the state of the procedure (`state\`). Only SYSTEM and the Administrators may change them |
+| `...\a`, `...\b` | The folders of the disk file. Each account may make files there, in that folder only, and an entry for CREATOR OWNER on files lets it replace or delete a file that it made. A also reads the folder and its rules (`0x1200ab`, read and execute with add file), as a present account does on the folder of its own disk file; B has add file only (`0x100002`), as its moved file is protected (`wsl_move_rehearsal_folder_rights`). No inheritance |
+| The marker file `tnwks-move.marker` | In the folder of B (setup) and of A (the window). SYSTEM and the Administrators full, the account read only. It keeps the folder through an unregister |
+| `...\log\a`, `...\log\b` | The result of each task of the account, one JSON file for each step |
+| The tasks `tnwks-moverh-<a\|b>-<step>` | As the account, S4U, no elevation, no trigger. `stop`, `unregister` and `import` are the window tasks, always enabled. `start` holds the distro, as the keepalive does: A's is enabled, B's is registered disabled |
+| The tasks `tnwks-moverh-window` and `tnwks-moverh-boot` | As SYSTEM: the procedure (`Invoke-TnwksMoveWindow.ps1`, no trigger, started by the play with a run request), and the boot task of the way back (a boot trigger) |
+| The profiles of the accounts | Their `.wslconfig` (1 GB, one processor, no swap), written only after the probe made the profile, and their registrations of the distro `tnwks-moverh` |
+
+**The guards.** Each name of the rehearsal starts with `tnwks-moverh`, and
+each path is under its folder. The play checks this before any phase, and
+also that no account of the rehearsal is the account of the host's person
+and that the disk of the live distro is not under the folder. Each script
+checks it again before any action: the account script refuses a distro name
+outside its pattern and the names of `wsl_move_rehearsal_refused_names` (the
+live distro), whatever the pattern, and a path outside the folder; the
+procedure refuses an account or a task outside its pattern, and a path
+outside the folder. The rehearsal keeps the session check off. Each phase that runs the
+procedure first reads the last marker in the state file, and does not start
+on another one than its order gives (a phase run twice, or out of order).
+The phase `window` runs after the setup, or again after a window that went
+back (the last marker `wayback-done`), as a second real window would. The
+phase `wayback` runs after a done window, and also ends a started window that
+did not end (the last marker `window-started` or `boot-run`, as after a boot
+run that did not end the way back), as the way back mode of the procedure
+does. Before any change, it reads that no run of the window task or of the
+boot task goes on, and stops with nothing changed when one does: the
+procedure has no lock, and a second way back must not run beside the first.
+The procedure itself does not go forward after a started window with no end.
+The tests in `security/tests/test_wsl_move_rehearsal.py` hold this.
+
+**The copies on the host.** The scripts, their configs and the tasks are
+written by one task file, `tasks/host_files.yml`, which setup and each later
+phase run before their first script on the host. It reads the last marker
+first. Setup, `window` and `interrupt` refresh: each copies the scripts and
+writes the configs that differ, and registers each task whose definition
+differs, only when no window is started (the last marker is empty or
+`wayback-done`); otherwise it stops with nothing changed. `wayback`,
+`restart` and `after-boot` change nothing and stop when a copy differs from
+the role's, as the window that they end started with the copies that are
+there: end that window with the release that started it, then run `window`
+or setup again. The read of the live parts (`Get-TnwksMoveLiveState.ps1`)
+is one of the scripts, but it only reads: `tasks/live.yml` copies it before
+each read, at any marker, so its copy is the role's in every phase.
+`remove-before-restart` prints each copy that differs and goes on;
+`remove` runs no script. Then the play reads the SHA-256 of each copy on the
+host and compares it with the role's: the bytes of each script, and the text
+of each config as the play writes it (`wsl_move_rehearsal_file_hashes`).
+Each run of the procedure (`tasks/run_procedure.yml`) compares them again
+before it writes the run request, and does not start on a difference. A
+registration of a task of an account sets a new random password on that
+account (the module's `s4u_user`), as setup does; the window reads the time
+of B's last password after the refresh, so its check of no new password for
+B stays its own. A task that a release adds to an account (as `strip-rules`
+of B) is registered by the refresh too; the phase `wayback` still registers
+`strip-rules` itself.
+
+**The live parts.** At the start and the end of each phase, the play reads
+the port proxy, the NAT networks, the VM processes, and the registrations
+of the distros of the account of the host's person (from its loaded hive,
+as a count and a SHA-256, so the output names no path). The first read is
+the baseline, in the state folder: the setup makes the folder before it
+(the read copies its script into the folder), and stops before its first account unless the baseline
+is there and it read the registrations (with the hive not loaded, the read
+says "not read"). A later read that differs stops the
+phase: run the removal. A VM process does not show its account, so the
+check of the VM processes holds until the first restart only. After it, the
+lead's read of the nodes (Ready, and the same address) covers the live VM.
+
+| Phase | What it does, and what it shows |
+| --- | --- |
+| `setup` | Only while the state file holds no marker. The accounts, rights, folders and rules, the marker in the folder of B, the tasks, the state file (only when absent) and the saved version of WSL. The probe of each account (a medium token, no Administrators, its profile), then `.wslconfig`. A imports the distro (a user of UID 1000, a data token, a shortcut with an icon), and the check reads back each file by its SHA-256. A second setup over A's distro at its path imports nothing and writes the files again. A disabled task does not run. The procedure stops with no change on another version, and the boot task on a disk file at both paths or at neither (a test config whose paths, the boot request among them, are all in a test folder and none in the state folder; no WSL) |
+| `window` | First a read of the state that the window starts from, before any task starts: the last marker, A's disk file at its path and none at B's path or in the side folder, no list of disabled tasks, A's batch right, A's start task enabled and B's disabled; and after a way back the file had the owner, the protection and the explicit rules that step 4 saved (the play prints whether its inherited rules are those that its folder gives, and does not stop on it). Only after these checks do A's disk file and folder get the rules of an older WSL, as in setup; then A reads its distro and B lists none. The procedure, forward, steps 1 to 9, with the group test: A joins Administrators before step 1 and leaves at step 7, and the log has both moments. Then A loses its own batch right, as the present account does. B reads the distro: the data, UID 0 right after the import and 1000 at the next start (the value that the import wrote), the default distribution, `OOBEComplete`, a VM of 1 GiB at most. The rules of the moved file (B the owner, as below), both markers, the icon in the folder of B, the window tasks enabled with no trigger, B's start enabled and A's disabled, and no new password for B. B makes, replaces and deletes a file of its own and can not remove the marker. B's unregister refuses while the file is at its path; B's import refuses another path. An apply of the start tasks changes nothing. With B's start task started, the file has the rule of step 4 and a rule of B's VM; after B's stop task (a clean stop), no rule of a VM. Then B imports, unregisters and imports again into the same folder, and the file keeps its rule |
+| `wayback` | First a read that no run of the window task or the boot task goes on: the phase stops with nothing changed when one does. Then, after a done window, A's import back task can not start: A has no batch right and is not in Administrators (the expected refusal). The check takes a refusal at the start, a last result that is not 0, or no new run in its wait, each with no result of this run: a task that ran well in an earlier window keeps the last result 0 of that run. Then B removes SYSTEM and the Administrators from the rules of its disk file (the stated case; `-e wsl_move_rehearsal_wayback_strip_case=false` leaves it out for one run, and the way back and each other check stay as they are). Then the way back mode: its step 1 puts A into Administrators, the same task imports back, then A's stop task ends the VM that the import started (its shutdown result of this run passes, not an earlier exit code), no WSL process of A is left, and A leaves, both moments logged. The play then gives A its batch right again, for the next phases, reads that the VM processes are those of the baseline by process ID and start time, starts A's start task, and reads the token of each WSL process of A: none has the Administrators group enabled. A owns the distro, the file has the saved owner, protection and explicit rules (the folder gives the inherited ones), and B lists none. After A left the group, the play removes an icon of the shortcut in A's folder that A does not own (see the icon below). `-e wsl_move_rehearsal_wayback_group_steps=false` runs the way back with no group step and no group test, as a standard A, as the boot run does: the check that the task can not start is left out, the play gives A its batch right (A holds it after `interrupt`) and removes an icon in A's folder that A does not own, both before the run; the log has no group moment, and the procedure starts A's start task itself |
+| `interrupt` | First a read of the icon of the shortcut in A's folder: the phase stops with nothing changed when A does not own it. The play removes a boot request of an earlier run. Then the window with no group step, stopped after step 5, in both cases below: the file in the folder of B, no account lists the distro, and the last marker is that of a started window. With `-e wsl_move_rehearsal_boot_group_steps=true` (the boot run of the group test, one run for each word of the owner), the play then writes the boot request: two booleans, read back |
+| `restart` | With the owner's go and time only (`-e wsl_move_rehearsal_restart_go=true`). The play restarts the host and waits for the run of the boot task. Before it, the play prints the boot request (or none), and the groups check reads each account in Users only: the phase stops before the restart otherwise |
+| `after-boot` | The boot task ran the way back once: its marker first, no group step, no restart. The play checks this right after its read of the log, so a boot run that did not end the way back stops the phase before any task of A or B starts. A owns the distro, B lists none. Started again by hand, the boot task does nothing and writes no marker. With `-e wsl_move_rehearsal_boot_group_steps=true` (as given to `interrupt`): the request of the boot run has the group steps and the group test, its log has A's join, the stop of A's VM and the leave, in that order, the start of A's start task is left to the play, and the boot request is spent. A holds its own batch right; the play removes an icon in A's folder that A does not own, reads that the count of the VM processes is that of the baseline (after a restart only the count compares), starts A's start task and reads the token of each WSL process of A: none has the Administrators group enabled. The groups at the end read A in Users only |
+| `remove-before-restart` | See the removal |
+| `restart` | The second restart, with its own go and time. The boot task finds no started window and does nothing |
+| `remove` | See the removal. Then the exit check |
+
+The check play also reads, at any time between the phases, that each
+account is in Users only, and that each moment in Administrators in the log
+of the procedure is a stated one: a join only in a run of the group test
+(mode forward or way back), with its leave in the same run.
+
+**The rule of the moved disk file.** At each attach of the disk (the import
+in place and every start), WSL grants the new VM access to the file as the
+account that owns the distro: it adds a rule for the virtual machine SID
+(`S-1-5-83-1-` and four numbers, the form of MS-DTYP's well-known SIDs)
+to the rules of the file, so the account needs the right to change them,
+which an owner has. While the VM runs, the file may also hold a rule for
+the capability SID that Windows derives from the capability name
+`vmWorkerProcess` (the SHA-256 of the name in upper case, as UTF-16, as
+eight numbers): `wsl_move_rehearsal_vm_capability_sid`. A clean stop of
+the VM removes both rules again. So window step 4 makes the new account the owner of the moved file,
+with full control for SYSTEM, the Administrators and the account, and no
+inheritance; SYSTEM sets that owner with SeRestorePrivilege, as the way back
+does for the saved owner. The role holds the rule as two values,
+`wsl_move_rehearsal_disk_owner` and `wsl_move_rehearsal_disk_new_mask`, and
+the procedure, its checks and the reads of the play take it from them. Each
+check of the rules of a disk file compares the owner, the protection, every
+explicit rule and the inherited rules, and allows only the explicit rules
+of WSL: any number of a virtual machine SID, and at most one of that
+capability SID, each as an allow rule with full control and no flag. Any
+other capability SID, a rule of WSL in another form, and any deny rule are
+not a pass. Right after the procedure writes rules, they must be the ones
+written, with no rule of WSL; a write of the rules leaves out the rules of
+WSL that a saved set holds. The procedure logs the rules before the move and after
+the import, and the play prints them after setup, before and after the
+window, while B's VM runs and after its stop, each account SID masked.
+
+As the owner, the account may also remove SYSTEM and the Administrators from
+the rules of its file. So each run of the procedure, in every mode, first
+turns on the privileges of SYSTEM (backup, restore, take ownership), before
+it reads the state, and stops when one of them is not on, with no marker
+and nothing changed. The move of the file works by these privileges, not
+by the right of SYSTEM on the folders: the page of `MoveFileEx` names
+delete on the file or delete child on the folder, but the rename also opens
+the file, and on a file that grants SYSTEM nothing that open is refused
+unless the privileges are on. The read of the rules asks for `READ_CONTROL`
+only, and either the backup or the restore privilege grants it: the restore
+privilege grants `FILE_GENERIC_WRITE`, which holds `STANDARD_RIGHTS_WRITE`,
+that is `READ_CONTROL` (Microsoft's pages Privilege Constants, File
+Security and Access Rights, and Standard Access Rights). A write of the
+rules takes ownership for the Administrators, then writes
+the owner, the explicit rules and the protection in one write by name.
+Windows gives the inherited rules from the folder in that write, so a
+CREATOR OWNER rule of the folder names the owner that the write sets (a
+write of the rules before the owner would name the Administrators). A group
+(`G:`) in a saved set is not written. Way back
+step 3 moves the file back first, then restores the saved owner and rules
+at the old path, where the folder gives the inherited rules that were
+saved. The check after it compares the saved owner, protection and
+explicit rules exactly. The inherited rules are not part of "as saved":
+Windows gives them from the old folder at the write, and a difference from
+the saved inherited rules is a note in the log, not a failed check. A file
+at the old path with other rules (a power loss between the two) is restored
+only, and one that passes the same compare is left as it is (the state
+read's `old_as_saved` and the play's read, its `rules_ok`, use it too).
+Whether the inherited rules of a file are those that its folder gives is a
+fact of its own: the play's read gives it as `inherits_ok`, and the guard
+of window step 1 acts on it.
+
+What a folder gives a file comes from Windows' own inheritance function,
+`CreatePrivateObjectSecurityEx`: the folder's rules as the parent, the
+owner and the group of the file as the creator with an empty DACL, the
+generic mapping of files, and an object that is not a container. So each
+rule of the folder that reaches a file (OI, with or without IO and NP; CI
+alone does not) comes with the flag ID, CREATOR OWNER names the owner of
+the file, CREATOR GROUP names its group, and each generic right becomes the
+rights of a file. The unit tests hold that rule
+in a stand-in, on three forms of a folder; the hand test runs the function
+of Windows on the same forms against a real write. Another way, a probe
+file in the folder, is a write, and the file gets the owner of the writer.
+Before any change, window step 1 reads the disk file: a file with no
+protection must have the inherited rules that its folder gives. It must
+also have no rule that the check of the way back refuses: no deny rule,
+explicit or inherited (the way back writes the explicit ones back, and the
+folder gives the inherited ones again, so its check would fail on each
+run), at most one rule of the capability SID, and no explicit rule of a
+virtual machine SID or a capability SID in another form than WSL's. A
+file that has other inherited rules or such a rule stops the window with
+nothing changed (exit 3), and the log names each reason, each account
+masked; the boot run never reads it. Step
+2 removes the saved rules of an earlier window before the marker of a
+started window, so a way back restores only rules that step 4 of its own
+window saved. In setup, and again at the start of each window, A's disk file
+is made like one of an older WSL: no protection, the rules of its folder
+(which gives files a read rule for Authenticated Users), and one explicit
+rule for A (`tasks/older_disk.yml`, which changes nothing when the file and
+the folder are so already, the inherited rules that the folder gives
+included, and runs only after setup or a way back). It reads and writes the
+file with the functions of the procedure, from its copy on the host: the
+take of ownership for the Administrators, then the owner and the rules in
+one write. A write of the rules that fails puts the owner back, so the file
+keeps its owner and its old rules. The play prints A's rules right after it (before A's read
+starts the distro) and asserts that the file has the inherited rules of its
+folder then; it prints them again after A's read, and the log of window
+step 4 holds them after A's stop, with no assert on the inherited rules:
+if A's start took them away again, the guard of window step 1 stops the
+window with nothing changed, and the log shows both sets. A
+stays the owner with full control, so its start and the rule that WSL adds
+for its VM need nothing more; A's read after it starts the distro. In the
+window, the read against the saved rules of the last way back, the read of
+the state and their checks all come before it, so a stop at a check changes
+nothing. In the phase `wayback`,
+before the way back mode, B removes SYSTEM and the Administrators from the
+rules of its own file (its task `strip-rules`), and the way back must still
+put back the saved set.
+
+**The end of a task run.** Each wait for a task (the runner of the tasks of
+an account, the run of the procedure, the procedure's own runs of the
+tasks of an account, and the wait for the boot task) takes a run as ended
+only when the task is not `Running` or `Queued`, its last run time is new,
+and its last result is not `0x41301` (the task is running). A task that
+never ran, as the window task and the tasks of the accounts at the first
+window, can read a new run time before its run ends.
+
+**The batch right of A.** The registration of a task of A checks its new
+password with a batch logon, so A keeps its own batch right from the setup
+to the end of the window. Then the play takes it away, so the way back runs
+as it must after the demotion of the real account, with only the group step.
+At the end of the phase `wayback`, the play gives it back: the interruption,
+the boot task and the removal run A's tasks with no group step. A way back
+with the group steps off needs it before the run: the play gives it then.
+
+**The icon of the shortcut.** The distro of the rehearsal has a shortcut with
+an icon, so each import in place writes `shortcut.ico` next to the disk file.
+WSL writes it as the importing account (the service impersonates its caller)
+with `CREATE_ALWAYS`, and an error there fails the import; the unregister
+deletes it as the account too, and goes on when it can not (the WSL source
+of the installed release, `LxssUserSession.cpp`). A file that an account makes while it is in
+Administrators can get the Administrators as its owner, and the CREATOR
+OWNER rule of the folder then names the group, not the account. Such an
+icon stays the group's: a standard account can not replace it at its
+import, nor delete it at its unregister. So before A imports back as a
+standard account, the play makes sure that A's folder holds no icon that A
+does not own (`tasks/icon.yml`, as SYSTEM, this one file only: it prints the
+owner, the rules, the attributes and the times first, and removes the file
+only when A is not its owner). The phase `wayback` removes such an icon
+after A leaves the group, or before a way back with no group step; the
+phase `interrupt` only reads it, and stops when it is there.
+
+**The reads of the icon in the procedure.** The window procedure reads the
+icon (`shortcut.ico`) before each import, for the account of that import,
+and deletes none. The read of its attributes takes the entry itself and
+follows no link: a directory or a link is refused, and its rules are not
+read. A read passes with no entry, or with a plain file that has none of the attributes
+read-only, hidden, system, directory, reparse point and encrypted, no deny
+entry, no object or conditional entry, and an allow rule that gives the
+account of the import the rights it needs (`FILE_GENERIC_WRITE`, and
+`DELETE` where its unregister deletes it). Only the rules of that account
+count, and of the Administrators when the account is a member of the group
+(at step 1, the group test of the rehearsal counts as a member, as it joins
+right after). Each import also requires its own result of this run: an
+import that fails for any other cause fails its check (window step 6 then
+goes back, and way back step 5 stops). Window step 1 reads both
+folders before any change: the old folder for an import back by the
+present account (write and delete), and the folder of the new account for
+its import (write and delete). Either
+read stops the window with nothing changed, with a stop line that holds
+the text of the read in one line of bounded length. After window step 5 no icon may
+be left in the old folder, and before window step 6 the read of the folder
+of the new account runs again; a fail at either sends the window back.
+Before way back step 5 the old folder is read for the import back (write).
+A fail there stops the way back before the import, and the procedure only
+says so: no step deletes the icon, and the way out is a reviewed change of
+the play.
+
+**The boot run of the group test.** The rehearsal shows the group step at
+boot only by the owner's word, once for each word: `interrupt` with
+`-e wsl_move_rehearsal_boot_group_steps=true` writes a boot request (a file
+in the state folder, `boot-request.json`, not one of the copies) after its
+window, and the boot run takes the group steps and the group test from it.
+A joins Administrators at way back step 1, after the restart, and the end of
+the run takes it out whatever the result: when the import back ran, A's
+stop task first ends the VM that the import started in the group, the run
+waits for no WSL process of A, and then A leaves. The stop runs once in a
+run (the time limit of the task holds one): a stop that fails is logged,
+and the leave comes all the same. The run removes the request at its
+end, only once A is out of the group, so the request holds for one boot run.
+A power loss in the run leaves A in Administrators and the request in
+place: the next boot run takes A out first, before it reads the marker, and
+the check play counts that leave as a problem (A was in the group across a
+restart). With no boot run before it, the groups check of the next phase,
+or the removal, finds A in the group. The procedure refuses a group test with `restart` on (a restart
+in the run would keep A in the group). With a config of the rehearsal (the
+one with a boot request file) it also refuses, in each mode, group steps
+and a group test that are not equal (from a request or from the boot part
+of the config): the rehearsal has no join without its leave. The real
+procedure runs the group steps with no group test, and its config has no
+boot request file. A boot request that
+is not two equal booleans stops the boot run with nothing changed. Only the
+boot mode reads the boot request.
+
+**The error text of a failed step.** The procedure runs a task of an
+account and takes its result only from a run that ended in this run, as
+Task Scheduler reads it for SYSTEM (a new last run time, not `Running` or
+`Queued`, a last result that is not `0x41301`), and only with a time from
+the start of this run to the moment of the read. The result file and its
+time come from the account, so with no such run or result a step does not
+pass. After an unregister or an import, a step requires the result of this
+run of the account and the exit code of its task. The fail
+line of each step that reads such a result (the stop, the unregister and
+the import of the window, and the unregister and the import back of the way
+back) holds the exit code of the task and the error text of its command
+from the result of this run (`failed` and `output`), or says that there is
+no result of this run, or that the task did not run to its end in this run.
+Each text in a fail line is one line, with each control character and each
+line or paragraph separator of Unicode a space, and is cut at 300
+characters, the whole line at 1000. The line of a task holds its result as JSON on one line, cut at 2000.
+The checks of the log read each line by its start, so the text inside an
+error is not read as a group moment, a start or a result.
+
+**Window step 7: no compute system runs.** Before the present account
+leaves Administrators, and again after it leaves, the procedure reads, as
+SYSTEM, the compute systems of the Host Compute Service through its own API
+(`computecore.dll`: `HcsCreateOperation`, `HcsEnumerateComputeSystems` with
+no query, `HcsWaitForOperationResult`, `HcsCloseOperation`), so the read
+needs no tool on the host. Step 7 requires that the service lists no
+compute system at all, of any owner or type. A VM does not run as its
+account, and keeps the token that made it. WSL makes VMs of more than one
+kind: the VM of a distro has the owner `WSL`, and a WSLC VM has a display
+name that its caller chooses, or `WSLC` (WSL: `HcsVirtualMachine.cpp`), so
+no owner name marks a VM of WSL. No account has a reason to have a compute
+system at this step. A list that is not empty is read again, 2 seconds
+apart, at most 10 reads; only a read with no system passes. A call that
+fails, or a result that is not a list, fails the check. The fail line names
+each system by its type, owner and state, in one bounded line, and never by
+its id. Then the second check: no process of the WSL package of the present
+account runs. A process counts by its image path: any file in the install
+folder of the package (from the key that its installer writes,
+`Lxss\MSI`, `InstallLocation`), or a WSL command of Windows in System32
+(`wsl.exe`, `wslconfig.exe`, `bash.exe`). A process with no path that
+SYSTEM can read counts by name: a named executable of the installer, or a
+WSL command of Windows.
+The path, not a list of names, is the rule: the installer takes some of its
+executables by a pattern, and some of its names are not only WSL's. A fail
+before the leave sends the window back while the account is still a
+member; a fail after it sends the window back, and way back step 1 puts
+the account back. The check is on when the config has no key
+`vm_check`. Only a config of the rehearsal (the one with a boot request
+file) may set `vm_check: false`, and it does, because the host's own distro
+runs during a rehearsal; the scope check of the procedure refuses that
+value in any other config, and a value that is not true or false. Each mode of the
+procedure, the boot run and a forward run that goes back among them, runs
+the group step of way back step 1 with a config that is not the
+rehearsal's, and a test shows it.
+
+**What stays unproven here.** The procedure and the boot task restart the
+host only with `restart` on in their config, and the rehearsal keeps it
+off: they log "would restart", and a unit test shows that the line runs only
+with the switch on. The restarts of the rehearsal come from the play. The
+boot run has the group steps off by default, so a standard A imports back
+at boot, a case of its own: the real present account is still in
+Administrators at a way back that comes before window step 7. The boot run
+of the group test (above) shows the group step at boot, once for each word
+of the owner. No temporary account is in Administrators across a restart in
+either case, a power loss in the boot run aside (above). The check for a
+session of the owner (site 1, `wsl_move_session_check`) reads the user of each
+session of the host with the session API of Windows (a session at the console
+or over Remote Desktop, active or disconnected; a task or an SSH login has
+none). With it on, window step 1 stops with nothing changed while the present
+account has a session, and the way back, in the procedure and in the boot
+task, does not restart while one is on, also after a failed check. A read
+that fails counts as a session. With it off (site 2), the procedure reads no
+session. The guards of the window play make the same read, from the copy of
+the procedure on the host. After a way back with no restart, it starts the start tasks of the
+present account (the third case of the design, a session of the owner, ends
+the same way); in the group test, A leaves Administrators first and the play
+starts them. Way back step 6 enables only the tasks that step 2 disabled (a
+list in the state folder, written before the marker of a started window
+and removed at the end of a way back); with no list, the way back moves
+nothing. The import writes `DefaultUid` and the default
+distribution, and only these are read back: window step 6 and way back
+step 5 check the path of the registration, not its values. A power loss in
+the phase `window` or `wayback` leaves A in Administrators across the
+restart until the group check of the next phase or the removal, which logs
+the leave; the check play counts that leave as a problem. The design speaks of
+the installed version of WSL: the scripts read it as the file version of
+`C:\Program Files\WSL\wslservice.exe`, as SYSTEM, in the same way at each
+place where a version is compared. That the write of the owner and the
+rules in one call names the new owner in a CREATOR OWNER rule is the
+documented behaviour of Windows, not shown on a host by the unit tests. A
+rule for OWNER RIGHTS that the account writes on its file could take the
+right to write the rules from the Administrators after the take of
+ownership: if so, the write fails and the way back stops, with the file at
+the old path, the Administrators as its owner and its rules as they were. Not shown on a host either: that WSL writes the
+rule of its VM as an explicit rule, keeps the protection of the file, and
+removes the rule at a clean shutdown; the phases print what they read.
+
+**The removal.** `remove-before-restart` first ends a run of the window
+task or the boot task. Each removal phase then takes A and B out of every
+local group but Users, whatever the state, and logs each leave.
+`remove-before-restart` then has each account stop its distro, removes the
+disk files (only the named paths under the folder), has each account
+unregister with no file at its path, and removes the tasks. It keeps the
+boot task for the second restart, unless the last marker is that of a
+started window. The profiles stay loaded until a restart (each run of an S4U
+task adds a reference to the profile that the system does not release).
+After the second restart, `remove` runs no task of an account. It reads the
+run of the boot task at that boot, removes the profiles (a loaded profile
+stops it before the tasks go, and the message says what stays), the tasks,
+the rights, the values
+of the sign-in screen, the accounts and the folder. It prints the SIDs of
+the accounts for the exit check:
+
+```sh
+uv run ansible-playbook playbooks/windows-move-rehearsal-check.yml --limit WSL-02 \
+  -e wsl_move_rehearsal_removed_sids=<SID>,<SID>
+```
+
+It reads no account, right, tile, task, profile or folder of the rehearsal
+left.
+
+## The move of the distro
+
+Per host, `wsl_move` (`group_vars/windows_hosts.yml`, off by default) adds
+the role `windows_wsl_move`: step 3 of the account change (Design Doc 0004,
+section 9). It makes the account that owns the distro, gives it its rights,
+and puts the procedure of the move window on the host. No apply starts the
+window. Site 2 (`host_vars/WSL-02`) has it on, and site 1 in the phase
+`move` (step 3), with the session check on. Each other host has it off.
+
+- **The start tasks of the new account.** `wsl_move_new_start_tasks`
+  (`group_vars/windows_hosts.yml`) is the copy of each start task that the
+  WSL roles register on the host: the watchdog, the address task, the
+  keepalive where it is on, and each UDP relay. It must be the copy of each
+  task of `wsl_move_present_tasks` apart from the compaction, which has no
+  copy. The play stops before any change on another list.
+- **Step 4: the SSH user.** On site 2 and site 1, `ansible_user` is the
+  administrator account. `windows_desktop_user`, the account that owns the
+  distro, is
+  `wsl_move_present_account` until the done switch and
+  `wsl_move_new_account` from it. The jump logs in to the distro as the
+  user of the distro (`wsl_distro_user`, from `wsl_move_present_account`).
+  An apply as an account other than the present one stops before any write
+  until an apply as the present account kept the reads of today and
+  registered its window tasks.
+- **In the phase move, a change of a task of the present account.** The
+  roles register the WSL tasks of the present account (`Register-ScheduledTask
+  -Xml`, an S4U principal, no `s4u_user`) until the done switch. Microsoft's
+  rule (Security Contexts for Tasks, "Security for Registering Tasks") asks
+  an administrator for the password of a different account to register an
+  S4U task for it. From step 4 Ansible logs in as the administrator account,
+  so in the phase move no change may touch the template or the values of a
+  task of the present account: an apply of such a change fails the Windows
+  play of the host at that task, and the distro play after it does not run.
+  Such a change waits for the done switch, from which the play registers no
+  task of the present account, or it is applied as the present account. The
+  copies of the new account take `s4u_user`, so a change of one is applied
+  as the administrator account in each phase
+  (`test_in_the_phase_move_a_task_of_the_present_account_is_registered_with_no_password_of_another_account`).
+- **The done switch.** `wsl_move_done` of the host, only after a window
+  that ended done and the check play of step 6, the write test from the
+  distro and the relay passed (site 2, then site 1). From
+  it, `windows_desktop_user` is the new account, the compaction and the host
+  check read the moved file (`vhdx_compact_vhdx`, in `wsl_move_disk_dir`),
+  the host check reads the rules of that file (`host_check_wsl_disk_rules`
+  follows the phase on a host with the move on), and the write test can fail
+  the distro play (`wsl_host_check_write_test_fails_play` follows it too),
+  and `windows_host_settings` alone writes the `.wslconfig` of the new
+  account, from its template. The role stops the play for the host, before
+  the WSL roles and with any tags, unless the last marker of the window is
+  `window-done`. It also stops it when the account or the file is not the
+  one of the phase. A way back turns the switch off first.
+- **The deletion of the tasks of the present account.**
+  `wsl_move_present_removed` of the host, only in the phase `done`, with the
+  owner's go. The apply unregisters each task of `wsl_move_present_tasks`, the
+  three window tasks of the present account and the boot task of the way back.
+  In the phase `done` no role registers a task of the present account, and the
+  role no longer registers the boot task. The play stops before any change
+  unless the last marker of the window is `window-done`, and
+  `windows_sshd_allow_users` holds the account that Ansible logs in as and not
+  the present account. The order: the owner's edit of that list in the
+  encrypted variables of the host, then the merge and the apply of the switch,
+  then the explicit apply of the role `windows_sshd`. The check play of the
+  window does not run after it; status does. **That apply is the point of no
+  return of the move.** A way back after it needs, in order: the present
+  account back in Administrators and in the allow list, with the apply of
+  sshd; this switch and the done switch off, as the roles register the WSL
+  tasks of the present account only before the phase `done`; the revert of
+  step 4, so that an apply as the present account registers its window tasks
+  and the boot task again as at step 3, and its WSL tasks, which come back
+  enabled; that apply starts its keepalive and relays, which fail and retry
+  until way back step 2 stops the copies; step 4 again, as the window play
+  starts no window while Ansible logs in as the present account; the window in
+  its way back mode; then the revert of step 3. On site 2 that needs a working
+  path to the host, or someone at the keyboard.
+
+- **Variables.** The names of the two accounts and the folder of the disk
+  file today are in the encrypted variables of the host only:
+  `wsl_move_present_account`, `wsl_move_new_account` and
+  `wsl_move_present_folder`. The role has no default for them, and each
+  task that takes one has `no_log`. `wsl_move_new_start_tasks` names the
+  start tasks of the new account.
+- **The tasks of the present account.** Window step 2 disables each task of
+  `wsl_move_present_tasks`, the compaction among them. A way back that ends
+  with no restart starts only `wsl_move_present_start_tasks`: the
+  long-running tasks, with no time limit. The compaction and each periodic
+  task wait for their own triggers.
+- **The version of WSL.** `wsl_move_rehearsed_wsl_version`, in the
+  encrypted variables of the host, is the version of WSL that the rehearsal
+  of the move ran on. At each apply, before any write, the play reads the
+  installed version and stops on another one.
+- **Paths.** The role folder is `C:\ProgramData\tnwks-wsl-move`, with
+  `disk`, `state` and `log` under it. On site 1 the disk file is on `E:`, so
+  its host variables put the role folder at `E:\tnwks-wsl-move`. Each path is in the long, normalized
+  form (a drive, then names joined by one backslash). The folder of the new
+  disk file (`wsl_move_disk_dir`) is on the volume of the disk file today,
+  as the move is a rename and never a copy. The play stops before any
+  change when either is not so.
+- **The account.** A local account, a member of Users only, with the right
+  to log on as a batch job, each other logon denied, and off the sign-in
+  screen. Its password is random and kept nowhere: each registration of
+  one of its tasks sets a new one (`s4u_user`).
+- **The folder of the disk file.** SYSTEM and the Administrators have full
+  control. The account may make files in the folder, and change or delete
+  only the files that it made. A marker file is written once, and the
+  account may only read it.
+- **What step 3 reads of today.** The values of the registration, the
+  default distro, the VM address and `.wslconfig` of the present account,
+  kept in the state folder. They are read once, while Ansible logs in as
+  the present account. The `.wslconfig` of the new account is the one
+  section `[wsl2]` of the present account, with the keys `memory`,
+  `processors`, `swap` and `kernelCommandLine` only.
+- **The procedure.** The scripts are those of the rehearsal of the move
+  (`roles/windows_wsl_move_rehearsal/files`), and each copy on the host must
+  have the SHA-256 of the role's file. The installed version of WSL is
+  saved once. The scripts, the configs and the tasks change only while no
+  window is started. After the deletion of the tasks of the present account
+  (`wsl_move_present_removed`), the scripts and the configs follow the role
+  again, and the tasks stay as they are. The values of the registration of
+  today reach the configs as a mapping of whole numbers, or the play stops.
+  After a window that ended done, the play writes them into the
+  registration of the new account, and removes a value `Length` there.
+- **The tasks.** The new account has its probe and its stop, unregister and
+  import tasks. The present account registers its own stop, unregister and
+  import tasks while Ansible logs in as it. SYSTEM has the window task and
+  the boot task of the way back. The window task reads its run request
+  (`state\request.json`), which the start of the window writes.
+- **The probe.** After the tasks, the play runs the probe of the new
+  account and stops unless it reads a medium token, no Administrators group
+  and a profile under `C:\Users`.
+- **Off or reverted.** The role removes nothing. The account and its
+  profile, its four user rights, its UserList value,
+  `C:\ProgramData\tnwks-wsl-move` with its disk folder and marker, the nine
+  tasks (the boot task runs at each boot and acts only after
+  `window-started`) and the manual start of seclogon stay. Their removal is
+  its own change with the owner's go, and the removal of the account needs
+  a restart.
+
+## The start tasks of the account that owns the distro
+
+Each WSL role registers a copy of each of its start tasks for the account
+that owns the distro (`wsl_move_new_account`, in the encrypted variables of
+the host), with the name of the task and the suffix `-account`
+(`wsl_move_task_suffix`). No apply replaces a task of the present account.
+The phase of a host (`wsl_move_phase`, `group_vars/windows_hosts.yml`) sets
+what the play does:
+
+| Phase | When | The tasks | The folders of the start tasks |
+| --- | --- | --- | --- |
+| `off` | `wsl_move` off (each host today) | As before. No copy | One writer, as before |
+| `move` | `wsl_move` on, `wsl_move_done` off | Each copy is registered disabled. No apply changes the enabled state of a start task that exists, of either account (`keep_task_enabled_state`): the move window enables and disables them | Both accounts may write |
+| `done` | `wsl_move_done` on | Each copy is kept enabled. The play no longer registers the start tasks of the present account | Only the account that owns the distro may write |
+
+A way back turns `wsl_move_done` off first. The copies run with no
+elevation, so `wsl_move` needs `wsl_start_unelevated`. Each copy is
+registered as SYSTEM, which sets a new random password on the account for
+each registration (`s4u_user`). The copy of the watchdog names the copy of
+the keepalive, and runs with `-SkipService`: Windows gives a batch logon of
+a standard account no right to query the WSL service (the service control
+manager and the service grant that to interactive and service logons,
+SYSTEM and the Administrators), and the WSL service task (SYSTEM) does that
+check. From `done` on, the WSL service task starts the copy of the
+keepalive. With `running`, the module does not start a task that is
+disabled while the state is the task's own.
+
+The copy of the address task of the LAN bridge (`tnwks-lan-bridge-ip-account`)
+writes the same address file. While the move runs, both accounts may write
+it, so after the restart of the window the copy writes the address of the
+VM, and the sync (SYSTEM) reads it and moves the port proxy. The sync waits
+45 seconds after a VM NIC event, and the address task 15 seconds. The
+handler of the role runs the address task that is enabled.
+
+Each UDP relay has a copy too (`<task>-account`). A relay and its copy
+listen on the same port, and the window runs one of them only. While the
+move runs, both accounts may write the logs of the relays, and the handler
+of the role restarts the relays that are enabled.
+
+The compaction changes with the move. From `move` on, the account that owns
+the distro has a stop task (`tnwks-wsl-stop-account`, no trigger), which runs
+`wsl --shutdown` and nothing else. From `done` on, the compaction is a task
+of SYSTEM, run on demand: `Start-ScheduledTask tnwks-vhdx-compact-system`.
+Its script, `Compact-WslVhdxSystem.ps1`, reads the owner and the rules of the
+disk file with the read of the host check (`wsl-disk-rules`), from the copy
+of `Invoke-TnwksHostCheck.ps1` in the folder of the host check, and only
+when that copy has the SHA-256 of the role's file. A fail stops the run
+before it pauses a task. Then it pauses the start tasks of the account
+(`wsl_move_new_start_tasks`), runs the stop task, and waits until the Host
+Compute Service lists no compute system. It reads the disk file again, and
+on a fail starts the tasks again and stops. Then diskpart compacts the file,
+and the tasks start again. It enables no privilege and sets no owner and no
+rules. Its log is `C:\ProgramData\tnwks-vhdx-compact\compact-system.log`.
+
+The distro writes the document of its host check to the inbox of the role
+`windows_host_check`, as the account that runs it. While the move runs,
+both accounts may write there (`host_check_inbox_writers`): after the
+window the distro runs as the new account, and the done switch makes it
+the only one.
+
+## The window of the move
+
+The lead runs the window play by hand, for one host where the move is on,
+from the workstation:
+
+```sh
+cd infrastructure/ansible && uv run ansible-playbook playbooks/windows-move-window.yml --limit WSL-02 \
+  -e wsl_move_window=<mode>
+```
+
+| Mode | What it does | When |
+| --- | --- | --- |
+| `precheck` | Reads only. Each guard of a forward start, and the readiness reads | Before the day, and again right before the start |
+| `forward` | The guards, then the request of a forward window, and one start of the window task. Needs `-e wsl_move_window_host=WSL-02` | The window, with the owner's go and time |
+| `wayback` | The same for the way back mode of the procedure. Needs `-e wsl_move_window_host=WSL-02` | Only on a decision to go back, before the done switch |
+| `status` | Reads only. The markers of the state file, the request, the window task and the boot task, and the tail of the window log | At any time; after the restart of the window |
+| `check` | Reads only. The check play of step 6. Needs `-e wsl_move_check_wsl_conf_uid=<uid or none>` (the default user, below) | After the restart of the window, before the done switch |
+
+The reads run as SYSTEM, from `roles/windows_wsl_move/files/Read-TnwksMoveWindow.ps1`,
+and their output masks each account, SID and folder of the move. The
+precheck and the check print one line for each read, pass or fail, and fail
+the run when a line fails.
+
+- **The guards of a start.** The move is on and not done (`wsl_move_phase`
+  is `move`). Ansible logs in as the administrator account, not as the
+  present account (step 4 is done). The copies of the scripts and the configs
+  on the host are the role's. The last marker lets the way start: none or
+  `wayback-done` for a forward window, `window-started`, `boot-run` or
+  `window-done` for a way back. The log, the window task, the boot task and
+  the window tasks of both accounts are there, and the window task does not
+  run. Each WSL task of the present account is there. Each start task of the
+  new account is there, and disabled for a forward window. The installed WSL
+  is the version of the rehearsal and the version that step 3 saved. No
+  restart is pending for updates. No session of the present account is on
+  the host (the read of the procedure, from its copy on the host), unless
+  `-e wsl_move_window_force_session=true`.
+- **The readiness.** No other enabled task of the present account runs WSL.
+  The present account registers the distro by its name, once, at the folder
+  of the config. Both folders are on one drive, which is not a `subst`
+  drive. The distro of the present account runs, and the hardened open of
+  the procedure reads the disk file and both folders as SYSTEM. The read of
+  the host check finds the disk file and reads it as a plain file. Each
+  batch logon of the present account in the Security log had an elevated
+  token, and it is in Administrators. The login of Ansible reads a High
+  token with the Administrators group enabled.
+- **The start.** The play writes `state\request.json` (the mode, the group
+  steps on, no stop, no group test), starts the window task once, and
+  returns. It does not wait: its path to the host ends when WSL stops. After
+  the restart, run `status`, then `check`.
+- **The check play of step 6.** The last marker is a done window, written
+  before the boot. The last forward run passed steps 5, 7 and 8 and ended
+  done. Each WSL process of the new account reads Medium Mandatory Level and
+  no Administrators group, and one runs. No WSL process of the present
+  account runs. Each WSL task of the present account is disabled, and no
+  other enabled task of it runs WSL. Each start task of the new account is
+  enabled, and ran after the boot with result 0 or still runs. The new
+  account registers the distro at the new disk file, with the flags, the
+  default environment and the kernel command line that step 3 read. A
+  launch with no user takes the user of today, not root. The port proxy points to the address that the new VM wrote
+  after the boot. The `.wslconfig` of the new account holds each setting of
+  today. The read of the host check of the moved file passes. The old path
+  is empty. Neither account is in Administrators. The write test from the
+  distro and the memory of the VM against the limit of its `.wslconfig` are
+  reads over SSH, in the distro.
+- **The default user.** WSL gives a launch with no user the user that
+  `[user] default` of `/etc/wsl.conf` names, when that user exists; else the
+  user of the `DefaultUid` of the registration; else root (the init of WSL,
+  `src/linux/init/init.cpp`). An import in place registers `DefaultUid` 0,
+  root (`ImportDistributionInplace`). The play reads the registration, not
+  the distro, so the lead reads the first part over SSH, in the distro, and
+  gives it to the check:
+
+  ```sh
+  u=$(sed -n '/^\[user\]/,/^\[/s/^[[:space:]]*default[[:space:]]*=[[:space:]]*//p' /etc/wsl.conf | head -n 1 | tr -d '[:space:]')
+  [ -n "$u" ] && id -u -- "$u" 2>/dev/null || echo none
+  ```
+
+  Then `-e wsl_move_check_wsl_conf_uid=<that output>`. The line passes when
+  that uid, or with `none` the `DefaultUid` of the registration, is the
+  `DefaultUid` that step 3 read, and not 0. With no value the line fails.
+
 ## Check-only settings
 
 The role `windows_host_settings` (last in the play) only reads. Its single
@@ -526,7 +1410,12 @@ these differ, and lists each difference:
   The only edit so far (2026-11-03) replaced the outdated comment about
   re-attaching the Coral after a restart; the settings are unchanged. A host
   without a cluster yet (WSL-02) sets `wslconfig_write: true` in host_vars,
-  so CI writes it there and WSL picks it up at its next restart. The VM's
+  so CI writes it there and WSL picks it up at its next restart. A host
+  with a cluster sets it too for the first apply of the phase `done` of the
+  move, and drops it after that apply: the file of the new account is the
+  copy that the move wrote, with the same key lines as the template and its
+  own comments, so that write changes comments only and needs no
+  `wsl --shutdown`. The VM's
   memory is `wsl_memory` (40GB; WSL-02 sets 45GB in host_vars).
 - **Ethernet** (`host_settings_ethernet`, the Realtek 2.5GbE): power
   management "Allow the computer to turn off this device" off, and the

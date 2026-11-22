@@ -193,6 +193,44 @@
       addLabels: ["impact/high"],
     },
     {
+      // The MCP server of the finance app can create and update data in the
+      // app (docs/apps/agent-platform.md, "The finance app"): a person reads
+      // each release before it runs, after the 7 days of renovate.json5.
+      description: "fireflyiii-mcp: every update reviewed",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/daften/fireflyiii-mcp"],
+      matchFileNames: ["!/^(talos/ms-01|kubernetes/clusters/ms-01|kubernetes/apps/(kube-system/cilium|monitoring/thanos|monitoring/vector/agent|production/uisp|storage/rook-ceph|tools/node-feature-discovery|databases/cloudnative-pg/cluster-backup))//"],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
+      // The MCP gateway decides which tool each agent may call
+      // (docs/apps/mcp-gateway.md): a person reads each release, its config
+      // changes and the test of the gateway before it runs, after the 7
+      // days of renovate.json5.
+      description: "agentgateway: every update reviewed",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/agentgateway/agentgateway"],
+      matchFileNames: ["!/^(talos/ms-01|kubernetes/clusters/ms-01|kubernetes/apps/(kube-system/cilium|monitoring/thanos|monitoring/vector/agent|production/uisp|storage/rook-ceph|tools/node-feature-discovery|databases/cloudnative-pg/cluster-backup))//"],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
+      // The read servers of the main agent (kubernetes/apps/ai/agents/main):
+      // a person reads each release and the new dump of its tools before it
+      // runs, after the 7 days of renovate.json5.
+      description: "Read MCP servers of main: every update reviewed",
+      matchDatasources: ["docker"],
+      matchPackageNames: [
+        "quay.io/containers/kubernetes_mcp_server",
+        "ghcr.io/controlplaneio-fluxcd/flux-operator-mcp",
+        "docker.io/hashicorp/terraform-mcp-server",
+      ],
+      matchFileNames: ["!/^(talos/ms-01|kubernetes/clusters/ms-01|kubernetes/apps/(kube-system/cilium|monitoring/thanos|monitoring/vector/agent|production/uisp|storage/rook-ceph|tools/node-feature-discovery|databases/cloudnative-pg/cluster-backup))//"],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
       // ImmichFrame bumps the third number for every release, breaking ones
       // included (v1.0.39.0 needed Immich 3.2), and has deprecated the
       // Settings.yml import our config relies on (docs/apps/immichframe.md).

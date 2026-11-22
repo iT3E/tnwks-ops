@@ -1,0 +1,94 @@
+---
+# The finance agent. Applied now: the network policy (it selects the agent
+# pod), the config of the MCP gateway (below), the volume (step 1) and its
+# backup policy (step 2), and step 4: the restore Job, the two Secrets and
+# the Deployment at zero replicas (no pod yet). The inbox is out again.
+#
+# The files join in the steps of the cutover, one pull request each, in
+# this order (docs/apps/agent-platform-runbook.md, "The cutover of the
+# finance agent"). Each step is checked before the next one.
+# 1. Done: ./pvc.yaml and ./state-inbox.yaml. The inbox is the first pod of
+#    the volume, so the volume is made on the node of the agent. The volume is
+#    never pruned (its annotation): the way back takes out the agent and
+#    the inbox, never pvc.yaml.
+# 2. Done: ./backup.yaml, the policy and schedule; the first snapshot
+#    runs at once, of the empty volume. It needs the ClusterRepository
+#    agents-finance (Ready) and its grant of agents-finance; the grant goes
+#    last.
+# 3. Done: the values of ./secret.sops.yaml (Secret agent-secret), by the
+#    owner (R4): OPENCLAW_GATEWAY_TOKEN,
+#    LITELLM_API_KEY (the key agents-finance of the model gateway, with the
+#    same value in its keys.json, docs/apps/litellm.md), TELEGRAM_BOT_TOKEN,
+#    TELEGRAM_ALLOW_FROM and MCP_GATEWAY_KEY (the key of the client finance
+#    of the MCP gateway, with its hash in the gateway's config,
+#    docs/apps/mcp-gateway.md).
+# 4. Done, after the owner put the copy of the state and the vault in the
+#    volume:
+#    out ./state-inbox.yaml; in ./restore-job.yaml (ARCHIVE and VAULT set),
+#    ./secret.sops.yaml, ./secret-search.sops.yaml (BRAVE_API_KEY, the search
+#    key of finance, with its value) and ./deployment.yaml at replicas 0.
+# 5. Listed: the cutover, after the host stopped the finance bot: out
+#    ./restore-job.yaml, and replicas 1 in ./deployment.yaml.
+# The restore test (../restore-test/, a template) follows the first nightly
+# snapshot with the state in it.
+# The tool set is the pilot's (its own search key), the notes vault in the
+# state volume, and the finance app through the MCP gateway, its MCP server
+# and its proxy (kubernetes/apps/ai/mcp-gateway, ../../firefly-mcp,
+# docs/apps/agent-platform.md, "The finance app").
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./networkpolicy.yaml
+  # Step 1 (the inbox is out again at step 4).
+  - ./pvc.yaml
+  # Step 2.
+  - ./backup.yaml
+  # Step 4 (the restore Job is out again at step 5).
+  - ./secret.sops.yaml
+  - ./secret-search.sops.yaml
+  # Step 5: replicas 1.
+  - ./deployment.yaml
+# The ConfigMaps of the pod. Each name gets a hash of its content, and
+# Kustomize puts that name in the Deployment, so a change of a file is a
+# change of the pod template: Flux applies both at once, and one merge gives
+# one rollout (docs/apps/agent-platform.md, "A start of the agent pod").
+# Reloader watches the Secrets only (deployment.yaml).
+configMapGenerator:
+  # The config of the MCP gateway, the same file, for the values check of
+  # the agent pod: it holds hashes and tool rules, no secret.
+  - name: agent-mcp-gateway-config
+    files:
+      - config.yaml=../../../../mcp-gateway/app/config/config.yaml
+  # The config of the agent (../config), with no ${VAR} substitution: each
+  # ${NAME} in openclaw.json is for the product, which reads it from an env
+  # var of the pod when it loads the config.
+  - name: agent-config
+    files:
+      - openclaw.json=../config/openclaw.json
+      # The sandbox policy (the policy of the openshell entry of
+      # openclaw.json): one network rule, to the proxy of the finance app.
+      - sandbox-policy.yaml=../config/sandbox-policy.yaml
+      # The scheduled jobs of the agent, for automations-sync.sh: the
+      # message of each job names a task file of the workspace, so no task
+      # text is in git.
+      - automations.json=../config/automations.json
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+  # The scripts of the pod, with no ${VAR} substitution. They are the files
+  # of the pilot, so a fix there reaches both trust domains.
+  - name: agent-scripts
+    files:
+      - archive-state.sh=../../../pilot/agent/config/scripts/archive-state.sh
+      - automations-sync.sh=../../../pilot/agent/config/scripts/automations-sync.sh
+      - daily-backup.sh=../../../pilot/agent/config/scripts/daily-backup.sh
+      - memory-index.sh=../../../pilot/agent/config/scripts/memory-index.sh
+      - sandbox-start.sh=../../../pilot/agent/config/scripts/sandbox-start.sh
+    # The sandbox gateway of this trust domain, for sandbox-start.sh (the
+    # same address as the openshell entry of openclaw.json). It is in the
+    # same ConfigMap as the script, so both change in one apply.
+    literals:
+      - sandbox-gateway-endpoint=https://openshell.agents-finance.svc.cluster.local:8080
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled

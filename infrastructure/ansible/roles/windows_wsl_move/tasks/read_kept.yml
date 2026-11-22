@@ -1,0 +1,42 @@
+---
+# The reads of today that step 3 kept in the state folder (read_today.yml):
+# wsl_move_registration and wsl_move_wslconfig_present. Read only. The
+# configs of the scripts take the values of the registration, so their
+# SHA-256 (wsl_move_file_hashes) needs this read first.
+- name: Read the kept reads of today
+  ansible.windows.win_powershell:
+    parameters:
+      Registration: "{{ wsl_move_registration_file }}"
+      Wslconfig: "{{ wsl_move_wslconfig_file }}"
+    script: |
+      param([string]$Registration, [string]$Wslconfig)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      if (-not (Test-Path -LiteralPath $Registration) -or -not (Test-Path -LiteralPath $Wslconfig)) { return $null }
+      # Both as text: win_powershell writes its output to the depth of its
+      # option depth (2), and gives each object below that depth as its
+      # PowerShell text. The dwords of the registration are at depth 3 of
+      # this output, so an object here would reach the play as the text
+      # "@{DefaultUid=...; Flags=...}". The play reads the JSON itself.
+      @{ registration = [IO.File]::ReadAllText($Registration); wslconfig = [IO.File]::ReadAllText($Wslconfig) }
+  check_mode: false
+  register: wsl_move_today_read
+  no_log: true
+
+# In a check run on a host where they are not kept yet, nothing is read: the
+# configs then take no values, and the run reports them as a change.
+- name: The reads of today
+  ansible.builtin.set_fact:
+    wsl_move_registration: "{{ (wsl_move_today_read.output | last | default({}, true) or {}).registration | default('{}', true) | from_json }}"
+    wsl_move_wslconfig_present: "{{ (wsl_move_today_read.output | last | default({}, true) or {}).wslconfig | default('') }}"
+  no_log: true
+
+# The import task of each account writes each of these values as a DWORD
+# into its registration: a mapping of names to whole numbers, never text.
+- name: The values of the registration of today are a mapping of whole numbers
+  ansible.builtin.assert:
+    that:
+      - wsl_move_registration_values is mapping
+      - wsl_move_registration_values.values() | reject('integer') | list | length == 0
+    fail_msg: The kept values of the registration of today are not a mapping of whole numbers. Nothing more is changed.
+    quiet: true

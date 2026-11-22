@@ -1,0 +1,193 @@
+---
+# Derived from the defaults and from what step 3 read: the accounts, the
+# configs that the play writes for the scripts, and the SHA-256 of each copy.
+
+# The volume of the disk file: the root of the scope of each script. The
+# move is a rename in this volume, so both folders are under it.
+wsl_move_root: "{{ (wsl_move_disk_dir | string)[:3] }}"
+
+# Each path of the procedure, in the configs and the tasks. The open of the
+# procedure compares the final path of a file with the path in its config, so
+# each one is in the long, normalized form: a drive, then names joined by one
+# backslash. No short name (a tilde and a digit), no \\?\ prefix, no slash,
+# no . or .. name, no name that ends in a dot or a space, and no backslash at
+# the end. The play stops before any change on another form.
+wsl_move_paths:
+  - "{{ wsl_move_dir }}"
+  - "{{ wsl_move_disk_dir }}"
+  - "{{ wsl_move_state_dir }}"
+  - "{{ wsl_move_log_dir }}"
+  - "{{ wsl_move_state_file }}"
+  - "{{ wsl_move_log_file }}"
+  - "{{ wsl_move_acl_file }}"
+  - "{{ wsl_move_version_file }}"
+  - "{{ wsl_move_request_file }}"
+  - "{{ wsl_move_registration_file }}"
+  - "{{ wsl_move_wslconfig_file }}"
+  - "{{ wsl_move_present_folder }}"
+  - "{{ wsl_move_accounts.present.log_dir }}"
+  - "{{ wsl_move_accounts.new.log_dir }}"
+  - "{{ wsl_move_service_binary }}"
+wsl_move_path_form: '^(?!.*~[0-9])[A-Za-z]:(\\(?!\.\.?(\\|$))[^\\/:*?"<>|\x00-\x1f]*[^\\/:*?"<>|. \x00-\x1f])+$'
+
+wsl_move_accounts:
+  present:
+    name: "{{ wsl_move_present_account }}"
+    folder: "{{ wsl_move_present_folder }}"
+    log_dir: '{{ wsl_move_log_dir }}\present'
+  new:
+    name: "{{ wsl_move_new_account }}"
+    folder: "{{ wsl_move_disk_dir }}"
+    log_dir: '{{ wsl_move_log_dir }}\new'
+
+# The tasks of the accounts, as {key, step}: present or new, and a step of
+# Invoke-TnwksWslAccountTask.ps1.
+wsl_move_task_list: >-
+  {%- set out = [] -%}
+  {%- for key in ['present', 'new'] -%}
+  {%- for step in wsl_move_account_steps[key] -%}
+  {%- set _ = out.append({'key': key, 'step': step}) -%}
+  {%- endfor -%}
+  {%- endfor -%}
+  {{ out }}
+# The tasks that the deletion of the tasks of the present account unregisters
+# (wsl_move_present_removed): each WSL task and each window task of that
+# account, and the boot task of the way back.
+wsl_move_removed_tasks: >-
+  {{ wsl_move_present_tasks + (wsl_move_window_tasks.present.values() | list) + [wsl_move_boot_task] }}
+wsl_move_window_tasks:
+  present:
+    stop: "{{ wsl_move_prefix }}-present-stop"
+    unregister: "{{ wsl_move_prefix }}-present-unregister"
+    import: "{{ wsl_move_prefix }}-present-import"
+  new:
+    stop: "{{ wsl_move_prefix }}-new-stop"
+    unregister: "{{ wsl_move_prefix }}-new-unregister"
+    import: "{{ wsl_move_prefix }}-new-import"
+
+# The scripts of the procedure: those of the rehearsal of the move, byte for
+# byte. The play copies each one from that role, and each copy on the host
+# must have the SHA-256 of the role's file (host_files.yml).
+wsl_move_scripts:
+  - Invoke-TnwksWslAccountTask.ps1
+  - Invoke-TnwksMoveWindow.ps1
+  - Invoke-TnwksStartTask.ps1
+wsl_move_scripts_src: "{{ role_path }}/../windows_wsl_move_rehearsal/files"
+
+# The values that the import task of each account writes into its
+# registration: the DWORD values of the registration of today
+# (registration.json), as step 3 read them.
+wsl_move_registration_values: "{{ (wsl_move_registration | default({}, true)).dwords | default({}, true) }}"
+
+wsl_move_account_config_common:
+  # The scope of the account script: this distro, and paths on its volume.
+  name_pattern: "^{{ wsl_move_distro | regex_escape }}$"
+  refused_names: []
+  root: "{{ wsl_move_root }}"
+  distro: "{{ wsl_move_distro }}"
+  disk_name: "{{ wsl_move_disk_name }}"
+  marker_name: "{{ wsl_move_marker_name }}"
+  registration_values: "{{ wsl_move_registration_values }}"
+
+wsl_move_window_config:
+  root: "{{ wsl_move_root }}"
+  account_pattern: >-
+    ^({{ wsl_move_present_account | regex_escape }}|{{ wsl_move_new_account | regex_escape }})$
+  task_pattern: "^tnwks-"
+  disk_name: "{{ wsl_move_disk_name }}"
+  marker_name: "{{ wsl_move_marker_name }}"
+  state_file: "{{ wsl_move_state_file }}"
+  log_file: "{{ wsl_move_log_file }}"
+  acl_file: "{{ wsl_move_acl_file }}"
+  version_file: "{{ wsl_move_version_file }}"
+  disk_rule:
+    owner: new-account
+    new_mask: FA
+  vm_capability_sid: "{{ wsl_move_vm_capability_sid }}"
+  service_binary: "{{ wsl_move_service_binary }}"
+  restart: "{{ wsl_move_restart | bool }}"
+  session_check: "{{ wsl_move_session_check | bool }}"
+  # The read of window step 7 that no compute system runs on the host: on.
+  vm_check: true
+  task_minutes: "{{ wsl_move_task_minutes | int }}"
+  present:
+    account: "{{ wsl_move_present_account }}"
+    folder: "{{ wsl_move_present_folder }}"
+    result_dir: "{{ wsl_move_accounts.present.log_dir }}"
+    window_tasks: "{{ wsl_move_window_tasks.present }}"
+    disable_tasks: "{{ wsl_move_present_tasks }}"
+    start_tasks: "{{ wsl_move_present_start_tasks }}"
+  new:
+    account: "{{ wsl_move_new_account }}"
+    folder: "{{ wsl_move_disk_dir }}"
+    result_dir: "{{ wsl_move_accounts.new.log_dir }}"
+    window_tasks: "{{ wsl_move_window_tasks.new }}"
+    start_tasks: "{{ wsl_move_new_start_tasks }}"
+  # The real present account is in Administrators until window step 7 takes
+  # it out, and way back step 1 puts it back. The boot run of the way back
+  # (after a power loss in the window) does the same: the group steps are on
+  # at boot too, and there is no group test, which is the rehearsal's only.
+  # No boot request either: that is the rehearsal's only, and the procedure
+  # refuses vm_check off in a config with none.
+  boot:
+    group_steps: true
+    rehearsal_group_test: false
+
+wsl_move_configs:
+  config-present: >-
+    {{ wsl_move_account_config_common | combine({'folder': wsl_move_accounts.present.folder,
+       'log_dir': wsl_move_accounts.present.log_dir}) }}
+  config-new: >-
+    {{ wsl_move_account_config_common | combine({'folder': wsl_move_accounts.new.folder,
+       'log_dir': wsl_move_accounts.new.log_dir}) }}
+  window: "{{ wsl_move_window_config }}"
+
+wsl_move_file_hashes: >-
+  {%- set out = {} -%}
+  {%- for name in wsl_move_scripts -%}
+  {%- set _ = out.update({wsl_move_dir ~ '\\' ~ name:
+      lookup('ansible.builtin.file', wsl_move_scripts_src ~ '/' ~ name, rstrip=false) | hash('sha256')}) -%}
+  {%- endfor -%}
+  {%- for key, value in wsl_move_configs.items() -%}
+  {%- set _ = out.update({wsl_move_dir ~ '\\' ~ key ~ '.json': value | to_nice_json | hash('sha256')}) -%}
+  {%- endfor -%}
+  {{ out }}
+
+# The config of the reads of the window play (files/Read-TnwksMoveWindow.ps1).
+# The way of a start: wayback only in the mode wayback.
+wsl_move_window_read:
+  way: "{{ 'wayback' if (wsl_move_window | default('')) == 'wayback' else 'forward' }}"
+  force_session: "{{ wsl_move_window_force_session | default(false) | bool }}"
+  present:
+    account: "{{ wsl_move_present_account }}"
+    folder: "{{ wsl_move_present_folder }}"
+    tasks: "{{ wsl_move_present_tasks }}"
+    window_tasks: "{{ wsl_move_window_tasks.present.values() | list }}"
+  new:
+    account: "{{ wsl_move_new_account }}"
+    folder: "{{ wsl_move_disk_dir }}"
+    start_tasks: "{{ wsl_move_new_start_tasks }}"
+    window_tasks: "{{ wsl_move_window_tasks.new.values() | list }}"
+  disk_name: "{{ wsl_move_disk_name }}"
+  distro: "{{ wsl_move_distro }}"
+  state_file: "{{ wsl_move_state_file }}"
+  log_file: "{{ wsl_move_log_file }}"
+  request_file: "{{ wsl_move_request_file }}"
+  version_file: "{{ wsl_move_version_file }}"
+  window_task: "{{ wsl_move_window_task }}"
+  boot_task: "{{ wsl_move_boot_task }}"
+  hashes: "{{ wsl_move_file_hashes }}"
+  window_script: '{{ wsl_move_dir }}\Invoke-TnwksMoveWindow.ps1'
+  rehearsed_version: "{{ wsl_move_rehearsed_wsl_version }}"
+  service_binary: "{{ wsl_move_service_binary }}"
+  host_check: "{{ wsl_move_host_check }}"
+  host_check_sha256: >-
+    {{ lookup('ansible.builtin.file', role_path ~ '/../windows_host_check/files/Invoke-TnwksHostCheck.ps1', rstrip=false) | hash('sha256') }}
+  capability_sid: "{{ wsl_move_vm_capability_sid }}"
+  registration_file: "{{ wsl_move_registration_file }}"
+  wslconfig_file: "{{ wsl_move_wslconfig_file }}"
+  bridge_address_file: "{{ wsl_move_bridge_address_file }}"
+  log_lines: "{{ wsl_move_window_log_lines | int }}"
+  line_limit: "{{ wsl_move_window_line_limit | int }}"
+  batch_logons: "{{ wsl_move_window_batch_logons | int }}"
+  wsl_conf_uid: "{{ wsl_move_check_wsl_conf_uid | string | trim }}"

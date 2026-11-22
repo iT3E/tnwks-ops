@@ -1,0 +1,582 @@
+---
+# The finance agent (docs/apps/agent-platform.md): the product (OpenClaw) in
+# the agent image, as the pilot runs it. Listed by step 4 of the cutover at
+# replicas 0 (no pod), after the owner put the values of its Secret (R4) and
+# the copy of the state in place; replicas 1 is step 5, after the host
+# stopped the finance bot
+# (docs/apps/agent-platform-runbook.md, "The cutover of the finance agent").
+# The tool set is the pilot's, with its own search key, the notes vault in
+# the state volume (docs/apps/agent-platform.md, "The finance agent"), and the
+# finance app through the MCP gateway (the firefly entry of openclaw.json).
+# Each command it runs goes to a sandbox of this trust domain, through the
+# sandbox gateway; each model call goes to the model gateway, with the key of
+# this trust domain; each call of a tool of the finance app goes to the MCP
+# gateway, with the key of this agent (MCP_GATEWAY_KEY).
+#
+# The image contract is in the README of iT3E/tnwks-agent-image: the user,
+# the paths, the read-only root and the steps before the start.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  labels:
+    app.kubernetes.io/name: agent
+  annotations:
+    # Start the pod again when a Secret it uses changes: agent-secret,
+    # agent-search-secret or openshell-client-tls (a renewal). Not for a
+    # ConfigMap: a change of the config or of a script gives the ConfigMap a
+    # new name (app/kustomization.yaml), so Flux changes the pod template
+    # and that is the one rollout. Reloader on the ConfigMaps too would make
+    # a second one.
+    secret.reloader.stakater.com/auto: "true"
+spec:
+  # One since step 5 of the cutover (phase 5 of the platform design).
+  replicas: 1
+  revisionHistoryLimit: 2
+  # The old pod stops before the new one starts: one process holds the state,
+  # and the archive step reads it with no writer.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent
+        # The logs of this pod go to Loki, but the agent container's: its
+        # log can hold chat content. What ships is the record of the backup,
+        # of the instruction check, of the sandbox start and of each start
+        # of the pod
+        # (kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml).
+        logs.home.arpa/ship: "true"
+      annotations:
+        vector.dev/exclude-containers: agent
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # One PID namespace for the containers of the pod. The backup command
+      # of the product checks that the gateway owns the state before it
+      # reads it, and it can only see the gateway process in the same PID
+      # namespace ("run this command inside the Gateway container or with a
+      # shared PID namespace"). The containers run the same image, as the
+      # same user. The backup container has the same secret env as the
+      # gateway, so it sees no more than it holds already; the
+      # automations-sync container has two of those values; the sandbox-start
+      # container has none, but it can see the processes of the others. The
+      # restricted Pod Security level allows it.
+      shareProcessNamespace: true
+      # The state volume (local-path) stays on the node of the first start.
+      # The node is set at the cutover, by the free memory of each worker
+      # then; the pilot runs on the second worker.
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # The values check: the pod does not start while a value of its
+        # Secrets is empty or still the placeholder `pending` of git, or while
+        # the SHA-256 of MCP_GATEWAY_KEY is not the hash of the client finance
+        # in the config of the MCP gateway (the same file, mounted here), so
+        # the value and the hash stay in step. It prints `values-check
+        # result=ok` or `values-check result=failed key=<name>
+        # reason=empty|placeholder|hash`, the name of the key only, never a
+        # value or a hash, and fails the start. The pod then stays in
+        # Init:CrashLoopBackOff, not ready, and AgentPlatformWorkloadNotReady
+        # fires after 10 minutes.
+        - name: values-check
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM MCP_GATEWAY_KEY BRAVE_API_KEY; do
+                v=$(printenv "$k" || true)
+                if [ -z "$v" ]; then echo "values-check result=failed key=$k reason=empty"; exit 1; fi
+                if [ "$v" = pending ]; then echo "values-check result=failed key=$k reason=placeholder"; exit 1; fi
+              done
+              have=$(printf %s "$MCP_GATEWAY_KEY" | sha256sum | cut -d " " -f 1)
+              want=$(awk '/keyHash:/ { k = $NF; gsub(/"/, "", k) } /metadata: \{client: finance\}/ { print k }' /gateway/config.yaml)
+              if [ "$want" != "sha256:$have" ]; then echo "values-check result=failed key=MCP_GATEWAY_KEY reason=hash"; exit 1; fi
+              echo "values-check result=ok"
+          envFrom:
+            - secretRef:
+                name: agent-secret
+            - secretRef:
+                name: agent-search-secret
+          volumeMounts:
+            - name: mcp-gateway-config
+              mountPath: /gateway
+              readOnly: true
+          securityContext: &containerSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources: &small
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+        # The two directories of the state volume and /tmp, as uid 1000 with
+        # mode 0700, and the client certificate of the sandbox gateway in the
+        # directory of the CLI: the gateway address with each ":" and "/" as
+        # "_". Each container mounts the volume at its root, with no subPath:
+        # on this cluster the kubelet can't reach the local-path directory,
+        # so it would make a subPath directory as root (talos/wsl/README.md).
+        - name: prepare
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /home/node/data/state /home/node/data/archives /scratch/tmp
+              chmod 0700 /home/node/data/state /home/node/data/archives /scratch/tmp
+              mkdir -p /home/node/.config/openshell/gateways/https___openshell.agents-finance.svc.cluster.local_8080/mtls
+              cp /openshell-tls/ca.crt /openshell-tls/tls.crt /openshell-tls/tls.key \
+                /home/node/.config/openshell/gateways/https___openshell.agents-finance.svc.cluster.local_8080/mtls/
+              chmod 0600 /home/node/.config/openshell/gateways/https___openshell.agents-finance.svc.cluster.local_8080/mtls/*
+          securityContext: *containerSecurity
+          resources: *small
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: tmp
+              mountPath: /scratch
+            - name: user-config
+              mountPath: /home/node/.config
+            - name: openshell-tls
+              mountPath: /openshell-tls
+              readOnly: true
+        # The archive step (scripts/archive-state.sh in ../config): an archive
+        # of the state, named with the release that starts, read back against
+        # its checksum. A failed step stops the start.
+        - name: archive
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/archive-state.sh"]
+          env: &env
+            # A change from the vault server comes from another NFS client,
+            # so the share gives no file event: the watch of the index polls
+            # (Design Doc of effort 0003, section 4.2.5). The other users of
+            # this list watch no file.
+            - name: CHOKIDAR_USEPOLLING
+              value: "1"
+            # The state directory of the product (with the workspace in it),
+            # on the volume. The archives are next to it, outside it.
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            # The config from git, a read-only file. The product treats it as
+            # managed outside: no command or repair writes to it.
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            # No update check, no telemetry call and no download of helper
+            # binaries (the network policy has no route for any of them).
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+        # The official plugins step of the image (the image README, "The
+        # official plugins"): it installs the Brave plugin from the npm cache
+        # of the image, with no network, as a verified official install, in
+        # the state directory. A sandboxed session uses a search provider
+        # only when it is bundled or a verified official install, and each
+        # session of this agent is sandboxed. It runs before doctor, which
+        # would try to install a missing configured plugin from the npm
+        # registry. It installs the plugin again at each start, and stops
+        # the start on a plugin in the state that the image did not put
+        # there. It prints `official-plugins id=brave version=...
+        # result=installed|failed` or `official-plugins result=failed
+        # reason=...`, and a failure stops the start.
+        # It needs no secret.
+        - name: official-plugins
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["install-official-plugins"]
+          # The env of the gateway, and OPENCLAW_DEBUG: on a failure the CLI
+          # of the product then prints the reason and the stack
+          # (`[openclaw] Reason: ...`), not only "The CLI command failed".
+          # The flag changes nothing else in this release (it is read only
+          # by the failure output of the CLI), and the step has no secret
+          # to print.
+          env:
+            # As the list of the gateway (env above).
+            - name: CHOKIDAR_USEPOLLING
+              value: "1"
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            - name: OPENCLAW_DEBUG
+              value: "1"
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+        # Doctor of the product, on a copy of the config (the image README):
+        # it migrates the state for a new release.
+        - name: doctor
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - >-
+              mkdir -p /tmp/doctor
+              && cp /home/node/config/openclaw.json /tmp/doctor/openclaw.json
+              && exec node /app/openclaw.mjs doctor --fix --non-interactive
+          env:
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /tmp/doctor/openclaw.json
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+          envFrom: &secrets
+            # OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY, TELEGRAM_BOT_TOKEN,
+            # TELEGRAM_ALLOW_FROM, MCP_GATEWAY_KEY
+            # (docs/apps/agent-platform.md).
+            - secretRef:
+                name: agent-secret
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts: &stateMounts
+            - name: state
+              mountPath: /home/node/data
+            # The finance share, read only (../../vault-share): the index
+            # reads it, and memory_get. The path is the one of the vault
+            # server, so a path from a search works in a vault tool call.
+            - name: vault
+              mountPath: /vault
+              readOnly: true
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            # /tmp with mode 0700: the sandbox plugin refuses a temp dir that
+            # others can write with no sticky bit, as an emptyDir is.
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+        # The memory index step (scripts/memory-index.sh in ../config): a
+        # stale index (a new embedding provider or model) gets a full rebuild,
+        # a valid one an incremental pass, before the gateway owns the state.
+        # It prints one line, memory-index result=ok|failed, and never stops
+        # the start: a failure or the time limit leaves search as it was.
+        # Its one secret is the key of the model gateway, for the
+        # embeddings.
+        - name: memory-index
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/memory-index.sh"]
+          env:
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: LITELLM_API_KEY
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: vault
+              mountPath: /vault
+              readOnly: true
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+      containers:
+        # The gateway of the product, on loopback only: no pod comes in. It
+        # reaches the channels, the model gateway and the sandbox gateway.
+        - name: agent
+          image: *image
+          imagePullPolicy: IfNotPresent
+          env: *env
+          envFrom:
+            - secretRef:
+                name: agent-secret
+            # BRAVE_API_KEY (the key of finance, not the pilot's), for the
+            # web search of the gateway. This container only: not the init
+            # containers, not the backup container, and no sandbox
+            # (autoProviders is off).
+            - secretRef:
+                name: agent-search-secret
+          ports:
+            - name: gateway
+              containerPort: 18789
+              protocol: TCP
+          startupProbe:
+            exec:
+              command: &healthz
+                - node
+                - -e
+                - "require('http').get('http://127.0.0.1:18789/healthz', r => process.exit(r.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))"
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "require('http').get('http://127.0.0.1:18789/readyz', r => process.exit(r.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))"
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: *healthz
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # The limit of the Design Doc (section 10.1). The request covers
+          # the use that the pilot measured over 24 hours: 1.2 to 1.6 GiB
+          # steady, 1.9 GiB at the most.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 2Gi
+            limits:
+              memory: 4Gi
+          securityContext: *containerSecurity
+          volumeMounts: *stateMounts
+        # The backup container (scripts/daily-backup.sh in ../config): once a
+        # day, the backup command of the product with its check, then the
+        # check of the instruction files.
+        - name: backup
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/daily-backup.sh"]
+          env: *env
+          envFrom: *secrets
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          securityContext: *containerSecurity
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+        # The sandbox-start container (scripts/sandbox-start.sh in ../config):
+        # it starts each sandbox of the product that the sandbox gateway left
+        # stopped, when the pod starts and then each minute. The client
+        # certificate of the sandbox gateway is all it uses, so it gets no
+        # secret env.
+        - name: sandbox-start
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/sandbox-start.sh"]
+          resources: *small
+          securityContext: *containerSecurity
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+              readOnly: true
+        # The automations-sync container (scripts/automations-sync.sh in
+        # ../config): it makes the scheduled jobs of the product equal to
+        # automations.json of the config, when the pod starts and then each
+        # hour. It calls the gateway on loopback with the CLI of the image.
+        # Two values of agent-secret only: the gateway token for the call,
+        # and the owner's chat id, where the answer of a job goes. TZ is the
+        # zone of each job: the zone of the cluster. The other containers
+        # have no TZ, so the product itself runs in UTC.
+        - name: automations-sync
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/automations-sync.sh"]
+          env:
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            - name: TZ
+              value: ${TIMEZONE}
+            - name: OPENCLAW_GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: OPENCLAW_GATEWAY_TOKEN
+            - name: TELEGRAM_ALLOW_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: TELEGRAM_ALLOW_FROM
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext: *containerSecurity
+          volumeMounts:
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+          # No user-config (the client certificate of the sandbox gateway):
+          # the CLI needs no file there.
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: agent-state
+        # The finance share. readOnly on the claim as well as the option ro
+        # of its volume: the kubelet takes the flag from the pod, not from
+        # the volume (Design Doc of effort 0003, section 4.2.5). A soft
+        # mount: with the NFS server away a read fails after about 30 s, and
+        # the chat goes on. The pod does not start while the NFS server is
+        # away, and starts when it is back.
+        - name: vault
+          persistentVolumeClaim:
+            claimName: vault-ro
+            readOnly: true
+        - name: config
+          configMap:
+            name: agent-config
+        - name: scripts
+          configMap:
+            name: agent-scripts
+        # The config of the MCP gateway, for the hash of the client finance
+        # (kustomization.yaml): hashes and tool rules, no secret.
+        - name: mcp-gateway-config
+          configMap:
+            name: agent-mcp-gateway-config
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: user-config
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+        # The client certificate of this trust domain's sandbox gateway
+        # (cert-manager, sandbox-gateway/app).
+        - name: openshell-tls
+          secret:
+            secretName: openshell-client-tls
+            defaultMode: 0440

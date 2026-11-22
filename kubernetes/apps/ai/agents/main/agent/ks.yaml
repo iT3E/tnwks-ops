@@ -1,0 +1,29 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The main agent (docs/apps/agent-platform.md): app/kustomization.yaml
+# says what joins it, and when.
+# One Flux Kustomization for the pod and its config: the ConfigMaps are
+# generated in app/ with a hash in their names, so a merge that changes the
+# config and the pod template is one apply and one rollout. With the config
+# in a Kustomization of its own, such a merge made two rollouts: Reloader
+# for the ConfigMap, then Flux for the template
+# (docs/apps/agent-platform.md, "A start of the agent pod").
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-main-agent
+  namespace: flux-system
+spec:
+  targetNamespace: agents-main
+  path: ./kubernetes/apps/ai/agents/main/agent/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The client certificate, and the gateway of the sandboxes.
+    - name: agents-main-sandbox-gateway
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

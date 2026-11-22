@@ -1,0 +1,68 @@
+---
+# Reads the token of each WSL process of A (wsl.exe, wslhost.exe,
+# wslrelay.exe), as SYSTEM: the count of processes, how many have the
+# Administrators group enabled (SE_GROUP_ENABLED; a filtered token has it for
+# deny only), and the errors of the read. It changes nothing.
+- name: Read the tokens of the WSL processes of A
+  ansible.windows.win_powershell:
+    parameters:
+      Sid: "{{ wsl_move_rehearsal_sids.a }}"
+    script: |
+      param([string]$Sid)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      if (-not ('TnwksToken' -as [type])) {
+          Add-Type -TypeDefinition @'
+      using System;
+      using System.Collections.Generic;
+      using System.ComponentModel;
+      using System.Runtime.InteropServices;
+      using System.Security.Principal;
+      public static class TnwksToken {
+          [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(int access, bool inherit, int pid);
+          [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, int access, out IntPtr token);
+          [DllImport("advapi32.dll", SetLastError = true)]
+          static extern bool GetTokenInformation(IntPtr token, int cls, IntPtr buffer, int length, out int needed);
+          [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+          // The SIDs of the enabled groups of the token of a process (TokenGroups).
+          public static string[] EnabledGroups(int pid) {
+              IntPtr process = OpenProcess(0x1000, false, pid);
+              if (process == IntPtr.Zero) throw new Win32Exception();
+              IntPtr token;
+              try { if (!OpenProcessToken(process, 0x8, out token)) throw new Win32Exception(); }
+              finally { CloseHandle(process); }
+              try {
+                  int needed;
+                  GetTokenInformation(token, 2, IntPtr.Zero, 0, out needed);
+                  IntPtr buffer = Marshal.AllocHGlobal(needed);
+                  try {
+                      if (!GetTokenInformation(token, 2, buffer, needed, out needed)) throw new Win32Exception();
+                      int count = Marshal.ReadInt32(buffer);
+                      var groups = new List<string>();
+                      for (int i = 0; i < count; i++) {
+                          IntPtr entry = new IntPtr(buffer.ToInt64() + IntPtr.Size + i * 2 * IntPtr.Size);
+                          int attributes = Marshal.ReadInt32(entry, IntPtr.Size);
+                          if ((attributes & 0x4) != 0) groups.Add(new SecurityIdentifier(Marshal.ReadIntPtr(entry)).Value);
+                      }
+                      return groups.ToArray();
+                  } finally { Marshal.FreeHGlobal(buffer); }
+              } finally { CloseHandle(token); }
+          }
+      }
+      '@
+      }
+      $procs = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('wsl.exe', 'wslhost.exe', 'wslrelay.exe') } | Where-Object {
+          $o = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue; $o -and $o.Sid -eq $Sid })
+      $admin = 0
+      $errors = @()
+      foreach ($p in $procs) {
+          try { if ([TnwksToken]::EnabledGroups([int]$p.ProcessId) -contains 'S-1-5-32-544') { $admin++ } }
+          catch { $errors += "$($p.Name) $($p.ProcessId): $($_.Exception.Message)" }
+      }
+      [pscustomobject]@{ processes = $procs.Count; admin_enabled = $admin; errors = $errors }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  check_mode: false
+  register: wsl_move_rehearsal_tokens

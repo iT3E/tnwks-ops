@@ -1,24 +1,37 @@
 ---
 # WSL overlay for zwave-js-ui: pin to homelab-wsl-worker-2 (the only node
-# with the Aeotec Z-Stick) and re-point the usb hostPath at
-# /hostdev/ttyACM0. worker-2 bind-mounts the host's /dev tree at /hostdev
-# with rslave propagation (see 01-talos-bootstrap.yml), mirroring the Coral
-# /dev/bus/usb bind: the live CDC tty node propagates in even when the
-# Z-Stick is attached after the container started, so a host reboot no
-# longer wedges the pod with a stale --device snapshot. It lands at
-# /hostdev/ttyACM0 (not /dev/serial/by-id/...) because Talos runs no udev
-# to populate the by-id symlinks.
+# with the Aeotec Z-Stick) and mount the folder /hostdev in place of the
+# by-id node. worker-2 bind-mounts the host's /dev tree at /hostdev with
+# rslave propagation (see 01-talos-bootstrap.yml). The pod mounts that
+# folder, the whole devtmpfs of the distro, at /hostdev, so the application
+# still opens /hostdev/ttyACM0 (its stored setting), and a node that the
+# attach makes after the pod started is there at once, with no restart.
+# zwave-js-ui starts its driver again by itself (a backoff of at most 15
+# seconds), after a port that is missing at its start or lost later. The
+# node lands at ttyACM0 (not /dev/serial/by-id/...) because Talos runs no
+# udev to populate the by-id symlinks.
 #
-# hostPathType is also cleared to "" (no validation). On WSL the worker
-# kubelet runs as a nested container whose mount namespace only carries the
-# worker's own /dev, NOT the sibling /hostdev bind — so a `CharDevice`
-# precheck stats a path the kubelet can't see and fails with "not a
-# character device". containerd (running in the worker's main namespace,
-# where /hostdev IS present) does the real mount, so skipping the kubelet
-# precheck lets the live node through. The Coral sidesteps this because its
-# mount lives under /dev (hostPathType: Directory just checks the dir
-# exists). MS-01 keeps CharDevice — udev runs there and the device is a
-# normal /dev node.
+# The folder, not the node: a hostPath of type "" whose path does not exist
+# is made by the container runtime as an empty directory. Mounting the node
+# itself, a pod that started before the device left an empty directory at
+# the node's name in the distro's /dev, where the kernel then makes no node.
+# /hostdev always exists, so nothing is made. The container is privileged
+# already (it opens a host character device, read and write), so the folder
+# adds no power: a privileged container may make any device node itself.
+#
+# hostPathType stays "" (no check). On WSL the worker kubelet runs as a
+# nested container whose mount namespace only carries the worker's own /dev,
+# NOT the sibling /hostdev bind, so a `CharDevice` or `Directory` check
+# stats a path the kubelet can't see and fails. containerd (running in the
+# worker's main namespace, where /hostdev IS present) does the real mount.
+# The Coral sidesteps this because its mount lives under /dev. MS-01 keeps
+# CharDevice and the by-id node: udev runs there.
+#
+# Known limit: cdc-acm names the node by its minor, so a second ACM device,
+# or an attach while a process still holds the old node open, gives
+# ttyACM1, which the application does not open. The by-id link of the
+# distro's udev, if it makes one, would be a stable path, but it changes the
+# application's stored setting (docs/wsl/usb-passthrough.md).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -44,10 +57,10 @@ spec:
           value: homelab-wsl-worker-2
         - op: replace
           path: /spec/values/persistence/usb/hostPath
-          value: /hostdev/ttyACM0
+          value: /hostdev
         - op: replace
           path: /spec/values/persistence/usb/hostPathType
           value: ""
         - op: replace
           path: /spec/values/persistence/usb/globalMounts/0/path
-          value: /hostdev/ttyACM0
+          value: /hostdev

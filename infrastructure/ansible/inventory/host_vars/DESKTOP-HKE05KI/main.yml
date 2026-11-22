@@ -2,6 +2,12 @@
 # The Windows host under the homelab-wsl cluster. ansible_user is in
 # secrets.sops.yml next to this file.
 
+# The account that owns the WSL distro: the present account until the done
+# switch of the move, then the account that the move made. Both names are in
+# secrets.sops.yml (wsl_move_present_account, wsl_move_new_account).
+windows_desktop_user: >-
+  {{ wsl_move_new_account if wsl_move_phase == 'done' else wsl_move_present_account }}
+
 # The vEthernet (WSL) address: WINDOWS_HOST_IP in
 # kubernetes/clusters/wsl/cluster-settings.yaml.
 ansible_host: 172.26.80.1
@@ -13,8 +19,14 @@ ansible_host: 172.26.80.1
 # WSL-02 admits this site's address in the same way.
 windows_monitoring_remote_extra: [10.10.91.112]
 
-# Prometheus sits on its own ext4 VHDX on C:, not the E: distro disk.
+# The monitoring data of homelab-wsl (Prometheus): on its own ext4 VHDX on C:
+# until the phase file below, then in a file on the distro disk.
 observability_storage_enabled: true
+# The move of the monitoring data into a file on the distro disk (Design Doc
+# 0004, section 5.13; docs/operations/observability-implementation.md): file,
+# the timer of the distro mounts the file at the point each minute, and the
+# mount task of the VHDX is disabled and stays as the way back (vhdx).
+observability_storage_mount: file
 
 # One tnwks-coral-detector-<id> service per Coral; a second Coral is one more
 # line (ports 5556 / 9556). docs/wsl/coral-detector.md.
@@ -25,3 +37,86 @@ coral_detector_devices:
 # "Cleanup").
 windows_locked_dirs:
   - 'C:\ProgramData\tnwks-cleanup-backup'
+
+# Each task that starts a process in the distro runs with no elevation
+# (Design Doc 0004, section 5.9), as on site 2. The services of the distro take
+# it at the next start of the distro (docs/wsl/windows-ansible.md, "Start WSL
+# with no elevation"). The monitoring data is in the file on the distro disk
+# (observability_storage_mount file), so no task of the monitoring volume
+# needs admin rights to start a process in the distro.
+wsl_start_unelevated: true
+# One long-running wsl.exe client, so WSL does not stop the distro once no
+# session of the owner holds one (the account that owns the distro after the
+# move has none). The watchdog starts it again after a restart of WSL; it
+# keeps its check of the gateway. It skips the Z-Stick, as each task with no
+# elevation: usbipd attach reads the list of services at the service control
+# manager, which such a task may not. The unit of the distro keeps the Z-Stick attached with the
+# usbip client (role wsl_usb_attach).
+wsl_keepalive_enabled: true
+wsl_watchdog_args: -SkipUsb -KeepAliveTask tnwks-wsl-keepalive
+# The UDP relays and the USB device of this host, the values of the roles'
+# defaults, here as on site 2: the play of the move window loads only the role
+# windows_wsl_move, so the start tasks of the new account
+# (wsl_move_new_start_tasks, group_vars/windows_hosts.yml) see only the values
+# of the host there. Both plays then write the same configs of the procedure.
+udp_relays:
+  # NetFlow v9 from the router -> monitoring/flow-collector. From the LAN.
+  - task: tnwks-udp-relay
+    port: 2055
+    remote: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+  # Router syslog -> monitoring/vector-aggregator. Only the router.
+  - task: tnwks-udp-relay-syslog
+    port: 6001
+    remote: [10.10.91.1]
+usb_attach_bound_devices:
+  - "0658:0200" # Aeotec Z-Stick Gen5
+
+# Step 3 of the account change (role windows_wsl_move, Design Doc 0004,
+# section 9, step 3), with the owner's go: the account that owns the distro,
+# its tasks, and the procedure of the move window. No apply starts the window.
+# The names of the two accounts, the folder of the disk file today and the
+# version of WSL that the rehearsal of the move ran on are in
+# secrets.sops.yml next to this file. The play stops before any change while
+# one of them is missing.
+wsl_move: true
+# A person may be signed in here: the window stops at its step 1 while a
+# session of the present account is on the host, and its way back does not
+# restart the host while one is on.
+wsl_move_session_check: true
+# The done switch of the move (section 9, step 6), only after a window that
+# ended done and the check play of step 6 that passed
+# (playbooks/windows-move-window.yml, -e wsl_move_window=check), with the
+# write test from the distro and the relay. From it, the account that owns
+# the distro is the new account, the copies of the start tasks stay enabled,
+# the play no longer registers the tasks of the present account (they stay on
+# the host until wsl_move_present_removed), and the host check reads the
+# rules of the moved disk file. A way back turns it off first.
+wsl_move_done: true
+# The disk file of the distro is on E:, and the move is a rename in one
+# volume, never a copy: the folder of the procedure and the folder of the
+# moved file are on E: too. Here so that the compaction and the host check
+# read it too. The role windows_wsl_move stops the play when this is not the
+# file of the phase.
+wsl_move_dir: 'E:\tnwks-wsl-move'
+wsl_move_disk_dir: 'E:\tnwks-wsl-move\disk'
+vhdx_compact_vhdx: >-
+  {{ wsl_move_disk_dir if wsl_move_phase == 'done' else wsl_move_present_folder }}\ext4.vhdx
+# The WSL tasks of the present account, which window step 2 disables: the
+# USB attach, both UDP relays, the address task of the LAN bridge, the
+# keepalive, the watchdog and the compaction. The start tasks of the new
+# account (group_vars/windows_hosts.yml) are the copies of each but the
+# compaction. The mount task of the monitoring volume is not one: it is
+# disabled with the monitoring data in the file.
+wsl_move_present_tasks:
+  - tnwks-lan-bridge-ip
+  - tnwks-udp-relay
+  - tnwks-udp-relay-syslog
+  - tnwks-usb-attach
+  - tnwks-vhdx-compact
+  - tnwks-wsl-keepalive
+  - tnwks-wsl-watchdog
+# The long-running tasks that a way back with no restart starts.
+wsl_move_present_start_tasks:
+  - tnwks-udp-relay
+  - tnwks-udp-relay-syslog
+  - tnwks-wsl-keepalive

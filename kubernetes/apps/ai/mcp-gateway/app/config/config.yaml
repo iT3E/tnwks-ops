@@ -1,0 +1,513 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# The config of the MCP gateway (docs/apps/mcp-gateway.md): agentgateway in
+# standalone mode, this one file, no database and no UI. It reads the file
+# at the start and when it changes; the ConfigMap of this file has a hash in
+# its name, so a change rolls the pod.
+#
+# One route for each trust domain that has a client, at /<domain>/mcp, with
+# its own clients, its own tool rule and its own MCP servers; and one route
+# for the vault of each trust domain with a vault, at /<domain>-vault/mcp,
+# with the keys of the agents of that domain (finance-vault, main-vault). Deny by
+# default: a request with no key or a key that is not here gets a 401, and a
+# client sees and calls only the tools that a rule names for it.
+#
+# The keys are SHA-256 hashes of keys of 32 random bytes; the values are in
+# the Secrets of their clients (SOPS), never here. A hash of the form
+# sha256:000...0N is a placeholder: no key has it, so its client gets a 401
+# until the owner's values step (docs/apps/mcp-gateway.md, "The keys").
+config:
+  # The admin port (config dump, shutdown, the UI) on loopback only, as is
+  # the default: no other pod and no Service reaches it.
+  adminAddr: localhost:15000
+  # The metrics, for Prometheus (../podmonitor.yaml), and the readiness
+  # probe of the kubelet.
+  statsAddr: 0.0.0.0:15020
+  readinessAddr: 0.0.0.0:15021
+  # The MCP request counter has a label with the tool name that the client
+  # sends, also for a refused name, so a client could make any number of
+  # series. It is not made; the access log has the tool of each request.
+  metrics:
+    remove:
+      - agentgateway_mcp_requests_total
+  # Stateless MCP (each request stands alone, as below): no session to
+  # protect, and the config is read-only, so no key is generated.
+  session:
+    key: disabled
+  logging:
+    format: json
+
+frontendPolicies:
+  # One JSON line for each request: the route, the MCP method, the target,
+  # the tool and the status, and the client of the key. Never the arguments
+  # or the result of a call (the defaults hold neither).
+  accessLog:
+    add:
+      client: apiKey.client
+
+gateways:
+  mcp:
+    port: 3000
+
+routes:
+  # The finance trust domain (agents-finance). Its clients: the finance
+  # agent, and the gateway probe of the domain (two keys: one that may list
+  # the tools of finance and call get_about only, and one with no tool).
+  - name: finance
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /finance/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:2999b940b101d4e6e12bf6892ed64e893e084afc69022e6cf2307c94e70aa842"
+            metadata: {client: finance}
+          - keyHash: "sha256:f90e324c19915593f3c590ff7f13b0228b3a6f4a2f7c5f96ddfb8c95b3aea3ae"
+            metadata: {client: finance-probe}
+          - keyHash: "sha256:e65ee3f86e8c4461ce8740868d2fb725d9d859460b856291715eefe9383ef7c9"
+            metadata: {client: no-tools}
+      timeout:
+        requestTimeout: 60s
+      # Only the headers that MCP needs go on to the MCP server, after the
+      # key is checked: each other header that a client sets (a cookie, a
+      # key of another kind, a forwarded address, a trace) is dropped. The
+      # gateway then sets its own Authorization (backendAuth below).
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The tool rule of finance. The list is the kept tools of the MCP
+      # server of the finance app, by exact name, from the dump of its pinned
+      # image (../../tools/firefly.json, written by ../../tools/mcp_tools.py).
+      # A tool that is not named here is not in a list and is refused, for
+      # every client.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "create_account",
+                "create_bill",
+                "create_budget",
+                "create_budget_limit",
+                "create_category",
+                "create_split_transaction",
+                "create_tag",
+                "create_transaction",
+                "get_about",
+                "get_account",
+                "get_account_overview_chart",
+                "get_account_transactions",
+                "get_accounts",
+                "get_available_budget",
+                "get_available_budgets",
+                "get_balance_chart",
+                "get_bill_transactions",
+                "get_bills",
+                "get_budget_chart",
+                "get_budget_limits",
+                "get_budget_transactions",
+                "get_budgets",
+                "get_categories",
+                "get_category_chart",
+                "get_category_transactions",
+                "get_exchange_rate",
+                "get_insight_expenses",
+                "get_insight_expenses_by_asset",
+                "get_insight_expenses_by_bill",
+                "get_insight_expenses_by_budget",
+                "get_insight_expenses_by_expense_account",
+                "get_insight_expenses_by_tag",
+                "get_insight_expenses_no_bill",
+                "get_insight_expenses_no_budget",
+                "get_insight_expenses_no_category",
+                "get_insight_expenses_no_tag",
+                "get_insight_expenses_total",
+                "get_insight_income",
+                "get_insight_income_by_asset",
+                "get_insight_income_by_revenue",
+                "get_insight_income_by_tag",
+                "get_insight_income_no_category",
+                "get_insight_income_no_tag",
+                "get_insight_income_total",
+                "get_insight_transfer_no_category",
+                "get_insight_transfer_no_tag",
+                "get_insight_transfers_by_asset",
+                "get_insight_transfers_by_category",
+                "get_insight_transfers_by_tag",
+                "get_insight_transfers_total",
+                "get_net_worth_summary",
+                "get_rule",
+                "get_rule_group",
+                "get_rule_group_rules",
+                "get_rule_groups",
+                "get_rules",
+                "get_summary",
+                "get_tag_transactions",
+                "get_tags",
+                "get_transaction",
+                "get_transactions",
+                "get_transactions_without_budget",
+                "search_accounts",
+                "search_transactions",
+                "test_rule",
+                "test_rule_group",
+                "update_account",
+                "update_bill",
+                "update_budget",
+                "update_budget_limit",
+                "update_category",
+                "update_tag",
+                "update_transaction"
+              ] && (
+                apiKey.client == "finance" ||
+                (apiKey.client == "finance-probe" &&
+                  (mcp.methodName == "tools/list" || mcp.tool.name == "get_about"))
+              )
+    backends:
+      - mcp:
+          # Each request stands alone; the gateway opens the session with
+          # the server for it.
+          statefulMode: stateless
+          # One target on this route, so the names stay bare (get_about, not
+          # firefly_get_about), as the agent's filter names them.
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The MCP server of the finance app, which holds no token: it
+            # sends this bearer on to the proxy of the app, and the proxy
+            # puts the token of the agent in its place (finance/firefly-mcp).
+            # "none" is no secret.
+            - name: firefly
+              mcp:
+                host: http://firefly-mcp.agents-finance.svc.cluster.local:3000/mcp
+              policies:
+                backendAuth:
+                  key: none
+                # The gateway waits 10 s for an MCP target unless the target
+                # sets a time (agentgateway 1.7.0). The 60 s of the route, by
+                # the choice of the owner at the gate of Design Doc v3.42: a
+                # hung call holds a turn of the finance agent up to 60 s.
+                http:
+                  requestTimeout: 60s
+
+  # The vault of the finance trust domain (agents-finance/vault-server,
+  # docs/apps/agent-platform.md, "The vault shares"): a route of its own, so
+  # the tool names of the finance app do not change. Its client is the
+  # finance agent, with the key of the route finance (the same client and
+  # hash: a key of the finance agent, not a new key), and the gateway probe
+  # of finance, with its key. The metadata of the agent key has a
+  # second field, so the values check of the agent pod, which finds the hash
+  # of the finance agent by the metadata line of the route finance, finds
+  # one hash only (agents/finance/agent/app/deployment.yaml). No comment of
+  # this file may hold that line either.
+  - name: finance-vault
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /finance-vault/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:2999b940b101d4e6e12bf6892ed64e893e084afc69022e6cf2307c94e70aa842"
+            metadata: {client: finance, route: finance-vault}
+          # The gateway probe of finance (its key of the route finance): it
+          # lists the tools and reads the facts of the root of the share.
+          - keyHash: "sha256:f90e324c19915593f3c590ff7f13b0228b3a6f4a2f7c5f96ddfb8c95b3aea3ae"
+            metadata: {client: finance-probe, route: finance-vault}
+      # A write on the hard mount waits while the NFS server is away: the
+      # gateway answers with its timeout error, and the write can still land
+      # later. The caller reads the note again before it tries again.
+      timeout:
+        requestTimeout: 60s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The nine tools of the design (Design Doc, section 4.2.5): six reads
+      # and three writes. Not listed, so refused: the deprecated read_file,
+      # read_media_file, list_directory_with_sizes, list_allowed_directories,
+      # append_file, move_file and copy_file. The server has no delete tool.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "create_directory",
+                "directory_tree",
+                "edit_file",
+                "get_file_info",
+                "list_directory",
+                "read_multiple_files",
+                "read_text_file",
+                "search_files",
+                "write_file"
+              ] && (
+                apiKey.client == "finance" ||
+                (apiKey.client == "finance-probe" &&
+                  (mcp.methodName == "tools/list" || mcp.tool.name == "get_file_info"))
+              )
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The vault server takes no credential: no backendAuth, and the
+            # rule above drops the key of the client.
+            - name: vault
+              mcp:
+                host: http://vault-server.agents-finance.svc.cluster.local:8080/mcp
+              # The gateway waits 10 s for an MCP target unless the target
+              # says more (agentgateway 1.7.0). The 60 s of the route, so a
+              # short stop of the NFS server ends in the true answer, not an
+              # error for a write that lands later.
+              policies:
+                http:
+                  requestTimeout: 60s
+
+  # The vault of the main trust domain (agents-main/vault-server), in the
+  # form of the route finance-vault: a route of its own, with the key of the
+  # main agent and no key of another trust domain (R6). The main agent has
+  # no other route, so this is its one key at the gateway. Its hash is a
+  # placeholder until the values step (docs/apps/mcp-gateway.md, "The
+  # keys"); the second field of the metadata names the route, as on
+  # finance-vault.
+  - name: main-vault
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-vault/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
+            metadata: {client: main, route: main-vault}
+          # The gateway probe of main (agents-main/checks): it lists the
+          # tools and reads the facts of the root of the share. A key of its
+          # own (PROBE_KEY of agents/main/checks/app).
+          - keyHash: "sha256:d6d0510b450b0fdd8d331a267d9b0a1f00709bc4a3661e2c7b4a82bd015a7456"
+            metadata: {client: main-probe, route: main-vault}
+      # As on finance-vault: a write on the hard mount waits while the NFS
+      # server is away, and the caller reads the note again before a retry.
+      timeout:
+        requestTimeout: 60s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The nine tools of the design (Design Doc, section 4.2.5), the list of
+      # finance-vault.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "create_directory",
+                "directory_tree",
+                "edit_file",
+                "get_file_info",
+                "list_directory",
+                "read_multiple_files",
+                "read_text_file",
+                "search_files",
+                "write_file"
+              ] && (
+                apiKey.client == "main" ||
+                (apiKey.client == "main-probe" &&
+                  (mcp.methodName == "tools/list" || mcp.tool.name == "get_file_info"))
+              )
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The vault server takes no credential: no backendAuth, and the
+            # rule above drops the key of the client.
+            - name: vault
+              mcp:
+                host: http://vault-server.agents-main.svc.cluster.local:8080/mcp
+              # The 60 s of the route, as on finance-vault.
+              policies:
+                http:
+                  requestTimeout: 60s
+
+  # The cluster server of main (agents-main/cluster-mcp, Design Doc, section
+  # 4.2.6): a read server of M7b, with a route of its own and the key of the
+  # main agent (the hash of the route main-vault, with the second field of
+  # the metadata that names this route). The server holds the token of its
+  # own service account: the gateway sets no credential on this target, and
+  # the header rule drops the key of the client.
+  - name: main-cluster
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-cluster/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
+            metadata: {client: main, route: main-cluster}
+      # A large list or a long log can take longer than the 10 s of the
+      # gateway: 30 s, the proposal of the design. The rehearsal measures
+      # the slowest read.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The eight read tools of the design, by exact name, from the dump of
+      # the pinned image (../../tools/cluster.json). Not listed, so refused:
+      # pods_list (each namespace at once), pods_exec, pods_run,
+      # pods_delete, the writes of resources, the nodes and the top tools.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "api_resources_list",
+                "events_list",
+                "namespaces_list",
+                "pods_get",
+                "pods_list_in_namespace",
+                "pods_log",
+                "resources_get",
+                "resources_list"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: cluster
+              mcp:
+                host: http://cluster-mcp.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s
+  - name: main-flux
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-flux/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
+            metadata: {client: main, route: main-flux}
+      # A trace or a long log can take longer than the 10 s of the gateway:
+      # 30 s, as for the cluster server.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The read tools of the design, by exact name, from the dump of the
+      # pinned image in its read-only mode (../../tools/flux.json). Not
+      # listed, so refused: diff_kubernetes_manifest (the design keeps it
+      # out: it needs patch on the kinds of a manifest) and get_flux_instance
+      # (this cluster has no Flux Operator, so no FluxInstance). The
+      # read-only mode of the server has no write tool.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "get_kubernetes_api_versions",
+                "get_kubernetes_events",
+                "get_kubernetes_logs",
+                "get_kubernetes_metrics",
+                "get_kubernetes_resources",
+                "read_flux_doc",
+                "search_flux_docs",
+                "trace_kubernetes_resource"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: flux
+              mcp:
+                host: http://flux-mcp.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s
+  - name: main-terraform
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-terraform/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
+            metadata: {client: main, route: main-terraform}
+      # A search of the registry can take longer than the 10 s of the
+      # gateway: 30 s, as for the other read servers.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The nine tools of the registry toolset, by exact name, from the dump
+      # of the pinned image (../../tools/terraform.json). The server has no
+      # token, so it lists no tool of HCP Terraform; a tool of HCP Terraform
+      # in a later release is refused here until a PR names it.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "get_latest_module_version",
+                "get_latest_provider_version",
+                "get_module_details",
+                "get_policy_details",
+                "get_provider_capabilities",
+                "get_provider_details",
+                "search_modules",
+                "search_policies",
+                "search_provider_docs"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: terraform
+              mcp:
+                host: http://terraform-mcp.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s

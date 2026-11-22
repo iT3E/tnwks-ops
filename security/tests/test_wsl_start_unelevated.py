@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import ansible_render
 import pytest
 import yaml
 from winacl import ACL_FAKES
@@ -74,14 +75,21 @@ def starts_distro_process(text: str, role: Path) -> bool:
     return any(re.search(r"wsl\.exe\b[^\n]*-d\b|wsl\.exe @", script.read_text()) for script in scripts_of(text, role))
 
 
+REHEARSALS = {"windows_wsl_rehearsal", "windows_wsl_move_rehearsal", "windows_wsl_move"}
+
+
 def templates() -> list[Path]:
-    """The scheduled tasks of the Windows roles (a WinSW service file is not one)."""
-    return sorted(path for path in ROLES.glob("windows_*/templates/*.xml.j2") if "<Task " in path.read_text())
+    """The scheduled tasks of the Windows roles (a WinSW service file is not one). The
+    tasks of the temporary accounts of the two rehearsals, and those of the move of the
+    distro, have their own tests (test_wsl_rehearsal.py, test_wsl_move_rehearsal.py and
+    test_wsl_move_role.py)."""
+    return sorted(path for path in ROLES.glob("windows_*/templates/*.xml.j2")
+                  if "<Task " in path.read_text() and path.parts[-3] not in REHEARSALS)
 
 
-# The elevated tasks of the desktop user that may still run wsl.exe with the switch on:
-# the play refuses the switch on a host with the USB attach or the monitoring volume.
-STILL_ELEVATED = {"usb-attach.xml.j2", "monitoring-mount.xml.j2"}
+# The elevated task of the desktop user that may still run wsl.exe with the switch on:
+# the play refuses the switch on a host with the monitoring volume.
+STILL_ELEVATED = {"monitoring-mount.xml.j2"}
 # The wsl.exe commands that an elevated client may run: none of them creates the WSL VM
 # or starts a process in a distro (LxssUserSession.cpp, the callers of _CreateVm: a
 # distro start, --mount, and --manage resize, compact or set-version create the VM).
@@ -146,7 +154,9 @@ $r = Invoke-Native -FilePath 'wsl.exe' -Arguments @('-d', $Distro, '--exec', 'tr
 
 
 def test_with_the_switch_on_each_task_that_starts_the_distro_runs_with_no_elevation():
-    expected = {"wsl-keepalive.xml.j2", "wsl-watchdog.xml.j2", "udp-relay.xml.j2", "lan-bridge-ip.xml.j2"}
+    # And the stop task of the account that owns the distro (test_wsl_move_compaction.py).
+    expected = {"wsl-keepalive.xml.j2", "wsl-watchdog.xml.j2", "udp-relay.xml.j2", "lan-bridge-ip.xml.j2", "wsl-stop.xml.j2",
+                "usb-attach.xml.j2"}
     unelevated = set()
     for path in templates():
         text = render(path, on=True)
@@ -159,12 +169,12 @@ def test_with_the_switch_on_each_task_that_starts_the_distro_runs_with_no_elevat
 
 def test_with_the_switch_off_each_task_is_as_before():
     for path in templates():
-        if path.name == "lan-bridge-ip.xml.j2":
-            continue  # the role registers it only with the switch on
+        if path.name in ("lan-bridge-ip.xml.j2", "wsl-stop.xml.j2"):
+            continue  # the role registers it only with the switch on, or the move of the distro
         text = render(path, on=False)
         _, level = principal(text)
         assert level == "HighestAvailable", path.name
-        assert "-NoDistroStart" not in text and "-IpFile" not in text, path.name
+        assert "-NoDistroStart" not in text and "-IpFile" not in text and "-NoElevation" not in text, path.name
     sync = render(ROLES / "windows_lan_bridge/templates/lan-bridge-sync.xml.j2", on=False)
     assert principal(sync) == ("{{ lan_bridge_user | e }}", "HighestAvailable")
 
@@ -186,10 +196,13 @@ def test_the_admin_steps_run_as_system_with_no_wsl_exe():
 
 
 def test_each_new_task_exists_only_with_the_switch_and_the_compaction_pauses_it():
-    for role, variable in (("windows_wsl_maintenance", "wsl_service_task"), ("windows_lan_bridge", "lan_bridge_ip_task")):
+    # Once the move of the distro is done, the play leaves the address task of the present account
+    # alone (test_wsl_move_start_tasks.py).
+    for role, variable, when in (("windows_wsl_maintenance", "wsl_service_task", ""),
+                                 ("windows_lan_bridge", "lan_bridge_ip_task", " and wsl_move_phase != 'done'")):
         tasks = yaml.safe_load((ROLES / role / "tasks/main.yml").read_text())
         named = [task for task in tasks if task.get("tnwks_win_scheduled_task", {}).get("name") == f"{{{{ {variable} }}}}"]
-        assert [task.get("when") for task in named] == ["wsl_start_unelevated | bool", "not (wsl_start_unelevated | bool)"]
+        assert [task.get("when") for task in named] == ["wsl_start_unelevated | bool" + when, "not (wsl_start_unelevated | bool)"]
         assert named[1]["tnwks_win_scheduled_task"]["state"] == "absent"
     compact = (ROLES / "windows_wsl_maintenance/files/Compact-WslVhdx.ps1").read_text()
     assert compact.count("'tnwks-lan-bridge-ip'") == 2, "paused, and started again at the end"
@@ -211,8 +224,8 @@ def test_the_logs_of_the_tasks_with_no_elevation_are_apart_from_their_scripts():
                 for item in task.get("loop", [task["tnwks_win_dir_acl"]]):
                     found[item["path"]] = item["writer"]
     assert found == {
-        "{{ wsl_watchdog_log_dir }}": "{{ wsl_maintenance_user }}", "{{ wsl_service_log_dir }}": "",
-        "{{ udp_relay_log_dir }}": "{{ udp_relay_user }}", "{{ lan_bridge_ip_dir }}": "{{ lan_bridge_user }}"}
+        "{{ wsl_watchdog_log_dir }}": "{{ wsl_maintenance_writers }}", "{{ wsl_service_log_dir }}": [],
+        "{{ udp_relay_log_dir }}": "{{ udp_relay_writers }}", "{{ lan_bridge_ip_dir }}": "{{ lan_bridge_writers }}"}
     defaults = yaml.safe_load((ROLES / "windows_wsl_maintenance/defaults/main.yml").read_text())
     assert defaults["wsl_service_log_dir"] != defaults["wsl_watchdog_log_dir"]
     service = (ROLES / "windows_wsl_maintenance/templates/wsl-service.xml.j2").read_text()
@@ -233,7 +246,8 @@ WRITER_RULES = sorted(DIR_RULES + [
 ])
 
 
-def run_dir_acl(have: str, writer: str = "adult1", check: bool = False, exists: bool = True, link: bool = False) -> dict:
+def run_dir_acl(have: str, writer: str = "adult1", check: bool = False, exists: bool = True, link: bool = False,
+                writers: list[str] | None = None) -> dict:
     """Run the logic of the module tnwks_win_dir_acl with the fakes of winacl.py."""
     text = MODULE.read_text()
     logic = text[text.index("# --- BEGIN logic"):text.index("# --- END logic")]
@@ -244,7 +258,8 @@ $script:Have = {have}
 $script:Exists = ${str(exists).lower()}
 $script:IsLink = ${str(link).lower()}
 $thrown = $null; $changed = $null
-try {{ $changed = Invoke-TnwksDirAcl -Path 'C:\\ProgramData\\x\\log' -Writer '{writer}' -Check ${str(check).lower()} }}
+$writer = @({", ".join(f"'{w}'" for w in (writers if writers is not None else [writer]))})
+try {{ $changed = Invoke-TnwksDirAcl -Path 'C:\\ProgramData\\x\\log' -Writer $writer -Check ${str(check).lower()} }}
 catch {{ $thrown = $_.Exception.Message }}
 $sets = @($script:Calls | Where-Object {{ $_ -is [hashtable] }} | ForEach-Object {{
     @{{ owner = $_.Acl.Owner; protected = $_.Acl.Protected; rules = @(Get-TestKeys $_.Acl.Rules) }} }})
@@ -280,6 +295,21 @@ def test_the_directory_module_sets_the_split_rule_and_changes_nothing_in_place()
 
 
 @needs_pwsh
+def test_a_check_run_reads_a_writer_that_does_not_exist_yet_as_a_change_and_an_apply_still_fails():
+    """An account that a task earlier in the play makes (the move of the distro) does not exist in a check run.
+    The check run gives changed and writes nothing; an apply with that name still fails, and writes nothing."""
+    for writers in (["missing-new"], ["adult1", "missing-new"]):
+        for have in (an_acl(WRITER_RULES), an_acl(DIR_RULES)):
+            checked = run_dir_acl(have, check=True, writers=writers)
+            assert checked["changed"] is True and checked["thrown"] is None and checked["sets"] == [], writers
+            applied = run_dir_acl(have, writers=writers)
+            assert applied["thrown"] and "could not be translated" in applied["thrown"], writers
+            assert applied["sets"] == [] and applied["changed"] is None, writers
+    # A writer that resolves is as before, in both runs.
+    assert run_dir_acl(an_acl(WRITER_RULES), check=True, writers=["adult1"])["changed"] is False
+
+
+@needs_pwsh
 def test_the_directory_module_makes_a_missing_directory_and_stops_at_a_link():
     missing = run_dir_acl(an_acl([]), exists=False)
     assert missing["calls"][:2] == ["Get-Item", "New-Item"] and missing["sets"][0]["rules"] == WRITER_RULES
@@ -304,8 +334,11 @@ def test_the_switch_is_off_by_default_and_on_for_site_2_first():
     group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
     assert group["wsl_start_unelevated"] is False
     assert group["wsl_start_unelevated_done"] is False
+    # Site 2 first, then site 1 with the move of its distro (test_wsl_move_role.py).
     switched = {name for name, data in windows_hosts().items() if data["wsl_start_unelevated"]}
-    assert switched == {"WSL-02"}
+    assert switched == {"WSL-02", "DESKTOP-HKE05KI"}
+    done = {name for name, data in windows_hosts().items() if data["wsl_start_unelevated_done"]}
+    assert done <= {"WSL-02"}
 
 
 def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet():
@@ -318,56 +351,80 @@ def test_the_play_refuses_the_switch_on_a_host_with_a_role_that_is_not_split_yet
     guard = first["ansible.builtin.assert"]
     for role in ROLES.glob("windows_*/tasks/*.yml"):
         assert "wsl_start_unelevated_done" not in role.read_text(), role
-    usb_default = yaml.safe_load((ROLES / "windows_usb_attach/defaults/main.yml").read_text())["usb_attach_bound_devices"]
 
     def passes(data: dict) -> bool:
         on = bool(data.get("wsl_start_unelevated"))
-        usb = data.get("usb_attach_bound_devices", usb_default)
-        return all([not on or len(usb) == 0, not on or not data.get("observability_storage_enabled", False)])
+        volume = data.get("observability_storage_enabled", False) and data.get("observability_storage_mount", "vhdx") != "file"
+        return not on or not volume
 
-    assert [condition.split(" or ")[0] for condition in guard["that"][:2]] == ["not (wsl_start_unelevated | bool)"] * 2
-    assert guard["that"][2] == "not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)"
+    assert guard["that"][0].split(" or ")[0] == "not (wsl_start_unelevated | bool)"
+    assert " ".join(guard["that"][0].split()) == ("not (wsl_start_unelevated | bool) or not (observability_storage_enabled | default(false) | bool) "
+                                                  "or (observability_storage_mount | default('vhdx')) == 'file'")
+    assert guard["that"][1] == "not (wsl_start_unelevated_done | bool) or (wsl_start_unelevated | bool)"
+    # The USB attach has its part with no elevation: the switch does not depend on it.
+    assert not any("usb_attach" in condition for condition in guard["that"])
     for name, data in windows_hosts().items():
         assert passes(data), name
         assert not data["wsl_start_unelevated_done"] or data["wsl_start_unelevated"], name
     site1 = windows_hosts()["DESKTOP-HKE05KI"]
-    assert not passes({**site1, "wsl_start_unelevated": True}), "site 1 needs the split of its two roles first"
+    # The monitoring data of site 1 is in the file on the distro disk (section 5.13): the mount
+    # task is disabled, so the guard lets the switch on there. With the VHDX, it would not.
+    assert guard["that"][0].endswith(" or (observability_storage_mount | default('vhdx')) == 'file'")
+    assert site1["observability_storage_mount"] == "file"
+    assert passes({**site1, "wsl_start_unelevated": True})
+    assert not passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "vhdx"})
+    assert not passes({**site1, "wsl_start_unelevated": True, "observability_storage_mount": "ready"})
 
 
-HOST_SWITCH = re.compile(r"\(hostvars\[wsl_distro_windows_host\]\.(\w+) \| default\(false\) \| bool\)")
+# Stand-ins for the encrypted values of a Windows host with the move of the distro on.
+MOVE_STANDINS = {"wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+                 "wsl_move_present_folder": "C:\\Users\\standin1\\wsl", "ansible_user": "standin-admin"}
 
 
-def fails_play(expression: str, host: dict) -> bool:
-    """Reads the default of wsl_host_check_write_test_fails_play for the given Windows
-    host: switches of that host, each with default(false) and bool, joined by "and".
-    Any other form stops the test, so a change of the form needs a change here."""
-    body = re.fullmatch(r"\{\{ (.*) \}\}", expression.strip())
-    assert body, expression
-    terms = body.group(1).split(" and ")
-    names = [HOST_SWITCH.fullmatch(term) for term in terms]
-    assert all(names), expression
-    return all(bool(host.get(name.group(1), False)) for name in names)
-
-
-def test_the_write_test_fails_the_play_only_where_the_start_step_is_done():
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_write_test_fails_the_play_only_where_the_done_switch_is_on(tmp_path):
     """The holding test: the write test fails the play of a distro whose Windows host
-    starts WSL with no elevation and has done the start step, and only there. A merge
-    of the switch alone leaves the plays green; a host with both on gets a play that
-    can fail."""
+    starts WSL with no elevation and has its done switch on, and only there. The done
+    switch is the phase done of the move of the distro on a host with the move on, and
+    the start step (wsl_start_unelevated_done) on another host. A merge of the switch
+    alone leaves the plays green; a host with both on gets a play that can fail.
+    Ansible itself renders the default, for each case and for each distro of the
+    inventory."""
     defaults = yaml.safe_load((ROLES / "wsl_host_check/defaults/main.yml").read_text())
+    group = yaml.safe_load((INVENTORY / "group_vars/windows_hosts.yml").read_text())
     expression = defaults["wsl_host_check_write_test_fails_play"]
+    hosts, want = {}, {}
     for switch in (False, True):
         for done in (False, True):
-            host = {"wsl_start_unelevated": switch, "wsl_start_unelevated_done": done}
-            assert fails_play(expression, host) == (switch and done), host
-    assert fails_play(expression, {}) is False
-    hosts = windows_hosts()
+            for move in (False, True):
+                for move_done in (False, True):
+                    name = f"case-{int(switch)}{int(done)}{int(move)}{int(move_done)}"
+                    hosts[name] = {"wsl_start_unelevated": switch, "wsl_start_unelevated_done": done, "wsl_move": move,
+                                   "wsl_move_done": move_done, "wsl_move_phase": group["wsl_move_phase"]}
+                    hosts[f"{name}-distro"] = {"wsl_distro_windows_host": name, "wsl_host_check_write_test_fails_play": expression}
+                    want[f"{name}-distro"] = switch and (move_done if move else done)
+    hosts["empty"] = {}
+    hosts["empty-distro"] = {"wsl_distro_windows_host": "empty", "wsl_host_check_write_test_fails_play": expression}
+    want["empty-distro"] = False
+    windows = windows_hosts()
     distros = yaml.safe_load((INVENTORY / "hosts.yml").read_text())["all"]["children"]["wsl_distros"]["hosts"]
     for distro in distros:
         own = yaml.safe_load((INVENTORY / f"host_vars/{distro}/main.yml").read_text())
         assert "wsl_host_check_write_test_fails_play" not in own, distro
-        host = hosts[own["wsl_distro_windows_host"]]
-        assert fails_play(expression, host) == bool(host["wsl_start_unelevated"] and host["wsl_start_unelevated_done"])
+        windows_host = own["wsl_distro_windows_host"]
+        host = windows[windows_host]
+        # Only the switches: the other values of a real host take values of hosts that are not here.
+        hosts[f"real-{windows_host}"] = {key: host[key] for key in (
+            "wsl_start_unelevated", "wsl_start_unelevated_done", "wsl_move", "wsl_move_done", "wsl_move_phase") if key in host}
+        hosts[f"real-{distro}"] = {"wsl_distro_windows_host": f"real-{windows_host}",
+                                   "wsl_host_check_write_test_fails_play": expression}
+        want[f"real-{distro}"] = bool(host["wsl_start_unelevated"]) and (
+            bool(host.get("wsl_move_done")) if host.get("wsl_move") else bool(host["wsl_start_unelevated_done"]))
+    # Both sites have the done switch of the move on: the write test can fail each distro play.
+    assert want["real-WSL-02-ubuntu"] is True and want["real-DESKTOP-HKE05KI-ubuntu"] is True
+    out = ansible_render.render(tmp_path, hosts, list(want), {"fails": "wsl_host_check_write_test_fails_play | bool"})
+    assert {name: values["fails"] for name, values in out.items()} == want
 
 
 # --- The scripts, in PowerShell ------------------------------------------------------------
@@ -424,6 +481,28 @@ function Test-Admin { $false }
     assert "set-service" not in lines and "start-service" not in lines
     assert not any(line.startswith("wsl") for line in lines)
     assert "tnwks-wsl-service repairs it" in (tmp_path / "watchdog.log").read_text()
+
+
+@needs_pwsh
+@pytest.mark.parametrize("skip", [True, False])
+def test_the_copy_for_a_standard_account_skips_the_check_of_the_wsl_service(tmp_path, skip):
+    """A batch logon of a standard account reads nothing from Get-Service. With
+    -SkipService the copy reads no service, runs its other checks and ends with 0;
+    without it, it stops with 1 before any wsl.exe."""
+    script = ROLES / "windows_wsl_maintenance/files/Watch-TnwksWsl.ps1"
+    result = pwsh(FAKES + r"""
+function wsl.exe { $global:Calls.Add('wsl ' + ($args -join ' ')); $global:LASTEXITCODE = 0; 'Ubuntu' }
+function Get-Service { $global:Calls.Add('get-service') }
+function Test-Admin { $false }
+& '""" + str(script) + "' -SkipGateway -SkipUsb -KeepAliveTask keepalive" + (" -SkipService" if skip else "")
+        + " -LogDir '" + str(tmp_path) + "'\n"
+        + "[Console]::Out.Write(\"exit $LASTEXITCODE`n\" + ($global:Calls -join \"`n\"))")
+    lines = result.stdout.splitlines()
+    if skip:
+        assert lines == ["exit 0", "wsl --list --running", "start keepalive"], result.stdout + result.stderr
+    else:
+        assert lines == ["exit 1", "get-service"], result.stdout + result.stderr
+        assert "aborting: WSL service unavailable." in (tmp_path / "watchdog.log").read_text()
 
 
 @needs_pwsh

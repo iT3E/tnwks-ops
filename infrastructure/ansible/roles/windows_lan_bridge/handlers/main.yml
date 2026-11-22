@@ -5,11 +5,15 @@
   ansible.windows.win_powershell:
     parameters:
       # With wsl_start_unelevated, the address task first: the sync reads its file.
-      Tasks: "{{ ([lan_bridge_ip_task] if wsl_start_unelevated | bool else []) + [lan_bridge_task] }}"
+      Tasks: "{{ (lan_bridge_ip_tasks if wsl_start_unelevated | bool else []) + [lan_bridge_task] }}"
+      # While the move of the distro runs, the window disables the address task
+      # of one account: the handler runs the one that is enabled.
+      SkipDisabled: "{{ wsl_move_phase == 'move' }}"
     script: |
       [CmdletBinding(SupportsShouldProcess)]
-      param([string[]]$Tasks)
+      param([string[]]$Tasks, [bool]$SkipDisabled)
       foreach ($Task in $Tasks) {
+          if ($SkipDisabled -and (Get-ScheduledTask -TaskName $Task).State -eq 'Disabled') { continue }
           if ($PSCmdlet.ShouldProcess($Task, 'run')) {
               Start-ScheduledTask -TaskName $Task
               $deadline = (Get-Date).AddMinutes(2)

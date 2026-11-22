@@ -43,6 +43,7 @@ desktop, a dead desktop takes it too: that is what the off-site kit is for.
 | Roles Anywhere CA key | `environments/prod/aws/rolesanywhere/ca-key.sops.yaml` | covered by the age keys |
 | `KOPIA_PASSWORD` (decrypts the kopiur backups) | Secret `kopiur-system/kopiur-repository` (SOPS) | **off-site kit** (the SOPS copy needs a working age key) |
 | `KOPIA_PASSWORD` of the agents repository (decrypts the backups of the agent trust domains, `kopiur-agents/`) | Secret `kopiur-system/kopiur-repository-agents` (SOPS) | **off-site kit** (the SOPS copy needs a working age key) |
+| `KOPIA_PASSWORD` of the finance repository (decrypts the backups of the finance trust domain, `kopiur-finance/`) | Secret `kopiur-system/kopiur-repository-agents-finance` (SOPS) | **off-site kit** (the SOPS copy needs a working age key) |
 | Terraform Cloud | the owner's TFC account | n/a |
 | AWS root / admin access | the owner | **off-site kit**: root MFA recovery |
 | Google account | the owner | its own recovery options |
@@ -221,3 +222,4 @@ Drill log:
 | 2026-11-02 | kopiur: newest Mealie snapshot into a scratch PVC | 171 files, checksums identical to the live volume |
 | 2026-11-05 | Two sites: the transcriber moved to homelab-wsl-02 with `task failover` (permanent) | 83 s down; 91 segments and 8 recordings on both, the 8 clip files copied; capture and MQTT up there |
 | 2026-11-05 | Two sites: Mealie to homelab-wsl-02 and back, twice | Second run (after the tool fixes): 54 s there, 47 s back, until the app answers. RPO 0: 67 recipes, 4 users and the schema revision identical at each step, all 171 config files on each side; Postgres timeline 1 → 5, the other side following as a replica every time |
+| 2026-11-17 | Firefly database: a recovery Cluster from its archive to the latest WAL, then a read-only check Job (`docs/apps/firefly.md`, "Restore the database") | The copy was healthy and the check ended in about 2 minutes after the merge, with `result=ok`: 81 tables, 60 migrations, rows in the three main tables, the newest journal from the day before. Not compared row for row with the live database |

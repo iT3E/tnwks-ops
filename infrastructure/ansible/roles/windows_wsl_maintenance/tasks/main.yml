@@ -30,22 +30,35 @@
 # made, so it logs to a directory of its own, where the account may make and
 # change files but not change the directory itself (tnwks_win_dir_acl). The
 # SYSTEM task logs to a directory that only SYSTEM and the Administrators may
-# change.
+# change. While the move of the distro runs, both accounts may write the log
+# of the watchdog (wsl_maintenance_writers).
 - name: Log directories of the watchdog and the WSL service task
   tnwks_win_dir_acl:
     path: "{{ item.path }}"
     writer: "{{ item.writer }}"
   loop:
-    - { path: "{{ wsl_watchdog_log_dir }}", writer: "{{ wsl_maintenance_user }}" }
-    - { path: "{{ wsl_service_log_dir }}", writer: "" }
+    - { path: "{{ wsl_watchdog_log_dir }}", writer: "{{ wsl_maintenance_writers }}" }
+    - { path: "{{ wsl_service_log_dir }}", writer: [] }
   loop_control:
     label: "{{ item.path }}"
   when: wsl_start_unelevated | bool
+
+# The move of the distro (wsl_move_phase): while it runs, the enabled state
+# of each start task is the window's (keep_task_enabled_state), and once it
+# is done the play leaves the tasks of the present account as the window
+# left them.
+- name: The move of the distro needs the start with no elevation
+  ansible.builtin.assert:
+    that: wsl_move_phase == 'off' or wsl_start_unelevated | bool
+    fail_msg: The tasks of the account that owns the distro run with no elevation, so wsl_move needs wsl_start_unelevated.
+    quiet: true
 
 - name: Watchdog task (every 5 min and at boot)
   tnwks_win_scheduled_task:
     name: "{{ wsl_watchdog_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'wsl-watchdog.xml.j2') }}"
+    keep_task_enabled_state: "{{ wsl_move_phase == 'move' }}"
+  when: wsl_move_phase != 'done'
 
 # The part of the watchdog that needs admin rights, as SYSTEM. SYSTEM's
 # wsl.exe can not see the distro of the user, and the script runs no wsl.exe
@@ -74,12 +87,73 @@
     name: "{{ wsl_keepalive_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'wsl-keepalive.xml.j2') }}"
     running: true
-  when: wsl_keepalive_enabled | bool
+    keep_task_enabled_state: "{{ wsl_move_phase == 'move' }}"
+  when: wsl_keepalive_enabled | bool and wsl_move_phase != 'done'
+
+# The copies for the account that owns the distro: registered as SYSTEM, which
+# sets a new random password on that account for each registration
+# (s4u_user). While the move runs, a new copy is disabled, and the window
+# enables it. Once it is done, the play keeps each copy enabled.
+- name: Watchdog and keepalive tasks of the account that owns the distro
+  tnwks_win_scheduled_task:
+    name: "{{ item.name }}"
+    xml: >-
+      {{ lookup('ansible.builtin.template', item.template)
+         | regex_replace('<Settings>', '<Settings><Enabled>false</Enabled>' if wsl_move_phase == 'move' else '<Settings>', count=1) }}
+    s4u_user: "{{ wsl_move_new_account }}"
+    s4u_description: "{{ wsl_move_new_description }}"
+    keep_task_enabled_state: "{{ wsl_move_phase == 'move' }}"
+    running: "{{ item.running }}"
+  vars:
+    wsl_maintenance_user: "{{ wsl_move_new_account }}"
+    wsl_watchdog_task_args: "{{ wsl_watchdog_args_account }}"
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  loop: >-
+    {{ [{'name': wsl_watchdog_task_account, 'template': 'wsl-watchdog.xml.j2', 'running': false}]
+       + ([{'name': wsl_keepalive_task_account, 'template': 'wsl-keepalive.xml.j2', 'running': true}]
+          if wsl_keepalive_enabled | bool else []) }}
+  loop_control:
+    label: "{{ item.name }}"
+  when: wsl_move_phase != 'off'
+  no_log: true
 
 - name: vhdx compaction task (on demand)
   tnwks_win_scheduled_task:
     name: "{{ vhdx_compact_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'vhdx-compact.xml.j2') }}"
+    keep_task_enabled_state: "{{ wsl_move_phase == 'move' }}"
+  when: wsl_move_phase != 'done'
+
+# The stop of WSL for the compaction of SYSTEM: a task of the account that
+# owns the distro, registered as SYSTEM, which sets a new random password on
+# that account (s4u_user). It has no trigger: only the compaction starts it.
+- name: Stop task of the account that owns the distro
+  tnwks_win_scheduled_task:
+    name: "{{ wsl_stop_task_account }}"
+    xml: "{{ lookup('ansible.builtin.template', 'wsl-stop.xml.j2') }}"
+    s4u_user: "{{ wsl_move_new_account }}"
+    s4u_description: "{{ wsl_move_new_description }}"
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  when: wsl_move_phase != 'off'
+  no_log: true
+
+- name: Compaction script of SYSTEM
+  ansible.windows.win_copy:
+    src: Compact-WslVhdxSystem.ps1
+    dest: '{{ vhdx_compact_dir }}\Compact-WslVhdxSystem.ps1'
+  when: wsl_move_phase == 'done'
+
+- name: vhdx compaction task of SYSTEM, once the move is done
+  tnwks_win_scheduled_task:
+    name: "{{ vhdx_compact_system_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'vhdx-compact-system.xml.j2') }}"
+  when: wsl_move_phase == 'done'
+  no_log: true
 
 - name: Superseded files are gone
   ansible.windows.win_file:

@@ -1,0 +1,97 @@
+---
+# The agent pod. No pod comes in: the gateway of the product listens on
+# loopback, the probes run in the pod, and default-deny (../../namespace.yaml)
+# denies ingress. Out, it reaches the model gateway, the sandbox gateway of
+# this trust domain, the trace collector, the fetch proxy of this trust
+# domain and two host names, the Telegram Bot API and the Brave Search API
+# (and DNS, through allow-dns). Nothing else: no model vendor, no update or
+# telemetry service, no other trust domain, no web site but through the
+# fetch proxy, and not the vault server (the MCP gateway stands between). It
+# also reaches the MCP gateway, for the vault route of main (task 3.37) and
+# the read routes of M7b.
+# The pilot's policy, for agents-main, with the fetch proxy and the MCP
+# gateway.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: agent
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent
+  egress:
+    # The model gateway (LiteLLM), with the key of this trust domain.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: litellm
+            app.kubernetes.io/instance: litellm
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "4000"
+              protocol: TCP
+    # The sandbox gateway of this trust domain: the sandboxes, and the SSH
+    # path to them (the gateway relays it).
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/instance: openshell
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # The traces of the product (OTLP over HTTP) to the collector.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: alloy
+            app.kubernetes.io/instance: alloy
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "4318"
+              protocol: TCP
+    # The MCP gateway (kubernetes/apps/ai/mcp-gateway), with the key of
+    # this agent: the vault tools of main (route main-vault) and the read
+    # tools of M7b (main-cluster, main-flux, main-terraform). The MCP
+    # client is in the gateway process of the product, so no sandbox gets
+    # this route.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    # The fetch proxy (../../fetch-proxy): the web fetch of the gateway,
+    # to any public site on port 443, as a CONNECT. The proxy checks the
+    # name and the address, and logs the host.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: fetch-proxy
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # The Telegram channel.
+    - toFQDNs:
+        - matchName: api.telegram.org
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # The web search of the gateway (the Brave plugin). The gateway process
+    # makes the call, not a sandbox.
+    - toFQDNs:
+        - matchName: api.search.brave.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

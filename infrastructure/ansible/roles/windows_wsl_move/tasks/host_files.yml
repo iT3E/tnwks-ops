@@ -1,0 +1,156 @@
+---
+# The copies on the host of the scripts and the configs of the procedure, and
+# its tasks, against the role's (plan task 10.25). While no window is started
+# (the last marker is '' or wayback-done), an apply copies each script and
+# writes each config that differs, and registers each task whose definition
+# differs. While a window is started, it changes none of them: a window never
+# runs another procedure than the one it started with. After the deletion of
+# the tasks of the present account (wsl_move_present_removed), the copies of
+# the scripts and the configs follow the role again: no window of that start
+# runs any more, and a way back after the deletion first registers the
+# deleted tasks again (docs/wsl/windows-ansible.md). The tasks stay as they
+# are. Then each copy on the host must have the SHA-256 of the role's: a copy
+# that differs stops the play.
+- name: The copies of the role, while no window is started or after the deletion
+  when: not wsl_move_copies_frozen | bool
+  block:
+    - name: The scripts of the procedure, from the role of the rehearsal of the move
+      ansible.windows.win_copy:
+        src: "{{ wsl_move_scripts_src }}/{{ item }}"
+        dest: '{{ wsl_move_dir }}\{{ item }}'
+      loop: "{{ wsl_move_scripts }}"
+
+    # The text of each config as its SHA-256 counts it (to_nice_json), as
+    # base64: a value that is JSON text would reach the host in another form.
+    - name: The configs of the scripts
+      ansible.windows.win_powershell:
+        parameters:
+          Path: '{{ wsl_move_dir }}\{{ item.key }}.json'
+          Content: "{{ item.value | to_nice_json | b64encode }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path, [string]$Content)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $bytes = [Convert]::FromBase64String($Content)
+          if ((Test-Path -LiteralPath $Path) -and
+              [Convert]::ToBase64String([IO.File]::ReadAllBytes($Path)) -eq [Convert]::ToBase64String($bytes)) { return }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Path, 'write the config')) { [IO.File]::WriteAllBytes($Path, $bytes) }
+      loop: "{{ wsl_move_configs | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      no_log: true
+
+    # An administrator registers an S4U task for another account only with
+    # its password, and the new account has none that anything keeps: the
+    # module sets a new random password at each registration (s4u_user), as
+    # SYSTEM.
+    - name: Tasks of the new account
+      tnwks_win_scheduled_task:
+        name: "{{ wsl_move_prefix }}-{{ task.key }}-{{ task.step }}"
+        xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
+        s4u_user: "{{ wsl_move_new_account }}"
+        s4u_description: "{{ wsl_move_new_description }}"
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      loop: "{{ wsl_move_task_list | selectattr('key', 'equalto', 'new') | list }}"
+      loop_control:
+        loop_var: task
+        label: "{{ task.key }}-{{ task.step }}"
+      when:
+        - not wsl_move_window_started | bool
+        - "'new' in wsl_move_sids"
+      no_log: true
+
+    # The present account registers its own tasks: no password, and the
+    # module resets none. Only while Ansible logs in as that account (before
+    # step 4); after it, the tasks stay as they are, and the read below
+    # checks that each one is there.
+    - name: Tasks of the present account, while Ansible logs in as it
+      tnwks_win_scheduled_task:
+        name: "{{ wsl_move_prefix }}-{{ task.key }}-{{ task.step }}"
+        xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
+      loop: "{{ wsl_move_task_list | selectattr('key', 'equalto', 'present') | list }}"
+      loop_control:
+        loop_var: task
+        label: "{{ task.key }}-{{ task.step }}"
+      when:
+        - not wsl_move_window_started | bool
+        - wsl_move_as_present | bool and not (wsl_move_present_removed | bool)
+      no_log: true
+
+    # After the deletion of the tasks of the present account, the boot task of
+    # the way back is not registered again (remove_present.yml).
+    - name: The window procedure and the boot task of the way back, tasks of SYSTEM
+      tnwks_win_scheduled_task:
+        name: "{{ wsl_move_window_task if item == 'window' else wsl_move_boot_task }}"
+        xml: "{{ lookup('ansible.builtin.template', 'system-task.xml.j2') }}"
+      loop: "{{ ['window'] if wsl_move_present_removed | bool else ['window', 'boot'] }}"
+      when: not wsl_move_window_started | bool
+
+- name: Read the window tasks of the present account
+  ansible.windows.win_powershell:
+    parameters:
+      Names: "{{ wsl_move_window_tasks.present.values() | list }}"
+    script: |
+      param([string[]]$Names)
+      $Ansible.Changed = $false
+      @($Names | Where-Object { -not (Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue) })
+  check_mode: false
+  register: wsl_move_present_tasks_read
+  when: not (wsl_move_present_removed | bool)
+
+- name: Each window task of the present account is there
+  ansible.builtin.assert:
+    that: wsl_move_present_tasks_read.output | length == 0
+    fail_msg: >-
+      The window tasks {{ wsl_move_present_tasks_read.output | join(', ') }} of the present account are not there, and
+      Ansible does not log in as that account, which registers them. Nothing more is changed.
+    quiet: true
+  when:
+    - not ansible_check_mode
+    - not (wsl_move_present_removed | bool)
+
+- name: Read the SHA-256 of each script and config on the host
+  ansible.windows.win_powershell:
+    parameters:
+      Paths: "{{ wsl_move_file_hashes.keys() | list }}"
+    script: |
+      param([string[]]$Paths)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $out = @{}
+      foreach ($path in $Paths) {
+          $out[$path] = if (Test-Path -LiteralPath $path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() } else { 'none' }
+      }
+      $out
+  check_mode: false
+  register: wsl_move_host_hashes
+
+- name: Each copy on the host that differs from the role's
+  vars:
+    have: "{{ wsl_move_host_hashes.output | last | default({}, true) }}"
+  ansible.builtin.set_fact:
+    wsl_move_files_differ: >-
+      {%- set out = [] -%}
+      {%- for path, sha in wsl_move_file_hashes.items() -%}
+      {%- if (have[path] | default('none')) != sha -%}
+      {%- set _ = out.append(path | win_basename) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+# A check run copied nothing, so where the apply writes the copies it reports
+# the copies that an apply would change, and stops on none of them.
+- name: Each copy on the host is the role's
+  ansible.builtin.assert:
+    that: wsl_move_files_differ | length == 0
+    fail_msg: >-
+      The copies {{ wsl_move_files_differ | join(', ') }} on the host are not the role's (SHA-256).
+      {{ 'A window is started with them, and no apply swaps them: end that window with the release that started it.'
+      if wsl_move_copies_frozen | bool else '' }} Nothing more is changed.
+    quiet: true
+  when: wsl_move_copies_frozen | bool or not ansible_check_mode

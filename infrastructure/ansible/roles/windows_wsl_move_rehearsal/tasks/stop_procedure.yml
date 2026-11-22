@@ -1,0 +1,28 @@
+---
+# Ends a running instance of the window task and of the boot task, and waits
+# for its end. A run ended this way skips its own end: the groups step that
+# follows takes the accounts out of every group.
+- name: No running window task or boot task
+  ansible.windows.win_powershell:
+    parameters:
+      Tasks: ["{{ wsl_move_rehearsal_window_task }}", "{{ wsl_move_rehearsal_boot_task }}"]
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string[]]$Tasks)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      foreach ($t in $Tasks) {
+          $task = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+          if (-not $task -or "$($task.State)" -ne 'Running') { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($t, 'stop the run')) {
+              Stop-ScheduledTask -TaskName $t
+              $deadline = (Get-Date).AddMinutes(2)
+              while ("$((Get-ScheduledTask -TaskName $t).State)" -eq 'Running' -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+              if ("$((Get-ScheduledTask -TaskName $t).State)" -eq 'Running') { throw "$t still runs. Nothing more is changed." }
+          }
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM

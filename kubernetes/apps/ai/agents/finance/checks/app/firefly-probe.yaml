@@ -1,0 +1,304 @@
+---
+# The probe of the finance app (scripts/platform_checks.py firefly-probe, in
+# kubernetes/apps/ai/agents/checks/app). Both ports of the proxy of the app:
+# the write port, called straight as the MCP server calls it, and the read
+# port from a sandbox made with the sandbox policy and the image of the
+# agent's sandboxes. An allowed read reaches the app (a 401 with the
+# placeholder token, an answer with the real one); each delete and each call
+# off the allow list is refused. It holds no token and changes no data. The
+# MCP server is behind the MCP gateway now, and the gateway probe tests that
+# path (mcp-gateway-probe.yaml). A failed run alerts as the other checks do
+# (AgentPlatformCronJobFailed, AgentPlatformCheckStale).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-check-firefly-probe
+  labels: &labels
+    app.kubernetes.io/name: platform-checks
+    app.kubernetes.io/component: firefly-probe
+spec:
+  schedule: "17 5 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # A finished Job goes after 26 hours, also a failed one. That is a day
+      # and room for the next run to end, so the alert and the AI board see
+      # a failure until a newer run ends, and KubeJobFailed then clears by
+      # itself (docs/apps/agent-platform.md, "A failed Job").
+      ttlSecondsAfterFinished: 93600
+      # The worst case, in seconds: the direct calls 130 (thirteen, 10
+      # each), then as the sandbox probe less its pod reads (1350). That is
+      # 1480.
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          restartPolicy: Never
+          serviceAccountName: platform-checks
+          # Removes a Sandbox record that a run left (rbac.yaml, and the
+          # patch of kustomization.yaml).
+          automountServiceAccountToken: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # The same as in platform-check-probe.
+            - name: fetch-cli
+              image: &python docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+              command:
+                - python3
+                - -c
+                - |
+                  import hashlib, io, os, tarfile, urllib.request
+                  url = ("https://github.com/NVIDIA/OpenShell/releases/download/v%s/"
+                         "openshell-x86_64-unknown-linux-musl.tar.gz" % os.environ["CLI_VERSION"])
+                  data = urllib.request.urlopen(url, timeout=120).read()
+                  got = hashlib.sha256(data).hexdigest()
+                  if got != os.environ["CLI_SHA256"]:
+                      raise SystemExit("openshell CLI checksum mismatch: " + got)
+                  with tarfile.open(fileobj=io.BytesIO(data)) as t:
+                      member = t.getmember("openshell")
+                      with open("/tools/openshell", "wb") as f:
+                          f.write(t.extractfile(member).read())
+                  os.chmod("/tools/openshell", 0o755)
+                  print("openshell CLI", os.environ["CLI_VERSION"], "ok")
+              env:
+                - name: CLI_VERSION
+                  value: "0.1.7"
+                - name: CLI_SHA256
+                  value: "5c1adfcae797eac9b2e8b9280c66c1f75e4e84d9e31ce6938c5b994314ef6098"
+              securityContext: &containerSecurity
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources: &resources
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: tools
+                  mountPath: /tools
+          containers:
+            - name: check
+              image: *python
+              command:
+                - python3
+                - /scripts/platform_checks.py
+                - firefly-probe
+              env:
+                - name: OWN_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: TRUST_DOMAIN_NAMESPACES
+                  value: agents-main agents-finance agents-workflows agents-pilot
+                - name: HOME
+                  value: /tmp/home
+                - name: XDG_CONFIG_HOME
+                  value: /tmp/home/.config
+                - name: XDG_STATE_HOME
+                  value: /tmp/home/.local/state
+                - name: OPENSHELL_GATEWAY
+                  value: own
+                - name: NO_COLOR
+                  value: "1"
+                # Its own sandbox name, so that it never meets the sandbox
+                # probe's.
+                - name: PROBE_SANDBOX
+                  value: firefly-probe
+                # The image of the agent's sandboxes (the openshell entry of
+                # ../../agent/config/openclaw.json): the binaries of the
+                # sandbox policy are its python3.
+                - name: PROBE_IMAGE
+                  value: docker.io/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+                - name: SANDBOX_POLICY
+                  value: /policy/sandbox-policy.yaml
+                # The read port, as the sandboxes use it, and the write port,
+                # as the MCP server uses it.
+                - name: APP_PROXY
+                  value: http://firefly-proxy.agents-finance.svc.cluster.local:8081
+                - name: APP_PROXY_WRITE
+                  value: http://firefly-proxy.agents-finance.svc.cluster.local:8080
+              securityContext: *containerSecurity
+              resources: *resources
+              volumeMounts:
+                - name: tools
+                  mountPath: /tools
+                  readOnly: true
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: policy
+                  mountPath: /policy
+                  readOnly: true
+                - name: client-tls
+                  mountPath: /client-tls
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tools
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+            - name: scripts
+              configMap:
+                name: platform-checks
+            - name: policy
+              configMap:
+                name: firefly-probe-policy
+            # The client certificate of this trust domain's sandbox gateway
+            # (cert-manager), the one its agent pod uses.
+            - name: client-tls
+              secret:
+                secretName: openshell-client-tls
+---
+# The probe of the finance app may call the proxy of the app on both ports
+# (../../firefly-mcp/app/networkpolicy.yaml lets this pod in, and no other
+# check pod).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: platform-check-firefly-probe
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-checks
+      app.kubernetes.io/component: firefly-probe
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: firefly-proxy
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+            - port: "8081"
+              protocol: TCP
+---
+# The DNS check of the pods of the finance app (scripts/platform_checks.py
+# dns). The MCP server and the proxy are out of the namespace's DNS rule for
+# any name (../../namespace.yaml, the label agents.home.arpa/dns), and each
+# has a rule for one name. This pod is set up the same way, with the label,
+# ndots 1 and a rule for the name of the proxy, so it tests the same
+# mechanism: that name resolves, and an outside name, a cluster name off its
+# rule and the API server's name do not. It can not run as the identity of
+# the MCP pod: a pod with that pod's labels would be an endpoint of its
+# Service.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-check-firefly-dns
+  labels:
+    app.kubernetes.io/name: platform-checks
+    app.kubernetes.io/component: firefly-dns
+spec:
+  schedule: "27 5 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # A finished Job goes after 26 hours, also a failed one. That is a day
+      # and room for the next run to end, so the alert and the AI board see
+      # a failure until a newer run ends, and KubeJobFailed then clears by
+      # itself (docs/apps/agent-platform.md, "A failed Job").
+      ttlSecondsAfterFinished: 93600
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: platform-checks
+            app.kubernetes.io/component: firefly-dns
+            agents.home.arpa/dns: own-rule
+        spec:
+          restartPolicy: Never
+          serviceAccountName: platform-checks
+          automountServiceAccountToken: false
+          dnsConfig:
+            options:
+              - name: ndots
+                value: "1"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: check
+              image: docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+              command: ["python3", "/scripts/platform_checks.py", "dns"]
+              env:
+                - name: OWN_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: TRUST_DOMAIN_NAMESPACES
+                  value: agents-finance
+                - name: DNS_ALLOWED
+                  value: firefly-proxy.agents-finance.svc.cluster.local
+                - name: DNS_REFUSED
+                  value: example.com firefly.production.svc.cluster.local kubernetes.default.svc.cluster.local
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: platform-checks
+---
+# The DNS rule of the DNS check: one name, as the pods of the finance app
+# have (../../firefly-mcp/app/networkpolicy.yaml).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: platform-check-firefly-dns
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-checks
+      app.kubernetes.io/component: firefly-dns
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: firefly-proxy.agents-finance.svc.cluster.local

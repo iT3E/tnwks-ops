@@ -1,0 +1,38 @@
+---
+# The first step of each removal, whatever the state: A and B leave every
+# local group but Users. Each leave is written to the log of the procedure
+# (mode removal), so the check play shows it.
+- name: The accounts of the rehearsal leave every group but Users
+  ansible.windows.win_powershell:
+    parameters:
+      Names: "{{ wsl_move_rehearsal_accounts.values() | map(attribute='name') | list }}"
+      Log: "{{ wsl_move_rehearsal_log_file }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string[]]$Names, [string]$Log)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $left = @()
+      foreach ($name in $Names) {
+          $user = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
+          if (-not $user) { continue }
+          foreach ($g in @(Get-LocalGroup)) {
+              if ($g.SID.Value -eq 'S-1-5-32-545') { continue }
+              $members = @()
+              try { $members = @(Get-LocalGroupMember -SID $g.SID.Value | ForEach-Object { $_.SID.Value }) }
+              catch { $members = @(([ADSI]"WinNT://./$($g.Name),group").Invoke('Members') | ForEach-Object {
+                  $raw = [byte[]]$_.GetType().InvokeMember('objectSid', 'GetProperty', $null, $_, $null)
+                  (New-Object Security.Principal.SecurityIdentifier $raw, 0).Value }) }
+              if ($members -notcontains $user.SID.Value) { continue }
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess("$name in $($g.Name)", 'remove from the group')) {
+                  Remove-LocalGroupMember -SID $g.SID.Value -Member $user.SID.Value
+                  if (Test-Path -LiteralPath (Split-Path -Parent $Log)) {
+                      [IO.File]::AppendAllText($Log, ('{0} removal group: {1} left {2}{3}' -f [DateTime]::UtcNow.ToString('o'), $name, $g.Name, "`r`n"))
+                  }
+              }
+              $left += "$name left $($g.Name)"
+          }
+      }
+      $left
+  register: wsl_move_rehearsal_groups_out

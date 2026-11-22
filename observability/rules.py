@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from inventory import inventory
+from inventory import AI_GOOD_RESULTS, AI_RESTORE_CHECKS, AI_RESULT_WINDOWS, AI_SCHEDULES, inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 # The SLO window (kubernetes/apps/monitoring/pyrra/app/slos.yaml): inside the
@@ -59,6 +59,7 @@ def records():
             ' or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))'),
         **objective_records(fresh),
         **other_database_records(),
+        **ai_records(),
         **network_records(),
         # Each site's collector reaches the shared-VIP names the way a client does
         # (router DNS, verified TLS, the ingress routing the host). A pod reaches
@@ -240,6 +241,142 @@ def other_database_records():
             f" or ({expected} * 0 + 1) and on ({key}) (({ready} >= {desired}) > 0)"
             f" or ({expected} * 0 + 3) and on ({key}) ({ready} < {desired})"
             f" or ({expected} * 0)"),
+    }
+
+
+def ai_records():
+    """The AI domain (inventory.py AI_*, docs/apps/agent-platform.md): one state
+    for each declared part, scheduled check, result line and backup. A row whose
+    source is gone stays, as Unknown (0); a part a site does not run is Not
+    applicable (5) there."""
+    part = "k8s_cluster, trust_domain, part, namespace, kind, workload"
+    key = "k8s_cluster, namespace, workload"
+    expected = f"max by ({part}) (homelab_expected_ai_part_info)"
+    absent = f"max by ({part}) (homelab_absent_ai_part_info)"
+
+    def per_workload(sts, deploy):
+        return (f'max by ({key}) (label_replace({sts}, "workload", "$1", "statefulset", "(.+)")'
+                f' or label_replace({deploy}, "workload", "$1", "deployment", "(.+)"))')
+
+    desired = per_workload("kube_statefulset_replicas", "kube_deployment_spec_replicas")
+    ready = per_workload("kube_statefulset_status_replicas_ready", "kube_deployment_status_replicas_available")
+
+    # A scheduled check: its last good run against its window (the objective).
+    # The namespaces are the ones of the declared schedules (inventory.py
+    # AI_SCHEDULES), so a schedule in a new namespace is matched too: a fixed
+    # list left litellm-key-check (namespace ai) at no evidence.
+    job = "k8s_cluster, namespace, cronjob"
+    scope = f'namespace=~"{"|".join(sorted({item["namespace"] for item in AI_SCHEDULES}))}"'
+    schedule = "max by (k8s_cluster, trust_domain, namespace, cronjob) (homelab_ai_schedule_objective_seconds)"
+    success = f"max by ({job}) (kube_cronjob_status_last_successful_time{{{scope}}})"
+    # The start of the newest failed Job of each CronJob (AgentPlatformCronJobFailed).
+    failed = (f"max by ({job}) (kube_job_status_start_time{{{scope}}}"
+              f" * on (k8s_cluster, namespace, job_name) group_left (cronjob)"
+              f' max by (k8s_cluster, namespace, job_name, cronjob) (label_replace(kube_job_owner{{{scope},owner_kind="CronJob"}},'
+              f' "cronjob", "$1", "owner_name", "(.+)"))'
+              f' and on (k8s_cluster, namespace, job_name) (kube_job_status_failed{{{scope},reason!=""}} > 0))')
+    left = f"({schedule} - on ({job}) group_left () (time() - {success}))"
+
+    # A result line: the newest good line against the newest other one, in its window.
+    result = "k8s_cluster, trust_domain, check"
+    expected_result = f"max by ({result}) (homelab_expected_ai_result_info)"
+    good = "|".join(AI_GOOD_RESULTS)
+
+    def lines(match):
+        return " or ".join(
+            f'max by ({result}) (label_replace(max_over_time(homelab_agent_platform_result_timestamp_seconds'
+            f'{{pod_namespace=~"agents-.+",check="{check}",result{match}"{good}"}}[{window}]),'
+            f' "trust_domain", "$1", "pod_namespace", "agents-(.+)"))'
+            for check, window in AI_RESULT_WINDOWS.items())
+
+    newest_good, newest_bad = f"({lines('=~')})", f"({lines('!~')})"
+
+    backup = "k8s_cluster, trust_domain, namespace, policy"
+    policy = "k8s_cluster, namespace, policy"
+    objective = f"max by ({backup}) (homelab_ai_backup_objective_seconds)"
+    restore = "|".join(AI_RESTORE_CHECKS)
+    return {
+        # 5 absent by design, 4 scaled to zero, 1 every replica ready, 2 some,
+        # 3 none, 0 no kube-state-metrics series (the workload is gone).
+        "homelab:ai_part_state": (
+            f"({absent} * 0 + 5)"
+            f" or ({expected} * 0 + 4) and on ({key}) ({desired} == 0)"
+            f" or ({expected} * 0 + 1) and on ({key}) (({ready} >= {desired}) > 0)"
+            f" or ({expected} * 0 + 2) and on ({key}) (({ready} < {desired}) and on ({key}) ({ready} > 0))"
+            f" or ({expected} * 0 + 3) and on ({key}) ({ready} < {desired})"
+            f" or ({expected} * 0)"),
+        # 4 suspended, 3 the newest run failed after the last good one (or no
+        # run was good), 1 a good run in its window, 2 the last good run is
+        # older, 0 no evidence.
+        "homelab:ai_schedule_state": (
+            f"({schedule} * 0 + 4) and on ({job}) (max by ({job}) (kube_cronjob_spec_suspend{{{scope}}}) == 1)"
+            f" or ({schedule} * 0 + 3) and on ({job}) (({failed} > {success}) or ({failed} unless on ({job}) {success}))"
+            f" or (({left} >= 0) * 0 + 1)"
+            f" or (({left} < 0) * 0 + 2)"
+            f" or ({schedule} * 0)"),
+        # 3 the newest line in the window is not good, 1 it is, 0 no line.
+        "homelab:ai_result_state": (
+            f"({expected_result} * 0 + 3) and on ({result}) (({newest_bad} > {newest_good})"
+            f" or ({newest_bad} unless on ({result}) {newest_good}))"
+            f" or ({expected_result} * 0 + 1) and on ({result}) {newest_good}"
+            f" or ({expected_result} * 0)"),
+        "homelab:ai_backup_age_seconds": (
+            f"((time() - max by ({policy}) (kopiur_policy_last_backup_success_timestamp_seconds)) >= 0)"
+            f" * on ({policy}) group_right () (0 * {objective} + 1)"),
+        # 1 within the recovery point objective, 3 past it, 0 no backup evidence.
+        "homelab:ai_backup_state": (
+            f"((homelab:ai_backup_age_seconds <= bool on ({backup}) {objective})"
+            f" + 3 * (homelab:ai_backup_age_seconds > bool on ({backup}) {objective}))"
+            f" or ({objective} * 0)"),
+        # A restore test runs by hand, now and then, and its result line lives
+        # 5 minutes as a series. Its samples stay in the local history (15
+        # days), so this keeps the time of the newest line of each result for
+        # that long. (A rule that read its own last value would keep it longer,
+        # but contracts.py refuses a rule that reads itself.)
+        "homelab:ai_restore_result_timestamp_seconds": (
+            f"max by (k8s_cluster, trust_domain, check, result) (label_replace(max_over_time("
+            f'homelab_agent_platform_result_timestamp_seconds{{pod_namespace=~"agents-.+",check=~"{restore}"}}[15d]),'
+            f' "trust_domain", "$1", "pod_namespace", "agents-(.+)"))'),
+        **plan_records(),
+    }
+
+
+# The use of the Claude plan (docs/apps/agent-platform.md, "Plan use"). The
+# model bridge logs a plan_limit line for a window only when its use, status or
+# reset moves, and the gauges of Vector expire one hour after their last line.
+# So each record reads the newest reading of the last 8 days (one week window
+# and a day). The plan is one account: the gauges carry the window only, and a
+# restart of the Vector pod gives a series of a new pod, so the newest reading
+# of all pods wins.
+PLAN_HELD = "8d"
+# A reading with no reset time counts for 6 hours (more than the five hour window).
+PLAN_UNKNOWN_RESET_SECONDS = 6 * 3600
+
+
+def plan_records():
+    window = "k8s_cluster, window"
+    pod = "k8s_cluster, window, namespace, pod"
+    observed = f"last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[{PLAN_HELD}])"
+
+    def newest(name):
+        return (f"max by ({window}) (last_over_time({name}[{PLAN_HELD}]) and on ({pod})"
+                f" ({observed} == on ({window}) group_left () homelab:ai_plan_observed_timestamp_seconds))")
+
+    reset = newest("homelab_model_bridge_plan_reset_timestamp_seconds")
+    # A reading counts until its window resets, or for 6 hours when the line gave
+    # no reset time. After that the window is new, and its use is not known.
+    current = (f"(({reset}) > time()) or ((({reset}) <= 0) and on ({window})"
+               f" ((time() - homelab:ai_plan_observed_timestamp_seconds) < {PLAN_UNKNOWN_RESET_SECONDS}))")
+    return {
+        "homelab:ai_plan_observed_timestamp_seconds": f"max by ({window}) ({observed})",
+        # The share used of the window (1 is the limit), while the reading counts.
+        "homelab:ai_plan_utilization_ratio": (
+            f"({newest('homelab_model_bridge_plan_utilization_ratio')} >= 0) and on ({window}) ({current})"),
+        "homelab:ai_plan_reset_timestamp_seconds": f"{reset} > time()",
+        # The status as a state: 1 allowed, 2 allowed_warning (near the limit),
+        # 3 rejected (at the limit), 0 a status that the bridge did not know.
+        "homelab:ai_plan_state": (
+            f"clamp_min({newest('homelab_model_bridge_plan_status')} + 1, 0) and on ({window}) ({current})"),
     }
 
 
@@ -1275,6 +1412,7 @@ def fixtures():
          ]},
         *objective_fixtures(),
         *other_database_fixtures(),
+        *ai_fixtures(),
         *house_fixtures(),
         *host_fixtures(),
         *capacity_fixtures(),
@@ -2316,6 +2454,179 @@ def other_database_fixtures():
              {"expr": "homelab:other_database_state", "eval_time": "5m", "exp_samples": [
                  {"labels": f'homelab:other_database_state{{k8s_cluster="one",namespace="db",workload="{w}",engine="e",app="a"}}', "value": v}
                  for w, v in (("down", 3), ("missing", 0), ("ok", 1), ("standby", 4))]},
+         ]},
+    ]
+
+
+def ai_fixtures():
+    """The AI states (ai_records): each state of a part, a scheduled check, a result
+    line and a backup, a row whose source is gone, and a restore result kept past
+    the 5 minutes of its line. Then the request panel of the AI board, which leaves
+    out the GET with 405 of a client start."""
+    from dashboards.boards.ai import mcp
+    part = ('homelab_%s_ai_part_info{k8s_cluster="%s",observer_cluster="%s",trust_domain="main",part="%s",'
+            'namespace="agents-main",kind="%s",workload="%s"}')
+    out = 'homelab:ai_part_state{k8s_cluster="%s",trust_domain="main",part="%s",namespace="agents-main",kind="%s",workload="%s"}'
+    kube = {"deployment": ("kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"),
+            "statefulset": ("kube_statefulset_replicas", "kube_statefulset_status_replicas_ready")}
+    parts = (("ok", "deployment", 1, 1, 1), ("some", "statefulset", 2, 1, 2), ("down", "deployment", 1, 0, 3),
+             ("zero", "deployment", 0, 0, 4))
+    job = 'namespace="agents-main",cronjob="%s"'
+    schedule = 'homelab_ai_schedule_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",%s}'
+    result = 'homelab_agent_platform_result_timestamp_seconds{k8s_cluster="one",pod_namespace="agents-%s",app="agent",check="%s",result="%s"}'
+    expected_result = 'homelab_expected_ai_result_info{k8s_cluster="one",observer_cluster="one",trust_domain="%s",check="%s"}'
+    backup = 'homelab_ai_backup_objective_seconds{k8s_cluster="one",observer_cluster="one",trust_domain="main",namespace="agents-main",policy="%s"}'
+    requests = 'agentgateway_requests_total{k8s_cluster="one",route="default/finance",method="%s",status="%s"}'
+    key_check = 'namespace="ai",cronjob="litellm-key-check"'
+    plan = ('homelab_model_bridge_plan_%s{k8s_cluster="one",namespace="monitoring",window="%s",'
+            'pod="vector-agent-platform-%s"}')
+    return [
+        {"name": "AI parts: ready, some, none, zero replicas, gone, and absent by design", "interval": "1m",
+         "input_series": [
+             *[{"series": part % ("expected", "one", observer, name, kind, name), "values": "1+0x10"}
+               for name, kind, *_ in parts for observer in ("one", "two")],
+             *[{"series": f'{kube[kind][0]}{{k8s_cluster="one",namespace="agents-main",{kind}="{name}"}}', "values": f"{desired}+0x10"}
+               for name, kind, desired, _, _ in parts],
+             *[{"series": f'{kube[kind][1]}{{k8s_cluster="one",namespace="agents-main",{kind}="{name}"}}', "values": f"{ready}+0x10"}
+               for name, kind, _, ready, _ in parts],
+             # Declared, but kube-state-metrics has no such workload: it stays a row.
+             {"series": part % ("expected", "one", "one", "gone", "deployment", "gone"), "values": "1+0x10"},
+             # Site two does not run it by design.
+             {"series": part % ("absent", "two", "one", "ok", "deployment", "ok"), "values": "1+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:ai_part_state", "eval_time": "5m", "exp_samples": [
+                 *[{"labels": out % ("one", name, kind, name), "value": state} for name, kind, _, _, state in parts],
+                 {"labels": out % ("one", "gone", "deployment", "gone"), "value": 0},
+                 {"labels": out % ("two", "ok", "deployment", "ok"), "value": 5},
+             ]},
+         ]},
+        {"name": "AI scheduled checks: good, stale, failed after a good run, never good, suspended, no evidence",
+         "interval": "1m",
+         "input_series": [
+             *[{"series": schedule % (job % name), "values": "3600+0x110"}
+               for name in ("good", "stale", "failed", "never", "paused", "unseen", "recovered")],
+             *[{"series": f'kube_cronjob_status_last_successful_time{{k8s_cluster="one",{job % name}}}', "values": f"{time}+0x110"}
+               for name, time in (("good", 5000), ("stale", 100), ("failed", 1000), ("paused", 5000), ("recovered", 5000))],
+             {"series": f'kube_cronjob_spec_suspend{{k8s_cluster="one",{job % "paused"}}}', "values": "1+0x110"},
+             *[series for name in ("failed", "never", "recovered") for series in (
+                 {"series": f'kube_job_owner{{k8s_cluster="one",namespace="agents-main",job_name="{name}-1",owner_kind="CronJob",owner_name="{name}"}}',
+                  "values": "1+0x110"},
+                 {"series": f'kube_job_status_start_time{{k8s_cluster="one",namespace="agents-main",job_name="{name}-1"}}',
+                  "values": "4000+0x110"},
+                 {"series": f'kube_job_status_failed{{k8s_cluster="one",namespace="agents-main",job_name="{name}-1",reason="BackoffLimitExceeded"}}',
+                  "values": "1+0x110"})],
+             # A failed run of a CronJob in a namespace that is not the domain's.
+             {"series": 'kube_job_status_start_time{k8s_cluster="one",namespace="apps",job_name="good-1"}', "values": "5500+0x110"},
+             # A declared schedule outside agents-* and monitoring (the key check of the model gateway).
+             {"series": schedule.replace('trust_domain="main"', 'trust_domain="shared"') % key_check,
+              "values": "86400+0x110"},
+             {"series": f'kube_cronjob_status_last_successful_time{{k8s_cluster="one",{key_check}}}', "values": "5000+0x110"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:ai_schedule_state", "eval_time": "100m", "exp_samples": [
+                 *[{"labels": f'homelab:ai_schedule_state{{k8s_cluster="one",trust_domain="main",{job % name}}}', "value": value}
+                   for name, value in (("good", 1), ("stale", 2), ("failed", 3), ("never", 3), ("paused", 4),
+                                       ("unseen", 0), ("recovered", 1))],
+                 {"labels": 'homelab:ai_schedule_state{k8s_cluster="one",trust_domain="shared",namespace="ai",cronjob="litellm-key-check"}',
+                  "value": 1}]},
+         ]},
+        {"name": "AI result lines: the newest line in its window decides, no line is Unknown", "interval": "1m",
+         "input_series": [
+             *[{"series": expected_result % (domain, check), "values": "1+0x60"}
+               for domain, check in (("pilot", "instruction-check"), ("main", "instruction-check"),
+                                     ("finance", "instruction-check"), ("main", "memory-index"),
+                                     ("finance", "automations-sync"), ("workflows", "app-drift"))],
+             {"series": result % ("pilot", "instruction-check", "first"), "values": "1000+0x60"},
+             {"series": result % ("main", "instruction-check", "ok"), "values": "1000+0x60"},
+             {"series": result % ("main", "instruction-check", "failed"), "values": "2000+0x60"},
+             {"series": result % ("finance", "instruction-check", "failed"), "values": "1000+0x60"},
+             {"series": result % ("finance", "instruction-check", "ok"), "values": "2000+0x60"},
+             {"series": result % ("finance", "automations-sync", "failed"), "values": "3000+0x60"},
+             # A good line 55 minutes ago is outside the 30 minutes of app-drift.
+             {"series": result % ("workflows", "app-drift", "ok"), "values": "100+0x5"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:ai_result_state", "eval_time": "60m", "exp_samples": [
+                 {"labels": f'homelab:ai_result_state{{k8s_cluster="one",trust_domain="{domain}",check="{check}"}}', "value": value}
+                 for domain, check, value in (("pilot", "instruction-check", 1), ("main", "instruction-check", 3),
+                                              ("finance", "instruction-check", 1), ("main", "memory-index", 0),
+                                              ("finance", "automations-sync", 3), ("workflows", "app-drift", 0))]},
+         ]},
+        {"name": "AI backups: within the objective, past it, no evidence", "interval": "1m",
+         "input_series": [
+             *[{"series": backup % name, "values": "100+0x10"} for name in ("fresh", "old", "none")],
+             {"series": 'kopiur_policy_last_backup_success_timestamp_seconds{k8s_cluster="one",namespace="agents-main",policy="fresh"}', "values": "550+0x10"},
+             {"series": 'kopiur_policy_last_backup_success_timestamp_seconds{k8s_cluster="one",namespace="agents-main",policy="old"}', "values": "100+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:ai_backup_state", "eval_time": "10m", "exp_samples": [
+                 {"labels": f'homelab:ai_backup_state{{k8s_cluster="one",trust_domain="main",namespace="agents-main",policy="{name}"}}', "value": value}
+                 for name, value in (("fresh", 1), ("old", 3), ("none", 0))]},
+             {"expr": "homelab:ai_backup_age_seconds", "eval_time": "10m", "exp_samples": [
+                 {"labels": f'homelab:ai_backup_age_seconds{{k8s_cluster="one",trust_domain="main",namespace="agents-main",policy="{name}"}}', "value": value}
+                 for name, value in (("fresh", 50), ("old", 500))]},
+         ]},
+        {"name": "AI plan use: the newest reading of any pod, until its window resets", "interval": "10m",
+         "input_series": [
+             # Pod a read the five hour window at 0, then Vector restarted, and
+             # pod b read it at 2h (near the limit). Each gauge lives one hour.
+             *[{"series": plan % (gauge, "five_hour", "a"), "values": f"{value}x6 _x30"}
+               for gauge, value in (("utilization_ratio", 0.3), ("reset_timestamp_seconds", 18000),
+                                    ("status", 0), ("observed_timestamp_seconds", 0))],
+             *[{"series": plan % (gauge, "five_hour", "b"), "values": f"_x12 {value}x6 _x20"}
+               for gauge, value in (("utilization_ratio", 0.6), ("reset_timestamp_seconds", 18000),
+                                    ("status", 1), ("observed_timestamp_seconds", 7200))],
+             # The week, read once at 0, resets in 10 days.
+             *[{"series": plan % (gauge, "seven_day", "a"), "values": f"{value}x6 _x30"}
+               for gauge, value in (("utilization_ratio", 0.1), ("reset_timestamp_seconds", 864000),
+                                    ("status", 0), ("observed_timestamp_seconds", 0))],
+             # A window at its limit with no share and no reset time: it counts
+             # for 6 hours.
+             *[{"series": plan % (gauge, "seven_day_opus", "a"), "values": f"{value}x6 _x30"}
+               for gauge, value in (("utilization_ratio", -1), ("reset_timestamp_seconds", -1),
+                                    ("status", 2), ("observed_timestamp_seconds", 0))],
+         ], "promql_expr_test": [
+             {"expr": "homelab:ai_plan_utilization_ratio", "eval_time": "4h", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="five_hour"}', "value": 0.6},
+                 {"labels": 'homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day"}', "value": 0.1}]},
+             {"expr": "homelab:ai_plan_state", "eval_time": "4h", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_state{k8s_cluster="one",window="five_hour"}', "value": 2},
+                 {"labels": 'homelab:ai_plan_state{k8s_cluster="one",window="seven_day"}', "value": 1},
+                 {"labels": 'homelab:ai_plan_state{k8s_cluster="one",window="seven_day_opus"}', "value": 3}]},
+             {"expr": "homelab:ai_plan_reset_timestamp_seconds", "eval_time": "4h", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="five_hour"}', "value": 18000},
+                 {"labels": 'homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="seven_day"}', "value": 864000}]},
+             {"expr": "homelab:ai_plan_observed_timestamp_seconds", "eval_time": "4h", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="five_hour"}', "value": 7200},
+                 {"labels": 'homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="seven_day"}', "value": 0},
+                 {"labels": 'homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="seven_day_opus"}', "value": 0}]},
+             # After 5h the five hour window is new; after 6h the reading with
+             # no reset time no longer counts. The week stays.
+             {"expr": "homelab:ai_plan_state", "eval_time": "370m", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_state{k8s_cluster="one",window="seven_day"}', "value": 1}]},
+             {"expr": "homelab:ai_plan_utilization_ratio", "eval_time": "370m", "exp_samples": [
+                 {"labels": 'homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day"}', "value": 0.1}]},
+         ]},
+        {"name": "AI restore results keep their time after the line is gone", "interval": "1m",
+         "input_series": [
+             {"series": result % ("finance", "restore-check", "ok"), "values": "600+0x5"},
+             {"series": result % ("finance", "vault-restore-check", "failed"), "values": "_x20 1500+0x5"},
+             # Another check is not a restore test.
+             {"series": result % ("finance", "daily-backup", "ok"), "values": "700+0x5"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:ai_restore_result_timestamp_seconds", "eval_time": "3m", "exp_samples": [
+                 {"labels": 'homelab:ai_restore_result_timestamp_seconds{k8s_cluster="one",trust_domain="finance",check="restore-check",result="ok"}', "value": 600}]},
+             {"expr": "homelab:ai_restore_result_timestamp_seconds", "eval_time": "90m", "exp_samples": [
+                 {"labels": 'homelab:ai_restore_result_timestamp_seconds{k8s_cluster="one",trust_domain="finance",check="restore-check",result="ok"}', "value": 600},
+                 {"labels": 'homelab:ai_restore_result_timestamp_seconds{k8s_cluster="one",trust_domain="finance",check="vault-restore-check",result="failed"}', "value": 1500}]},
+         ]},
+        {"name": "the MCP request panel leaves out the GET with 405 of a client start", "interval": "1m",
+         "input_series": [
+             {"series": requests % ("GET", "405"), "values": "0+1x20"},
+             {"series": requests % ("POST", "200"), "values": "0+2x20"},
+             {"series": requests % ("POST", "405"), "values": "0+1x20"},
+         ], "promql_expr_test": [
+             {"expr": f'sum by (k8s_cluster, route, method, status) ({mcp("10m")})'.replace("$cluster", ".*"),
+              "eval_time": "20m", "exp_samples": [
+                  {"labels": '{k8s_cluster="one",route="default/finance",method="POST",status="200"}', "value": 20},
+                  {"labels": '{k8s_cluster="one",route="default/finance",method="POST",status="405"}', "value": 10}]},
          ]},
     ]
 

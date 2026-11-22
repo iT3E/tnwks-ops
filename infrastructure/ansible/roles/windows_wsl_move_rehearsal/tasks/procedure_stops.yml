@@ -1,0 +1,109 @@
+---
+# The stops of the procedure that change nothing, on the host, with a test
+# config of its own (a state file, a log, a boot request path and two empty
+# folders under test\) and no WSL: another saved version stops the window at
+# step 1, and a disk file at neither path or at both paths stops the boot run
+# at its first read. Each stop leaves the test folders as they were. No path
+# of the test config is in the state folder of the rehearsal.
+- name: The stops of the procedure on a test config
+  ansible.windows.win_powershell:
+    parameters:
+      Script: '{{ wsl_move_rehearsal_dir }}\Invoke-TnwksMoveWindow.ps1'
+      Test: "{{ test_dir }}"
+      DiskName: "{{ wsl_move_rehearsal_disk_name }}"
+      # The config of the window with the paths of the test: written here, so
+      # no JSON goes through ConvertTo-Json of Windows PowerShell 5.1.
+      TestConfig: "{{ wsl_move_rehearsal_window_config | combine(test_config, recursive=true) | to_json }}"
+    script: |
+      param([string]$Script, [string]$Test, [string]$DiskName, [string]$TestConfig)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $true
+      $cfg = $TestConfig | ConvertFrom-Json
+      $oldDisk = Join-Path $cfg.present.folder $DiskName
+      $newDisk = Join-Path $cfg.new.folder $DiskName
+      function Get-Listing {
+          @(Get-ChildItem -LiteralPath $cfg.present.folder, $cfg.new.folder -Force | ForEach-Object { "$($_.FullName) $($_.Length)" }) -join ' | '
+      }
+      function Invoke-Case([string]$Name, [string]$Mode, [string]$Version, [string]$LastMarker, [bool]$OldFile, [bool]$NewFile) {
+          [IO.File]::WriteAllText($cfg.version_file, $Version)
+          [IO.File]::WriteAllText($cfg.state_file, $(if ($LastMarker) { "2026-01-01T00:00:00Z $LastMarker`r`n" } else { '' }))
+          foreach ($p in @($oldDisk, $newDisk)) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }
+          if ($OldFile) { [IO.File]::WriteAllText($oldDisk, 'old') }
+          if ($NewFile) { [IO.File]::WriteAllText($newDisk, 'new') }
+          # Get-Content -Raw of an empty file gives nothing, and a [string] cast
+          # of nothing is $null: "$()" makes it ''.
+          $state = "$(Get-Content -LiteralPath $cfg.state_file -Raw)"
+          $before = Get-Listing
+          $request = Join-Path $Test 'request.json'
+          [IO.File]::WriteAllText($request, (@{ mode = $Mode; group_steps = $false; stop_after = 0; rehearsal_group_test = $false } | ConvertTo-Json))
+          $argv = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $Script, '-Config', $configFile)
+          if ($Mode -eq 'boot') { $argv += @('-Mode', 'boot') } else { $argv += @('-Request', $request) }
+          # Windows PowerShell 5.1 makes a line on stderr of a program an error,
+          # which stops the script under Stop: the run keeps it as text.
+          $out = & { $ErrorActionPreference = 'Continue'
+              & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" @argv 2>&1 | ForEach-Object { "$_" } }
+          $code = $LASTEXITCODE
+          $stateAfter = "$(Get-Content -LiteralPath $cfg.state_file -Raw)"
+          [pscustomobject]@{
+              case = $Name
+              exit = $code
+              files_unchanged = ((Get-Listing) -eq $before)
+              new_markers = @($stateAfter.Substring([Math]::Min($state.Length, $stateAfter.Length)).Trim() -split "`r?`n" |
+                  Where-Object { $_ } | ForEach-Object { ($_ -split ' ', 2)[1] }) -join ','
+              last_log = "$(@(Get-Content -LiteralPath $cfg.log_file) | Select-Object -Last 2 | Select-Object -First 1)"
+              output = (@($out) | Select-Object -Last 5) -join ' / '
+          }
+      }
+      $installed = [Diagnostics.FileVersionInfo]::GetVersionInfo($cfg.service_binary).FileVersion
+      # The test folder goes at the end, also when a case fails.
+      try {
+          if (Test-Path -LiteralPath $Test) { Remove-Item -LiteralPath $Test -Recurse -Force }
+          New-Item -ItemType Directory -Path $cfg.present.folder, $cfg.new.folder | Out-Null
+          # Not $testConfig: names are not case sensitive, so it would change $TestConfig.
+          $configFile = Join-Path $Test 'window.json'
+          [IO.File]::WriteAllText($configFile, $TestConfig)
+          @(
+              Invoke-Case 'another version' 'forward' '0.0.0.0' '' $true $false
+              Invoke-Case 'neither path' 'boot' $installed 'window-started' $false $false
+              Invoke-Case 'both paths' 'boot' $installed 'window-started' $true $true
+              Invoke-Case 'no started window' 'boot' $installed 'wayback-done' $true $false
+          )
+      } finally {
+          Remove-Item -LiteralPath $Test -Recurse -Force -ErrorAction SilentlyContinue
+      }
+  # Each backslash of a path is outside the braces: in a template, a backslash
+  # inside a Jinja string stays doubled.
+  vars:
+    test_dir: '{{ wsl_move_rehearsal_dir }}\test'
+    test_config:
+      state_file: '{{ wsl_move_rehearsal_dir }}\test\window.state'
+      log_file: '{{ wsl_move_rehearsal_dir }}\test\window.log'
+      acl_file: '{{ wsl_move_rehearsal_dir }}\test\disk.sddl'
+      version_file: '{{ wsl_move_rehearsal_dir }}\test\wsl-version.txt'
+      # The boot cases read a boot request at this path, and the folder of the
+      # test holds none: a boot request in the state folder stays as it is,
+      # and so do the groups.
+      boot_request_file: '{{ wsl_move_rehearsal_dir }}\test\boot-request.json'
+      restart: false
+      present: {folder: '{{ wsl_move_rehearsal_dir }}\test\a'}
+      new: {folder: '{{ wsl_move_rehearsal_dir }}\test\b'}
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_stops
+
+# Another version: exit 3, no marker. At neither or both paths: exit 3, and
+# only the marker of the boot run (written before its first read). No started
+# window: exit 0, no marker. The files never change.
+- name: Each stop changed nothing
+  vars:
+    by_case: "{{ dict(wsl_move_rehearsal_stops.output | map(attribute='case') | zip(wsl_move_rehearsal_stops.output)) }}"
+  ansible.builtin.assert:
+    that:
+      - by_case['another version'].exit == 3 and by_case['another version'].new_markers == ''
+      - by_case['neither path'].exit == 3 and by_case['neither path'].new_markers == 'boot-run'
+      - by_case['both paths'].exit == 3 and by_case['both paths'].new_markers == 'boot-run'
+      - by_case['no started window'].exit == 0 and by_case['no started window'].new_markers == ''
+      - wsl_move_rehearsal_stops.output | rejectattr('files_unchanged') | list | length == 0
+    fail_msg: "A stop of the procedure did not read as it should: {{ wsl_move_rehearsal_stops.output }}"
+    quiet: true

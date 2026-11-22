@@ -3,5 +3,27 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./namespace.yaml
+  # The network policy of the backup movers. It selects no pod until the
+  # backup policy of agent/app is applied.
+  - ./backup-mover.yaml
   - ./sandbox-gateway/ks.yaml
   - ./checks/ks.yaml
+  # The finance agent: a scaffold, its network policy and config only
+  # (agent/app/kustomization.yaml).
+  - ./agent/ks.yaml
+  # The finance app as a tool of the agent: the proxy that holds the token of
+  # the agent at the app, and the MCP server of the app.
+  - ./firefly-mcp/ks.yaml
+  # The share of the vault: its two volumes and two claims, mounted by no pod
+  # yet (vault-share/ks.yaml).
+  - ./vault-share/ks.yaml
+  # The vault server of the share, behind the central MCP gateway
+  # (vault-server/ks.yaml). The agent pod mounts the share read only.
+  - ./vault-server/ks.yaml
+  # The nightly snapshot of the share (vault-backup/ks.yaml).
+  - ./vault-backup/ks.yaml
+  # The restore test of the share ran once on 2026-11-20 and passed
+  # (vault-backup/restore-test/). It is not listed: its files stay in git
+  # for the next run, with the name of the snapshot as a placeholder.
+  # The seed of the share ran once on 2026-11-19 (vault-seed/). It is not
+  # listed: its files stay in git for the seed of the main share.

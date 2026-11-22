@@ -10,6 +10,28 @@ A CronJob in each agents-<name> namespace runs one of:
       supervisor) run, and each is printed with its node. The run removes a
       sandbox of its own name that an earlier run left, and fails when its
       own sandbox is still there at its end.
+  platform_checks.py firefly-probe
+      The proxy in front of the finance app holds (finance only:
+      kubernetes/apps/ai/agents/finance/checks), with the token that the
+      proxy holds. Its two ports are tried: the write port, straight, as
+      the MCP server calls it (and with the calls that only a direct client
+      can send: a method override, a form body), and the read port from a
+      sandbox made with the sandbox policy of the agent. An allowed read
+      reaches the app; each delete and each call off the allow list of the
+      proxy is refused. The run removes its sandbox at its end, as the probe
+      does.
+  platform_checks.py mcp-gateway
+      The MCP gateway holds for this trust domain (finance only). No key and
+      a key that is not in its config get a 401. The probe key lists exactly
+      the tools of the domain's rule, its read reaches the app through the
+      MCP server and the proxy, and a tool off the rule is refused at the
+      gateway. The key with no tool lists nothing and is refused. A pod that
+      is not the gateway can not reach the MCP server, and can not reach
+      the servers of GATEWAY_ONLY_SERVERS (the read servers of main).
+  platform_checks.py dns
+      A pod with its own DNS rule, out of the namespace's rule for any name,
+      resolves the names of DNS_ALLOWED and none of DNS_REFUSED (finance
+      only, as the pods of the finance app).
 
 Each probe prints one JSON line. The exit code is 1 when a probe fails, so
 the Job fails. Standard library only; the OpenShell CLI comes from the init
@@ -18,6 +40,8 @@ container (/tools/openshell). No secret value is printed.
 
 import json
 import os
+import re
+import secrets
 import shutil
 import socket
 import ssl
@@ -67,7 +91,8 @@ def tcp(host: str, port: int, timeout: float = 5) -> str:
 
 
 def cli(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
-    return subprocess.run([CLI, *args], capture_output=True, text=True, timeout=timeout)
+    return subprocess.run([CLI, *args], capture_output=True, text=True, timeout=timeout,
+                          check=False)
 
 
 def tail(result: subprocess.CompletedProcess) -> str:
@@ -338,14 +363,26 @@ def run_probe() -> None:
     if created.returncode != 0:
         report("probe", "sandbox create", "ok", f"failed: {tail(created)}")
         return
-    result = None
-    deadline = time.monotonic() + 300
     # The direct probes use addresses: the sandbox resolves no names, so a
     # name would test DNS only. The check pod resolves them.
     code = (PROBE.replace("KUBE_DNS_IP", socket.gethostbyname(KUBE_DNS))
             .replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
             .replace("MODEL_GATEWAY", MODEL_GATEWAY)
             .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN))))
+    results = exec_probe("probe", code)
+    if results is None:
+        return
+    for target, got in results.items():
+        report("probe", target, "blocked", got)
+    # Before cleanup() deletes the sandbox.
+    report_pods()
+
+
+def exec_probe(check: str, code: str) -> dict | None:
+    """Run the code in the probe's sandbox until it prints its PROBE line
+    (the sandbox can take a while to answer after its create)."""
+    result = None
+    deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         result = cli("sandbox", "exec", "--name", SANDBOX, "--no-tty", "--",
                      "python3", "-c", code, timeout=120)
@@ -355,12 +392,9 @@ def run_probe() -> None:
     line = next((l for l in (result.stdout if result else "").splitlines()
                  if l.startswith("PROBE ")), None)
     if line is None:
-        report("probe", "sandbox exec", "ok", f"failed: {tail(result)}")
-        return
-    for target, got in json.loads(line[len("PROBE "):]).items():
-        report("probe", target, "blocked", got)
-    # Before cleanup() deletes the sandbox.
-    report_pods()
+        report(check, "sandbox exec", "ok", f"failed: {tail(result)}")
+        return None
+    return json.loads(line[len("PROBE "):])
 
 
 def probe() -> None:
@@ -377,6 +411,509 @@ def probe() -> None:
         cleanup()
 
 
+# The probe of the finance app. APP_PROXY is the proxy of the app as a
+# sandbox calls it (the read port), APP_PROXY_WRITE as the MCP server calls
+# it (the write port), and SANDBOX_POLICY the sandbox policy of the agent.
+# The proxy holds the token (a placeholder until the owner puts the real one,
+# and the checks pass with either). No call here can change data: each write
+# or delete names an id that does not exist ("0"), or sends an empty body
+# that the app refuses.
+APP_PROXY = os.environ.get("APP_PROXY", "")
+APP_PROXY_WRITE = os.environ.get("APP_PROXY_WRITE", "")
+SANDBOX_POLICY = os.environ.get("SANDBOX_POLICY", "")
+
+
+# Runs inside the sandbox. Each answer of the proxy names its port in a
+# header, and a refusal of the proxy carries a second header; the sandbox
+# policy answers 403 with the JSON error "policy_denied" (OpenShell 0.1.8,
+# l7/rest.rs). An answer with neither did not come through the proxy.
+FIREFLY_PROBE = r'''
+import json, socket, urllib.error, urllib.request
+APP = "APP_PROXY"
+WRITE_PORT = "APP_WRITE"
+def http(method, path, base=APP):
+    request = urllib.request.Request(base + path, method=method,
+        data=b"{}" if method in ("POST", "PUT") else None,
+        headers={"Accept": "application/json", "Content-Type": "application/json"})
+    try:
+        r = urllib.request.urlopen(request, timeout=10); r.read()
+        if r.headers.get("X-Firefly-Proxy-Port"):
+            return "reached: HTTP %s" % r.status
+        return "blocked: HTTP %s, not from the proxy" % r.status
+    except urllib.error.HTTPError as e:
+        if e.headers.get("X-Firefly-Proxy") == "refused":
+            return "refused: proxy"
+        if e.headers.get("X-Firefly-Proxy-Port"):
+            return "reached: HTTP %s" % e.code
+        try:
+            error = json.loads(e.read(4000) or b"{}").get("error")
+        except Exception:
+            error = None
+        if e.code == 403 and error == "policy_denied":
+            return "refused: sandbox policy"
+        return "blocked: HTTP %s %s" % (e.code, error or "")
+    except Exception as e:
+        return "blocked: " + type(e).__name__
+def tcp(host, port):
+    try:
+        socket.create_connection((host, port), timeout=4).close(); return "connected"
+    except Exception as e:
+        return "blocked: " + type(e).__name__
+out = {"allowed read (GET /api/v1/about)": http("GET", "/api/v1/about")}
+for method, path in CALLS:
+    out["%s %s" % (method, path)] = http(method, path)
+# The probe's policy names the write port too; the network policy must stop
+# the supervisor there.
+out["write port of the proxy, through the supervisor"] = http("GET", "/api/v1/about", WRITE_PORT)
+out["proxy address, direct"] = tcp("PROXY_IP", PROXY_PORT)
+print("PROBE " + json.dumps(out))
+'''
+# Calls that must not reach the app from a sandbox: each write and each
+# delete (the read port of the proxy lets through reads only), and calls off
+# the allow list of the proxy (firefly-mcp/app/proxy/default.conf.template).
+REFUSED_CALLS = [
+    ("POST", "/api/v1/tags"),
+    ("PUT", "/api/v1/tags/0"),
+    ("PUT", "/api/v1/transactions/0"),
+    ("PATCH", "/api/v1/transactions/0"),
+    ("DELETE", "/api/v1/transactions/0"),
+    ("DELETE", "/api/v1/tags/0"),
+    ("GET", "/api/v1/preferences"),
+    ("GET", "/api/v1/webhooks"),
+    ("GET", "/api/v1/cron/probe-not-a-token"),
+    ("GET", "/api/v1/configuration"),
+    ("GET", "/api/v1/users"),
+    ("GET", "/oauth/personal-access-tokens"),
+    ("POST", "/api/v1/data/bulk/transactions"),
+    ("POST", "/api/v1/rules/0/trigger"),
+    ("POST", "/api/v1/rule-groups/0/trigger"),
+    ("POST", "/api/v1/recurrences/0/trigger"),
+    ("POST", "/api/v1/rules"),
+    ("PUT", "/api/v1/rules/0"),
+    ("GET", "/api/v1/data/export/transactions"),
+    ("GET", "/api/v1/attachments/0/download"),
+    ("POST", "/api/v1/attachments/0/upload"),
+    ("GET", "/api/v1/accounts/../preferences"),
+    ("GET", "/api/v1/accounts/%2e%2e/preferences"),
+]
+
+
+# The sandbox policy of the agent lets through GET only. The probe's sandbox
+# gets that policy with each method on the read port, so that the proxy, not
+# the policy, must refuse each write there, as it must when a policy is
+# widened. It also gets a rule for the write port of the proxy, which the
+# network policy must stop at the supervisor. The policy of the agent ends
+# with its network_policies.
+AGENT_RULE = '''- allow: {method: GET, path: "/api/v1/**"}'''
+PROBE_RULE = '''- allow: {method: "*", path: "/api/v1/**"}'''
+WRITE_PORT_RULE = """  write_port_probe:
+    name: write_port_probe
+    endpoints:
+      - host: {host}
+        port: {port}
+        protocol: rest
+        tls: ""
+        enforcement: enforce
+        rules:
+          - allow: {{method: GET, path: "/api/v1/**"}}
+    binaries:
+      - {{path: /usr/local/bin/python3.13}}
+      - {{path: /usr/local/bin/python3}}
+"""
+
+
+def probe_policy() -> str:
+    """The sandbox policy of the agent, with each method on the read port and
+    a rule for the write port."""
+    with open(SANDBOX_POLICY) as f:
+        text = f.read()
+    if text.count(AGENT_RULE) != 1:
+        raise ValueError("the rule of the read port is not in the sandbox policy")
+    text = text.replace(AGENT_RULE, PROBE_RULE)
+    host, port = APP_PROXY_WRITE.split("://", 1)[1].split("/", 1)[0].rsplit(":", 1)
+    os.makedirs(os.environ["HOME"], exist_ok=True)
+    path = os.path.join(os.environ["HOME"], "firefly-probe-policy.yaml")
+    with open(path, "w") as f:
+        f.write(text.rstrip("\n") + "\n" + WRITE_PORT_RULE.format(host=host, port=port))
+    return path
+
+
+def run_firefly_probe() -> None:
+    try:
+        policy = probe_policy()
+    except (OSError, ValueError) as e:
+        report("firefly-probe", "sandbox policy of the probe", "ok", f"failed: {e}")
+        return
+    created = cli("sandbox", "create", "--name", SANDBOX, "--from", PROBE_IMAGE,
+                  "--policy", policy, "--detach", "--no-tty", "--",
+                  "sleep", "3600", timeout=300)
+    if created.returncode != 0:
+        report("firefly-probe", "sandbox create", "ok", f"failed: {tail(created)}")
+        return
+    writes = {f"{m} {p}" for m, p in REFUSED_CALLS if m != "GET"}
+    host, port = APP_PROXY.split("://", 1)[1].split("/", 1)[0].rsplit(":", 1)
+    code = (FIREFLY_PROBE.replace("APP_PROXY", APP_PROXY).replace("APP_WRITE", APP_PROXY_WRITE)
+            .replace("PROXY_IP", socket.gethostbyname(host)).replace("PROXY_PORT", port)
+            .replace("CALLS", json.dumps(REFUSED_CALLS)))
+    results = exec_probe("firefly-probe", code)
+    if results is None:
+        return
+    for target, got in results.items():
+        # A write must meet the proxy; a read off the list may meet the
+        # policy first (a path outside /api/v1, a path trick).
+        expected = ("reached" if target.startswith("allowed") else
+                    "blocked" if target.endswith(("direct", "supervisor")) else
+                    "refused: proxy" if target in writes else "refused")
+        report("firefly-probe", f"sandbox: {target}", expected, got)
+
+
+def direct(base: str, method: str, path: str, body: bytes | None = None,
+           headers: dict | None = None) -> str:
+    """A call straight to the proxy. The proxy marks its refusal with a
+    header. A 405 is the app's answer to a method that a path has no route
+    for: here, a method override that reached the app."""
+    request = urllib.request.Request(base + path, method=method, data=body,
+                                     headers={"Accept": "application/json", **(headers or {})})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as r:
+            return f"reached: HTTP {r.status}"
+    except urllib.error.HTTPError as e:
+        if e.headers.get("X-Firefly-Proxy") == "refused":
+            return "refused: proxy"
+        if e.code == 405:
+            return "override applied: HTTP 405"
+        return f"reached: HTTP {e.code}"
+    except OSError as e:
+        return f"failed: {type(e).__name__}"
+
+
+JSON = {"Content-Type": "application/json"}
+
+
+def direct_checks() -> None:
+    """The calls that neither the MCP server nor a sandbox (reads only) can
+    send, on the write port, and the writes on the read port. No call can
+    change data: the app refuses an empty body, and ids are "0"."""
+    write, read = APP_PROXY_WRITE, APP_PROXY
+    for target, expected, args in (
+            ("allowed read (GET /api/v1/about)", "reached", (write, "GET", "/api/v1/about")),
+            # The proxy drops the header, so the app routes a POST, and
+            # refuses its empty body; a PUT on /api/v1/tags has no route.
+            ("X-HTTP-Method-Override: PUT on POST /api/v1/tags", "reached",
+             (write, "POST", "/api/v1/tags", b"{}", {**JSON, "X-HTTP-Method-Override": "PUT"})),
+            ("_method in the query (POST /api/v1/tags?_method=PUT)", "refused",
+             (write, "POST", "/api/v1/tags?_method=PUT", b"{}", JSON)),
+            ("_method with encoded letters (POST /api/v1/tags?%5F%6Dethod=PUT)", "refused",
+             (write, "POST", "/api/v1/tags?%5F%6Dethod=PUT", b"{}", JSON)),
+            ("any query on a write (PUT /api/v1/tags/0?x=1)", "refused",
+             (write, "PUT", "/api/v1/tags/0?x=1", b"{}", JSON)),
+            ("form body (POST /api/v1/tags, _method=PUT)", "refused",
+             (write, "POST", "/api/v1/tags", b"_method=PUT",
+              {"Content-Type": "application/x-www-form-urlencoded"})),
+            ("DELETE /api/v1/tags/0", "refused", (write, "DELETE", "/api/v1/tags/0")),
+            ("PATCH /api/v1/transactions/0", "refused",
+             (write, "PATCH", "/api/v1/transactions/0", b"{}", JSON)),
+            ("GET /api/v1/preferences", "refused", (write, "GET", "/api/v1/preferences")),
+            ("GET /api/v1/accounts/%2e%2e/preferences", "refused",
+             (write, "GET", "/api/v1/accounts/%2e%2e/preferences")),
+            ("read port: allowed read (GET /api/v1/about)", "reached", (read, "GET", "/api/v1/about")),
+            ("read port: write (POST /api/v1/tags)", "refused",
+             (read, "POST", "/api/v1/tags", b"{}", JSON)),
+            ("read port: write (PUT /api/v1/transactions/0)", "refused",
+             (read, "PUT", "/api/v1/transactions/0", b"{}", JSON))):
+        report("firefly-probe", f"proxy, direct: {target}", expected, direct(*args))
+
+
+def lookup(name: str) -> str:
+    try:
+        socket.getaddrinfo(name, None)
+        return "resolved"
+    except OSError as e:
+        return f"blocked: {type(e).__name__}"
+
+
+def dns() -> None:
+    for name in os.environ.get("DNS_ALLOWED", "").split():
+        report("dns", f"lookup {name}", "resolved", lookup(name))
+    for name in os.environ.get("DNS_REFUSED", "").split():
+        report("dns", f"lookup {name}", "blocked", lookup(name))
+
+
+def firefly_probe() -> None:
+    direct_checks()
+    setup_cli()
+    if not remove_leftover():
+        return
+    try:
+        run_firefly_probe()
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        report("firefly-probe", "probe run", "ok", f"failed: {type(e).__name__}: {e}")
+    finally:
+        cleanup()
+
+
+# The gateway probe of a trust domain (finance and main:
+# kubernetes/apps/ai/agents/<domain>/checks/app/mcp-gateway-probe.yaml).
+# MCP_GATEWAY_URL is the route of the domain at the MCP gateway, as its agent
+# calls it, or empty for a domain with a vault route only (main); MCP_SERVER the MCP server behind it (host:port), which no pod but
+# the gateway may reach; GATEWAY_CONFIG the config of the gateway, whose tool
+# list the probe key must see. PROBE_KEY may list the tools of the domain
+# and call get_about only; NO_TOOLS_KEY has no tool. Each is a placeholder
+# ("pending") until the owner's values step, and a check that needs it says
+# so and passes. The probe holds no key of an agent. VAULT_GATEWAY_URL and
+# VAULT_SERVER are the vault route of the domain and its vault server; with
+# no VAULT_GATEWAY_URL the probe checks no vault. VAULT_ROUTE is the name of
+# the vault route in the config. On the vault route, PROBE_KEY may list the
+# tools and call get_file_info only, and NO_TOOLS_KEY is not a key at all; a
+# domain with no NO_TOOLS_KEY in its env has no such checks.
+# OTHER_VAULT_GATEWAY_URL and OTHER_VAULT_SERVER are the vault route and the
+# vault server of the other trust domain: the probe key gets a 401 there, and
+# a straight connection is blocked (R6).
+# GATEWAY_ONLY_SERVERS are more MCP servers (host:port, separated by commas)
+# that only the gateway may reach: the read servers of main (Design Doc,
+# section 4.2.6). Each is tried straight, as the vault servers are, and only
+# a time out passes: in this cluster a policy drop is silent, while a
+# Service with no ready pod refuses at once. A refusal, an answer and a name
+# that does not resolve each fail.
+MCP_GATEWAY_URL = os.environ.get("MCP_GATEWAY_URL", "")
+MCP_SERVER = os.environ.get("MCP_SERVER", "")
+GATEWAY_CONFIG = os.environ.get("GATEWAY_CONFIG", "")
+VAULT_GATEWAY_URL = os.environ.get("VAULT_GATEWAY_URL", "")
+VAULT_SERVER = os.environ.get("VAULT_SERVER", "")
+VAULT_ROUTE = os.environ.get("VAULT_ROUTE", "finance-vault")
+OTHER_VAULT_GATEWAY_URL = os.environ.get("OTHER_VAULT_GATEWAY_URL", "")
+OTHER_VAULT_SERVER = os.environ.get("OTHER_VAULT_SERVER", "")
+GATEWAY_ONLY_SERVERS = [s.strip() for s in os.environ.get("GATEWAY_ONLY_SERVERS", "").split(",")
+                        if s.strip()]
+PENDING = "pending"
+SKIPPED = "skipped: the key is pending"
+
+
+def mcp_request(key: str | None, method: str, params: dict,
+                extra: dict | None = None, url: str = "") -> tuple[int, object]:
+    """One JSON-RPC request to the gateway (streamable HTTP, stateless: no
+    session), with the key as a bearer or with no key, and other headers of
+    the client if given. The status and the answer (JSON, or the last
+    server-sent event)."""
+    headers = {"Content-Type": "application/json",
+               "Accept": "application/json, text/event-stream", **(extra or {})}
+    if key is not None:
+        headers["Authorization"] = f"Bearer {key}"
+    request = urllib.request.Request(
+        url or MCP_GATEWAY_URL, method="POST", headers=headers,
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode())
+    try:
+        with urllib.request.urlopen(request, timeout=30) as r:
+            status, raw = r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        status, raw = e.code, e.read().decode(errors="replace")
+    events = [line[5:].strip() for line in raw.splitlines() if line.startswith("data:")]
+    try:
+        return status, json.loads(events[-1] if events else raw)
+    except ValueError:
+        return status, raw[:200]
+
+
+def listed(key: str | None, url: str = "") -> str:
+    """The tools that a key sees: "tools: <n>", or the refusal."""
+    try:
+        status, body = mcp_request(key, "tools/list", {}, url=url)
+    except OSError as e:
+        return f"failed: {type(e).__name__}"
+    if status == 401:
+        return "refused: HTTP 401"
+    try:
+        return f"tools: {len(body['result']['tools'])}"
+    except (TypeError, KeyError):
+        return f"other: HTTP {status}"
+
+
+def listed_names(key: str, url: str = "") -> list[str] | None:
+    try:
+        status, body = mcp_request(key, "tools/list", {}, url=url)
+        return sorted(t["name"] for t in body["result"]["tools"]) if status == 200 else None
+    except (OSError, TypeError, KeyError):
+        return None
+
+
+def called(key: str, name: str, arguments: dict, extra: dict | None = None,
+           url: str = "") -> str:
+    """The outcome of a tool call through the gateway. The gateway refuses a
+    tool that its rule does not name for the key with a 400 and the JSON-RPC
+    error "unknown resource" (agentgateway 1.7.0), and sends nothing on. A
+    call that it sends on gets the answer of the app through the MCP server
+    (fireflyiii-mcp 1.0.1, formatError): the app's 401 with the placeholder
+    token, and an answer with the real one."""
+    try:
+        status, body = mcp_request(key, "tools/call", {"name": name, "arguments": arguments}, extra,
+                                   url=url)
+    except OSError as e:
+        return f"failed: {type(e).__name__}"
+    if status == 401:
+        return "refused: HTTP 401"
+    if not isinstance(body, dict):
+        return f"other: HTTP {status}"
+    error = body.get("error") or {}
+    if status == 400 and error.get("message") == "unknown resource":
+        return "refused: gateway"
+    result = body.get("result")
+    if status != 200 or not isinstance(result, dict):
+        return f"other: HTTP {status}"
+    text = " ".join(c.get("text", "") for c in result.get("content", []))
+    if not result.get("isError"):
+        return "reached: ok"
+    if text.startswith("Authentication failed"):
+        return "reached: HTTP 401"
+    if text == "Resource not found.":
+        return "reached: HTTP 404"
+    return f"other: {text[:120]}"
+
+
+def rule_tools(name: str = "finance") -> list[str]:
+    """The tool list of the rule of a route in the config of the gateway
+    (its one `mcp.tool.name in [...]` list, as mcp-gateway/tools/mcp_tools.py
+    reads it for the route finance). The route finance-vault has a list of
+    its own."""
+    with open(GATEWAY_CONFIG) as f:
+        route = re.search(rf"(?ms)^  - name: {re.escape(name)}\n.*?(?=^  - name: |\Z)", f.read())
+    (names,) = re.findall(r"mcp\.tool\.name in \[(.*?)\]", route.group(0), re.DOTALL)
+    return sorted(re.findall(r'"([^"]+)"', names))
+
+
+def mcp_gateway() -> None:
+    check = "mcp-gateway"
+    probe_key = os.environ.get("PROBE_KEY", PENDING)
+    no_tools_key = os.environ.get("NO_TOOLS_KEY")
+    if MCP_GATEWAY_URL:
+        domain(check, probe_key, no_tools_key or PENDING)
+    if VAULT_GATEWAY_URL:
+        vault(check, probe_key, no_tools_key)
+    if OTHER_VAULT_GATEWAY_URL:
+        other_vault(check, probe_key)
+    for server in GATEWAY_ONLY_SERVERS:
+        gateway_only(check, server)
+
+
+def domain(check: str, probe_key: str, no_tools_key: str) -> None:
+    """The route of the domain and its MCP server."""
+    host, port = MCP_SERVER.rsplit(":", 1)
+    report(check, "MCP server, direct from a pod that is not the gateway", "blocked",
+           tcp(host, int(port)))
+    report(check, "no key: tools/list", "refused: HTTP 401", listed(None))
+    report(check, "a key that is not in the config: tools/list", "refused: HTTP 401",
+           listed(secrets.token_hex(32)))
+    if probe_key == PENDING:
+        report(check, "probe key", SKIPPED, SKIPPED)
+    else:
+        want = rule_tools()
+        got = listed_names(probe_key)
+        report(check, f"probe key: lists the {len(want)} tools of the rule", "same",
+               "same" if got == want else
+               f"differs: {'failed' if got is None else sorted(set(got) ^ set(want))[:10]}")
+        for target, tool, arguments, expected in (
+                ("probe key: allowed read (get_about)", "get_about", {}, "reached"),
+                ("probe key: delete (delete_transaction 0), off every rule",
+                 "delete_transaction", {"id": "0"}, "refused: gateway"),
+                ("probe key: rule trigger (trigger_rule 0), off every rule",
+                 "trigger_rule", {"id": "0"}, "refused: gateway"),
+                ("probe key: a write of the rule (create_tag), not the probe's",
+                 "create_tag", {"tag": "probe"}, "refused: gateway")):
+            report(check, target, expected, called(probe_key, tool, arguments))
+        # The client is the one of the key: headers that name another client
+        # give nothing (the gateway also drops them before the MCP server).
+        report(check, "probe key with headers that name the client finance: a write",
+               "refused: gateway",
+               called(probe_key, "create_tag", {"tag": "probe"},
+                      {"X-Client": "finance", "X-Api-Key": "finance", "Cookie": "client=finance",
+                       "X-Forwarded-For": "127.0.0.1"}))
+    if no_tools_key == PENDING:
+        report(check, "key with no tool", SKIPPED, SKIPPED)
+    else:
+        report(check, "key with no tool: tools/list", "tools: 0", listed(no_tools_key))
+        report(check, "key with no tool: read (get_about)", "refused: gateway",
+               called(no_tools_key, "get_about", {}))
+
+
+def vault(check: str, probe_key: str, no_tools_key: str | None) -> None:
+    """The vault route of the domain and its vault server. The probe reads
+    the facts of the root of the share only (get_file_info /vault): no note
+    name and no note text."""
+    host, port = VAULT_SERVER.rsplit(":", 1)
+    report(check, "vault server, direct from a pod that is not the gateway", "blocked",
+           tcp(host, int(port)))
+    report(check, "vault: no key: tools/list", "refused: HTTP 401", listed(None, VAULT_GATEWAY_URL))
+    report(check, "vault: a key that is not in the config: tools/list", "refused: HTTP 401",
+           listed(secrets.token_hex(32), VAULT_GATEWAY_URL))
+    if probe_key == PENDING:
+        report(check, "vault: probe key", SKIPPED, SKIPPED)
+    else:
+        want = rule_tools(VAULT_ROUTE)
+        got = listed_names(probe_key, VAULT_GATEWAY_URL)
+        report(check, f"vault: probe key: lists the {len(want)} tools of the rule", "same",
+               "same" if got == want else
+               f"differs: {'failed' if got is None else sorted(set(got) ^ set(want))[:10]}")
+        for target, tool, arguments, expected in (
+                ("vault: probe key: the facts of the root (get_file_info /vault)",
+                 "get_file_info", {"path": "/vault"}, "reached: ok"),
+                ("vault: probe key: a write (write_file), not the probe's",
+                 "write_file", {"path": "/vault/probe.md", "content": "probe"}, "refused: gateway"),
+                ("vault: probe key: a move (move_file), off every rule",
+                 "move_file", {"source": "/vault/a", "destination": "/vault/b"},
+                 "refused: gateway")):
+            report(check, target, expected, called(probe_key, tool, arguments, url=VAULT_GATEWAY_URL))
+    if no_tools_key is None:
+        return
+    if no_tools_key == PENDING:
+        report(check, "vault: key with no tool", SKIPPED, SKIPPED)
+    else:
+        report(check, "vault: key with no tool: tools/list", "refused: HTTP 401",
+               listed(no_tools_key, VAULT_GATEWAY_URL))
+
+
+def other_vault(check: str, probe_key: str) -> None:
+    """The vault of the other trust domain: a key of this domain gets a 401
+    on its route, and no pod of this domain reaches its server straight
+    (Design Doc, section 4.2.5, "One trust domain can not reach the
+    other")."""
+    host, port = OTHER_VAULT_SERVER.rsplit(":", 1)
+    report(check, "other vault server, direct from this trust domain", "blocked",
+           tcp(host, int(port)))
+    if probe_key == PENDING:
+        report(check, "other vault: probe key", SKIPPED, SKIPPED)
+    else:
+        report(check, "other vault: probe key: tools/list", "refused: HTTP 401",
+               listed(probe_key, OTHER_VAULT_GATEWAY_URL))
+
+
+def gateway_only(check: str, server: str) -> None:
+    """A server that only the gateway may reach: a straight connection
+    from this pod must fail. No key is used."""
+    host, port = server.rsplit(":", 1)
+    name, namespace = host.split(".")[:2]
+    report(check, f"{name} in {namespace}, direct from a pod that is not the gateway", "blocked",
+           reach(host, int(port)))
+
+
+def reach(host: str, port: int, timeout: float = 5) -> str:
+    """A straight try that only a drop of the network passes. A policy drop
+    in this cluster is silent (no answer to the connect: a time out). A
+    refusal is what a Service with no ready pod, or a closed port, gives at
+    once, so it proves nothing about the policy. A name that does not
+    resolve proves nothing either."""
+    try:
+        socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError as e:
+        return f"unresolved: {type(e).__name__}"
+    try:
+        socket.create_connection((host, port), timeout=timeout).close()
+        return "connected"
+    except TimeoutError:
+        return "blocked: TimeoutError"
+    except OSError as e:
+        return f"refused: {type(e).__name__} (no ready backend or a closed port: proves nothing)"
+
+
 if __name__ == "__main__":
-    {"isolation": isolation, "probe": probe}[sys.argv[1]]()
+    {"isolation": isolation, "probe": probe, "firefly-probe": firefly_probe,
+     "dns": dns, "mcp-gateway": mcp_gateway}[sys.argv[1]]()
     sys.exit(1 if failures else 0)

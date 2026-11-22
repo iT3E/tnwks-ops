@@ -1,0 +1,32 @@
+---
+# The finance app as a tool of the finance agent (docs/apps/agent-platform.md,
+# "The finance app"). Two pods, each with its own Service:
+# - firefly-proxy (proxy.yaml): nginx, the only holder of the token of the
+#   agent at the app. It lets through the calls of an allow list
+#   (proxy/default.conf.template) and sets the token on each.
+# - firefly-mcp (mcp.yaml): the MCP server of the app, behind the MCP gateway
+#   (kubernetes/apps/ai/mcp-gateway), which the agent calls. It calls the
+#   app through the proxy and holds no token.
+# The sandboxes of the agent reach the proxy too, by one rule of their sandbox
+# policy (../../agent/config/sandbox-policy.yaml), with no credential.
+#
+# The token is a placeholder ("pending") until the owner puts the real one in
+# secret-firefly-proxy.sops.yaml: the app answers each call with a 401, so the
+# probe (../../checks/app/firefly-probe.yaml) can test both walls first.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./secret-firefly-proxy.sops.yaml
+  - ./proxy.yaml
+  - ./mcp.yaml
+  - ./networkpolicy.yaml
+configMapGenerator:
+  - name: firefly-proxy-config
+    files:
+      - default.conf.template=./proxy/default.conf.template
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    # Each ${NAME} in the template is for the entrypoint of the image, which
+    # fills it from an env var of the container, not for Flux.
+    kustomize.toolkit.fluxcd.io/substitute: disabled

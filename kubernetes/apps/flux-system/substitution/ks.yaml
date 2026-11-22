@@ -1,0 +1,27 @@
+---
+# The reduced substitution Secret of the Flux children outside the "ask
+# first" class (docs/operations/flux-admission.md, "Substitution"). It is a
+# child of the class: its build reads only the template below, and Flux
+# fills it from cluster-secrets. The label keeps the patch of the parent of
+# the apps off it, so its substitution is the one written here.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-substitution
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  path: ./kubernetes/apps/flux-system/substitution/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+  postBuild:
+    substituteFrom:
+      - kind: Secret
+        name: cluster-secrets

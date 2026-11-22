@@ -46,6 +46,12 @@
     - role: wsl_site_routing
       when: wsl_site_routing_enabled | bool
       tags: [site-routing]
+    # The monitoring data of site 1 in a file on the distro disk, mounted by a
+    # loop device, in place of the VHDX of windows_observability_storage
+    # (Design Doc 0004, section 5.13). Off while that VHDX holds the data.
+    - role: wsl_observability_file
+      when: hostvars[wsl_distro_windows_host].observability_storage_enabled | default(false) | bool
+      tags: [observability-file]
     # Keeps the Z-Stick attached into the WSL VM across WSL restarts.
     - role: wsl_usb_attach
       when: wsl_usb_attach_devices | length > 0

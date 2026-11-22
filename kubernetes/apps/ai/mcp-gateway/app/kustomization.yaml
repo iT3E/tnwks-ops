@@ -1,0 +1,18 @@
+---
+# The MCP gateway (docs/apps/mcp-gateway.md). No Secret: the config holds
+# hashes of the keys of the clients, and the values are in the Secrets of
+# the clients.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ai
+resources:
+  - ./deployment.yaml
+  - ./service.yaml
+  - ./networkpolicy.yaml
+  - ./podmonitor.yaml
+configMapGenerator:
+  # The config file. The name gets a hash of the file, so a change of the
+  # config rolls the pod.
+  - name: mcp-gateway-config
+    files:
+      - config.yaml=./config/config.yaml

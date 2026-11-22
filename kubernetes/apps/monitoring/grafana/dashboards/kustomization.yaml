@@ -93,6 +93,15 @@ configMapGenerator:
       kustomize.toolkit.fluxcd.io/substitute: disabled
     labels:
       grafana_dashboard: 'true'
+- name: grafana-tnwks-ai
+  files:
+  - tnwks-ai.json
+  options:
+    annotations:
+      grafana_folder: AI
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
 - name: grafana-tnwks-home
   files:
   - tnwks-home.json

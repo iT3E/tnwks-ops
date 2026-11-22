@@ -82,6 +82,53 @@ data:
       }
     }
 
+    # The vault share of each trust domain (pvc nfs-vault-main and
+    # nfs-vault-finance; docs/apps/agent-platform.md, "The vault shares").
+    # Only the three nodes of this site, read and write, each client squashed
+    # to uid/gid 1000 (the user of the agent image and of the vault server),
+    # the owner of the 0700 export root. A kubelet mount comes from its
+    # node's address, so a pod address gets no access. Which pod may mount
+    # which path is the admission policy's (nfs-server/admission).
+    EXPORT {
+      Export_Id = 3;
+      Pseudo = /vault-main;
+      Path = /vault-main;
+      Access_Type = None;
+      Squash = All_Squash;
+      Anonymous_Uid = 1000;
+      Anonymous_Gid = 1000;
+      SecType = sys;
+      Protocols = 4;
+      Transports = TCP;
+      CLIENT {
+        Clients = 10.5.0.2, 10.5.0.3, 10.5.0.4;
+        Access_Type = RW;
+      }
+      FSAL {
+        Name = VFS;
+      }
+    }
+
+    EXPORT {
+      Export_Id = 4;
+      Pseudo = /vault-finance;
+      Path = /vault-finance;
+      Access_Type = None;
+      Squash = All_Squash;
+      Anonymous_Uid = 1000;
+      Anonymous_Gid = 1000;
+      SecType = sys;
+      Protocols = 4;
+      Transports = TCP;
+      CLIENT {
+        Clients = 10.5.0.2, 10.5.0.3, 10.5.0.4;
+        Access_Type = RW;
+      }
+      FSAL {
+        Name = VFS;
+      }
+    }
+
     LOG {
       Default_Log_Level = WARN;
     }

@@ -2,8 +2,12 @@
 # The Ubuntu WSL distro on WSL-02: Docker and, later, the homelab-wsl-02 Talos
 # nodes.
 
-# The Windows admin account owns the distro (same name inside it).
-wsl_distro_user: "{{ hostvars['WSL-02'].ansible_user }}"
+# The user of the distro. Its name is the name of the Windows account that
+# owned the distro before the move by history only (wsl --install made the
+# user with that name), not by a rule; the move keeps the user of the distro.
+# Ansible logs in to the Windows host as the administrator account, and to
+# the distro as this user.
+wsl_distro_user: "{{ hostvars['WSL-02'].wsl_move_present_account }}"
 wsl_distro_windows_host: WSL-02
 # Its sshd from the LAN: windows_lan_bridge on WSL-02 forwards 2222 to it
 # (from DESKTOP-HKE05KI only). Host key in inventory/known_hosts.

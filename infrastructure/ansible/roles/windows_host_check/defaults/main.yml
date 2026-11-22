@@ -35,6 +35,13 @@ host_check_distro_dir: '{{ host_check_textfile_dir }}\wsl-distro'
 # The Windows account that owns the WSL distro, as which the distro writes to
 # drvfs (/mnt/c): it may change files in the inbox only.
 host_check_distro_account: "{{ windows_desktop_user }}"
+# The accounts that may write to the inbox: the account of the distro, and
+# while the move of the distro runs (wsl_move_phase move), the account that
+# the move made too. After the window the distro runs as that account, and
+# the done switch makes it the account of the distro.
+host_check_inbox_writers: >-
+  {{ [host_check_distro_account]
+     + ([wsl_move_new_account] if (wsl_move_phase | default('off')) == 'move' else []) }}
 
 # The relay of the distro (Design Doc 0004, section 5.9).
 host_check_inbox_dir: 'C:\ProgramData\tnwks-host-check-distro'
@@ -56,3 +63,24 @@ host_check_distro_system: >-
 # signatures as out of date after 7 days by default.
 host_check_signature_max_age_days: 7
 host_check_updates_max_age_days: 14
+
+# The check wsl-disk-rules (Design Doc 0004, section 7, row 27): the owner and
+# the rules of the disk file of the WSL distro of the host. On from the done
+# switch of the host: the phase done of the move of the distro on a host with
+# the move on (wsl_move, wsl_move_phase), and wsl_start_unelevated_done on
+# another host. Before it, the account that starts the distro owns its file as
+# WSL made it, so the check gives no result. The file is the disk of the
+# compaction (role windows_wsl_maintenance, vhdx_compact_vhdx), or the
+# default of its script when that is empty.
+host_check_wsl_disk_rules: >-
+  {{ (wsl_move_phase | default('off') == 'done') if (wsl_move | default(false) | bool)
+     else (wsl_start_unelevated_done | default(false) | bool) }}
+host_check_wsl_disk: "{{ vhdx_compact_vhdx | default('', true) or host_check_wsl_disk_default }}"
+host_check_wsl_disk_default: 'E:\WSL\Ubuntu\ext4.vhdx'
+# The account that owns the distro: the owner of the disk file, and one of
+# its three named entries.
+host_check_wsl_disk_account: "{{ host_check_distro_account }}"
+# The capability SID that WSL adds to the file while the VM runs: Windows
+# derives it from the capability name vmWorkerProcess
+# (DeriveCapabilitySidsFromName), so it is the same on each host.
+host_check_wsl_capability_sid: S-1-15-3-1024-2268835264-3721307629-241982045-173645152-1490879176-104643441-2915960892-1612460704

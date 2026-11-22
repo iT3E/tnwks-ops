@@ -2,12 +2,16 @@
 # "Logs"). homelab-wsl only. It reads the logs of the long-running pods on an
 # allowlist and of the sandbox supervisors of agents-workflows, drops what can
 # hold content before a line leaves the node, and sends the rest to the
-# aggregator, as the pod-log agent does. It also serves two gauges for the
-# alerts of the platform. The tests are in
+# aggregator, as the pod-log agent does. It also serves the gauges of the
+# alerts of the platform and the use of the Claude plan. The tests are in
 # observability/vector-tests/agent-platform-logs.yaml.
 data_dir: /vector-data-dir
-# A counter or gauge stays one hour after its last change, as on the
-# aggregator.
+# Vector's own metrics (internal_metrics) stay for an hour after their last
+# change, as on the aggregator. This does not hold for the metrics of the
+# exporter: it drops a metric that no event changed in its flush period (60 s;
+# it looks on each event, so after 1 to 2 minutes). A gauge of a line also
+# carries the time of the line, so Prometheus shows it for 5 minutes (its
+# lookback) and no longer. The token counter is kept alive by token_zero.
 expire_metrics_secs: 3600
 
 api:
@@ -39,6 +43,32 @@ sources:
   internal_metrics:
     type: internal_metrics
 
+  # The token counter of each declared trust domain, model and kind of token,
+  # at 0 from the start of the pod and again every 30 seconds. So the series
+  # is there before the first call (increase() counts the first call), and the
+  # exporter never drops it while the pod runs (a dropped counter starts again
+  # at the next call, and increase() loses what it had). The lists are the
+  # ones of platform_gauges (observability/tests/test_plan_usage.py). A value
+  # that reads other has no zero series: its counter lives from its first line
+  # to the flush period after its last one.
+  token_zero:
+    type: static_metrics
+    namespace: homelab
+    interval_secs: 30
+    metrics:
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: main, model: claude-opus-5-5, token: input}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: main, model: claude-opus-5-5, token: output}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: main, model: claude-opus-5-5, token: cache_read}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: main, model: claude-opus-5-5, token: cache_write}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: finance, model: claude-opus-5-5, token: input}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: finance, model: claude-opus-5-5, token: output}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: finance, model: claude-opus-5-5, token: cache_read}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: finance, model: claude-opus-5-5, token: cache_write}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: input}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: output}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: cache_read}}
+      - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: cache_write}}
+
 transforms:
   # The gateway's lines lose, in order: colour codes; a whole OCSF JSON
   # record (any prefix), which becomes a marker; everything from the first
@@ -48,9 +78,9 @@ transforms:
   # argv or env, with = or :, in any case, or "[cmd:"); and the query string
   # of each word with a "/" or "." before its "?". An error= or detail=
   # field ships: the gateway writes its own error text there. The other pods on the allowlist (run
-  # receiver, model bridge, pilot agent pod) pass as they are: their code
-  # writes no content, and the bridge's lines are JSON that a text rule would
-  # break.
+  # receiver, model bridge, MCP gateway, pilot agent pod) pass as they are:
+  # their code writes no content, and the lines of the bridge and of the MCP
+  # gateway are JSON that a text rule would break.
   # No regex replacement here uses a capture group: Flux and Vector would
   # both read its dollar sign as a variable.
   allowlist_redact:
@@ -148,6 +178,20 @@ transforms:
   #   - homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}: a
   #     JSON line of the model bridge with event engine_error. A kind or
   #     domain that is not a short lowercase name becomes "other".
+  # The use of the Claude plan (docs/apps/agent-platform.md, "Plan use"),
+  # from the lines of the model bridge:
+  #   - a plan_limit line gives four gauges for its window:
+  #     homelab_model_bridge_plan_utilization_ratio (the share used, 1 is
+  #     the limit), _plan_reset_timestamp_seconds (when the window resets),
+  #     _plan_status (0 allowed, 1 allowed_warning, 2 rejected, -1 other) and
+  #     _plan_observed_timestamp_seconds (the time of the line). A value that
+  #     the line does not give, or that is out of range, is -1. The plan is
+  #     one account for each trust domain, so the window is the only label:
+  #     the newest line of any domain sets the gauges, and the domain stays
+  #     in Loki.
+  #   - a call line with an answer adds its token counts to
+  #     homelab_model_bridge_tokens_total{domain, model, token}.
+  # Each label has a list of values, and each other value becomes "other".
   platform_gauges:
     type: remap
     inputs:
@@ -165,12 +209,54 @@ transforms:
         parsed, err = parse_json(msg)
         if err != null { abort }
         line = object(parsed) ?? {}
-        if (string(line.event) ?? "") != "engine_error" { abort }
-        kind = string(line.kind) ?? ""
-        if !match(kind, r'\A[a-z_]{1,32}\z') { kind = "other" }
-        domain = string(line.domain) ?? ""
-        if !match(domain, r'\A[a-z0-9-]{1,32}\z') { domain = "other" }
-        . = {"gauge": "bridge", "domain": domain, "kind": kind, "time": ts}
+        event = string(line.event) ?? ""
+        if event == "engine_error" {
+          kind = string(line.kind) ?? ""
+          if !match(kind, r'\A[a-z_]{1,32}\z') { kind = "other" }
+          domain = string(line.domain) ?? ""
+          if !match(domain, r'\A[a-z0-9-]{1,32}\z') { domain = "other" }
+          . = {"gauge": "bridge", "domain": domain, "kind": kind, "time": ts}
+        } else if event == "plan_limit" {
+          window = string(line.window) ?? ""
+          if !includes(["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet", "seven_day_overage_included", "overage"], window) { window = "other" }
+          state = string(line.status) ?? ""
+          status = if state == "allowed" { 0 } else if state == "allowed_warning" { 1 } else if state == "rejected" { 2 } else { -1 }
+          used = -1.0
+          if is_float(line.utilization) || is_integer(line.utilization) {
+            u = to_float(line.utilization) ?? -1.0
+            if u >= 0.0 && u <= 10.0 { used = u }
+          }
+          reset = -1
+          if is_integer(line.resets_at) || is_float(line.resets_at) {
+            r = to_int(line.resets_at) ?? -1
+            if r >= 1000000000 && r <= 9999999999 { reset = r }
+          }
+          . = {"gauge": "plan", "window": window, "status": status, "utilization": used, "reset": reset, "time": ts}
+        } else if event == "call" {
+          domain = string(line.domain) ?? ""
+          if !includes(["main", "finance", "workflows"], domain) { domain = "other" }
+          model = string(line.model) ?? ""
+          if !includes(["claude-opus-5-5"], model) { model = "other" }
+          # A count is a whole number from 0 to 100 million, or it is not counted.
+          input = int(line.input_tokens) ?? -1
+          if input > 100000000 { input = -1 }
+          output = int(line.output_tokens) ?? -1
+          if output > 100000000 { output = -1 }
+          cache_read = int(line.cache_read_tokens) ?? -1
+          if cache_read > 100000000 { cache_read = -1 }
+          cache_write = int(line.cache_write_tokens) ?? -1
+          if cache_write > 100000000 { cache_write = -1 }
+          # A call line with no answer has no token counts: no sample.
+          if input < 0 && output < 0 && cache_read < 0 && cache_write < 0 { abort }
+          if input < 0 { input = 0 }
+          if output < 0 { output = 0 }
+          if cache_read < 0 { cache_read = 0 }
+          if cache_write < 0 { cache_write = 0 }
+          . = {"gauge": "tokens", "domain": domain, "model": model, "input": input, "output": output,
+               "cache_read": cache_read, "cache_write": cache_write}
+        } else {
+          abort
+        }
       } else {
         abort
       }
@@ -179,11 +265,13 @@ transforms:
     type: route
     inputs:
       - platform_gauges
-    # platform_gauges passes only these two kinds, so no _unmatched output.
+    # platform_gauges passes only these four kinds, so no _unmatched output.
     reroute_unmatched: false
     route:
       instruction: '.gauge == "instruction"'
       bridge: '.gauge == "bridge"'
+      plan: '.gauge == "plan"'
+      tokens: '.gauge == "tokens"'
 
   instruction_metrics:
     type: log_to_metric
@@ -212,6 +300,92 @@ transforms:
         tags:
           domain: "{{ domain }}"
           kind: "{{ kind }}"
+
+  # One line sets each gauge of its window; the exporter keeps the newest
+  # value. The panels and the alert read the recording rules
+  # homelab:ai_plan_* (observability/rules.py), which keep the newest reading
+  # after the gauges expire (one hour after the last line).
+  plan_metrics:
+    type: log_to_metric
+    inputs:
+      - platform_gauge_route.plan
+    metrics:
+      - type: gauge
+        field: utilization
+        namespace: homelab
+        name: model_bridge_plan_utilization_ratio
+        tags:
+          window: "{{ window }}"
+      - type: gauge
+        field: reset
+        namespace: homelab
+        name: model_bridge_plan_reset_timestamp_seconds
+        tags:
+          window: "{{ window }}"
+      - type: gauge
+        field: status
+        namespace: homelab
+        name: model_bridge_plan_status
+        tags:
+          window: "{{ window }}"
+      - type: gauge
+        field: time
+        namespace: homelab
+        name: model_bridge_plan_observed_timestamp_seconds
+        tags:
+          window: "{{ window }}"
+
+  # The tokens of the calls of each trust domain, as the bridge counts them.
+  # token_zero keeps each declared series alive; token_now gives each sample
+  # the time it was counted, so a sample is never older than the one before.
+  token_metrics:
+    type: log_to_metric
+    inputs:
+      - platform_gauge_route.tokens
+    metrics:
+      - type: counter
+        increment_by_value: true
+        field: input
+        namespace: homelab
+        name: model_bridge_tokens_total
+        tags:
+          domain: "{{ domain }}"
+          model: "{{ model }}"
+          token: input
+      - type: counter
+        increment_by_value: true
+        field: output
+        namespace: homelab
+        name: model_bridge_tokens_total
+        tags:
+          domain: "{{ domain }}"
+          model: "{{ model }}"
+          token: output
+      - type: counter
+        increment_by_value: true
+        field: cache_read
+        namespace: homelab
+        name: model_bridge_tokens_total
+        tags:
+          domain: "{{ domain }}"
+          model: "{{ model }}"
+          token: cache_read
+      - type: counter
+        increment_by_value: true
+        field: cache_write
+        namespace: homelab
+        name: model_bridge_tokens_total
+        tags:
+          domain: "{{ domain }}"
+          model: "{{ model }}"
+          token: cache_write
+
+  token_now:
+    type: remap
+    inputs:
+      - token_metrics
+    source: |
+      .timestamp = now()
 
 sinks:
   # To the kubernetes source of the aggregator, as the pod-log agent sends.
@@ -253,4 +427,7 @@ sinks:
       - internal_metrics
       - instruction_metrics
       - bridge_metrics
+      - plan_metrics
+      - token_now
+      - token_zero
     address: 0.0.0.0:9598

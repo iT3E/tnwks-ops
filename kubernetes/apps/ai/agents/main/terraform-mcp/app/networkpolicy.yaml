@@ -1,0 +1,59 @@
+---
+# The Terraform server of main. In: the MCP gateway only
+# (kubernetes/apps/ai/mcp-gateway), which checks the key of each client and
+# lets through only the tools of its route main-terraform; and the kubelet
+# on the node, for the probes. Out: the public registry on 443, and DNS for
+# its name only. Not app.terraform.io, so no call of HCP Terraform, and not
+# raw.githubusercontent.com, so the style guide resources of the server do
+# not load. The namespace's default deny holds the rest
+# (../../namespace.yaml).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: terraform-mcp
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: terraform-mcp
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toFQDNs:
+        - matchName: registry.terraform.io
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # DNS for the name of the registry, and no other name: DNS would be a
+    # way out too. The name has fewer dots than ndots (5), so the resolver
+    # asks each name of the search list first.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: registry.terraform.io
+              - matchName: registry.terraform.io.agents-main.svc.cluster.local
+              - matchName: registry.terraform.io.svc.cluster.local
+              - matchName: registry.terraform.io.cluster.local

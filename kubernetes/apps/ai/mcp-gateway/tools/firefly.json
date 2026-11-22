@@ -1,0 +1,3930 @@
+{
+ "groups": "accounts,transactions,categories,budgets,bills,reports,rules",
+ "image": "ghcr.io/daften/fireflyiii-mcp:1.0.1@sha256:3e20ab3b0e575094be039148266c746b46aa493e700f2296c602994d7ee79017",
+ "tools": [
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Set the category, budget, tags or notes on every transaction a search query matches (same syntax as search_transactions). Only the splits the query matches are changed. Run search_transactions with the same query first to check what will change: if the query matches more than max_transactions transactions, nothing is changed. Returns the updated and failed transaction IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "budget_id": {
+      "description": "Set budget for all matched transactions",
+      "type": "string"
+     },
+     "category_name": {
+      "description": "Set category for all matched transactions. Matched by exact string \u2014 pass literal text, since HTML entities like &amp; or &#039; are not decoded and would create a separate category.",
+      "type": "string"
+     },
+     "max_transactions": {
+      "default": 50,
+      "description": "Safety limit: refuse to change anything if the query matches more transactions than this (default 50, max 500)",
+      "exclusiveMinimum": 0,
+      "maximum": 500,
+      "type": "integer"
+     },
+     "notes": {
+      "description": "Set notes on all matched transactions",
+      "type": "string"
+     },
+     "query": {
+      "description": "Search query to select transactions (same syntax as search_transactions)",
+      "type": "string"
+     },
+     "tags": {
+      "description": "Replace tags on all matched transactions",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "name": "bulk_update_transactions",
+   "title": "Bulk Update Transactions"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a new account in Firefly III.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "account_role": {
+      "description": "Role for asset accounts (required when type is asset)",
+      "enum": [
+       "defaultAsset",
+       "sharedAsset",
+       "savingAsset",
+       "ccAsset",
+       "cashWalletAsset"
+      ],
+      "type": "string"
+     },
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "iban": {
+      "description": "IBAN number",
+      "type": "string"
+     },
+     "include_net_worth": {
+      "description": "Include in net worth calculations",
+      "type": "boolean"
+     },
+     "interest": {
+      "description": "Interest percentage as a number string between 0 and 100, e.g. \"3.15\" (required when type is liability)",
+      "type": "string"
+     },
+     "interest_period": {
+      "description": "Period the interest percentage applies to (required when type is liability)",
+      "enum": [
+       "daily",
+       "weekly",
+       "monthly",
+       "quarterly",
+       "half-year",
+       "yearly"
+      ],
+      "type": "string"
+     },
+     "liability_amount": {
+      "description": "Amount of the liability as a number string (required when type is liability). Must be sent together with liability_start_date.",
+      "type": "string"
+     },
+     "liability_direction": {
+      "description": "Liability direction (required when type is liability): 'debit' if you owe this money, 'credit' if it is owed to you",
+      "enum": [
+       "credit",
+       "debit"
+      ],
+      "type": "string"
+     },
+     "liability_start_date": {
+      "description": "Date the liability started (YYYY-MM-DD) (required when type is liability). Must be sent together with liability_amount.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "liability_type": {
+      "description": "Liability type (required when type is liability): loan, debt, or mortgage",
+      "enum": [
+       "loan",
+       "debt",
+       "mortgage"
+      ],
+      "type": "string"
+     },
+     "name": {
+      "description": "Account name",
+      "type": "string"
+     },
+     "notes": {
+      "description": "Notes",
+      "type": "string"
+     },
+     "opening_balance": {
+      "description": "Opening balance as a number string",
+      "type": "string"
+     },
+     "opening_balance_date": {
+      "description": "Opening balance date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "type": {
+      "description": "Account type",
+      "enum": [
+       "asset",
+       "expense",
+       "revenue",
+       "liability"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "type"
+    ],
+    "type": "object"
+   },
+   "name": "create_account",
+   "title": "Create Account"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a new recurring bill in Firefly III.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "active": {
+      "description": "Whether the bill is active",
+      "type": "boolean"
+     },
+     "amount_max": {
+      "description": "Maximum expected amount as a number string",
+      "type": "string"
+     },
+     "amount_min": {
+      "description": "Minimum expected amount as a number string",
+      "type": "string"
+     },
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "date": {
+      "description": "Bill start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "end_date": {
+      "description": "End date for the bill (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "name": {
+      "description": "Bill name",
+      "type": "string"
+     },
+     "notes": {
+      "description": "Notes",
+      "type": "string"
+     },
+     "object_group_title": {
+      "description": "Object group to file this bill under; Firefly III creates the group if it does not exist",
+      "type": "string"
+     },
+     "repeat_freq": {
+      "description": "Repeat frequency",
+      "enum": [
+       "weekly",
+       "monthly",
+       "quarterly",
+       "half-year",
+       "yearly"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "amount_min",
+     "amount_max",
+     "date",
+     "repeat_freq"
+    ],
+    "type": "object"
+   },
+   "name": "create_bill",
+   "title": "Create Bill"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a new budget in Firefly III.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "active": {
+      "description": "Whether the budget is active",
+      "type": "boolean"
+     },
+     "auto_budget_amount": {
+      "description": "Auto-budget amount as a number string",
+      "type": "string"
+     },
+     "auto_budget_currency_code": {
+      "description": "Currency code for auto-budget",
+      "type": "string"
+     },
+     "auto_budget_period": {
+      "description": "Auto-budget period",
+      "enum": [
+       "daily",
+       "weekly",
+       "monthly",
+       "quarterly",
+       "half_year",
+       "yearly"
+      ],
+      "type": "string"
+     },
+     "auto_budget_type": {
+      "description": "Auto-budget type",
+      "enum": [
+       "reset",
+       "rollover",
+       "none"
+      ],
+      "type": "string"
+     },
+     "name": {
+      "description": "Budget name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "create_budget",
+   "title": "Create Budget"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a spending limit for a budget in Firefly III for a specific date range.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "amount": {
+      "description": "Limit amount as a number string",
+      "type": "string"
+     },
+     "budget_id": {
+      "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+      "type": "string"
+     },
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "period": {
+      "description": "Budget period",
+      "enum": [
+       "daily",
+       "weekly",
+       "monthly",
+       "quarterly",
+       "half_year",
+       "yearly"
+      ],
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "budget_id",
+     "start",
+     "end",
+     "amount"
+    ],
+    "type": "object"
+   },
+   "name": "create_budget_limit",
+   "title": "Create Budget Limit"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a new spending category in Firefly III.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "name": {
+      "description": "Category name. Matched by exact string \u2014 pass literal text, since HTML entities like &amp; or &#039; are not decoded and would create a separate category.",
+      "type": "string"
+     },
+     "notes": {
+      "description": "Notes",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "create_category",
+   "title": "Create Category"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a new automation rule in Firefly III. Use get_rule_groups to find a valid rule_group_id.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "actions": {
+      "description": "List of actions to perform when triggers match",
+      "items": {
+       "properties": {
+        "active": {
+         "default": true,
+         "type": "boolean"
+        },
+        "order": {
+         "maximum": 9007199254740991,
+         "minimum": -9007199254740991,
+         "type": "integer"
+        },
+        "stop_processing": {
+         "default": false,
+         "type": "boolean"
+        },
+        "type": {
+         "description": "Action type",
+         "type": "string"
+        },
+        "value": {
+         "description": "Value for the action (empty string for clear/boolean actions)",
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "required": [
+        "type",
+        "value"
+       ],
+       "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+     },
+     "active": {
+      "default": true,
+      "description": "Whether the rule is active",
+      "type": "boolean"
+     },
+     "description": {
+      "description": "Description",
+      "type": "string"
+     },
+     "rule_group_id": {
+      "description": "Rule group ID \u2014 use get_rule_groups to find valid IDs",
+      "type": "string"
+     },
+     "stop_processing": {
+      "default": false,
+      "description": "Stop processing further rules after this one matches",
+      "type": "boolean"
+     },
+     "strict": {
+      "default": true,
+      "description": "ALL triggers must match (true) or ANY trigger (false)",
+      "type": "boolean"
+     },
+     "title": {
+      "description": "Rule name",
+      "type": "string"
+     },
+     "trigger": {
+      "description": "When this rule fires: store-journal (on transaction creation), update-journal (on transaction update), or manual-activation (only when run with trigger_rule / trigger_rule_group)",
+      "enum": [
+       "store-journal",
+       "update-journal",
+       "manual-activation"
+      ],
+      "type": "string"
+     },
+     "triggers": {
+      "description": "List of trigger conditions",
+      "items": {
+       "properties": {
+        "active": {
+         "default": true,
+         "type": "boolean"
+        },
+        "order": {
+         "maximum": 9007199254740991,
+         "minimum": -9007199254740991,
+         "type": "integer"
+        },
+        "prohibited": {
+         "description": "Negate this trigger (IS becomes IS NOT)",
+         "type": "boolean"
+        },
+        "stop_processing": {
+         "default": false,
+         "type": "boolean"
+        },
+        "type": {
+         "description": "Trigger type",
+         "type": "string"
+        },
+        "value": {
+         "description": "Value the trigger matches against",
+         "type": "string"
+        }
+       },
+       "required": [
+        "type",
+        "value"
+       ],
+       "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+     }
+    },
+    "required": [
+     "title",
+     "rule_group_id",
+     "trigger",
+     "triggers",
+     "actions"
+    ],
+    "type": "object"
+   },
+   "name": "create_rule",
+   "title": "Create Rule"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a new rule group in Firefly III.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "active": {
+      "default": true,
+      "description": "Whether the group is active",
+      "type": "boolean"
+     },
+     "description": {
+      "description": "Description",
+      "type": "string"
+     },
+     "title": {
+      "description": "Rule group name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "type": "object"
+   },
+   "name": "create_rule_group",
+   "title": "Create Rule Group"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a split transaction in Firefly III \u2014 one receipt divided across multiple categories, budgets, or descriptions. All splits share the same type, date, and accounts. Use get_accounts to find source and destination account IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD). Defaults to account currency.",
+      "type": "string"
+     },
+     "date": {
+      "description": "Transaction date (YYYY-MM-DD or RFC 3339 date-time with timezone, shared across all splits)",
+      "type": "string"
+     },
+     "destination_id": {
+      "description": "Destination account ID (required for deposits and transfers)",
+      "type": "string"
+     },
+     "foreign_currency_code": {
+      "description": "Foreign currency code (e.g. USD). Required together with foreign_amount. When the source and destination accounts hold different currencies it must be the destination account's `currency_code`; read it from get_account or get_accounts. Shared across all splits; set foreign_amount on every split.",
+      "type": "string"
+     },
+     "group_title": {
+      "description": "Title for the whole transaction group (Firefly III requires one when there are several splits)",
+      "minLength": 1,
+      "type": "string"
+     },
+     "source_id": {
+      "description": "Source account ID (required for withdrawals and transfers)",
+      "type": "string"
+     },
+     "splits": {
+      "description": "At least 2 splits required",
+      "items": {
+       "properties": {
+        "amount": {
+         "description": "Amount as a positive number string, e.g. \"42.50\"",
+         "type": "string"
+        },
+        "budget_id": {
+         "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+         "type": "string"
+        },
+        "category_name": {
+         "description": "Category name. Matched by exact string \u2014 pass literal text, since HTML entities like &amp; or &#039; are not decoded and would create a separate category.",
+         "type": "string"
+        },
+        "description": {
+         "description": "Description for this split",
+         "type": "string"
+        },
+        "foreign_amount": {
+         "description": "Foreign amount for this split. Amount in foreign_currency_code as a positive number string, e.g. \"1000.00\". Required, together with foreign_currency_code, when the source and destination accounts hold different currencies (e.g. a transfer from a BRL account to a USD account); `amount` stays in the source account's currency. Firefly III does not convert between currencies, so pass the amount actually received by the destination account.",
+         "type": "string"
+        },
+        "notes": {
+         "description": "Notes",
+         "type": "string"
+        },
+        "tags": {
+         "description": "Tags",
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        }
+       },
+       "required": [
+        "amount",
+        "description"
+       ],
+       "type": "object"
+      },
+      "minItems": 2,
+      "type": "array"
+     },
+     "type": {
+      "description": "Transaction type (shared across all splits)",
+      "enum": [
+       "withdrawal",
+       "deposit",
+       "transfer"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "type",
+     "date",
+     "group_title",
+     "splits"
+    ],
+    "type": "object"
+   },
+   "name": "create_split_transaction",
+   "title": "Create Split Transaction"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a new tag in Firefly III.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "date": {
+      "description": "Tag date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "description": {
+      "description": "Tag description",
+      "type": "string"
+     },
+     "tag": {
+      "description": "Tag name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tag"
+    ],
+    "type": "object"
+   },
+   "name": "create_tag",
+   "title": "Create Tag"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Create a new transaction in Firefly III. Use get_accounts to find source and destination account IDs and their currencies; a transfer between accounts in different currencies also needs foreign_amount and foreign_currency_code. update_transaction and delete_transaction take the top-level `id` (the transaction group), not the `transaction_journal_id` inside `transactions[]`.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "amount": {
+      "description": "Amount as a positive number string, e.g. \"42.50\"",
+      "type": "string"
+     },
+     "budget_id": {
+      "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+      "type": "string"
+     },
+     "category_name": {
+      "description": "Category name to assign. Matched by exact string \u2014 pass literal text, since HTML entities like &amp; or &#039; are not decoded and would create a separate category.",
+      "type": "string"
+     },
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD). Defaults to account currency.",
+      "type": "string"
+     },
+     "date": {
+      "description": "Transaction date (YYYY-MM-DD or RFC 3339 date-time with timezone)",
+      "type": "string"
+     },
+     "description": {
+      "description": "Short description of the transaction",
+      "type": "string"
+     },
+     "destination_id": {
+      "description": "Destination account ID (required for deposits and transfers)",
+      "type": "string"
+     },
+     "foreign_amount": {
+      "description": "Amount in foreign_currency_code as a positive number string, e.g. \"1000.00\". Required, together with foreign_currency_code, when the source and destination accounts hold different currencies (e.g. a transfer from a BRL account to a USD account); `amount` stays in the source account's currency. Firefly III does not convert between currencies, so pass the amount actually received by the destination account.",
+      "type": "string"
+     },
+     "foreign_currency_code": {
+      "description": "Foreign currency code (e.g. USD). Required together with foreign_amount. When the source and destination accounts hold different currencies it must be the destination account's `currency_code`; read it from get_account or get_accounts.",
+      "type": "string"
+     },
+     "notes": {
+      "description": "Additional notes",
+      "type": "string"
+     },
+     "source_id": {
+      "description": "Source account ID (required for withdrawals and transfers)",
+      "type": "string"
+     },
+     "tags": {
+      "description": "Tags to attach",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "type": {
+      "description": "Transaction type",
+      "enum": [
+       "withdrawal",
+       "deposit",
+       "transfer"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "type",
+     "date",
+     "amount",
+     "description"
+    ],
+    "type": "object"
+   },
+   "name": "create_transaction",
+   "title": "Create Transaction"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete an account from Firefly III. **This action cannot be undone.** Accounts with linked transactions cannot be deleted. Use get_account to confirm before deleting.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Account ID \u2014 use get_accounts to find valid IDs",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_account",
+   "title": "Delete Account"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete a bill from Firefly III. **This action cannot be undone.** Use get_bills to confirm the ID before deleting.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Bill ID \u2014 use get_bills to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_bill",
+   "title": "Delete Bill"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete a budget from Firefly III. **This action cannot be undone.** Use get_budgets to confirm the ID before deleting.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_budget",
+   "title": "Delete Budget"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete a budget limit from Firefly III. **This action cannot be undone.** Use get_budget_limits to confirm the ID before deleting.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "budget_id": {
+      "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+      "type": "string"
+     },
+     "id": {
+      "description": "Budget limit ID: use get_budget_limits to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "budget_id",
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_budget_limit",
+   "title": "Delete Budget Limit"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete a category from Firefly III. **This action cannot be undone.** Transactions in this category will become uncategorised. Use get_categories to confirm the ID.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Category ID \u2014 use get_categories to find valid IDs",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_category",
+   "title": "Delete Category"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete an automation rule from Firefly III. **This action cannot be undone.** Use get_rule to confirm before deleting.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Rule ID \u2014 use get_rules to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_rule",
+   "title": "Delete Rule"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete a rule group and all its rules from Firefly III. **This action cannot be undone.** Use get_rule_group to confirm before deleting.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Rule group ID \u2014 use get_rule_groups to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_rule_group",
+   "title": "Delete Rule Group"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete a tag from Firefly III. **This action cannot be undone.** Transactions with this tag will have it removed. Use get_tags to confirm the ID before deleting.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Tag ID or exact tag name: use get_tags to find them",
+      "minLength": 1,
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_tag",
+   "title": "Delete Tag"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "openWorldHint": true
+   },
+   "description": "Permanently delete a transaction from Firefly III. **This action cannot be undone.** Use get_transaction to confirm the transaction before deleting.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Transaction group ID \u2014 the top-level `id` (the transaction group), not the `transaction_journal_id` inside `transactions[]`. That is usually an adjacent number, so the wrong one silently deletes a different transaction.",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "delete_transaction",
+   "title": "Delete Transaction"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get Firefly III server version, PHP version, and OS info. Useful for diagnostics.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {},
+    "type": "object"
+   },
+   "name": "get_about",
+   "title": "Get Server Info"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get a single Firefly III account by its numeric ID, including the current balance. Use get_accounts to find valid account IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Account ID \u2014 use get_accounts to find valid IDs",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_account",
+   "title": "Get Account"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get chart data showing account balances over a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_account_overview_chart",
+   "title": "Get Account Overview Chart"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all transactions for a specific account. Use get_accounts to find valid account IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Account ID \u2014 use get_accounts to find valid IDs",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "type": {
+      "description": "Filter by transaction type",
+      "enum": [
+       "all",
+       "withdrawal",
+       "deposit",
+       "transfer",
+       "opening_balance",
+       "reconciliation",
+       "special",
+       "default"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_account_transactions",
+   "title": "Get Account Transactions"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all accounts from Firefly III. Filter by type: asset (bank/cash accounts), expense (merchants), revenue (income sources), liability (loans/debts), or all. Use get_account to fetch a single account by ID.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "type": {
+      "default": "all",
+      "description": "Account type filter",
+      "enum": [
+       "asset",
+       "expense",
+       "revenue",
+       "liability",
+       "all"
+      ],
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_accounts",
+   "title": "Get Accounts"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get a single available budget amount by ID. Use get_available_budgets to find valid IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Available budget ID",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_available_budget",
+   "title": "Get Available Budget"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all available budget amounts configured in Firefly III (the total money available to budget per period).",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_available_budgets",
+   "title": "Get Available Budgets"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get chart data showing balance changes over a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_balance_chart",
+   "title": "Get Balance Chart"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all transactions linked to a specific bill. Use get_bills to find valid bill IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Bill ID",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_bill_transactions",
+   "title": "Get Bill Transactions"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all recurring bills from Firefly III, including the next expected match date and payment status. Optionally filter by date range (YYYY-MM-DD).",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_bills",
+   "title": "Get Bills"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get chart data showing budget usage over a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_budget_chart",
+   "title": "Get Budget Chart"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get spending limits for a specific Firefly III budget, including how much has been spent against each limit. Optionally filter by date range (YYYY-MM-DD). Use get_budgets to find valid budget IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "budgetId": {
+      "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+      "type": "string"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "budgetId"
+    ],
+    "type": "object"
+   },
+   "name": "get_budget_limits",
+   "title": "Get Budget Limits"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all transactions linked to a specific budget. Use get_budgets to find valid budget IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_budget_transactions",
+   "title": "Get Budget Transactions"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all budgets from Firefly III, including spent and available amounts for the current period. Use get_budget_limits for period-specific spending limits.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_budgets",
+   "title": "Get Budgets"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all spending categories defined in Firefly III. Use get_category_transactions to list transactions for a specific category.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_categories",
+   "title": "Get Categories"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get chart data showing spending by category over a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_category_chart",
+   "title": "Get Category Chart"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all transactions belonging to a specific Firefly III category. Optionally filter by date range (YYYY-MM-DD). Use get_categories to find valid category IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "categoryId": {
+      "description": "Category ID \u2014 use get_categories to find valid IDs",
+      "type": "string"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "categoryId"
+    ],
+    "type": "object"
+   },
+   "name": "get_category_transactions",
+   "title": "Get Category Transactions"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get the exchange rate between two currencies. Optionally specify a date (YYYY-MM-DD) for historical rates.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "date": {
+      "description": "Date for historical rate (YYYY-MM-DD). Defaults to today.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "from": {
+      "description": "Source currency code (e.g. EUR)",
+      "type": "string"
+     },
+     "to": {
+      "description": "Target currency code (e.g. USD)",
+      "type": "string"
+     }
+    },
+    "required": [
+     "from",
+     "to"
+    ],
+    "type": "object"
+   },
+   "name": "get_exchange_rate",
+   "title": "Get Exchange Rate"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense insights grouped by category for a date range. Returns how much was spent per category. Both start and end dates (YYYY-MM-DD) are required. For income insights, use get_insight_income.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses",
+   "title": "Get Expense Insights"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals grouped by asset account for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "assets": {
+      "description": "Filter to specific asset account IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_by_asset",
+   "title": "Get Expense Insights by Asset Account"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals grouped by bill for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "bills": {
+      "description": "Filter to specific bill IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_by_bill",
+   "title": "Get Expense Insights by Bill"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals grouped by budget for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "budgets": {
+      "description": "Filter to specific budget IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_by_budget",
+   "title": "Get Expense Insights by Budget"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals grouped by expense account for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "accounts": {
+      "description": "Filter to specific expense account IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_by_expense_account",
+   "title": "Get Expense Insights by Expense Account"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals grouped by tag for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "tags": {
+      "description": "Filter to specific tag IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_by_tag",
+   "title": "Get Expense Insights by Tag"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals for transactions that have no bill attached, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_no_bill",
+   "title": "Get Expense Insights \u2014 No Bill"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals for transactions that have no budget attached, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_no_budget",
+   "title": "Get Expense Insights \u2014 No Budget"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals for transactions that have no category attached, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_no_category",
+   "title": "Get Expense Insights \u2014 No Category"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get expense totals for transactions that have no tag attached, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_no_tag",
+   "title": "Get Expense Insights \u2014 No Tag"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get total expense amount for a date range, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_expenses_total",
+   "title": "Get Total Expenses"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get income insights grouped by category for a date range. Returns how much was earned per category. Both start and end dates (YYYY-MM-DD) are required. For expense insights, use get_insight_expenses.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_income",
+   "title": "Get Income Insights"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get income totals grouped by asset account for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "assets": {
+      "description": "Filter to specific asset account IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_income_by_asset",
+   "title": "Get Income Insights by Asset Account"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get income totals grouped by revenue account for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "revenue": {
+      "description": "Filter to specific revenue account IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_income_by_revenue",
+   "title": "Get Income Insights by Revenue Account"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get income totals grouped by tag for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "tags": {
+      "description": "Filter to specific tag IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_income_by_tag",
+   "title": "Get Income Insights by Tag"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get income totals for transactions that have no category attached, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_income_no_category",
+   "title": "Get Income Insights \u2014 No Category"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get income totals for transactions that have no tag attached, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_income_no_tag",
+   "title": "Get Income Insights \u2014 No Tag"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get total income amount for a date range, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_income_total",
+   "title": "Get Total Income"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get transfer totals for transactions that have no category attached, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_transfer_no_category",
+   "title": "Get Transfer Insights \u2014 No Category"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get transfer totals for transactions that have no tag attached, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_transfer_no_tag",
+   "title": "Get Transfer Insights \u2014 No Tag"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get transfer totals grouped by asset account for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "assets": {
+      "description": "Filter to specific asset account IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_transfers_by_asset",
+   "title": "Get Transfer Insights by Asset Account"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get transfer totals grouped by category for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "categories": {
+      "description": "Filter to specific category IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_transfers_by_category",
+   "title": "Get Transfer Insights by Category"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get transfer totals grouped by tag for a date range. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "tags": {
+      "description": "Filter to specific tag IDs",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_transfers_by_tag",
+   "title": "Get Transfer Insights by Tag"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get total transfer amount for a date range, grouped by currency. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_insight_transfers_total",
+   "title": "Get Total Transfers"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get net worth as of the end of a date range, one entry per currency (the net-worth part of get_summary). Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "currency_code": {
+      "description": "Filter by currency code (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_net_worth_summary",
+   "title": "Get Net Worth Summary"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get a single automation rule by its numeric ID. Use get_rules to find valid IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Rule ID",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_rule",
+   "title": "Get Rule"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get a single rule group by its numeric ID. Use get_rule_groups to find valid IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Rule group ID",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_rule_group",
+   "title": "Get Rule Group"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all rules belonging to a specific rule group. Use get_rule_groups to find valid rule group IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Rule group ID",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_rule_group_rules",
+   "title": "Get Rule Group Rules"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all rule groups from Firefly III.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_rule_groups",
+   "title": "Get Rule Groups"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all automation rules from Firefly III.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_rules",
+   "title": "Get Rules"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get a basic financial summary from Firefly III for a date range, including total assets, liabilities, and net worth. Both start and end dates (YYYY-MM-DD) are required.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "currency_code": {
+      "description": "Currency code to filter by (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "type": "object"
+   },
+   "name": "get_summary",
+   "title": "Get Financial Summary"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all transactions associated with a specific Firefly III tag. Optionally filter by date range (YYYY-MM-DD). Use get_tags to find valid tag names.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "tag": {
+      "description": "Tag name \u2014 use get_tags to find valid tag names",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tag"
+    ],
+    "type": "object"
+   },
+   "name": "get_tag_transactions",
+   "title": "Get Tag Transactions"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all tags defined in Firefly III. Use get_tag_transactions to list transactions for a specific tag.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_tags",
+   "title": "Get Tags"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get a single Firefly III transaction by its numeric ID, including all splits. Use get_transactions to find valid transaction IDs. update_transaction and delete_transaction take the top-level `id` (the transaction group), not the `transaction_journal_id` inside `transactions[]`.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Transaction ID",
+      "pattern": "^\\d+$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "get_transaction",
+   "title": "Get Transaction"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get transactions from Firefly III. Filter by type (withdrawal/deposit/transfer/reconciliation), account ID, or date range. Dates must be YYYY-MM-DD. Use get_transaction to fetch a single transaction by ID.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "accountId": {
+      "description": "Filter by account ID \u2014 use get_accounts to find valid IDs. Internally delegates to the same endpoint as get_account_transactions.",
+      "type": "string"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "type": {
+      "description": "Transaction type filter",
+      "enum": [
+       "withdrawal",
+       "deposit",
+       "transfer",
+       "reconciliation"
+      ],
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_transactions",
+   "title": "Get Transactions"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Get all transactions that have no budget assigned. Useful for finding unbudgeted spending.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_transactions_without_budget",
+   "title": "Get Transactions Without Budget"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Search for accounts by name, IBAN, account number, or ID.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "field": {
+      "default": "all",
+      "description": "Field to search in",
+      "enum": [
+       "all",
+       "id",
+       "name",
+       "iban",
+       "number",
+       "account_number"
+      ],
+      "type": "string"
+     },
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "query": {
+      "description": "Search query",
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "name": "search_accounts",
+   "title": "Search Accounts"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Search for transactions in Firefly III by keyword. Searches across descriptions, notes, and other fields.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "limit": {
+      "default": 50,
+      "description": "Results per page (max 100)",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+     },
+     "page": {
+      "default": 1,
+      "description": "Page number",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "query": {
+      "description": "Search query",
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "name": "search_transactions",
+   "title": "Search Transactions"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Dry-run a single rule against existing transactions and return matching transactions without applying any changes. Use get_rules to find valid IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "accounts": {
+      "description": "Limit to these account IDs",
+      "items": {
+       "exclusiveMinimum": 0,
+       "maximum": 9007199254740991,
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "Filter transactions to this date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Rule ID \u2014 use get_rules to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "search_limit": {
+      "description": "Maximum number of transactions to search",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Filter transactions from this date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "triggered_limit": {
+      "description": "Maximum number of triggered transactions to return",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "test_rule",
+   "title": "Test Rule"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Dry-run a rule group against existing transactions and return matching transactions without applying any changes. Use get_rule_groups to find valid IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "accounts": {
+      "description": "Limit to these account IDs",
+      "items": {
+       "exclusiveMinimum": 0,
+       "maximum": 9007199254740991,
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "Filter transactions to this date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Rule group ID \u2014 use get_rule_groups to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "search_limit": {
+      "description": "Maximum number of transactions to search",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     },
+     "start": {
+      "description": "Filter transactions from this date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "triggered_limit": {
+      "description": "Maximum number of triggered transactions to return",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "test_rule_group",
+   "title": "Test Rule Group"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Manually run a single rule against existing transactions. Use get_rules to find valid IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "accounts": {
+      "description": "Limit to these account IDs",
+      "items": {
+       "exclusiveMinimum": 0,
+       "maximum": 9007199254740991,
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "Filter transactions to this date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Rule ID \u2014 use get_rules to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Filter transactions from this date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "trigger_rule",
+   "title": "Trigger Rule"
+  },
+  {
+   "annotations": {
+    "openWorldHint": true
+   },
+   "description": "Manually run all rules in a rule group against existing transactions. Use get_rule_groups to find valid IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "accounts": {
+      "description": "Limit to these account IDs",
+      "items": {
+       "exclusiveMinimum": 0,
+       "maximum": 9007199254740991,
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "end": {
+      "description": "Filter transactions to this date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Rule group ID \u2014 use get_rule_groups to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "start": {
+      "description": "Filter transactions from this date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "trigger_rule_group",
+   "title": "Trigger Rule Group"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update an existing account in Firefly III. Only fields provided will be changed. Use get_account to confirm the ID.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "active": {
+      "description": "Whether the account is active",
+      "type": "boolean"
+     },
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "iban": {
+      "description": "IBAN number",
+      "type": "string"
+     },
+     "id": {
+      "description": "Account ID \u2014 use get_accounts to find valid IDs",
+      "type": "string"
+     },
+     "include_net_worth": {
+      "description": "Include in net worth calculations",
+      "type": "boolean"
+     },
+     "interest": {
+      "description": "Interest percentage as a number string between 0 and 100, e.g. \"3.15\" (Only applies to liability accounts)",
+      "type": "string"
+     },
+     "interest_period": {
+      "description": "Period the interest percentage applies to (Only applies to liability accounts). Firefly III accepts fewer periods here than on create_account.",
+      "enum": [
+       "daily",
+       "monthly",
+       "yearly"
+      ],
+      "type": "string"
+     },
+     "liability_amount": {
+      "description": "Amount of the liability as a number string (Only applies to liability accounts). Must be sent together with liability_start_date.",
+      "type": "string"
+     },
+     "liability_direction": {
+      "description": "Liability direction (Only applies to liability accounts): 'debit' if you owe this money, 'credit' if it is owed to you",
+      "enum": [
+       "credit",
+       "debit"
+      ],
+      "type": "string"
+     },
+     "liability_start_date": {
+      "description": "Date the liability started (YYYY-MM-DD) (Only applies to liability accounts). Must be sent together with liability_amount.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "liability_type": {
+      "description": "Liability type (Only applies to liability accounts): loan, debt, or mortgage",
+      "enum": [
+       "loan",
+       "debt",
+       "mortgage"
+      ],
+      "type": "string"
+     },
+     "name": {
+      "description": "Account name",
+      "type": "string"
+     },
+     "notes": {
+      "description": "Notes",
+      "type": "string"
+     },
+     "opening_balance": {
+      "description": "Opening balance as a number string",
+      "type": "string"
+     },
+     "opening_balance_date": {
+      "description": "Opening balance date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_account",
+   "title": "Update Account"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update an existing bill in Firefly III. Only fields provided will be changed. Use get_bills to find valid bill IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "active": {
+      "description": "Whether the bill is active",
+      "type": "boolean"
+     },
+     "amount_max": {
+      "description": "Maximum expected amount as a number string",
+      "type": "string"
+     },
+     "amount_min": {
+      "description": "Minimum expected amount as a number string",
+      "type": "string"
+     },
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "date": {
+      "description": "First expected payment date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "end_date": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Bill ID \u2014 use get_bills to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "name": {
+      "description": "Bill name",
+      "type": "string"
+     },
+     "notes": {
+      "description": "Notes",
+      "type": "string"
+     },
+     "object_group_title": {
+      "description": "Object group to file this bill under; Firefly III creates the group if it does not exist",
+      "type": "string"
+     },
+     "repeat_freq": {
+      "description": "Repeat frequency",
+      "enum": [
+       "weekly",
+       "monthly",
+       "quarterly",
+       "half-year",
+       "yearly"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_bill",
+   "title": "Update Bill"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update an existing budget in Firefly III. Only fields provided will be changed. Use get_budgets to find valid budget IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "active": {
+      "description": "Whether the budget is active",
+      "type": "boolean"
+     },
+     "auto_budget_amount": {
+      "description": "Auto-budget amount as a number string",
+      "type": "string"
+     },
+     "auto_budget_currency_code": {
+      "description": "Currency code for auto-budget",
+      "type": "string"
+     },
+     "auto_budget_period": {
+      "description": "Auto-budget period",
+      "enum": [
+       "daily",
+       "weekly",
+       "monthly",
+       "quarterly",
+       "half_year",
+       "yearly"
+      ],
+      "type": "string"
+     },
+     "auto_budget_type": {
+      "description": "Auto-budget type",
+      "enum": [
+       "reset",
+       "rollover",
+       "none"
+      ],
+      "type": "string"
+     },
+     "id": {
+      "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+      "type": "string"
+     },
+     "name": {
+      "description": "Budget name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_budget",
+   "title": "Update Budget"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update an existing budget limit in Firefly III. Only fields provided will be changed. Use get_budget_limits to find valid limit IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "amount": {
+      "description": "Limit amount as a number string",
+      "type": "string"
+     },
+     "budget_id": {
+      "description": "Budget ID \u2014 use get_budgets to find valid IDs",
+      "type": "string"
+     },
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "end": {
+      "description": "End date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "id": {
+      "description": "Budget limit ID: use get_budget_limits to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "period": {
+      "description": "Budget period",
+      "enum": [
+       "daily",
+       "weekly",
+       "monthly",
+       "quarterly",
+       "half_year",
+       "yearly"
+      ],
+      "type": "string"
+     },
+     "start": {
+      "description": "Start date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "budget_id",
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_budget_limit",
+   "title": "Update Budget Limit"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update an existing category in Firefly III. Only fields provided will be changed. Use get_categories to find valid category IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "id": {
+      "description": "Category ID \u2014 use get_categories to find valid IDs",
+      "type": "string"
+     },
+     "name": {
+      "description": "Category name. Matched by exact string \u2014 pass literal text, since HTML entities like &amp; or &#039; are not decoded and would create a separate category.",
+      "type": "string"
+     },
+     "notes": {
+      "description": "Notes",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_category",
+   "title": "Update Category"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update an existing automation rule. Only fields provided will be changed. Use get_rule to confirm the ID before updating.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "actions": {
+      "description": "List of actions",
+      "items": {
+       "properties": {
+        "active": {
+         "default": true,
+         "type": "boolean"
+        },
+        "order": {
+         "maximum": 9007199254740991,
+         "minimum": -9007199254740991,
+         "type": "integer"
+        },
+        "stop_processing": {
+         "default": false,
+         "type": "boolean"
+        },
+        "type": {
+         "description": "Action type",
+         "type": "string"
+        },
+        "value": {
+         "description": "Value for the action (empty string for clear/boolean actions)",
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "required": [
+        "type",
+        "value"
+       ],
+       "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+     },
+     "active": {
+      "description": "Whether the rule is active",
+      "type": "boolean"
+     },
+     "description": {
+      "description": "Description",
+      "type": "string"
+     },
+     "id": {
+      "description": "Rule ID \u2014 use get_rules to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "rule_group_id": {
+      "description": "Rule group ID",
+      "type": "string"
+     },
+     "stop_processing": {
+      "description": "Stop processing further rules after this one",
+      "type": "boolean"
+     },
+     "strict": {
+      "description": "ALL triggers must match (true) or ANY trigger (false)",
+      "type": "boolean"
+     },
+     "title": {
+      "description": "Rule name",
+      "type": "string"
+     },
+     "trigger": {
+      "description": "When this rule fires",
+      "enum": [
+       "store-journal",
+       "update-journal",
+       "manual-activation"
+      ],
+      "type": "string"
+     },
+     "triggers": {
+      "description": "List of trigger conditions",
+      "items": {
+       "properties": {
+        "active": {
+         "default": true,
+         "type": "boolean"
+        },
+        "order": {
+         "maximum": 9007199254740991,
+         "minimum": -9007199254740991,
+         "type": "integer"
+        },
+        "prohibited": {
+         "description": "Negate this trigger (IS becomes IS NOT)",
+         "type": "boolean"
+        },
+        "stop_processing": {
+         "default": false,
+         "type": "boolean"
+        },
+        "type": {
+         "description": "Trigger type",
+         "type": "string"
+        },
+        "value": {
+         "description": "Value the trigger matches against",
+         "type": "string"
+        }
+       },
+       "required": [
+        "type",
+        "value"
+       ],
+       "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_rule",
+   "title": "Update Rule"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update an existing rule group. Only fields provided will be changed. Use get_rule_group to confirm the ID before updating.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "active": {
+      "description": "Whether the group is active",
+      "type": "boolean"
+     },
+     "description": {
+      "description": "Description",
+      "type": "string"
+     },
+     "id": {
+      "description": "Rule group ID \u2014 use get_rule_groups to find valid IDs",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "title": {
+      "description": "Rule group name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_rule_group",
+   "title": "Update Rule Group"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update an existing tag in Firefly III. Only fields provided will be changed. Use get_tags to find valid tag IDs.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "date": {
+      "description": "Tag date (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+     },
+     "description": {
+      "description": "Tag description",
+      "type": "string"
+     },
+     "id": {
+      "description": "Tag ID or exact tag name: use get_tags to find them",
+      "minLength": 1,
+      "type": "string"
+     },
+     "tag": {
+      "description": "Tag name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_tag",
+   "title": "Update Tag"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "openWorldHint": true
+   },
+   "description": "Update one split of an existing transaction in Firefly III. Only fields provided will be changed; the other splits of a split transaction are left untouched. For a transaction with several splits, pass transaction_journal_id to pick the split (one split per call); a type change always applies to every split. Use get_transaction to confirm the IDs before updating.",
+   "execution": {
+    "taskSupport": "forbidden"
+   },
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "properties": {
+     "amount": {
+      "description": "Amount as a positive number string",
+      "type": "string"
+     },
+     "budget_id": {
+      "description": "Budget ID",
+      "type": "string"
+     },
+     "category_name": {
+      "description": "Category name. Matched by exact string \u2014 pass literal text, since HTML entities like &amp; or &#039; are not decoded and would create a separate category.",
+      "type": "string"
+     },
+     "currency_code": {
+      "description": "Currency code (e.g. EUR, USD)",
+      "type": "string"
+     },
+     "date": {
+      "description": "Transaction date (YYYY-MM-DD or RFC 3339 date-time with timezone)",
+      "type": "string"
+     },
+     "description": {
+      "description": "Short description",
+      "type": "string"
+     },
+     "destination_id": {
+      "description": "Destination account ID",
+      "type": "string"
+     },
+     "foreign_amount": {
+      "description": "Amount in foreign_currency_code as a positive number string, e.g. \"1000.00\". Required, together with foreign_currency_code, when the source and destination accounts hold different currencies (e.g. a transfer from a BRL account to a USD account); `amount` stays in the source account's currency. Firefly III does not convert between currencies, so pass the amount actually received by the destination account. Firefly III enforces this only when creating, so an update missing it is accepted silently: when changing `amount` on a transaction that already has a foreign amount, send the new foreign_amount too. On its own it changes the foreign amount of a split that already has a foreign currency. Pass null to remove the foreign amount and its currency.",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "foreign_currency_code": {
+      "description": "Foreign currency code (e.g. USD). Required together with foreign_amount. When the source and destination accounts hold different currencies it must be the destination account's `currency_code`; read it from get_account or get_accounts. On update, always send foreign_amount with it, even if unchanged.",
+      "type": "string"
+     },
+     "id": {
+      "description": "Transaction group ID \u2014 the top-level `id` (the transaction group), not the `transaction_journal_id` inside `transactions[]`. That is usually an adjacent number, so the wrong one silently updates a different transaction.",
+      "pattern": "^\\d+$",
+      "type": "string"
+     },
+     "notes": {
+      "description": "Additional notes",
+      "type": "string"
+     },
+     "source_id": {
+      "description": "Source account ID",
+      "type": "string"
+     },
+     "tags": {
+      "description": "Tags (replaces existing tags)",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "transaction_journal_id": {
+      "description": "Which split to update: the `transaction_journal_id` from the group's `transactions[]`. Optional when the transaction has a single split; required when it has several.",
+      "type": "string"
+     },
+     "type": {
+      "description": "Transaction type",
+      "enum": [
+       "withdrawal",
+       "deposit",
+       "transfer"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "name": "update_transaction",
+   "title": "Update Transaction"
+  }
+ ]
+}

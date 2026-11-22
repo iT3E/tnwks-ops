@@ -15,5 +15,6 @@ resources:
   - ./heartbeats.yaml
   - ./alertmanager.yaml
   - ./wifi.yaml
+  - ./radio-gateway.yaml
   - ./site-overrides.yaml
   - ./terraform-drift.yaml

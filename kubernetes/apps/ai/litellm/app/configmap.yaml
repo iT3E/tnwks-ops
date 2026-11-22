@@ -84,6 +84,19 @@ data:
         litellm_params:
           model: ollama/embeddinggemma-300m-q8
           api_base: ${OLLAMA_BASE_URL}
+      # The same for the finance agent, on its own name: only the key
+      # agents-finance lists it (docs/apps/litellm.md), so no other trust
+      # domain can send text to it, and finance text goes to no vendor.
+      - model_name: agents-finance-embeddings
+        litellm_params:
+          model: ollama/embeddinggemma-300m-q8
+          api_base: ${OLLAMA_BASE_URL}
+      # The same for the main agent, on its own name: only the key
+      # agents-main lists it, once the owner adds it to that key.
+      - model_name: agents-main-embeddings
+        litellm_params:
+          model: ollama/embeddinggemma-300m-q8
+          api_base: ${OLLAMA_BASE_URL}
 
     router_settings:
       # The name of each trust domain of the agent platform, and the one
@@ -112,3 +125,36 @@ data:
       # nothing reuses pays 25% more on its prompt; there is no per-request
       # or per-key off switch while this is on.
       enable_anthropic_prompt_caching: true
+      # The Prometheus metrics of the gateway (docs/apps/litellm.md,
+      # "Metrics"). /metrics asks for a key: the scrape uses the key
+      # `metrics-scrape`, which calls no model and reads /metrics only
+      # (helmrelease.yaml, serviceMonitor). The keep list below is the only
+      # source of the series: each metric that it does not name is not made,
+      # and each metric keeps only the labels that it names. Never add
+      # end_user, user, user_email, client_ip, user_agent or hashed_api_key
+      # (tests/test_model_gateway_metrics.py fails on any label not listed
+      # there). No spend metric: the plan is not paid by the call.
+      callbacks: ["prometheus"]
+      prometheus_metrics_config:
+        - group: calls
+          metrics:
+            - litellm_proxy_total_requests_metric
+          include_labels: [api_key_alias, requested_model, api_provider, status_code]
+        - group: failed-calls
+          metrics:
+            - litellm_proxy_failed_requests_metric
+          include_labels: [api_key_alias, requested_model, api_provider, exception_status]
+        - group: time
+          metrics:
+            - litellm_request_total_latency_metric
+          include_labels: [api_key_alias, requested_model, api_provider]
+        - group: tokens
+          metrics:
+            - litellm_input_tokens_metric
+            - litellm_output_tokens_metric
+          include_labels: [api_key_alias, requested_model, api_provider]
+      # At most 100 label sets for each metric: each further one goes to one
+      # series whose labels all read "other". The time histogram makes 20
+      # series for each label set, so the worst case is 4 x 100 + 100 x 20
+      # = 2,400 series.
+      prometheus_metrics_max_series_per_metric: 100

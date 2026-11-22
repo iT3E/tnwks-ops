@@ -14,8 +14,10 @@ the WAN except WireGuard.
 | --- | --- | --- | --- |
 | RouterOS (SSH 22, REST 443, Winbox 8291) | `10.10.30.1` on `wg01` | `wg01`, admin peers | — |
 | RouterOS read-only API (api-ssl 8729) | any router address | — | mktxp, from the WSL host only |
-| RouterOS REST 443, for CI | `10.10.32.1` on `wg03` | — | the self-hosted runner `tnwks-ops-runner` only (its own listener and zone; [`ci.md`](ci.md)) |
-| EP-R6 SSH, for CI | `10.10.140.140` | — | the same runner, through `wg03`: the one forward from `vpn-ci` (`infrastructure/edgeos`) |
+| RouterOS REST 443, for CI | `10.10.32.1` on `wg03` | — | the self-hosted runner `tnwks-ops-runner` only: its peers `10.10.32.10` and `.11` (its own listener and zone; [`ci.md`](ci.md)) |
+| EP-R6 SSH, for CI | `10.10.140.140` | the [device access pod](#device-access-pod) | the same runner, through `wg03` (`infrastructure/edgeos`) |
+| Radio SSH | `10.60.10.45` (LiteAP), `10.60.10.43` (LiteBeam) | the device access pod | every `wg03` peer (for later CI config plans) |
+| Radio web UI 443 | the same two | the device access pod only (source `10.10.32.12`) | — |
 | Aruba SW03 management | `10.98.0.251` (untagged native VLAN) | `wg01`, admin peers | — |
 | UniFi APs | VLAN 900 | `wg01`, admin peers | UniFi controller (SSH adopt, STUN); APs inform to it |
 | UISP radios | VLAN 140, `10.60.10.0/24` via EP-R6 | `wg01`, admin peers | radios connect out to UISP |
@@ -44,6 +46,51 @@ so the router cannot restrict them; they are protected by their own logins.
   `10.98.0.0/24`, `10.10.90.0/24`, `10.10.140.0/24`, `10.60.10.0/24`.
 - Terraform runs over `wg01` (`routeros_url` in SOPS is
   `https://10.10.30.1`), so the WSL tunnel must be up.
+
+## Device access pod
+
+`device-access` in `tools` on homelab-wsl
+(`kubernetes/apps/tools/device-access`) reaches the EP-R6 and the two radios
+behind it over the runners' tunnel, without `wg01`. Its wireproxy sidecar
+holds the `wg03` peer `10.10.32.12` and forwards, inside the pod only:
+
+| Pod address | Target | Router rule (pair `180-vpn-ci-UISP-140`) |
+| --- | --- | --- |
+| `127.0.0.1:8022` (`ep-r6`) | EP-R6 SSH `10.10.140.140:22` | every `wg03` peer |
+| `127.0.0.1:8023` (`liteap`) | LiteAP radio SSH `10.60.10.45:22` | every `wg03` peer |
+| `127.0.0.1:8024` (`litebeam`) | LiteBeam radio SSH `10.60.10.43:22` | every `wg03` peer |
+| `127.0.0.1:8443` | LiteAP web UI `10.60.10.45:443` | source `10.10.32.12` only |
+| `127.0.0.1:8444` | LiteBeam web UI `10.60.10.43:443` | source `10.10.32.12` only |
+
+Nothing else: no other address on VLAN 140 or elsewhere, and not the router's
+REST API, which `wg03` accepts only from the runners. WireGuard binds each
+peer's source address to its key, so `10.10.32.12` is this pod.
+
+Who can use it: anyone who can `kubectl exec` or `kubectl port-forward` in
+`tools` on homelab-wsl, that is, the cluster admins. It has no Service or
+Ingress. It is the interim until an MCP server does this.
+
+```sh
+# EP-R6, with CI's key. The login is ssh_user in
+# infrastructure/edgeos/ep-r6/secrets.sops.yaml.
+kubectl -n tools exec -it deploy/device-access -c shell -- ssh -l <user> ep-r6
+kubectl -n tools exec deploy/device-access -c shell -- \
+  ssh -l <user> ep-r6 /opt/vyatta/bin/vyatta-op-cmd-wrapper show interfaces
+# The radios: airOS password login, so a TTY.
+kubectl -n tools exec -it deploy/device-access -c shell -- ssh -l <user> liteap
+kubectl -n tools exec -it deploy/device-access -c shell -- ssh -l <user> litebeam
+# A radio's web UI in the desktop's browser, at https://localhost:8443
+# (LiteAP) or :8444 (LiteBeam). Apply changes with Test mode, which reverts
+# them by itself.
+kubectl -n tools port-forward deploy/device-access 8443 8444
+```
+
+The EP-R6's host key is pinned (`ssh/known_hosts`, from
+`infrastructure/edgeos/ep-r6/device.json`). The radios' keys are not yet: the
+first login accepts and records each key in the pod's `/tmp`. To pin them,
+run `ssh-keyscan -p 8023 127.0.0.1` and `-p 8024` in the pod, add the lines
+to `kubernetes/apps/tools/device-access/app/ssh/known_hosts`, and set
+`StrictHostKeyChecking yes` for the radios in `ssh/device-access.conf`.
 
 ## Break-glass
 

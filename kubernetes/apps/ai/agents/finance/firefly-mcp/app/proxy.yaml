@@ -1,0 +1,136 @@
+---
+# The proxy of the finance app (proxy/default.conf.template). It holds the
+# token of the finance agent at the app, as the env var FIREFLY_TOKEN of its
+# one container, and the rendered config in an emptyDir in memory. No other
+# pod of the trust domain gets the token.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firefly-proxy
+  labels:
+    app.kubernetes.io/name: firefly-proxy
+  annotations:
+    # A new token or a new allow list starts the pod again.
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: firefly-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: firefly-proxy
+        # Its own DNS rule, for one name (networkpolicy.yaml), and not the
+        # namespace's rule for any name (../../namespace.yaml).
+        agents.home.arpa/dns: own-rule
+    spec:
+      # A name with a dot is looked up as it is, with no search domain: the
+      # DNS rule allows the one full name, and the resolver of the image
+      # (musl) stops at the first refused name of a search.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: docker.io/nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
+          imagePullPolicy: IfNotPresent
+          env:
+            # The Service of the app (docs/apps/firefly.md), as the other
+            # in-cluster clients of the app use it.
+            - name: FIREFLY_UPSTREAM
+              value: firefly.production.svc.cluster.local:8080
+            # The entrypoint fills only these names into the template.
+            - name: NGINX_ENVSUBST_FILTER
+              value: ^FIREFLY_
+            - name: FIREFLY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-proxy-secret
+                  key: FIREFLY_TOKEN
+          ports:
+            # Reads and the writes of the list, for the MCP server.
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            # Reads only, for the sandboxes.
+            - name: read
+              containerPort: 8081
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: template
+              mountPath: /etc/nginx/templates
+              readOnly: true
+            # The rendered config, with the token: in memory only.
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/nginx
+      volumes:
+        - name: template
+          configMap:
+            name: firefly-proxy-config
+        - name: conf
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefly-proxy
+  labels:
+    app.kubernetes.io/name: firefly-proxy
+spec:
+  selector:
+    app.kubernetes.io/name: firefly-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: read
+      port: 8081
+      targetPort: read
+      protocol: TCP

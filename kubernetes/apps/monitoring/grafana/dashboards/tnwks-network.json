@@ -163,6 +163,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Path"
                       }
                     }
@@ -1017,6 +1041,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Mesh"
                       }
                     }
@@ -1224,6 +1272,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "KVStoreMesh"
                       }
                     }
@@ -1602,6 +1674,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Router uptime"
                       }
                     }
@@ -2425,6 +2521,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Link"
                       }
                     }
@@ -2632,6 +2752,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Address pool use"
                       }
                     }
@@ -3058,6 +3202,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Upgrade"
                       }
                     }
@@ -3146,6 +3314,651 @@
         "kind": "Panel",
         "spec": {
           "id": 27,
+          "title": "EP-R6 reachability",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background_solid",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "1": {
+                          "text": "Reachable",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Losing pings",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Unreachable",
+                          "color": "#c4302b"
+                        },
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Hop 1 of the radio link. Whether the EP-R6 (sce-ep01, 10.10.140.140), the gateway of the radio network 10.60.10.0/24, answers smokeping's pings: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioGatewayUnreachable fires after 4 minutes of that). Unknown while the router hop or SW03 lose pings too, as the probe's own path is at fault then, and when the EP-R6 isn't probed. Pings only: nothing reads the radios or a UISP controller. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-27": {
+        "kind": "Panel",
+        "spec": {
+          "id": 28,
+          "title": "LiteAP reachability",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1) and on () (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background_solid",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "1": {
+                          "text": "Reachable",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Losing pings",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Unreachable",
+                          "color": "#c4302b"
+                        },
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Hop 2 of the radio link. Whether the LiteAP radio (liteap-gps, 10.60.10.45), the AP end of the link beside the EP-R6, answers smokeping's pings: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioAPUnreachable fires after 4 minutes of that). Unknown while the EP-R6 in front of it, the router hop or SW03 lose pings, as the fault is in front of it then, and when the LiteAP isn't probed. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-28": {
+        "kind": "Panel",
+        "spec": {
+          "id": 29,
+          "title": "LiteBeam reachability",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1) and on () (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background_solid",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "1": {
+                          "text": "Reachable",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Losing pings",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Unreachable",
+                          "color": "#c4302b"
+                        },
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Hop 3 of the radio link. Whether the LiteBeam radio (litebeam-5ac, 10.60.10.43), the station end at the far end of the radio link, answers smokeping's pings over the air: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioStationUnreachable fires after 10 minutes of that: the link is down or the station is off). Unknown while the LiteAP in front of it, or any hop before that, loses pings, and when the LiteBeam isn't probed. The airCube behind it rejects pings, so it has no state here. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-29": {
+        "kind": "Panel",
+        "spec": {
+          "id": 30,
+          "title": "Radio link packet loss",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge|radio\"})",
+                        "instant": false,
+                        "legendFormat": "{{name}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of pings lost over each minute at each hop: the router hop (sce-rtr01), the EP-R6 (sce-ep01), the LiteAP (liteap-gps) and the LiteBeam (litebeam-5ac). A fault at one hop rises there and at every hop behind it; all of them rising together with sce-rtr01 is the probe's path. Only site 1 probes it, so the site filter doesn't apply; a missing line means that hop isn't probed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-30": {
+        "kind": "Panel",
+        "spec": {
+          "id": 31,
+          "title": "Radio link latency",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge|radio\"})",
+                        "instant": false,
+                        "legendFormat": "{{name}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "p90 round trip over each minute to each hop and the router hop. The LiteBeam's includes the air between the radios. A lost ping has no round trip, so an unreachable hop is a gap here and 100% on packet loss. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-31": {
+        "kind": "Panel",
+        "spec": {
+          "id": 32,
+          "title": "VLAN 140 traffic",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (direction) (label_replace(rate(mktxp_interface_rx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"from VLAN 140\", \"\", \"\") or label_replace(rate(mktxp_interface_tx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"to VLAN 140\", \"\", \"\"))",
+                        "instant": false,
+                        "legendFormat": "{{direction}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The router's counters on its VLAN 140 interface, where the EP-R6 is the only client. Nothing received for hours means nothing comes from the radio network, whatever the pings say. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-32": {
+        "kind": "Panel",
+        "spec": {
+          "id": 33,
+          "title": "Radio network Internet traffic",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (client, direction) (label_replace(wan:client_app_receive_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"up\", \"\", \"\"))",
+                        "instant": false,
+                        "legendFormat": "{{client}} {{direction}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bps",
+                  "links": [
+                    {
+                      "title": "Open WAN clients",
+                      "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__field.labels.client:percentencode}",
+                      "oneClick": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The radio network's Internet traffic from flow export, down and up. The EP-R6 masquerades the network, so it is one device, named sce-ep01 from its DHCP lease. Click a line for its apps and destinations on WAN clients. A gap is a time the network sent nothing to the Internet, or flow export saw nothing (compare VLAN 140 traffic).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-33": {
+        "kind": "Panel",
+        "spec": {
+          "id": 34,
           "title": "Router BGP session resets",
           "links": [
             {
@@ -3265,6 +4078,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Router BGP session resets"
                       }
                     }
@@ -3331,10 +4168,10 @@
           "description": "Times each of the router's BGP sessions restarted in the range: its uptime went back. A session that dropped and came back between scrapes still counts. Only site 1 observes the router.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-27": {
+      "panel-34": {
         "kind": "Panel",
         "spec": {
-          "id": 28,
+          "id": 35,
           "title": "Cilium BGP session changes",
           "links": [
             {
@@ -3454,6 +4291,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Cilium BGP session changes"
                       }
                     }
@@ -3520,10 +4381,10 @@
           "description": "State changes of each node's Cilium BGP session with its distro's FRR in the range. Sampled at each scrape, so a shorter flap can be missed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-28": {
+      "panel-35": {
         "kind": "Panel",
         "spec": {
-          "id": 29,
+          "id": 36,
           "title": "Path hop changes",
           "links": [
             {
@@ -3643,6 +4504,30 @@
                         "site": "Site of the system",
                         "domain": "Domain",
                         "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
                         "Value": "Path hop changes"
                       }
                     }
@@ -4163,7 +5048,7 @@
                           "kind": "AutoGridLayout",
                           "spec": {
                             "columnWidthMode": "narrow",
-                            "rowHeightMode": "standard",
+                            "rowHeightMode": "short",
                             "items": [
                               {
                                 "kind": "AutoGridLayoutItem",
@@ -4189,6 +5074,118 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-28"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 6,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-29"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-30"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-31"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-32"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Radio link"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-33"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-34"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-35"
                                   }
                                 }
                               }

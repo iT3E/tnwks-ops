@@ -1,0 +1,422 @@
+---
+# Phase window: the procedure runs the window forward, steps 1 to 9, with A
+# in the place of the present account and B in the place of the new one. For
+# the test of the way back after the demotion, the procedure first puts A into
+# Administrators (logged), and step 7 takes it out (logged); then the play
+# takes away A's own batch right, so A is like the real demoted account. The
+# procedure does not restart (restart is off). Then the reads of B.
+#
+# The phase runs after setup (no marker yet), or again after a window that
+# went back (the last marker is wayback-done), as a second real window
+# would. Before any task starts, a read shows the state that the window
+# starts from: A owns the distro at its path, with the rules that window
+# step 4 saved, when there are any; A's start task is enabled and B's is
+# disabled; A holds its own batch right; no list of the tasks that step 2
+# disabled; no disk file at B's path or in the side folder, and B lists no
+# distro. A's read starts its distro, as the keepalive holds it in the real
+# case; window step 3 stops it.
+#
+# First, the copies of the scripts, the configs and the tasks of this
+# release on the host (host_files.yml). Then a read of A's disk file against
+# the rules that the last window saved
+# (after a way back), the read of the state and their checks, all before any
+# change. Then the rules of an older WSL on A's disk file and its folder
+# (older_disk.yml, the same tasks as setup), so that each window starts from
+# that form. A stays the owner of the file, with full control, so its
+# start and the rule that WSL adds for its VM need nothing more; A's read
+# after it shows that its distro starts.
+
+- name: The live parts at the start
+  ansible.builtin.include_tasks: live.yml
+
+- name: The groups at the start
+  ansible.builtin.include_tasks: groups.yml
+
+- name: Read the accounts of the rehearsal
+  ansible.builtin.include_tasks: read_accounts.yml
+
+# The copies of this release on the host before anything reads with them
+# (read_disk.yml runs the functions of the procedure's copy): only at the
+# marker of no started window, which host_files.yml checks first. The other
+# checks of the state follow; a stop there leaves the copies of this release
+# and no started window.
+- name: The copies of the scripts, the configs and the tasks on the host (refresh)
+  ansible.builtin.include_tasks: host_files.yml
+  vars:
+    wsl_move_rehearsal_host_files: refresh
+
+- name: The window, and the reads after it
+  when: not ansible_check_mode
+  block:
+    - name: The rules of A's disk file as the last way back left them
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: a, rule: saved}
+
+    - name: The owner and the rules of A's disk file as the last way back left them, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    - name: Keep the read of A's disk file before its rules change
+      ansible.builtin.set_fact:
+        wsl_move_rehearsal_disk_last: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    - name: Read the state before the window
+      ansible.windows.win_powershell:
+        parameters:
+          State: "{{ wsl_move_rehearsal_state_file }}"
+          Prefix: "{{ wsl_move_rehearsal_prefix }}"
+          DiskA: '{{ wsl_move_rehearsal_accounts.a.folder }}\{{ wsl_move_rehearsal_disk_name }}'
+          DiskB: '{{ wsl_move_rehearsal_accounts.b.folder }}\{{ wsl_move_rehearsal_disk_name }}'
+          DiskSide: '{{ wsl_move_rehearsal_side }}\{{ wsl_move_rehearsal_disk_name }}'
+          SidA: "{{ wsl_move_rehearsal_sids.a }}"
+          NameA: "{{ wsl_move_rehearsal_accounts.a.name }}"
+        script: |
+          param([string]$State, [string]$Prefix, [string]$DiskA, [string]$DiskB, [string]$DiskSide, [string]$SidA, [string]$NameA)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $lines = @(Get-Content -LiteralPath $State | Where-Object { $_.Trim() })
+          $last = if ($lines.Count) { "$(($lines[-1] -split ' ', 2)[1])".Trim() } else { '' }
+          # The batch right of A, as the local policy holds it: secedit writes
+          # an account as *SID, or by its name.
+          $file = Join-Path $env:TEMP 'tnwks-moverh-rights.inf'
+          Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+          $out = & { $ErrorActionPreference = 'Continue'; secedit.exe /export /areas USER_RIGHTS /cfg $file /quiet 2>&1 | ForEach-Object { "$_" } } | Out-String
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $file)) { throw "secedit did not export the rights ($LASTEXITCODE): $out" }
+          $line = @(Get-Content -LiteralPath $file | Where-Object { $_ -match '^SeBatchLogonRight\s*=' })
+          Remove-Item -LiteralPath $file -Force
+          $held = @(if ($line) { ($line[0] -split '=', 2)[1].Split(',') | ForEach-Object { $_.Trim().TrimStart('*') } })
+          $startA = Get-ScheduledTask -TaskName "$Prefix-a-start"
+          $startB = Get-ScheduledTask -TaskName "$Prefix-b-start"
+          [pscustomobject]@{
+              last_marker = $last
+              disabled_list = [bool](Test-Path -LiteralPath "$State.disabled")
+              disk_a = [bool](Test-Path -LiteralPath $DiskA)
+              disk_b = [bool](Test-Path -LiteralPath $DiskB)
+              disk_side = [bool](Test-Path -LiteralPath $DiskSide)
+              batch_a = @($held | Where-Object { $_ -eq $SidA -or $_ -eq $NameA -or $_ -like "*\$NameA" }).Count -gt 0
+              # Enabled is the flag of a task; its State reads Running while an
+              # instance runs.
+              start_a = "$($startA.State)"
+              start_a_enabled = [bool]$startA.Settings.Enabled
+              start_b = "$($startB.State)"
+              start_b_enabled = [bool]$startB.Settings.Enabled
+          }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_before
+
+    # Only the state that the window starts from: no task starts on another.
+    - name: The window starts after setup or after a way back, with the files, the tasks and the right of that state
+      vars:
+        before: "{{ wsl_move_rehearsal_before.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - before.last_marker in ['', 'wayback-done']
+          - not before.disabled_list
+          - before.disk_a and not before.disk_b and not before.disk_side
+          - before.batch_a
+          - before.start_a_enabled and before.start_a in ['Ready', 'Running']
+          - not before.start_b_enabled and before.start_b == 'Disabled'
+        fail_msg: "The state before the window is not the one that it starts from. Nothing is changed: {{ before }}"
+        quiet: true
+
+    # After a way back, the file had the owner, the protection and the
+    # explicit rules that window step 4 saved, and the rules of WSL at most
+    # (rules_ok, as way back step 3 compares). The inherited rules are not
+    # part of it: whether they are those that the folder gives (inherits_ok)
+    # prints here, and the rules of an older WSL give them next. The read
+    # comes before those rules, and this check before any change.
+    - name: After a way back, A's disk file had its saved rules
+      vars:
+        before: "{{ wsl_move_rehearsal_before.output | last }}"
+        disk_a: "{{ wsl_move_rehearsal_disk_last }}"
+      ansible.builtin.assert:
+        that:
+          - before.last_marker == '' or (disk_a.saved and disk_a.rules_ok)
+        fail_msg: "A's disk file has not the rules that the last window saved. Nothing is changed: {{ disk_a }}"
+        quiet: true
+
+    - name: Whether A's disk file had the inherited rules that its folder gives, before the rules of an older WSL
+      ansible.builtin.debug:
+        msg: >-
+          inherits_ok {{ wsl_move_rehearsal_disk_last.inherits_ok }}; the folder gives '{{ wsl_move_rehearsal_disk_last.gives }}';
+          {{ wsl_move_rehearsal_disk_last.inherited_note | default('', true) or 'the inherited rules are those of the saved set' }}
+
+    # The first change of the phase, after the checks of the state.
+    - name: A's disk file like a file of an older WSL
+      ansible.builtin.include_tasks: older_disk.yml
+
+    # Right after the shaping, before A's read starts its distro: the next
+    # reads (after A's read, and the log of window step 4 after A's stop)
+    # show whether WSL's grant at the start keeps the inherited rules. Those
+    # reads assert nothing on them: the guard of window step 1 decides, and
+    # stops the window with nothing changed when they are gone.
+    - name: The rules of A's disk file right after the rules of an older WSL
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: a, rule: none}
+
+    - name: The owner and the rules of A's disk file right after the rules of an older WSL, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    # The shaping must have given the file the inherited rules of its folder.
+    - name: A's disk file has the inherited rules that its folder gives, right after the rules of an older WSL
+      vars:
+        disk_a: "{{ wsl_move_rehearsal_disk.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - disk_a.inherits_ok
+        fail_msg: "A's disk file has not the inherited rules that its folder gives after the rules of an older WSL: {{ disk_a }}"
+        quiet: true
+
+    - name: A reads its distro before the window
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: a, step: check}
+
+    - name: B lists no distro before the window
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: check}
+
+    - name: The rules of A's disk file before the window
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: a, rule: none}
+
+    - name: The owner and the rules of A's disk file before the window, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    # A reads its distro with the rules of an older WSL.
+    - name: A owns the distro at its path, and B lists none
+      vars:
+        check_a: "{{ wsl_move_rehearsal_runs.check[-2] }}"
+        check_b: "{{ wsl_move_rehearsal_runs.check[-1] }}"
+      ansible.builtin.assert:
+        that:
+          - check_a.result.registered
+          - check_a.result.read_exit == 0
+          - check_a.result.repeated_count == 0
+          - check_a.result.disk | lower == (wsl_move_rehearsal_accounts.a.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
+          - check_a.result.token == wsl_move_rehearsal_data_token
+          - not check_b.result.registered
+        fail_msg: "The window does not start: {{ check_a }} {{ check_b }}"
+        quiet: true
+
+    - name: Read when the password of B was last set
+      ansible.windows.win_powershell:
+        parameters:
+          Name: "{{ wsl_move_rehearsal_accounts.b.name }}"
+        script: |
+          param([string]$Name)
+          $Ansible.Changed = $false
+          (Get-LocalUser -Name $Name).PasswordLastSet.ToUniversalTime().ToString('o')
+      register: wsl_move_rehearsal_b_password
+
+    - name: The window procedure, forward
+      ansible.builtin.include_tasks: run_procedure.yml
+      vars:
+        wsl_move_rehearsal_request: {mode: forward, group_steps: true, stop_after: 0, rehearsal_group_test: true}
+        wsl_move_rehearsal_last_markers: ['', wayback-done]
+
+    # A leaves Administrators at window step 7. The real present account then
+    # has no batch right at all; A loses its own as well.
+    - name: A no longer holds its own batch right
+      ansible.windows.win_user_right:
+        name: SeBatchLogonRight
+        users: ["{{ wsl_move_rehearsal_sids.a }}"]
+        action: remove
+
+    - name: B reads its distro after the window
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: check}
+
+    - name: The reads of the folders, the files and the tasks after the window
+      ansible.builtin.include_tasks: read_window.yml
+
+    - name: The rules of B's disk file after the window
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: b, rule: moved}
+
+    # What WSL itself adds to the rule of window step 4: the import and its
+    # first start, the stop of step 6, and B's read since.
+    - name: The owner and the rules of B's disk file after its import and first start, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    # The value that the import wrote (DefaultUid) shows at the next start of
+    # the distro: the import ran id -u before it wrote the value, and the read
+    # after the stop of step 6 is a new start.
+    - name: B owns the distro, with its data, and WSL took the value that B's import wrote
+      vars:
+        check: "{{ wsl_move_rehearsal_runs.check | last }}"
+        windowed: "{{ wsl_move_rehearsal_window_read.output | last }}"
+        moved: "{{ wsl_move_rehearsal_disk.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - check.result.registered
+          - check.result.repeated_count == 0
+          - check.result.disk | lower == (wsl_move_rehearsal_accounts.b.folder ~ '\\' ~ wsl_move_rehearsal_disk_name) | lower
+          - check.result.token == wsl_move_rehearsal_data_token
+          - check.result.uid == (wsl_move_rehearsal_registration_values.DefaultUid | string)
+          - check.result.default_uid == wsl_move_rehearsal_registration_values.DefaultUid
+          - check.result.default_distribution
+          - check.result.oobe_complete == 1
+          - check.result.distribution_conf_sha256 == wsl_move_rehearsal_distribution_conf | hash('sha256')
+          - check.result.mem_total_kib | int > 0
+          - check.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
+          - windowed.import_b.uid_after_import is search('(^|\n)0$')
+          - moved.rules_ok
+          - not windowed.disk_at_a
+          - windowed.marker_a and windowed.marker_b
+          - windowed.icon_owner_b | length > 0
+          - windowed.window_tasks_enabled_no_trigger
+          - windowed.start_b_enabled and not windowed.start_a_enabled
+          - windowed.start_b == 'Ready' and windowed.start_a == 'Disabled'
+          - windowed.password_b == (wsl_move_rehearsal_b_password.output | last)
+          - wsl_move_rehearsal_procedure.result == 'done'
+          - wsl_move_rehearsal_procedure.markers == ['window-started', 'window-done']
+          - wsl_move_rehearsal_procedure.groups == ['joined', 'left']
+          - wsl_move_rehearsal_procedure.would_restart == 1
+        fail_msg: "After the window, a read did not pass: {{ check }} {{ windowed }} {{ moved }} {{ wsl_move_rehearsal_procedure.log }}"
+        quiet: true
+
+    # WSL grants each new VM access to the disk file as B, and a clean stop
+    # of the VM removes the rule again. B's start task holds the distro, as
+    # the keepalive does; the reads show the rule of the VM while it runs and
+    # none after B's stop task.
+    - name: The start task of B, started by the play
+      ansible.windows.win_powershell:
+        parameters:
+          Task: "{{ wsl_move_rehearsal_prefix }}-b-start"
+          Sid: "{{ wsl_move_rehearsal_sids.b }}"
+        script: |
+          param([string]$Task, [string]$Sid)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $true
+          Start-ScheduledTask -TaskName $Task
+          $deadline = (Get-Date).AddMinutes(3)
+          do {
+              Start-Sleep -Seconds 3
+              $running = "$((Get-ScheduledTask -TaskName $Task).State)" -eq 'Running'
+              $wsl = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('wsl.exe', 'wslhost.exe', 'wslrelay.exe') } | Where-Object {
+                  $o = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue; $o -and $o.Sid -eq $Sid })
+          } while (-not ($running -and $wsl.Count) -and (Get-Date) -lt $deadline)
+          [pscustomobject]@{ running = $running; wsl = $wsl.Count }
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      register: wsl_move_rehearsal_b_started
+      failed_when: not ((wsl_move_rehearsal_b_started.output | last).running and (wsl_move_rehearsal_b_started.output | last).wsl > 0)
+
+    - name: The rules of B's disk file while its VM runs
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: b, rule: moved}
+
+    - name: The owner and the rules of B's disk file while its VM runs, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    - name: While B's VM runs, the file has the rule of step 4 and a rule of the VM
+      vars:
+        running: "{{ wsl_move_rehearsal_disk.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - running.rules_ok
+          - running.vm > 0
+          - running.capability <= 1
+        fail_msg: "While B's VM runs, the rules of the file are not as they should be: {{ running }}"
+        quiet: true
+
+    - name: Stop the start task of B
+      ansible.windows.win_powershell:
+        parameters:
+          Task: "{{ wsl_move_rehearsal_prefix }}-b-start"
+        script: |
+          param([string]$Task)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $true
+          Stop-ScheduledTask -TaskName $Task
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+
+    - name: B stops its distro and its VM, a clean stop
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: stop}
+
+    - name: The rules of B's disk file after the clean stop of its VM
+      ansible.builtin.include_tasks: read_disk.yml
+      vars:
+        wsl_move_rehearsal_disk_read: {key: b, rule: moved, wait: 60}
+
+    - name: The owner and the rules of B's disk file after the clean stop of its VM, each account masked
+      ansible.builtin.debug:
+        msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+    - name: After the clean stop, the file has the rule of step 4 and no rule of a VM
+      vars:
+        stopped: "{{ wsl_move_rehearsal_disk.output | last }}"
+      ansible.builtin.assert:
+        that:
+          - stopped.rules_ok
+          - stopped.vm == 0
+          - stopped.capability == 0
+        fail_msg: "After the clean stop of B's VM, the rules of the file are not as they should be: {{ stopped }}"
+        quiet: true
+
+    - name: B makes, replaces and deletes a file of its own, and can not remove the marker
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: filetest}
+
+    - name: The unregister task of B refuses while a file is at the path of its registration
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: unregister, expect: refused}
+
+    - name: The import task of B refuses another path while B lists the distro
+      ansible.builtin.include_tasks: run_task.yml
+      vars:
+        wsl_move_rehearsal_run: {key: b, step: import-elsewhere, expect: refused}
+
+    # No apply changes the state of a start task (keep_task_enabled_state): B's
+    # is enabled by the window, A's disabled, and the template of B's says
+    # disabled.
+    - name: An apply after the window does not change the start tasks
+      tnwks_win_scheduled_task:
+        name: "{{ wsl_move_rehearsal_prefix }}-{{ task.key }}-start"
+        xml: "{{ lookup('ansible.builtin.template', 'account-task.xml.j2') }}"
+        s4u_user: "{{ wsl_move_rehearsal_accounts[task.key].name }}"
+        s4u_description: "{{ wsl_move_rehearsal_accounts[task.key].description }}"
+        keep_task_enabled_state: true
+      vars:
+        ansible_become: true
+        ansible_become_method: ansible.builtin.runas
+        ansible_become_user: SYSTEM
+      loop: [{key: a, step: start}, {key: b, step: start}]
+      loop_control:
+        loop_var: task
+        label: "{{ task.key }}-start"
+      register: wsl_move_rehearsal_keep
+      failed_when: wsl_move_rehearsal_keep.changed or wsl_move_rehearsal_keep.failed | default(false)
+
+    - name: B imports, unregisters and imports again into the same folder
+      ansible.builtin.include_tasks: b_cycle.yml
+
+- name: The groups at the end
+  ansible.builtin.include_tasks: groups.yml
+
+- name: The live parts at the end
+  ansible.builtin.include_tasks: live.yml

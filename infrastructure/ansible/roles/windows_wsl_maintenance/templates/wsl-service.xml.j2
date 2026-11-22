@@ -41,7 +41,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>powershell.exe</Command>
-      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ wsl_watchdog_dir | e }}\Watch-TnwksWsl.ps1" -ServiceOnly -LogDir "{{ wsl_service_log_dir | e }}"{% if wsl_keepalive_enabled | bool %} -KeepAliveTask "{{ wsl_keepalive_task | e }}"{% endif %}</Arguments>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ wsl_watchdog_dir | e }}\Watch-TnwksWsl.ps1" -ServiceOnly -LogDir "{{ wsl_service_log_dir | e }}"{% if wsl_keepalive_enabled | bool %} -KeepAliveTask "{{ wsl_service_keepalive_task | e }}"{% endif %}</Arguments>
     </Exec>
   </Actions>
 </Task>

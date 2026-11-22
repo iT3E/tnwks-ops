@@ -1,0 +1,71 @@
+---
+# windows_wsl_rehearsal: the rehearsal of the account change on a Windows host
+# (Design Doc 0004, section 9, step 0, "The rehearsal"). It runs only where
+# wsl_rehearsal (group_vars/windows_hosts.yml) is on.
+#
+# A temporary local account with no admin group owns a small distro of its
+# own and starts it from its own tasks (S4U, with no elevation), with nobody
+# signed in. WSL keeps one session and one VM for each account, so the
+# rehearsal touches no other distro, task or VM. The checks are
+# playbooks/windows-rehearsal-check.yml.
+#
+# absent: the removal (Design Doc 0004, task 10.6). A task of the account
+# stops its distro and its VM and unregisters the distro, then the play
+# removes the tasks, the batch right, the profile, the account and the
+# folder, in that order. The check play then reads the exit check.
+wsl_rehearsal_state: absent
+
+# The temporary account. The play makes it with a random password that it
+# keeps nowhere: an S4U task needs no password. It is a member of Users only,
+# and it gets the right to log on as a batch job, which S4U needs. It may not
+# log on in any other way, and it has no tile on the sign-in screen.
+wsl_rehearsal_account: tnwks-rehearsal
+# The comment of the account. New-LocalUser of Windows PowerShell 5.1 takes a
+# name of 20 characters at most and a description of 48 at most.
+wsl_rehearsal_account_description: 'tnwks-ops: temporary account, WSL rehearsal'
+# Its distro, in its own profile (%LOCALAPPDATA%\<name>).
+wsl_rehearsal_distro: tnwks-rehearsal
+
+# The scripts and the root file system: only SYSTEM and the Administrators
+# may change them, and Users may read (tnwks_win_dir_acl, no writer).
+wsl_rehearsal_dir: 'C:\ProgramData\tnwks-rehearsal'
+# The results of the tasks of the account: it may make and change files here.
+wsl_rehearsal_log_dir: '{{ wsl_rehearsal_dir }}\log'
+# The test disk file, which the account may read and write.
+wsl_rehearsal_disk_dir: '{{ wsl_rehearsal_dir }}\disk'
+wsl_rehearsal_disk: '{{ wsl_rehearsal_disk_dir }}\mount-test.vhdx'
+wsl_rehearsal_disk_mib: 64
+
+# The root file system, pinned by its digest (alpinelinux.org, the release
+# file of v3.24 and its .sha256). The controller downloads it and checks it,
+# and the play checks it again on the host before the import.
+wsl_rehearsal_rootfs:
+  url: https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.4-x86_64.tar.gz
+  sha256: cdaa38cb8de3537967ee5b6c9b6cd00cc962da2b018e6eea48696bb274923012
+wsl_rehearsal_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/tnwks-ops/windows-wsl-rehearsal"
+
+# The .wslconfig of the account: a memory limit for its VM, so it does not
+# compete with the cluster, and no key for networking. Set from a read of the
+# free memory of the host.
+wsl_rehearsal_memory: 1GB
+
+# The tasks of the account. Each runs Invoke-TnwksRehearsal.ps1 with its step,
+# but the start, which holds one wsl.exe client as the keepalive does.
+wsl_rehearsal_task_prefix: tnwks-rehearsal
+wsl_rehearsal_steps: [probe, import, write, mount]
+# Every task the role has registered: the steps, the start and the removal.
+wsl_rehearsal_tasks: "{{ wsl_rehearsal_steps + ['start', 'remove'] }}"
+
+# The logons that the account does not need: at the keyboard, by Remote
+# Desktop, and from the network. The batch logon of its S4U tasks is another
+# right (SeBatchLogonRight).
+wsl_rehearsal_deny_rights:
+  - SeDenyInteractiveLogonRight
+  - SeDenyRemoteInteractiveLogonRight
+  - SeDenyNetworkLogonRight
+# A value 0 here, named for the account, keeps it off the sign-in screen.
+wsl_rehearsal_userlist_key: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList'
+
+# The textfile directory of windows_exporter, where the write test tries a
+# file (the same directory as the write test of the host check).
+wsl_rehearsal_write_test_dir: 'C:\Program Files\windows_exporter\textfile_inputs'

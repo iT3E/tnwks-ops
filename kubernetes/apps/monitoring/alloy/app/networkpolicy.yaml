@@ -1,0 +1,100 @@
+---
+# Alloy of this site: who may open a connection to its pod, and on which
+# port (Design Doc 0003, section 4.2.8, "The open port of the collector";
+# docs/operations/observability-implementation.md, "The network rule of
+# Alloy"). Without it, each pod of either cluster could send OTLP to the
+# receiver of the agents: false series of the product into Prometheus,
+# and a false span of a completed turn into Tempo.
+#
+# The senders, from the flow log of Cilium (Hubble, site 1, 2026-11-21)
+# and from git:
+#   4318, the OTLP receiver of the agents: the agent pod of each personal
+#     trust domain (main, finance, pilot: diagnostics.otel in openclaw.json);
+#     the sandbox supervisors of agents-workflows, for the traces of a run
+#     (run-receiver/app/policies/renovate-reviewer.yaml; the supervisor opens
+#     each connection that the sandbox policy approves); the daily test span
+#     (trace-filter-check.yaml).
+#   12347, the Faro receiver: the public ingress (class nginx, the Ingress
+#     of helmrelease.yaml), for the browsers of the sites.
+#   12345, the HTTP server (metrics, readiness): Prometheus of this site
+#     (the ServiceMonitor of the chart), and the kubelet probes from the
+#     local host. The config reloader calls Alloy on the loopback of the pod,
+#     and no rule sees it; a kubectl port-forward too.
+#
+# Both WSL clusters are one Cilium Cluster Mesh. A selector without the
+# cluster label selects this cluster only (policy-default-local-cluster), so
+# each selector names its cluster. Alloy runs on site 1 only
+# (kubernetes/apps/monitoring is in the app list of site 1), so this rule
+# exists on site 1 only.
+#
+# A new sender adds its pod below in the same PR. Without it, its
+# connections are dropped and Hubble shows them as POLICY_DENIED.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: alloy
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+      app.kubernetes.io/instance: alloy
+  ingress:
+    # The OTLP receiver of the agents (otelcol.receiver.otlp "agents").
+    - fromEndpoints:
+        # The agent pod of each personal trust domain.
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: agent
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-finance
+            app.kubernetes.io/name: agent
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-pilot
+            app.kubernetes.io/name: agent
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The sandbox supervisors of the workflow agents. The workload pod
+        # of a sandbox has no egress at all.
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-workflows
+            openshell.ai/boundary-role: supervisor
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The daily test span of the text filter.
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: trace-filter-check
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "4318"
+              protocol: TCP
+    # The Faro receiver, through the public ingress.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: networking
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/instance: ingress-nginx
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "12347"
+              protocol: TCP
+    # The scrape of Prometheus of this site.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+            operator.prometheus.io/name: kube-prometheus-stack-prometheus
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "12345"
+              protocol: TCP
+    # The kubelet probes, from the local host.
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "12345"
+              protocol: TCP

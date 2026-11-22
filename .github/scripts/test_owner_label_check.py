@@ -32,6 +32,9 @@ WORKFLOW_BOT = {"login": "workflow-bot[bot]", "id": 3003, "type": "Bot", "site_a
 REVIEWER_BOT = {"login": "reviewer-app[bot]", "id": 4004, "type": "Bot", "site_admin": False}
 OTHER_USER = {"login": "someone-else", "id": 5005, "type": "User", "site_admin": False}
 REVIEWER_APP = {"id": 777, "slug": "reviewer-app", "node_id": "A_1", "owner": OWNER, "name": "reviewer app"}
+AGENT_APP = {"login": "agent-app[bot]", "id": 6006, "type": "Bot", "site_admin": False}
+# The recorded bodies name Renovate with a neutral login.
+check.RENOVATE = DEPS_BOT["login"]
 
 _ids = iter(range(34866273000, 34866299999))
 
@@ -72,17 +75,22 @@ PUSH = {
 }
 
 
-def pr(labels: list[str], head: str = HEAD, head_repo: str | None = REPO) -> dict:
+def pr(labels: list[str], head: str = HEAD, head_repo: str | None = REPO, user: dict = DEPS_BOT,
+       changed_files: int = 1, base: str = "main", title: str = "chore: a change", body: str | None = None) -> dict:
     return {
         "number": 42,
         "state": "open",
+        "title": title,
+        "body": body,
+        "user": user,
+        "changed_files": changed_files,
         "labels": [{"name": n, "color": "000000"} for n in labels],
         "head": {
             "sha": head,
             "ref": "renovate/example",
             "repo": None if head_repo is None else {"full_name": head_repo},
         },
-        "base": {"ref": "main", "repo": {"full_name": REPO}},
+        "base": {"ref": base, "repo": {"full_name": REPO, "default_branch": "main"}},
     }
 
 
@@ -254,6 +262,7 @@ def routes(p: dict, pages: list[list], push: list | None = None) -> dict:
         nxt = {"Link": f'<{BASE}/issues/42/events?per_page=100&page={i + 2}>; rel="next"'} if i + 1 < len(pages) else {}
         r[url] = (200, page, nxt)
     r[f"{BASE}/activity?"] = (200, [PUSH] if push is None else push, {})
+    r[f"{BASE}/pulls/42/commits?per_page=100"] = (200, [], {})
     return r
 
 
@@ -308,7 +317,7 @@ class Run(unittest.TestCase):
         api = FakeAPI(routes(pr(["impact/high", "owner/review"]), [OPENED]))
         v = self.go(api)
         self.assertFalse(v.ok)
-        self.assertEqual(sum(1 for c in api.calls if "/pulls/42" in c), check.ATTEMPTS)
+        self.assertEqual(sum(1 for c in api.calls if c == f"{BASE}/pulls/42"), check.ATTEMPTS)
 
     def test_branch_ref_is_quoted(self):
         p = pr(["impact/high", "owner/review"])
@@ -342,6 +351,412 @@ class Main(unittest.TestCase):
         del env["OWNER_ID"]
         with mock.patch.dict(os.environ, env, clear=True), mock.patch("builtins.print"):
             self.assertEqual(check.main(), 1)
+
+
+def entry(actor: dict, at: str = "2026-11-02T14:18:29Z", after: str = HEAD, kind: str = "push") -> dict:
+    return dict(PUSH, id=next(_ids), actor=actor, timestamp=at, after=after, activity_type=kind)
+
+
+class AgentApp(unittest.TestCase):
+    """The three rules of the tier of owner/approved for the App of the main agent."""
+
+    def setUp(self):
+        check.MAIN_AGENT_APP = AGENT_APP["login"]
+
+    def tearDown(self):
+        check.MAIN_AGENT_APP = ""
+
+    def go(self, p, events=(), pushes=None, files=()):
+        pushes = [entry(p["user"])] if pushes is None else pushes
+        return check.decide(p, list(events), pushes[0] if pushes else None, [], HEAD, OWNER_ID,
+                            pushes=pushes, files=list(files))
+
+    def test_another_author_waits_for_owner_approved(self):
+        for author in (OTHER_USER, REVIEWER_BOT, WORKFLOW_BOT):
+            v = self.go(pr([], user=author))
+            self.assertFalse(v.ok, author)
+            self.assertIn("owner/approved tier (the author", v.message)
+            self.assertIn("waits for the owner to add owner/approved", v.message)
+
+    def test_another_author_passes_with_the_owners_label_after_the_push(self):
+        events = [event("labeled", OWNER, "2026-11-02T15:00:00Z", "owner/approved")]
+        v = self.go(pr(["owner/approved"], user=OTHER_USER), events)
+        self.assertTrue(v.ok, v.message)
+
+    def test_owner_review_is_not_enough_for_another_author(self):
+        events = [event("labeled", OWNER, "2026-11-02T15:00:00Z", "owner/review")]
+        self.assertFalse(self.go(pr(["owner/review"], user=OTHER_USER), events).ok)
+
+    def test_until_the_app_is_set_it_is_another_author(self):
+        check.MAIN_AGENT_APP = ""
+        v = self.go(pr([], user=AGENT_APP), files=[{"filename": "docs/a.md"}])
+        self.assertFalse(v.ok)
+        self.assertIn("is not the owner, Renovate or the App", v.message)
+
+    def test_a_push_of_an_app_into_the_branch_of_the_owner(self):
+        pushes = [entry(AGENT_APP, "2026-11-02T14:20:00Z"), entry(OWNER, "2026-11-02T14:00:00Z")]
+        v = self.go(pr([], user=OWNER), pushes=pushes)
+        self.assertFalse(v.ok)
+        self.assertIn("agent-app[bot] (Bot) pushed to the branch of another author", v.message)
+
+    def test_an_old_push_of_an_app_still_counts(self):
+        pushes = [entry(OWNER, "2026-11-02T14:20:00Z"), entry(AGENT_APP, "2026-11-02T14:00:00Z", after=OLD_HEAD)]
+        self.assertFalse(self.go(pr([], user=OWNER), pushes=pushes).ok)
+
+    def test_a_push_of_an_app_into_a_renovate_branch(self):
+        pushes = [entry(AGENT_APP, kind="force_push"), entry(DEPS_BOT, "2026-11-02T01:00:00Z")]
+        self.assertFalse(self.go(pr(["type/patch"]), pushes=pushes).ok)
+
+    def test_the_owner_and_renovate_alone_pass_as_before(self):
+        self.assertTrue(self.go(pr([], user=OWNER), pushes=[entry(OWNER)]).ok)
+        self.assertTrue(self.go(pr(["type/patch"]), pushes=[entry(DEPS_BOT)]).ok)
+
+    def test_the_app_outside_the_class_passes_at_once(self):
+        files = [{"filename": "kubernetes/apps/selfhosted/example/app/helmrelease.yaml"}, {"filename": "docs/a.md"}]
+        v = self.go(pr([], user=AGENT_APP, changed_files=2), files=files)
+        self.assertTrue(v.ok, v.message)
+
+    def test_the_owner_may_push_into_the_branch_of_the_app(self):
+        files = [{"filename": "docs/a.md"}]
+        v = self.go(pr([], user=AGENT_APP), pushes=[entry(OWNER), entry(AGENT_APP, "2026-11-02T14:00:00Z")], files=files)
+        self.assertTrue(v.ok, v.message)
+
+    def test_each_path_of_the_class_holds_the_app(self):
+        for path in ("infrastructure/ansible/roles/x/tasks/main.yml", ".github/workflows/ci.yaml",
+                     ".github/scripts/owner-label-check.py", "bin/ci-changes", "talos/wsl/patch.yaml",
+                     "kubernetes/apps/ai/mcp-gateway/app/config/config.yaml", "kubernetes/clusters/wsl/cluster-settings.yaml",
+                     "kubernetes/apps/kube-system/cilium/app/helmrelease.yaml", ".betterleaks.toml", "AGENTS.md"):
+            v = self.go(pr([], user=AGENT_APP), files=[{"filename": path}])
+            self.assertFalse(v.ok, path)
+            self.assertIn("ask-first class", v.message)
+
+    def test_a_rename_out_of_the_class_holds_the_app(self):
+        files = [{"filename": "docs/old-policy.yaml", "previous_filename": "kubernetes/apps/ai/agents/main/agent/app/networkpolicy.yaml"}]
+        self.assertFalse(self.go(pr([], user=AGENT_APP), files=files).ok)
+
+    def test_a_name_that_only_starts_like_a_path_is_not_in_the_class(self):
+        v = self.go(pr([], user=AGENT_APP), files=[{"filename": "binaries/readme.md"}, {"filename": "AGENTS.md.bak"}])
+        self.assertTrue(v.ok, v.message)
+
+    def test_more_files_than_listed_holds_the_app(self):
+        v = self.go(pr([], user=AGENT_APP, changed_files=3001), files=[{"filename": "docs/a.md"}])
+        self.assertFalse(v.ok)
+        self.assertIn("more files than the API lists", v.message)
+
+    def test_the_class_passes_with_the_owners_label(self):
+        events = [event("labeled", OWNER, "2026-11-02T15:00:00Z", "owner/approved")]
+        v = self.go(pr(["owner/approved"], user=AGENT_APP), events, files=[{"filename": "infrastructure/ansible/site.yml"}])
+        self.assertTrue(v.ok, v.message)
+
+    def test_a_fork_of_another_author_fails(self):
+        v = self.go(pr([], user=OTHER_USER, head_repo="someone-else/ops"), pushes=[])
+        self.assertFalse(v.ok)
+        self.assertIn("another repository", v.message)
+
+
+class AgentRun(unittest.TestCase):
+    def setUp(self):
+        check.MAIN_AGENT_APP = AGENT_APP["login"]
+
+    def tearDown(self):
+        check.MAIN_AGENT_APP = ""
+
+    def test_the_files_are_read_for_the_app_only(self):
+        r = routes(pr([], user=AGENT_APP), [[]], push=[entry(AGENT_APP)])
+        r[f"{BASE}/pulls/42/files?per_page=100"] = (200, [{"filename": "infrastructure/edgeos/x.json"}], {})
+        api = FakeAPI(r)
+        v = check.run(api, REPO, 42, HEAD, OWNER_ID, sleep=lambda s: None)
+        self.assertFalse(v.ok)
+        self.assertIn("ask-first class", v.message)
+        api = FakeAPI(routes(pr([], user=OWNER), [[]], push=[entry(OWNER)]))
+        self.assertTrue(check.run(api, REPO, 42, HEAD, OWNER_ID, sleep=lambda s: None).ok)
+        self.assertFalse(any("/files" in c for c in api.calls))
+
+    def test_unreadable_files_fail(self):
+        api = FakeAPI(routes(pr([], user=AGENT_APP), [[]], push=[entry(AGENT_APP)]))
+        v = check.run(api, REPO, 42, HEAD, OWNER_ID, sleep=lambda s: None)
+        self.assertFalse(v.ok)
+
+    def test_each_page_of_the_activity_is_read(self):
+        r = routes(pr([], user=OWNER), [[]])
+        first = f"{BASE}/activity?ref=refs%2Fheads%2Frenovate%2Fexample&direction=desc&per_page=100"
+        r[first] = (200, [entry(OWNER)], {"Link": f'<{first}&page=2>; rel="next"'})
+        r[first + "&page=2"] = (200, [entry(AGENT_APP, "2026-11-01T00:00:00Z")], {})
+        v = check.run(FakeAPI(r), REPO, 42, HEAD, OWNER_ID, sleep=lambda s: None)
+        self.assertFalse(v.ok)
+        self.assertIn("pushed to the branch of another author", v.message)
+
+
+class Trust(unittest.TestCase):
+    """--trust, for the gates of the CI (pr-trust.yaml)."""
+
+    def answer(self, p, pushes, actor="owner-account"):
+        return check.trusted(p, pushes, actor, OWNER_ID, "owner-account")
+
+    def test_the_owner_and_renovate_alone_are_trusted(self):
+        self.assertTrue(self.answer(pr([], user=OWNER), [entry(OWNER)]))
+        self.assertTrue(self.answer(pr([]), [entry(DEPS_BOT)], actor=DEPS_BOT["login"]))
+
+    def test_another_actor_is_not(self):
+        self.assertFalse(self.answer(pr([], user=OWNER), [entry(OWNER)], actor=AGENT_APP["login"]))
+
+    def test_another_author_is_not(self):
+        check.MAIN_AGENT_APP = AGENT_APP["login"]
+        try:
+            self.assertFalse(self.answer(pr([], user=AGENT_APP), [entry(AGENT_APP)]))
+        finally:
+            check.MAIN_AGENT_APP = ""
+
+    def test_a_push_of_an_app_into_the_branch_is_not(self):
+        self.assertFalse(self.answer(pr([], user=OWNER), [entry(OWNER), entry(AGENT_APP, "2026-11-01T00:00:00Z")]))
+
+    def test_a_fork_is_not(self):
+        self.assertFalse(self.answer(pr([], user=OWNER, head_repo="someone-else/ops"), []))
+
+    def test_main_prints_false_when_it_can_not_tell(self):
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+        env = {"REPO": REPO, "PR": "42", "OWNER_ID": str(OWNER_ID), "ACTOR": "owner-account", "OWNER_LOGIN": "owner-account"}
+        out, err = io.StringIO(), io.StringIO()
+        old = dict(check.os.environ)
+        try:
+            check.os.environ.update(env)
+            with redirect_stdout(out), redirect_stderr(err):
+                self.assertEqual(check.trust_main(FakeAPI({})), 0)
+        finally:
+            check.os.environ.clear()
+            check.os.environ.update(old)
+        self.assertEqual(out.getvalue(), "trusted=false\n")
+
+    def test_main_prints_true_for_the_owner(self):
+        import io
+        from contextlib import redirect_stdout
+        env = {"REPO": REPO, "PR": "42", "OWNER_ID": str(OWNER_ID), "ACTOR": "owner-account", "OWNER_LOGIN": "owner-account"}
+        out = io.StringIO()
+        old = dict(check.os.environ)
+        try:
+            check.os.environ.update(env)
+            with redirect_stdout(out):
+                check.trust_main(FakeAPI(routes(pr([], user=OWNER), [[]], push=[entry(OWNER)])))
+        finally:
+            check.os.environ.clear()
+            check.os.environ.update(old)
+        self.assertEqual(out.getvalue(), "trusted=true\n")
+
+
+def commit(message: str = "fix: a change", author: dict | None = None, committer: dict | None = None,
+           sha: str = HEAD) -> dict:
+    return {"sha": sha, "commit": {"message": message}, "author": author, "committer": committer}
+
+
+WEB_FLOW = {"login": "web-flow", "id": 19864447, "type": "User", "site_admin": False}
+APPROVED_NOW = [event("labeled", OWNER, "2026-11-02T15:00:00Z", "owner/approved")]
+
+
+class Base(unittest.TestCase):
+    """A PR held for the owner must have the default branch as its base."""
+
+    def setUp(self):
+        check.MAIN_AGENT_APP = AGENT_APP["login"]
+
+    def tearDown(self):
+        check.MAIN_AGENT_APP = ""
+
+    def go(self, p, events=(), pushes=None, files=(), commits=()):
+        pushes = [entry(p["user"])] if pushes is None else pushes
+        return check.decide(p, list(events), pushes[0] if pushes else None, [], HEAD, OWNER_ID,
+                            pushes=pushes, files=list(files), commits=list(commits))
+
+    def test_an_app_pr_to_another_base_fails_even_outside_the_class(self):
+        v = self.go(pr([], user=AGENT_APP, base="x"), files=[{"filename": "docs/a.md"}])
+        self.assertFalse(v.ok)
+        self.assertIn("the base x is not the default branch", v.message)
+
+    def test_the_owners_label_does_not_pass_another_base(self):
+        v = self.go(pr(["owner/approved"], user=OTHER_USER, base="x"), APPROVED_NOW)
+        self.assertFalse(v.ok)
+        self.assertIn("not the default branch", v.message)
+
+    def test_a_stacked_pr_of_the_owner_passes_as_before(self):
+        self.assertTrue(self.go(pr([], user=OWNER, base="x")).ok)
+
+    def test_a_label_before_a_change_of_the_base_fails(self):
+        for kind in check.BASE_CHANGES:
+            events = APPROVED_NOW + [event(kind, AGENT_APP, "2026-11-02T15:30:00Z")]
+            v = self.go(pr(["owner/approved"], user=OTHER_USER), events)
+            self.assertFalse(v.ok, kind)
+            self.assertIn("before the base changed", v.message)
+
+    def test_a_label_after_a_change_of_the_base_passes(self):
+        events = [event("base_ref_changed", AGENT_APP, "2026-11-02T14:30:00Z")] + APPROVED_NOW
+        self.assertTrue(self.go(pr(["owner/approved"], user=OTHER_USER), events).ok)
+
+    def test_the_trust_needs_the_default_branch(self):
+        self.assertFalse(check.trusted(pr([], user=OWNER, base="x"), [entry(OWNER)], "owner-account", OWNER_ID,
+                                       "owner-account"))
+
+
+class Skip(Base):
+    """A skip instruction would stop the workflows of the push to main."""
+
+    FORMS = ("[skip ci]", "[ci skip]", "[no ci]", "[skip actions]", "[actions skip]", "[Skip CI]", "[ skip  ci ]",
+             "x\n\n\nskip-checks:true", "x\n\n\nskip-checks: true", "x\n\n\nSkip-Checks: TRUE")
+
+    def test_each_form_in_a_commit_message_fails_the_app(self):
+        for form in self.FORMS:
+            v = self.go(pr(["owner/approved"], user=AGENT_APP), APPROVED_NOW, files=[{"filename": "docs/a.md"}],
+                        commits=[commit(f"docs: one {form}", sha=OLD_HEAD), commit()])
+            self.assertFalse(v.ok, form)
+            self.assertIn("the message of commit 476290c holds a skip instruction", v.message)
+
+    def test_the_title_and_the_body_fail_the_app(self):
+        v = self.go(pr([], user=AGENT_APP, title="docs: a change [skip actions]"), files=[{"filename": "docs/a.md"}])
+        self.assertIn("its title holds a skip instruction", v.message)
+        v = self.go(pr([], user=AGENT_APP, body="text\n[no ci]"), files=[{"filename": "docs/a.md"}])
+        self.assertIn("its body holds a skip instruction", v.message)
+
+    def test_a_push_of_an_app_into_the_branch_of_the_owner(self):
+        pushes = [entry(AGENT_APP, "2026-11-02T14:20:00Z"), entry(OWNER, "2026-11-02T14:00:00Z")]
+        v = self.go(pr(["owner/approved"], user=OWNER), APPROVED_NOW, pushes=pushes,
+                    commits=[commit("fix: x [ci skip]")])
+        self.assertFalse(v.ok)
+        self.assertIn("skip instruction", v.message)
+
+    def test_the_owner_and_renovate_alone_are_not_read_for_it(self):
+        self.assertTrue(self.go(pr([], user=OWNER, title="docs: x [skip ci]"), commits=[commit("[skip ci]")]).ok)
+        self.assertTrue(self.go(pr(["type/patch"], title="chore: x [skip ci]")).ok)
+
+    def test_words_that_only_look_alike_pass(self):
+        v = self.go(pr([], user=AGENT_APP, title="docs: how to skip ci runs", body="skip-checks: false"),
+                    files=[{"filename": "docs/a.md"}], commits=[commit("docs: [skip] ci")])
+        self.assertTrue(v.ok, v.message)
+
+
+class Commits(Base):
+    """A bot other than Renovate in the commits of another author holds the PR."""
+
+    def test_a_commit_of_another_bot_holds_the_owners_pr(self):
+        for c in (commit(author=AGENT_APP), commit(committer=AGENT_APP), commit(author=WORKFLOW_BOT)):
+            v = self.go(pr([], user=OWNER), commits=[c])
+            self.assertFalse(v.ok)
+            self.assertIn("a bot made commit d94fb5f in the branch of another author", v.message)
+
+    def test_commits_of_the_owner_the_web_and_renovate_pass(self):
+        self.assertTrue(self.go(pr([], user=OWNER), commits=[commit(author=OWNER, committer=WEB_FLOW)]).ok)
+        self.assertTrue(self.go(pr(["type/patch"]), commits=[commit(author=DEPS_BOT, committer=DEPS_BOT)]).ok)
+        self.assertTrue(self.go(pr([], user=OWNER), commits=[commit()]).ok)
+
+    def test_more_commits_than_listed_holds_the_pr(self):
+        p = pr([], user=OWNER)
+        p["commits"] = 251
+        v = self.go(p, commits=[commit()] * 250)
+        self.assertFalse(v.ok)
+        self.assertIn("more commits than the API lists", v.message)
+
+    def test_the_trust_reads_the_commits(self):
+        self.assertFalse(check.trusted(pr([], user=OWNER), [entry(OWNER)], "owner-account", OWNER_ID,
+                                       "owner-account", [commit(author=AGENT_APP)]))
+
+
+class Paths(Base):
+    def test_each_new_path_of_the_class_holds_the_app(self):
+        for path in ("kubernetes/flux/meta/helm/x.yaml", "kubernetes/components/cnpg-cluster/cluster.yaml",
+                     "kubernetes/bootstrap/kustomization.yaml", "kubernetes/apps/kube-system/reflector/ks.yaml",
+                     "kubernetes/apps/security/prowler/ks.yaml", "security/README.md",
+                     "observability/generate.py", "Taskfile.yml", ".taskfiles/ClusterTasks.yml", ".envrc",
+                     ".vscode/settings.json", "kubernetes/apps/kustomization.yaml",
+                     "kubernetes/apps/auth/oauth2-proxy/ks.yaml", "kubernetes/apps/networking/cloudflared/ks.yaml",
+                     "kubernetes/apps/cert-manager/cert-manager/ks.yaml",
+                     "kubernetes/apps/tools/actions-runner-controller/ks.yaml",
+                     "kubernetes/apps/kopiur-system/kopiur/ks.yaml", "kubernetes/apps/monitoring/alertmanager/ks.yaml",
+                     ".changie.yaml", ".gitattributes", "kubernetes/apps/default/x/.gitattributes",
+                     "kubernetes/apps/default/hajimari/app/helmrelease.yaml",
+                     "kubernetes/apps/production/frigate/ks.yaml",
+                     "kubernetes/apps/home-automation/zwave-js-ui/app/helmrelease.yaml",
+                     "kubernetes/apps/media/qbittorrent/app/helmrelease.yaml"):
+            v = self.go(pr([], user=AGENT_APP), files=[{"filename": path}])
+            self.assertFalse(v.ok, path)
+            self.assertIn("ask-first class", v.message)
+
+    def test_paths_that_only_start_alike_are_not_in_it(self):
+        for path in ("kubernetes/apps/securityx/a.yaml", "security-notes.md", "Taskfile.yml.bak",
+                     "kubernetes/apps/default/x/kustomization.yaml", "docs/gitattributes.md"):
+            v = self.go(pr([], user=AGENT_APP), files=[{"filename": path}])
+            self.assertTrue(v.ok, path)
+
+
+class Activity(unittest.TestCase):
+    """The activity of a branch counts from its newest creation, and lags."""
+
+    def test_a_push_into_an_earlier_branch_of_the_name_does_not_count(self):
+        entries = [entry(DEPS_BOT), entry(DEPS_BOT, kind="branch_creation"), entry(AGENT_APP, after=OLD_HEAD)]
+        self.assertEqual(check.since_creation(entries), entries[:2])
+        self.assertTrue(check.decide(pr(["type/patch"]), [], entries[0], [], HEAD, OWNER_ID,
+                                     pushes=check.since_creation(entries)).ok)
+
+    def test_a_creation_by_an_app_counts(self):
+        entries = [entry(DEPS_BOT), entry(AGENT_APP, kind="branch_creation")]
+        self.assertFalse(check.decide(pr(["type/patch"]), [], entries[0], [], HEAD, OWNER_ID,
+                                      pushes=check.since_creation(entries)).ok)
+
+    def test_the_reading_stops_at_the_creation(self):
+        r = routes(pr([], user=OWNER), [[]])
+        first = f"{BASE}/activity?ref=refs%2Fheads%2Frenovate%2Fexample&direction=desc&per_page=100"
+        r[first] = (200, [entry(OWNER), entry(OWNER, kind="branch_creation"), entry(AGENT_APP, after=OLD_HEAD)],
+                    {"Link": f'<{first}&page=2>; rel="next"'})
+        api = FakeAPI(r)
+        v = check.run(api, REPO, 42, HEAD, OWNER_ID, sleep=lambda s: None)
+        self.assertTrue(v.ok, v.message)
+        self.assertFalse(any("page=2" in c for c in api.calls))
+
+    def test_the_trust_needs_the_newest_push_to_be_the_head(self):
+        owner_pr = pr([], user=OWNER)
+        self.assertFalse(check.trusted(owner_pr, [], "owner-account", OWNER_ID, "owner-account"))
+        self.assertFalse(check.trusted(owner_pr, [entry(OWNER, after=OLD_HEAD)], "owner-account", OWNER_ID,
+                                       "owner-account"))
+        self.assertFalse(check.trusted(owner_pr, [entry(OWNER)], "owner-account", OWNER_ID, "owner-account",
+                                       head_sha=OLD_HEAD))
+        self.assertTrue(check.trusted(owner_pr, [entry(OWNER)], "owner-account", OWNER_ID, "owner-account",
+                                      head_sha=HEAD))
+
+    def trust(self, api, **env):
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+        base = {"REPO": REPO, "PR": "42", "OWNER_ID": str(OWNER_ID), "ACTOR": "owner-account",
+                "OWNER_LOGIN": "owner-account", "HEAD_SHA": HEAD}
+        out = io.StringIO()
+        old = dict(check.os.environ)
+        try:
+            check.os.environ.update(dict(base, **env))
+            with redirect_stdout(out), redirect_stderr(io.StringIO()):
+                check.trust_main(api, sleep=lambda s: None)
+        finally:
+            check.os.environ.clear()
+            check.os.environ.update(old)
+        return out.getvalue()
+
+    def test_a_lagging_activity_is_read_again(self):
+        # The push of an App (C1) is not listed yet when the owner's push
+        # (C2) runs: the newest entry is not the head, so it reads again.
+        r = routes(pr([], user=OWNER), [[]])
+        answers = iter([(200, [entry(OWNER, after=OLD_HEAD)], {}),
+                        (200, [entry(OWNER), entry(AGENT_APP, "2026-11-02T14:18:20Z", after=OLD_HEAD)], {})])
+        r[f"{BASE}/activity?"] = lambda: next(answers)
+        self.assertEqual(self.trust(FakeAPI(r)), "trusted=false\n")
+        r = routes(pr([], user=OWNER), [[]])
+        answers = iter([(200, [], {}), (200, [entry(OWNER)], {})])
+        r[f"{BASE}/activity?"] = lambda: next(answers)
+        self.assertEqual(self.trust(FakeAPI(r)), "trusted=true\n")
+
+    def test_no_second_read_for_an_answer_that_is_not_a_lag(self):
+        api = FakeAPI(routes(pr([], user=OTHER_USER), [[]], push=[entry(OTHER_USER)]))
+        self.assertEqual(self.trust(api), "trusted=false\n")
+        self.assertEqual(sum(1 for c in api.calls if c == f"{BASE}/pulls/42"), 1)
+
+    def test_a_lag_that_stays_is_false(self):
+        api = FakeAPI(routes(pr([], user=OWNER), [[]], push=[entry(OWNER, after=OLD_HEAD)]))
+        self.assertEqual(self.trust(api), "trusted=false\n")
+        self.assertEqual(sum(1 for c in api.calls if c == f"{BASE}/pulls/42"), check.ATTEMPTS)
 
 
 if __name__ == "__main__":

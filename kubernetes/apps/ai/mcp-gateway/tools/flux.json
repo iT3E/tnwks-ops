@@ -1,0 +1,344 @@
+{
+ "groups": "read-only",
+ "image": "ghcr.io/controlplaneio-fluxcd/flux-operator-mcp:v0.63.0@sha256:d0700196e3e89bf35bc3b375ff72dc11e23dd82c0050957f5c54b72bbf81fa0a",
+ "tools": [
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Diffs a Kubernetes YAML manifest against the cluster using a server-side apply dry-run.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "flux_object": {
+      "description": "YAML of the owning Flux resource, when new or changed.",
+      "type": "string"
+     },
+     "owner_kind": {
+      "description": "Owning Flux resource kind: Kustomization, HelmRelease or ResourceSet.",
+      "type": "string"
+     },
+     "owner_name": {
+      "description": "Name of the owning Flux resource.",
+      "type": "string"
+     },
+     "owner_namespace": {
+      "description": "Namespace of the owning Flux resource.",
+      "type": "string"
+     },
+     "yaml_content": {
+      "description": "Multi-doc YAML content to diff.",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "diff_kubernetes_manifest"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Retrieves the Flux installation report with controllers, CRDs and their reconciliation status.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "name": "get_flux_instance"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Retrieves the CRDs registered on the cluster and their preferred apiVersion for each kind.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "name": "get_kubernetes_api_versions"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Retrieves Kubernetes events, optionally filtered by namespace, involved object, type, time window and regex.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "apiVersion": {
+      "description": "Exact apiVersion of the involved object.",
+      "type": "string"
+     },
+     "grep": {
+      "description": "Case-insensitive RE2 expression matched against reason, message and the object rendered as Kind/namespace/name.",
+      "type": "string"
+     },
+     "kind": {
+      "description": "Exact kind of the involved object.",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum number of events to return. Defaults to 100.",
+      "type": "number"
+     },
+     "name": {
+      "description": "Exact name of the involved object.",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace of the involved objects; omit to list across all namespaces.",
+      "type": "string"
+     },
+     "since": {
+      "description": "Only events newer than this Go duration, for example 10m or 1h.",
+      "type": "string"
+     },
+     "type": {
+      "description": "Event type: Normal or Warning.",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "name": "get_kubernetes_events"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Retrieves logs from a Kubernetes pod.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "container": {
+      "description": "Container name; omit to read all containers.",
+      "type": "string"
+     },
+     "grep": {
+      "description": "Case-insensitive RE2 expression; keeps the log entries whose line matches, including attached continuation lines.",
+      "type": "string"
+     },
+     "kind": {
+      "description": "Kind of the resource: Pod (default), Deployment, StatefulSet, DaemonSet, CronJob or Job.",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Max log lines. Defaults to 100.",
+      "type": "number"
+     },
+     "name": {
+      "description": "Name of the pod or workload.",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace of the pod or workload.",
+      "type": "string"
+     },
+     "previous": {
+      "description": "Logs from the previously terminated containers.",
+      "type": "boolean"
+     },
+     "since": {
+      "description": "Only log entries newer than this Go duration, for example 10m or 1h.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "namespace"
+    ],
+    "type": "object"
+   },
+   "name": "get_kubernetes_logs"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Retrieves CPU and memory usage of pods.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "limit": {
+      "description": "Max resources. Defaults to 100.",
+      "type": "number"
+     },
+     "pod_name": {
+      "description": "Pod name; omit to select all pods.",
+      "type": "string"
+     },
+     "pod_namespace": {
+      "description": "Namespace of the pods.",
+      "type": "string"
+     },
+     "pod_selector": {
+      "description": "Label selector in the format key1=value1 key2=value2.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "pod_namespace"
+    ],
+    "type": "object"
+   },
+   "name": "get_kubernetes_metrics"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Retrieves Kubernetes resources from the cluster.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "apiVersion": {
+      "description": "apiVersion of the resource. Use get_kubernetes_api_versions when unknown.",
+      "type": "string"
+     },
+     "fields": {
+      "description": "kubectl JSONPath expressions to include in the result to reduce its size, e.g. spec.sourceRef.name or status.conditions[?(@.type=='Ready')].message.",
+      "items": {
+       "type": "string"
+      },
+      "type": [
+       "null",
+       "array"
+      ]
+     },
+     "kind": {
+      "description": "Kind of the resource.",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Max number of resources to return.",
+      "type": "number"
+     },
+     "name": {
+      "description": "Name of the resource; omit to list.",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace; omit for all namespaces.",
+      "type": "string"
+     },
+     "selector": {
+      "description": "Label selector in the format key1=value1 key2=value2.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "apiVersion",
+     "kind"
+    ],
+    "type": "object"
+   },
+   "name": "get_kubernetes_resources"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Reads a Flux Operator documentation page as markdown. Use the path from search_flux_docs results. Long pages should be read in slices: pass heading to jump to a section, or offset and limit to page; the response reports the next offset. Output is capped at 30KB per call.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "heading": {
+      "description": "Heading anchor or text; reads that section only",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Maximum lines to return (1-1000). Default is 400.",
+      "type": "number"
+     },
+     "offset": {
+      "description": "1-based start line, ignored when heading is set",
+      "type": "number"
+     },
+     "path": {
+      "description": "Doc path from search results, e.g. /docs/crd/helmrelease",
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "type": "object"
+   },
+   "name": "read_flux_doc"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Searches the Flux Operator and Flux CRD documentation, returning the most relevant sections with their path and line range. Query with 2-5 keywords naming the kind and field (e.g. HelmRelease valuesFrom, CEL expression), not a question. Pages are published at https://fluxoperator.dev{path}/.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "limit": {
+      "description": "Maximum sections to return (1-20). Default is 8.",
+      "type": "number"
+     },
+     "path": {
+      "description": "Optional doc or section path (max 300 characters): /docs/guides, /docs/instance, /docs/resourcesets, /docs/web-ui, /docs/mcp, /docs/crd, /docs/controllers, /docs/charts.",
+      "type": "string"
+     },
+     "query": {
+      "description": "Keywords naming the kind and field, e.g. HelmRelease valuesFrom (2-200 characters).",
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "name": "search_flux_docs"
+  },
+  {
+   "annotations": {
+    "idempotentHint": true,
+    "readOnlyHint": true
+   },
+   "description": "Traces a Kubernetes resource up the GitOps delivery pipeline to the Flux objects managing it and their source.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "apiVersion": {
+      "description": "apiVersion of the resource. Use get_kubernetes_api_versions when unknown.",
+      "type": "string"
+     },
+     "kind": {
+      "description": "Kind of the resource.",
+      "type": "string"
+     },
+     "name": {
+      "description": "Name of the resource.",
+      "type": "string"
+     },
+     "namespace": {
+      "description": "Namespace of the resource; omit for cluster-scoped resources.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "apiVersion",
+     "kind",
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "trace_kubernetes_resource"
+  }
+ ]
+}

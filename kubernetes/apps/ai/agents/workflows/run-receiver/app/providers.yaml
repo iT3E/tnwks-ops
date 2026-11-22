@@ -29,6 +29,11 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
+      # A finished Job goes after 26 hours, also a failed one. That is a day
+      # and room for the next run to end, so the alert and the AI board see
+      # a failure until a newer run ends, and KubeJobFailed then clears by
+      # itself (docs/apps/agent-platform.md, "A failed Job").
+      ttlSecondsAfterFinished: 93600
       activeDeadlineSeconds: 300
       template:
         metadata:
@@ -50,7 +55,7 @@ spec:
             - name: providers
               # The image of the workflow agents holds the OpenShell CLI and the
               # providers command (release 0.3.0 and later).
-              image: ghcr.io/it3e/tnwks-workflow-agents:0.3.2@sha256:35998129d4db52274984e1721e110730f3cc9dfdb5dd6d0c6d7f73440242c881
+              image: ghcr.io/it3e/tnwks-workflow-agents:0.3.3@sha256:4d58fa0d2b68ee220d5c7bc377f90084decef234be77e673d55a39e2cda30f9e
               imagePullPolicy: IfNotPresent
               args: ["providers"]
               env:

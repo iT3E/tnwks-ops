@@ -29,6 +29,19 @@ patches:
     kind: Namespace
     metadata:
       name: flux-system
+# No remote base or resource in any build of kustomize-controller: a URL in
+# a kustomization outside the "ask first" class would bring in any manifest,
+# an admission object among them, which the admission policy of the Flux
+# children can not see (docs/operations/flux-admission.md). No build of the
+# clusters uses one (observability/tests/test_flux_admission.py checks it).
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --no-remote-bases=true
+  target:
+    group: apps
+    kind: Deployment
+    name: kustomize-controller
 # Flux owns its CRDs now. Never let a prune remove them (deleting a CRD
 # deletes every object of that kind) if this directory ever drops out of the
 # build.

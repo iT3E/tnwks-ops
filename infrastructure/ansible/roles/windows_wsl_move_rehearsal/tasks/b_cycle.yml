@@ -1,0 +1,81 @@
+---
+# B imports, unregisters and imports again into the same folder (step 3 of
+# the design: the new account can do it twice, and the folder keeps its
+# rights and its marker). The disk file waits in the side folder while B
+# unregisters, so the unregister deletes no file.
+- name: B names its default Linux user in the distro
+  ansible.builtin.include_tasks: run_task.yml
+  vars:
+    wsl_move_rehearsal_run: {key: b, step: wslconf}
+
+- name: B stops its distro and its VM
+  ansible.builtin.include_tasks: run_task.yml
+  vars:
+    wsl_move_rehearsal_run: {key: b, step: stop}
+
+- name: Move the disk file of B to the side folder, or back
+  ansible.builtin.include_tasks: move_side.yml
+  vars:
+    wsl_move_rehearsal_side_to: side
+
+- name: B unregisters the distro, with no file at its path
+  ansible.builtin.include_tasks: run_task.yml
+  vars:
+    wsl_move_rehearsal_run: {key: b, step: unregister}
+
+- name: Move the disk file of B back from the side folder
+  ansible.builtin.include_tasks: move_side.yml
+  vars:
+    wsl_move_rehearsal_side_to: folder
+
+- name: B imports the file in place again
+  ansible.builtin.include_tasks: run_task.yml
+  vars:
+    wsl_move_rehearsal_run: {key: b, step: import}
+
+- name: B reads its distro after the second import
+  ansible.builtin.include_tasks: run_task.yml
+  vars:
+    wsl_move_rehearsal_run: {key: b, step: check}
+
+- name: B stops its distro again
+  ansible.builtin.include_tasks: run_task.yml
+  vars:
+    wsl_move_rehearsal_run: {key: b, step: stop}
+
+# The side folder and back keep the owner and the rules; the import in place
+# and the read start new VMs, and the clean stop removes the rule of each.
+- name: The rules of B's disk file after the second import and a clean stop
+  ansible.builtin.include_tasks: read_disk.yml
+  vars:
+    wsl_move_rehearsal_disk_read: {key: b, rule: moved, wait: 60}
+
+- name: The owner and the rules of B's disk file after the second import and a clean stop, each account masked
+  ansible.builtin.debug:
+    msg: "{{ wsl_move_rehearsal_disk.output | last }}"
+
+# The read after the second import is a new start of the distro: the uid
+# and the SHA-256 of /etc/wsl.conf show the default user that B wrote.
+- name: The second import of B passed, with the data and the default user
+  vars:
+    unregister: "{{ wsl_move_rehearsal_runs.unregister | last }}"
+    reimport: "{{ wsl_move_rehearsal_runs.import | last }}"
+    check: "{{ wsl_move_rehearsal_runs.check | last }}"
+    disk: "{{ wsl_move_rehearsal_disk.output | last }}"
+  ansible.builtin.assert:
+    that:
+      - not unregister.result.registered
+      - reimport.result.imported | default(false)
+      - check.result.registered
+      - check.result.read_exit == 0
+      - check.result.repeated_count == 0
+      - check.result.token == wsl_move_rehearsal_data_token
+      - check.result.uid == (wsl_move_rehearsal_registration_values.DefaultUid | string)
+      - check.result.wsl_conf_sha256 == wsl_move_rehearsal_wsl_conf | hash('sha256')
+      - check.result.default_distribution
+      - check.result.mem_total_kib | int > 0
+      - check.result.mem_total_kib | int <= wsl_move_rehearsal_memory_limit_kib
+      - wsl_move_rehearsal_side_moves | select | list | length == 2
+      - disk.rules_ok and disk.vm == 0 and disk.capability == 0
+    fail_msg: "The cycle of B did not pass: {{ unregister }} {{ reimport }} {{ check }} {{ disk }}"
+    quiet: true

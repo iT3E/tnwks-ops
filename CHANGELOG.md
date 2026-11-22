@@ -3,6 +3,856 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.273.0 - 2026-11-22
+
+### Changed
+
+* windows: site 1 checks its .wslconfig again and no longer writes it, the convention of a host with a cluster, after the first apply of the phase done of the move
+
+## v2.272.0 - 2026-11-22
+
+### Changed
+
+* site 1 Windows host: the allow list of sshd names only the account that Ansible logs in as (step 6 of the account change, before the removal of the tasks of the present account)
+
+## v2.271.0 - 2026-11-22
+
+### Changed
+
+* windows: the done switch of the move of the distro on site 1: the account that owns the distro is the new account, the copies of the start tasks stay enabled, the play no longer registers the tasks of the present account, and the host check reads the moved disk file and its rules
+
+## v2.270.0 - 2026-11-22
+
+### Added
+
+* tools: a device-access pod on homelab-wsl, with its own peer on the router's CI tunnel (wg03), reaches the EP-R6 and the two radios behind it over SSH and the radios' web UI, for an operator who execs into it; the router lets every wg03 peer reach the radios' SSH, only that pod their web UI, and only the runners its REST API
+
+## v2.269.0 - 2026-11-22
+
+### Added
+
+* agents: the gateway probes of main and finance try the cluster, Flux and Terraform servers of main straight each day: only the gateway may reach them. A time out passes (a policy drop is silent); a refusal (no ready backend or a closed port), an answer and a name that does not resolve each fail. The probes use no key on a read route.
+
+## v2.268.0 - 2026-11-22
+
+### Added
+
+* mikrotik: the router lets the desktop read the LiteAP radio (10.60.10.45) and the LiteBeam radio (10.60.10.43) over SNMP: UDP 161 from the monitoring list to those two addresses only, for snmp-exporter; SNMP is not on in the radios yet
+
+## v2.267.0 - 2026-11-22
+
+### Removed
+
+* monitoring: the legacy UNMS Overview board is removed, because its data source (the UISP instance) is gone and its saved panel settings held identifying values.
+
+## v2.266.0 - 2026-11-22
+
+### Added
+
+* monitoring: smokeping pings the LiteAP radio (liteap-gps) and the LiteBeam radio (litebeam-5ac) behind the EP-R6 (role radio), and the radio link has one alert per hop: RadioAPUnreachable when the LiteAP stops answering while the EP-R6 answers, RadioStationUnreachable when the LiteBeam stops answering while the LiteAP answers (RadioLinkProbeMissing when nothing probes them). The Network & Routing tab Radio gateway becomes Radio link: a state per hop (Unknown behind a hop that is down), loss and latency per hop. The airCube rejects pings and is not watched
+
+## v2.265.1 - 2026-11-22
+
+### Fixed
+
+* wsl: the USB attach unit of the distro attaches with the usbip client of usbipd-win against the usbipd service of the host, as usbipd attach reads the list of services at the Windows service control manager, which grants it to interactive and service logons, SYSTEM and the Administrators only; with no elevation the Windows backup task hands the attach to the distro and the watchdog skips its USB attach; on WSL zwave-js-ui mounts the folder /hostdev, so a pod that starts before the device leaves no directory at the name of the node, and the unit removes such an empty directory before it attaches
+
+## v2.265.0 - 2026-11-22
+
+### Added
+
+* agents: AgentPlatformCheckStale also covers the daily key check of the model gateway (ai/litellm-key-check): it fires when the check has not passed in 26 hours, or never passed once a run was due. Before, a key check that stopped (its CronJob suspended, or its failed Job gone with no newer run) raised no alert.
+
+## v2.264.1 - 2026-11-22
+
+### Security
+
+* monitoring: a network rule for Alloy. Its OTLP receiver (4318) takes the agent pods of main, finance and pilot, the sandbox supervisors of agents-workflows and the daily test span only, so no other pod can write false series of the agents into Prometheus or a false span into Tempo. The Faro port takes the public ingress, and the HTTP server Prometheus of the site and the kubelet probes.
+
+## v2.264.0 - 2026-11-22
+
+### Added
+
+* mikrotik: the router lets the desktop ping the LiteAP radio (10.60.10.45), the LiteBeam radio (10.60.10.43) and the airCube (10.60.10.46) behind the EP-R6: ICMP from the monitoring list to those three addresses only; their SSH and web UIs stay VPN-only
+
+## v2.263.0 - 2026-11-22
+
+### Added
+
+* agents: the alert AgentTurnNotEnded fires when a personal agent took a message and has not ended its turn for 30 minutes (its count of messages in is higher than its count of messages that ended, from the metrics of the product). It catches a turn that never ends (a model call, a tool or a streamed part that hangs), not a final reply that hangs after the turn ended; a quiet evening has no message and does not fire. The AI board has the row Messages with no end on its Messages tab, and the runbook has a section.
+
+## v2.262.0 - 2026-11-22
+
+### Changed
+
+* agents: each CronJob of a trust domain and of ai deletes a finished Job after 26 hours, a failed one too (ttlSecondsAfterFinished). AgentPlatformCronJobFailed and the AI board still see a failure until the next daily run ends, and KubeJobFailed clears by itself instead of firing until three newer runs fail. The one-off Jobs that Flux applies keep no time to live, so Flux never runs them again.
+
+## v2.261.0 - 2026-11-22
+
+### Added
+
+* agents: the cluster server of main (task 6.19, the read step of M7b). The Kubernetes MCP server v0.1.3 (pinned by digest) in agents-main, read only, as its own service account with the role view in each namespace of this cluster but agents-finance and ai and the list of the namespaces, with Secrets and exposed-secret reports refused. The route main-cluster on the central MCP gateway takes the key of the main agent only and names eight reads, from the dump tools/cluster.json. Only the gateway and the kubelet reach the pod; it reaches the API server and DNS for its name only. Renovate waits 7 days and a person reviews each update. A test, observability/tests/test_main_read_servers.py, checks the files and runs the pinned gateway and server in containers.
+* agents: the Flux server of main (task 6.19, the read step of M7b). The Flux MCP server of the Flux Operator v0.63.0 (pinned by digest, unmodified) in agents-main, in its read-only mode, as its own service account with the read bindings of the cluster server, and with no DNS. The route main-flux on the central MCP gateway takes the key of the main agent only and names eight reads, from the dump tools/flux.json; the diff and get_flux_instance stay out. The reconcile is a later step.
+* agents: the Terraform server of main (task 6.19, the read step of M7b). The Terraform MCP server 1.4.1 of HashiCorp (pinned by digest) in agents-main with the registry toolset and no token, no account at the API server, and egress to the public registry only. The route main-terraform on the central MCP gateway takes the key of the main agent only and names the nine registry tools, from the dump tools/terraform.json.
+* agents: the read step of M7b goes live for the main agent (task 6.19): the cluster, Flux and Terraform servers. The config of the agent has one server entry for each read route, with the kept tools in its filter and each tool by its exact name in the sandbox allow list. The agent pod reaches the MCP gateway on its MCP port, and the gateway admits it. The hash of the key of the main agent (MCP_GATEWAY_KEY of agent-secret, the key of its vault route) on each read route comes from bin/main-mcp-key, which the lead runs before the push: it keeps the key, sets the hash, and prints names and ok only. A test fails while a read route has another hash than main-vault. The code host server follows in one more pull request.
+
+## v2.260.3 - 2026-11-22
+
+### Fixed
+
+* Flux admission: classlist.py and the render of the test harness take the API group of a document exactly (the part of apiVersion before the "/"), through one helper, in place of a prefix or substring match. The class lists, the policy and the cluster lists stay the same; a test checks the helper with groups that a prefix or substring match would take
+
+## v2.260.2 - 2026-11-21
+
+### Fixed
+
+* windows: site 1 states its UDP relays and its bound USB device, so the play of the move window renders the same configs of the procedure as the play of the host, with the copies of both relays among the start tasks of the new account
+
+## v2.260.1 - 2026-11-21
+
+### Fixed
+
+* ci: the observability contracts job has 25 minutes again instead of 15. Its runs of 2026-11-21 took 690 to 885 s, and two stopped at the limit; the split of the long tests had brought it down to 15.
+
+## v2.260.0 - 2026-11-21
+
+### Added
+
+* monitoring: the EP-R6 (sce-ep01), the gateway of the radio network, is watched. smokeping pings it once a second (role edge), and RadioGatewayUnreachable fires when it loses over half its pings for 4 minutes while the router and SW03 answer (RadioGatewayProbeMissing when nothing probes it). The Network & Routing board has a Radio gateway tab: its reachability as a state, loss and latency beside the router hop, the router's VLAN 140 traffic and its Internet traffic from flow export. The Internet board's probe panels show only the Internet targets and the router hop
+
+## v2.259.0 - 2026-11-21
+
+### Added
+
+* agents: the main agent gets its vault (task 3.37, step D): the claim vault-ro of the main share at /vault in the gateway, its repair step and its index step, read only on the claim and each mount with no subPath; the index reads /vault (Markdown) and polls; the six read tools of the vault through the route main-vault of the MCP gateway with MCP_GATEWAY_KEY (the three write tools come with the seed of the share, which stops at a share that is not empty), and the values check stops the start when its hash is not the one of the client main; the egress of the agent to the gateway and the ingress of the gateway from it. A merge starts one new agent pod.
+
+## v2.258.0 - 2026-11-21
+
+### Added
+
+* mikrotik: the router lets the desktop ping the EP-R6 (sce-ep01), the gateway of the radio network: ICMP from the monitoring list to 10.10.140.140 only, so smokeping can watch it. Its SSH and web UI stay VPN-only
+
+## v2.257.0 - 2026-11-21
+
+### Changed
+
+* site 1 Windows host: Ansible logs in as the administrator account (step 4 of the account change). The desktop user, the tasks and the disk path stay with the present account by their own values
+
+## v2.256.5 - 2026-11-21
+
+### Security
+
+* Flux: the class Kustomization flux-substitution makes the reduced Secret cluster-secrets-apps on both sites, with only the keys of cluster-secrets that the children outside the "ask first" class use; no child reads it yet. CI checks that each variable of a child outside the class is a key of it or a setting of the site
+
+## v2.256.4 - 2026-11-21
+
+### Security
+
+* Flux admission: the read of the audit result before Deny has a positive control. The API server counts a check of a policy only when it refuses, so the live check bin/flux-admission-check (now as both Flux controllers) adds a known count on each site; a harness test shows that an allowed check adds nothing. The runbook reads the highest count in the window, so a restart of the API server does not hide one, and adds a replay of the rendered chart output of both sites
+
+## v2.256.3 - 2026-11-21
+
+### Security
+
+* Flux admission: the daily CronJob flux-admission-objects on both sites lists each admission object (webhook configurations, admission policies and bindings) and fails when a Flux child outside the "ask first" class owns one, which the admission policy can not refuse. It reads the class from the live policy, with a read-only account; a failure raises KubeJobFailed, and the AI board shows it on its Checks tab
+
+## v2.256.2 - 2026-11-21
+
+### Security
+
+* Flux admission: the rule operator-pods refuses, for a Flux child outside the "ask first" class, the objects from which an operator makes a pod of its own template (runner sets, sandboxes, a database pooler, and a database cluster with a privileged container or an added capability). The test harness takes its Kubernetes version from the upgrade file of the clusters, and the test that the class lists equal git also runs on a change of the Owner label script
+
+## v2.256.1 - 2026-11-21
+
+### Security
+
+* Flux: kustomize-controller runs with --no-remote-bases=true on both sites, so a kustomization can not bring in a remote base or resource; no build of the clusters uses one, and a CI test keeps it so
+
+## v2.256.0 - 2026-11-21
+
+### Changed
+
+* windows: site 1 turns on step 3 of the account change (wsl_move, phase move) with the session check, the start of WSL with no elevation and the keepalive, with the folder of the move on E:, the volume of its disk file
+
+## v2.255.0 - 2026-11-21
+
+### Changed
+
+* site 1 Windows host: the encrypted host variables hold the values of the move of the distro (the present account, the new account, the present folder, the WSL release of the rehearsal), and the allow list of sshd names both accounts (step 2 of the account change). sshd changes only with its explicit apply
+
+## v2.254.2 - 2026-11-21
+
+### Security
+
+* Owner label and the Flux admission policy: the folders of hajimari, frigate, zwave-js-ui and qbittorrent join the "ask first" class, because each needs a right of the class (cluster RBAC, or a privileged pod with a host path or an added capability). With them in the class the policy refuses no live object
+
+## v2.254.1 - 2026-11-21
+
+### Security
+
+* Flux: the admission policy flux-child-scope (kubernetes/apps/flux-system/admission, docs/operations/flux-admission.md) limits what a Flux child outside the "ask first" class may apply: no cluster object, no object in a namespace of the class, no RBAC, no Flux Kustomization, no privileged pod spec, and no change of an object of the class; Kustomizations and HelmReleases of the class must come from their parents in git. Its lists come from git (classlist.py, checked in CI), its rules run on a throwaway API server in CI, each rule switched off once to show its test fails, and both sites keep its audit and deny counts. The binding starts with Audit and Warn
+
+## v2.254.0 - 2026-11-21
+
+### Changed
+
+* windows: site 1 takes the phase file of the move of the monitoring data: the timer of the distro mounts the file of 19 GiB at the point each minute, and the mount task of the VHDX is disabled and stays as the way back
+
+## v2.253.0 - 2026-11-21
+
+### Changed
+
+* windows: site 1 takes the phase ready of the move of the monitoring data (observability_storage_mount): the distro makes the file of 19 GiB once, its timer stays off, and the VHDX keeps the data
+
+## v2.252.0 - 2026-11-21
+
+### Changed
+
+* ai: the browser tool (playwright-mcp) runs at homelab-wsl only, with one replica, beside the central MCP gateway and the fetch proxy of the main agent. homelab-wsl-02 no longer deploys it, its Service is local to the cluster (not global in the mesh), and its network policy names this cluster only. The AI board has it at homelab-wsl, and Not applicable at homelab-wsl-02. It still loads no page: no route of the gateway names it, and the fetch proxy lets in the agent pod of main only.
+
+## v2.251.0 - 2026-11-21
+
+### Added
+
+* site 1 Windows host: the encrypted host variables hold the password of the administrator account, for step 1 of the account change (the same key as site 2). No role reads it
+
+## v2.250.1 - 2026-11-21
+
+### Security
+
+* Owner label: a pull request whose author is not the owner, Renovate or the App of the main agent, one with a push of anyone else into the branch of another author (since the branch was last created) or a commit of a bot other than Renovate, and one of the App that touches a path of the "ask first" class all wait for owner/approved from the owner. Such a pull request fails when its base is not main or when its title, body or a commit message holds a skip instruction of GitHub Actions, and a label counts only when it is newer than the last change of the base; the check runs again on each edit. The class also holds the workstation entry files and the other controls of the cluster. The App is not set yet, so each of its pull requests waits. A new mode, owner-label-check.py --trust, answers the gates of the CI; it needs the base main and the newest push of the branch at the head. AGENTS.md keeps a pull request that waits for the owner as a draft. docs/operations/ci.md, "Agent pull requests".
+
+## v2.250.0 - 2026-11-21
+
+### Added
+
+* site 1 monitoring: the data of Prometheus can move from the VHDX that a Windows task attaches into a file of 19 GiB on the disk of the distro, ext4, mounted by a loop device at the same point (role wsl_observability_file, phases vhdx, ready and file of observability_storage_mount). With the file, the mount task is disabled and stays with the VHDX as the way back, and a compaction leaves a disabled task disabled
+
+## v2.249.1 - 2026-11-21
+
+### Security
+
+* ai: the browser tool (playwright-mcp) gets a network policy. In: the MCP port from the central MCP gateway and the kubelet. Out: the fetch proxy of the main agent and DNS for its name only. Each peer is named at both WSL sites, because the app moves between them. Its internal ingress goes, with its name on the router and its entry in the ingress probe of the evidence collector. A new doc, docs/apps/playwright-mcp.md, and a test, observability/tests/test_browser_pod.py.
+
+## v2.249.0 - 2026-11-21
+
+### Added
+
+* windows: the USB attach runs with no elevation with wsl_start_unelevated (-NoElevation): the play binds each device as admin, and the task attaches with no bind and logs to a folder that its account may write. In the move of the distro it has a copy for the account that owns the distro, registered disabled while the move runs, as the UDP relays have, and the way back enables the task of the present account again. The play no longer refuses the switch on a host with a USB device
+
+## v2.248.0 - 2026-11-21
+
+### Added
+
+* windows: the window procedure of the move of the distro has the check of a session of the owner (wsl_move_session_check). With it on, window step 1 stops with nothing changed while the present account has a session at the console or over Remote Desktop, and the way back, in the procedure and in the boot task, does not restart while one is on, also after a failed check. A read that fails counts as a session. With it off the procedure reads no session, as before. The guards of the window play make the same read, from the copy of the procedure on the host
+
+## v2.247.3 - 2026-11-21
+
+### Fixed
+
+* windows: the boot task of the way back of the move (and of its rehearsal) names its boot trigger with no default child, so a check run no longer reads it as a change: the Task Scheduler leaves an Enabled of true out of the export that the task module compares
+
+## v2.247.2 - 2026-11-21
+
+### Fixed
+
+* observability: the schedule state of the AI board matches each namespace of a declared schedule, so litellm-key-check (namespace ai) reads its last good run and no longer no evidence. AgentDailyArchiveFailed reads the exit code of the backup container (1 to 127), so a stop of the node (exit 143 from SIGTERM, or 255) no longer fires it.
+
+## v2.247.1 - 2026-11-21
+
+### Fixed
+
+* observability: the token counter of the model bridge (homelab_model_bridge_tokens_total) lives as long as the platform log agent. The exporter of Vector dropped it 1 to 2 minutes after the last call line, and its sample kept the time of the line, so the token panels of the AI board counted the first call as 0 and later calls only in part. A static_metrics source now adds 0 to each declared series at the start and every 30 seconds, and each sample has the time it was counted.
+
+## v2.247.0 - 2026-11-21
+
+### Changed
+
+* agents: the main agent sends the metrics of the product to Alloy, after the finance agent (step 3 of task 5.23). Its pod restarts once for the change of its config.
+
+## v2.246.0 - 2026-11-21
+
+### Added
+
+* observability: the AI board shows the use of the Claude plan first on its tab Limits and security: the share used of the five hour window and of the week, the time to each reset, the state of each window, the use over time, the age of the last reading, and the tokens of each trust domain by kind. The platform log agent of Vector turns the plan_limit and call lines of the model bridge into series (the window only on the plan series, so the newest line of any trust domain wins; at most 60 series), the records homelab:ai_plan_* keep the newest reading until its window resets, and the warning ModelPlanNearLimit goes to the chat (it never pages) when a window is near or at its limit.
+
+### Changed
+
+* ai: the model bridge 0.3.0 logs a plan_limit line for each limit window of the Claude plan and the token counts of each answer on its call line. The AI board and the alert ModelPlanNearLimit read them.
+
+## v2.245.0 - 2026-11-21
+
+### Changed
+
+* agents: the finance agent sends the metrics of the product to Alloy, after the pilot agent (step 3 of task 5.23). Its pod restarts once for the change of its config.
+
+## v2.244.0 - 2026-11-21
+
+### Added
+
+* observability: the AI board shows the metrics of the personal agents (step 3 of task 5.23): messages in, turns by outcome and trigger, replies sent and failed, the time to send a reply, stuck sessions and failovers. The pilot agent sends its metrics first (finance and main follow, each in its own change), and Alloy keeps 8 instruments, the listed labels of each and their declared values (other for each other value), cuts the resource to the service name (undeclared for each other name), and writes to the OTLP path of Prometheus. The network rule of Prometheus lets Alloy of the same site write there and no reader, and the daily CronJob prometheus-rule-check proves that a reader can not write.
+
+## v2.243.0 - 2026-11-21
+
+### Added
+
+* observability: the network rule of Prometheus names its readers (step 3 of task 5.23). On the query port, Grafana of each site, the Pyrra UI, the internal ingress and Prometheus itself may send GET on each path and POST on the query paths; the evidence of the other site and the LAN bridge get the two paths that they call; Thanos Query of each site gets the sidecar port. Nobody may write or call the admin and lifecycle paths. A test fails when git names a new reader of Prometheus that the rule does not know.
+
+## v2.242.0 - 2026-11-20
+
+### Added
+
+* windows: once the move of the distro is done, the compaction runs as SYSTEM, reads the owner and the rules of the disk file before the pause and before diskpart, and stops WSL with a stop task of the account that owns the distro
+
+## v2.241.0 - 2026-11-20
+
+### Added
+
+* observability: the network rule of Prometheus, first form (step 3 of task 5.23). The CiliumNetworkPolicy prometheus sends each request to the query port through the proxy of Cilium and lets each one pass, with default deny off, so Hubble shows the method, the path and the source of each request before the next form names the readers.
+
+## v2.240.1 - 2026-11-20
+
+### Fixed
+
+* windows: the configs of the move take the values of the registration of today as a mapping, not as the text that win_powershell gives for an object below its output depth, and an apply after a done window writes those values into the registration of the new account and removes the value Length that an import with that text writes; after the deletion of the tasks of the present account, the copies of the scripts and the configs of the procedure follow the role again
+
+## v2.240.0 - 2026-11-20
+
+### Changed
+
+* windows: site 2 deletes the tasks of the present account after the move of the distro: each WSL task and window task of that account and the boot task of the way back, only in the phase done, after a window that ended done, and while the allow list of sshd no longer names that account
+
+## v2.239.0 - 2026-11-20
+
+### Added
+
+* litellm, observability: the series of the model gateway (step 2 of task 5.23). The Prometheus callback with a keep list (5 metrics; the key name, the name asked for, the provider and the status) and a cap of 100 label sets for each metric; a scrape with a key of its own (metrics-scrape: no model, the route /metrics only, pinned in ensure_keys.py), which writes undeclared for a key name that is not declared; the daily CronJob litellm-key-check, which fails when that key can call a model name; the Model calls tab of the AI board (calls, the share that failed, the time of a call, tokens by key, name and day); and the alert ModelGatewayCallsFailing with its runbook section and promtool cases.
+
+## v2.238.0 - 2026-11-20
+
+### Added
+
+* observability: the AI board in Grafana (tnwks-ai, step 1 of task 5.23), from the data of today. A declared list of the AI parts, scheduled checks, result lines and snapshot policies, with a state for each (a part that is gone stays a row, as Unknown; site 2 declares each part it does not run as Not applicable); the AI tile on the Homelab wall and its row in Needs attention; tool calls of the MCP gateway without the GET with 405 of a client start; the plan limit, instruction file changes and mover denials; the time of the newest restore test result. Each of the 18 AI alerts opens the AI board, and the certificate alert of the model gateway has its runbook section and promtool cases.
+
+## v2.237.0 - 2026-11-20
+
+### Changed
+
+* Site 2, Windows host: the allow list of sshd names only the account that Ansible logs in as (Design Doc 0004, section 9, step 6). The encrypted `windows_sshd_allow_users` of the host loses the present account of the move; the apply on the host stays the explicit one of the role windows_sshd.
+
+## v2.236.0 - 2026-11-20
+
+### Changed
+
+* windows: site 2 turns on the done switch of the move of the distro: the account that owns the distro, the disk file of the compaction and the host check, and the read of its rules follow the phase, and the play stops when they do not
+
+## v2.235.0 - 2026-11-20
+
+### Added
+
+* agents: the gateway probe of main has its key (PROBE_KEY, client main-probe of the route main-vault), and the gateway config has its hash in place of the placeholder. The key checks of the probe run from the next scheduled run.
+
+## v2.234.0 - 2026-11-20
+
+### Added
+
+* agents: the nightly snapshot of the main share (task 3.37, step C): the SnapshotPolicy and SnapshotSchedule vault in agents-main, the form of finance, from the read-only claim vault-ro to the repository agents-main, with the retention of the state volume.
+
+## v2.233.0 - 2026-11-20
+
+### Added
+
+* agents: the gateway probe covers the vault route of main (task 3.37, step B): platform-check-mcp-gateway-probe in agents-main (05:47) checks the route main-vault with its key main-probe (a placeholder until the values step, read from an optional Secret), and the probes of finance and main each check that their key gets a 401 on the vault route of the other trust domain and that the other vault server is out of reach. The probe script runs for a vault route only when a domain has no other route.
+
+## v2.232.0 - 2026-11-20
+
+### Changed
+
+* agents: the restore test of the finance share passed on 2026-11-20 and is out of the list again; Flux deletes its Restore, its Job and its scratch claim. The files stay, with the snapshot name as a placeholder.
+
+## v2.231.0 - 2026-11-20
+
+### Added
+
+* agents: the vault server of main (task 3.37, step A): the pod of finance in agents-main on the claim vault-rw of the main share, the route main-vault on the central MCP gateway with the key of the main agent (a placeholder hash until the values step) and the nine tools, the egress of the gateway to it, and main's DNS rule without the vault server. No pod of main calls the route yet.
+
+## v2.230.1 - 2026-11-20
+
+### Fixed
+
+* windows: in the move of the distro, the copy of the watchdog for the standard account skips the check of the WSL service, which that account may not query and the SYSTEM task does; both accounts may write the inbox of the host check while the move runs; and the check play reads the default user by the rule of WSL, wsl.conf first, with the read in the distro
+
+## v2.230.0 - 2026-11-20
+
+### Added
+
+* agents: the restore test of the finance share (finance/vault-backup/restore-test/), listed for one run: the Restore of the newest Succeeded snapshot of the policy vault to a scratch claim, then a check Job that compares it with the live share, read only, by path and SHA-256 of each file, with counts of files, notes and bytes, and logs flags and counts only. The next change takes it out of the list.
+
+## v2.229.0 - 2026-11-20
+
+### Changed
+
+* agents: the main agent thinks at level high by default (thinkingDefault), by the owner's word. The copy of the host setting was off, which the model of the platform does not take: the product used low and wrote a warning in each run.
+
+## v2.228.0 - 2026-11-20
+
+### Changed
+
+* agents: the daily heartbeat check (06:33 UTC) checks the main agent too, after its first completed heartbeat in Tempo (2026-11-19 15:05 UTC): SERVICES is openclaw-agents-pilot,openclaw-agents-finance,openclaw-agents-main, and a test holds the list to the running agents with a heartbeat. The runbook shows vault-notes=none for a restore with no vault archive.
+
+## v2.227.0 - 2026-11-19
+
+### Changed
+
+* Site 2, Windows host: Ansible logs in as the administrator account (Design Doc 0004, section 9, step 4). The encrypted `ansible_user` of the host changes; the jump, the distro and the paths keep the present account by its own variable, so no role changes a thing on the host.
+
+## v2.226.0 - 2026-11-19
+
+### Added
+
+* windows: the window play of the move of the distro, with its precheck, its start of a window or a way back, its status, and the check play of step 6
+
+### Fixed
+
+* agents: the daily backup of the main agent runs on a copy of its config with regular files, since the backup command of the product refuses an include file that is a link, as each file of the projected config volume is
+
+## v2.225.1 - 2026-11-19
+
+### Fixed
+
+* agents: the first start of the main agent stopped at the official plugins step, because the step of the image copies only openclaw.json and the config of main includes the group file. The pod now gives the step one file with the include filled in.
+
+## v2.225.0 - 2026-11-19
+
+### Changed
+
+* windows: on site 2, Ansible logs in as the administrator account, the account that owns the distro comes from the values of the move, and the jump logs in to the distro as its user (step 4 of the account change)
+
+## v2.224.0 - 2026-11-19
+
+### Added
+
+* agents: step 5 of the main agent: the agent pod starts for its test run beside the host, on the test bot that moved from the pilot, and the restore Job is out again (docs/apps/agent-platform-runbook.md, "The test run beside the host").
+
+## v2.223.0 - 2026-11-19
+
+### Changed
+
+* agents: the test bot of the pilot moves to the main agent, for its test run beside the host: its token in the Secret of main, and the Telegram channel of the pilot off (one bot has one poller); the pilot runs on for the platform checks with no chat channel
+
+## v2.222.0 - 2026-11-19
+
+### Added
+
+* agents: the finance agent runs the plugin active-memory, with the settings of the host (direct and group chats, query mode recent, prompt style recall-heavy, a limit of 25 s), on the model of its session through LiteLLM until the model gateway has a recall model for finance. The finance agent pod restarts once. The config of the main agent gets the same settings for its first run; it has no pod yet.
+
+## v2.221.0 - 2026-11-19
+
+### Added
+
+* agents: web fetch for the main agent through a fetch proxy in agents-main (Envoy, no secret): CONNECT to a host name on port 443 only, no address inside after its own lookup, a log line with the host for each request, kept on the pod and out of Loki; the agent pod reaches the proxy and no web site directly
+
+## v2.220.0 - 2026-11-19
+
+### Added
+
+* windows: site 2 turns on the move of the distro (step 3 of the account change), with the start tasks of the account that owns the distro, and the play stops before any change while a value of the move is missing
+
+## v2.219.0 - 2026-11-19
+
+### Added
+
+* agents: the finance agent reads its share: the claim vault-ro at /vault, read only on the claim and on each mount, in its memory index with polling, and the nine vault tools through the route finance-vault with its key. The finance agent pod restarts once (docs/apps/agent-platform.md, "The vault shares").
+
+## v2.218.0 - 2026-11-19
+
+### Added
+
+* agents: the seed of the finance share, a one-time Job: the secret scanner of CI on the copy of the vault on the state volume (read only), one line for each finding with an id for the owner, and a copy into the empty share only when the owner decided each finding (no link, no config folder of the notes app, no trash, no .git; files 0600); one result line with counts
+
+## v2.217.0 - 2026-11-19
+
+### Added
+
+* agents: a nightly snapshot of the finance share to the Kopia repository of the finance trust domain, read through the claim vault-ro, with the retention of the state volume (docs/operations/backups.md).
+
+## v2.216.0 - 2026-11-19
+
+### Added
+
+* agents: the daily gateway probe of finance also checks the vault route: no key and a random key get a 401, the probe key lists the nine tools and reads the facts of the root of the share only, a write and a move are refused, and a pod that is not the gateway can not reach the vault server (docs/apps/mcp-gateway.md, "The probe").
+
+## v2.215.0 - 2026-11-19
+
+### Added
+
+* agents: the vault server of finance, the one writer of the finance share, on the claim vault-rw in agents-finance, and its route finance-vault on the central MCP gateway with the key of the finance agent and nine file tools. Only the gateway reaches the server, and the server reaches nothing. The gateway now waits 60 s, not 10 s, for the finance app too. The finance agent does not use it yet (docs/apps/agent-platform.md, "The vault server").
+
+## v2.214.0 - 2026-11-19
+
+### Added
+
+* agents: step 4 of the cutover of the main agent: the three Secrets of the owner and the restore Job of the copy of the state, with no vault. The inbox is out again, and no pod starts.
+* agents: the main agent gets the progress card tool, and its sessions see each other as on the host. It first runs beside the host agent as a test, with a second bot: the bot token is a placeholder until the owner puts that token in, so no pod starts before it (docs/apps/agent-platform-runbook.md, "The test run beside the host").
+
+## v2.213.0 - 2026-11-19
+
+### Added
+
+* windows: the role windows_wsl_move, step 3 of the account change: the account that owns the distro, its folder, and the tasks of the move window, off on every host
+
+## v2.212.0 - 2026-11-19
+
+### Changed
+
+* Windows hosts, sshd: AllowUsers names each account of windows_sshd_allow_users (default: the account that Ansible logs in as), so a host can allow both accounts while it moves its distro to another account (Design Doc 0004, section 9, step 2). The bootstrap script takes one account or more in -AdminUser, in order, each once, and refuses a name that sshd reads as a pattern or a host. The role and task wsl-host:sshd pass the list, and each refuses a list that does not hold the account that Ansible logs in as. With no list, the config is the same as before.
+
+## v2.211.0 - 2026-11-19
+
+### Changed
+
+* Site 2, Windows host: the encrypted host variables get the values of the account change (Design Doc 0004, section 9): the list of accounts for AllowUsers, the present account, the new account, the folder of the disk file of today, the WSL version of the rehearsal and the password of the administrator account. No role reads a new value yet.
+
+## v2.210.0 - 2026-11-19
+
+### Added
+
+* agents: the agent pod of the main agent at zero replicas, in the form of the finance agent: one Telegram account with the direct chat of the owner and one group (its chat id from a Secret of the owner), web search, the message tool and the built-in tools of the product. No MCP tool, no vault and no scheduled job yet. No pod starts until the steps of the cutover (docs/apps/agent-platform-runbook.md, "The cutover of the main agent").
+* agents: the three Secret files of the main agent, not listed until step 4 of its cutover, and the key agents-main at the model gateway (models agents-main and agents-main-embeddings). The search key is a placeholder until the owner makes it at the vendor.
+
+## v2.209.0 - 2026-11-19
+
+### Added
+
+* litellm: the entry agents-main-embeddings, the embeddings of the memory search of the main agent on the model of the host, so no vendor gets that text. No key lists it until the owner adds the key agents-main.
+
+## v2.208.1 - 2026-11-18
+
+### Fixed
+
+* agents: the read-only volumes of the vault shares (vault-ro, in agents-main and agents-finance) mount read only for each pod, with the option ro. The kubelet takes the read-only flag of a PersistentVolume from the pod, not from nfs.readOnly. No pod mounts them yet, and no pod restarts (docs/apps/agent-platform.md, "The vault shares").
+
+## v2.208.0 - 2026-11-18
+
+### Added
+
+* windows: each UDP relay gets a copy for the account that owns the distro, and both accounts may write the logs of the relays while the move runs (off on every host)
+
+## v2.207.0 - 2026-11-18
+
+### Added
+
+* windows: the address task of the LAN bridge gets a copy for the account that owns the distro, and both accounts may write the address file while the move runs (off on every host)
+
+## v2.206.0 - 2026-11-18
+
+### Added
+
+* agents: the volumes and claims of the vault shares, step d of the vault shares. Two static PersistentVolumes for each share (read and write with a hard mount, read only with a soft mount) and their two claims, vault-rw and vault-ro, in agents-main and agents-finance. Each claim binds to its volume at once; no pod mounts them yet, and no pod restarts (docs/apps/agent-platform.md, "The vault shares").
+
+## v2.205.0 - 2026-11-18
+
+### Added
+
+* windows: the watchdog and the keepalive get copies for the account that owns the distro, under their own names, with the phase of the move per host (off on every host); the folder module takes a list of writers, and a task whose state is its own is not started while it is disabled
+
+## v2.204.0 - 2026-11-18
+
+### Added
+
+* nfs-server: the vault share of each trust domain with a vault, step b of the vault shares. Two claims (nfs-vault-main, nfs-vault-finance) and two exports (/vault-main, /vault-finance): read and write for the three nodes of homelab-wsl only, each client squashed to uid 1000. The exports of today keep their ids and settings. The server restarts once (docs/apps/agent-platform.md, "The vault shares").
+
+## v2.203.0 - 2026-11-18
+
+### Changed
+
+* kube-prometheus-stack (homelab-wsl): the scrape of the API server keeps the checks of the two admission policies of NFS volumes (nfs-pod-volumes, nfs-persistent-volumes) with enforcement_action "audit" or "deny", beside the denials of the mover policy. So the count of the volumes they would refuse is in Prometheus while they audit.
+
+## v2.202.0 - 2026-11-18
+
+### Added
+
+* nfs-server: two admission rules list which pods and PersistentVolumes may mount the NFS server of homelab-wsl (nfs-pod-volumes: a namespace, server and exact path for each user of today; nfs-persistent-volumes: the read and write and the read-only volume of each vault share, each with its one claim). They audit and warn only for now; a later change turns them to Deny. A throwaway API server tests the rules (admission/tests/run.sh), and a test checks that each NFS volume in git is on the list (docs/apps/agent-platform.md, "NFS volumes and admission").
+
+## v2.201.0 - 2026-11-18
+
+### Added
+
+* Security, the Windows host check: the check wsl-disk-rules (Design Doc 0004, section 7, row 27), with the severity high, in line 3.3 of the registry for the Windows host type. Each 6 hours as SYSTEM, with no privilege, it opens the disk file of the WSL distro through the open of the move procedure and reads its owner and DACL on that handle. It passes only when the owner is the account that owns the distro, the DACL is protected, and each entry is an allow entry with full control and no flag: one each for SYSTEM, the Administrators and that account, any number for a VM, and at most one for the capability SID of WSL. A missing file and a file that can not be read are each a fail. The check is on for a host from its done switch (wsl_start_unelevated_done), and gives no result before it. The series homelab_security_host_wsl_disk_rules_reason names each rule that the file breaks, from a fixed list. A fail starts SecurityFindingNew.
+
+## v2.200.1 - 2026-11-18
+
+### Fixed
+
+* Windows hosts, the window procedure of the move: each read of the rules, the read of the group and the set of the owner of a file by SYSTEM open the file through one open (TnwksSecurity.Open). It opens the entry at the path itself (FILE_FLAG_OPEN_REPARSE_POINT), with identification only for a server behind the path, and takes it only when it is a file or a directory of a disk, not a reparse point, with one name, and with a final path that is the path itself. Each refusal closes the handle before any rule is read or written. Tests check the flags of the open and each refusal with stand-ins for the calls of Windows.
+
+## v2.200.0 - 2026-11-18
+
+### Added
+
+* Windows hosts, the window procedure of the move: reads of the icon of the distro (shortcut.ico) before each import, for the account of that import, with no delete. Window step 1 reads both folders and stops with nothing changed; after window step 5 no icon may be left in the old folder; before window step 6 the folder of the new account is read again; before way back step 5 the old folder is read, and a fail stops the way back before the import. The read of its attributes takes the entry itself and follows no link: a directory or a link is refused, and its rules are not read. A read passes with no entry, or a plain file with none of the attributes read-only, hidden, system, directory, reparse point and encrypted, no deny, object or conditional entry, and a rule that gives the account of the import the right to write it (and to delete it where its unregister does). Tests use test icons for each read. Window step 7: a process of the present account with no path that SYSTEM can read counts by the names of the WSL commands of Windows too.
+
+## v2.199.1 - 2026-11-18
+
+### Fixed
+
+* CI: the PowerShell tests of security/ (the pwsh mark, run alone as the powershell job runs them) take one pytest-xdist worker for each CPU, so the job stays within its time limit. A run of the other tests, or of both marks, stays in one process, and -n on the command line still decides.
+
+## v2.199.0 - 2026-11-18
+
+### Added
+
+* Windows hosts, the window procedure of the move: before the present account leaves Administrators at window step 7, and again after it, a read as SYSTEM through the API of the Host Compute Service (computecore.dll, HcsEnumerateComputeSystems) that no compute system runs, of any owner or type, read again for a VM that a stop ended (at most 10 reads, 2 seconds apart); then the check that no process of the WSL package of the present account runs, by its image path in the install folder of the package or a WSL command of Windows in System32. A fail before the leave sends the window back while the account is still a member; a fail after it sends the window back, and way back step 1 puts the account back. The check is on with no key; only a config of the rehearsal may turn it off (vm_check: false), as the host's own distro runs during a rehearsal. A test shows that each mode of the procedure, the boot run and a forward run that goes back among them, runs the group step of the way back with a config that is not the rehearsal's.
+
+## v2.198.1 - 2026-11-18
+
+### Fixed
+
+* Windows hosts, the window procedure of the move: the fail line of each step that runs a task of an account (the stop, the unregister and the import of the window, the unregister and the import back of the way back) holds the exit code of the task and the error text of its command from the result of this run, or says that there is no result of this run. A step takes the result of a task of an account only from a run that ended in this run, with a time from the start of the run to the moment of the read. Each fail line is one line and bounded, as is the line of a task with its result. The checks of the rehearsal read each line of the procedure log by its start. Tests show that a result of an earlier run, a task that starts and never runs, and a start that Task Scheduler refuses each fail their step with that text.
+
+## v2.198.0 - 2026-11-18
+
+### Added
+
+* agents: step 2 of the move of the main agent: the snapshot policy and schedule of its state volume, to the backup repository agents-main. The first snapshot runs at once, of the empty volume.
+
+## v2.197.0 - 2026-11-18
+
+### Changed
+
+* Windows hosts, the rehearsal of the move: the rehearsal ended, and its switch (wsl_move_rehearsal) is off on the site 2 host until the next rehearsal. A run of the playbook no longer includes the role there. The check play of the rehearsal now says of each host with the switch off that it checked nothing there, and fails when no host of the run has the switch on; after a rehearsal, -e wsl_move_rehearsal=true gives the switch for one run.
+
+## v2.196.0 - 2026-11-18
+
+### Added
+
+* Backups: the ClusterRepository agents-main, with the grant of agents-main only. Kopia creates the repository at its first bootstrap, with the password of kopiur-repository-agents-main.
+
+## v2.195.0 - 2026-11-18
+
+### Added
+
+* Backups: the session refresher of the main repository runs (its role and profile in the wsl cluster settings, and its directory listed for Flux). The ClusterRepository comes in the next step.
+
+## v2.194.1 - 2026-11-18
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the stops of the procedure at setup give their test config a boot request path of its own, in the test folder. Before, that path was the one in the state folder of the rehearsal, so with a boot request there the boot cases of the stops would read it, could take an account out of Administrators, and would remove it at their end. No path of the test config is now in the state folder.
+
+## v2.194.0 - 2026-11-18
+
+### Added
+
+* Backups: the directory of the backup repository of the main trust domain (kopiur-system/agents-main-repository: its refresher, its RBAC, its session Secret with placeholders, and its ClusterRepository agents-main with the grant of agents-main), in git and not listed for Flux, and the two settings keys RA_AGENTS_MAIN_BACKUPS_* as marked placeholders. The two SOPS files, the session, the repository and the backup policy of the main agent come in later steps, in the order of docs/operations/backups.md. A test holds each repository of a trust domain to its Terraform entry and to that order.
+
+## v2.193.0 - 2026-11-18
+
+### Added
+
+* Backups: the role and the prefix of the backup repository of the main trust domain (entry agents-main of rolesanywhere_backups_prefixed, prefix kopiur-main/, exclusive to its role in the bucket policy), step 1 of its repository. The certificate, the password, the session and the repository come in later steps, in the order of docs/operations/backups.md, "The main repository".
+
+## v2.192.0 - 2026-11-18
+
+### Added
+
+* Windows hosts, the rehearsal of the move: a boot run of the group test. The phase interrupt with -e wsl_move_rehearsal_boot_group_steps=true writes a boot request after its window, and the boot run then takes the group steps and the group test from it, for that one run: A joins Administrators at way back step 1, after the restart, and the end of the run takes it out whatever the result, after A's stop task ended a VM that the import back started. A boot run after a power loss takes A out first. The procedure refuses the group test with the restart on, with a config of the rehearsal, group steps and a group test that are not equal (in each mode, from a request or from the config), and a boot request that is not two equal booleans; only the boot mode reads the boot request. The phase after-boot checks this case with the same switch, removes an icon of the shortcut that A does not own, compares the count of the VM processes with the baseline, starts A's start task and reads A's tokens. The check play accepts the group moments of such a boot run.
+
+## v2.191.0 - 2026-11-18
+
+### Added
+
+* agents: step 1 of the move of the main agent: the state volume of agents-main and its inbox pod, on the node of the agent pods, with no product code, no secret and no network. The backup policy of the volume is in git and not applied until the backup repository agents-main exists and is Ready; the network policy of the backup movers of agents-main selects no pod until then. The runbook has a draft of the cutover of the main agent: Telegram first, Signal later with its own go, and the steps that wait for the owner
+
+## v2.190.1 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the phase wayback takes a switch for its group steps (wsl_move_rehearsal_wayback_group_steps, on by default). With it off, the way back runs as a standard A, as the boot run does, and the phase also ends a started window that did not end. Before any change, the phase reads that no run of the window task or of the boot task goes on, and stops with nothing changed when one does. Before A imports back as a standard account, the play removes an icon of the shortcut in A's folder that A does not own, because WSL writes that icon as the importing account and a standard account can not replace an icon that the Administrators own. The phase interrupt reads that icon first and stops when A does not own it.
+
+## v2.190.0 - 2026-11-17
+
+### Changed
+
+* agents: the daily heartbeat check (agent-heartbeat-check, 06:33 UTC) checks the finance agent too: SERVICES is openclaw-agents-pilot,openclaw-agents-finance. Each service gets its own tries and its own log line; one missing service fails the run and fires AgentHeartbeatMissing, and the line names the service. The docs say how to read that line and that a new agent joins the list after its first heartbeat is in Tempo
+
+## v2.189.10 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the phase after-boot reads the accounts of the rehearsal before its read of A's disk file, which needs their SIDs. It also checks the run of the boot task right after its read of the log, so a boot run that did not end the way back stops the phase before any task of A or B starts. A new static test walks each phase, and the check play, in a run and in a check run, and fails when a task reads a fact or a result of the role that no earlier task of that phase sets for sure.
+
+## v2.189.9 - 2026-11-17
+
+### Fixed
+
+* model-bridge: image 0.2.7, a call after a model call of the engine that no caller waits for is rebuilt at once and no longer waits for the call timeout (it also brings the releases 0.2.4 to 0.2.6)
+
+## v2.189.8 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: window step 1 also stops, with nothing changed, on a disk file with a rule that the check of the way back refuses (a deny rule, explicit or inherited; more than one rule of the capability of the VM; an explicit rule of a VM SID or a capability SID that is not in WSL's form); what a folder gives a file names the file's own group for CREATOR GROUP; the read of the live parts is one of the role's scripts with its SHA-256, and each read copies it first; a failed write of the older form of A's disk file puts its owner back; the message of a copy that differs in the middle of a window says to end it with the release that started it. The account task strip-rules writes the rules of its disk file with .NET and an object that has the rules section only, so a standard account with no privilege can write them (Set-Acl tried to write the audit section too); an error that a step of the account task does not handle ends it with exit 1 and a result that holds the text of the error. The stops of the procedure keep a line on stderr of their powershell.exe as text and make their test folder inside the try; each read of a log or state line takes a line with no time or no text as empty, so a text over two lines breaks no read and no check; and the model of the output of win_powershell in the tests gives an enum, a date and an enumerable that is not a list as the module does, and a script that writes an error record fails its test.
+
+## v2.189.7 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the phase wayback can leave out its stated case (B removes SYSTEM and the Administrators from the rules of its disk file) for one run, with -e wsl_move_rehearsal_wayback_strip_case=false; by default the case runs. The tests of the check that a task can not start also hold a run that exits 1 and writes a result, and the docs row of the phase says that the inherited rules come from the folder.
+
+## v2.189.6 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the check that a task can not start also passes when the task shows no new run and no result of this run, as for a task that ran well in an earlier window and keeps the last result 0 of that run. Before, it held only for a task that never ran or one that Windows refused at the start.
+
+## v2.189.5 - 2026-11-17
+
+### Fixed
+
+* agents: one merge gives one rollout of an agent pod (pilot and finance): the config and the scripts are ConfigMaps with a hash in their names, in the Flux Kustomization of the pod, and Reloader watches the Secrets only; the official plugins step prints the reason of a failure (OPENCLAW_DEBUG=1); the docs say what a rollout costs, and how to turn the scheduled jobs off before a revert
+
+## v2.189.4 - 2026-11-17
+
+### Fixed
+
+* Rehearsal of the move: each phase takes the scripts, configs and tasks of the role from one task file, refreshed only with no started window and compared by SHA-256 before each run of the procedure; the compare against the saved set takes the owner, the protection and the explicit rules, and the play reads apart whether the inherited rules of a disk file are those that its folder gives (Windows' own inheritance function); the checks allow the capability SID of the VM and the four-part VM SID only as allow rules with full control, and refuse deny rules; window step 1 stops on a disk file without the inherited rules of its folder; A reads the folder of its disk file
+
+## v2.189.3 - 2026-11-17
+
+### Fixed
+
+* Rehearsal of the move: the new account owns its moved disk file, from two role values; the procedure reads and writes file rules with the privileges of SYSTEM and restores the saved rules after the move back; the checks allow the rules of a VM only; the window phase runs again after a way back; new stated cases for an older disk file, at setup and at the start of each window, and a file that grants SYSTEM nothing
+
+## v2.189.2 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the script in the distro goes to a new private file from mktemp, a command line too long for Windows does not run, a key that the check reads twice reads as no value (a count and one text in the result), the result of import-rootfs says whether it imported, and a test finds each -c flag of the Windows roles in any form. The stops of the procedure read an empty state file, take their config from the play, and remove their test folder also when a case fails; the way back reads the VM processes of the baseline in the form that the play keeps; the read of the boot runs keeps each run as a list; a check of after-boot is a text again; no path to a script has a doubled backslash; and new tests run the scripts of the role and feed the play's checks with what they give. The docs state what is left of the limits of this way for the real window.
+
+## v2.189.1 - 2026-11-17
+
+### Fixed
+
+* Windows hosts, the rehearsal of the move: the account script passes each shell script to wsl.exe as base64 in one fixed command, so no quote or backslash of the text is lost to the argument rules of Windows PowerShell 5.1; it writes each file in the distro with a newline at its end, reads each value back by its key, and the setup asserts the SHA-256 of each written file. A second setup over the distro of A writes its files again. Each stop step of the window procedure passes only with a shutdown result of its own run, the way back compares the VM processes with the baseline by process ID and start time, the setup stops first when the controller cache has no root file system, the phase command of the docs runs the controller play too (--limit 'localhost,WSL-02'), and the comments on the worst case, the file read and the debug privilege are correct.
+
+## v2.189.0 - 2026-11-17
+
+### Added
+
+* Windows hosts: the rehearsal of the move of a distro to another account (role windows_wsl_move_rehearsal, site 2 only, Design Doc 0004, section 9, step 0). Two temporary standard accounts and a small distro of their own run the scripts of the move window: the procedure as SYSTEM, with its forward steps, its way back and its boot task, and the stop, unregister and import tasks of each account. Each phase runs only when given by hand, and a restart needs the owner's go. The scripts refuse any name or path outside the rehearsal, and the live distro by name. A check play reads the groups, each moment in Administrators and the live parts, and the exit check after the removal. The task module takes keep_task_enabled_state, off by default, so a start task keeps the state that the window gives it (docs/wsl/windows-ansible.md, "The rehearsal of the move").
+
+## v2.188.0 - 2026-11-17
+
+### Added
+
+* Agent platform: the MCP gateway (agentgateway 1.7.0, standalone, one config file in git, no database, no UI), shared by all trust domains in `ai`, with one route for each domain that has a tool. Each MCP call of an agent goes through it: it checks the key of the agent (a hash in the config, the value in the Secret of the agent), lets the agent see and call only the tools that its rule names, and sends the call on to the MCP server of the domain. Deny by default: no key or an unknown key gets a 401, and a tool off the rule is refused before it reaches the server. The rule of finance names the 73 kept tools of the MCP server of the finance app, from a dump of its pinned image, and a test fails when the image, the dump, the rule and the agent's filter differ. The MCP server of the finance app now takes the gateway only. One log line for each request with the client, the tool and the status, never the arguments; metrics to Prometheus; a daily probe with two keys of its own; 7 days of release age and a review for each update. The keys are placeholders until the owner's values step (docs/apps/mcp-gateway.md).
+
+## v2.187.0 - 2026-11-17
+
+### Added
+
+* Agent platform: the finance app as a tool of the finance agent, read and write and never delete. A proxy in agents-finance holds the token of the agent at the app and lets through only an allow list of calls (GET, POST and PUT on the paths of the kept tools; each delete, trigger, rule write, export, attachment and setting refused). The MCP server of the app (fireflyiii-mcp 1.0.1, pinned by digest, 7 days of release age and a review for each update) calls the app through it with no token, and the sandboxes of the agent read through its read port, which lets through no write and is the only port of it that their network policy lets them reach, with no credential. The proxy drops or refuses a method override and lets through a write only with a JSON body, and the two pods resolve one name each. The agent filters and denies the same tools. A daily probe tests both clients of the proxy and the proxy itself, and a daily check tests the DNS rule. The token is a placeholder until the owner puts it in (docs/apps/agent-platform.md, "The finance app").
+
+## v2.186.0 - 2026-11-17
+
+### Added
+
+* Backups: the ClusterRepository agents-finance (prefix kopiur-finance/), which grants the finance trust domain. No policy uses it yet.
+
+### Fixed
+
+* Windows: the write check of windows-rehearsal-check.yml reads the one answer line of the write test, so a warning that wsl.exe writes to stderr before or after it no longer fails a refusal. Two answers still fail.
+
+## v2.185.2 - 2026-11-17
+
+### Fixed
+
+* CI: the summary of the hosts workflow shows a host with no recap line as "did not run" instead of a count of ok 0 and failed 1. ansible-playbook stops before wsl-distro.yml when the play of windows-host.yml ends with a failure, so the distro of a failed Windows host did not run. The drift metrics still count it as failed, and the run still fails.
+
+## v2.185.1 - 2026-11-17
+
+### Fixed
+
+* Windows: a later run of the rehearsal removal runs no task of the temporary account when nothing of it is left to stop (no start task running, no process of the account, no distro in the list in its hive), so it does not load the profile again. When the profile stays loaded, the removal stops with a message that says what stays and to run it again once the profile unloads, at the latest after the next restart of the host.
+
+## v2.185.0 - 2026-11-17
+
+### Added
+
+* Agent platform: web search (with a key of its own) and the notes vault (seeded into its state volume, read through its memory search, counted by the restore test) for the finance agent, in git and not applied yet. The steps of the owner are in docs/apps/agent-platform.md, "The finance agent".
+
+## v2.184.0 - 2026-11-17
+
+### Added
+
+* Backups: the session refresher of the finance repository runs (its role and profile in the wsl cluster settings, and its directory listed for Flux). The ClusterRepository comes in the next step.
+
+## v2.183.0 - 2026-11-16
+
+### Removed
+
+* Windows: the rehearsal of the account change on WSL-02 is removed (windows_wsl_rehearsal, state absent). A task of the temporary account, registered like the others (s4u_user, as SYSTEM), stops and unregisters its distro and shuts down its own VM; the play then removes its tasks, its profile, its batch right and its deny rights, the value that hides its tile, the account and its folder. windows-rehearsal-check.yml reads the exit check.
+
+## v2.182.0 - 2026-11-16
+
+### Added
+
+* Agent platform: a scaffold of the finance agent in `agents-finance` (its config, the scripts of the pilot and its network policy; the Deployment at zero replicas and the state volume are in git and not applied), an embedding entry `agents-finance-embeddings` on the model gateway, and a template of its restore test.
+* Backups: a Kopia repository of its own for the finance trust domain (prefix `kopiur-finance/`, its own role, certificate, password and refresher), the deny of the bucket policy for that prefix, and the mover policy and backup policy of the finance agent. The refresher, the repository and the policy are applied in later steps, in the order of docs/operations/backups.md.
+
+### Changed
+
+* Agent platform: the sandbox-start step of each agent pod reads the address of its own sandbox gateway from its scripts ConfigMap, not from the script, and logs one line when the gateway stops or starts to answer.
+
+## v2.181.0 - 2026-11-16
+
+### Changed
+
+* Agent platform alerts: `AgentInstructionCheckStale` and `AgentMemoryIndexFailed` count each trust domain with an agent pod, not the pilot only. A trust domain with no agent pod, or one at zero replicas, never fires them.
+
+## v2.180.1 - 2026-11-16
+
+### Fixed
+
+* Windows: the tasks of the rehearsal account register. Microsoft asks an administrator, SYSTEM included, for the password of a different account to register an S4U task for it. With s4u_user, tnwks_win_scheduled_task now makes a new random password on the host, sets it on the account, registers the task with it and drops it; it does so only when the task must be registered, never in check mode, and the password is in no argument, result, diff or failure text. Only for an account whose password nobody needs: the temporary account of the rehearsal. The module refuses, and changes nothing, for a member of Administrators, an account whose Description is not the required s4u_description, the account of its own process, and an account with an interactive, network or remote logon session open. No cmdlet takes the plain password. The probe and the import name a task that fails to log on at its start.
+
+## v2.180.0 - 2026-11-16
+
+### Changed
+
+* Renovate review: the repository variable `RENOVATE_REVIEW_ROUTE` is `platform`, so each review goes to the run receiver of the workflow agents and its answer is one comment on the pull request. The hook of the host gets no review while the variable is `platform`; setting it to `host` again is the way back.
+
+## v2.179.1 - 2026-11-16
+
+### Fixed
+
+* Windows: the tasks of the rehearsal account register. The module tnwks_win_scheduled_task takes s4u_user, which registers an S4U task for another account through the Schedule.Service object with that user, no password and the S4U logon type. Each task of the role windows_wsl_rehearsal and of the rehearsal check that registers, starts or stops a task of the account runs as SYSTEM (become, runas), since the Task Scheduler refuses that registration to the network logon of the SSH session; every other Windows task keeps become off. A failed registration names each exception of the chain with its HResult, in both paths.
+
+## v2.179.0 - 2026-11-16
+
+### Added
+
+* renovate-review.yaml: a second review job that asks the run receiver of the workflow agents for the review (`POST /runs`), with the retry rule of a caller: the key `renovate-review-<pr>-<sha7>-<n>`, a new attempt only after a failed or timed out answer, and 3 attempts at the most for one head over all the runs. It runs only when the repository variable `RENOVATE_REVIEW_ROUTE` is `platform`; until then each review goes to the hook of the host, as before.
+
+## v2.178.0 - 2026-11-16
+
+### Added
+
+* GitHub settings: the environment `run-receiver` (deployments from `main` only) for the token of the run receiver, and the repository variable `RENOVATE_REVIEW_ROUTE` at `host`, which keeps each Renovate review on the hook of the host until the owner changes it to `platform`. The docs of the review describe the two routes, the move and its way back.
+
+## v2.177.1 - 2026-11-16
+
+### Fixed
+
+* Windows: the role windows_wsl_rehearsal makes its temporary account with a description of 48 characters at most, the limit of New-LocalUser in Windows PowerShell 5.1, from the new default wsl_rehearsal_account_description. A warning that wsl.exe or diskpart writes to stderr stays text in the result of the step and no longer stops it.
+
+## v2.177.0 - 2026-11-16
+
+### Added
+
+* Windows: the role windows_wsl_rehearsal, on WSL-02 only (wsl_rehearsal): a temporary standard account with a distro of its own, imported from a pinned Alpine root file system and started from its own S4U tasks with no elevation, and the play windows-rehearsal-check.yml that reads its checks.
+
 ## v2.176.0 - 2026-11-16
 
 ### Changed

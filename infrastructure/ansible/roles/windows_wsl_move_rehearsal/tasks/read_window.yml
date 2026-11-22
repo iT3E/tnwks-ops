@@ -1,0 +1,49 @@
+---
+# The reads of the folders, the files and the tasks after a window, as
+# SYSTEM: wsl_move_rehearsal_window_read. The rules of the disk file are
+# read_disk.yml.
+- name: Read the folders, the files and the tasks
+  ansible.windows.win_powershell:
+    parameters:
+      FolderA: "{{ wsl_move_rehearsal_accounts.a.folder }}"
+      FolderB: "{{ wsl_move_rehearsal_accounts.b.folder }}"
+      LogB: "{{ wsl_move_rehearsal_accounts.b.log_dir }}"
+      NameB: "{{ wsl_move_rehearsal_accounts.b.name }}"
+      DiskName: "{{ wsl_move_rehearsal_disk_name }}"
+      MarkerName: "{{ wsl_move_rehearsal_marker_name }}"
+      Prefix: "{{ wsl_move_rehearsal_prefix }}"
+    script: |
+      param([string]$FolderA, [string]$FolderB, [string]$LogB, [string]$NameB,
+          [string]$DiskName, [string]$MarkerName, [string]$Prefix)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $import = Get-Content -LiteralPath (Join-Path $LogB 'import.json') -Raw | ConvertFrom-Json
+      # The files that the import in place wrote next to the disk file (the
+      # icon of the shortcut), with their owner.
+      $other = @(Get-ChildItem -LiteralPath $FolderB -File -Force | Where-Object { $_.Name -notin @($DiskName, $MarkerName) } |
+          ForEach-Object { "$($_.Name) owner $((Get-Acl -LiteralPath $_.FullName).Owner)" })
+      $window = @()
+      foreach ($k in 'a', 'b') { foreach ($s in 'stop', 'unregister', 'import') { $window += Get-ScheduledTask -TaskName "$Prefix-$k-$s" } }
+      [pscustomobject]@{
+          disk_at_a = [bool](Test-Path -LiteralPath (Join-Path $FolderA $DiskName))
+          marker_a = [bool](Test-Path -LiteralPath (Join-Path $FolderA $MarkerName))
+          marker_b = [bool](Test-Path -LiteralPath (Join-Path $FolderB $MarkerName))
+          import_b = $import
+          icon_owner_b = @($other | Where-Object { $_ -match '\.ico owner ' })
+          other_files_b = $other
+          # Enabled is the flag of a task: its State reads Running while an
+          # instance runs, also when the task is disabled.
+          # @($null) counts 1: only the triggers that are there count.
+          window_tasks_enabled_no_trigger = (@($window | Where-Object {
+              -not $_.Settings.Enabled -or @($_.Triggers | Where-Object { $_ }).Count -gt 0 }).Count -eq 0)
+          start_a = "$((Get-ScheduledTask -TaskName "$Prefix-a-start").State)"
+          start_b = "$((Get-ScheduledTask -TaskName "$Prefix-b-start").State)"
+          start_a_enabled = [bool](Get-ScheduledTask -TaskName "$Prefix-a-start").Settings.Enabled
+          start_b_enabled = [bool](Get-ScheduledTask -TaskName "$Prefix-b-start").Settings.Enabled
+          password_b = (Get-LocalUser -Name $NameB).PasswordLastSet.ToUniversalTime().ToString('o')
+      }
+  vars:
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_window_read

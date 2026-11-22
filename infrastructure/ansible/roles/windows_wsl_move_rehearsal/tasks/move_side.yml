@@ -1,0 +1,36 @@
+---
+# As SYSTEM, moves the disk file of B between its folder and the side folder
+# (wsl_move_rehearsal_side_to: side or folder). The file keeps its own rules;
+# the folder of B keeps its marker. A file still in use waits up to a minute.
+- name: "Move the disk file of B to the {{ wsl_move_rehearsal_side_to }}"
+  ansible.windows.win_powershell:
+    parameters:
+      From: "{{ b_disk if wsl_move_rehearsal_side_to == 'side' else side_disk }}"
+      To: "{{ side_disk if wsl_move_rehearsal_side_to == 'side' else b_disk }}"
+      Marker: '{{ wsl_move_rehearsal_accounts.b.folder }}\{{ wsl_move_rehearsal_marker_name }}'
+    script: |
+      param([string]$From, [string]$To, [string]$Marker)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $true
+      if (-not (Test-Path -LiteralPath $From) -or (Test-Path -LiteralPath $To)) { throw "The disk file is not at $From only. Nothing is moved." }
+      if (-not (Test-Path -LiteralPath $Marker)) { throw 'The folder of B has no marker. Nothing is moved.' }
+      $size = (Get-Item -LiteralPath $From).Length
+      $deadline = (Get-Date).AddMinutes(1)
+      while ($true) {
+          try { Move-Item -LiteralPath $From -Destination $To; break }
+          catch { if ((Get-Date) -gt $deadline) { throw } ; Start-Sleep -Seconds 3 }
+      }
+      (-not (Test-Path -LiteralPath $From)) -and (Get-Item -LiteralPath $To).Length -eq $size
+  # Each backslash of a path is outside the braces: in a template, a backslash
+  # inside a Jinja string stays doubled.
+  vars:
+    b_disk: '{{ wsl_move_rehearsal_accounts.b.folder }}\{{ wsl_move_rehearsal_disk_name }}'
+    side_disk: '{{ wsl_move_rehearsal_side }}\{{ wsl_move_rehearsal_disk_name }}'
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  register: wsl_move_rehearsal_side_move
+
+- name: Keep the result of the move
+  ansible.builtin.set_fact:
+    wsl_move_rehearsal_side_moves: "{{ wsl_move_rehearsal_side_moves | default([]) + [wsl_move_rehearsal_side_move.output | last] }}"

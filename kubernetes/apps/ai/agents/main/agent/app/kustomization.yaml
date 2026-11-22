@@ -1,0 +1,116 @@
+---
+# The main agent. Applied now: the volume (step 1), its backup policy (step
+# 2), the network policy and the config (step 3a), the three Secrets of the
+# owner (step 4), and step 5: the Deployment at one replica. The inbox and
+# the restore Job are out again.
+#
+# The files join in the steps of the cutover, one pull request each, in
+# this order (docs/apps/agent-platform-runbook.md, "The cutover of the main
+# agent"). Each step is checked before the next one.
+# 1. Done: ./pvc.yaml and ./state-inbox.yaml. The inbox is the first pod
+#    of the volume, so the volume is made on the node of the agent. The
+#    volume is never pruned (its annotation): the way back takes out the
+#    agent and the inbox, never pvc.yaml.
+# 2. Done: ./backup.yaml, the policy and schedule. It needs the
+#    ClusterRepository agents-main (Ready) and its grant of agents-main
+#    (docs/operations/backups.md, "The main repository").
+# 3a. Listed: ./networkpolicy.yaml, the config (../config) and
+#    ./deployment.yaml at replicas 0. No value of the owner: the Deployment
+#    names its Secrets, and with no replica nothing reads them.
+# 3b. In git: the owner's values (R4), in three files that are not listed yet:
+#    ./secret.sops.yaml (Secret agent-secret: OPENCLAW_GATEWAY_TOKEN,
+#    LITELLM_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM, and since
+#    task 3.37 MCP_GATEWAY_KEY),
+#    ./secret-search.sops.yaml (Secret agent-search-secret: BRAVE_API_KEY,
+#    the search key of main) and ./secret-telegram-groups.sops.yaml (Secret
+#    agent-telegram-groups: telegram-groups.json, the one group of the
+#    Telegram account), and the entry agents-main in the key list of the
+#    model gateway. For the test run beside the host (the runbook): the
+#    bot token is the one of the pilot's test bot (step 4b, which also
+#    turned the pilot's Telegram channel off), and the search key is the
+#    key of the host.
+# 4. After the owner stopped the Telegram account of main on the host and
+#    put the copy of the state in the volume: out ./state-inbox.yaml; in
+#    the three Secrets and ./restore-job.yaml (ARCHIVE set, VAULT empty).
+# 5. The cutover: out ./restore-job.yaml, and replicas 1 in
+#    ./deployment.yaml.
+# The restore test (a template made from ../../../finance/agent/restore-test)
+# follows the first nightly snapshot with the state in it.
+# The tool set of M7a, first step: built-in tools of the product, web search
+# with its own key, web fetch through the fetch proxy (../../fetch-proxy),
+# images through the model, and the vault of main (task 3.37): the share
+# read only for the index, and the vault tools through the central MCP
+# gateway with MCP_GATEWAY_KEY (the key of the client main, its hash in the
+# gateway's config). M7b, the read step: the read tools of the cluster, Flux
+# and Terraform servers (../../cluster-mcp, ../../flux-mcp,
+# ../../terraform-mcp) through the same gateway with the same key;
+# bin/main-mcp-key keeps the key and puts its hash on each route of main
+# (docs/apps/mcp-gateway.md, "The keys"). No finance app, no Signal and no
+# scheduled job yet.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Step 1.
+  - ./pvc.yaml
+  # Step 2.
+  - ./backup.yaml
+  # Step 3a, replicas 1 since step 5.
+  - ./networkpolicy.yaml
+  - ./deployment.yaml
+  # Step 4.
+  - ./secret.sops.yaml
+  - ./secret-search.sops.yaml
+  - ./secret-telegram-groups.sops.yaml
+# The ConfigMaps of the pod. Each name gets a hash of its content, and
+# Kustomize puts that name in the Deployment, so a change of a file is a
+# change of the pod template: Flux applies both at once, and one merge gives
+# one rollout (docs/apps/agent-platform.md, "A start of the agent pod").
+# Reloader watches the Secrets only (deployment.yaml).
+configMapGenerator:
+  # The config of the MCP gateway, the same file, for the values check of
+  # the agent pod: it holds hashes and tool rules, no secret.
+  - name: agent-mcp-gateway-config
+    files:
+      - config.yaml=../../../../mcp-gateway/app/config/config.yaml
+  # The config of the agent (../config), with no ${VAR} substitution: each
+  # ${NAME} in openclaw.json is for the product, which reads it from an env
+  # var of the pod when it loads the config. The file of the Telegram group
+  # joins it in the pod, from the Secret agent-telegram-groups
+  # (deployment.yaml, the volume config).
+  - name: agent-config
+    files:
+      - openclaw.json=../config/openclaw.json
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+  # The env of the gateway for web fetch (docs/apps/agent-platform.md, "Web
+  # fetch of the main agent"). web_fetch sends each fetch as a CONNECT to
+  # the fetch proxy of this trust domain (../../fetch-proxy), as
+  # tools.web.fetch.useTrustedEnvProxy in ../config/openclaw.json asks.
+  # Each other call of the gateway stays direct: NO_PROXY holds the services
+  # of the cluster (the model gateway, the sandbox gateway, the trace
+  # collector), loopback, and the two host names of the network policy. A
+  # call to any other name goes to the proxy, which refuses each address
+  # inside and any port but 443.
+  - name: agent-fetch-proxy
+    literals:
+      - HTTPS_PROXY=http://fetch-proxy.agents-main.svc.cluster.local:8080
+      - HTTP_PROXY=http://fetch-proxy.agents-main.svc.cluster.local:8080
+      - NO_PROXY=localhost,127.0.0.1,.svc.cluster.local,api.telegram.org,api.search.brave.com
+  # The scripts of the pod, with no ${VAR} substitution. They are the files
+  # of the pilot, so a fix there reaches each trust domain. No
+  # automations-sync.sh: no scheduled job in this step.
+  - name: agent-scripts
+    files:
+      - archive-state.sh=../../../pilot/agent/config/scripts/archive-state.sh
+      - daily-backup.sh=../../../pilot/agent/config/scripts/daily-backup.sh
+      - memory-index.sh=../../../pilot/agent/config/scripts/memory-index.sh
+      - sandbox-start.sh=../../../pilot/agent/config/scripts/sandbox-start.sh
+    # The sandbox gateway of this trust domain, for sandbox-start.sh (the
+    # same address as the openshell entry of openclaw.json). It is in the
+    # same ConfigMap as the script, so both change in one apply.
+    literals:
+      - sandbox-gateway-endpoint=https://openshell.agents-main.svc.cluster.local:8080
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled

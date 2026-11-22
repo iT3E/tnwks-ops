@@ -27,10 +27,10 @@ spec:
   values:
     controllers:
       playwright-mcp:
-        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"): the
-        # default here, per cluster in cluster-settings, at runtime in
-        # site-overrides. Its name points at the running site's ingress.
-        replicas: ${PLAYWRIGHT_MCP_REPLICAS:=1}
+        # homelab-wsl only, beside the central MCP gateway and the fetch proxy
+        # of the main agent (docs/apps/playwright-mcp.md). It does not move
+        # between the sites.
+        replicas: 1
         annotations:
           reloader.stakater.com/auto: "true"
         containers:
@@ -46,8 +46,8 @@ spec:
             args:
               - --port=8000
               - --host=0.0.0.0
-              # Requests arrive with the ingress hostname or the Service name
-              # as Host; the default only allows localhost.
+              # Requests arrive with the Service name as Host; the default
+              # only allows localhost.
               - --allowed-hosts=*
               # Fresh in-memory browser profile per session.
               - --isolated
@@ -89,29 +89,12 @@ spec:
     service:
       app:
         controller: playwright-mcp
-        # Global across the WSL sites (Cilium Cluster Mesh): the other site's
-        # ingress (the shared VIP) reaches this app wherever it runs.
-        annotations:
-          service.cilium.io/global: "true"
-          service.cilium.io/affinity: local
+        # Local to this cluster: its only caller, the central MCP gateway,
+        # runs here too. No ingress: an agent reaches it through the gateway
+        # only (networkpolicy.yaml).
         ports:
           http:
             port: 8000
-    ingress:
-      app:
-        className: nginx-internal
-        annotations:
-          # Through the Service's ClusterIP, not the pod endpoints: on the site
-          # where the app is at 0, only Cilium knows the other site's backends.
-          nginx.ingress.kubernetes.io/service-upstream: "true"
-        hosts:
-          - host: &host "playwright-mcp.${INTERNAL_DOMAIN}"
-            paths:
-              - path: /
-                pathType: Prefix
-                service:
-                  identifier: app
-                  port: http
     persistence:
       tmp:
         type: emptyDir

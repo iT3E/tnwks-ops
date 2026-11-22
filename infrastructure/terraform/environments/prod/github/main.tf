@@ -69,6 +69,12 @@ locals {
         RELEASE_APP_CLIENT_ID = "Iv23li4tvKlTdMwPMmJR"
         # Turns on the UniFi root in terraform.yaml (docs/network/unifi.md).
         UNIFI_TERRAFORM_ENABLED = "true"
+        # Where renovate-review.yaml sends a review: "host" (the hook of the
+        # gateway on the host) or "platform" (the run receiver of the
+        # workflow agents). Any value but "platform" is the host. A change of
+        # this line, merged by the owner, is the move and its way back
+        # (docs/operations/renovate.md, "The route of a review").
+        RENOVATE_REVIEW_ROUTE = "platform"
       }
 
       environments = {
@@ -86,6 +92,16 @@ locals {
           }
           branch_patterns = ["main"]
           variables       = local.openclaw_hooks_variables
+        }
+        # The review job of the platform route (renovate-review.yaml). Its
+        # secret RUN_RECEIVER_TOKEN stays by hand. Deployments from main
+        # only, so a job of another branch can not read it.
+        run-receiver = {
+          deployment_branch_policy = {
+            protected_branches     = false
+            custom_branch_policies = true
+          }
+          branch_patterns = ["main"]
         }
         # Terraform applies (terraform.yaml, apply): protected branches only.
         prod = {

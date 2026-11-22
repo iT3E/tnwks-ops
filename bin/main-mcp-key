@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""The key of the main agent at the central MCP gateway, and its hash on
+the routes of main (docs/apps/mcp-gateway.md, "The keys").
+
+    bin/main-mcp-key          # keep the key (make one if there is none), set the hash
+    bin/main-mcp-key --new    # make a new key in its place, then set the hash
+
+A key that exists stays as it is, and the script does not write the
+Secret file: it sets the hash on each route of main that lacks it, and a
+route that has it stays byte for byte (the vault route of main, since its
+vault step).
+
+The key is MCP_GATEWAY_KEY of the Secret agent-secret of main, in
+kubernetes/apps/ai/agents/main/agent/app/secret.sops.yaml: 32 random bytes as
+64 hex characters. It exists in the cluster only, so the lead makes it here
+and nobody types it. Each route of main in
+kubernetes/apps/ai/mcp-gateway/app/config/config.yaml (the lines
+`metadata: {client: main, route: main-...}`) gets `sha256:` and the SHA-256
+of those 64 characters, the value that the values check of the agent pod
+computes.
+
+How the value stays unseen:
+- A new key is made in the editor step of `bin/sops <file>`: sops calls this
+  script with its own temporary file of the clear text, the script adds the
+  line, and sops encrypts it again. The value is never an argument, an env
+  var or a line of output. sops keeps the ciphertext of the other keys.
+- The value is read back through `bin/sops -d --extract` in a pipe into this
+  process, which keeps only its hash.
+- It prints the names of the files, the key and the routes, and "ok". It
+  never prints the value or the hash, and never the output of sops.
+
+The hash is not a secret (a SHA-256 of 32 random bytes tells nothing about
+them, and the hashes of finance are in git), but the script has no need to
+print it: `git diff` shows it.
+
+Run it from the repo root of a branch, with the access of the owner to the
+age key or KMS of the file, and commit both files in one commit.
+"""
+
+import hashlib
+import os
+import re
+import secrets
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SOPS = ROOT / "bin/sops"
+SECRET = ROOT / "kubernetes/apps/ai/agents/main/agent/app/secret.sops.yaml"
+CONFIG = ROOT / "kubernetes/apps/ai/mcp-gateway/app/config/config.yaml"
+NAME = "MCP_GATEWAY_KEY"
+FORM = re.compile(r"[0-9a-f]{64}")
+# A key line of a route of main: the hash, then its metadata on the next line.
+LINE = re.compile(
+    r'(?m)^(?P<head>\s*- keyHash: ")(?P<hash>sha256:[0-9a-f]{64})'
+    r'(?P<tail>"\n\s*metadata: \{client: main, route: (?P<route>main-[a-z]+)\})$')
+OTHER = re.compile(r'keyHash: "(sha256:[0-9a-f]{64})"\n\s*metadata: \{client: (?!main,)')
+
+
+def say(*words: str) -> None:
+    print(" ".join(words), flush=True)
+
+
+def stop(*words: str) -> None:
+    say(*words)
+    sys.exit(1)
+
+
+def extract(path: str) -> subprocess.CompletedProcess:
+    # stdout holds the clear value: it stays in this process.
+    return subprocess.run([str(SOPS), "-d", "--extract", path, str(SECRET)],
+                          capture_output=True, check=False)
+
+
+def read_key() -> tuple[str, str]:
+    """The state of the key (missing, placeholder, form, ok) and its value."""
+    found = extract(f'["stringData"]["{NAME}"]')
+    if found.returncode != 0:
+        if b"not found" in found.stderr:
+            return "missing", ""
+        stop(SECRET.name, "read=failed")
+    value = found.stdout.decode()
+    if value in ("", "pending"):
+        return "placeholder", ""
+    return ("ok" if FORM.fullmatch(value) else "form"), value
+
+
+def editor_step(path: Path) -> None:
+    """The editor of sops: put a new random key in the clear text of the
+    file, in place of a line of the key or at the end of stringData."""
+    lines = path.read_text().split("\n")
+    value = secrets.token_hex(32)
+    try:
+        start = lines.index("stringData:")
+    except ValueError:
+        sys.exit(1)
+    end = start + 1
+    while end < len(lines) and (lines[end].startswith((" ", "\t")) or not lines[end].strip()):
+        end += 1
+    block = [i for i in range(start + 1, end) if lines[i].strip()]
+    if not block:
+        sys.exit(1)
+    indent = lines[block[0]][:len(lines[block[0]]) - len(lines[block[0]].lstrip())]
+    line = f'{indent}{NAME}: "{value}"'
+    mine = [i for i in block if lines[i].startswith(f"{indent}{NAME}:")]
+    if len(mine) > 1:
+        sys.exit(1)
+    if mine:
+        lines[mine[0]] = line
+    else:
+        lines.insert(block[-1] + 1, line)
+    path.write_text("\n".join(lines))
+
+
+def make_key() -> None:
+    editor = shlex.join([sys.executable, str(Path(__file__).resolve()), "--editor-step"])
+    env = dict(os.environ, EDITOR=editor, SOPS_EDITOR=editor)
+    done = subprocess.run([str(SOPS), str(SECRET)], env=env, capture_output=True, check=False)
+    if done.returncode != 0:
+        stop(SECRET.name, f"key={NAME}", "write=failed")
+
+
+def set_hash(digest: str) -> None:
+    text = CONFIG.read_text()
+    found = list(LINE.finditer(text))
+    routes = [m["route"] for m in found]
+    if "main-vault" not in routes or len(routes) != len(set(routes)):
+        stop(CONFIG.name, "routes=unexpected")
+    if digest in OTHER.findall(text):
+        stop(CONFIG.name, "hash=used-by-another-client")
+    new = LINE.sub(lambda m: m["head"] + digest + m["tail"], text)
+    for m in found:
+        say(CONFIG.name, f"route={m['route']}", "unchanged" if m["hash"] == digest else "set", "ok")
+    if new != text:
+        CONFIG.write_text(new)
+
+
+def main() -> None:
+    if sys.argv[1:2] == ["--editor-step"] and len(sys.argv) == 3:
+        editor_step(Path(sys.argv[2]))
+        return
+    if sys.argv[1:] not in ([], ["--new"]):
+        stop("usage: bin/main-mcp-key [--new]")
+    name = extract('["metadata"]["name"]')
+    if name.returncode != 0 or name.stdout.decode() != "agent-secret":
+        stop(SECRET.name, "read=failed")
+    state, value = read_key()
+    if state == "form" and "--new" not in sys.argv:
+        stop(SECRET.name, f"key={NAME}", "form=not-64-hex", "(--new makes a new one)")
+    if state != "ok" or "--new" in sys.argv:
+        make_key()
+        state, value = read_key()
+        if state != "ok":
+            stop(SECRET.name, f"key={NAME}", "made=failed")
+        say(SECRET.name, f"key={NAME}", "made", "ok")
+    else:
+        say(SECRET.name, f"key={NAME}", "kept", "ok")
+    digest = "sha256:" + hashlib.sha256(value.encode()).hexdigest()
+    del value
+    set_hash(digest)
+
+
+if __name__ == "__main__":
+    main()

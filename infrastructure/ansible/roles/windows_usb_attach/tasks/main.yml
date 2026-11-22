@@ -64,6 +64,16 @@
   tnwks_win_dir_acl:
     path: "{{ usb_attach_dir }}"
     items: reset
+    # Its own rules: the task with no elevation writes there (below).
+    keep: ["{{ usb_attach_log_dir }}"]
+
+# The account may make and change files here, but not change the directory
+# itself (tnwks_win_dir_acl).
+- name: Log directory of the attach task
+  tnwks_win_dir_acl:
+    path: "{{ usb_attach_log_dir }}"
+    writer: "{{ usb_attach_writers }}"
+  when: wsl_start_unelevated | bool
 
 # The task starts the script fresh every run, so a new copy needs no restart.
 - name: Sync script
@@ -71,10 +81,44 @@
     src: "{{ usb_attach_src }}"
     dest: '{{ usb_attach_dir }}\Sync-TnwksUsbAttach.ps1'
 
+# The move of the distro (wsl_move_phase): while it runs, the enabled state
+# of the task and of its copy is the window's (keep_task_enabled_state), and
+# once it is done the play leaves the task of the present account as the
+# window left it. The way back enables that task again: the task of today.
+- name: The move of the distro needs the start with no elevation
+  ansible.builtin.assert:
+    that: wsl_move_phase == 'off' or wsl_start_unelevated | bool
+    fail_msg: The tasks of the account that owns the distro run with no elevation, so wsl_move needs wsl_start_unelevated.
+    quiet: true
+
 - name: Sync task (desktop user; logon, every 15 min, after a WSL vNIC reset)
   tnwks_win_scheduled_task:
     name: "{{ usb_attach_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'usb-attach.xml.j2') }}"
+    keep_task_enabled_state: "{{ wsl_move_phase == 'move' }}"
+  when: wsl_move_phase != 'done'
+
+# The copy for the account that owns the distro, registered as SYSTEM, which
+# sets a new random password on that account (s4u_user). While the move
+# runs, a new copy is disabled, and the window enables it. Once it is done,
+# the play keeps it enabled. The task and its copy attach the same device,
+# and the window runs one of them only.
+- name: Sync task of the account that owns the distro
+  tnwks_win_scheduled_task:
+    name: "{{ usb_attach_task_account }}"
+    xml: >-
+      {{ lookup('ansible.builtin.template', 'usb-attach.xml.j2')
+         | regex_replace('<Settings>', '<Settings><Enabled>false</Enabled>' if wsl_move_phase == 'move' else '<Settings>', count=1) }}
+    s4u_user: "{{ wsl_move_new_account }}"
+    s4u_description: "{{ wsl_move_new_description }}"
+    keep_task_enabled_state: "{{ wsl_move_phase == 'move' }}"
+  vars:
+    usb_attach_user: "{{ wsl_move_new_account }}"
+    ansible_become: true
+    ansible_become_method: ansible.builtin.runas
+    ansible_become_user: SYSTEM
+  when: wsl_move_phase != 'off'
+  no_log: true
 
 - name: Superseded files are gone
   ansible.windows.win_file:

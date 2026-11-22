@@ -13,6 +13,7 @@ RUNBOOKS = {
     "observability": "docs/operations/observability-implementation.md",
     "wifi": "docs/network/unifi.md",
     "security": "security/README.md",
+    "ai": "docs/apps/agent-platform-runbook.md",
 }
 PANEL_RUNBOOKS = {
     "Windows disk free": "docs/operations/grafana-resource-budget.md",

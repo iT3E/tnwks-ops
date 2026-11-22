@@ -1,0 +1,23 @@
+---
+# Controller side (localhost, runs for real in check mode too: it only fills
+# the local cache). Downloads the pinned root file system and checks its SHA-256.
+
+- name: Cache directory
+  when: wsl_rehearsal_state == 'present'
+  ansible.builtin.file:
+    path: "{{ wsl_rehearsal_cache }}"
+    state: directory
+    mode: "0755"
+
+- name: Download the root file system of the rehearsal
+  when: wsl_rehearsal_state == 'present'
+  ansible.builtin.get_url:
+    url: "{{ wsl_rehearsal_rootfs.url }}"
+    dest: "{{ wsl_rehearsal_cache }}/{{ wsl_rehearsal_rootfs.url | basename }}"
+    checksum: "sha256:{{ wsl_rehearsal_rootfs.sha256 }}"
+    mode: "0644"
+    timeout: 120
+  register: wsl_rehearsal_download
+  until: wsl_rehearsal_download is succeeded
+  retries: 3
+  delay: 10

@@ -1,0 +1,187 @@
+---
+# Listed by step 4 of the cutover in kustomization.yaml, with ARCHIVE and
+# VAULT set to the names of the owner's two files, and step 5 takes it out
+# again. While either still holds the placeholder of git, the Job refuses at
+# once (reason=not-set) and the step order test fails, so it can not run with
+# a placeholder (docs/apps/agent-platform-runbook.md, "The cutover of the
+# finance agent").
+#
+# The restore Job of the runbook ("The restore Job"), narrowed to the copy of
+# the cutover, with the image and the node of deployment.yaml. The agent is at
+# zero replicas. It is the wall of the copy, not the owner's checks on the
+# host: it reads the list of each archive first and refuses it, before any
+# file is written, unless each member is a plain file or a directory, with
+# no absolute path, no ".." and no setuid or setgid bit, the archive has at
+# most 20000 members and 2 GiB in all (by the sizes in the list), and each
+# member of the state archive is under ./workspace/.
+#
+# Then it unpacks both archives into restore-<time>/ of the volume, and only
+# when both are out does it move the state of now aside to
+# state.before-restore-<time>, put the copy in place as state/ and the vault
+# in place as vault/ (two renames each). A failure before the renames
+# removes restore-<time>/, so the volume is as it was.
+#
+# Each way out prints one line and nothing else, `restore result=ok ...` or
+# `restore result=failed reason=<kind>`: the only names in it are the names
+# that git sets (ARCHIVE) and fixed names of the volume, never the name of a
+# member or a content. The output of tar and sha256sum, which names members,
+# goes to /dev/null.
+#
+# Executable bits stay, for the owner of the file only (umask 077): the
+# scripts of the workspace keep them. They run in a sandbox, where the
+# sandbox policy lets only python3 out, and with no setuid or setgid bit
+# they run as the user that starts them.
+#
+# The script uses no variable in braces, because Flux substitutes those in
+# this directory.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # One name for each run: agent-restore, then agent-restore-2.
+  name: agent-restore
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-restore
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          imagePullPolicy: IfNotPresent
+          env:
+            # The copy of the state: start/openclaw-state-<release>-<time>.tar.gz,
+            # with its .sha256 file next to it.
+            # SET AT STEP 4 from the owner's name, before the merge.
+            - name: ARCHIVE
+              value: start/openclaw-state-2026.9.6-20261117T073712Z.tar.gz
+            # The seed of the vault: vault-<time>.tar in archives/seed/.
+            # Empty: no vault in this run.
+            # SET AT STEP 4 from the owner's name, before the merge.
+            - name: VAULT
+              value: vault-20261117T073724Z.tar
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              umask 077
+              DATA=/home/node/data
+              # The limits of each archive, from its list, before any write.
+              MAX_MEMBERS=20000
+              MAX_BYTES=2147483648
+              reason=start
+              work=""
+              trap 'rc=$?; if [ "$rc" -ne 0 ]; then if [ -n "$work" ]; then rm -rf "$work"; fi; echo "restore result=failed reason=$reason"; fi' EXIT
+              # check <archive> <allowed names> <label>: the list first, no write.
+              check() {
+                reason="unreadable archive=$3"
+                tar -tvf "$1" --quoting-style=escape > /tmp/check.types 2> /dev/null
+                tar -tf "$1" --quoting-style=escape > /tmp/check.names 2> /dev/null
+                reason="empty archive=$3"
+                test -s /tmp/check.names
+                kinds=$(awk '{ k = substr($1, 1, 1); if (k == "l") print "link"; else if (k == "h") print "hard-link"; else if (k == "c" || k == "b") print "device"; else if (k == "p") print "pipe"; else if (k != "-" && k != "d") print "other" }' /tmp/check.types | sort -u | paste -sd, -)
+                if [ -n "$kinds" ]; then reason="member-type archive=$3 kinds=$kinds"; return 1; fi
+                if ! awk '{ if (substr($1, 4, 1) ~ /[sS]/ || substr($1, 7, 1) ~ /[sS]/) n++ } END { exit (n > 0) }' /tmp/check.types; then
+                  reason="setid-bit archive=$3"; return 1
+                fi
+                if [ "$(wc -l < /tmp/check.names)" -gt "$MAX_MEMBERS" ]; then reason="too-many-members archive=$3"; return 1; fi
+                if ! awk -v max="$MAX_BYTES" '{ if ($3 !~ /^[0-9]+$/) bad = 1; n += $3 } END { exit (bad || n > max) }' /tmp/check.types; then
+                  reason="too-large archive=$3"; return 1
+                fi
+                if grep -q '^/' /tmp/check.names; then reason="absolute-path archive=$3"; return 1; fi
+                if grep -qE '(^|/)\.\.(/|$)' /tmp/check.names; then reason="dot-dot archive=$3"; return 1; fi
+                if grep -vqE "$2" /tmp/check.names; then reason="outside archive=$3"; return 1; fi
+                return 0
+              }
+              case "$ARCHIVE $VAULT" in
+                *SET-ME*) reason=not-set; exit 1 ;;
+              esac
+              case "$ARCHIVE" in
+                start/openclaw-state-*.tar.gz) ;;
+                *) reason=archive-name; exit 1 ;;
+              esac
+              A="$DATA/archives/$ARCHIVE"
+              reason=missing
+              test -f "$A"
+              test -f "$A.sha256"
+              reason=checksum
+              (cd "$DATA/archives/start" && sha256sum -c --quiet "$(basename "$A").sha256" > /dev/null 2>&1)
+              check "$A" '^\./(workspace(/.*)?)?$' state
+              reason=no-workspace
+              grep -qxE '\./workspace/?' /tmp/check.names
+              V=""
+              if [ -n "$VAULT" ]; then
+                case "$VAULT" in
+                  vault-*.tar) ;;
+                  *) reason=vault-name; exit 1 ;;
+                esac
+                V="$DATA/archives/seed/$VAULT"
+                reason=vault-missing
+                test -f "$V"
+                check "$V" '^\./.*$' vault
+                reason=vault-not-empty
+                if [ -d "$DATA/vault" ] && [ -n "$(ls -A "$DATA/vault")" ]; then exit 1; fi
+              fi
+              # Both archives out first, into restore-<time>/; the trap
+              # removes it on a failure.
+              reason=unpack
+              stamp=$(date -u +%Y%m%dT%H%M%SZ)
+              work="$DATA/restore-$stamp"
+              mkdir -m 0700 "$work" "$work/state"
+              tar -xf "$A" -C "$work/state" --no-same-owner --no-same-permissions > /dev/null 2>&1
+              if [ -n "$V" ]; then
+                reason=vault-unpack
+                mkdir -m 0700 "$work/vault"
+                tar -xf "$V" -C "$work/vault" --no-same-owner --no-same-permissions > /dev/null 2>&1
+              fi
+              files=$(find "$work/state" -type f | wc -l)
+              notes=none
+              if [ -n "$V" ]; then notes=$(find "$work/vault" -type f -name '*.md' | wc -l); fi
+              # Then the renames.
+              reason=rename
+              if [ -d "$DATA/state" ]; then mv "$DATA/state" "$DATA/state.before-restore-$stamp"; fi
+              mv "$work/state" "$DATA/state"
+              chmod 0700 "$DATA/state"
+              if [ -n "$V" ]; then
+                if [ -d "$DATA/vault" ]; then rmdir "$DATA/vault"; fi
+                mv "$work/vault" "$DATA/vault"
+                rm -f "$V"
+              fi
+              rmdir "$work"
+              work=""
+              echo "restore result=ok archive=$ARCHIVE files=$files vault-notes=$notes kept=state.before-restore-$stamp"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /home/node/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: agent-state
+        - name: tmp
+          emptyDir: {}
