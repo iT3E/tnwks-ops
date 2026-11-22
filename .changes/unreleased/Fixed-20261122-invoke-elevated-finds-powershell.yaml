@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'ansible: invoke-elevated.sh finds Windows PowerShell at its standard place when the WSL shell leaves the Windows folders out of PATH, and stops with one line and exit 125 when it finds none, so `task wsl-host:sshd` and `sshd-check` run from such a shell'
-time: 2026-11-22T12:00:00.000000000Z

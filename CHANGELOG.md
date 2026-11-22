@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.296.1 - 2026-11-22
+
+### Fixed
+
+* ansible: invoke-elevated.sh finds Windows PowerShell at its standard place when the WSL shell leaves the Windows folders out of PATH, and stops with one line and exit 125 when it finds none, so `task wsl-host:sshd` and `sshd-check` run from such a shell
+
 ## v2.296.0 - 2026-11-22
 
 ### Added
