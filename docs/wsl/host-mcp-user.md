@@ -118,7 +118,9 @@ states (`security/tests/test_host_mcp_apply_guard.py`).
 ## A first apply
 
 The owner runs it from a checkout of the branch of the switch, on the
-workstation of site 1, **before** the merge. Each command is a task of
+workstation of site 1, **before** the merge, and only when the last nightly
+check of `main` is green for site 1: that check runs `windows_sshd` and each
+other role, so the run starts from a host with no other drift. Each command is a task of
 `.taskfiles/WslHostTasks.yml`; what goes after `--` reaches
 `ansible-playbook` as it is, so `-e host_mcp_agent_apply=true` goes there.
 With `--check` (step 1) the flag changes nothing: it shows the changes of the
@@ -130,7 +132,9 @@ task wsl-host:windows-check -- --limit site_wsl --tags host-mcp -e host_mcp_agen
 task wsl-host:distro-check -- --limit 'wsl_distros:&site_wsl' --tags host-mcp -e host_mcp_agent_apply=true
 # 2. On Windows: the account, its rights, profile, startup folders and key file.
 task wsl-host:windows-apply -- --limit site_wsl --tags host-mcp -e host_mcp_agent_apply=true
-# 3. On Windows: AllowUsers and the Match block. One UAC prompt; sshd restarts once.
+# 3. On Windows: the whole sshd config, the admin keys, the firewall rule and
+#    the service, to the form of the script; with the switch on, AllowUsers
+#    names the user and its Match block is added. One UAC prompt; sshd restarts once.
 task wsl-host:sshd
 # 4. In the distro: the user, its home and its key file.
 task wsl-host:distro-apply -- --limit 'wsl_distros:&site_wsl' --tags host-mcp -e host_mcp_agent_apply=true
@@ -141,29 +145,41 @@ task wsl-host:sshd-check
 task wsl-host:check -- --limit site_wsl
 ```
 
-Step 1 lists the account, the folders and the key files as changes, and
-stops at no check. Steps 2 and 4 make them and end with the checks of
-"On the Windows host" and "In the distro"; a finding stops the run before
-it changes the item. Until step 3 no sign-in of the user is possible on
+Step 1 lists the Windows account, its sign-in screen value, its key folder
+and its key file, and the distro account. The rest needs the account, so
+steps 2 and 4 make it. Steps 2 and 4 end with the checks of "On the Windows
+host" and "In the distro". The checks run after the changes of the same
+run: a finding stops the run, what the run made before it stays, and the
+way back below removes it. Only a member of another group stops the
+Windows account task before a change. Until step 3 no sign-in of the user is possible on
 Windows: `AllowUsers` does not name it. `task wsl-host:sshd` runs on the
 Windows host of this workstation only, which is the host of site 1.
 
-Then the merge: its CI apply finds nothing to change.
+The host check of the pull request runs `--check` of the branch on each
+site with no flag, so it fails on site 1 until his run: the draft shows a
+red check, and the merge helper refuses it. After his run the lead runs that
+check again (the CI form of step 5: every tag, no flag); when it is green,
+the pull request leaves draft and merges, and its CI apply finds nothing to
+change.
 
 **If the pull request merged before his run.** A push to `main` runs the CI
 apply of both playbooks on each site, with every tag
-([ansible.md](../operations/ansible.md)), and with no flag. On site 1 the
-two roles of the user and `windows_sshd` would find the user missing, fail
-at their drift checks, and change nothing ([The guard](#the-guard)). The
-apply and each nightly check of `main` would report that drift until his
-run. So the pull request stays a draft, and merges after his apply.
+([ansible.md](../operations/ansible.md)), and with no flag. On site 1,
+`windows_sshd` on Windows and the role of the user in the distro would find
+the user missing and fail at their drift checks; nothing changes
+([The guard](#the-guard)). On Windows the roles after `windows_sshd` (the
+host settings, the role of the user and the rehearsals) would not run until
+then. The apply and each nightly check of `main` would report that drift
+until his run. So the pull request stays a draft, and merges after his
+apply.
 
 ## The way back
 
 - **Stop the sign-in at once:** remove the key file
   (`C:\ProgramData\tnwks-host-mcp\authorized_keys`, and
   `.ssh/authorized_keys` in the home of the user in the distro). A key
-  sign-in fails from then on.
+  sign-in fails from then on. CI does not put a deleted key file back: with
+  no flag it reports drift.
 - **Take the user out:** a pull request that turns the switch of the site
   off, then `task wsl-host:sshd` from it (the config is again as before:
   no block, and `AllowUsers` without the user). In the distro, `userdel`
@@ -187,7 +203,9 @@ run. So the pull request stays a draft, and merges after his apply.
   not the cluster alone. No narrower form exists on that path. There, the
   private key in the Secret of the host server is the real control. In the
   distro, `from=` names the Docker network of the nodes of the cluster, the
-  same `from` as the key of the runners.
+  same `from` as the key of the runners. Each pod of the cluster leaves
+  through a node, so each pod could try the key, as for the key of the
+  runners; there too the private key is the control.
 - **The profile root and the registry hive on Windows.** The user owns the
   root of its profile and its own registry hive, as each Windows user does.
   It could rename `Documents` and make a new one, or set an environment
