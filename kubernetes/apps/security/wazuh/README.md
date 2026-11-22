@@ -348,6 +348,12 @@ Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
 A run fails, and `KubeJobFailed` fires, at the first error, and when a move
 does not apply in time (after it writes the counts).
 
+The two steps are two Jobs of one Kustomization, so Flux starts them at the
+same time. When one merge changes the rights in `accounts.json` and a file
+of step 2, step 2 can call the indexer before step 1 writes the new rights,
+and fail. Its Job then stays failed: the daily run of the CronJob runs it
+again, or the owner deletes the Job and Flux makes it again.
+
 ## Contract
 
 What other apps and workstreams read from here:
