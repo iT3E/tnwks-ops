@@ -477,6 +477,7 @@ spec:
         summary: '{{ $labels.node }} is above 90% of the memory limit of its node container'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster
           }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#nodecontainermemorynearlimit
         description: The node container has a memory limit of 18 GiB. The scheduler does not see it, because the
           node reports the memory of the whole WSL VM. Find the largest pods of the node, and move or shrink one.
           The limit is memory_nodes of talos_clusters in the Ansible inventory.
@@ -537,6 +538,7 @@ spec:
           in a day
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster
           }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#lokisecurityingestaboveplan
         description: The streams that Loki keeps for 90 days took in more than 2.4 GB of lines in 24 hours, before
           compression. The plan is 1.2 GB a day. Find the stream that grew (the label security_stream), then lower
           its volume at the source or its retention.
@@ -549,6 +551,7 @@ spec:
       annotations:
         summary: The drive under the WSL disk of {{ $labels.instance }} has less than 100 GB free
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#wsldrivespacelow
         description: '{{ $labels.volume }} of {{ $labels.instance }} holds the WSL disk file of its cluster, and
           WSL stops when that drive is full. The stores of the cluster delete at a set age: lower the age of the
           largest one, or free space on the drive.'
@@ -643,6 +646,7 @@ spec:
       annotations:
         summary: A new finding of high severity on {{ $labels.system }}, from {{ $labels.source }}
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
@@ -659,6 +663,7 @@ spec:
       annotations:
         summary: '{{ $value }} running images on {{ $labels.k8s_cluster }} have no scan report of Trivy Operator'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityimagesnotscanned
         description: 'Images that run on this cluster have had no vulnerability report for 36 hours: a private image,
           a registry that the network policy of the scan jobs does not name, or a scan that fails. While one image
           has no report, the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of
@@ -676,6 +681,7 @@ spec:
         summary: '{{ $value }} running containers on {{ $labels.k8s_cluster }} have a Trivy report of their tag,
           not of the image that runs'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityimagesscannedbytag
         description: 'For a week, containers on this cluster have run an image that no report has: the tag was pushed
           again after the node pulled it, and the report is of the image that the tag points to now. The check image-vulnerabilities
           counts that report. Restart the workload, so that it pulls the image of the tag, or pin a digest in its
@@ -692,6 +698,7 @@ spec:
         summary: 'A certificate for IAM Roles Anywhere on {{ $labels.k8s_cluster }} ends within 30 days: {{ $labels.lease
           }}'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitycertificateexpiring
         description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
           when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
           has the steps. The alert ends at the next run of the refresher.'
@@ -704,6 +711,7 @@ spec:
       annotations:
         summary: 'An API token of Prowler on {{ $labels.k8s_cluster }} ends within 30 days: {{ $labels.lease }}'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitytokenexpiring
         description: 'The daily Prowler run of one provider reads with this token, and fails when it ends. Make
           a new token, put it in its SOPS Secret, and write its end date to its Lease: kubernetes/apps/security/prowler/README.md
           has the steps. The alert ends when the Lease has the new date.'
@@ -716,6 +724,7 @@ spec:
       annotations:
         summary: Loki refused audit lines of {{ $labels.k8s_cluster }}
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityauditlinesrefused
         description: The sink {{ $labels.component_id }} of the Vector aggregator on {{ $labels.k8s_cluster }} dropped
           a request in the last 15 minutes, and Vector does not send it again. Loki refuses a line that is older
           than 7 days, or more than one hour older than the newest line of its stream. The log of the aggregator
@@ -728,6 +737,7 @@ spec:
       annotations:
         summary: The list of accepted findings on {{ $labels.k8s_cluster }} gives no entry
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityacceptedlistunread
         description: 'The security converter can not read the list of accepted findings in the Secret security-accepted-findings,
           so it serves no accepted finding: the board shows none, and the rule of Trivy Operator mutes none. The
           log of the converter has the number of the line and the kind of its form. security/converter/README.md,
@@ -740,6 +750,7 @@ spec:
       annotations:
         summary: Entries of the list of accepted findings on {{ $labels.k8s_cluster }} are skipped
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityacceptedentriesskipped
         description: '{{ $value }} entries of the list of accepted findings do not fit, so the security converter
           skips them: their findings show as fails on the board. The Prowler runs skip the entries that are not
           in the form, and take an entry whose source or system is not in the registry. The log of the converter

@@ -17,6 +17,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-sites?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#peersiteunreachable"
             summary: "The other WSL site's Prometheus hasn't answered for 10 minutes."
             description: >-
               {{ $labels.source_site }} isn't reachable from here: the site is

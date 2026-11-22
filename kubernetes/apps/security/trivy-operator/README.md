@@ -129,7 +129,7 @@ has no report. The check `image-vulnerabilities` of its cluster then shows a
 fail, or "no evidence" in place of a pass, and `SecurityImagesNotScanned`
 fires after 36 hours, until the image has a report. For an image that no
 scan can read, the owner mutes the alert with an entry of the accepted list
-(`security/README.md`, "When an alert fires").
+(`docs/apps/security-platform-runbook.md`, "SecurityImagesNotScanned").
 
 A rollout: the new image counts from its first report, and the old one
 stops counting when its pods stop. Until the new image has a report, a pass

@@ -88,6 +88,7 @@ tests:
         description: The newest result of host-check for DESKTOP-HKE05KI is older than its limit, or the source
           serves no time. The board shows no evidence for it.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityresultlate
 - name: 'each source serves a fresh time: no alert'
   interval: 1m
   external_labels:
@@ -161,6 +162,7 @@ tests:
         description: The newest result of prowler for aws-management is older than its limit, or the source serves
           no time. The board shows no evidence for it.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityresultlate
 - name: a time that stops is late after the limit of its source, and a time that goes away is late too
   interval: 1m
   external_labels:
@@ -202,6 +204,7 @@ tests:
         description: The newest result of stream for aws-management is older than its limit, or the source serves
           no time. The board shows no evidence for it.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityresultlate
   - eval_time: 2190m
     alertname: SecurityResultLate
     exp_alerts:
@@ -214,6 +217,7 @@ tests:
         description: The newest result of prowler for aws-management is older than its limit, or the source serves
           no time. The board shows no evidence for it.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityresultlate
     - exp_labels:
         severity: warning
         source: stream
@@ -223,6 +227,7 @@ tests:
         description: The newest result of stream for aws-management is older than its limit, or the source serves
           no time. The board shows no evidence for it.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityresultlate
 - name: a stream with a line for one system only reads as late for the other system
   interval: 1m
   external_labels:
@@ -264,3 +269,4 @@ tests:
         description: The newest result of stream for homelab-wsl-02 is older than its limit, or the source serves
           no time. The board shows no evidence for it.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityresultlate
