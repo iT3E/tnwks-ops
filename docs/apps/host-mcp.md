@@ -21,6 +21,7 @@ Manifests: `kubernetes/apps/ai/agents/main/host-mcp/`.
 | Pod | Deployment `host-mcp` in `agents-main`: the step `files`, then two containers, `server` (port 3000, loopback use only) and `proxy` (nginx, port 8080) |
 | Service | `host-mcp`, port 8080, the proxy only |
 | Secret | `host-mcp-secret`: `config.toml`, `agent_ed25519` and `HOST_MCP_TOKEN` (not in git yet) |
+| Audit log | `/audit/ssh-mcp/audit.log` in the server container (`XDG_DATA_HOME=/audit`), an emptyDir `audit` of its own, 64Mi ([below](#the-audit-log)) |
 | Gateway route | `main-host`, a key of its own (`client: main-host`), the six read tools |
 | Tool dump | `kubernetes/apps/ai/mcp-gateway/tools/host.json`, the tool names of the pinned image |
 | Network policy | CiliumNetworkPolicy `host-mcp` |
@@ -33,8 +34,21 @@ Manifests: `kubernetes/apps/ai/agents/main/host-mcp/`.
 - `--allowedHosts` names its Service only.
 - The server takes its config and its key only with mode 0600 and its own
   uid; it stops at its start with any other mode. A Secret volume gives
-  files of root, so the step `files` copies them, as uid 65532 with mode
-  0600, into volumes in memory.
+  files of root, so the step `files` copies them, as uid 65532 (the user of
+  the image) with mode 0600, into volumes in memory. It also stops when the
+  folder of the config is open to others, and the root of an emptyDir is
+  (mode 0777, with the group of fsGroup). So the config is
+  `/config/ssh-mcp/config.toml`, in a folder of mode 0700 that the step
+  makes.
+- **The profiles** (`config.toml`): `agent`, the user of the host server in
+  the distro of site 1, and `agent-windows`, the same user on the Windows
+  host, each with the address of its target, port 22, the key
+  `/keys/agent_ed25519` and its pinned host key. Both take
+  `role = "viewer"` and `group = "prod"`: in the role bindings of the
+  server, a viewer on a prod group runs read-only commands only. The lab
+  proved each line of the proposed read list under it
+  ([host-mcp-read-list.md](host-mcp-read-list.md)). The denylist names
+  `dig`, `nslookup`, `host`, `ping` and `traceroute`.
 - The token is a flag of the server, so its command line holds it. The pod
   shares no process namespace, the spec holds only the reference to the
   Secret, and no account of an agent has `pods/exec` in the namespace
@@ -45,6 +59,40 @@ Manifests: `kubernetes/apps/ai/agents/main/host-mcp/`.
 server takes, and sends it to the server on loopback. Only `/mcp` and
 `/healthz` answer. So the gateway and the agent hold no token of the
 server.
+
+## The audit log
+
+The server writes one JSON line for each tool call that reaches a command
+or a file to `$XDG_DATA_HOME/ssh-mcp/audit.log`: the time, the profile and
+user, the command (with the secrets that its redactor finds removed), its
+class and binary, the decision and its rule, the exit code, the duration and
+the error. The root of the pod is read only, and the server answers a call
+with the error of that write and runs no command when it has no writable
+place for the line. So `XDG_DATA_HOME` is `/audit`, an emptyDir of its own
+with a limit of 64Mi. In the lab a line was 270 to 330 bytes, so the limit
+holds about 200,000 calls; past it, the kubelet evicts the pod.
+
+**The log is lost at each new pod**, and no other container reads it. A
+volume that lasts is a later choice, for the write step. Until then the
+lasting records of a host call are:
+
+- **The access log of the central MCP gateway**, in Loki for 14 days (its
+  pod ships its log, `logs.home.arpa/ship`): one line for each request with
+  the route, the MCP method, the target, the tool, the status and the client
+  of the key. It never holds the arguments or the result, so not the command.
+- **The session store of the main agent**, on its own volume: the tool call
+  with its arguments, as each tool call of a session (Design Doc, section
+  4.2.6: "The product records the yes").
+- **Not the log of the host approval plugin.** The plugin writes a line when
+  it loads and for each call that it refuses, not for a card or a listed
+  read, and the agent container of main does not ship its log to Loki
+  (`vector.dev/exclude-containers: agent`). Its lines stay on the node only.
+
+The lab of the pod (all six read tools, the user, the read-only root, the
+environment and the volumes of the manifest) found three writes and no
+other: the step `files` writes `/config/ssh-mcp/config.toml` and
+`/keys/agent_ed25519`, and the server writes `/audit/ssh-mcp/audit.log`.
+Nothing goes to `/tmp` or to the root.
 
 ## The route
 
@@ -74,12 +122,22 @@ refused at the gateway.
 ## Tests
 
 `observability/tests/test_main_host_server.py` reads the files, and runs
-the gateway at its pin with the config of git, and the proxy and the
-server from their pinned images in one network namespace, as in the pod.
-The route lists the six reads, a read reaches the server, each other tool
-is refused at the gateway, the key of main gets a 401 on this route and
-passes on a route of main, the server refuses a call with no token, the
-proxy sets it, and no log holds the token or a key.
+the gateway at its pin with the config of git, the proxy and the server
+from their pinned images in one network namespace, as in the pod, and a
+fake Linux host (`observability/tests/host-mcp-sshd/`: OpenSSH with one
+normal user, new keys and a pinned host key each run). The server runs with
+the user, the read-only root, the environment and the volumes of the
+manifest, each emptyDir with the owner and mode that the kubelet gives it,
+so a path that the server needs and the manifest does not give fails the
+test. The route lists the six reads; a read through the gateway comes back
+with no error and with the output of the command, as viewer on prod; the
+server refuses a command of another class and one of the denylist; each
+other tool is refused at the gateway; the key of main gets a 401 on this
+route and passes on a route of main; the server refuses a call with no
+token, the proxy sets it; and no log holds the token or a key. The fake
+host is built from its Dockerfile (the recipe of the update check of the
+plugin in the agent image repository), or taken from
+`HOST_MCP_LAB_SSHD_IMAGE` for a run with no network.
 
 ## What waits
 
@@ -93,7 +151,7 @@ proxy sets it, and no log holds the token or a key.
 | The profiles: one for each target, the user of the agent | The lead, from the reads above | `config.toml` of the Secret |
 | The bearer token of the server | The lead (a key inside the cluster) | `HOST_MCP_TOKEN` of the Secret |
 | `MCP_HOST_KEY` and its hash on `main-host` | The lead (a key inside the cluster) | `agent-secret` of main, and the route |
-| The read list of the plugin | The design (the fixed lines of the ten checks) | `readList` in the config of the agent |
+| The read list of the plugin | The owner's gate: nine lines for the profile `agent` are proposed in [host-mcp-read-list.md](host-mcp-read-list.md), not in the config | `readList` in the config of the agent |
 | The pod at site 2 | A later step: site 2 runs no part of the AI domain yet | The cluster of site 2, with a global Service |
 
 When the Secret exists, a pull request adds `secret-host-mcp.sops.yaml`

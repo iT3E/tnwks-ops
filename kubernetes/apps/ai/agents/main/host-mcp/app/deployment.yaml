@@ -42,13 +42,16 @@ spec:
         # The server takes its config and its key only with mode 0600 and
         # its own uid, and a Secret volume gives files of root. So this step
         # copies them, as uid 65532 with mode 0600, into volumes in memory.
+        # The server also refuses a config in a folder that others may read,
+        # and the root of an emptyDir is open to all (mode 0777 with the
+        # group of fsGroup). So the config goes in a folder of mode 0700.
         - name: files
           image: ghcr.io/it3e/tnwks-host-mcp:0.1.0@sha256:8c17e38459ed4c7bc11f967c40e73a7994a5f2bc5cac7c451a4a3f327d8909d6
           imagePullPolicy: IfNotPresent
           command:
             - sh
             - -c
-            - install -m 600 /secret/config.toml /config/config.toml && install -m 600 /secret/agent_ed25519 /keys/agent_ed25519
+            - install -d -m 700 /config/ssh-mcp && install -m 600 /secret/config.toml /config/ssh-mcp/config.toml && install -m 600 /secret/agent_ed25519 /keys/agent_ed25519
           resources:
             requests:
               cpu: 10m
@@ -80,8 +83,16 @@ spec:
                 secretKeyRef:
                   name: host-mcp-secret
                   key: HOST_MCP_TOKEN
+            # The audit log of the server: $XDG_DATA_HOME/ssh-mcp/audit.log,
+            # one line for each tool call. The root is read only, and with
+            # no writable place for that line the server answers each call
+            # with the error of the write and runs no command. A volume of
+            # its own, so the log has a named place (docs/apps/host-mcp.md,
+            # "The audit log").
+            - name: XDG_DATA_HOME
+              value: /audit
           args:
-            - --config=/config/config.toml
+            - --config=/config/ssh-mcp/config.toml
             - --transport=http
             - --httpHost=0.0.0.0
             - --httpPort=3000
@@ -124,6 +135,8 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            - name: audit
+              mountPath: /audit
         - name: proxy
           image: docker.io/nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
           imagePullPolicy: IfNotPresent
@@ -196,6 +209,12 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi
+        # The audit log: lost at each new pod. A record is a few hundred
+        # bytes, so 64Mi holds well over 100,000 calls; past the limit the
+        # kubelet evicts the pod, and the new pod starts an empty log.
+        - name: audit
+          emptyDir:
+            sizeLimit: 64Mi
         - name: template
           configMap:
             name: host-mcp-proxy-config

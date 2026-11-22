@@ -17,13 +17,22 @@ The static tests read the files:
 
 The lab runs the gateway at its pin with the config of git (a key of the
 test in place of the placeholder), the proxy and the server from their
-pinned images in one network namespace, as in the pod. No host: a read
-reaches the server, which can not connect. It needs Docker: without it a
-test is skipped, except in CI.
+pinned images in one network namespace, as in the pod, and a fake Linux
+host (host-mcp-sshd/: OpenSSH, one normal user, new keys each run, a pinned
+host key). The server runs with the user, the read-only root, the
+environment and the volumes of the manifest, so a path that the server
+writes and the manifest does not give fails the lab. A read through the
+gateway must come back with no error and with the output of the command,
+under the role viewer on the group prod; a command of another class and a
+command of the denylist are refused by the server. It needs Docker: without
+it a test is skipped, except in CI. The fake host is built from its
+Dockerfile, or taken from HOST_MCP_LAB_SSHD_IMAGE (an image of the same
+recipe, for a run with no network).
 """
 
 import hashlib
 import json
+import os
 import re
 import secrets
 import subprocess
@@ -113,6 +122,19 @@ def test_the_server_runs_with_the_flags_of_the_design():
     assert "${" not in DEPLOYMENT.read_text()
 
 
+def test_the_audit_log_has_a_volume_of_its_own():
+    # The server writes one line for each tool call to
+    # $XDG_DATA_HOME/ssh-mcp/audit.log, and with no writable place it runs no
+    # command. The root is read only: a volume of its own, with a size limit.
+    server = container("server")
+    (data,) = [e["value"] for e in server["env"] if e["name"] == "XDG_DATA_HOME"]
+    (mount,) = [m for m in server["volumeMounts"] if m["mountPath"] == data]
+    assert mount["name"] == "audit" and not mount.get("readOnly")
+    (volume,) = [v for v in pod()["volumes"] if v["name"] == "audit"]
+    assert volume["emptyDir"]["sizeLimit"] == "64Mi"
+    assert [c["name"] for c in pod()["containers"] if "audit" in {m["name"] for m in c.get("volumeMounts", [])}] == ["server"]
+
+
 def test_the_pod_is_out_of_the_dns_of_the_namespace():
     (d,) = [x for x in docs(DEPLOYMENT) if x["kind"] == "Deployment"]
     assert d["spec"]["template"]["metadata"]["labels"]["agents.home.arpa/dns"] == "none"
@@ -191,24 +213,32 @@ def test_no_route_of_finance_or_of_another_key_names_a_host_tool():
 
 # The lab
 
+# The form of config.toml of the Secret (docs/apps/host-mcp.md, "The
+# profiles"): the role viewer on the group prod runs read-only commands only,
+# and the denylist of the design.
 SERVER_CONFIG = """[defaults]
 defaultProfile = "agent"
 approvalMode = "auto"
-commandTimeoutMs = 5000
+commandTimeoutMs = 30000
 
 [[profiles]]
 name = "agent"
-host = "lab-host.invalid"
+host = "{host}"
 port = 22
 user = "agent"
 auth = "key"
 keyRef = "/keys/agent_ed25519"
-trustedHostKey = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-role = "operator"
-group = "staging"
+trustedHostKey = "{fingerprint}"
+role = "viewer"
+group = "prod"
 approvalPolicy = "auto"
 announceAgent = false
+
+[policy]
+denylist = ["^\\\\s*dig\\\\b", "^\\\\s*nslookup\\\\b", "^\\\\s*host\\\\b", "^\\\\s*ping\\\\b", "^\\\\s*traceroute\\\\b"]
 """
+SSHD_DIR = Path(__file__).resolve().parent / "host-mcp-sshd"
+LAB_HOST = "lab-distro"
 
 CLIENT = r'''
 import json, sys, urllib.request, urllib.error
@@ -237,7 +267,17 @@ for name in json.loads(sys.argv[3]):
     code, body = post(GW, "tools/call", {"name": name, "arguments": {"command": "uptime"}}, KEY)
     err = (body or {}).get("error") or {}
     out[name] = ("refused: gateway" if code == 400 and err.get("message") == "unknown resource"
-                 else "reached" if code == 200 and body and "result" in body else f"other: {code}")
+                 else "passed the gateway" if code == 200 and body and "result" in body else f"other: {code}")
+def read(command):
+    code, body = post(GW, "tools/call", {"name": "read-command", "arguments": {"command": command, "profile": "agent"}}, KEY)
+    result = (body or {}).get("result")
+    if code != 200 or not isinstance(result, dict):
+        return {"outcome": f"other: {code}", "text": ""}
+    text = " ".join(c.get("text", "") for c in result.get("content", []) if isinstance(c, dict))
+    return {"outcome": "error" if result.get("isError") else "ok", "text": text[:400]}
+out["read"] = read("uptime")
+out["read of another class"] = read("touch /tmp/lab-write")
+out["read of the denylist"] = read("ping -c 1 lab-distro")
 out["no key"] = post(GW, "tools/list", {})[0]
 out["main key"] = post(GW, "tools/list", {}, sys.argv[7])[0]
 out["main key, cluster route"] = post(GW.replace("/main-host/", "/main-cluster/"), "tools/list", {}, sys.argv[7])[0]
@@ -248,9 +288,70 @@ print(json.dumps(out))
 '''
 
 
+def sshd_image(tool: str) -> str:
+    """The fake Linux host: HOST_MCP_LAB_SSHD_IMAGE, or a build of host-mcp-sshd/."""
+    given = os.environ.get("HOST_MCP_LAB_SSHD_IMAGE")
+    if given:
+        return given
+    recipe = hashlib.sha256(b"".join((SSHD_DIR / f).read_bytes() for f in ("Dockerfile", "sshd_config")))
+    tag = f"hostmcp-lab-sshd:{recipe.hexdigest()[:12]}"
+    if subprocess.run([tool, "image", "inspect", tag], capture_output=True, check=False).returncode == 0:
+        return tag
+    built = subprocess.run([tool, "build", "-q", "-t", tag, str(SSHD_DIR)], capture_output=True, text=True,
+                           timeout=600, check=False)
+    if built.returncode != 0:
+        if os.environ.get("CI"):
+            pytest.fail("the fake host of the lab does not build: " + built.stderr[-2000:])
+        pytest.skip("the fake host of the lab does not build here (no network?); set HOST_MCP_LAB_SSHD_IMAGE")
+    return tag
+
+
+def tmpfs_size(limit: str) -> str:
+    """A sizeLimit of the manifest (16Mi) as a size of tmpfs (16m)."""
+    number, unit = re.fullmatch(r"(\d+)(Ki|Mi|Gi)", limit).groups()
+    return number + unit[0].lower()
+
+
+def server_run(work: Path) -> list[str]:
+    """The options of `docker run` for the server as the manifest runs it: the user and group of
+    the pod, the read-only root, no capability, no new privileges, the plain environment, and
+    each volume of the step files and of the server (an emptyDir as a tmpfs of its size limit
+    with the owner and mode that the kubelet gives it, the Secret as the files of the test). The step files runs first in the same container."""
+    spec, server = pod(), container("server")
+    (files,) = spec["initContainers"]
+    uid, gid = spec["securityContext"]["runAsUser"], spec["securityContext"]["runAsGroup"]
+    fs_group = spec["securityContext"]["fsGroup"]
+    volumes = {v["name"]: v for v in spec["volumes"]}
+    options = ["--user", f"{uid}:{gid}", "--cap-drop", "ALL"]
+    if server["securityContext"]["readOnlyRootFilesystem"]:
+        options.append("--read-only")
+    if server["securityContext"]["allowPrivilegeEscalation"] is False:
+        options += ["--security-opt", "no-new-privileges"]
+    for e in server.get("env", []):
+        if "value" in e:
+            options += ["-e", f"{e['name']}={e['value']}"]
+    seen = set()
+    for m in files["volumeMounts"] + server["volumeMounts"]:
+        if m["mountPath"] in seen:
+            continue
+        seen.add(m["mountPath"])
+        v = volumes[m["name"]]
+        if "secret" in v:
+            options += ["-v", f"{work}/secret:{m['mountPath']}:ro"]
+        elif "emptyDir" in v:
+            # As the kubelet makes an emptyDir: owned by root, open to all
+            # (0777), with the group of fsGroup and its setgid bit.
+            size = tmpfs_size(v["emptyDir"].get("sizeLimit", "16Mi"))
+            options += ["--tmpfs", f"{m['mountPath']}:uid=0,gid={fs_group},mode=2777,size={size}"]
+        else:
+            raise AssertionError(f"a volume of the server that the lab does not know: {m['name']}")
+    return options
+
+
 @pytest.fixture(scope="module")
 def lab():
     tool = docker()
+    sshd = sshd_image(tool)
     work = scratch()
     key, token = f"test-host-{uuid.uuid4().hex}", secrets.token_hex(24)
     (old,) = [k["keyHash"] for k in route(ROUTE)["policies"]["apiKey"]["keys"]]
@@ -261,10 +362,16 @@ def lab():
     (work / "config.yaml").write_text(CONFIG.read_text().replace(
         old, "sha256:" + hashlib.sha256(key.encode()).hexdigest()).replace(
         main_old, "sha256:" + hashlib.sha256(main_key.encode()).hexdigest()))
+    # New keys of the run: the key of the user and the host key of the fake host.
+    (work / "k").mkdir()
+    made = run([tool, "run", "--rm", "--network", "none", "--user", f"{os.getuid()}:{os.getgid()}",
+                "-v", f"{work}/k:/k", "--entrypoint", "sh", sshd, "-c",
+                'ssh-keygen -q -t ed25519 -N "" -f /k/agent && ssh-keygen -q -t ed25519 -N "" -f /k/host'
+                ' && chmod 644 /k/agent /k/host && ssh-keygen -l -E sha256 -f /k/host.pub'])
+    (fingerprint,) = re.findall(r"SHA256:[A-Za-z0-9+/]{43}", made.stdout)
     (work / "secret").mkdir()
-    (work / "secret/config.toml").write_text(SERVER_CONFIG)
-    # Not a key: the lab connects to no host.
-    (work / "secret/agent_ed25519").write_text("not a key\n")
+    (work / "secret/config.toml").write_text(SERVER_CONFIG.format(host=LAB_HOST, fingerprint=fingerprint))
+    (work / "secret/agent_ed25519").write_text((work / "k/agent").read_text())
     (work / "templates").mkdir()
     (work / "templates/default.conf.template").write_text(TEMPLATE.read_text())
     for p in work.rglob("*"):
@@ -272,20 +379,25 @@ def lab():
     work.chmod(0o755)
     tag = uuid.uuid4().hex[:8]
     net = f"hostmcp-{tag}"
-    names = {n: f"hostmcp-{n}-{tag}" for n in ("server", "proxy", "gateway")}
+    names = {n: f"hostmcp-{n}-{tag}" for n in ("server", "proxy", "gateway", "host")}
     hardened = ["--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
     try:
         run([tool, "network", "create", "--internal", net])
+        run([tool, "run", "-d", "--name", names["host"], "--network", net, "--network-alias", LAB_HOST,
+             "-v", f"{work}/k:/k:ro", sshd])
         server = container("server")
         args = [a.replace("$(HOST_MCP_TOKEN)", token) for a in server["args"]]
         (files,) = pod()["initContainers"]
         # The step files of the pod, then the server, in one container with
-        # the same volumes: the Secret read only, the copies in memory.
+        # the volumes of the manifest.
         start = " ".join(files["command"][2:]) + ' && exec node build/index.js "$@"'
         run([tool, "run", "-d", "--name", names["server"], "--network", net, "--network-alias", SERVICE,
-             *hardened, "--tmpfs", "/tmp", "--tmpfs", "/config:uid=65532,mode=0700",
-             "--tmpfs", "/keys:uid=65532,mode=0700", "--user", "65532",
-             "-v", f"{work}/secret:/secret:ro", "--entrypoint", "sh", IMAGE, "-c", start, "server", *args])
+             *server_run(work), "--entrypoint", "sh", IMAGE, "-c", start, "server", *args])
+        time.sleep(1)
+        state = run([tool, "inspect", "-f", "{{.State.Running}}", names["server"]]).stdout.strip()
+        if state != "true":
+            log = subprocess.run([tool, "logs", names["server"]], capture_output=True, text=True, check=False)
+            raise AssertionError("the server stopped at its start: " + (log.stdout + log.stderr).replace(token, "<token>")[-3000:])
         proxy = container("proxy")
         run([tool, "run", "-d", "--name", names["proxy"], "--network", f"container:{names['server']}",
              *hardened, "--user", "101",
@@ -317,11 +429,19 @@ def test_the_lab_route_lists_the_reads_and_refuses_the_rest(lab):
     result = run([lab["tool"], "run", "--rm", "--network", lab["net"], "--read-only", "--cap-drop", "ALL",
                   "--user", "65534", PYTHON, "python3", "-I", "-c", CLIENT,
                   f"http://mcp-gateway.ai.svc.cluster.local:3000/{ROUTE}/mcp", lab["key"],
-                  json.dumps(["read-command", *WRITES, *NEVER]),
+                  json.dumps([*WRITES, *NEVER]),
                   f"http://{SERVICE}:3000/", SERVICE, f"http://{SERVICE}:8080/mcp", lab["main_key"]])
     out = json.loads(result.stdout)
     assert out["list"] == READS
-    assert out["read-command"] == "reached"
+    # A read comes back with no error and with the output of the command,
+    # as the role viewer on the group prod.
+    assert out["read"]["outcome"] == "ok", out["read"]
+    assert "load average" in out["read"]["text"], out["read"]
+    # A command of another class, and one of the denylist: the server refuses them.
+    assert out["read of another class"]["outcome"] == "error"
+    assert out["read of another class"]["text"].startswith("POLICY_DENIED: Role \"viewer\" on host group \"prod\"")
+    assert out["read of the denylist"]["outcome"] == "error"
+    assert "[policy].denylist" in out["read of the denylist"]["text"]
     for name in WRITES + NEVER:
         assert out[name] == "refused: gateway", name
     assert out["no key"] == 401
