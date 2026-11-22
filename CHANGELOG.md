@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.280.2 - 2026-11-22
+
+### Security
+
+* Flux: the database folders of the apps join the "ask first" class, and databases is a namespace of the class (D149). The rule operator-pods of the admission policy flux-child-scope now covers each object of the database operator and of its backup plugin, so a child outside the class can not apply a database cluster, a pooler, a backup or an object store. The binding stays at Audit and Warn; a replay of the render of git of both sites finds no refusal
+
 ## v2.280.1 - 2026-11-22
 
 ### Fixed

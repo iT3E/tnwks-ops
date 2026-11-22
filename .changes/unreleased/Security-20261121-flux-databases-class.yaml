@@ -1,3 +1,0 @@
-kind: Security
-body: 'Flux: the database folders of the apps join the "ask first" class, and databases is a namespace of the class (D149). The rule operator-pods of the admission policy flux-child-scope now covers each object of the database operator and of its backup plugin, so a child outside the class can not apply a database cluster, a pooler, a backup or an object store. The binding stays at Audit and Warn; a replay of the render of git of both sites finds no refusal'
-time: 2026-11-21T22:00:00.000000+00:00
