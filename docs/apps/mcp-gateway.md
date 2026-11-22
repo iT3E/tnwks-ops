@@ -159,12 +159,38 @@ later, with its read credential):
   call in agentgateway 1.7.0. The pod reaches the API of the code host and
   its host of raw file content only. `tools/github.json` is the dump.
 
-  **The token is the owner's step.** The pod reads the Secret
-  `github-mcp-token` in `agents-main`, key `GITHUB_MCP_TOKEN`, and does not
-  start without it, so `agents-main-github-mcp` is not ready until it
-  exists. The design puts an installation token of the App of the main
-  agent there, renewed by a token job; Reloader starts the pod again when
-  the Secret changes.
+  **The token is a stopgap of the owner (D143).** The pod reads the
+  Secret `github-mcp-token` in `agents-main`, key `GITHUB_MCP_TOKEN`
+  (`github-mcp/app/secret.sops.yaml`, in the kustomization of the app).
+  By the owner's choice it holds a read-only token for this repository
+  only, until the token job of the App of the main agent writes the
+  Secret: the design puts an installation token of the App there, renewed
+  by that job. This token expires on 2026-12-22; the runbook says what
+  fails then ([agent-platform-runbook.md](agent-platform-runbook.md), "The
+  code host server of main"). Reloader starts the pod again when the
+  Secret changes.
+
+  **Deployed, not live for use.** After the merge the pod runs and the
+  route takes the key of main, so the agent can call the 17 reads. The
+  step is live for use only when these live rows pass, and until then the
+  owner uses the code host tools for these rows only:
+
+  1. A read through the gateway: a `tools/list` and a `tools/call` of the
+     client `main` on `default/main-github`, status 200, no 401 or 403.
+  2. The sandbox allow list in a session: the agent sees and calls a read
+     as `github__<tool>` in a sandboxed session.
+  3. The reach: a pod of another namespace and a pod of `agents-main` that
+     is not the gateway get no connection to the server pod (item 7 of
+     "The probe").
+  4. The slowest read under 30 s: a long job log (`get_job_logs`) ends
+     before the timeout of the route, with no 504.
+  5. One live `tools/call` with an answer from the code host for the ops
+     repository, and a call for another repository refused at the gateway.
+
+  Before the owner asks the agent anything, a probe proves row 3 only: the
+  next daily runs of the gateway probes of finance and of main. Rows 1, 2,
+  4 and 5 need the key of main, which only the agent holds, so they need a
+  question of the owner to the agent.
 
 **The read step.** The config of the main agent
 (`agents/main/agent/config/openclaw.json`) has one server entry for each
@@ -393,7 +419,8 @@ agent does, with two keys of its own and none of the agent's:
    straight connection to its server fails (R6). Each probe checks the
    other.
 7. The read servers of main (`GATEWAY_ONLY_SERVERS`: `cluster-mcp`,
-   `flux-mcp` and `terraform-mcp` in `agents-main`, port 8080): a straight
+   `flux-mcp`, `terraform-mcp` and `github-mcp` in `agents-main`, port
+   8080): a straight
    connection from its pod to each fails. No key is used. A time out passes:
    a policy drop in this cluster is silent. A refusal fails, since a
    Service with no ready pod refuses at once and so proves nothing; an

@@ -188,7 +188,7 @@ before the create, and fails a run that leaves its own record.
   (R6): the policy of that vault server or the keys of that route are
   wrong; fix it before the next run. Both probes also try the read servers
   of main straight (`cluster-mcp in agents-main, direct from a pod that is
-  not the gateway`, and the same for `flux-mcp` and `terraform-mcp`).
+  not the gateway`, and the same for `flux-mcp`, `terraform-mcp` and `github-mcp`).
   Only `blocked: TimeoutError` passes there. `connected`: the policy of that
   read server lets in more than the gateway; fix it before the next run.
   `refused`: the Service had no ready pod (the server was down or rolling)
@@ -2570,6 +2570,24 @@ client, never the arguments or the result.
 | `sum by (k8s_cluster, route, status) (increase(agentgateway_requests_total{route=~"default/main-(cluster\|flux\|terraform)"}[1h]))`, through thanos-query | A 200 series for each route, on site 1. No 5xx series |
 | The board ([observability-operations.md](../operations/observability-operations.md)): the rows of the parts of main | Cluster, Flux and Terraform MCP server healthy. The code host MCP server has no row until its step |
 | The next run of the gateway probe of main (`kubectl -n agents-main get jobs -l app.kubernetes.io/component=mcp-gateway-probe`) | Complete. It covers the vault route only, with its own key |
+
+#### The code host server of main
+
+It is deployed, not live for use, until its live rows pass
+([mcp-gateway.md](mcp-gateway.md), "The read servers of main"). Its
+token is a stopgap of the owner: a read-only token for this repository
+only, until the token job of the App of the main agent writes the Secret
+`github-mcp-token`.
+
+- **The token expires on 2026-12-22.** Then the pod stays up and ready
+  (its health check does not use the token), and each call of the agent
+  gets a 401 from the code host: the agent sees a failed read.
+- **The gap:** no probe uses the token, and no alert fires on its expiry
+  or on the status of the route. The lab did not run with an expired
+  token, so whether the gateway counts such a call as a 200 (an error
+  inside the answer of the tool) or as an error status is not known.
+  Until the token job writes the Secret, the date above is the only
+  warning.
 
 **The rehearsal rows** of the design that the lab did not cover (section
 4.2.6, "Not tested"): the DNS rules of Cilium and the reach of each pod

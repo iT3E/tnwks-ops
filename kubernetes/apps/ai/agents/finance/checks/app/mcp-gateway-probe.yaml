@@ -19,7 +19,7 @@
 #   the probe key gets a 401 on its route, and a straight connection to its
 #   server fails (R6);
 # - a straight connection to each read server of main (cluster, Flux,
-#   Terraform) times out: this pod is a pod of another namespace, and the
+#   Terraform, code host) times out: this pod is a pod of another namespace, and the
 #   policy of each server names the gateway only. No key is used on a read
 #   route.
 # Until the owner's values step the two keys are placeholders: the checks
@@ -49,8 +49,8 @@ spec:
       # a failure until a newer run ends, and KubeJobFailed then clears by
       # itself (docs/apps/agent-platform.md, "A failed Job").
       ttlSecondsAfterFinished: 93600
-      # The worst case, in seconds: six straight connections of 5 each
-      # (30), then eighteen MCP requests of 30 each (540). That is 570.
+      # The worst case, in seconds: seven straight connections of 5 each
+      # (35), then eighteen MCP requests of 30 each (540). That is 575.
       activeDeadlineSeconds: 600
       template:
         metadata:
@@ -106,7 +106,7 @@ spec:
                 # a refusal (no ready backend), an answer and a name that
                 # does not resolve fail.
                 - name: GATEWAY_ONLY_SERVERS
-                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080
+                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080
               # PROBE_KEY and NO_TOOLS_KEY.
               envFrom:
                 - secretRef:
@@ -187,6 +187,10 @@ spec:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-main
             app.kubernetes.io/name: terraform-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: github-mcp
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

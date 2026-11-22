@@ -624,7 +624,7 @@ def test_the_probe_passes_and_the_app_sees_only_its_read(lab):
     assert got["probe key: allowed read (get_about)"] == "reached: ok"
     assert got["key with no tool: tools/list"] == "tools: 0"
     assert got["probe key with headers that name the client finance: a write"] == "refused: gateway"
-    for name in ("cluster-mcp", "flux-mcp", "terraform-mcp"):
+    for name in ("cluster-mcp", "flux-mcp", "terraform-mcp", "github-mcp"):
         assert got[f"{name} in agents-main, direct from a pod that is not the gateway"] == (
             "blocked: TimeoutError")
     assert not [k for k in got if "skipped" in got[k]]

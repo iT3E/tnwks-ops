@@ -458,7 +458,7 @@ def test_the_try_passes_on_a_time_out_only(monkeypatch, capsys, connect, ok, got
     assert [line["target"] for line in lines] == [
         f"{s['dir']} in agents-main, direct from a pod that is not the gateway" for s in SERVERS.values()]
     assert {(line["ok"], line["got"]) for line in lines} == {(ok, got)}
-    assert checks.failures == (0 if ok else 3)
+    assert checks.failures == (0 if ok else len(SERVERS))
 
 
 # The cluster server and the read rights
@@ -561,6 +561,20 @@ def test_the_code_host_server_reads_only_with_the_token_of_its_proxy():
     for doc in manifests("Deployment", "StatefulSet", "CronJob", "Job", "DaemonSet", "Pod"):
         if doc["__path"] != MAIN / "github-mcp/app/deployment.yaml":
             assert "github-mcp-token" not in json.dumps({k: v for k, v in doc.items() if k != "__path"}), doc["__path"]
+
+
+def test_the_code_host_token_is_an_encrypted_secret_of_the_app():
+    """The stopgap token of the owner (D143) is the Secret of the app, in its
+    kustomization, encrypted: its key name only, never a value in clear."""
+    app = yaml.safe_load((MAIN / "github-mcp/app/kustomization.yaml").read_text())
+    assert "./secret.sops.yaml" in app["resources"]
+    (secret,) = docs(MAIN / "github-mcp/app/secret.sops.yaml")
+    assert secret["kind"] == "Secret"
+    assert secret["metadata"] == {"name": "github-mcp-token", "namespace": "agents-main"}
+    values = secret.get("stringData") or secret.get("data")
+    assert set(values) == {"GITHUB_MCP_TOKEN"}
+    assert all(str(v).startswith("ENC[") for v in values.values())
+    assert "sops" in secret
 
 
 def test_the_code_host_route_takes_the_ops_repository_only():

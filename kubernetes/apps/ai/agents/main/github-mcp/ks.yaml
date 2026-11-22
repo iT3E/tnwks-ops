@@ -16,8 +16,8 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  # Ready only when the server is. With no Secret github-mcp-token the pod
-  # does not start, and this Kustomization is not ready.
+  # Ready only when the server is. The pod needs the Secret github-mcp-token
+  # (app/secret.sops.yaml) to start.
   wait: true
   interval: 30m
   retryInterval: 1m

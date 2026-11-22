@@ -373,7 +373,7 @@ def test_the_probe_of_main_passes_with_its_key(vault_lab):
     assert got["vault: probe key: a move (move_file), off every rule"] == "refused: gateway"
     assert got["other vault server, direct from this trust domain"].startswith("blocked")
     assert got["other vault: probe key: tools/list"] == "refused: HTTP 401"
-    for name in ("cluster-mcp", "flux-mcp", "terraform-mcp"):
+    for name in ("cluster-mcp", "flux-mcp", "terraform-mcp", "github-mcp"):
         assert got[f"{name} in agents-main, direct from a pod that is not the gateway"] == (
             "blocked: TimeoutError")
     # No route of a domain, and no key with no tool: main has neither.

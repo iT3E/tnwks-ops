@@ -64,8 +64,9 @@ spec:
             # The entrypoint fills only these names into the template.
             - name: NGINX_ENVSUBST_FILTER
               value: ^GITHUB_MCP_
-            # The read token of the code host. The owner's step makes the
-            # Secret (docs/apps/mcp-gateway.md, "The read servers of main").
+            # The read token of the code host: a stopgap of the owner until
+            # the token job (secret.sops.yaml; docs/apps/mcp-gateway.md,
+            # "The read servers of main").
             - name: GITHUB_MCP_TOKEN
               valueFrom:
                 secretKeyRef:
