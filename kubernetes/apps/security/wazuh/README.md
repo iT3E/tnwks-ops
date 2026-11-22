@@ -5,9 +5,9 @@ one manager node, one indexer node and the dashboard, at the tag
 `v5.0.0-rc2`. The agents of the hosts report to the manager, and the
 converter (`../converter`) reads the state of the hosts from the indexer.
 
-homelab-wsl-02 lists `ks.yaml` (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`).
-No cluster lists `../wazuh-settings/ks.yaml` yet: that is a later merge, the
-owner's (see "The merges that list it").
+homelab-wsl-02 lists `ks.yaml` and `../wazuh-settings/ks.yaml`
+(`kubernetes/clusters/wsl-02/apps/kustomization.yaml`). No other cluster
+lists either (see "The merges that list it").
 
 ## How it is built
 
@@ -232,7 +232,7 @@ only in the container of the part that logs in with it.
 | `wazuh-accounts-user` | `../wazuh-settings/accounts` | `username`, `password` | The account user (see "Accounts") | Step 1 only |
 | `wazuh-accounts-hashes` | `../wazuh-settings/accounts` | `tnwks-settings`, `tnwks-converter`: one key for each user of `accounts.json` | The bcrypt hash of the password of that user | Step 1 only |
 | `wazuh-settings-user` | `../wazuh-settings/app` | `password` | The password of `tnwks-settings` | Step 2 only |
-| `wazuh-converter-reader` | `../converter` | `password` | The password of `tnwks-converter` | The converter only. The change that adds the Wazuh source to the converter adds it |
+| `wazuh-converter-reader` | `../converter` | `password` | The password of `tnwks-converter` | The converter only. Its SOPS file is in `../converter/app`, and no kustomization lists it: the change that adds the Wazuh source to the converter lists it and mounts it |
 
 The password rule of the Wazuh images: 12 to 64 characters from
 `A-Z a-z 0-9 . , _ + : @ % ^ = ~ -`, with at least one lowercase letter,
@@ -250,6 +250,29 @@ the vendor's `password-tool.sh` (same page). A password of a user of
 Secret of the part that logs in, and its hash in `wazuh-accounts-hashes`.
 Then the owner deletes the Job of step 1, and Flux runs it again.
 
+Flux substitutes the variables of the cluster in the objects of both
+Kustomizations of the settings. The parent of the apps of homelab-wsl-02
+(`kubernetes/clusters/wsl-02/apps.yaml`) gives each child without the label
+`substitution.flux.home.arpa/disabled` the SOPS decryption and
+`postBuild.substituteFrom`, and the two have no such label.
+kustomize-controller substitutes each object after it decrypts it, so a
+decrypted Secret too
+([the build](https://github.com/fluxcd/kustomize-controller/blob/v1.10.1/internal/controller/kustomization_controller.go#L862-L879)).
+A bcrypt hash holds three `$` signs (`$2y$12$` and 53 characters from
+`./A-Za-z0-9`). The envsubst of Flux reads a variable only at `${`, and
+`$$` as an escape; a `$` before any other character stays as it is
+([the scanner](https://github.com/fluxcd/pkg/blob/envsubst/v1.9.0/envsubst/parse/scan.go#L189-L232)),
+and a hash holds neither `${` nor `$$`. The Secret `wazuh-accounts-hashes`
+also turns the substitution off for itself, with the annotation
+`kustomize.toolkit.fluxcd.io/substitute: disabled`: the controller skips
+each object with that label or annotation
+([SubstituteVariables](https://github.com/fluxcd/pkg/blob/kustomize/v1.44.0/kustomize/kustomize_varsub.go#L112-L132)).
+The annotation is in the plain metadata of the SOPS file (the rule of
+`.sops.yaml` for `kubernetes/` encrypts only `data` and `stringData`), so
+the object that the controller reads after the decryption has it.
+`security/tests/test_wazuh_manifests.py` pins the annotation, the labels of
+the two Kustomizations and the form of a hash that step 1 accepts.
+
 ## Accounts
 
 The indexer has the vendor's accounts (`admin`, `kibanaserver`,
@@ -259,7 +282,7 @@ this repository from `../wazuh-settings/app/config/accounts.json`:
 
 | User | Role | For |
 | --- | --- | --- |
-| `tnwks-settings` | `tnwks-settings`: the five ISM actions that step 2 calls ([`policy/get`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/getpolicy/GetPolicyAction.kt#L13), [`policy/write`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/indexpolicy/IndexPolicyAction.kt#L13), [`managedindex/add`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/addpolicy/AddPolicyAction.kt#L14), [`managedindex/change`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/changepolicy/ChangePolicyAction.kt#L14), [`managedindex/explain`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/explain/ExplainAction.kt#L13), each under `cluster:admin/opendistro/ism/`), and the ISM index actions on the patterns of the four streams of "Retention". `policy/write` lets the user write a policy under any ID: the role can not limit the ID, so step 2 refuses to write a shipped ID. Also the raw events setting, with a write of the settings document in `.wazuh-settings` (the Setup plugin indexes it with the rights of the caller, which OpenSearch runs as a bulk request: the cluster action `indices:data/write/bulk`, and `indices:data/write/index` and `indices:data/write/bulk[s]` on that index, [SettingsIndex.java](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/plugins/setup/src/main/java/com/wazuh/setup/index/SettingsIndex.java#L106-L113)), and the index stats of the two streams that hold no document. No Security API, and no read of a document | Step 2 |
+| `tnwks-settings` | `tnwks-settings`: the five ISM actions that step 2 calls ([`policy/get`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/getpolicy/GetPolicyAction.kt#L13), [`policy/write`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/indexpolicy/IndexPolicyAction.kt#L13), [`managedindex/add`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/addpolicy/AddPolicyAction.kt#L14), [`managedindex/change`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/changepolicy/ChangePolicyAction.kt#L14), [`managedindex/explain`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/explain/ExplainAction.kt#L13), each under `cluster:admin/opendistro/ism/`), and the ISM index actions on the patterns of the four streams of "Retention". `policy/write` lets the user write a policy under any ID: the role can not limit the ID, so step 2 refuses to write a shipped ID. Also the raw events setting, with a write of the settings document in `.wazuh-settings` (the Setup plugin indexes it with the rights of the caller, which OpenSearch runs as a bulk request: the cluster action `indices:data/write/bulk`, and `indices:data/write/index` and `indices:data/write/bulk[s]` on that index, [SettingsIndex.java](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/plugins/setup/src/main/java/com/wazuh/setup/index/SettingsIndex.java#L106-L113)), and the index stats of the two streams that hold no document. Also what ISM calls with this role for the policies of tnwks (see below): the index stats and the rollover on the names of the four streams, and the index stats and the delete on their backing indices. No Security API, and no read of a document | Step 2 |
 | `tnwks-converter` | `tnwks-converter`: a read of the index names of "Contract", with field-level security on the agent snapshots, and the index stats (the size) of each index of Wazuh | The converter |
 
 Step 1 runs only when its files change: `accounts.json`, `indexer.py` and
@@ -273,8 +296,8 @@ runs when `accounts.json`, its script or a hash changes: a change of a file
 gives the Job a new name, and at a change of a hash only (in
 `wazuh-accounts-hashes`) the owner deletes the Job.
 
-It runs as the account user, which the owner, or the session the owner
-names for it, makes once with `admin`, from `../wazuh-settings/app/config/account-user.json`: an internal
+It runs as the account user, which its own step makes once with `admin`
+(see "The merges that list it"), from `../wazuh-settings/app/config/account-user.json`: an internal
 user mapped to the reserved role `security_rest_api_access`, with its name
 and password in `wazuh-accounts-user`. The file holds no hash, and step 1
 never reads it. It is applied through the Security API: a `PUT` of
@@ -290,6 +313,77 @@ and role mappings that are neither reserved nor hidden, so it can also give
 itself wide rights on the data
 ([API permissions, OpenSearch](https://github.com/opensearch-project/documentation-website/blob/d4a12efae197ed01306f752eb1406072ad18bb58/_security/access-control/api.md#L67)).
 Only the pod of step 1 mounts its Secret.
+
+ISM runs each step of a policy with the roles of the user that wrote or
+moved the policy, not with the rights of ISM:
+
+- A write of a policy stores the caller as its user
+  ([TransportIndexPolicyAction.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/indexpolicy/TransportIndexPolicyAction.kt#L232)),
+  and so do `add`
+  ([TransportAddPolicyAction.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/addpolicy/TransportAddPolicyAction.kt#L328))
+  and `change_policy`
+  ([TransportChangePolicyAction.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/changepolicy/TransportChangePolicyAction.kt#L369),
+  [ManagedIndexRunner.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/ManagedIndexRunner.kt#L773)).
+  A backing index that ISM puts on a policy by its `ism_template` gets the
+  policy with its stored user
+  ([ManagedIndexCoordinator.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/ManagedIndexCoordinator.kt#L316-L327)).
+- The runner runs each step with the roles of that user
+  ([ManagedIndexRunner.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/ManagedIndexRunner.kt#L453-L459),
+  [OpenSearchExtensions.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/opensearchapi/OpenSearchExtensions.kt#L302)),
+  and with `all_access` only for a policy with no user, as the shipped ones
+  ([SecurityUtils.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/util/SecurityUtils.kt#L23)).
+
+Step 2 writes and moves the policies of tnwks as `tnwks-settings`, so ISM
+runs their steps with the role `tnwks-settings`, and the role holds what
+those steps call:
+
+- The rollover step asks for the stats of the backing index
+  ([AttemptRolloverStep.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/step/rollover/AttemptRolloverStep.kt#L74-L76),
+  [the call](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/step/rollover/AttemptRolloverStep.kt#L216-L219)),
+  then rolls over the data stream by its name
+  ([the rollover](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/step/rollover/AttemptRolloverStep.kt#L251)).
+  The rollover of a data stream asks for the stats of the stream name
+  ([TransportRolloverAction.java](https://github.com/opensearch-project/OpenSearch/blob/3.6.0/server/src/main/java/org/opensearch/action/admin/indices/rollover/TransportRolloverAction.java#L170-L175)),
+  and makes the new backing index in its own change of the cluster state,
+  with no other action to check
+  ([MetadataRolloverService.java](https://github.com/opensearch-project/OpenSearch/blob/3.6.0/server/src/main/java/org/opensearch/action/admin/indices/rollover/MetadataRolloverService.java#L205-L229)).
+  So: `indices:monitor/stats` on the names and on the backing indices, and
+  `indices:admin/rollover` on the names.
+- The delete step deletes the backing index
+  ([AttemptDeleteStep.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/step/delete/AttemptDeleteStep.kt#L30)):
+  `indices:admin/delete` on the backing indices only.
+
+A test on a throwaway indexer of the pinned image, with a copy of the
+policies of tnwks at ages of minutes, written and moved by a user with
+exactly this role, ran the rollover and the delete to the end, also for an
+index moved by `add` and for the new backing index of a rollover. With the
+role before this change, the rollover step failed at the stats of the
+backing index, and the index stayed on its policy. With the delete on the
+backing indices only and the stats on them only, the rollover failed at the
+stats of the stream name. After the role of a failed index got the rights of
+this change, the index stayed at its failed step until a retry by `admin`,
+and then rolled over. The check of step 2 for a failed step, applied to the
+explain answers of that test, counted the failed index and no other.
+
+So `tnwks-settings` can roll over and delete each backing index of the four
+streams. Who holds its password can delete the security data of those
+streams. The password is in one SOPS Secret, `wazuh-settings-user`, which
+only the pod of step 2 mounts. The index permissions of the role, all of
+them (`app/config/accounts.json`, pinned by
+`test_the_index_permissions_of_each_role_are_pinned`):
+
+| Index patterns | Actions |
+| --- | --- |
+| The names of the four streams and of their backing indices: `wazuh-events-v5*`, `.ds-wazuh-events-v5-*`, `wazuh-findings-v5*`, `.ds-wazuh-findings-v5-*`, `wazuh-events-raw-v5*`, `.ds-wazuh-events-raw-v5-*`, `wazuh-metrics*`, `.ds-wazuh-metrics-*` | `indices:admin/opensearch/ism/*` (the ISM index actions of the moves and of explain) |
+| The names of the four streams: `wazuh-events-v5*`, `wazuh-findings-v5*`, `wazuh-events-raw-v5*`, `wazuh-metrics*` | `indices:monitor/stats`, `indices:admin/rollover` |
+| Their backing indices: `.ds-wazuh-events-v5-*`, `.ds-wazuh-findings-v5-*`, `.ds-wazuh-events-raw-v5-*`, `.ds-wazuh-metrics-*` | `indices:monitor/stats`, `indices:admin/delete` |
+| The active responses stream: `.ds-wazuh-active-responses-*`, `wazuh-active-responses*` | `indices:monitor/stats` |
+| `.wazuh-settings` | `indices:data/write/index`, `indices:data/write/bulk[s]` |
+
+The image also maps every user to its reserved role `wazuh_ai_assistant`,
+which reads only the sessions of the AI assistant of that user
+([roles_mapping.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles_mapping.wazuh.yml#L23-L27),
+[roles.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles.wazuh.yml#L100-L115)).
 
 What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
 
@@ -349,7 +443,9 @@ Which policy an index of a stream starts on:
   (`wazuh-events-v5*` and `.ds-wazuh-events-v5-*`, and the others of
   `accounts.json`; a backing index is named `.ds-<stream>-<generation>`,
   [DataStream.java](https://github.com/opensearch-project/OpenSearch/blob/3.6.0/server/src/main/java/org/opensearch/cluster/metadata/DataStream.java#L191-L193)).
-  This path does not read the `policy_id` setting of the template.
+  This path does not read the `policy_id` setting of the template. The
+  new index gets the policy with its stored user, so ISM runs its steps
+  with the role `tnwks-settings` (see "Accounts").
 
 Step 2 moves each index that is not on its policy of tnwks at each run: the
 first index of a stream, or one that ISM put on another policy.
@@ -389,6 +485,23 @@ The merge that first lists `../wazuh-settings/ks.yaml` applies the policies,
 and ISM then deletes each index older than its age. A merge that lowers an
 age does the same at the new age. Deleted data has no way back. Each such
 merge is the owner's.
+
+What the first listing can delete: ISM counts each age from the creation of
+the index (`index.creation_date`), for the rollover
+([AttemptRolloverStep.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/step/rollover/AttemptRolloverStep.kt#L97-L105))
+and for the move to the state `delete`
+([checkIndexAge](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/util/ManagedIndexUtils.kt#L218-L224)).
+A policy of tnwks deletes an index only in its state `delete`, which an
+index reaches only after its rollover, at the earliest when it is
+`delete_age` old: 120 days for host events, findings and raw events, 60
+days for metrics. Each index of a stream is made by the indexer, at the
+first start of the indexer or later. So on an indexer that first started
+less than 60 days before the first listing, no index is old enough for a
+delete, and less than 30 days before, none for a rollover. The first
+deletes come at the earliest 60 days after the first start (metrics) and
+120 days after it (the other three). The listing changes no shipped policy:
+the active responses stream and the AI assistant sessions keep their
+shipped ages from the first start of the indexer on.
 
 `security/tests/test_wazuh_settings.py` pins each age of each policy
 (`PINNED`). A change of an age, or a stream that goes, fails CI until the
@@ -451,13 +564,33 @@ Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
    1200 seconds holds more than two such gaps, and the deadline of a pod
    (`activeDeadlineSeconds`, 1800) is more than the two waits and the calls;
 5. counts the indices of the four patterns that are not on the policy of
-   tnwks of their stream, with those that have no policy, and the documents
-   of the raw events and active responses streams, from the index stats. It
-   writes them to `wazuh-settings/indices.json` on the volume of results
+   tnwks of their stream, with those that have no policy, those whose
+   policy stopped at a failed step (`failed`), and the documents of the raw
+   events and active responses streams, from the index stats. It writes
+   them to `wazuh-settings/indices.json` on the volume of results
    (`security/converter/README.md`, "The count file of the Wazuh settings").
+   An index counts as failed when explain shows its step at `failed` (ISM
+   may still retry the action), its action failed (the retries of the
+   action are used up), or its policy failed (`retry_info`): ISM counts the
+   last two as failed itself
+   ([ManagedIndexMetaData.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/spi/src/main/kotlin/org.opensearch.indexmanagement.spi/indexstatemanagement/model/ManagedIndexMetaData.kt#L93-L137)).
 
-A run fails, and `KubeJobFailed` fires, at the first error, and when a move
-does not apply in time (after it writes the counts).
+A run fails at the first error, and, after it writes the counts, when a
+move does not apply in time or an index is at a failed step. `KubeJobFailed`
+fires 15 minutes after the failure (the `for` of the rule of the chart).
+
+A failed step stays failed after its cause is fixed: ISM runs no further
+step of that index until a retry. After the fix (for example a merge that
+gives the role a right that it lacked, which step 1 applies), the owner, as
+`admin`, retries each failed index:
+`POST _plugins/_ism/retry/<index>`, which needs
+`cluster:admin/opendistro/ism/managedindex/retry`
+([RetryFailedManagedIndexAction.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/retryfailedmanagedindex/RetryFailedManagedIndexAction.kt#L14)).
+The retry keeps the stored user of the policy
+([TransportRetryFailedManagedIndexAction.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/retryfailedmanagedindex/TransportRetryFailedManagedIndexAction.kt#L255-L282): it resets the metadata of the step and enables the job, and changes no policy),
+so the steps still run with the role `tnwks-settings`. Step 2 does not
+retry: its role does not hold the retry, because a retry before the cause
+is fixed fails again, and the cause needs a person.
 
 The two steps are in two Flux Kustomizations. `security-wazuh-accounts`
 (`../wazuh-settings/accounts`: the Job of step 1, its ConfigMap and the
@@ -566,23 +699,82 @@ site 2 on the owner's go.
 
    The name and the address are the values of the cluster-settings. No
    agent enrolls before this record exists.
-3. After the first start of the server, the owner, or the session the
-   owner names for it, makes the account user once, with `admin`, from
-   `account-user.json` (see "Accounts"). The password of `admin` is read
-   from its Secret into the call and is never shown or stored outside it.
-   The Secrets of `../wazuh-settings` are made then.
-4. A second merge, the owner's, adds `../wazuh-settings/ks.yaml`. It first
-   applies the retention policies, and ISM deletes the data older than its
-   ages (see "The merges that delete data").
+3. Done by its own step: the account user, made once with `admin` from
+   `account-user.json` (see "Accounts"), and the four Secrets of the
+   settings ("Secrets").
+4. The second merge, the owner's, because it sets the retention, lists
+   `../wazuh-settings/ks.yaml` in the apps of homelab-wsl-02, with:
+   - the three Secrets of the settings, listed in
+     `../wazuh-settings/accounts/kustomization.yaml` and
+     `../wazuh-settings/app/kustomization.yaml`, and the Secret of the
+     converter in `../converter/app`, not listed;
+   - the output of `classlist.py write` for `security-wazuh-accounts` and
+     `security-wazuh-settings`.
+
+   What its first run does, in this order:
+   1. Flux applies `security-wazuh-accounts` after `security-wazuh-server`
+      is Ready: the two Secrets of step 1, its ConfigMap, the network rule
+      of both steps and the Job `wazuh-accounts-<hash>`. The Kustomization
+      waits for the Job (`wait: true`, `timeout: 15m`), and the Job has 600
+      seconds (`activeDeadlineSeconds`) and no retry (`backoffLimit: 0`).
+   2. Step 1 waits up to 300 seconds while the indexer gives no answer or
+      answers 503: `security-wazuh-server` has `wait: false`, so Flux can
+      apply the Job while the indexer starts or restarts. A 401 stops it at
+      once. Step 1 logs in as the account user, which exists. It never changes
+      that user, and a name of it in `accounts.json` stops the run. It makes
+      the roles `tnwks-settings` and `tnwks-converter`, their users with the
+      hashes of `wazuh-accounts-hashes`, and their role mappings, each with
+      its mark, then reads them back.
+   3. Flux then applies `security-wazuh-settings`: the Secret of step 2,
+      its ConfigMap, the Job `wazuh-settings-git-<hash>` and the CronJob.
+      The Job has 1800 seconds and no retry.
+   4. Step 2 waits up to 300 seconds for the login of `tnwks-settings`,
+      writes the four policies of tnwks, sets `engine.index_raw_events` to
+      `false`, and moves each index of the four streams from its shipped
+      policy to the policy of tnwks of its stream (`change_policy`). ISM
+      applies such a move at the next run of the job of the index, not at
+      the end of the state: the policies of tnwks have the states and the
+      actions of the shipped ones (`hot` with a rollover, `delete` with a
+      delete), and ISM marks a change of policy safe, and applies it at
+      once, when the current state has the same actions in both
+      ([isSafeToChange](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/util/ManagedIndexUtils.kt#L467-L487),
+      [shouldChangePolicy](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/util/ManagedIndexUtils.kt#L428-L438)).
+      Step 2 waits up to 1200 seconds until explain names the policy of
+      tnwks on each index, then writes `wazuh-settings/indices.json`.
+   5. The CronJob runs step 2 again each day at 08:22 UTC.
+
+   After it, check that:
+   - `flux-admission` is Ready, then the parent of the apps on both sites
+     (the same order as after the first merge);
+   - `security-wazuh-accounts` is Ready, and the Job of step 1 is Complete;
+     its log ends with the read back and `done`;
+   - `security-wazuh-settings` is Ready, and the Job
+     `wazuh-settings-git-<hash>` is Complete; its log names the four
+     policies, the raw events setting and a move of each index, and ends
+     with `done`;
+   - `wazuh-settings/indices.json` on the volume of results has `moves`
+     `applied`, and `off_policy`, `no_policy` and `failed` at 0;
+   - no `KubeJobFailed`.
+
+   A failed Job of step 1 keeps `security-wazuh-accounts` not Ready, so
+   Flux applies nothing of step 2; `FluxResourceNotReady` fires after an
+   hour, and `KubeJobFailed` 15 minutes after the failure. Read its log,
+   fix the cause, then delete the Job: Flux makes it again and it runs
+   again. A failed Job of step 2 fires `KubeJobFailed` 15 minutes after
+   the failure ("What step 2 does"); with `failed` above 0, read the `info`
+   of the ISM explain API of each failed index, fix the cause, and retry
+   the index as `admin`.
 5. The owner checks each point of "Not yet proven on a cluster": the path
    to the feed after the first merge, the rights of step 2 at its first
-   run, the policy of a new backing index at the first rollover of each
-   stream (`rollover_age` after the second merge), and the files of the
-   last point at the first start.
+   run (the moves and the explain calls of the Job of the second merge),
+   the first rollover of each stream on the policy of tnwks (`rollover_age`
+   after the second merge, through the daily counts of `indices.json`,
+   with `failed` at 0), and the files of the last point at the first
+   start.
 
 ## The way back
 
-A revert of the merge that lists `ks.yaml` also reverts, in the same pull
+For the first merge: a revert of the merge that lists `ks.yaml` also reverts, in the same pull
 request, what `classlist.py write` wrote for the two Kustomizations (in
 `policy.yaml` and in the name list of `kubernetes/clusters/wsl-02/apps.yaml`),
 and the pinned listing in `security/tests/test_wazuh_manifests.py`. Without
@@ -603,6 +795,37 @@ Certificates. The owner deletes them, and keeps them only for a return with
 the same four Secrets, because the vendor's parts keep what they stored at
 their first start.
 
+For the second merge: a revert of the merge that lists
+`../wazuh-settings/ks.yaml` also reverts, in the same pull request, what
+`classlist.py write` wrote for its two Kustomizations and the pinned
+listings in `security/tests/test_wazuh_manifests.py`, as for the first
+merge. It also removes the four SOPS files of the settings from git: a
+return brings them back, with the same values or new ones (step 1 sets the
+hashes again at each run). Flux then deletes both Kustomizations and what
+they applied: the three Secrets, the ConfigMaps, the network rule, the Jobs
+with their logs, and the CronJob. Nothing of the indexer goes, and no data
+is lost: the revert deletes no index. What stays in the indexer:
+
+- the four policies of tnwks, and each index on them. ISM keeps applying
+  their ages to those indices, with the role `tnwks-settings`, and gives
+  each new backing index of a rollover the policy of tnwks (priority 1);
+- the users, roles and role mappings of `accounts.json`, and the account
+  user;
+- `engine.index_raw_events` at `false`, the default at the tag.
+
+To stop the ages, the owner, as `admin`, works in this order: move each
+index of the four streams off the policies of tnwks (`change_policy`, for
+example to the shipped policy of its stream), and wait until explain names
+the new policy on each; delete the four policies; then delete the users,
+roles and role mappings of `accounts.json` through the Security API, or
+keep them for a return. Not the other way round: ISM runs the steps of a
+policy of tnwks with the role names stored with the policy, so after a
+delete of the role `tnwks-settings` each step of those policies fails for
+lack of rights, and the indices stay on them.
+
+The file `wazuh-settings/indices.json` stays on the volume of results with
+the `time` of its last run.
+
 ## Not yet proven on a cluster
 
 These files are written from the vendor's sources at the tag, and checked
@@ -610,17 +833,21 @@ by the tests below. The first run on site 2 shows these points:
 
 - The Content Manager of the indexer reaches its feed through
   `wazuh-indexer-feed` only (the snapshot download can use another host).
-- Step 2 needs no ISM action beyond the five of its role. Each ISM action
+- Step 2 needs no ISM action beyond the five of its role on site 2. Each ISM action
   that moves or explains an index also runs
   `indices:admin/opensearch/ism/managedindex` on the index with the rights
   of the caller ([add](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/addpolicy/TransportAddPolicyAction.kt#L166),
   [change](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/changepolicy/TransportChangePolicyAction.kt#L129-L131),
   [explain](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/explain/TransportExplainAction.kt#L413-L415)),
   which the ISM index actions of the role give.
-- A backing index that a rollover makes takes the policy of tnwks of its
-  stream: ISM picks it by its `ism_template` priority when `tnwks-settings`
-  holds `indices:admin/opensearch/ism/managedindex` on the stream ("Which
-  policy an index of a stream starts on", above).
+- The first rollover and delete of each stream on site 2, at its real
+  ages. A test on a throwaway indexer of the pinned image ran them at ages
+  of minutes ("Accounts"): the rollover and the delete with the role
+  `tnwks-settings`, for an index moved by `change_policy` and by `add`,
+  and the new backing index of a rollover on the policy of tnwks by its
+  `ism_template`, run with the same role. The streams of findings and of
+  metrics were not in that test: the indexer had made no backing index of
+  them yet.
 - Whether the pinned image writes the audit log of the security plugin, and
   whether the manager writes `alerts.json` or `archives.json` by default.
 
@@ -630,7 +857,9 @@ by the tests below. The first run on site 2 shows these points:
   against its sums and `server/UPSTREAM.md`, the files that `server/` builds,
   the images by digest, the node selector and the memory lines against the
   table above, nothing privileged, no `0.0.0.0/0` and no `world` egress, the
-  Secrets that nothing in git holds, and the configuration of the manager.
+  Secrets that nothing in git holds and the SOPS file of each, the Secret of
+  the converter that no kustomization lists yet, no substitution of Flux in
+  the hashes ("Secrets"), and the configuration of the manager.
   A render of `server/` with the patches of `ks.yaml` runs when `kustomize`
   is installed.
 - `security/tests/test_wazuh_settings.py`: the two steps against a fake

@@ -25,6 +25,10 @@ starts with [wazuh-accounts] on a role or a role mapping. It:
   - reads back the resources that carry its mark, and stops when they are not
     those of accounts.json.
 
+First it waits up to --login-wait seconds while the indexer gives no answer
+or answers 503: Flux can apply the Job while the indexer starts or restarts
+(security-wazuh-server has wait: false). A 401 stops the run at once.
+
 The run exits 1 at the first error, so KubeJobFailed fires. Tests:
 security/tests/test_wazuh_settings.py.
 """
@@ -33,9 +37,10 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
-from indexer import Indexer, Stop, q, read_secret
+from indexer import Indexer, NoAnswer, Stop, q, read_secret
 
 USER_MARK = {"tnwks_managed_by": "wazuh-accounts"}
 MARK = "[wazuh-accounts]"
@@ -170,7 +175,29 @@ def apply(client: Indexer, accounts: dict, hashes: dict, own_user: str, log) -> 
     log("read back: the users, roles and role mappings with the mark are those of accounts.json")
 
 
-def main(argv=None, send=None, out=print) -> int:
+def wait_for_indexer(client: Indexer, wait: float, log, sleep=time.sleep, clock=time.monotonic) -> None:
+    """Wait while the indexer gives no answer or answers 503 (the security
+    plugin is not initialized yet). Any other answer ends the wait: 200 goes
+    on, and a 401 or another error stops the run."""
+    end = clock() + wait
+    while True:
+        try:
+            status, data = client.call("GET", "/_plugins/_security/authinfo", ok=None)
+        except NoAnswer as error:
+            status, reason = None, str(error)
+        else:
+            if status == 200:
+                return
+            if status != 503:
+                raise Stop(f"GET /_plugins/_security/authinfo as {client.user}: HTTP {status}")
+            reason = "HTTP 503"
+        if clock() >= end:
+            raise Stop(f"the indexer is not ready after {int(wait)} seconds: {reason}")
+        log(f"the indexer is not ready yet ({reason}): waits")
+        sleep(15)
+
+
+def main(argv=None, send=None, out=print, sleep=time.sleep, clock=time.monotonic) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--indexer", required=True)
     parser.add_argument("--ca", default="")
@@ -179,6 +206,7 @@ def main(argv=None, send=None, out=print) -> int:
                         help="the folder of the Secret wazuh-accounts-user: the files username and password")
     parser.add_argument("--hashes", required=True,
                         help="the folder of the Secret wazuh-accounts-hashes: one file for each user")
+    parser.add_argument("--login-wait", type=float, default=300, help="seconds to wait for the indexer")
     args = parser.parse_args(argv)
     try:
         folder = Path(args.user)
@@ -187,6 +215,7 @@ def main(argv=None, send=None, out=print) -> int:
         check_accounts(accounts, own_user)
         hashes = read_hashes(Path(args.hashes), accounts["users"])
         client = Indexer(args.indexer, own_user, read_secret(folder / "password"), send=send, ca_file=args.ca)
+        wait_for_indexer(client, args.login_wait, out, sleep=sleep, clock=clock)
         apply(client, accounts, hashes, own_user, out)
     except Stop as error:
         out(f"error: {error}")

@@ -7,7 +7,7 @@
   ],
   "roles": {
     "tnwks-settings": {
-      "description": "Step 2: the ISM policies of tnwks (the five ISM actions of the script: policy get and write, managed index add, change and explain; index-management 3.6.0.0, transport/action/*/*Action.kt), the move of the indices of their streams to them, the raw events setting (the Setup plugin writes its document in .wazuh-settings with the rights of the caller, as a bulk request: the cluster action indices:data/write/bulk and the index actions on .wazuh-settings), and the document count of the streams that hold none. No Security API, and no read of a document.",
+      "description": "Step 2: the ISM policies of tnwks (the five ISM actions of the script: policy get and write, managed index add, change and explain; index-management 3.6.0.0, transport/action/*/*Action.kt), the move of the indices of their streams to them, the raw events setting (the Setup plugin writes its document in .wazuh-settings with the rights of the caller, as a bulk request: the cluster action indices:data/write/bulk and the index actions on .wazuh-settings), and the document count of the streams that hold none. ISM runs the steps of each policy of tnwks with the roles of the user that wrote and moved it (index-management 3.6.0.0, ManagedIndexRunner), so this role also holds what those steps call: the index stats and the rollover on the names of the four streams, and the index stats and the delete on their backing indices. So this role can roll over and delete the indices of the four streams. No Security API, and no read of a document.",
       "cluster_permissions": [
         "cluster:admin/opendistro/ism/policy/get",
         "cluster:admin/opendistro/ism/policy/write",
@@ -35,8 +35,30 @@
         },
         {
           "index_patterns": [
-            ".ds-wazuh-events-raw-v5-*",
+            "wazuh-events-v5*",
+            "wazuh-findings-v5*",
             "wazuh-events-raw-v5*",
+            "wazuh-metrics*"
+          ],
+          "allowed_actions": [
+            "indices:monitor/stats",
+            "indices:admin/rollover"
+          ]
+        },
+        {
+          "index_patterns": [
+            ".ds-wazuh-events-v5-*",
+            ".ds-wazuh-findings-v5-*",
+            ".ds-wazuh-events-raw-v5-*",
+            ".ds-wazuh-metrics-*"
+          ],
+          "allowed_actions": [
+            "indices:monitor/stats",
+            "indices:admin/delete"
+          ]
+        },
+        {
+          "index_patterns": [
             ".ds-wazuh-active-responses-*",
             "wazuh-active-responses*"
           ],
