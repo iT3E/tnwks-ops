@@ -5,9 +5,9 @@ one manager node, one indexer node and the dashboard, at the tag
 `v5.0.0-rc2`. The agents of the hosts report to the manager, and the
 converter (`../converter`) reads the state of the hosts from the indexer.
 
-homelab-wsl-02 lists `ks.yaml` (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`).
-No cluster lists `../wazuh-settings/ks.yaml` yet: that is a later merge, the
-owner's (see "The merges that list it").
+homelab-wsl-02 lists `ks.yaml` and `../wazuh-settings/ks.yaml`
+(`kubernetes/clusters/wsl-02/apps/kustomization.yaml`). No other cluster
+lists either (see "The merges that list it").
 
 ## How it is built
 
@@ -206,7 +206,7 @@ only in the container of the part that logs in with it.
 | `wazuh-accounts-user` | `../wazuh-settings/accounts` | `username`, `password` | The account user (see "Accounts") | Step 1 only |
 | `wazuh-accounts-hashes` | `../wazuh-settings/accounts` | `tnwks-settings`, `tnwks-converter`: one key for each user of `accounts.json` | The bcrypt hash of the password of that user | Step 1 only |
 | `wazuh-settings-user` | `../wazuh-settings/app` | `password` | The password of `tnwks-settings` | Step 2 only |
-| `wazuh-converter-reader` | `../converter` | `password` | The password of `tnwks-converter` | The converter only. The change that adds the Wazuh source to the converter adds it |
+| `wazuh-converter-reader` | `../converter` | `password` | The password of `tnwks-converter` | The converter only. Its SOPS file is in `../converter/app`, and no kustomization lists it: the change that adds the Wazuh source to the converter lists it and mounts it |
 
 The password rule of the Wazuh images: 12 to 64 characters from
 `A-Z a-z 0-9 . , _ + : @ % ^ = ~ -`, with at least one lowercase letter,
@@ -223,6 +223,29 @@ the vendor's `password-tool.sh` (same page). A password of a user of
 `accounts.json` changes in one merge of the owner: the new password in the
 Secret of the part that logs in, and its hash in `wazuh-accounts-hashes`.
 Then the owner deletes the Job of step 1, and Flux runs it again.
+
+Flux substitutes the variables of the cluster in the objects of both
+Kustomizations of the settings. The parent of the apps of homelab-wsl-02
+(`kubernetes/clusters/wsl-02/apps.yaml`) gives each child without the label
+`substitution.flux.home.arpa/disabled` the SOPS decryption and
+`postBuild.substituteFrom`, and the two have no such label.
+kustomize-controller substitutes each object after it decrypts it, so a
+decrypted Secret too
+([the build](https://github.com/fluxcd/kustomize-controller/blob/v1.10.1/internal/controller/kustomization_controller.go#L862-L879)).
+A bcrypt hash holds three `$` signs (`$2y$12$` and 53 characters from
+`./A-Za-z0-9`). The envsubst of Flux reads a variable only at `${`, and
+`$$` as an escape; a `$` before any other character stays as it is
+([the scanner](https://github.com/fluxcd/pkg/blob/envsubst/v1.9.0/envsubst/parse/scan.go#L189-L232)),
+and a hash holds neither `${` nor `$$`. The Secret `wazuh-accounts-hashes`
+also turns the substitution off for itself, with the annotation
+`kustomize.toolkit.fluxcd.io/substitute: disabled`: the controller skips
+each object with that label or annotation
+([SubstituteVariables](https://github.com/fluxcd/pkg/blob/kustomize/v1.44.0/kustomize/kustomize_varsub.go#L112-L132)).
+The annotation is in the plain metadata of the SOPS file (the rule of
+`.sops.yaml` for `kubernetes/` encrypts only `data` and `stringData`), so
+the object that the controller reads after the decryption has it.
+`security/tests/test_wazuh_manifests.py` pins the annotation, the labels of
+the two Kustomizations and the form of a hash that step 1 accepts.
 
 ## Accounts
 
@@ -247,8 +270,8 @@ runs when `accounts.json`, its script or a hash changes: a change of a file
 gives the Job a new name, and at a change of a hash only (in
 `wazuh-accounts-hashes`) the owner deletes the Job.
 
-It runs as the account user, which the owner, or the session the owner
-names for it, makes once with `admin`, from `../wazuh-settings/app/config/account-user.json`: an internal
+It runs as the account user, which its own step makes once with `admin`
+(see "The merges that list it"), from `../wazuh-settings/app/config/account-user.json`: an internal
 user mapped to the reserved role `security_rest_api_access`, with its name
 and password in `wazuh-accounts-user`. The file holds no hash, and step 1
 never reads it. It is applied through the Security API: a `PUT` of
@@ -363,6 +386,23 @@ The merge that first lists `../wazuh-settings/ks.yaml` applies the policies,
 and ISM then deletes each index older than its age. A merge that lowers an
 age does the same at the new age. Deleted data has no way back. Each such
 merge is the owner's.
+
+What the first listing can delete: ISM counts each age from the creation of
+the index (`index.creation_date`), for the rollover
+([AttemptRolloverStep.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/step/rollover/AttemptRolloverStep.kt#L97-L105))
+and for the move to the state `delete`
+([checkIndexAge](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/util/ManagedIndexUtils.kt#L218-L224)).
+A policy of tnwks deletes an index only in its state `delete`, which an
+index reaches only after its rollover, at the earliest when it is
+`delete_age` old: 120 days for host events, findings and raw events, 60
+days for metrics. Each index of a stream is made by the indexer, at the
+first start of the indexer or later. So on an indexer that first started
+less than 60 days before the first listing, no index is old enough for a
+delete, and less than 30 days before, none for a rollover. The first
+deletes come at the earliest 60 days after the first start (metrics) and
+120 days after it (the other three). The listing changes no shipped policy:
+the active responses stream and the AI assistant sessions keep their
+shipped ages from the first start of the indexer on.
 
 `security/tests/test_wazuh_settings.py` pins each age of each policy
 (`PINNED`). A change of an age, or a stream that goes, fails CI until the
@@ -540,23 +580,74 @@ site 2 on the owner's go.
 
    The name and the address are the values of the cluster-settings. No
    agent enrolls before this record exists.
-3. After the first start of the server, the owner, or the session the
-   owner names for it, makes the account user once, with `admin`, from
-   `account-user.json` (see "Accounts"). The password of `admin` is read
-   from its Secret into the call and is never shown or stored outside it.
-   The Secrets of `../wazuh-settings` are made then.
-4. A second merge, the owner's, adds `../wazuh-settings/ks.yaml`. It first
-   applies the retention policies, and ISM deletes the data older than its
-   ages (see "The merges that delete data").
+3. Done by its own step: the account user, made once with `admin` from
+   `account-user.json` (see "Accounts"), and the four Secrets of the
+   settings ("Secrets").
+4. The second merge, the owner's, because it sets the retention, lists
+   `../wazuh-settings/ks.yaml` in the apps of homelab-wsl-02, with:
+   - the three Secrets of the settings, listed in
+     `../wazuh-settings/accounts/kustomization.yaml` and
+     `../wazuh-settings/app/kustomization.yaml`, and the Secret of the
+     converter in `../converter/app`, not listed;
+   - the output of `classlist.py write` for `security-wazuh-accounts` and
+     `security-wazuh-settings`.
+
+   What its first run does, in this order:
+   1. Flux applies `security-wazuh-accounts` after `security-wazuh-server`
+      is Ready: the two Secrets of step 1, its ConfigMap, the network rule
+      of both steps and the Job `wazuh-accounts-<hash>`. The Kustomization
+      waits for the Job (`wait: true`, `timeout: 15m`), and the Job has 600
+      seconds (`activeDeadlineSeconds`) and no retry (`backoffLimit: 0`).
+   2. Step 1 logs in as the account user, which exists. It never changes
+      that user, and a name of it in `accounts.json` stops the run. It makes
+      the roles `tnwks-settings` and `tnwks-converter`, their users with the
+      hashes of `wazuh-accounts-hashes`, and their role mappings, each with
+      its mark, then reads them back.
+   3. Flux then applies `security-wazuh-settings`: the Secret of step 2,
+      its ConfigMap, the Job `wazuh-settings-git-<hash>` and the CronJob.
+      The Job has 1800 seconds and no retry.
+   4. Step 2 waits up to 300 seconds for the login of `tnwks-settings`,
+      writes the four policies of tnwks, sets `engine.index_raw_events` to
+      `false`, and moves each index of the four streams from its shipped
+      policy to the policy of tnwks of its stream (`change_policy`). ISM
+      applies such a move at the next run of the job of the index, not at
+      the end of the state: the policies of tnwks have the states and the
+      actions of the shipped ones (`hot` with a rollover, `delete` with a
+      delete), and ISM marks a change of policy safe, and applies it at
+      once, when the current state has the same actions in both
+      ([isSafeToChange](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/util/ManagedIndexUtils.kt#L467-L487),
+      [shouldChangePolicy](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/util/ManagedIndexUtils.kt#L428-L438)).
+      Step 2 waits up to 1200 seconds until explain names the policy of
+      tnwks on each index, then writes `wazuh-settings/indices.json`.
+   5. The CronJob runs step 2 again each day at 08:22 UTC.
+
+   After it, check that:
+   - `flux-admission` is Ready, then the parent of the apps on both sites
+     (the same order as after the first merge);
+   - `security-wazuh-accounts` is Ready, and the Job of step 1 is Complete;
+     its log ends with the read back and `done`;
+   - `security-wazuh-settings` is Ready, and the Job
+     `wazuh-settings-git-<hash>` is Complete; its log names the four
+     policies, the raw events setting and a move of each index, and ends
+     with `done`;
+   - `wazuh-settings/indices.json` on the volume of results has `moves`
+     `applied`, and `off_policy` and `no_policy` at 0;
+   - no `KubeJobFailed`.
+
+   A failed Job of step 1 keeps `security-wazuh-accounts` not Ready, so
+   Flux applies nothing of step 2; `FluxResourceNotReady` fires after an
+   hour, and `KubeJobFailed` at the failure. A failed Job of step 2 fires
+   `KubeJobFailed` ("What step 2 does").
 5. The owner checks each point of "Not yet proven on a cluster": the path
    to the feed after the first merge, the rights of step 2 at its first
-   run, the policy of a new backing index at the first rollover of each
-   stream (`rollover_age` after the second merge), and the files of the
-   last point at the first start.
+   run (the moves and the explain calls of the Job of the second merge),
+   the policy of a new backing index at the first rollover of each stream
+   (`rollover_age` after the second merge, through the daily count of
+   `indices.json`), and the files of the last point at the first start.
 
 ## The way back
 
-A revert of the merge that lists `ks.yaml` also reverts, in the same pull
+For the first merge: a revert of the merge that lists `ks.yaml` also reverts, in the same pull
 request, what `classlist.py write` wrote for the two Kustomizations (in
 `policy.yaml` and in the name list of `kubernetes/clusters/wsl-02/apps.yaml`),
 and the pinned listing in `security/tests/test_wazuh_manifests.py`. Without
@@ -576,6 +667,29 @@ Secrets), because nothing gives them an owner reference to their
 Certificates. The owner deletes them, and keeps them only for a return with
 the same four Secrets, because the vendor's parts keep what they stored at
 their first start.
+
+For the second merge: a revert of the merge that lists
+`../wazuh-settings/ks.yaml` also reverts, in the same pull request, what
+`classlist.py write` wrote for its two Kustomizations and the pinned
+listings in `security/tests/test_wazuh_manifests.py`, as for the first
+merge. It also removes the four SOPS files of the settings from git: a
+return brings them back, with the same values or new ones (step 1 sets the
+hashes again at each run). Flux then deletes both Kustomizations and what
+they applied: the three Secrets, the ConfigMaps, the network rule, the Jobs
+with their logs, and the CronJob. Nothing of the indexer goes, and no data
+is lost: the revert deletes no index. What stays in the indexer:
+
+- the users, roles and role mappings of `accounts.json`, and the account
+  user. The owner deletes them as `admin` through the Security API, or
+  keeps them for a return;
+- the four policies of tnwks, and each index on them. ISM keeps applying
+  their ages to those indices, and gives each new backing index of a
+  rollover the policy of tnwks (priority 1). To stop that, the owner moves
+  each index to another policy and deletes the four policies, as `admin`;
+- `engine.index_raw_events` at `false`, the default at the tag.
+
+The file `wazuh-settings/indices.json` stays on the volume of results with
+the `time` of its last run.
 
 ## Not yet proven on a cluster
 
@@ -604,7 +718,9 @@ by the tests below. The first run on site 2 shows these points:
   against its sums and `server/UPSTREAM.md`, the files that `server/` builds,
   the images by digest, the node selector and the memory lines against the
   table above, nothing privileged, no `0.0.0.0/0` and no `world` egress, the
-  Secrets that nothing in git holds, and the configuration of the manager.
+  Secrets that nothing in git holds and the SOPS file of each, the Secret of
+  the converter that no kustomization lists yet, no substitution of Flux in
+  the hashes ("Secrets"), and the configuration of the manager.
   A render of `server/` with the patches of `ks.yaml` runs when `kustomize`
   is installed.
 - `security/tests/test_wazuh_settings.py`: the two steps against a fake

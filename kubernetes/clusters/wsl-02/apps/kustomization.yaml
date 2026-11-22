@@ -155,9 +155,12 @@ resources:
   # a result file for the converter.
   - ../../../apps/security/api-checks/ks.yaml
   # The Wazuh server (kubernetes/apps/security/wazuh/README.md): the manager,
-  # the indexer and the dashboard. Its settings (../../../apps/security/wazuh-settings)
-  # are a later merge.
+  # the indexer and the dashboard.
   - ../../../apps/security/wazuh/ks.yaml
+  # The settings of the Wazuh indexer from git: step 1, the accounts, and
+  # step 2, the retention (kubernetes/apps/security/wazuh/README.md,
+  # "Accounts" and "Retention").
+  - ../../../apps/security/wazuh-settings/ks.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml

@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: homelab-wsl-02 lists the settings of the Wazuh indexer, with their SOPS Secrets. Step 1 makes the users of accounts.json, and step 2 writes the retention policies of tnwks (a rollover at 30 days, a delete at 120 days, 60 days for metrics), turns raw events off, and moves the first index of each stream onto its policy. The Secret of the converter''s reader is in git and not listed yet.'
+time: 2026-11-22T20:45:00.000000000Z
