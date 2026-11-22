@@ -359,13 +359,13 @@ catch {{ $_.Exception.Message }}
     assert (tmp_path / "same/v").read_text() == "2.0.0.0"
 
 
-def test_site_1_turns_the_move_on_and_its_done_switch_with_the_copies_that_its_roles_register():
-    """The values of site 1 for step 3 (plan task 10.37) and the done switch of step 6, as site 2 has them,
-    with the disk file on E:."""
+def test_site_1_turns_the_move_on_its_done_switch_and_the_deletion_with_the_copies_that_its_roles_register():
+    """The values of site 1 for step 3 (plan task 10.37), the done switch of step 6 and the deletion of the tasks
+    of the present account, as site 2 has them, with the disk file on E:."""
     host = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI/main.yml").read_text())
-    # The phase done: the done switch of step 6, and no deletion of the tasks of the present account.
-    assert host["wsl_move"] is True and host["wsl_move_done"] is True
-    assert not {"wsl_move_present_removed", "wsl_move_phase"} & set(host)
+    # The phase done: the done switch of step 6, then the deletion of the tasks of the present account.
+    assert host["wsl_move"] is True and host["wsl_move_done"] is True and host["wsl_move_present_removed"] is True
+    assert "wsl_move_phase" not in host
     assert host["wsl_start_unelevated"] is True and "wsl_start_unelevated_done" not in host
     assert host["wsl_move_session_check"] is True
     # The move needs the start with no elevation, which needs the monitoring data in the file.
@@ -633,12 +633,15 @@ def test_the_done_switch_changes_no_config_of_the_procedure(tmp_path, host):
                 "wsl_move_present_folder": "E:\\WSL\\Ubuntu" if host == "DESKTOP-HKE05KI" else "C:\\Users\\standin1\\wsl",
                 "wsl_move_rehearsed_wsl_version": "3.0.5.0", "ansible_user": "standin-admin",
                 "role_path": str(ROLE), "wsl_move_registration": {"dwords": {"DefaultUid": 1000, "Flags": 15}}}
-    hosts = {"done": {**values, **standins, "wsl_move_done": True}, "move": {**values, **standins, "wsl_move_done": False}}
+    hosts = {"done": {**values, **standins, "wsl_move_done": True}, "move": {**values, **standins, "wsl_move_done": False},
+             "kept": {**values, **standins, "wsl_move_done": True, "wsl_move_present_removed": False}}
     expressions = {"configs": "wsl_move_configs | to_nice_json", "hashes": "wsl_move_file_hashes | to_nice_json",
                    "read": "wsl_move_window_read | to_nice_json", "phase": "wsl_move_phase"}
     out = ansible_render.render(tmp_path, hosts, list(hosts), expressions, extra={"wsl_move_window": "precheck"})
-    assert (out["done"].pop("phase"), out["move"].pop("phase")) == ("done", "move")
-    assert out["done"] == out["move"]
+    assert (out["done"].pop("phase"), out["move"].pop("phase"), out["kept"].pop("phase")) == ("done", "move", "done")
+    # The deletion of the tasks of the present account changes no config either: after it the copies follow the
+    # role again, and each stays as the window found it.
+    assert out["done"] == out["move"] == out["kept"]
 
 
 # The roles of the play of the host, whose defaults are public to each role of that play; the play of the
@@ -895,6 +898,39 @@ def test_the_deletion_renders_its_tasks_and_stops_on_each_allow_list_that_names_
         "tnwks-lan-bridge-ip", "tnwks-udp-relay-syslog", "tnwks-vhdx-compact", "tnwks-wsl-keepalive", "tnwks-wsl-watchdog",
         "tnwks-wsl-move-present-stop", "tnwks-wsl-move-present-unregister", "tnwks-wsl-move-present-import",
         "tnwks-wsl-move-boot"]
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_deletion_of_site_1_unregisters_its_own_tasks_and_keeps_the_mount_task_of_the_monitoring_volume(tmp_path):
+    """The values of site 1 with stand-ins for the encrypted ones: the guard of the deletion passes with the allow
+    list of the account of Ansible only, and the deletion unregisters each WSL task of the present account of site
+    1, its three window tasks and the boot task of the way back. The mount task of the monitoring volume is not
+    one: with the monitoring data in the file it stays, disabled, and the role windows_observability_storage stops
+    the play when it is not there."""
+    guard = next(t for t in tasks("main.yml") if t.get("name") == REMOVAL)
+    site1 = ansible_render.load("roles/windows_wsl_move/defaults/main.yml", "roles/windows_wsl_move/vars/main.yml",
+                                "inventory/group_vars/windows_hosts.yml", "inventory/host_vars/DESKTOP-HKE05KI/main.yml")
+    standins = {"wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+                "ansible_user": "standin-admin", "wsl_move_allow_list": guard["vars"]["wsl_move_allow_list"]}
+    hosts = {"removed": {**site1, **standins, "windows_sshd_allow_users": ["standin-admin"]},
+             "listed": {**site1, **standins, "windows_sshd_allow_users": ["standin-admin", "standin1"]}}
+    out = ansible_render.render(tmp_path, hosts, list(hosts), {
+        "passes": "[" + ", ".join(f"({c})" for c in guard["ansible.builtin.assert"]["that"]) + "] is all",
+        "removed": "wsl_move_removed_tasks", "phase": "wsl_move_phase",
+        "frozen": "wsl_move_present_removed | bool", "mount": "observability_storage_mount"})
+    assert (out["removed"]["passes"], out["listed"]["passes"]) == (True, False)
+    assert (out["removed"]["phase"], out["removed"]["frozen"], out["removed"]["mount"]) == ("done", True, "file")
+    assert out["removed"]["removed"] == [
+        "tnwks-lan-bridge-ip", "tnwks-udp-relay", "tnwks-udp-relay-syslog", "tnwks-usb-attach", "tnwks-vhdx-compact",
+        "tnwks-wsl-keepalive", "tnwks-wsl-watchdog",
+        "tnwks-wsl-move-present-stop", "tnwks-wsl-move-present-unregister", "tnwks-wsl-move-present-import",
+        "tnwks-wsl-move-boot"]
+    storage = yaml.safe_load((ANSIBLE / "roles/windows_observability_storage/defaults/main.yml").read_text())
+    assert storage["observability_storage_task"] not in out["removed"]["removed"]
+    stays = next(t for t in yaml.safe_load((ANSIBLE / "roles/windows_observability_storage/tasks/main.yml").read_text())
+                 if t.get("name") == "With the file, the mount task is disabled and stopped, and stays")
+    assert "is not there: it is the way back of the file" in stays["ansible.windows.win_powershell"]["script"]
 
 
 def test_no_trigger_of_a_windows_role_names_a_default_that_the_task_scheduler_drops():

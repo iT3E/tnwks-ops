@@ -1123,8 +1123,10 @@ Per host, `wsl_move` (`group_vars/windows_hosts.yml`, off by default) adds
 the role `windows_wsl_move`: step 3 of the account change (Design Doc 0004,
 section 9). It makes the account that owns the distro, gives it its rights,
 and puts the procedure of the move window on the host. No apply starts the
-window. Site 2 (`host_vars/WSL-02`) has it on, and site 1 in the phase
-`move` (step 3), with the session check on. Each other host has it off.
+window. Site 2 (`host_vars/WSL-02`) and site 1 (`host_vars/DESKTOP-HKE05KI`)
+have it on, each in the phase `done` with the deletion of the tasks of the
+present account, and site 1 with the session check on. Each other host has
+it off.
 
 - **The start tasks of the new account.** `wsl_move_new_start_tasks`
   (`group_vars/windows_hosts.yml`) is the copy of each start task that the
@@ -1189,8 +1191,9 @@ window. Site 2 (`host_vars/WSL-02`) has it on, and site 1 in the phase
   enabled; that apply starts its keepalive and relays, which fail and retry
   until way back step 2 stops the copies; step 4 again, as the window play
   starts no window while Ansible logs in as the present account; the window in
-  its way back mode; then the revert of step 3. On site 2 that needs a working
-  path to the host, or someone at the keyboard.
+  its way back mode; then the revert of step 3. On each site that needs a
+  working path to the host, or someone at the keyboard. Site 2, then site 1,
+  have the switch on.
 
 - **Variables.** The names of the two accounts and the folder of the disk
   file today are in the encrypted variables of the host only:
