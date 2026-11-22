@@ -12,13 +12,17 @@ the code host server reads. An installation token lives one hour at most.
 - The token is held in this process and goes to the API server in the
   body of one request. It is never an argument, an env var, a file or a
   line of output.
-- The job asks for each permission exactly. When the installation has
-  more than that, or more repositories, it logs one line with app-drift
-  and goes on: the token stays narrow. When the installation has less, or
-  the token that comes back is not exactly what was asked for, it fails.
+- The job asks for each permission of GITHUB_APP_PERMISSIONS exactly.
+  When the installation has more than GITHUB_APP_INSTALLED (the
+  permissions of the App by the design), or more repositories, it logs
+  one line with app-drift and goes on: the token stays narrow. When the
+  installation has less than the token asks for, or the token that comes
+  back is not exactly what was asked for, it fails.
 - The account of the job may update the one Secret by its name, and
   nothing else (rbac.yaml). It writes with an update (PUT), so it never
-  reads the Secret back.
+  reads the Secret back. A PUT replaces the labels, so the body carries
+  the two owner labels of Flux: a prune of the Kustomization still removes
+  the Secret.
 - One line of output for each run: "github-token result=ok ..." or
   "github-token result=failed step=<step> ...". No body of an answer is
   printed: an error of the code host can quote a request.
@@ -46,6 +50,10 @@ JWT_LIFE = 540
 # not one that this job asked for.
 TOKEN_LIFE_MAX = 3600 + 60
 LEVELS = {"read": 1, "write": 2, "admin": 3}
+# The Kustomization of Flux that makes the Secret (../../ks.yaml): its owner
+# labels, which a PUT must keep.
+FLUX_OWNER = {"kustomize.toolkit.fluxcd.io/name": "agents-main-github-token",
+              "kustomize.toolkit.fluxcd.io/namespace": "flux-system"}
 
 
 class Failed(Exception):
@@ -102,9 +110,9 @@ def call(url: str, auth: str, method: str = "GET", body: dict | None = None,
         raise Failed(step, "answer=not-json") from None
 
 
-def wanted() -> dict[str, str]:
+def wanted(name: str = "GITHUB_APP_PERMISSIONS") -> dict[str, str]:
     perms = {}
-    for item in env("GITHUB_APP_PERMISSIONS").split(","):
+    for item in env(name).split(","):
         name, _, level = item.strip().partition(":")
         if level not in LEVELS or not name:
             raise Failed("config", "permissions=bad")
@@ -135,6 +143,9 @@ def run(now: int | None = None) -> list[str]:
     if not owner or not repo or "/" in repo:
         raise Failed("config", "repository=bad")
     want = wanted()
+    installed = wanted("GITHUB_APP_INSTALLED")
+    if short(installed, want):
+        raise Failed("config", "permissions=more-than-installed")
     drift = []
 
     app = f"Bearer {jwt(env('GITHUB_APP_ID'), env('GITHUB_APP_KEY_FILE'), now)}"
@@ -144,7 +155,7 @@ def run(now: int | None = None) -> list[str]:
     have = install.get("permissions") or {}
     if short(have, want):
         raise Failed("installation", "permissions=less-than-asked")
-    if more(have, want):
+    if more(have, installed):
         drift.append("permissions")
     if install.get("repository_selection") != "selected":
         drift.append("repositories")
@@ -191,7 +202,7 @@ def write(value: str, name: str, key: str, until: int) -> None:
         "metadata": {
             "name": name,
             "namespace": namespace,
-            "labels": {"app.kubernetes.io/name": "github-token"},
+            "labels": {"app.kubernetes.io/name": "github-token", **FLUX_OWNER},
             "annotations": {"kustomize.toolkit.fluxcd.io/ssa": "IfNotPresent",
                             "agents.home.arpa/expires": stamp},
         },

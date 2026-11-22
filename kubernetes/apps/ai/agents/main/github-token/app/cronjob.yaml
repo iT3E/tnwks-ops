@@ -75,11 +75,18 @@ spec:
                 - name: GITHUB_APP_KEY_FILE
                   value: /github-app/private-key.pem
                 # What the token may do, in one place: the one repository and
-                # the permissions of D138 and D140. A token never has more,
-                # whatever the App or its installation has.
+                # the permissions it asks for. A token never has more,
+                # whatever the App or its installation has. Read rights only
+                # for the read step (Design Doc, section 4.2.6); the write
+                # step widens this one value, up to GITHUB_APP_INSTALLED.
                 - name: GITHUB_REPOSITORY
                   value: iT3E/tnwks-ops
                 - name: GITHUB_APP_PERMISSIONS
+                  value: metadata:read,contents:read,pull_requests:read,actions:read,issues:read
+                # The permissions of the App and its installation by the
+                # design (D138, D140). More is drift, which the job logs; less
+                # than the token asks for fails the run.
+                - name: GITHUB_APP_INSTALLED
                   value: metadata:read,contents:write,pull_requests:write,actions:read,issues:write
                 - name: TOKEN_SECRET
                   value: github-mcp-app-token

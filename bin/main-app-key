@@ -22,9 +22,18 @@ file (bin/sops). The key never passes through another session:
 - It prints the names of the files and "ok", and at the end the line that
   tells the owner to delete the download. It never prints the key, a hash
   of it, or the output of sops or openssl.
+- Each stop after sops wrote the file puts the file back as it was: the
+  bytes of the old encrypted file, or no file on a first run. So a stop
+  leaves the Secret and the CronJob unchanged.
 
 A file that holds a key already stays as it is unless --replace is given.
 Commit both files, the Secret and the CronJob, in one commit.
+
+The key stays out of each transcript, log and argument. It is not out of
+reach of the Linux user that runs this script: that user reads the age key
+too, which is the trust model of each encrypted value of this repository.
+A run that is cut in the editor step can leave the clear temporary file of
+sops in a new folder under $TMPDIR (or /tmp): delete it.
 """
 
 import hashlib
@@ -73,12 +82,19 @@ def pem_text(path: Path) -> str:
 
 
 def check_form(path: Path) -> None:
-    if not path.is_file():
+    try:
+        found = path.is_file()
+        size = path.stat().st_size if found else 0
+    except PermissionError:
+        stop("key file", "read=denied")
+    if not found:
         stop("key file", "found=no")
-    if path.stat().st_size > MAX_BYTES:
+    if size > MAX_BYTES:
         stop("key file", "form=not-a-key")
     try:
         text = pem_text(path)
+    except PermissionError:
+        stop("key file", "read=denied")
     except (UnicodeDecodeError, OSError):
         stop("key file", "form=not-a-key")
     if text.startswith("-----BEGIN ENCRYPTED PRIVATE KEY-----") or "Proc-Type: 4,ENCRYPTED" in text:
@@ -129,12 +145,11 @@ def editor_step(pem: Path, clear: Path) -> None:
     del text, body
 
 
-def put_key(pem: Path) -> None:
+def put_key(pem: Path) -> bool:
     editor = shlex.join([sys.executable, str(Path(__file__).resolve()), "--editor-step", str(pem.resolve())])
     env = dict(os.environ, EDITOR=editor, SOPS_EDITOR=editor)
     done = subprocess.run([str(SOPS), str(SECRET)], env=env, capture_output=True, check=False)
-    if done.returncode != 0:
-        stop(SECRET.name, f"key={KEY}", "write=failed")
+    return done.returncode == 0
 
 
 def same_key(pem: Path) -> bool:
@@ -154,14 +169,31 @@ def encrypted() -> bool:
     return bool(value) and value["v"].startswith("ENC[AES256_GCM,data:") and "\nsops:\n" in text
 
 
+def has_id_line() -> bool:
+    return len(ID_LINE.findall(CRONJOB.read_text())) == 1
+
+
 def set_app_id(app_id: str) -> None:
     text = CRONJOB.read_text()
-    if len(ID_LINE.findall(text)) != 1:
-        stop(CRONJOB.name, "app-id=line-missing")
     new = ID_LINE.sub(lambda m: m["head"] + app_id + m["tail"], text)
     if new != text:
         CRONJOB.write_text(new)
     say(CRONJOB.name, "app-id=set", "ok")
+
+
+class Undo:
+    """The encrypted file as it was before sops wrote it: its bytes, or no
+    file. Ciphertext only."""
+
+    def __init__(self) -> None:
+        self.before = SECRET.read_bytes() if SECRET.exists() else None
+
+    def stop(self, *words: str) -> None:
+        if self.before is None:
+            SECRET.unlink(missing_ok=True)
+        else:
+            SECRET.write_bytes(self.before)
+        stop(*words)
 
 
 def main() -> None:
@@ -179,13 +211,17 @@ def main() -> None:
     if not SOPS.is_file() or not CRONJOB.is_file():
         stop("run from the root of the branch of the token job")
     check_form(pem)
+    if not has_id_line():
+        stop(CRONJOB.name, "app-id=line-missing")
     if has_key() and not replace:
         stop(SECRET.name, f"key={KEY}", "held=yes", "(--replace puts a new key in its place)")
-    put_key(pem)
+    undo = Undo()
+    if not put_key(pem):
+        undo.stop(SECRET.name, f"key={KEY}", "write=failed")
     if not same_key(pem):
-        stop(SECRET.name, f"key={KEY}", "read-back=differs")
+        undo.stop(SECRET.name, f"key={KEY}", "read-back=differs")
     if not encrypted():
-        stop(SECRET.name, f"key={KEY}", "encrypted=no")
+        undo.stop(SECRET.name, f"key={KEY}", "encrypted=no")
     say(SECRET.name, f"key={KEY}", "replaced" if replace else "stored", "ok")
     set_app_id(app_id)
     say("Now delete the download:", shlex.quote(str(pem)))

@@ -44,8 +44,13 @@ APP = FOLDER / "app"
 JOB = APP / "scripts/github_token.py"
 KEY_SECRET = APP / "secret.sops.yaml"
 REPOSITORY = "iT3E/tnwks-ops"
-PERMISSIONS = {"metadata": "read", "contents": "write", "pull_requests": "write", "actions": "read",
-               "issues": "write"}
+# The permissions of the App by the design (D138, D140), and what the token
+# asks for in the read step: each of them, read only (section 4.2.6). The
+# write step widens the ask.
+INSTALLED = {"metadata": "read", "contents": "write", "pull_requests": "write", "actions": "read",
+             "issues": "write"}
+PERMISSIONS = {"metadata": "read", "contents": "read", "pull_requests": "read", "actions": "read",
+               "issues": "read"}
 
 needs_openssl = pytest.mark.skipif(shutil.which("openssl") is None and not os.environ.get("CI"),
                                    reason="no openssl here")
@@ -111,7 +116,7 @@ if args[:2] == ["-d", "--extract"]:
     if value is None:
         sys.stderr.write("component private-key.pem not found\n")
         sys.exit(128)
-    sys.stdout.write(dec(value))
+    sys.stdout.write(dec(value) if str(value).startswith("ENC[") else str(value))
     sys.exit(0)
 (path,) = args
 if os.path.exists(path):
@@ -128,7 +133,11 @@ if subprocess.run(shlex.split(os.environ["EDITOR"]) + [tmp]).returncode != 0:
     sys.exit(1)
 data = yaml.safe_load(open(tmp))
 os.unlink(tmp)
-data["stringData"] = {k: enc(v) for k, v in data["stringData"].items()}
+mode = os.environ.get("FAKE_SOPS_MODE", "")
+if mode == "another-key":
+    data["stringData"]["private-key.pem"] = "-----BEGIN PRIVATE KEY-----\nanother\n-----END PRIVATE KEY-----\n"
+if mode != "clear-text":
+    data["stringData"] = {k: enc(v) for k, v in data["stringData"].items()}
 data["sops"] = {"age": [{"recipient": "age1test"}], "encrypted_regex": "^(data|stringData)$"}
 open(path, "w").write(yaml.safe_dump(data, sort_keys=False))
 '''
@@ -273,6 +282,61 @@ def test_a_secret_that_sops_can_not_read_is_never_written_over(tree, keys):
     assert path.read_text() == "kind: Secret\nsops: {}\n"
 
 
+@needs_openssl
+@pytest.mark.parametrize(("mode", "flag"), [("another-key", "read-back=differs"), ("clear-text", "encrypted=no")])
+def test_a_stop_after_the_write_removes_a_new_file(tree, keys, mode, flag):
+    root, _ = tree
+    result = run_key(tree, "--app-id", "123456", str(keys["rsa2048"]), extra={"FAKE_SOPS_MODE": mode})
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[-1] == f"secret.sops.yaml key=private-key.pem {flag}"
+    assert not (root / APP.relative_to(ROOT) / "secret.sops.yaml").exists()
+    assert app_id_of(root) == "SET-BY-MAIN-APP-KEY"
+    assert_never_shown(tree, result, keys["rsa2048"])
+
+
+@needs_openssl
+@pytest.mark.parametrize(("mode", "flag"), [("another-key", "read-back=differs"), ("clear-text", "encrypted=no")])
+def test_a_stop_after_the_write_puts_the_old_ciphertext_back(tree, keys, mode, flag):
+    root, _ = tree
+    assert run_key(tree, "--app-id", "123456", str(keys["rsa2048"])).returncode == 0
+    path = root / APP.relative_to(ROOT) / "secret.sops.yaml"
+    before = path.read_bytes()
+    result = run_key(tree, "--app-id", "654321", "--replace", str(keys["rsa2048-b"]), extra={"FAKE_SOPS_MODE": mode})
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[-1] == f"secret.sops.yaml key=private-key.pem {flag}"
+    assert path.read_bytes() == before
+    assert app_id_of(root) == "123456"
+
+
+@needs_openssl
+def test_a_cronjob_with_no_id_line_stops_before_sops(tree, keys):
+    root, _ = tree
+    cron = root / APP.relative_to(ROOT) / "cronjob.yaml"
+    cron.write_text(re.sub(r"(?m)^\s*- name: GITHUB_APP_ID\n\s*value: .*\n", "", cron.read_text()))
+    result = run_key(tree, "--app-id", "123456", str(keys["rsa2048"]))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[-1] == "cronjob.yaml app-id=line-missing"
+    assert not (root / APP.relative_to(ROOT) / "secret.sops.yaml").exists()
+    assert not (root / "sops.log").exists()
+
+
+@needs_openssl
+def test_a_key_file_that_the_user_can_not_read_has_its_own_flag(tree, keys, tmp_path):
+    if os.geteuid() == 0:
+        pytest.skip("root reads each file")
+    root, _ = tree
+    locked = tmp_path / "locked.pem"
+    shutil.copy2(keys["rsa2048"], locked)
+    locked.chmod(0)
+    try:
+        result = run_key(tree, "--app-id", "123456", str(locked))
+    finally:
+        locked.chmod(0o600)
+    assert result.returncode == 1
+    assert result.stdout.splitlines() == ["key file read=denied"]
+    assert not (root / "sops.log").exists()
+
+
 # The round trip with the real sops, opt-in: MAIN_APP_KEY_SOPS_TEST=1, with
 # sops and age-keygen on the PATH. It makes a throwaway age key and a
 # .sops.yaml of the copy, so it reads no file of the repository. No CI job
@@ -329,7 +393,7 @@ class Fake:
         self.public = public
         self.tmp = tmp
         self.calls: list[tuple[str, str, dict, dict]] = []
-        self.install = {"id": 42, "permissions": dict(PERMISSIONS), "repository_selection": "selected"}
+        self.install = {"id": 42, "permissions": dict(INSTALLED), "repository_selection": "selected"}
         self.token = {"token": TOKEN, "permissions": dict(PERMISSIONS),
                       "repositories": [{"full_name": REPOSITORY}], "repository_selection": "selected"}
         self.life = 3600
@@ -452,12 +516,21 @@ def test_the_job_writes_a_narrow_token_into_the_one_secret(job):
     assert "resourceVersion" not in body["metadata"]
     assert body["metadata"]["annotations"]["kustomize.toolkit.fluxcd.io/ssa"] == "IfNotPresent"
     assert body["data"] == {"GITHUB_MCP_TOKEN": base64.b64encode(TOKEN.encode()).decode()}
+    # A PUT replaces the labels: the body keeps the owner labels of Flux, so
+    # a prune of the Kustomization still removes the Secret.
+    (ks,) = docs(FOLDER / "ks.yaml")
+    assert body["metadata"]["labels"] == {
+        "app.kubernetes.io/name": "github-token",
+        "kustomize.toolkit.fluxcd.io/name": ks["metadata"]["name"],
+        "kustomize.toolkit.fluxcd.io/namespace": ks["metadata"]["namespace"]}
+    # And no drift line for an installation of the design.
+    assert "app-drift" not in result.stdout
 
 
 @needs_openssl
 @pytest.mark.parametrize(("change", "step", "detail"), [
     ({"token": {"permissions": {**PERMISSIONS, "administration": "write"}}}, "token", "permissions=not-as-asked"),
-    ({"token": {"permissions": {**PERMISSIONS, "issues": "read"}}}, "token", "permissions=not-as-asked"),
+    ({"token": {"permissions": {**PERMISSIONS, "issues": "write"}}}, "token", "permissions=not-as-asked"),
     ({"token": {"repositories": [{"full_name": REPOSITORY}, {"full_name": "iT3E/other"}]}}, "token",
      "repositories=not-as-asked"),
     ({"token": {"repositories": [{"full_name": "iT3E/other"}]}}, "token", "repositories=not-as-asked"),
@@ -465,7 +538,7 @@ def test_the_job_writes_a_narrow_token_into_the_one_secret(job):
     ({"token": {"token": ""}}, "token", "token=missing"),
     ({"life": 7200}, "token", "expires=out-of-range"),
     ({"life": -10}, "token", "expires=out-of-range"),
-    ({"install": {"permissions": {**PERMISSIONS, "contents": "read"}}}, "installation",
+    ({"install": {"permissions": {k: v for k, v in INSTALLED.items() if k != "issues"}}}, "installation",
      "permissions=less-than-asked"),
     ({"install": {"permissions": {"metadata": "read"}}}, "installation", "permissions=less-than-asked"),
     ({"status": {"/installation": 404}}, "installation", "status=404"),
@@ -501,6 +574,14 @@ def test_a_wider_installation_is_drift_and_the_token_stays_narrow(job):
 
 
 @needs_openssl
+def test_an_ask_above_the_installed_permissions_is_a_config_fault(job):
+    fake, go = job
+    result = go(GITHUB_APP_PERMISSIONS="metadata:read,administration:write")
+    assert result.stdout.splitlines() == ["github-token result=failed step=config permissions=more-than-installed"]
+    assert fake.calls == []
+
+
+@needs_openssl
 def test_a_wrong_key_gets_no_token(job, keys):
     fake, go = job
     result = go(GITHUB_APP_KEY_FILE=str(keys["rsa2048-b"]))
@@ -531,8 +612,11 @@ def test_the_token_asks_for_the_permissions_of_the_design_for_the_ops_repository
     (c,) = pod()["containers"]
     env = {e["name"]: e.get("value") for e in c["env"]}
     asked = dict(x.split(":") for x in env["GITHUB_APP_PERMISSIONS"].split(","))
+    installed = dict(x.split(":") for x in env["GITHUB_APP_INSTALLED"].split(","))
     # D138 and D140: Metadata read, Contents write, Pull requests write,
     # Actions read, Issues read and write. Nothing else, no Workflows.
+    assert installed == INSTALLED
+    # The read step asks for each of them, read only.
     assert asked == PERMISSIONS
     assert env["GITHUB_REPOSITORY"] == REPOSITORY
     assert (env["TOKEN_SECRET"], env["TOKEN_KEY"]) == ("github-mcp-app-token", "GITHUB_MCP_TOKEN")
