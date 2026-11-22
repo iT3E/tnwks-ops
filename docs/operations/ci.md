@@ -105,8 +105,9 @@ owner his. Each comes from `main`, so a branch can not change it.
     `observability/`, `security/`), and the other controls of the cluster
     (the Flux sources and the bootstrap, the shared components,
     `kube-system`, identity, the network edge, certificates, the runners
-    of the house, backups, monitoring, the security scanners, and the list
-    of namespaces), plus a `.gitattributes` file in any folder. The agent
+    of the house, backups, monitoring, the security scanners, the list of
+    namespaces, and the `db/` folder of each app with a database), plus a
+    `.gitattributes` file in any folder. The agent
     asks the owner in the chat, and the merge waits for his label;
   - its author is that App, and its content reaches past the class: it
     adds or changes a link or a submodule (the tree of the head); a file

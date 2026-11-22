@@ -45,6 +45,8 @@ OPERATOR_KINDS = (
     ("extensions.agents.x-k8s.io", "v1beta1", "SandboxTemplate", "sandboxtemplates"),
     ("postgresql.cnpg.io", "v1", "Cluster", "clusters"),
     ("postgresql.cnpg.io", "v1", "Pooler", "poolers"),
+    ("postgresql.cnpg.io", "v1", "ScheduledBackup", "scheduledbackups"),
+    ("barmancloud.cnpg.io", "v1", "ObjectStore", "objectstores"),
 )
 
 

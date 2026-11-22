@@ -78,6 +78,8 @@ KINDS = {
     "SandboxTemplate": ("sandboxtemplates", True),
     "Cluster": ("clusters", True),
     "Pooler": ("poolers", True),
+    "ScheduledBackup": ("scheduledbackups", True),
+    "ObjectStore": ("objectstores", True),
 }
 VERSIONS = {
     "ConfigMap": "v1", "Secret": "v1", "Namespace": "v1", "PersistentVolume": "v1", "Pod": "v1",
@@ -382,34 +384,33 @@ def cases():
 def operator_cases():
     """The kinds from which an operator makes a pod of its own template: none
     from outside the class, in a namespace outside it; each from the class.
-    A plain database cluster from outside the class, as the children of the
-    apps make one each, passes."""
+    The whole group of the database operator and of its backup plugin is of
+    the class (D149): the database folders of the apps are in the class, and
+    databases is a namespace of the class."""
     template = {"spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1"}]}}
+    cluster = {"instances": 1, "storage": {"size": "1Gi"}}
     out = [
         ("AutoscalingRunnerSet", {"template": template}),
         ("EphemeralRunner", {"spec": template["spec"]}),
         ("Sandbox", {"podTemplate": template}),
         ("SandboxTemplate", {"podTemplate": template}),
         ("Pooler", {"cluster": {"name": "app-pg"}, "instances": 1, "type": "rw", "template": template}),
+        ("Cluster", cluster),
+        ("ScheduledBackup", {"schedule": "0 0 0 * * *", "cluster": {"name": "app-pg"}}),
+        ("ObjectStore", {"configuration": {"destinationPath": "s3://bucket.invalid/app"}}),
     ]
     cases = []
     for kind, spec in out:
         cases.append(("operator-pods", f"a {kind} outside the class", KUSTOMIZE, "deny",
                       obj(kind, "new-app", "production", OUT_K, spec=spec)))
-    namespace = {"AutoscalingRunnerSet": "tools", "EphemeralRunner": "tools", "Pooler": "databases"}
+    namespace = {"AutoscalingRunnerSet": "tools", "EphemeralRunner": "tools", "Pooler": "databases",
+                 "Cluster": "databases", "ScheduledBackup": "databases", "ObjectStore": "databases"}
     for kind, spec in out:
         cases.append(("operator-pods", f"a {kind} of the class", KUSTOMIZE, "allow",
                       obj(kind, "new-app", namespace.get(kind, "agents-main"), CLASS_K, spec=spec)))
-    cluster = {"instances": 1, "storage": {"size": "1Gi"}}
-    for what, context in (("a privileged container", {"privileged": True}),
-                          ("an added capability", {"capabilities": {"add": ["NET_ADMIN"]}})):
-        cases.append(("operator-pods", f"a database cluster outside the class with {what}", KUSTOMIZE, "deny",
-                      obj("Cluster", "new-app-pg", "databases", OUT_K, spec=dict(cluster, securityContext=context))))
-    cases.append(("operator-pods", "a plain database cluster outside the class", KUSTOMIZE, "allow",
+    # The database clusters of the apps: their namespace is of the class now.
+    cases.append(("class-namespace", "a database cluster outside the class in databases", KUSTOMIZE, "deny",
                   obj("Cluster", "new-app-pg", "databases", OUT_K, spec=cluster)))
-    cases.append(("operator-pods", "a database cluster outside the class that drops capabilities", KUSTOMIZE, "allow",
-                  obj("Cluster", "new-app-pg", "databases", OUT_K,
-                      spec=dict(cluster, securityContext={"capabilities": {"drop": ["ALL"]}}))))
     return cases
 
 

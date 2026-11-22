@@ -31,10 +31,10 @@
 #   any namespace;
 # - operator-pods: make an object that an operator turns into a pod from a
 #   template of its own: the runner sets (actions.github.com), the sandboxes
-#   (agents.x-k8s.io, extensions.agents.x-k8s.io), a database pooler, or a
-#   database cluster with a privileged container or an added capability
-#   (postgresql.cnpg.io). A plain database cluster stays allowed: the
-#   children of the apps outside the class make one each;
+#   (agents.x-k8s.io, extensions.agents.x-k8s.io), and each object of the
+#   database operator and its backup plugin (postgresql.cnpg.io,
+#   barmancloud.cnpg.io). The database folders of the apps are in the class
+#   (D149), so no child outside it needs one;
 # - takeover: change an object whose owner labels name a child of the class.
 #
 # For each request of the controllers:
@@ -152,6 +152,8 @@ spec:
           'flux-system/coe-runner': ['flux-system/cluster-apps'],
           'flux-system/descheduler': ['flux-system/cluster-apps'],
           'flux-system/device-access': ['flux-system/cluster-apps'],
+          'flux-system/finance-sync-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/firefly-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/flow-collector': ['flux-system/cluster-apps'],
           'flux-system/flux-admission': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/flux-alerts': ['flux-system/cluster-apps'],
@@ -162,6 +164,7 @@ spec:
           'flux-system/grafana': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/grafana-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/hajimari': ['flux-system/cluster-apps'],
+          'flux-system/home-assistant-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/ingress-nginx': ['flux-system/cluster-apps'],
           'flux-system/ingress-nginx-certificates': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/ingress-nginx-internal': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
@@ -181,6 +184,7 @@ spec:
           'flux-system/local-path-provisioner': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/loki': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/mcp-gateway': ['flux-system/cluster-apps'],
+          'flux-system/mealie-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/metrics-server': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/mktxp': ['flux-system/cluster-apps'],
           'flux-system/model-bridge': ['flux-system/cluster-apps'],
@@ -196,7 +200,9 @@ spec:
           'flux-system/observability-storage-check': ['flux-system/cluster-apps'],
           'flux-system/onboard': ['flux-system/cluster-apps'],
           'flux-system/openclaw-hooks-runner': ['flux-system/cluster-apps'],
+          'flux-system/packing-api-db': ['flux-system/cluster-apps'],
           'flux-system/packing-api-runner': ['flux-system/cluster-apps'],
+          'flux-system/plausible-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/plausible-exporter': ['flux-system/cluster-apps'],
           'flux-system/playwright-mcp': ['flux-system/cluster-apps'],
           'flux-system/pushgateway': ['flux-system/cluster-apps'],
@@ -221,13 +227,16 @@ spec:
           'flux-system/tempo': ['flux-system/cluster-apps'],
           'flux-system/thanos-metrics': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/thanos-metrics-archive': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/things-api-db': ['flux-system/cluster-apps'],
           'flux-system/tnwks-ansible-runner': ['flux-system/cluster-apps'],
           'flux-system/tnwks-ops-runner': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/transcriber-db': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/tuppr': ['flux-system/cluster-apps'],
           'flux-system/tuppr-upgrades': ['flux-system/cluster-apps'],
           'flux-system/unifi': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/unms-exporter': ['flux-system/cluster-apps'],
           'flux-system/unpoller': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/vaultwarden-db': ['flux-system/cluster-apps'],
           'flux-system/vector-agent': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/vector-agent-platform': ['flux-system/cluster-apps'],
           'flux-system/vector-aggregator': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
@@ -317,6 +326,7 @@ spec:
           'auth',
           'cert-manager',
           'cilium-secrets',
+          'databases',
           'flux-system',
           'kopiur-system',
           'kube-node-lease',
@@ -352,7 +362,16 @@ spec:
           'kubernetes/apps/default/hajimari/',
           'kubernetes/apps/production/frigate/',
           'kubernetes/apps/home-automation/zwave-js-ui/',
-          'kubernetes/apps/media/qbittorrent/'
+          'kubernetes/apps/media/qbittorrent/',
+          'kubernetes/apps/home-automation/home-assistant/db/',
+          'kubernetes/apps/production/finance-sync/db/',
+          'kubernetes/apps/production/firefly/db/',
+          'kubernetes/apps/production/mealie/db/',
+          'kubernetes/apps/production/packing-api/db/',
+          'kubernetes/apps/production/things-api/db/',
+          'kubernetes/apps/production/transcriber/db/',
+          'kubernetes/apps/production/vaultwarden/db/',
+          'kubernetes/apps/selfhosted/plausible/db/'
         ]
     - name: parentObjects
       expression: >-
@@ -517,10 +536,8 @@ spec:
           c.?ports.orValue([]).exists(p, p.?hostPort.orValue(0) != 0))
     - name: operatorPods
       expression: >-
-        variables.group in ['actions.github.com', 'agents.x-k8s.io', 'extensions.agents.x-k8s.io'] ||
-        (variables.group == 'postgresql.cnpg.io' && (variables.kind == 'Pooler' || (variables.kind == 'Cluster' && (
-          object.?spec.?securityContext.?privileged.orValue(false) == true ||
-          object.?spec.?securityContext.?capabilities.?add.orValue([]).size() > 0))))
+        variables.group in ['actions.github.com', 'agents.x-k8s.io', 'extensions.agents.x-k8s.io',
+          'postgresql.cnpg.io', 'barmancloud.cnpg.io']
     - name: oldLabels
       expression: "oldObject != null ? oldObject.metadata.?labels.orValue({}) : {}"
     - name: oldClass
@@ -570,7 +587,7 @@ spec:
     - expression: "!variables.outside || !variables.operatorPods"
       messageExpression: >-
         'flux-child-scope/operator-pods: ' + variables.child + ' is outside the class and may not apply ' +
-        variables.what + ', from which an operator makes a pod of its own template'
+        variables.what + ', an object from which an operator of the class makes a pod of its own template'
       reason: Forbidden
     - expression: "!variables.outside || !variables.oldClass"
       messageExpression: >-

@@ -152,6 +152,20 @@ ASK_FIRST = (
     "kubernetes/apps/production/frigate/",
     "kubernetes/apps/home-automation/zwave-js-ui/",
     "kubernetes/apps/media/qbittorrent/",
+    # The database folders of the apps outside the class (D149): each makes
+    # the database cluster of its app in the shared namespace databases, and
+    # the operator of the class turns it into pods. So the whole group of the
+    # database operator is of the class, and a change of these folders waits
+    # for the owner.
+    "kubernetes/apps/home-automation/home-assistant/db/",
+    "kubernetes/apps/production/finance-sync/db/",
+    "kubernetes/apps/production/firefly/db/",
+    "kubernetes/apps/production/mealie/db/",
+    "kubernetes/apps/production/packing-api/db/",
+    "kubernetes/apps/production/things-api/db/",
+    "kubernetes/apps/production/transcriber/db/",
+    "kubernetes/apps/production/vaultwarden/db/",
+    "kubernetes/apps/selfhosted/plausible/db/",
     "security/",
     "observability/",
     ".taskfiles/",
