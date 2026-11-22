@@ -368,7 +368,22 @@ explain answers of that test, counted the failed index and no other.
 So `tnwks-settings` can roll over and delete each backing index of the four
 streams. Who holds its password can delete the security data of those
 streams. The password is in one SOPS Secret, `wazuh-settings-user`, which
-only the pod of step 2 mounts.
+only the pod of step 2 mounts. The index permissions of the role, all of
+them (`app/config/accounts.json`, pinned by
+`test_the_index_permissions_of_each_role_are_pinned`):
+
+| Index patterns | Actions |
+| --- | --- |
+| The names of the four streams and of their backing indices: `wazuh-events-v5*`, `.ds-wazuh-events-v5-*`, `wazuh-findings-v5*`, `.ds-wazuh-findings-v5-*`, `wazuh-events-raw-v5*`, `.ds-wazuh-events-raw-v5-*`, `wazuh-metrics*`, `.ds-wazuh-metrics-*` | `indices:admin/opensearch/ism/*` (the ISM index actions of the moves and of explain) |
+| The names of the four streams: `wazuh-events-v5*`, `wazuh-findings-v5*`, `wazuh-events-raw-v5*`, `wazuh-metrics*` | `indices:monitor/stats`, `indices:admin/rollover` |
+| Their backing indices: `.ds-wazuh-events-v5-*`, `.ds-wazuh-findings-v5-*`, `.ds-wazuh-events-raw-v5-*`, `.ds-wazuh-metrics-*` | `indices:monitor/stats`, `indices:admin/delete` |
+| The active responses stream: `.ds-wazuh-active-responses-*`, `wazuh-active-responses*` | `indices:monitor/stats` |
+| `.wazuh-settings` | `indices:data/write/index`, `indices:data/write/bulk[s]` |
+
+The image also maps every user to its reserved role `wazuh_ai_assistant`,
+which reads only the sessions of the AI assistant of that user
+([roles_mapping.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles_mapping.wazuh.yml#L23-L27),
+[roles.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles.wazuh.yml#L100-L115)).
 
 What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
 
