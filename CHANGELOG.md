@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.292.0 - 2026-11-22
+
+### Changed
+
+* security: the Wazuh server builds a byte-for-byte copy of the manifests of wazuh-kubernetes v5.0.0-rc2 in this repository (kubernetes/apps/security/wazuh/server), checked against its sha256 sums, in place of a GitRepository of the vendor. No cluster lists it yet.
+
 ## v2.291.1 - 2026-11-22
 
 ### Fixed
