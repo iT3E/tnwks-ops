@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.278.0 - 2026-11-22
+
+### Added
+
+* homelab-wsl: alerts on the memory of the node containers, which the kubelet does not see (it reports the whole WSL VM): WorkerContainerMemoryNearLimit (a warning at 90% of 13 GiB for 5 minutes, critical at 95% for 2 minutes) and ControlPlaneContainerMemoryNearLimit (98% of 4 GiB for 15 minutes, warning); site 1 now scrapes the working set of its nodes
+
 ## v2.277.0 - 2026-11-22
 
 ### Changed
