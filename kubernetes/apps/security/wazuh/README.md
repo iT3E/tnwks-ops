@@ -515,6 +515,14 @@ site 2 on the owner's go.
    not issue; and `FluxResourceNotReady` for a Kustomization that does not
    apply. The table of shared VIPs in `docs/wsl/multi-site.md` gets its row
    for the address once the address is live.
+
+   Nothing orders `flux-admission` and the parent of the apps: no
+   `dependsOn` joins them, and the parent applies `flux-admission` as one of
+   its children. So when the parent applies a new child of the class before
+   the admission policy holds the new list, the parent's apply fails on that
+   site until `flux-admission` has reconciled, and nothing is pruned (Flux
+   prunes only after an apply succeeds). Read `flux-admission` Ready first,
+   then the parent of the apps on both sites.
 2. The owner adds the site record of the agents' name, in
    `infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf`
    (`site_dns_records`), and applies it:
@@ -560,8 +568,9 @@ The storage class deletes the volume of a deleted PVC (`reclaimPolicy:
 Delete`), so the dashboard's configuration is lost. Flux leaves the PVCs of
 the StatefulSets (`wazuh-manager-master-wazuh-manager-master-0`,
 `wazuh-indexer-wazuh-indexer-0`): the StatefulSet controller makes them,
-they are not in the inventory of Flux, and the StatefulSets keep them
-(the default retention), with the stored passwords and the data. It also
+they are not in the inventory of Flux, and the default retention of a
+StatefulSet (`whenDeleted: Retain`) keeps them when Flux deletes the
+StatefulSet, with the stored passwords and the data. It also
 leaves the Secrets that cert-manager made (`wazuh-ca` and the six leaf
 Secrets), because nothing gives them an owner reference to their
 Certificates. The owner deletes them, and keeps them only for a return with
