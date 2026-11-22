@@ -9,6 +9,16 @@
     fail_msg: windows_sshd_allow_users must be a list that holds ansible_user.
     quiet: true
 
+# The user of the host server is never an account of AllowUsers: those take
+# the admin key file, and it takes its own Match block.
+- name: The user of the host server is not an account of AllowUsers
+  ansible.builtin.assert:
+    that:
+      - (windows_sshd_agent_user | lower) not in (windows_sshd_allow_users | map('lower') | list)
+    fail_msg: The user of the host server (host_mcp_agent_user) must not be an account of windows_sshd_allow_users.
+    quiet: true
+  no_log: true
+
 # The script changes nothing with -Check, so it runs in check mode too.
 - name: sshd matches Install-TnwksWindowsSshd.ps1 (applied only with windows_sshd_apply=true)
   ansible.windows.win_powershell:
@@ -16,6 +26,7 @@
     parameters:
       PublicKey: "{{ windows_sshd_authorized_keys }}"
       AdminUser: "{{ windows_sshd_allow_users }}"
+      AgentUser: "{{ windows_sshd_agent_user }}"
       Check: "{{ ansible_check_mode or not (windows_sshd_apply | bool) }}"
   check_mode: false
   register: windows_sshd_result

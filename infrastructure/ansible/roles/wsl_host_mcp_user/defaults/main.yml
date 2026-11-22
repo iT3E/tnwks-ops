@@ -1,0 +1,45 @@
+---
+# wsl_host_mcp_user: the local user of the host server of the main agent in
+# the WSL distro (docs/wsl/host-mcp-user.md). Only where
+# host_mcp_agent_enabled is on (group_vars/all/host_mcp.yml). The name, the
+# key and the source address are encrypted variables of each host
+# (host_vars/<host>/secrets.sops.yml).
+#
+# A normal user with its own group only: no sudo rule, never in the docker
+# group (that group is root) and in no other group. Its password field
+# holds no password, so only its key signs it in. root owns its home
+# (mode 0750, group of the user) and each file in it, so the user can not
+# write a startup file of its shell or a key file. Its key holds for the
+# source address of the cluster only, with no forwarding and no terminal.
+# Each run checks that the SSH server lets it in by key, that it has no
+# sudo rule, that it can not read the private paths below, and that its
+# home holds only what this role puts there.
+
+host_mcp_agent_description: "tnwks-ops: host server of the main agent"
+host_mcp_agent_home: "/home/{{ host_mcp_agent_user }}"
+host_mcp_agent_shell: /bin/bash
+
+# The field of the user in the shadow file: "*" matches no password, and a
+# key still signs it in (a field that starts with "!" locks the account, and
+# the SSH server then refuses the key too where it runs with no PAM).
+host_mcp_agent_shadow_field: "*"
+
+# The startup files of bash in the home: root owns them, and they hold
+# nothing but their header. A login over SSH runs the commands of the host
+# server with these and the files of the system under /etc only.
+host_mcp_agent_startup_files:
+  - .bashrc
+  - .profile
+  - .bash_logout
+
+# The paths that the user must not read, for the check of each run (label
+# only in the output), and more of them per site.
+host_mcp_agent_private_paths_distro:
+  - {label: "the home of the account of the distro", path: "{{ wsl_distro_home }}"}
+  - {label: "its .ssh folder", path: "{{ wsl_distro_home }}/.ssh"}
+  - {label: "its .kube folder", path: "{{ wsl_distro_home }}/.kube"}
+  - {label: "its age key of sops", path: "{{ wsl_distro_home }}/.config/sops/age/keys.txt"}
+  - {label: "the home of root", path: /root}
+  - {label: "the shadow file", path: /etc/shadow}
+  - {label: "the ed25519 host key", path: /etc/ssh/ssh_host_ed25519_key}
+host_mcp_agent_private_paths_distro_extra: []

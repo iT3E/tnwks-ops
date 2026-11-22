@@ -1,0 +1,203 @@
+---
+# The play runs this role only where host_mcp_agent_enabled is on, as root.
+# The tasks that name the account, its key or the source address carry
+# no_log or a label.
+
+- name: The values of the user of the host server are set and in their form
+  ansible.builtin.assert:
+    that:
+      - host_mcp_agent_user is match('^[a-z][a-z0-9-]{0,19}$')
+      - host_mcp_agent_public_key is match('^ssh-ed25519 [A-Za-z0-9+/=]+( [ -~]*)?$')
+      - host_mcp_agent_source_distro is match('^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$')
+      - host_mcp_agent_user != wsl_distro_user
+      - host_mcp_agent_user != 'root'
+    fail_msg: >-
+      host_mcp_agent_user (20 characters at most: lower case, digits, '-'), host_mcp_agent_public_key
+      (one ssh-ed25519 key) and host_mcp_agent_source_distro (an address or a network) are encrypted
+      variables of the host, and the user is not the account of the distro. Nothing is changed.
+    quiet: true
+  no_log: true
+
+# A read, also in a check run.
+- name: Read the account of the host server
+  ansible.builtin.command:
+    argv: [getent, passwd, "{{ host_mcp_agent_user }}"]
+  register: host_mcp_agent_getent
+  changed_when: false
+  failed_when: host_mcp_agent_getent.rc not in [0, 2]
+  check_mode: false
+  no_log: true
+
+- name: The account exists, or this run makes it
+  ansible.builtin.set_fact:
+    # In a check run before the first apply, the tasks that need the account
+    # or its group wait for the apply that makes it.
+    host_mcp_agent_ready: "{{ host_mcp_agent_getent.rc == 0 or not ansible_check_mode }}"
+
+# Its own group only: `groups: []` with `append: false` takes it out of any
+# other group. No home from the skeleton: the tasks below make the home and
+# its files, owned by root.
+- name: The account of the host server
+  ansible.builtin.user:
+    name: "{{ host_mcp_agent_user }}"
+    comment: "{{ host_mcp_agent_description }}"
+    shell: "{{ host_mcp_agent_shell }}"
+    home: "{{ host_mcp_agent_home }}"
+    create_home: false
+    groups: []
+    append: false
+  no_log: true
+
+# No password: useradd leaves the field of the shadow file at "!", a lock,
+# and the field "*" (defaults) matches no password and lets the key in.
+- name: Read the field of the account in the shadow file
+  ansible.builtin.command:
+    argv: [getent, shadow, "{{ host_mcp_agent_user }}"]
+  register: host_mcp_agent_shadow
+  changed_when: false
+  failed_when: host_mcp_agent_shadow.rc not in [0, 2]
+  check_mode: false
+  no_log: true
+
+- name: The account has no password
+  ansible.builtin.command:
+    argv: [usermod, -p, "{{ host_mcp_agent_shadow_field }}", "{{ host_mcp_agent_user }}"]
+  changed_when: true
+  when: (host_mcp_agent_shadow.stdout.split(':')[1] | default('')) != host_mcp_agent_shadow_field
+  no_log: true
+
+- name: The home of the account of the host server, owned by root
+  ansible.builtin.file:
+    path: "{{ host_mcp_agent_home }}"
+    state: directory
+    owner: root
+    group: "{{ host_mcp_agent_user }}"
+    mode: "0750"
+  no_log: true
+  when: host_mcp_agent_ready | bool
+
+- name: The startup files of its shell, owned by root
+  ansible.builtin.copy:
+    content: |
+      # Managed by tnwks-ops (role wsl_host_mcp_user). root owns this file, and
+      # the user of the host server can not change it.
+    dest: "{{ host_mcp_agent_home }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ host_mcp_agent_startup_files }}"
+  loop_control:
+    label: "{{ item }}"
+  # The diff header would name the home, which holds the name of the account.
+  diff: false
+  when: host_mcp_agent_ready | bool
+
+- name: The .ssh folder of the account, owned by root
+  ansible.builtin.file:
+    path: "{{ host_mcp_agent_home }}/.ssh"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  no_log: true
+  when: host_mcp_agent_ready | bool
+
+# One key, for the source address of the cluster only. `restrict` turns off
+# each forwarding, the terminal and the rc file of the user.
+- name: The key file of the host server
+  ansible.builtin.copy:
+    content: |
+      from="{{ host_mcp_agent_source_distro }}",restrict {{ host_mcp_agent_public_key }}
+    dest: "{{ host_mcp_agent_home }}/.ssh/authorized_keys"
+    owner: root
+    group: root
+    mode: "0644"
+  no_log: true
+  diff: false
+  when: host_mcp_agent_ready | bool
+
+# The checks below are reads, also in a check run; a finding stops the run.
+- name: Checks of the account of the host server
+  when: host_mcp_agent_ready | bool
+  block:
+    - name: The SSH server of the distro lets the account in by key, from the source address
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - "user={{ host_mcp_agent_user }},host=host-mcp,addr={{ host_mcp_agent_source_distro.split('/')[0] }}"
+      register: host_mcp_agent_sshd
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: The settings of the SSH server for the account
+      ansible.builtin.assert:
+        that:
+          - "'pubkeyauthentication yes' in host_mcp_agent_sshd_lines"
+          - host_mcp_agent_sshd_lines | select('match', '^authorizedkeysfile .*\\.ssh/authorized_keys( |$)') | list | length == 1
+          - >-
+            host_mcp_agent_sshd_lines | select('match', '^allowusers ') | list | length == 0 or
+            host_mcp_agent_user in (host_mcp_agent_sshd_lines | select('match', '^allowusers ') | map('split') | flatten)
+          - >-
+            host_mcp_agent_user not in (host_mcp_agent_sshd_lines | select('match', '^denyusers ') | map('split') | flatten)
+          - host_mcp_agent_sshd_lines | select('match', '^(allowgroups|denygroups) ') | list | length == 0
+        fail_msg: >-
+          The SSH server of the distro does not let the user of the host server in by key (sshd -T for
+          that user and address): it needs key sign-in, .ssh/authorized_keys, and no AllowUsers,
+          DenyUsers or group rule that leaves it out.
+        quiet: true
+      vars:
+        host_mcp_agent_sshd_lines: "{{ host_mcp_agent_sshd.stdout_lines | map('trim') | list }}"
+      no_log: true
+
+    - name: The account has no sudo rule
+      ansible.builtin.command:
+        argv: [sudo, -n, -l, -U, "{{ host_mcp_agent_user }}"]
+      register: host_mcp_agent_sudo
+      changed_when: false
+      failed_when: "'is not allowed to run sudo' not in host_mcp_agent_sudo.stdout"
+      check_mode: false
+      no_log: true
+
+    - name: Try a read of each private path as the account
+      ansible.builtin.command:
+        argv: [test, -r, "{{ item.path }}"]
+      become: true
+      become_user: "{{ host_mcp_agent_user }}"
+      register: host_mcp_agent_read
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      no_log: true
+      loop: "{{ host_mcp_agent_private_paths_distro + host_mcp_agent_private_paths_distro_extra }}"
+
+    # The labels only: a path can hold the name of an account.
+    - name: The account read none of them
+      ansible.builtin.assert:
+        that: host_mcp_agent_readable | length == 0
+        fail_msg: "The user of the host server can read: {{ host_mcp_agent_readable | join('; ') }}. Nothing is changed: an admin looks first."
+        quiet: true
+      vars:
+        host_mcp_agent_readable: "{{ host_mcp_agent_read.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | map(attribute='label') | list }}"
+
+    - name: Read the items of the home of the account
+      ansible.builtin.command:
+        argv: [find, "{{ host_mcp_agent_home }}", -mindepth, "1", -printf, "%P %u %g %m\n"]
+      register: host_mcp_agent_items
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: The home holds only what the role puts there, and root owns each item
+      ansible.builtin.assert:
+        that:
+          - (host_mcp_agent_items.stdout_lines | map('split') | map('first') | list | sort) == (host_mcp_agent_want | sort)
+          - host_mcp_agent_items.stdout_lines | map('split') | map(attribute='1') | unique | list == ['root']
+        fail_msg: >-
+          The home of the user of the host server holds an item that the role does not put there, or one
+          that root does not own. Nothing is changed: an admin looks first.
+        quiet: true
+      vars:
+        host_mcp_agent_want: "{{ host_mcp_agent_startup_files + ['.ssh', '.ssh/authorized_keys'] }}"

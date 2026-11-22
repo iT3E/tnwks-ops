@@ -23,3 +23,10 @@ windows_sshd_allow_users: "{{ [windows_sshd_admin_user] }}"
 # administrators_authorized_keys, in this order. The public halves of the
 # controllers' Ansible keys; set for windows_hosts in group_vars.
 windows_sshd_authorized_keys: []
+
+# The local user of the host server of the main agent (role
+# windows_host_mcp_user), where host_mcp_agent_enabled is on: AllowUsers
+# lists it after the accounts above, and a Match block of its own names the
+# key file of that role (Install-TnwksWindowsSshd.ps1). Empty: no such user,
+# and sshd_config is as before.
+windows_sshd_agent_user: "{{ host_mcp_agent_user if host_mcp_agent_enabled | bool else '' }}"

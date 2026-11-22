@@ -115,6 +115,10 @@ tasks:
         sh: "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r '(.windows_sshd_allow_users // [.ansible_user]) | join(\",\")'"
       WINDOWS_ADDR:
         sh: "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r .ansible_host"
+      # The user of the host server of the main agent, where the site turns it
+      # on (role windows_host_mcp_user): its own Match block. Empty: none.
+      AGENT_USER:
+        sh: "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r 'if (.host_mcp_agent_enabled // false) == true then .host_mcp_agent_user else \"\" end'"
     cmds:
       - test -f "{{.WINDOWS_SSH_KEY}}" || ssh-keygen -q -t ed25519 -N '' -C 'ansible@wsl to {{.WINDOWS_HOST}}' -f "{{.WINDOWS_SSH_KEY}}"
       - chmod 600 "{{.WINDOWS_SSH_KEY}}"
@@ -124,7 +128,7 @@ tasks:
       - grep -qxF "$(cat "{{.WINDOWS_SSH_KEY}}.pub")" {{.SSHD_KEYS}} || { echo "{{.WINDOWS_SSH_KEY}}.pub is not in windows_sshd_authorized_keys"; exit 1; }
       # And AllowUsers keeps the account that Ansible logs in as.
       - echo "{{.ALLOW_USERS}}" | tr ',' '\n' | grep -qixF "{{.ADMIN_USER}}" || { echo "windows_sshd_allow_users does not hold ansible_user"; exit 1; }
-      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ALLOW_USERS}}'
+      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ALLOW_USERS}}{{if .AGENT_USER}} -AgentUser {{.AGENT_USER}}{{end}}'
       # Key login works (password logins are refused by sshd_config), against
       # the host key pinned in inventory/known_hosts.
       - ssh -o BatchMode=yes -o UserKnownHostsFile={{.ANSIBLE_DIR}}/inventory/known_hosts -i "{{.WINDOWS_SSH_KEY}}" "{{.ADMIN_USER}}@{{.WINDOWS_ADDR}}" whoami
@@ -135,7 +139,7 @@ tasks:
     cmds:
       # The script exits 2 when something differs.
       - "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r '.windows_sshd_authorized_keys[]' > {{.SSHD_KEYS}}"
-      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ALLOW_USERS}} -Check || [ $? -eq 2 ]'
+      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ALLOW_USERS}}{{if .AGENT_USER}} -AgentUser {{.AGENT_USER}}{{end}} -Check || [ $? -eq 2 ]'
 
   ci-check:
     desc: Run the Ansible Hosts workflow's --check on the sites' runners now (what the nightly drift check runs); changes nothing

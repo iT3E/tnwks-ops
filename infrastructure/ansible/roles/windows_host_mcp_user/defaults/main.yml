@@ -1,0 +1,50 @@
+---
+# windows_host_mcp_user: the local user of the host server of the main agent
+# on a Windows host (docs/wsl/host-mcp-user.md). Only where
+# host_mcp_agent_enabled is on (group_vars/all/host_mcp.yml). The name, the
+# key and the source address are encrypted variables of each host
+# (host_vars/<host>/secrets.sops.yml).
+#
+# A normal local user: a member of Users only, in no admin group. Its
+# password is random, made here and kept nowhere: the host server signs in
+# with its key. It may not log on at the keyboard or by Remote Desktop, and
+# it has no tile on the sign-in screen. Its key holds for the source address
+# of the cluster only, with no forwarding and no terminal, in a file that
+# only SYSTEM and the Administrators can change. Role windows_sshd points
+# the Match block of the user at that file, so a key file in the profile of
+# the user counts for nothing.
+#
+# PowerShell reads its profile scripts and the user modules from two
+# folders below the profile of the user at each start. The Administrators
+# own those folders, the user may only read them, and they hold nothing.
+# Each run checks them, and checks that the user can read no profile of an
+# account of AllowUsers and no host key.
+
+# The comment of the account. New-LocalUser of Windows PowerShell 5.1 takes a
+# description of 48 characters at most.
+host_mcp_agent_description: 'tnwks-ops: host server of the main agent'
+
+# The folder of the key file: only SYSTEM and the Administrators may change
+# it, and Users may read it (tnwks_win_dir_acl). Role windows_sshd names the
+# file authorized_keys in it (Install-TnwksWindowsSshd.ps1).
+host_mcp_agent_windows_dir: 'C:\ProgramData\tnwks-host-mcp'
+
+# The logons that the user does not need. Not the network logon: the SSH
+# server signs a user in with a key by a logon of that type.
+host_mcp_agent_deny_rights:
+  - SeDenyInteractiveLogonRight
+  - SeDenyRemoteInteractiveLogonRight
+
+# A value 0 here, named for the account, keeps it off the sign-in screen.
+host_mcp_agent_userlist_key: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList'
+
+# The startup folders of PowerShell below the profile of the user: Windows
+# PowerShell and PowerShell 7 read their profile scripts and their user
+# modules there.
+host_mcp_agent_startup_dirs:
+  - 'Documents\WindowsPowerShell'
+  - 'Documents\PowerShell'
+
+# More paths that the user must not read, for the check of each run (the
+# profiles of the accounts of AllowUsers and the host keys are always in it).
+host_mcp_agent_private_paths_windows: []
