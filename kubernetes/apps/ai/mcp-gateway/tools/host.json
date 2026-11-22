@@ -1,6 +1,6 @@
 {
  "groups": "all",
- "image": "ghcr.io/it3e/tnwks-host-mcp:0.1.0@sha256:8c17e38459ed4c7bc11f967c40e73a7994a5f2bc5cac7c451a4a3f327d8909d6",
+ "image": "ghcr.io/it3e/tnwks-host-mcp:0.2.0@sha256:0000000000000000000000000000000000000000000000000000000000000000",
  "tools": [
   {
    "name": "close-session"
