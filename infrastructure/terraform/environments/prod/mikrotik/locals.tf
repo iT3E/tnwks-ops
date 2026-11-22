@@ -19,7 +19,7 @@
 ##   Address lists        5 (11 members)
 ##   Port lists           1
 ##   Zone-pair chains     20
-##   Firewall accepts     20 (expanded from VyOS tcp_udp / port-limit splits)
+##   Firewall accepts     24 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
@@ -483,6 +483,32 @@ locals {
           protocol    = "tcp"
           dst_port    = "22"
         },
+        {
+          comment     = "SSH to the LiteAP radio"
+          dst_address = "10.60.10.45"
+          protocol    = "tcp"
+          dst_port    = "22"
+        },
+        {
+          comment     = "SSH to the LiteBeam radio"
+          dst_address = "10.60.10.43"
+          protocol    = "tcp"
+          dst_port    = "22"
+        },
+        {
+          comment     = "device access pod to the LiteAP radio's web UI"
+          src_address = "10.10.32.12"
+          dst_address = "10.60.10.45"
+          protocol    = "tcp"
+          dst_port    = "443"
+        },
+        {
+          comment     = "device access pod to the LiteBeam radio's web UI"
+          src_address = "10.10.32.12"
+          dst_address = "10.60.10.43"
+          protocol    = "tcp"
+          dst_port    = "443"
+        },
       ]
     }
     "190-unifi-frontend-910-switch-mgmt" = {
@@ -692,6 +718,7 @@ locals {
       protocol          = "tcp"
       dst_port          = "443"
       in_interface_list = "vpn-ci"
+      src_address       = "10.10.32.10-10.10.32.11"
     }
   }
 
@@ -1000,6 +1027,11 @@ locals {
           public_key      = "PdKrAZoUe0UgjIswaKOaIvLlXh1k811qVo/SJDiD6Bw="
           allowed_address = ["10.10.32.11/32"]
           comment         = "ARC scale set tnwks-ops-runner-wsl-02 (wireproxy sidecar)"
+        }
+        device-access = {
+          public_key      = "ktbzr3XWwhMjWExRCmfHJDwFzhcxHsCGfo4RM8nFCkA="
+          allowed_address = ["10.10.32.12/32"]
+          comment         = "device access pod (homelab-wsl, wireproxy sidecar)"
         }
       }
     }

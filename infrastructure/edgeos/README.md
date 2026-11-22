@@ -47,7 +47,7 @@ plans every device on the owner's PRs and comments the result;
 `edgeos-apply.yaml` applies on merge to `main`. Both run on the
 `tnwks-ops-runner` scale set, whose wireproxy sidecar forwards
 `127.0.0.1:<ci_port>` to each device through the router's `wg03` tunnel (the
-router allows `vpn-ci` only the EP-R6's SSH). CI logs in with its own key
+router allows `vpn-ci` only SSH to the EP-R6 and the two radios behind it). CI logs in with its own key
 (`tnwks-ops-runner` in `config.sh`); the workstation uses the SOPS password.
 
 Adding a device: its directory, a `ci_port`, a forward in the runner's

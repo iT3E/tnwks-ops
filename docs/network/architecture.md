@@ -64,12 +64,13 @@ zone pair with no rule falls to the terminal forward drop.
 | --- | --- | --- | --- |
 | 1 (native) | `switch-mgmt` | `10.98.0.1/24` | Switch management, untagged on ether2. From 910 only the desktop to SW03: SNMP (udp/161) for snmp-exporter and ICMP for smokeping |
 | — | `transit-10` | — | The outside (internet) zone: only `ether1`. Its old VLAN 10 transit hop is disabled, so `172.16.1.0/24` is not routed |
-| 140 | `UISP-140` | `10.10.140.1/24` | EP-R6 bridge; `10.60.10.0/24` is routed via `10.10.140.140`. From 910 only the desktop: ICMP to the EP-R6 (smokeping) and to the LiteAP radio `.45`, the LiteBeam radio `.43` and the airCube `.46` in `10.60.10.0/24`, and SNMP (udp/161) to the two radios; their SSH and UIs are VPN-only |
+| 140 | `UISP-140` | `10.10.140.1/24` | EP-R6 bridge; `10.60.10.0/24` is routed via `10.10.140.140`. From 910 only the desktop: ICMP to the EP-R6 (smokeping) and to the LiteAP radio `.45`, the LiteBeam radio `.43` and the airCube `.46` in `10.60.10.0/24`, and SNMP (udp/161) to the two radios; their SSH and UIs are VPN-only (`wg01`, or `wg03` below) |
 | 610 | `seccam-610` | `10.10.60.1/24` | Cameras. Untrusted: router services only, Frigate pulls RTSP |
 | 900 | `unifi-mgmt-900` | `10.10.90.1/24` | UniFi AP management. From 910: the controller (inform, SSH, STUN) and ICMP from the desktop to the 3 APs (smokeping) |
 | 910 | `unifi-frontend-910` | `10.10.91.1/24` | Main client network; hosts the WSL desktop |
 | — | `vpn` (wg01) | `10.10.30.1/24` | Admin VPN |
 | — | `vpn-mobile` (wg02) | `10.10.31.1/24` | Mobile VPN: internet and 910, plus admin peers by address |
+| — | `vpn-ci` (wg03) | `10.10.32.1/24` | CI tunnel, from the LAN only ([`ci.md`](ci.md)): router REST for the runners; SSH to the EP-R6 and the two radios; the radios' UIs for the device access pod only |
 
 `ether8` (`192.168.88.1/24`) is outside every zone and always accepts
 management, for break-glass.
@@ -78,7 +79,8 @@ management, for break-glass.
 
 Management of the router, switch, APs and radios is reachable only over the
 admin VPN or from an admin peer; nothing on the WAN answers except WireGuard.
-The full model and the break-glass steps are in
+The EP-R6 and the two radios are also reachable from the device access pod
+on homelab-wsl, over `wg03`. The full model and the break-glass steps are in
 [`access.md`](access.md).
 
 ## Services on the router

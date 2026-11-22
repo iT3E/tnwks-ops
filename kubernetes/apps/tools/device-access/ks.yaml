@@ -1,0 +1,21 @@
+---
+# The pod an operator execs into to reach the EP-R6 and the two radios behind
+# it over the router's wg03 tunnel (docs/network/access.md, "Device access
+# pod"). homelab-wsl only: listed in kubernetes/clusters/wsl/apps/kustomization.yaml.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: device-access
+  namespace: flux-system
+spec:
+  # The Secret tnwks-ops-runner, whose EdgeOS SSH key the pod mounts.
+  dependsOn:
+    - name: tnwks-ops-runner
+  path: ./kubernetes/apps/tools/device-access/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
