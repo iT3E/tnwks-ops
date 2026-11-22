@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.262.0 - 2026-11-22
+
+### Changed
+
+* agents: each CronJob of a trust domain and of ai deletes a finished Job after 26 hours, a failed one too (ttlSecondsAfterFinished). AgentPlatformCronJobFailed and the AI board still see a failure until the next daily run ends, and KubeJobFailed clears by itself instead of firing until three newer runs fail. The one-off Jobs that Flux applies keep no time to live, so Flux never runs them again.
+
 ## v2.261.0 - 2026-11-22
 
 ### Added
