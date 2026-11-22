@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.301.0 - 2026-11-22
+
+### Added
+
+* agents: the alerts MainGithubTokenStale and MainGithubAppDrift for the token job of the App of main, its Job dropped from KubeJobFailed, and the order of the admission lists and the new child after its listing
+
+### Changed
+
+* agents: the token job of the App of the main agent is listed, with its key: each 30 minutes a token with read rights for the ops repository; two alerts for a stale token and for a drift of the installation
+
 ## v2.300.0 - 2026-11-22
 
 ### Added
