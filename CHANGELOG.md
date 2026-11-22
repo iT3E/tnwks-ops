@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.285.0 - 2026-11-22
+
+### Added
+
+* agents: the encrypted Secret of the host server of main, the values of its user in the host secrets of site 1 with the switch off, and the address of the SSH server of the distro in the settings of site 1; not applied until the owner applies the user and passes his gates
+
 ## v2.284.0 - 2026-11-22
 
 ### Added
