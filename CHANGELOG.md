@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.293.0 - 2026-11-22
+
+### Changed
+
+* talos: worker 1 of homelab-wsl-02 has a memory limit of 22 GiB in place of 18 GiB, for the budget of step 2 of the security platform; NodeContainerMemoryNearLimit fires at 90% of the new limit
+
 ## v2.292.2 - 2026-11-22
 
 ### Security
