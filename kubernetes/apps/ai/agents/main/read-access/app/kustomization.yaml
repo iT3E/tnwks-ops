@@ -1,0 +1,8 @@
+---
+# The read rights of the read servers of main (rbac.yaml). Each object
+# names its namespace, so the Flux entry (../ks.yaml) has no
+# targetNamespace.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./rbac.yaml

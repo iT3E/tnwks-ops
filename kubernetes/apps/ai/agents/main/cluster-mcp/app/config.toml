@@ -1,0 +1,63 @@
+# The config of the cluster server of main (deployment.yaml): the
+# Kubernetes MCP server, in HTTP mode, read only. The docs of each key are
+# docs/configuration.md of the pinned release.
+#
+# The control is the right of the service account cluster-mcp at the API
+# server: the role view in each namespace of ../../read-access but
+# agents-finance and ai, and the list of the namespaces. The role view
+# reads no Secret and gives no exec, and no binding gives a list of all
+# namespaces. The keys below are a second layer.
+
+# HTTP mode, on /mcp. Each request stands alone, as the gateway sends it.
+port = "8080"
+stateless = true
+
+# The core toolset only: no Helm, no kubeconfig tools, no other backend.
+toolsets = ["core"]
+# Only the tools that are marked read only are made.
+read_only = true
+# The tools of the design (Design Doc, section 4.2.6), by exact name. The
+# gateway names the same list (route main-cluster), from the dump of the
+# pinned image (kubernetes/apps/ai/mcp-gateway/tools/cluster.json).
+enabled_tools = [
+  "api_resources_list",
+  "events_list",
+  "namespaces_list",
+  "pods_get",
+  "pods_list_in_namespace",
+  "pods_log",
+  "resources_get",
+  "resources_list",
+]
+
+# The identity at the API server is always the service account of the pod,
+# never a token that a request brings (the default "passthrough" sends an
+# Authorization header of the request on). The gateway sends no
+# Authorization to this target either.
+cluster_auth_mode = "kubeconfig"
+cluster_provider_strategy = "in-cluster"
+
+# The memory bounds (docs/scaling.md): 4 calls at one time, a body of the
+# API server up to 4 MiB, and a result and a request up to 1 MiB. The floor
+# of the formula is 128 MiB + 2 x 4 x (10 x 4 + 1 + 1) MiB = 464 MiB, under
+# the limit of the pod. TOML puts each key after a table into that table,
+# so the plain keys come before the tables below.
+max_in_flight = 4
+max_backend_response_bytes = 4194304
+max_result_bytes = 1048576
+
+# A Secret is refused by the client of the server too, and so is a report of
+# a secret that the image scanner found: the role view reads that report
+# (the aggregated role of the scanner).
+[[denied_resources]]
+group = ""
+version = "v1"
+kind = "Secret"
+
+[[denied_resources]]
+group = "aquasecurity.github.io"
+version = "v1alpha1"
+kind = "ExposedSecretReport"
+
+[http]
+max_body_bytes = 1048576

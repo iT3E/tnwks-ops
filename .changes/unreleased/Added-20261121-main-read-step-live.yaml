@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the read step of M7b goes live for the main agent (task 6.19): the cluster, Flux and Terraform servers. The config of the agent has one server entry for each read route, with the kept tools in its filter and each tool by its exact name in the sandbox allow list. The agent pod reaches the MCP gateway on its MCP port, and the gateway admits it. The hash of the key of the main agent (MCP_GATEWAY_KEY of agent-secret, the key of its vault route) on each read route comes from bin/main-mcp-key, which the lead runs before the push: it keeps the key, sets the hash, and prints names and ok only. A test fails while a read route has another hash than main-vault. The code host server follows in one more pull request.'
+time: 2026-11-21T21:00:00.000000+00:00

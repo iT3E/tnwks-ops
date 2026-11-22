@@ -1,0 +1,107 @@
+---
+# The Terraform server of main (Design Doc, section 4.2.6): the Terraform
+# MCP server of HashiCorp, from its upstream image at a release and a
+# digest, in HTTP mode on /mcp, with the registry toolset only and no token
+# of HCP Terraform: the free plan has no read token, and the owner chose the
+# registry with no token at the gate D133. Its tools read the public
+# registry. With no TFE_TOKEN the tools of HCP Terraform are not listed, and
+# the gateway sends no header of a client that could carry one
+# (Authorization, TFE_TOKEN). The central MCP gateway is its one client
+# (networkpolicy.yaml), and it refuses each tool that its route
+# main-terraform does not name.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: terraform-mcp
+  labels:
+    app.kubernetes.io/name: terraform-mcp
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: terraform-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: terraform-mcp
+        # Its own DNS rule, for the name of the registry only
+        # (networkpolicy.yaml), and not the namespace's rule for any name
+        # (../../namespace.yaml).
+        agents.home.arpa/dns: own-rule
+    spec:
+      # No account and no token at the API server: the server does not call it.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The user of the image.
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          # 1.4.1 of 2026-10-23, MPL-2.0, the newest release on 2026-11-21.
+          # The digest is the one of the image index.
+          image: docker.io/hashicorp/terraform-mcp-server:1.4.1@sha256:11dd418bba6003dd5777e9d0979b68de59929a155b355f338f407947e00e9d80
+          imagePullPolicy: IfNotPresent
+          args: ["streamable-http", "--toolsets", "registry"]
+          env:
+            # Listen on the pod address (the default is 127.0.0.1), port 8080.
+            - name: TRANSPORT_HOST
+              value: 0.0.0.0
+            - name: TRANSPORT_PORT
+              value: "8080"
+            # No session state: the gateway is stateless on this route.
+            - name: MCP_SESSION_MODE
+              value: stateless
+          ports:
+            - name: mcp
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: mcp
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: mcp
+            periodSeconds: 30
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: terraform-mcp
+  labels:
+    app.kubernetes.io/name: terraform-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: terraform-mcp
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: mcp
+      protocol: TCP

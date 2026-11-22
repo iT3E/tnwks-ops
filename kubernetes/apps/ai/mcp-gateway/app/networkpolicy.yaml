@@ -6,8 +6,8 @@
 # supervisor of a sandbox carries the labels of a client. The admin port
 # listens on loopback and no rule names it.
 # Out: the MCP servers that are targets of the config (the finance app, the
-# vault server of finance and the vault server of main), and DNS for their
-# names only. No app, no other namespace, nothing outside the cluster.
+# vault server of finance, the vault server of main and the read servers of
+# main), and DNS for their names only. No app, no other namespace, nothing outside the cluster.
 # A trust domain that gets a client adds its agent pod and its probe below,
 # and its MCP server and its name to the egress, in the same PR as its route.
 apiVersion: cilium.io/v2
@@ -90,6 +90,34 @@ spec:
         - ports:
             - port: "8080"
               protocol: TCP
+    # The read servers of main (agents/main), one route each.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: cluster-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: flux-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: terraform-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
     # DNS for the name of each target, and no other name: DNS would be a way
     # out too.
     - toEndpoints:
@@ -106,3 +134,6 @@ spec:
               - matchName: firefly-mcp.agents-finance.svc.cluster.local
               - matchName: vault-server.agents-finance.svc.cluster.local
               - matchName: vault-server.agents-main.svc.cluster.local
+              - matchName: cluster-mcp.agents-main.svc.cluster.local
+              - matchName: flux-mcp.agents-main.svc.cluster.local
+              - matchName: terraform-mcp.agents-main.svc.cluster.local

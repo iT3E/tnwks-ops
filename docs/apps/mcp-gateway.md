@@ -81,6 +81,9 @@ the MCP server and checks the headers that arrive.
 | `/finance-vault/` | `finance-probe` | the nine tools of the vault | `get_file_info` only |
 | `/main-vault/` | `main` | the nine tools of the vault | the nine tools of the vault |
 | `/main-vault/` | `main-probe` | the nine tools of the vault | `get_file_info` only |
+| `/main-cluster/` | `main` | the eight kept reads of the cluster server | the eight kept reads of the cluster server |
+| `/main-flux/` | `main` | the eight kept reads of the Flux server | the eight kept reads of the Flux server |
+| `/main-terraform/` | `main` | the nine tools of the registry | the nine tools of the registry |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -100,10 +103,61 @@ leak of that key also gives the writes of the vault
 
 **The vault of main** has the same form: the route `/main-vault/`, the
 nine tools, the 60 s, and the vault server of main as its target. Its one
-client is the main agent, which has no other route, so its key is a key
-of its own and no key of finance is on it (a test holds the two routes
-apart). The main agent calls it from its gateway process (`mcp.servers.vault`
-of its config, with `MCP_GATEWAY_KEY`), as the finance agent calls its own.
+client is the main agent, so its key is a key of its own and no key of
+finance is on it (a test holds the two routes apart). The main agent calls
+it from its gateway process (`mcp.servers.vault` of its config, with
+`MCP_GATEWAY_KEY`), as the finance agent calls its own.
+
+**The read servers of main** (Design Doc of effort 0003, section 4.2.6)
+each get a route of their own with the key of the main agent only, the
+same hash as on `/main-vault/`, with `route` as the second field of its
+metadata. Each route names its kept tools one by one, from a dump of the
+pinned image in `tools/`, sets 30 s on the route and on the target, and
+sets no credential on the target: the credential of each read server stays
+in its pod. Live since the read step:
+
+- `/main-cluster/`: the cluster server of main
+  (`kubernetes/apps/ai/agents/main/cluster-mcp`), the Kubernetes MCP server
+  of the containers organization, read only, as its own service account.
+  That account has the role `view` in each namespace of this cluster but
+  `agents-finance` and `ai`, and the list of the namespaces
+  (`agents/main/read-access`). The server refuses Secrets and
+  exposed-secret reports, and the gateway refuses each tool that the route
+  does not name: no exec, no run, no write, no list across all namespaces,
+  no node log. `tools/cluster.json` is the dump.
+
+- `/main-flux/`: the Flux server of main
+  (`kubernetes/apps/ai/agents/main/flux-mcp`), the Flux MCP server of the
+  Flux Operator, unmodified (AGPL-3.0), in its read-only mode, as its own
+  service account with the same read bindings. Its pod has no DNS: it
+  calls the API server by the address in its environment, and its docs
+  are in the image. The route keeps the reads and the docs, and refuses
+  the diff (it needs `patch`) and `get_flux_instance` (no Flux Operator
+  here). The reconcile is a later step. `tools/flux.json` is the dump.
+
+- `/main-terraform/`: the Terraform server of main
+  (`kubernetes/apps/ai/agents/main/terraform-mcp`), the Terraform MCP
+  server of HashiCorp with the registry toolset and no token (the free plan
+  of HCP Terraform has no read token). Its pod has no account at the API
+  server and reaches the public registry only: not HCP Terraform, and not
+  the host of the style guide resources of the server. The gateway sends
+  no header of a client, so a client can not give it a token either.
+  `tools/terraform.json` is the dump.
+
+**The read step.** The config of the main agent
+(`agents/main/agent/config/openclaw.json`) has one server entry for each
+read route, beside its vault entry, at
+`http://mcp-gateway.ai.svc.cluster.local:3000/<route>/mcp` with
+`Bearer ${MCP_GATEWAY_KEY}`, and its `toolFilter` lists the same tools as
+the rule of the route. In a sandboxed session an MCP tool also passes the
+sandbox allow list, so `tools.sandbox.tools.alsoAllow` names each read
+tool as `<server>__<tool>`, one by one, with no wildcard (Design Doc,
+section 4.2.6). The MCP client is in the gateway process of the product,
+so the agent pod reaches the gateway on its MCP port, and no sandbox does.
+
+`observability/tests/test_main_read_servers.py` checks the routes, the
+pods, the network rules, the bindings and the config of the agent, and
+runs the pinned gateway with the pinned servers in containers.
 
 **The pilot and the workflow agents get no key.** No key is the safer
 default. A key with no tool still authenticates: it opens a connection,
@@ -161,7 +215,7 @@ its place for the container tests.
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
-| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, route `main-vault` (`metadata: {client: main, route: main-vault}`) |
+| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux` and `main-terraform` (the same hash; `metadata: {client: main, route: <the route>}`) |
 | `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, route `main-vault` |
 
 **The hash and the value stay in step** in two ways: the owner changes both
@@ -183,6 +237,17 @@ the probe of finance). The values check of the main agent reads the line
 `metadata: {client: main, route: main-vault}`, and two tests keep each
 value and its hash together: a key that the Secret names must be in git
 with it, and a real hash of `main-probe` needs its Secret listed.
+
+**A new route of main** gets the hash of the key of main from
+`bin/main-mcp-key`, run on its branch before the push. The script reads
+the key through `bin/sops -d --extract` in a pipe, keeps it, and puts
+`sha256:` and the SHA-256 of its 64 characters on each route of main; a
+route that has it already stays as it is. It prints names and `ok` only,
+never the value or the hash (the hash is not a secret; `git diff` shows
+it). With no key in the file it makes one in the editor step of
+`bin/sops` (never an argument, an env var or a line of output), and
+`--new` makes a new key in its place. A test fails while a server of the
+config of the agent has a route with another hash than `main-vault`.
 
 ## Network policy
 

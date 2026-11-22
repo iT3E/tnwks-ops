@@ -1,0 +1,8 @@
+---
+# The Terraform server of main: the Terraform MCP server of HashiCorp, over
+# Streamable HTTP, with the registry toolset and no credential.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml

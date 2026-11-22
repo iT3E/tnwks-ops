@@ -7,7 +7,8 @@
 # (and DNS, through allow-dns). Nothing else: no model vendor, no update or
 # telemetry service, no other trust domain, no web site but through the
 # fetch proxy, and not the vault server (the MCP gateway stands between). It
-# also reaches the MCP gateway, for the vault route of main (task 3.37).
+# also reaches the MCP gateway, for the vault route of main (task 3.37) and
+# the read routes of M7b.
 # The pilot's policy, for agents-main, with the fetch proxy and the MCP
 # gateway.
 apiVersion: cilium.io/v2
@@ -54,7 +55,8 @@ spec:
             - port: "4318"
               protocol: TCP
     # The MCP gateway (kubernetes/apps/ai/mcp-gateway), with the key of
-    # this agent: the vault tools of main (route main-vault). The MCP
+    # this agent: the vault tools of main (route main-vault) and the read
+    # tools of M7b (main-cluster, main-flux, main-terraform). The MCP
     # client is in the gateway process of the product, so no sandbox gets
     # this route.
     - toEndpoints:

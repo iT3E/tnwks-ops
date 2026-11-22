@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the Terraform server of main (task 6.19, the read step of M7b). The Terraform MCP server 1.4.1 of HashiCorp (pinned by digest) in agents-main with the registry toolset and no token, no account at the API server, and egress to the public registry only. The route main-terraform on the central MCP gateway takes the key of the main agent only and names the nine registry tools, from the dump tools/terraform.json.'
+time: 2026-11-21T13:20:00.000000+00:00

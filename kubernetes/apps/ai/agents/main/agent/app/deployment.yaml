@@ -11,8 +11,11 @@
 # (task 3.37): its share, read only at /vault for the index, and the six
 # read tools of the vault through the central MCP gateway, with the key of
 # this agent (MCP_GATEWAY_KEY). The three write tools come with the seed of
-# the share: the seed stops at a share that is not empty. No finance app, no Signal and no scheduled job (the
-# Monday job comes with the Signal step). Each command it runs goes to a sandbox of this trust domain,
+# the share: the seed stops at a share that is not empty. M7b, the read
+# step: the read tools of the cluster, Flux and Terraform servers, through
+# the same gateway with the same key (Design Doc, section 4.2.6). No finance
+# app, no Signal and no scheduled job (the Monday job comes with the Signal
+# step). Each command it runs goes to a sandbox of this trust domain,
 # through the sandbox gateway; each model call goes to the model gateway,
 # with the key of this trust domain.
 #
