@@ -17,8 +17,9 @@
 #   finance, and a straight connection to the vault server of finance
 #   fails (R6);
 # - a straight connection to each read server of main (cluster, Flux,
-#   Terraform) times out: only the gateway may reach them (the networkpolicy.yaml
-#   of ../../cluster-mcp, ../../flux-mcp and ../../terraform-mcp). This pod
+#   Terraform, code host) times out: only the gateway may reach them (the
+#   networkpolicy.yaml of ../../cluster-mcp, ../../flux-mcp,
+#   ../../terraform-mcp and ../../github-mcp). This pod
 #   is a pod of the agent's namespace that is not the gateway; the agent pod
 #   is another such pod, and the policy of each server names the gateway
 #   only.
@@ -35,8 +36,9 @@ metadata:
     app.kubernetes.io/name: platform-checks
     app.kubernetes.io/component: mcp-gateway-probe
 spec:
-  # Ten minutes after the probe of finance, so the two never meet.
-  schedule: "47 5 * * *"
+  # Sixteen minutes after the probe of finance, more than its deadline of
+  # 900 s, so the two never meet.
+  schedule: "53 5 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3
@@ -48,9 +50,10 @@ spec:
       # a failure until a newer run ends, and KubeJobFailed then clears by
       # itself (docs/apps/agent-platform.md, "A failed Job").
       ttlSecondsAfterFinished: 93600
-      # The worst case, in seconds: five straight connections of 5 each
-      # (25), then seven MCP requests of 30 each (210). That is 235.
-      activeDeadlineSeconds: 600
+      # The worst case, in seconds: six straight connections of 5 each
+      # (30), then seven MCP requests of 30 each (210). That is 240. The
+      # deadline only stops a Job that hangs; 900 leaves room for more tries.
+      activeDeadlineSeconds: 900
       template:
         metadata:
           labels: *labels
@@ -98,7 +101,7 @@ spec:
                 # a refusal (no ready backend), an answer and a name that
                 # does not resolve fail.
                 - name: GATEWAY_ONLY_SERVERS
-                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080
+                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080
               # PROBE_KEY, once the lead makes the Secret.
               envFrom:
                 - secretRef:
@@ -177,6 +180,10 @@ spec:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-main
             app.kubernetes.io/name: terraform-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: github-mcp
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

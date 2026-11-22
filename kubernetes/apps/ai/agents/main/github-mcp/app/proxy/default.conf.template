@@ -1,0 +1,61 @@
+# The proxy of the code host server. The entrypoint of the image fills in
+# the names that start with GITHUB_MCP_ (NGINX_ENVSUBST_FILTER) and writes
+# the config to /etc/nginx/conf.d, an emptyDir in memory.
+#
+# Each request to the server gets the token of the pod as its bearer, in
+# place of any credential of the client, and no mode header of a client:
+# the flags of the server set its mode. The MCP gateway drops those headers
+# too; this is the second layer.
+#
+# Port 8080 takes the MCP gateway only (networkpolicy.yaml) and serves /mcp.
+# Port 8081 serves the health path only, for the probes of the kubelet,
+# which come from the host: it never adds the token.
+server {
+    listen 8081;
+    server_tokens off;
+    access_log off;
+
+    location = /healthz {
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 404;
+    }
+}
+
+server {
+    listen 8080;
+    server_tokens off;
+    access_log off;
+    client_max_body_size 1m;
+
+    location = /mcp {
+        # The path only: the "?" drops the query string of the client.
+        rewrite ^ /mcp? break;
+        proxy_pass http://${GITHUB_MCP_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Authorization "Bearer ${GITHUB_MCP_TOKEN}";
+        # An empty value removes the header.
+        proxy_set_header Cookie "";
+        proxy_set_header X-MCP-Readonly "";
+        proxy_set_header X-MCP-Toolsets "";
+        proxy_set_header X-MCP-Tools "";
+        proxy_set_header X-MCP-Exclude-Tools "";
+        proxy_set_header X-MCP-Features "";
+        proxy_set_header X-MCP-Insiders "";
+        proxy_set_header X-MCP-Lockdown "";
+        proxy_set_header X-Forwarded-For "";
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Proto "";
+        # Streamed answers, and the 30 s of the gateway with a margin.
+        proxy_buffering off;
+        proxy_read_timeout 35s;
+    }
+
+    # No other path: not /readonly, /x/<toolset> or /insiders of the server.
+    location / {
+        return 404;
+    }
+}

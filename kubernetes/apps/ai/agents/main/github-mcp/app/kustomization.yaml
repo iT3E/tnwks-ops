@@ -1,0 +1,22 @@
+---
+# The code host server of main: the GitHub MCP server over Streamable HTTP,
+# read only, with a proxy container in its pod that sets the token on each
+# request (the pattern of the proxy of finance).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml
+  # The Secret github-mcp-token (GITHUB_MCP_TOKEN): a stopgap of the owner,
+  # a read-only token for this repository only, until the token job of the
+  # App of the main agent writes it (docs/apps/mcp-gateway.md, "The read
+  # servers of main"). Flux decrypts it (the decryption of cluster-apps).
+  - ./secret.sops.yaml
+configMapGenerator:
+  - name: github-mcp-proxy
+    files:
+      - default.conf.template=./proxy/default.conf.template
+    options:
+      annotations:
+        # ${GITHUB_MCP_TOKEN} is for the entrypoint of the proxy, not Flux.
+        kustomize.toolkit.fluxcd.io/substitute: disabled

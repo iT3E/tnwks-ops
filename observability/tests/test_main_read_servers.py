@@ -78,7 +78,31 @@ SERVERS = {
                   "search_private_modules", "list_runs", "create_workspace"],
         "reader": False,
     },
+    "github": {
+        "dir": "github-mcp", "route": "main-github", "port": 8080, "dump": "github.json",
+        # The kubelet probes the proxy on a port of its own, with no token.
+        "health_port": 8081,
+        "groups": "repos,pull_requests,actions,issues,context read-only",
+        "keep": ["actions_get", "actions_list", "get_commit", "get_file_contents", "get_job_logs", "get_label",
+                 "get_latest_release", "get_release_by_tag", "get_tag", "issue_read", "list_branches",
+                 "list_commits", "list_issues", "list_pull_requests", "list_releases", "list_tags",
+                 "pull_request_read"],
+        # The reads that the design leaves out, and writes of the full mode.
+        "never": ["search_code", "search_repositories", "search_issues", "search_pull_requests",
+                  "search_commits", "get_me", "get_teams", "get_team_members", "list_repository_collaborators",
+                  "list_issue_types", "list_issue_fields", "ui_get", "create_branch", "push_files",
+                  "create_or_update_file", "create_pull_request", "merge_pull_request", "actions_run_trigger"],
+        # Each call names the ops repository, so the guardrail of the route
+        # lets it pass to the tool rule.
+        "args": {"owner": "iT3E", "repo": "tnwks-ops"},
+        "reader": False,
+        # The proxy container takes the requests of the gateway.
+        "container": "proxy",
+    },
 }
+# A token of the form of an installation token of the code host, which is
+# no token.
+FAKE_CODE_HOST_TOKEN = "ghs_readtestnotatoken000000000000000000"
 # The namespaces with no binding of the read account (R6): the finance trust
 # domain, and ai with the log of the MCP gateway.
 NO_READ = {"agents-finance", "ai"}
@@ -248,8 +272,12 @@ def test_the_pod_is_restricted_and_pinned(server):
     assert spec["securityContext"]["runAsNonRoot"] is True
     assert spec["securityContext"]["seccompProfile"] == {"type": "RuntimeDefault"}
     for c in spec["containers"]:
-        assert c["securityContext"] == {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
-                                        "capabilities": {"drop": ["ALL"]}}
+        context = dict(c["securityContext"])
+        # A container may set its own user (the image of the code host
+        # server runs as root unless told), never root.
+        assert context.pop("runAsUser", 65532) != 0 and context.pop("runAsGroup", 65532) != 0
+        assert context == {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
+                           "capabilities": {"drop": ["ALL"]}}
         assert "@sha256:" in c["image"] and len(c["image"].split("@sha256:")[1]) == 64
         assert "limits" in c["resources"] and "memory" in c["resources"]["limits"]
 
@@ -263,7 +291,9 @@ def test_only_the_gateway_and_the_kubelet_reach_the_server(server):
     assert [(p["io.kubernetes.pod.namespace"], p["app.kubernetes.io/name"]) for p in peers(gateway)] == [
         ("ai", "mcp-gateway")]
     assert ports(gateway) == [str(spec["port"])]
-    assert host["fromEntities"] == ["host"] and ports(host) == [str(spec["port"])]
+    # The kubelet, for the probes: on the health port where a server has
+    # one, so the host gets no port that adds a token.
+    assert host["fromEntities"] == ["host"] and ports(host) == [str(spec.get("health_port", spec["port"]))]
 
 
 @pytest.mark.parametrize("server", SERVERS)
@@ -432,7 +462,7 @@ def test_the_try_passes_on_a_time_out_only(monkeypatch, capsys, connect, ok, got
     assert [line["target"] for line in lines] == [
         f"{s['dir']} in agents-main, direct from a pod that is not the gateway" for s in SERVERS.values()]
     assert {(line["ok"], line["got"]) for line in lines} == {(ok, got)}
-    assert checks.failures == (0 if ok else 3)
+    assert checks.failures == (0 if ok else len(SERVERS))
 
 
 # The cluster server and the read rights
@@ -506,6 +536,70 @@ def test_the_terraform_server_has_the_registry_only_and_no_token():
     # The name, and the name with each search suffix of the pod: no other name.
     assert set(names) == {host} | {f"{host}.{s}" for s in ("agents-main.svc.cluster.local", "svc.cluster.local", "cluster.local")}
     assert pod("terraform")["metadata"]["labels"]["agents.home.arpa/dns"] == "own-rule"
+
+
+def test_the_code_host_server_reads_only_with_the_token_of_its_proxy():
+    """The token is in the proxy container only, from the Secret
+    github-mcp-token; the server listens on the loopback, so each request
+    passes the proxy, which sets the token and drops each mode header."""
+    args = container("github")["args"]
+    assert args[0] == "http"
+    assert {"--read-only", "--lockdown-mode", "--toolsets=", "--listen-host=127.0.0.1", "--port=8082"} <= set(args)
+    (tools,) = [a for a in args if a.startswith("--tools=")]
+    assert tools.removeprefix("--tools=").split(",") == sorted(SERVERS["github"]["keep"])
+    assert not [a for a in args if a.startswith(("--insiders", "--features", "--gh-host", "--enable-command"))]
+    assert "env" not in container("github") and "envFrom" not in container("github")
+    proxy = container("github", "proxy")
+    env = {e["name"]: e for e in proxy["env"]}
+    assert env["GITHUB_MCP_UPSTREAM"]["value"] == "127.0.0.1:8082"
+    assert env["GITHUB_MCP_TOKEN"]["valueFrom"] == {"secretKeyRef": {"name": "github-mcp-token", "key": "GITHUB_MCP_TOKEN"}}
+    assert [(p["name"], p["containerPort"]) for p in proxy["ports"]] == [("mcp", 8080), ("health", 8081)]
+    for probe in ("readinessProbe", "livenessProbe"):
+        assert proxy[probe]["httpGet"] == {"path": "/healthz", "port": "health"}
+    template = (MAIN / "github-mcp/app/proxy/default.conf.template").read_text()
+    health, mcp = template.split("server {")[1:]
+    # The health port serves the health path only and never the token.
+    assert "listen 8081;" in health and "location = /healthz {" in health
+    assert "proxy_pass" not in health and "GITHUB_MCP_TOKEN" not in health
+    assert "listen 8080;" in mcp and "/healthz" not in mcp
+    # The query string of a client stops at the proxy.
+    assert "rewrite ^ /mcp? break;" in mcp and "proxy_pass http://${GITHUB_MCP_UPSTREAM};" in mcp
+    assert 'proxy_set_header Authorization "Bearer ${GITHUB_MCP_TOKEN}";' in template
+    for header in ("Readonly", "Toolsets", "Tools", "Exclude-Tools", "Features", "Insiders", "Lockdown"):
+        assert f'proxy_set_header X-MCP-{header} "";' in template
+    assert "location = /mcp {" in template and "location / {\n        return 404;" in template
+    spec = pod("github")["spec"]
+    assert spec["automountServiceAccountToken"] is False
+    # No other pod of the repository names the Secret.
+    for doc in manifests("Deployment", "StatefulSet", "CronJob", "Job", "DaemonSet", "Pod"):
+        if doc["__path"] != MAIN / "github-mcp/app/deployment.yaml":
+            assert "github-mcp-token" not in json.dumps({k: v for k, v in doc.items() if k != "__path"}), doc["__path"]
+
+
+def test_the_code_host_token_is_an_encrypted_secret_of_the_app():
+    """The stopgap token of the owner (D143) is the Secret of the app, in its
+    kustomization, encrypted: its key name only, never a value in clear."""
+    app = yaml.safe_load((MAIN / "github-mcp/app/kustomization.yaml").read_text())
+    assert "./secret.sops.yaml" in app["resources"]
+    (secret,) = docs(MAIN / "github-mcp/app/secret.sops.yaml")
+    assert secret["kind"] == "Secret"
+    assert secret["metadata"] == {"name": "github-mcp-token", "namespace": "agents-main"}
+    values = secret.get("stringData") or secret.get("data")
+    assert set(values) == {"GITHUB_MCP_TOKEN"}
+    assert all(str(v).startswith("ENC[") for v in values.values())
+    assert "sops" in secret
+
+
+def test_the_code_host_route_takes_the_ops_repository_only():
+    """The repository of the guardrail is the repository that Flux reads."""
+    sync = (ROOT / "kubernetes/clusters/wsl/flux-system/gotk-sync.yaml").read_text()
+    owner, repo = sync.split("github.com/")[1].split()[0].split("/")
+    (processor,) = route("main-github")["policies"]["mcpGuardrails"]["processors"]
+    assert processor["kind"] == "expression" and processor["methods"] == {"tools/call": "request"}
+    assert f"mcp.params.arguments.owner == '{owner}'" in processor["condition"]
+    assert f"mcp.params.arguments.repo == '{repo}'" in processor["condition"]
+    assert processor["condition"].startswith("!(") and processor["reject"]
+    assert SERVERS["github"]["args"] == {"owner": owner, "repo": repo}
 
 
 def namespaces_of_the_cluster() -> set[str]:
@@ -604,6 +698,9 @@ for name, args in calls:
     error = body.get("error") if isinstance(body, dict) else None
     if status == 400 and error and error.get("message") == "unknown resource":
         out[name] = "refused: gateway"
+    elif status == 200 and isinstance(body, dict) and body.get("result", {}).get("isError") and \
+            " ".join(c.get("text", "") for c in body["result"].get("content", [])).endswith("the ops repository only"):
+        out[name] = "refused: guardrail"
     elif status == 200 and isinstance(body, dict) and "result" in body:
         out[name] = "reached"
     else:
@@ -672,7 +769,54 @@ def start_terraform_server(tool: str, work: Path, net: str, name: str) -> None:
          container("terraform")["image"], *container("terraform")["args"]])
 
 
-STARTERS = {"cluster": start_cluster_server, "flux": start_flux_server, "terraform": start_terraform_server}
+def start_github_proxy(tool: str, net: str, name: str, alias: str, upstream: str) -> None:
+    """The proxy of the code host server, with the template of the repo and
+    a token that is no token."""
+    proxy = container("github", "proxy")
+    env = {e["name"]: e.get("value") for e in proxy["env"]}
+    run([tool, "run", "-d", "--name", name, "--network", net, "--network-alias", alias,
+         "--read-only", "--tmpfs", "/tmp:uid=101,gid=101", "--tmpfs", "/etc/nginx/conf.d:uid=101,gid=101",
+         "--tmpfs", "/var/cache/nginx:uid=101,gid=101", "--cap-drop", "ALL", "--user", "101",
+         "-e", f"GITHUB_MCP_UPSTREAM={upstream}",
+         "-e", f"NGINX_ENVSUBST_FILTER={env['NGINX_ENVSUBST_FILTER']}",
+         "-e", f"GITHUB_MCP_TOKEN={FAKE_CODE_HOST_TOKEN}",
+         "-v", f"{MAIN / 'github-mcp/app/proxy'}:/etc/nginx/templates:ro", proxy["image"]])
+
+
+# What the proxy sends on: the path and whether a bearer came with it.
+PROXY_SEEN = r'''
+import http.server, json
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        with open("/rec/proxy-seen.jsonl", "a") as f:
+            f.write(json.dumps({"path": self.path,
+                                "bearer": (self.headers.get("Authorization") or "").startswith("Bearer ")}) + "\n")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b"{}")
+    do_GET = do_POST
+    def log_message(self, *args):
+        pass
+http.server.ThreadingHTTPServer(("0.0.0.0", 8082), Handler).serve_forever()
+'''
+
+
+def start_github_server(tool: str, work: Path, net: str, name: str) -> None:
+    """The code host server with the args of its pod, and its proxy with the
+    template of the repo and a token that is no token. In the pod both share
+    the loopback; here the proxy reaches the server by a name. No code host
+    behind it: the tool list, the tool rule and the guardrail need none."""
+    args = [a if not a.startswith("--listen-host") else "--listen-host=" for a in container("github")["args"]]
+    run([tool, "run", "-d", "--name", name, "--network", net, "--network-alias", "github-server",
+         "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL", "--user", "65532",
+         container("github")["image"], *args])
+    start_github_proxy(tool, net, name + "-proxy", "github-upstream", "github-server:8082")
+
+
+STARTERS = {"cluster": start_cluster_server, "flux": start_flux_server, "terraform": start_terraform_server,
+            "github": start_github_server}
 
 
 @pytest.fixture(scope="module")
@@ -682,7 +826,9 @@ def lab():
     (work / "rec").mkdir(mode=0o777)
     (work / "rec").chmod(0o777)
     recorder = RECORDER.replace('open("/rec/mcp.jsonl", "a")', 'open("/rec/" + sys.argv[2] + ".jsonl", "a")')
-    recorder = recorder.replace('"headers": {k.lower()', '"path": self.path, "headers": {k.lower()')
+    recorder = recorder.replace('"headers": {k.lower()',
+                                '"path": self.path, "body": (body or b"").decode(errors="replace"), '
+                                '"headers": {k.lower()')
     # On the port of the server whose name it takes.
     recorder = recorder.replace('("0.0.0.0", 3000)', '("0.0.0.0", int(sys.argv[3]))')
     (work / "recorder.py").write_text(recorder)
@@ -702,6 +848,17 @@ def lab():
         for server, spec in SERVERS.items():
             names[server] = f"readsrv-{server}-{tag}"
             STARTERS[server](tool, work, back, names[server])
+            if server == "github":
+                names["github-proxy"] = names[server] + "-proxy"
+                # A second proxy with a recorder in place of the server.
+                (work / "proxy_seen.py").write_text(PROXY_SEEN)
+                (work / "proxy_seen.py").chmod(0o644)
+                names["proxy-seen"] = f"readsrv-proxy-seen-{tag}"
+                run([tool, "run", "-d", "--name", names["proxy-seen"], "--network", back,
+                     "--network-alias", "proxy-seen", "-v", f"{work}/proxy_seen.py:/proxy_seen.py:ro",
+                     "-v", f"{work}/rec:/rec", PYTHON, "python3", "-I", "/proxy_seen.py"])
+                names["proxy-check"] = f"readsrv-proxy-check-{tag}"
+                start_github_proxy(tool, back, names["proxy-check"], "proxy-check", "proxy-seen:8082")
             names[server + "-recorder"] = f"readsrv-{server}-rec-{tag}"
             upstream = spec.get("upstream", f"http://{server}-upstream:{spec['port']}")
             run([tool, "run", "-d", "--name", names[server + "-recorder"], "--network", back,
@@ -714,7 +871,7 @@ def lab():
              gateway_image(), "-f", "/config/config.yaml"])
         run([tool, "network", "connect", "--alias", "mcp-gateway.ai.svc.cluster.local", front, names["gateway"]])
         run([tool, "start", names["gateway"]])
-        lab = {"tool": tool, "work": work, "key": key, "front": front, "names": names}
+        lab = {"tool": tool, "work": work, "key": key, "front": front, "back": back, "names": names}
         wait_ready(lab)
         yield lab
     finally:
@@ -764,7 +921,8 @@ def recorded(lab: dict, server: str) -> list[dict]:
 @pytest.mark.parametrize("server", SERVERS)
 def test_the_main_key_sees_and_calls_the_kept_tools_only(lab, server):
     spec = SERVERS[server]
-    pairs = [[spec["keep"][0], {}], *[[n, {}] for n in spec["never"]], ["zz_made_up_tool_name", {}]]
+    args = spec.get("args", {})
+    pairs = [[spec["keep"][0], args], *[[n, args] for n in spec["never"]], ["zz_made_up_tool_name", args]]
     out = calls(lab, url(server), pairs)
     assert out["list"] == sorted(spec["keep"])
     assert out[spec["keep"][0]] == "reached"
@@ -778,7 +936,7 @@ def test_no_header_or_path_of_a_client_reaches_the_server(lab, server):
     before = len(recorded(lab, server))
     base = url(server).removesuffix("/mcp")
     for target in (url(server), f"{base}/readonly", f"{base}/x/repos", f"{base}/insiders?features=all"):
-        calls(lab, target, [[spec["keep"][0], {}]], CLIENT_HEADERS)
+        calls(lab, target, [[spec["keep"][0], spec.get("args", {})]], CLIENT_HEADERS)
     seen = recorded(lab, server)[before:]
     assert seen
     for request in seen:
@@ -795,3 +953,67 @@ def test_the_gateway_log_has_no_key_and_no_argument(lab):
     log = result.stdout + result.stderr
     assert lab["key"] not in log
     assert "read-test-header" not in log
+
+
+# Each request of the client below: the method, the URL, and the status and
+# the paths that the recorder behind the proxy saw, as JSON.
+PROXY_CLIENT = r'''
+import json, sys, time, urllib.error, urllib.request
+out = []
+for method, url in json.loads(sys.argv[1]):
+    for i in range(30):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, method=method, data=b"{}" if method == "POST" else None,
+                                                               headers={"Content-Type": "application/json"}), timeout=5) as r:
+                status = r.status
+            break
+        except urllib.error.HTTPError as e:
+            status = e.code
+            break
+        except OSError:
+            time.sleep(1)
+    else:
+        status = "no answer"
+    out.append([method, url, status])
+print(json.dumps(out))
+'''
+
+
+def proxy_requests(lab: dict, pairs: list) -> tuple[list, list]:
+    path = lab["work"] / "rec/proxy-seen.jsonl"
+    before = len(path.read_text().splitlines()) if path.exists() else 0
+    result = run([lab["tool"], "run", "--rm", "--network", lab["back"], "--read-only", "--cap-drop", "ALL",
+                  "--user", "65534", PYTHON, "python3", "-I", "-c", PROXY_CLIENT, json.dumps(pairs)])
+    seen = [json.loads(line) for line in path.read_text().splitlines()][before:] if path.exists() else []
+    return json.loads(result.stdout), seen
+
+
+def test_the_health_port_of_the_proxy_serves_the_health_path_only(lab):
+    """The kubelet reaches the health port only (the policy), and that port
+    never sends a request on with the token: /mcp there is a 404."""
+    out, seen = proxy_requests(lab, [["GET", "http://proxy-check:8081/healthz"],
+                                     ["POST", "http://proxy-check:8081/mcp"],
+                                     ["GET", "http://proxy-check:8081/mcp"],
+                                     ["GET", "http://proxy-check:8080/healthz"]])
+    assert [status for _, _, status in out] == [200, 404, 404, 404]
+    assert seen == []
+
+
+def test_the_proxy_sends_no_query_string_to_the_server(lab):
+    out, seen = proxy_requests(lab, [["POST", "http://proxy-check:8080/mcp?features=all&toolsets=all"],
+                                     ["POST", "http://proxy-check:8080/mcp"]])
+    assert [status for _, _, status in out] == [200, 200]
+    assert seen == [{"path": "/mcp", "bearer": True}, {"path": "/mcp", "bearer": True}]
+
+
+def test_a_call_for_another_repository_is_refused_and_not_sent_on(lab):
+    before = len(recorded(lab, "github"))
+    pairs = [["list_branches", {"owner": "iT3E", "repo": "other"}],
+             ["get_file_contents", {"owner": "someone", "repo": "tnwks-ops", "path": "README.md"}],
+             ["list_commits", {}]]
+    out = calls(lab, url("github"), pairs)
+    for name, _ in pairs:
+        assert out[name] == "refused: guardrail", name
+    # Only the tools/list of the client reached the server.
+    seen = recorded(lab, "github")[before:]
+    assert all(json.loads(r.get("body") or "{}").get("method") != "tools/call" for r in seen), seen

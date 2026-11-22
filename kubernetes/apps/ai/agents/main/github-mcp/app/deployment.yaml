@@ -1,0 +1,180 @@
+---
+# The code host server of main (Design Doc, section 4.2.6): the GitHub MCP
+# server of GitHub, from its upstream image at a release and a digest, in
+# HTTP mode, read only, with lockdown mode, and with no toolset but the
+# exact list of its reads (--toolsets= --tools). A header or a path of a
+# client can only narrow that list, never widen it (the lab of task 6.19).
+#
+# In HTTP mode the server takes its token from each request. So the proxy
+# container of this pod sets it (proxy/default.conf.template), from the
+# Secret github-mcp-token, which no other pod mounts (R2). The server
+# listens on the loopback of the pod only, so each request passes the
+# proxy. The central MCP gateway is the one client of the proxy
+# (networkpolicy.yaml), and it refuses each tool that its route
+# main-github does not name, and each call for another repository.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-mcp
+  labels:
+    app.kubernetes.io/name: github-mcp
+  annotations:
+    # A new token starts the pod again.
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: github-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: github-mcp
+        # Its own DNS rule, for the two names of the code host only
+        # (networkpolicy.yaml), and not the namespace's rule for any name
+        # (../../namespace.yaml).
+        agents.home.arpa/dns: own-rule
+    spec:
+      # A name with a dot is looked up as it is first, with no search
+      # domain: the DNS rule allows the full names only.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      # No account at the API server: neither container calls it.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The user of the proxy image; the server sets its own.
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: proxy
+          image: docker.io/nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
+          imagePullPolicy: IfNotPresent
+          env:
+            # The server, on the loopback of the pod.
+            - name: GITHUB_MCP_UPSTREAM
+              value: 127.0.0.1:8082
+            # The entrypoint fills only these names into the template.
+            - name: NGINX_ENVSUBST_FILTER
+              value: ^GITHUB_MCP_
+            # The read token of the code host: a stopgap of the owner until
+            # the token job (secret.sops.yaml; docs/apps/mcp-gateway.md,
+            # "The read servers of main").
+            - name: GITHUB_MCP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-mcp-token
+                  key: GITHUB_MCP_TOKEN
+          ports:
+            - name: mcp
+              containerPort: 8080
+              protocol: TCP
+            # The health path only, for the kubelet: no token on this port.
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 30
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: template
+              mountPath: /etc/nginx/templates
+              readOnly: true
+            # The rendered config, with the token: in memory only.
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/nginx
+        - name: server
+          # v2.2.0 of 2026-11-16, MIT, the newest release on 2026-11-21. The
+          # digest is the one of the image index. The image runs as root
+          # unless the pod says otherwise.
+          image: ghcr.io/github/github-mcp-server:v2.2.0@sha256:040c4e99810076035eb1d9beb4b4a96fcf589c43cefed6ff51a46a553eb4e174
+          imagePullPolicy: IfNotPresent
+          args:
+            - http
+            - --port=8082
+            - --listen-host=127.0.0.1
+            - --read-only
+            - --lockdown-mode
+            # No toolset, and the reads of the route by exact name (the
+            # same list as the rule of main-github).
+            - --toolsets=
+            - --tools=actions_get,actions_list,get_commit,get_file_contents,get_job_logs,get_label,get_latest_release,get_release_by_tag,get_tag,issue_read,list_branches,list_commits,list_issues,list_pull_requests,list_releases,list_tags,pull_request_read
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: server-tmp
+              mountPath: /tmp
+      volumes:
+        - name: template
+          configMap:
+            name: github-mcp-proxy
+        - name: conf
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: server-tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: github-mcp
+  labels:
+    app.kubernetes.io/name: github-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: github-mcp
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: mcp
+      protocol: TCP
