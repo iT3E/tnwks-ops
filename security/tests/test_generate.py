@@ -324,15 +324,18 @@ ALLOWED_LABELS = {"SecurityResultLate": {"source", "system"}, "SecurityAcceptedF
 
 def test_the_text_of_each_alert_is_a_system_a_severity_and_a_link_and_no_raw_event(registry):
     """The Telegram template prints the description, each label of the alert and the
-    dashboard link (kubernetes/apps/monitoring/alertmanager/app/config/telegram.tmpl).
+    dashboard and runbook links (kubernetes/apps/monitoring/alertmanager/app/config/telegram.tmpl).
     So the labels and the annotations of a rule are the whole text of its alert."""
     found = generate.alerts(generate.every_source(registry))
     assert {rule["alert"] for rule in found} == set(ALLOWED_LABELS)
     for rule in found:
         allowed = ALLOWED_LABELS[rule["alert"]]
         assert rule["labels"] == {"severity": "warning"}
-        assert set(rule["annotations"]) == {"summary", "description", "dashboard_url"}
+        assert set(rule["annotations"]) == {"summary", "description", "dashboard_url", "runbook_url"}
         assert rule["annotations"]["dashboard_url"] == generate.BOARD_LINK
+        # The section of the alert in the runbook: a plain link, with no variable.
+        assert rule["annotations"]["runbook_url"] == (
+            "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#" + rule["alert"].lower())
         text = " ".join(rule["annotations"].values())
         used = set(re.findall(r"\{\{ *(\$[A-Za-z.]+) *\}\}", text))
         assert used <= {f"$labels.{label}" for label in allowed} | {"$externalLabels.cluster"}, used
@@ -359,7 +362,8 @@ def test_a_sample_of_each_alert_has_its_whole_text_in_the_rule_tests(registry):
         "summary": "A security source is late for aws-prod",
         "description": ("The newest result of prowler for aws-prod is older than its limit, or the source "
                         "serves no time. The board shows no evidence for it."),
-        "dashboard_url": "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site"}
+        "dashboard_url": "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site",
+        "runbook_url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityresultlate"}
     accepted = generate.alert_sample(generate.accepted_rule(), system="aws-prod")
     assert accepted["exp_labels"] == {"severity": "warning", "system": "aws-prod"}
     assert "check" not in json.dumps(accepted) and "prowler" not in json.dumps(accepted)

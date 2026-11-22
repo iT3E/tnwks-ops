@@ -321,6 +321,13 @@ def line_number(identifier):
 
 # The link of each alert: the security board, on the site whose Prometheus raised it.
 BOARD_LINK = f"https://grafana.${{INTERNAL_DOMAIN}}/d/{BOARD}?var-cluster={{{{ $externalLabels.cluster }}}}"
+# The section of each alert in the runbook of the security platform: a plain link,
+# with no variable of the alert.
+RUNBOOK = "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md"
+
+
+def runbook_link(alert):
+    return f"{RUNBOOK}#{alert.lower()}"
 
 
 def late_rule(expr):
@@ -333,7 +340,8 @@ def late_rule(expr):
                 "description": ("The newest result of {{ $labels.source }} for {{ $labels.system }} is older "
                                 "than its limit, or the source serves no time. The board shows no evidence "
                                 "for it."),
-                "dashboard_url": BOARD_LINK}}
+                "dashboard_url": BOARD_LINK,
+                "runbook_url": runbook_link("SecurityResultLate")}}
 
 
 def accepted_rule():
@@ -346,7 +354,8 @@ def accepted_rule():
                 "summary": "An accepted finding of {{ $labels.system }} has passed its end date",
                 "description": ("{{ $labels.system }} has an accepted finding whose end date has passed. "
                                 "Renew it or remove it in the encrypted list of accepted findings."),
-                "dashboard_url": BOARD_LINK}}
+                "dashboard_url": BOARD_LINK,
+                "runbook_url": runbook_link("SecurityAcceptedFindingExpired")}}
 
 
 def host_unreachable_rule():
@@ -363,7 +372,8 @@ def host_unreachable_rule():
                                 "is away (its power or its link), the link between the sites is down, or windows_exporter "
                                 "on that host stopped. The results of the systems behind {{ $labels.behind_site }} wait, "
                                 "and their late alerts, and PeerSiteUnreachable of that site, are held while this fires."),
-                "dashboard_url": BOARD_LINK}}
+                "dashboard_url": BOARD_LINK,
+                "runbook_url": runbook_link("SecurityHostUnreachable")}}
 
 
 def alerts(registry):

@@ -36,6 +36,7 @@ tests:
       exp_annotations:
         summary: 1 running containers on homelab-wsl have a Trivy report of their tag, not of the image that runs
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityimagesscannedbytag
         description: 'For a week, containers on this cluster have run an image that no report has: the tag was pushed
           again after the node pulled it, and the report is of the image that the tag points to now. The check image-vulnerabilities
           counts that report. Restart the workload, so that it pulls the image of the tag, or pin a digest in its

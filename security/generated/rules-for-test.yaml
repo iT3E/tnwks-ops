@@ -3771,6 +3771,7 @@ groups:
         the source serves no time. The board shows no evidence for it.
       dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster
         }}
+      runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityresultlate
   - alert: SecurityHostUnreachable
     expr: up{job="windows-exporter-security",behind_site!=""} == 0
     for: 5m
@@ -3784,6 +3785,7 @@ groups:
         of that site, are held while this fires.'
       dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster
         }}
+      runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityhostunreachable
   - alert: SecurityAcceptedFindingExpired
     expr: count by (system) (max by (source, check, system) (last_over_time(homelab_security_accepted_until_timestamp_seconds[10m]))
       < time())
@@ -3796,3 +3798,4 @@ groups:
         in the encrypted list of accepted findings.'
       dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster
         }}
+      runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityacceptedfindingexpired

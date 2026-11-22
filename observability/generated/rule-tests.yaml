@@ -1429,6 +1429,7 @@ tests:
       exp_annotations:
         summary: homelab-wsl-02-worker-1 is above 90% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#nodecontainermemorynearlimit
         description: The node container has a memory limit of 18 GiB. The scheduler does not see it, because the
           node reports the memory of the whole WSL VM. Find the largest pods of the node, and move or shrink one.
           The limit is memory_nodes of talos_clusters in the Ansible inventory.
@@ -1591,6 +1592,7 @@ tests:
       exp_annotations:
         summary: Loki on homelab-wsl-02 took in more than twice the planned bytes of its 90-day streams in a day
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#lokisecurityingestaboveplan
         description: The streams that Loki keeps for 90 days took in more than 2.4 GB of lines in 24 hours, before
           compression. The plan is 1.2 GB a day. Find the stream that grew (the label security_stream), then lower
           its volume at the source or its retention.
@@ -1664,6 +1666,7 @@ tests:
       exp_annotations:
         summary: 'A certificate for IAM Roles Anywhere on homelab-wsl-02 ends within 30 days: aws-security-audit-certificate'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitycertificateexpiring
         description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
           when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
           has the steps. The alert ends at the next run of the refresher.'
@@ -1689,6 +1692,7 @@ tests:
       exp_annotations:
         summary: 'An API token of Prowler on homelab-wsl-02 ends within 30 days: prowler-cloudflare-token'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitytokenexpiring
         description: 'The daily Prowler run of one provider reads with this token, and fails when it ends. Make
           a new token, put it in its SOPS Secret, and write its end date to its Lease: kubernetes/apps/security/prowler/README.md
           has the steps. The alert ends when the Lease has the new date.'
@@ -1712,6 +1716,7 @@ tests:
       exp_annotations:
         summary: 'A certificate for IAM Roles Anywhere on homelab-wsl-02 ends within 30 days: aws-security-trail-certificate'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitycertificateexpiring
         description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
           when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
           has the steps. The alert ends at the next run of the refresher.'
@@ -1737,6 +1742,7 @@ tests:
       exp_annotations:
         summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
@@ -1764,6 +1770,7 @@ tests:
       exp_annotations:
         summary: A new finding of high severity on tnwks-ops, from api-check
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
@@ -1788,6 +1795,7 @@ tests:
       exp_annotations:
         summary: Loki refused audit lines of homelab-wsl
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityauditlinesrefused
         description: The sink loki_security_audit of the Vector aggregator on homelab-wsl dropped a request in the
           last 15 minutes, and Vector does not send it again. Loki refuses a line that is older than 7 days, or
           more than one hour older than the newest line of its stream. The log of the aggregator pod has the answer
@@ -1877,6 +1885,7 @@ tests:
       exp_annotations:
         summary: The list of accepted findings on homelab-wsl-02 gives no entry
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityacceptedlistunread
         description: 'The security converter can not read the list of accepted findings in the Secret security-accepted-findings,
           so it serves no accepted finding: the board shows none, and the rule of Trivy Operator mutes none. The
           log of the converter has the number of the line and the kind of its form. security/converter/README.md,
@@ -1904,6 +1913,7 @@ tests:
       exp_annotations:
         summary: Entries of the list of accepted findings on homelab-wsl-02 are skipped
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityacceptedentriesskipped
         description: '2 entries of the list of accepted findings do not fit, so the security converter skips them:
           their findings show as fails on the board. The Prowler runs skip the entries that are not in the form,
           and take an entry whose source or system is not in the registry. The log of the converter has the number
@@ -2112,6 +2122,7 @@ tests:
       exp_annotations:
         summary: 1 running images on homelab-wsl have no scan report of Trivy Operator
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityimagesnotscanned
         description: 'Images that run on this cluster have had no vulnerability report for 36 hours: a private image,
           a registry that the network policy of the scan jobs does not name, or a scan that fails. While one image
           has no report, the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of
@@ -2305,6 +2316,7 @@ tests:
       exp_annotations:
         summary: 1 running images on homelab-wsl have no scan report of Trivy Operator
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityimagesnotscanned
         description: 'Images that run on this cluster have had no vulnerability report for 36 hours: a private image,
           a registry that the network policy of the scan jobs does not name, or a scan that fails. While one image
           has no report, the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of
@@ -2336,6 +2348,7 @@ tests:
       exp_annotations:
         summary: 1 running images on homelab-wsl have no scan report of Trivy Operator
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityimagesnotscanned
         description: 'Images that run on this cluster have had no vulnerability report for 36 hours: a private image,
           a registry that the network policy of the scan jobs does not name, or a scan that fails. While one image
           has no report, the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of
@@ -2419,6 +2432,7 @@ tests:
       exp_annotations:
         summary: A new finding of high severity on homelab-wsl, from trivy
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
@@ -2549,6 +2563,7 @@ tests:
       exp_annotations:
         summary: A new finding of high severity on aws-prod, from prowler
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
@@ -2698,6 +2713,7 @@ tests:
       exp_annotations:
         summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
@@ -2724,6 +2740,7 @@ tests:
       exp_annotations:
         summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
@@ -2748,6 +2765,7 @@ tests:
       exp_annotations:
         summary: A new finding of high severity on WSL-02, from host-check
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
@@ -2786,6 +2804,7 @@ tests:
       exp_annotations:
         summary: A new finding of high severity on DESKTOP-HKE05KI, from host-check
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityfindingnew
         description: 'A check of high or critical severity fails: with more failed resources than at each time of
           the day before, after an hour with none, or with no result in the day before. The board shows the failing
           safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the

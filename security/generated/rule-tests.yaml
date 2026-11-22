@@ -188,6 +188,7 @@ tests:
         description: aws-management has an accepted finding whose end date has passed. Renew it or remove it in
           the encrypted list of accepted findings.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityacceptedfindingexpired
 - name: 'one system passes and a second with a check has no evidence: the line is no evidence, and it has a result'
   interval: 1m
   input_series:
@@ -325,6 +326,7 @@ tests:
           behind homelab-wsl wait, and their late alerts, and PeerSiteUnreachable of that site, are held while this
           fires.'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityhostunreachable
 - name: a host behind another site that this site scrapes, or a host of this site, does not alert
   interval: 1m
   external_labels:

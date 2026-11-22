@@ -532,6 +532,15 @@ SITE1_WORKER_LIMIT_GIB = 13
 SITE1_CONTROLPLANE_LIMIT_GIB = 4
 
 
+# The section of each alert of the security platform in its runbook. A plain
+# link: no variable of the alert, so the link names no check, finding or value.
+SECURITY_RUNBOOK = "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md"
+
+
+def security_runbook(alert):
+    return f"{SECURITY_RUNBOOK}#{alert.lower()}"
+
+
 def capacity_alerts():
     """Each alert reads a series that only one site's Prometheus has, so the rule
     is quiet on the other site: the kubelet's node figure of each site is
@@ -562,6 +571,7 @@ def capacity_alerts():
          "for": "15m", "labels": {"severity": "warning"},
          "annotations": {"summary": "{{ $labels.node }} is above 90% of the memory limit of its node container",
                          "dashboard_url": board("tnwks-kubernetes"),
+                         "runbook_url": security_runbook("NodeContainerMemoryNearLimit"),
                          "description": (f"The node container has a memory limit of {CAPACITY_NODE_LIMIT_GIB} GiB. The scheduler does not see it,"
                                          " because the node reports the memory of the whole WSL VM. Find the largest pods of the node,"
                                          " and move or shrink one. The limit is memory_nodes of talos_clusters in the Ansible inventory.")}},
@@ -607,6 +617,7 @@ def capacity_alerts():
          "for": "1h", "labels": {"severity": "warning"},
          "annotations": {"summary": "Loki on {{ $labels.k8s_cluster }} took in more than twice the planned bytes of its 90-day streams in a day",
                          "dashboard_url": board("tnwks-observability"),
+                         "runbook_url": security_runbook("LokiSecurityIngestAbovePlan"),
                          "description": (f"The streams that Loki keeps for 90 days took in more than {2 * SECURITY_INGEST_PLAN_GB:g} GB of lines"
                                          f" in 24 hours, before compression. The plan is {SECURITY_INGEST_PLAN_GB:g} GB a day. Find the stream that grew"
                                          " (the label security_stream), then lower its volume at the source or its retention.")}},
@@ -993,6 +1004,7 @@ def security_alerts():
          "for": "10m", "labels": {"severity": "warning"},
          "annotations": {"summary": "A new finding of high severity on {{ $labels.system }}, from {{ $labels.source }}",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityFindingNew"),
                          "description": ("A check of high or critical severity fails: with more failed resources than at each time of the day before,"
                                          " after an hour with none, or with no result in the day before."
                                          " The board shows the failing safeguards of the system, and the reports of the source have the detail."
@@ -1009,6 +1021,7 @@ def security_alerts():
          "for": TRIVY_UNSCANNED_HOLD, "labels": {"severity": "warning"},
          "annotations": {"summary": "{{ $value }} running images on {{ $labels.k8s_cluster }} have no scan report of Trivy Operator",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityImagesNotScanned"),
                          "description": ("Images that run on this cluster have had no vulnerability report for"
                                          f" {TRIVY_UNSCANNED_HOLD[:-1]} hours: a private image, a registry that the network policy"
                                          " of the scan jobs does not name, or a scan that fails. While one image has no report,"
@@ -1026,6 +1039,7 @@ def security_alerts():
          "annotations": {"summary": ("{{ $value }} running containers on {{ $labels.k8s_cluster }} have a Trivy report"
                                      " of their tag, not of the image that runs"),
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityImagesScannedByTag"),
                          "description": ("For a week, containers on this cluster have run an image that no report has:"
                                          " the tag was pushed again after the node pulled it, and the report is of the image"
                                          " that the tag points to now. The check image-vulnerabilities counts that report."
@@ -1042,6 +1056,7 @@ def security_alerts():
          "annotations": {"summary": (f"A certificate for IAM Roles Anywhere on {{{{ $labels.k8s_cluster }}}} ends within"
                                      f" {SECURITY_CERTIFICATE_DAYS} days: {{{{ $labels.lease }}}}"),
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityCertificateExpiring"),
                          "description": ("The AWS sessions of one tool of the security platform come from this certificate, and stop when it ends."
                                          " Make a new certificate and put it in its SOPS Secret:"
                                          " kubernetes/apps/security/aws-credentials/README.md has the steps."
@@ -1054,6 +1069,7 @@ def security_alerts():
          "annotations": {"summary": (f"An API token of Prowler on {{{{ $labels.k8s_cluster }}}} ends within"
                                      f" {SECURITY_CERTIFICATE_DAYS} days: {{{{ $labels.lease }}}}"),
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityTokenExpiring"),
                          "description": ("The daily Prowler run of one provider reads with this token, and fails when it ends."
                                          " Make a new token, put it in its SOPS Secret, and write its end date to its Lease:"
                                          " kubernetes/apps/security/prowler/README.md has the steps."
@@ -1065,6 +1081,7 @@ def security_alerts():
          "labels": {"severity": "warning"},
          "annotations": {"summary": "Loki refused audit lines of {{ $labels.k8s_cluster }}",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityAuditLinesRefused"),
                          "description": ("The sink {{ $labels.component_id }} of the Vector aggregator on {{ $labels.k8s_cluster }} dropped a request"
                                          f" in the last {AUDIT_SINK_WINDOW[:-1]} minutes, and Vector does not send it again. Loki refuses a line that is older than"
                                          " 7 days, or more than one hour older than the newest line of its stream. The log of the aggregator pod has the"
@@ -1077,6 +1094,7 @@ def security_alerts():
          "for": "30m", "labels": {"severity": "warning"},
          "annotations": {"summary": "The list of accepted findings on {{ $labels.k8s_cluster }} gives no entry",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityAcceptedListUnread"),
                          "description": ("The security converter can not read the list of accepted findings in the Secret"
                                          " security-accepted-findings, so it serves no accepted finding: the board shows none, and"
                                          " the rule of Trivy Operator mutes none. The log of the converter has the number of the line"
@@ -1087,6 +1105,7 @@ def security_alerts():
          "for": "1h", "labels": {"severity": "warning"},
          "annotations": {"summary": "Entries of the list of accepted findings on {{ $labels.k8s_cluster }} are skipped",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityAcceptedEntriesSkipped"),
                          "description": ("{{ $value }} entries of the list of accepted findings do not fit, so the security converter"
                                          " skips them: their findings show as fails on the board. The Prowler runs skip the"
                                          " entries that are not in the form, and take an entry whose source or system is not in"
