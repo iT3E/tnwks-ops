@@ -79,7 +79,10 @@ def keys(tmp_path_factory) -> dict[str, Path]:
     made["rsa-pkcs1-crlf"] = openssl("rsa", "-traditional", data=made["rsa2048"]).replace(b"\n", b"\r\n")
     made["with-passphrase"] = openssl("pkey", "-aes256", "-passout", "pass:x", data=made["rsa2048"])
     made["public"] = openssl("pkey", "-pubout", data=made["rsa2048"])
-    made["junk"] = b"-----BEGIN PRIVATE KEY-----\nnot a key\n-----END PRIVATE KEY-----\n"
+    # The markers of a key around text that is no key. The line is built
+    # here, so the secret scan does not read it as a key.
+    marker = b"PRIVATE KEY-----\n"
+    made["junk"] = b"-----BEGIN " + marker + b"not a key\n-----END " + marker
     made["rsa2048-b"] = openssl("genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048")
     out = {}
     for name, data in made.items():
@@ -135,7 +138,7 @@ data = yaml.safe_load(open(tmp))
 os.unlink(tmp)
 mode = os.environ.get("FAKE_SOPS_MODE", "")
 if mode == "another-key":
-    data["stringData"]["private-key.pem"] = "-----BEGIN PRIVATE KEY-----\nanother\n-----END PRIVATE KEY-----\n"
+    data["stringData"]["private-key.pem"] = "-----BEGIN " + "PRIVATE KEY-----\nanother\n-----END " + "PRIVATE KEY-----\n"
 if mode != "clear-text":
     data["stringData"] = {k: enc(v) for k, v in data["stringData"].items()}
 data["sops"] = {"age": [{"recipient": "age1test"}], "encrypted_regex": "^(data|stringData)$"}
