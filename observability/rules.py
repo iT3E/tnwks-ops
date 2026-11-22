@@ -1115,6 +1115,10 @@ def security_alerts():
     ]
 
 
+# The labels of one Flux object of one site in the series of the collector.
+FLUX = "k8s_cluster, namespace, kind, resource"
+
+
 def rule_resource():
     rules = [{"record": name, "expr": expr} for name, expr in records().items()]
     rules += [
@@ -1124,6 +1128,28 @@ def rule_resource():
          "annotations": {"summary": "A monitoring collector is no longer observing its upstream",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
                          "description": "Scrape success does not establish fresh upstream evidence. Check the collector source and network access."}},
+        # A Flux object of the site whose Ready condition is False, from the
+        # evidence collector, which each site runs for itself (no federation
+        # brings the flux series of the other site). The collector writes
+        # homelab_flux_resource_ready only while Ready is True (1) or False
+        # (0): Unknown (a reconcile or a first install in progress) has no
+        # series. An object that fails retries each minute or so, and its
+        # Ready condition is Unknown for a moment at each try; a scrape of the
+        # collector can fail too. last_over_time over 15 minutes holds the last
+        # True or False across those, so `for` does not start again at each
+        # try. A suspended object is left out: its condition is old, and the
+        # Kubernetes board shows the suspension. max by drops the pod of the
+        # collector, so a new collector pod gives no second alert.
+        {"alert": "FluxResourceNotReady",
+         "expr": (f'(max by ({FLUX}) (last_over_time(homelab_flux_resource_ready{{source_site=""}}[15m])) == 0)'
+                  f' unless on ({FLUX}) (max by ({FLUX}) (last_over_time(homelab_flux_resource_suspended{{source_site=""}}[15m])) == 1)'),
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The {{ $labels.kind }} {{ $labels.namespace }}/{{ $labels.resource }} on {{ $labels.k8s_cluster }} has not been Ready for 1 hour",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("Flux reports Ready False for this object, so the change it carries is not on the cluster."
+                                         " Its Ready message says why: flux get on that site, or kubectl describe of the object."
+                                         " An object that waits for it reports Ready False too: fix the first one."
+                                         " docs/operations/observability-operations.md, Flux object not Ready, has the steps.")}},
         {"alert": "ObservabilityExpectedDatabaseBackupMissing",
          # Each site only answers for its own primaries: the peer's databases
          # are Unknown here by design, and a replica cluster takes no backups.
@@ -1165,6 +1191,70 @@ def rule_resource():
                                 {"name": "homelab.capacity", "interval": "1m", "rules": capacity_alerts()},
                                 {"name": "homelab.security", "interval": "1m",
                                  "rules": security_records() + security_finding_records() + security_alerts()}]}}
+
+
+def flux_fixtures():
+    def flux(name, resource, values, pod="a", kind="Kustomization", site="one"):
+        return {"series": (f'{name}{{k8s_cluster="{site}",namespace="flux-system",kind="{kind}",'
+                           f'resource="{resource}",pod="{pod}"}}'), "values": values}
+
+    def fired(resource, kind="Kustomization", site="one"):
+        """The alert as promtool sees it: its annotations with the labels filled in."""
+        rule = next(rule for rule in rule_resource()["spec"]["groups"][0]["rules"]
+                    if rule.get("alert") == "FluxResourceNotReady")
+        labels = {"k8s_cluster": site, "namespace": "flux-system", "kind": kind, "resource": resource}
+        annotations = {}
+        for key, text in rule["annotations"].items():
+            for label, value in labels.items():
+                text = text.replace("{{ $labels." + label + " }}", value)
+            annotations[key] = text
+        return {"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}
+
+    return [
+        # Ready False from 0m, with the moments of Unknown of each retry (the
+        # ready series goes, so Prometheus marks it stale, at 20m and at 40m)
+        # and a failed scrape of 3 minutes at 52m (stale too): it fires once,
+        # after an hour, and ends when Ready is True again.
+        {"name": "a Flux object not Ready for an hour fires once, across its retries and a scrape gap", "interval": "1m",
+         "input_series": [
+             flux("homelab_flux_resource_ready", "broken", "0x19 stale 0x19 stale 0x9 stale _x2 0x15 1x30"),
+             flux("homelab_flux_resource_suspended", "broken", "0x51 stale _x2 0x46"),
+             flux("homelab_flux_resource_ready", "fine", "1x100"),
+             flux("homelab_flux_resource_suspended", "fine", "0x100"),
+         ], "alert_rule_test": [
+             {"alertname": "FluxResourceNotReady", "eval_time": "59m", "exp_alerts": []},
+             {"alertname": "FluxResourceNotReady", "eval_time": "61m", "exp_alerts": [fired("broken")]},
+             {"alertname": "FluxResourceNotReady", "eval_time": "75m", "exp_alerts": []},
+         ]},
+        {"name": "a new pod of the collector gives no second alert", "interval": "1m",
+         "input_series": [
+             flux("homelab_flux_resource_ready", "broken", "0x40 stale", pod="a"),
+             flux("homelab_flux_resource_ready", "broken", "_x38 0x60", pod="b"),
+         ], "alert_rule_test": [
+             {"alertname": "FluxResourceNotReady", "eval_time": "70m", "exp_alerts": [fired("broken")]},
+         ]},
+        {"name": "a suspended object, one that is Ready again in time, and a first install do not fire", "interval": "1m",
+         "input_series": [
+             flux("homelab_flux_resource_ready", "paused", "0x90"),
+             flux("homelab_flux_resource_suspended", "paused", "1x90"),
+             flux("homelab_flux_resource_ready", "flaky", "0x50 1x40"),
+             # A first install: Ready Unknown, so no ready series at all.
+             flux("homelab_flux_resource_suspended", "installing", "0x90", kind="HelmRelease"),
+         ], "alert_rule_test": [
+             {"alertname": "FluxResourceNotReady", "eval_time": "85m", "exp_alerts": []},
+         ]},
+        {"name": "an object of each site fires on its own", "interval": "1m",
+         "input_series": [
+             flux("homelab_flux_resource_ready", "same", "0x90", site="one"),
+             flux("homelab_flux_resource_ready", "same", "0x90", site="two"),
+             # A federated copy of a peer series is not read.
+             {"series": ('homelab_flux_resource_ready{k8s_cluster="two",namespace="flux-system",kind="Kustomization",'
+                         'resource="other",source_site="two"}'), "values": "0x90"},
+         ], "alert_rule_test": [
+             {"alertname": "FluxResourceNotReady", "eval_time": "70m",
+              "exp_alerts": [fired("same", site="one"), fired("same", site="two")]},
+         ]},
+    ]
 
 
 def fixtures():
@@ -1490,6 +1580,7 @@ def fixtures():
              {"expr": "homelab:recovery_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:recovery_state{k8s_cluster="one",app="test"}', "value": 3}]},
          ]},
+        *flux_fixtures(),
         *objective_fixtures(),
         *other_database_fixtures(),
         *ai_fixtures(),

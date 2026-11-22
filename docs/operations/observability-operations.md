@@ -41,6 +41,35 @@ WSL-02, which has that cluster's kubeconfig
   request that the rule refused. If the pod is NotReady, look first for a
   403 to the host on `/-/ready` or `/-/healthy`. The quick way back is a
   revert of the rule's PR.
+- **Flux object not Ready:** `FluxResourceNotReady` (group
+  `homelab.evidence`, `observability/rules.py`): a Kustomization,
+  HelmRelease or source of Flux on one site has had Ready False for one
+  hour. Each site evaluates it on its own Prometheus, from the evidence
+  collector of that site (`homelab_flux_resource_ready`), and its own
+  Alertmanager sends it, so it covers site 2 too. The event alerts of Flux
+  (`kubernetes/apps/flux-system/addons/alerts`) are in the tree of site 1
+  only.
+  - It fires once for each object and site. A suspended object does not
+    fire. A first install or a reconcile in progress has Ready Unknown, and
+    does not fire; an object that stays Unknown has no alert.
+  - An object that fails is tried again each minute or so, and its Ready
+    condition is Unknown for a moment at each try. The rule holds the last
+    True or False of the last 15 minutes, so those moments do not start the
+    hour again. It ends at the first Ready True.
+  - An object that waits for a failed one (a `dependsOn`) reports Ready
+    False too, so one fault can fire several alerts. Fix the first one.
+
+  Steps, read only first:
+  1. The Ready message: `flux get kustomizations -A` (or `helmreleases`,
+     `sources all`) on that site, or `kubectl -n <namespace> describe
+     <kind> <name>`. The Kubernetes board, tab Reconciliation, lists the
+     objects that are not Ready.
+  2. The events of the object and the log of its controller
+     (`kubectl -n flux-system logs deploy/kustomize-controller` or
+     `helm-controller`).
+  3. The fix is a change in git, in a pull request. After the merge,
+     `flux reconcile` of the object on that site, with the go of the owner,
+     or wait for its interval.
 - **Archive behind or full:** `ObservabilityArchiveBehind` and
   `ObservabilityArchiveSpaceLow`. Check the Compactor first: whether it has
   halted (`thanos_compact_halted`) and how many compactions it has left. Then

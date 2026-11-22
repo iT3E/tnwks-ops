@@ -400,6 +400,22 @@ spec:
           }}
         description: Scrape success does not establish fresh upstream evidence. Check the collector source and network
           access.
+    - alert: FluxResourceNotReady
+      expr: (max by (k8s_cluster, namespace, kind, resource) (last_over_time(homelab_flux_resource_ready{source_site=""}[15m]))
+        == 0) unless on (k8s_cluster, namespace, kind, resource) (max by (k8s_cluster, namespace, kind, resource)
+        (last_over_time(homelab_flux_resource_suspended{source_site=""}[15m])) == 1)
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: The {{ $labels.kind }} {{ $labels.namespace }}/{{ $labels.resource }} on {{ $labels.k8s_cluster
+          }} has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster
+          }}
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
     - alert: ObservabilityExpectedDatabaseBackupMissing
       expr: homelab:database_backup_state{k8s_cluster="${CLUSTER_NAME}"} == 0 unless on (k8s_cluster, namespace,
         db_cluster) (homelab:database_in_recovery == 1)
