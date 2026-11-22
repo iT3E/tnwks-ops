@@ -122,6 +122,9 @@ AI_SCHEDULES = [
     {"trust_domain": "workflows", "namespace": "agents-workflows", "cronjob": "workflow-providers",
      "within": 35 * 60},
     {"trust_domain": "workflows", "namespace": "agents-workflows", "cronjob": "workflow-sweep", "within": 35 * 60},
+    # The token job of the App of main (docs/apps/github-token.md): two runs
+    # an hour, as the providers job.
+    {"trust_domain": "main", "namespace": "agents-main", "cronjob": "github-token", "within": 35 * 60},
     {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "agent-heartbeat-check", "within": DAILY},
     {"trust_domain": "shared", "namespace": "monitoring", "cronjob": "trace-filter-check", "within": DAILY},
     # The network rule of Prometheus: a reader may not write (step 3 of the

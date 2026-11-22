@@ -1,0 +1,3 @@
+kind: Changed
+body: 'agents: the token job of the App of the main agent is listed, with its key: each 30 minutes a token with read rights for the ops repository; two alerts for a stale token and for a drift of the installation'
+time: 2026-11-22T22:55:00.000000000Z
