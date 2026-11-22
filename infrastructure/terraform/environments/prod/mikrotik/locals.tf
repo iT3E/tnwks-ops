@@ -19,7 +19,7 @@
 ##   Address lists        5 (11 members)
 ##   Port lists           1
 ##   Zone-pair chains     20
-##   Firewall accepts     15 (expanded from VyOS tcp_udp / port-limit splits)
+##   Firewall accepts     18 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
@@ -514,6 +514,24 @@ locals {
           comment          = "smokeping (WSL cluster) pings of the EP-R6"
           src_address_list = "monitoring"
           dst_address      = "10.10.140.140"
+          protocol         = "icmp"
+        },
+        {
+          comment          = "smokeping (WSL cluster) pings of the LiteAP radio"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.45"
+          protocol         = "icmp"
+        },
+        {
+          comment          = "smokeping (WSL cluster) pings of the LiteBeam radio"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.43"
+          protocol         = "icmp"
+        },
+        {
+          comment          = "smokeping (WSL cluster) pings of the airCube"
+          src_address_list = "monitoring"
+          dst_address      = "10.60.10.46"
           protocol         = "icmp"
         },
       ]

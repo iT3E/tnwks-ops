@@ -216,14 +216,38 @@ MONITORING_ZONE_RULES = {
             "dst_address": "10.98.0.251",
         },
     ],
-    # smokeping pings the EP-R6 (role edge), the gateway of the radio network.
-    # ICMP to that one address only: SSH and the web UI stay VPN-only.
-    ("unifi-frontend-910", "UISP-140"): [{
-        "description": "smokeping (WSL cluster) pings of the EP-R6",
-        "protocol": "icmp",
-        "src_address_list": "monitoring",
-        "dst_address": "10.10.140.140",
-    }],
+    # The monitoring source pings the EP-R6 (role edge), the gateway of the
+    # radio network, and the three devices behind it in 10.60.10.0/24 (static
+    # route via the EP-R6, out VLAN 140, so the same pair): the LiteAP radio,
+    # the LiteBeam radio and the airCube at the far end of the radio link. ICMP
+    # to those four addresses only, one rule each (.43, .45 and .46 are not one
+    # range): SSH and the web UIs stay VPN-only.
+    ("unifi-frontend-910", "UISP-140"): [
+        {
+            "description": "smokeping (WSL cluster) pings of the EP-R6",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.10.140.140",
+        },
+        {
+            "description": "smokeping (WSL cluster) pings of the LiteAP radio",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.45",
+        },
+        {
+            "description": "smokeping (WSL cluster) pings of the LiteBeam radio",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.43",
+        },
+        {
+            "description": "smokeping (WSL cluster) pings of the airCube",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.60.10.46",
+        },
+    ],
 }
 
 # Static DNS records that pointed at container IPs. None drops the record;
