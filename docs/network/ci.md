@@ -22,7 +22,7 @@ PR / merge to main
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Listener `wg03`, zone `vpn-ci` | generator `EXTRA_WIREGUARD` | `10.10.32.1/24`, one peer per site's runner (`10.10.32.10` homelab-wsl, `10.10.32.11` homelab-wsl-02), each with its own key so both can hold the tunnel at once. Its own zone, not a `wg01` peer: `vpn -> *` defaults to accept, which a CI identity must not inherit. `vpn-ci` has no zone pairs (the terminal forward drop covers it) and one input accept, REST 443. WireGuard 51822 is accepted from the LAN only, never the WAN |
+| Listener `wg03`, zone `vpn-ci` | generator `EXTRA_WIREGUARD` | `10.10.32.1/24`, one peer per site's runner (`10.10.32.10` homelab-wsl, `10.10.32.11` homelab-wsl-02), each with its own key so both can hold the tunnel at once, and `10.10.32.12` for the device access pod ([`access.md`](access.md#device-access-pod)). Its own zone, not a `wg01` peer: `vpn -> *` defaults to accept, which a CI identity must not inherit. One zone pair, `vpn-ci -> UISP-140` (`CI_ZONE_RULES`): SSH to the EP-R6 and to the radios `10.60.10.45` and `.43` from every peer, the radios' web UI (443) from `10.10.32.12` only; the terminal forward drop covers the rest. One input accept, REST 443, from the runners' peers only (`CI_RUNNER_SOURCES`). WireGuard 51822 is accepted from the LAN only, never the WAN |
 | Runner scale set `tnwks-ops-runner-homelab-wsl` | `kubernetes/apps/tools/actions-runner-controller/ops-runner/` | Labels `tnwks-ops-runner` and `tnwks-ops-homelab-wsl`. `minRunners: 0`, `maxRunners: 1`. Same GitHub App as `sites-builder`, installed on both repos. ARC sends labels only when it registers a set, so a label change needs a new `runnerScaleSetName` |
 | Its twin on homelab-wsl-02 | `kubernetes/clusters/wsl-02/apps/ops-runner/` | The same HelmRelease, registered as `tnwks-ops-runner-wsl-02` with the label `tnwks-ops-runner` (`scaleSetLabels`), so `runs-on: tnwks-ops-runner` goes to whichever site's runner is up. Each also carries `tnwks-ops-<CLUSTER_NAME>` (`tnwks-ops-homelab-wsl`, `tnwks-ops-homelab-wsl-02`) for workflows that need one site: UniFi's, whose controller API is in-cluster on homelab-wsl. Its own Secret: the same CI age key and EdgeOS key, its own `wg03` peer |
 | wireproxy sidecar | same pod | Userspace WireGuard (no `NET_ADMIN`, TUN or kernel module). Exposes the router's REST API as `https://127.0.0.1:8443` inside the pod; the runner waits for its `/readyz`, which pings the router through the tunnel |
@@ -35,7 +35,7 @@ PR / merge to main
 | Cloudflare | `terraform.yaml` (root `cloudflare`), `environments/prod/cloudflare` | Same as healthchecks.io: public API, shared action (`root` input). State in TFC workspace `tnwks-cloudflare-prod` |
 | GitHub | `terraform.yaml` (root `github`), `environments/prod/github` | Same as Cloudflare. State in TFC workspace `tnwks-github-prod`. Gated on the repository variable `TERRAFORM_GITHUB_ENABLED=true` ([`../operations/github.md`](../operations/github.md)) |
 | Drift check | `terraform-drift.yaml` → `terraform.yaml` (drift mode), `kubernetes/apps/monitoring/pushgateway` | Nightly plan of `main` for the roots with `drift = true` (GitHub today), never applied, on homelab-wsl's runner (`tnwks-ops-homelab-wsl`) in the root's `lock` group. The result goes to that site's Pushgateway for Prometheus ([`../operations/ci.md`](../operations/ci.md#terraform-drift)) |
-| EdgeOS devices | `edgeos-{plan,apply}.yaml`, `.github/actions/edgeos-sync`, `infrastructure/edgeos` | Same runner. wireproxy also forwards `127.0.0.1:8022` to the EP-R6's SSH, the one forward `vpn-ci` has (`CI_ZONE_RULES`); CI logs in with its own SSH key against a pinned host key |
+| EdgeOS devices | `edgeos-{plan,apply}.yaml`, `.github/actions/edgeos-sync`, `infrastructure/edgeos` | Same runner. wireproxy also forwards `127.0.0.1:8022` to the EP-R6's SSH (`CI_ZONE_RULES`); CI logs in with its own SSH key against a pinned host key. The zone also lets every peer reach the radios' SSH, for config plans the runner does not run yet |
 
 ## Security model
 
@@ -47,9 +47,11 @@ tells it to inside the LAN. The controls:
    any workflow at all (repo setting: all external contributors).
 2. **Apply runs only from `main`.** The `prod` environment accepts deployments
    from protected branches only, and `main` takes changes through PRs.
-3. **The runner can reach the router's REST API and nothing else on the
-   LAN.** No forwarding from `vpn-ci`, and the tunnel's `AllowedIPs` is the
-   router's `wg03` address. Inside the WSL cluster it is an ordinary pod
+3. **The runner can reach the router's REST API and SSH on the EP-R6 and
+   the two radios, and nothing else on the LAN.** `vpn-ci`'s only forwards
+   are those SSH ports (and the radios' web UI for the device access pod's
+   peer alone), and the REST accept takes only the runners' peers. Inside
+   the WSL cluster it is an ordinary pod
    (no NetworkPolicy selects it), which is how it reaches the UniFi
    controller's Service.
 4. **Narrow secrets.** The CI age key decrypts only the secrets of the roots

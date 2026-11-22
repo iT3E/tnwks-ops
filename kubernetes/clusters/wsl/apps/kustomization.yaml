@@ -128,6 +128,9 @@ resources:
   - ../../../apps/tools/actions-runner-controller/runner/ks.yaml
   # Network-device Terraform runners for this repo (docs/network/ci.md).
   - ../../../apps/tools/actions-runner-controller/ops-runner/ks.yaml
+  # The pod to exec into for the EP-R6 and the radios over the router's CI
+  # tunnel (docs/network/access.md). This site only: one wg03 peer.
+  - ../../../apps/tools/device-access/ks.yaml
   # Where this site's ops runner reports the nightly Terraform drift check,
   # for Prometheus (docs/operations/ci.md#terraform-drift). This site only,
   # like the drift check's runner and its alerts.

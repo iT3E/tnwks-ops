@@ -7,8 +7,10 @@
 # sidecar: userspace WireGuard (no NET_ADMIN, no TUN, no kernel module) to the
 # router's wg03 listener, exposing REST as https://127.0.0.1:8443 and the
 # EP-R6's SSH as 127.0.0.1:8022, inside the pod only. wg03 is its own zone
-# whose only forward is that SSH, so the tunnel reaches nothing else. secret.sops.yaml holds the tunnel config and the
-# CI-only age key, which decrypts the MikroTik secrets and nothing else.
+# whose only forwards are SSH to the EP-R6 and to the two radios behind it
+# (docs/network/ci.md), so the tunnel reaches nothing else. secret.sops.yaml
+# holds the tunnel config and the CI-only age key, which decrypts the MikroTik
+# secrets and nothing else.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
