@@ -59,8 +59,8 @@ talos_clusters:
     controlplane_patches: [patches/controlplane.yaml, patches/audit-policy-multidoc.yaml]
     worker2_augment: true
   # homelab-wsl-02 on WSL-02 (talos/wsl-02/README.md): Cilium, the
-  # multi-document patches (talosctl >= 1.14), no USB. Worker 1 has 18 GiB
-  # (memory_nodes), so the limits add to 35 GiB (4 + 18 + 13) inside WSL-02's
+  # multi-document patches (talosctl >= 1.14), no USB. Worker 1 has 22 GiB
+  # (memory_nodes), so the limits add to 39 GiB (4 + 22 + 13) inside WSL-02's
   # 45 GB .wslconfig (wsl_memory in host_vars/WSL-02).
   wsl-02:
     provisioner: docker
@@ -78,7 +78,7 @@ talos_clusters:
     memory_controlplanes: 4GiB
     memory_workers: 13GiB
     memory_nodes:
-      worker-1: 18GiB
+      worker-1: 22GiB
     config_patches: [patches/cluster.yaml]
     controlplane_patches: [patches/controlplane.yaml, patches/audit-policy.yaml]
     # Flux from the committed flux-system/ manifests (public repo, HTTPS,
