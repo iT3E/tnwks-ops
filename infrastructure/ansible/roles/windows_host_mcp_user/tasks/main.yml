@@ -2,6 +2,12 @@
 # The play runs this role only where host_mcp_agent_enabled is on. The tasks
 # that name the account carry no_log or a label, so no run prints its name,
 # its key or the source address.
+#
+# Check only unless host_mcp_agent_apply is true (group_vars/all/host_mcp.yml):
+# each task that can change the host runs in check mode then, and a
+# difference fails the run at "No drift of the user of the host server",
+# with no change. The owner's run passes -e host_mcp_agent_apply=true; CI
+# never does.
 
 - name: The values of the user of the host server are set and in their form
   ansible.builtin.assert:
@@ -22,6 +28,8 @@
 # random, made here, and kept nowhere. No other account changes. A member of
 # any other group stops the run with no change: an admin looks first.
 - name: The account of the host server
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_account
   ansible.windows.win_powershell:
     parameters:
       Name: "{{ host_mcp_agent_user }}"
@@ -88,6 +96,8 @@
   when: host_mcp_agent_sid | length == 0
 
 - name: The account of the host server may not log on at the keyboard or by Remote Desktop
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_rights
   ansible.windows.win_user_right:
     name: "{{ item }}"
     users: ["{{ host_mcp_agent_sid }}"]
@@ -96,6 +106,8 @@
   when: host_mcp_agent_sid | length > 0
 
 - name: The account of the host server is not on the sign-in screen
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_userlist
   ansible.windows.win_regedit:
     path: "{{ host_mcp_agent_userlist_key }}"
     name: "{{ host_mcp_agent_user }}"
@@ -108,6 +120,7 @@
 # their rules before the host server signs in for the first time
 # (CreateProfile of userenv.dll, as the profile service makes it).
 - name: The profile of the account of the host server
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
   ansible.windows.win_powershell:
     parameters:
       Sid: "{{ host_mcp_agent_sid }}"
@@ -153,6 +166,8 @@
 # have full control, Users may read, and nothing below keeps rules of its
 # own. A link or a junction in its place stops the module with no change.
 - name: The startup folders of PowerShell of the account of the host server
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_startup
   tnwks_win_dir_acl:
     path: "{{ host_mcp_agent_profile }}\\{{ item }}"
     items: reset
@@ -162,6 +177,8 @@
   when: host_mcp_agent_profile | length > 0
 
 - name: The folder of the key file of the host server
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_folder
   tnwks_win_dir_acl:
     path: "{{ host_mcp_agent_windows_dir }}"
     items: reset
@@ -170,12 +187,34 @@
 # of the distro, docs/wsl/host-mcp-user.md "Limits"). `restrict` turns off
 # each forwarding, the terminal and the rc file of the user.
 - name: The key file of the host server
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_keyfile
   ansible.windows.win_copy:
     content: |
       from="{{ host_mcp_agent_source_windows }}",restrict {{ host_mcp_agent_public_key }}
     dest: '{{ host_mcp_agent_windows_dir }}\authorized_keys'
   no_log: true
   diff: false
+
+- name: No drift of the user of the host server
+  ansible.builtin.assert:
+    that: host_mcp_agent_drift | length == 0 or (host_mcp_agent_apply | bool)
+    fail_msg: >-
+      Drift of the user of the host server: {{ host_mcp_agent_drift | join('; ') }}. Ansible changes it
+      only with -e host_mcp_agent_apply=true, in the owner's run (docs/wsl/host-mcp-user.md). Nothing is
+      changed.
+    quiet: true
+  vars:
+    host_mcp_agent_drift: >-
+      {{ [
+        ('the account', host_mcp_agent_change_account is changed),
+        ('its deny rights', host_mcp_agent_change_rights is changed),
+        ('its value on the sign-in screen', host_mcp_agent_change_userlist is changed),
+        ('its profile', host_mcp_agent_profile_result is changed),
+        ('its startup folders', host_mcp_agent_change_startup is changed),
+        ('the folder of its key file', host_mcp_agent_change_folder is changed),
+        ('its key file', host_mcp_agent_change_keyfile is changed)
+      ] | selectattr('1') | map('first') | list }}
 
 # Reads, also in a check run; a finding stops the run with no change.
 - name: The startup folders are empty, and the user reads no profile of an account of AllowUsers and no host key

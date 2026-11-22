@@ -7,6 +7,14 @@
 # site turn it on (group_vars/site_<name>.yml).
 host_mcp_agent_enabled: false
 
+# Where the switch is on, the two roles change a host only with
+# -e host_mcp_agent_apply=true, which the owner's run passes
+# (docs/wsl/host-mcp-user.md, "A first apply"). Without it, as in each CI
+# run, they check only: a difference fails the run and changes nothing.
+# Never set it to true in a file.
+host_mcp_agent_apply: false
+host_mcp_agent_check_only: "{{ ansible_check_mode or not (host_mcp_agent_apply | bool) }}"
+
 # Set in the encrypted variables of each host of the site,
 # host_vars/<host>/secrets.sops.yml, which the lead writes:
 #

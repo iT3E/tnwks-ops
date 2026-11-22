@@ -15,7 +15,9 @@
 # sudo rule, that it can not read the private paths below, and that its
 # home holds only what this role puts there.
 
-host_mcp_agent_description: "tnwks-ops: host server of the main agent"
+# The comment field of the account (GECOS): useradd refuses a ":" or a
+# newline in it, so it has none.
+host_mcp_agent_description: "tnwks-ops host server of the main agent"
 host_mcp_agent_home: "/home/{{ host_mcp_agent_user }}"
 host_mcp_agent_shell: /bin/bash
 

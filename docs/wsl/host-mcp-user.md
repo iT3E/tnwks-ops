@@ -15,14 +15,15 @@ Design Doc of effort 0003 in the CoE repository (task 6.21 of its plan).
 
 | Piece | What |
 | --- | --- |
-| `group_vars/all/host_mcp.yml` | `host_mcp_agent_enabled: false`, and the four values, empty. A site turns the switch on in `group_vars/site_<name>.yml` |
+| `group_vars/all/host_mcp.yml` | `host_mcp_agent_enabled: false`, and the four values, empty. A site turns the switch on in `group_vars/site_<name>.yml`. `host_mcp_agent_apply: false`: the guard ([below](#the-guard)) |
 | `host_vars/<host>/secrets.sops.yml` | the values, encrypted: `host_mcp_agent_user` and `host_mcp_agent_public_key` on both hosts of the site, `host_mcp_agent_source_windows` on the Windows host, `host_mcp_agent_source_distro` on the distro |
 | role `windows_host_mcp_user` (tag `host-mcp`) | the local account, its rights, its profile, its startup folders, and the key file `C:\ProgramData\tnwks-host-mcp\authorized_keys` |
 | role `windows_sshd` (tag `sshd`) | the account at the end of `AllowUsers`, and a `Match User` block of its own (`Install-TnwksWindowsSshd.ps1 -AgentUser`) |
 | role `wsl_host_mcp_user` (tag `host-mcp`) | the user of the distro, its home owned by root, its startup files and its key file |
 
 Each role runs only where the switch is on, and stops before any change
-when a value is empty or not in its form. No task prints the name, the key
+when a value is empty or not in its form. Where it runs, it changes the host
+only with `-e host_mcp_agent_apply=true` ([The guard](#the-guard)). No task prints the name, the key
 or the source address: those tasks carry `no_log`, or a label with none of
 them.
 
@@ -81,27 +82,52 @@ them.
   (`host_mcp_agent_private_paths_distro_extra` adds paths); the home holds
   only the items above, all owned by root.
 
+## The guard
+
+The owner's rule: nothing on a host changes without his word. So the two
+roles change a host only in a run that passes `-e host_mcp_agent_apply=true`,
+which only the owner's run does. Without it, as in each CI run, each task
+that can change the host runs in check mode, and the task "No drift of the
+user of the host server" fails the run when one of them finds a difference.
+Its message names the items (the account, its key file, ...) and no value,
+and nothing is changed. The flag is never set in a file.
+
+What a CI run from `main` does on a site:
+
+| State of the site | The two roles in CI (apply, or the nightly check) |
+| --- | --- |
+| Switch off (each site today) | Skipped; nothing changes |
+| Switch on, the user present and equal to the values | The checks run and pass; `changed=0` |
+| Switch on, the user missing or different | The run fails at "No drift of the user of the host server", with the items that differ; nothing changes |
+
+`windows_sshd` has the same form (`windows_sshd_apply`): with the switch on
+and no `task wsl-host:sshd` yet, CI fails its drift check and changes
+nothing. A test runs the role of the distro in a container in each of these
+states (`security/tests/test_host_mcp_apply_guard.py`).
+
 ## A first apply
 
 The values come first: the lead reads the source addresses and makes the
 key pair, and writes them in the encrypted files of the two hosts. The
 switch of the site is a change of its own, in a pull request that the
-owner approves. Merging a change applies it
-([ansible.md](../operations/ansible.md)), and the role `windows_sshd` only
-checks in CI, so the Windows half of the change runs from a workstation
-before the merge. From a checkout of that branch:
+owner approves. CI only checks the two roles of the user and
+`windows_sshd` ([The guard](#the-guard)), so the change runs from a
+workstation before the merge, with `-e host_mcp_agent_apply=true` (after
+`--`, the task passes it to `ansible-playbook`). With `--check`, as in step
+1, the flag changes nothing: it shows the changes of the apply without a
+drift failure. From a checkout of that branch:
 
 ```bash
 # 1. What the apply would change (changes nothing).
-task wsl-host:windows-check -- --limit site_wsl --tags host-mcp
-task wsl-host:distro-check -- --limit 'wsl_distros:&site_wsl' --tags host-mcp
+task wsl-host:windows-check -- --limit site_wsl --tags host-mcp -e host_mcp_agent_apply=true
+task wsl-host:distro-check -- --limit 'wsl_distros:&site_wsl' --tags host-mcp -e host_mcp_agent_apply=true
 task wsl-host:sshd-check   # DRIFT: AllowUsers ... and the user of the host server
 # 2. The account, its rights, profile, folders and key file.
-task wsl-host:windows-apply -- --limit site_wsl --tags host-mcp
+task wsl-host:windows-apply -- --limit site_wsl --tags host-mcp -e host_mcp_agent_apply=true
 # 3. AllowUsers and the Match block (UAC prompt; sshd restarts).
 task wsl-host:sshd
 # 4. The user of the distro.
-task wsl-host:distro-apply -- --limit 'wsl_distros:&site_wsl' --tags host-mcp
+task wsl-host:distro-apply -- --limit 'wsl_distros:&site_wsl' --tags host-mcp -e host_mcp_agent_apply=true
 # 5. Both checks show changed=0, and sshd shows no drift.
 task wsl-host:sshd-check
 task wsl-host:check -- --limit site_wsl
