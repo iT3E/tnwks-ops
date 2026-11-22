@@ -3,6 +3,24 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.299.0 - 2026-11-22
+
+### Changed
+
+* security: the memory limit and request of the Wazuh indexer go from 3 GiB to 4 GiB, by the owner's decision for the budget of step 2; the heap stays at 1536 MiB. The merge replaces the indexer pod once.
+
+## v2.298.1 - 2026-11-22
+
+### Fixed
+
+* agents: the tests of the token job of the main agent build the markers of a fake key at run time, so the secret scan of main passes
+
+## v2.298.0 - 2026-11-22
+
+### Added
+
+* agents: the token job of the App of the main agent, not listed yet: each 30 minutes an installation token for the ops repository, with read rights only for the read step, into one Secret; bin/main-app-key puts the private key of the App into its encrypted Secret at the terminal of the owner, and shows flags only
+
 ## v2.297.0 - 2026-11-22
 
 ### Added

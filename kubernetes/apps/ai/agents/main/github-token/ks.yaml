@@ -1,0 +1,27 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The token job of the App of the main agent (Design Doc of effort 0003,
+# section 4.2.6, "The credential of the code host server";
+# docs/apps/github-token.md). It writes the installation token that the
+# proxy of the code host server sets on each request.
+#
+# Listed in ../kustomization.yaml only with the key: the owner puts the
+# private key of the App into app/secret.sops.yaml with bin/main-app-key,
+# and the same pull request lists this file.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-main-github-token
+  namespace: flux-system
+spec:
+  targetNamespace: agents-main
+  path: ./kubernetes/apps/ai/agents/main/github-token/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # A CronJob has no ready state to wait for.
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
