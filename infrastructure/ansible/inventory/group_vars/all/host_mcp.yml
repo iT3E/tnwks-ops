@@ -1,0 +1,28 @@
+---
+# The local user of the host server of the main agent, on the Windows host
+# and in the distro of a site (Design Doc of effort 0003, section 4.2.6,
+# "The host server"; docs/wsl/host-mcp-user.md): the roles
+# windows_host_mcp_user and wsl_host_mcp_user, and the Match block of
+# windows_sshd. Off on each site until the plain group variables of the
+# site turn it on (group_vars/site_<name>.yml).
+host_mcp_agent_enabled: false
+
+# Set in the encrypted variables of each host of the site,
+# host_vars/<host>/secrets.sops.yml, which the lead writes:
+#
+#   host_mcp_agent_user            the name of the account, the same on the
+#                                  Windows host and in the distro (both files)
+#   host_mcp_agent_public_key      the public half of the key of the host
+#                                  server of the site (both files)
+#   host_mcp_agent_source_windows  the source address of the cluster of the
+#                                  site, as the SSH server of Windows sees it
+#                                  (the file of the Windows host)
+#   host_mcp_agent_source_distro   the same, as the SSH server of the distro
+#                                  sees it (the file of the distro)
+#
+# Each role stops before any change when one of them is empty or not in
+# its form.
+host_mcp_agent_user: ""
+host_mcp_agent_public_key: ""
+host_mcp_agent_source_windows: ""
+host_mcp_agent_source_distro: ""

@@ -50,6 +50,9 @@ FOLDERS = {
     # The move of the distro: a role folder whose disk and log folders have
     # rules of their own (test_wsl_move_role.py).
     "wsl_move_dir": "move",
+    # The key file of the user of the host server of the main agent
+    # (test_host_mcp_user.py): only SYSTEM and the Administrators change it.
+    "host_mcp_agent_windows_dir": "module",
 }
 # The folders below a role folder that the account writes to, with their own call
 # of the module and a writer. The SYSTEM log of the watchdog has its own call too.

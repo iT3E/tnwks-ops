@@ -161,6 +161,12 @@
     # each host (security/README.md, the source host-check).
     - role: windows_host_check
       tags: [host-check]
+    # The local user of the host server of the main agent, where the site
+    # turns it on (docs/wsl/host-mcp-user.md). Before windows_sshd, which
+    # names its key file in a Match block of its own.
+    - role: windows_host_mcp_user
+      when: host_mcp_agent_enabled | bool
+      tags: [host-mcp]
     # Check-only by default (an sshd_config rewrite restarts sshd under the
     # session). Like host-settings, near the end: a failed assertion stops
     # nothing else.

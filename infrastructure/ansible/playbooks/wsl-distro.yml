@@ -6,7 +6,7 @@
 #   task wsl-host:distro-check   # --check --diff, changes nothing
 #   task wsl-host:distro-apply
 #
-# One role with `--tags docker` / `cluster-tools` / `ci-access` / `lan-bridge` /
+# One role with `--tags docker` / `cluster-tools` / `ci-access` / `host-mcp` / `lan-bridge` /
 # `site-routing` / `usb-attach` / `backups` / `drift-check` / `host-check`. A distro with
 # nothing for a role sets its list empty in host_vars (or leaves its
 # `_enabled` off), and the role is skipped.
@@ -33,6 +33,11 @@
     # The tnwks-ansible runners' key (CI reaches the distro over SSH).
     - role: wsl_ci_access
       tags: [ci-access]
+    # The local user of the host server of the main agent, where the site
+    # turns it on (docs/wsl/host-mcp-user.md).
+    - role: wsl_host_mcp_user
+      when: host_mcp_agent_enabled | bool
+      tags: [host-mcp]
     - role: wsl_time
       tags: [time]
     # Exposes *.internal.tnwks.us services to the LAN with the Windows-side

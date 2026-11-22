@@ -1,5 +1,5 @@
 # Install-TnwksWindowsSshd.ps1 -PublicKeyFile <path> | -PublicKey <key>[,<key>...]
-#                              [-AdminUser <name>[,<name>...]] [-Check]
+#                              [-AdminUser <name>[,<name>...]] [-AgentUser <name>] [-Check]
 #
 # Bootstrap for managing this Windows host with Ansible (docs/wsl/windows-ansible.md):
 # the built-in OpenSSH server, reachable only from WSL. The role windows_sshd
@@ -12,6 +12,11 @@
 #   - sshd_config: ListenAddress = the vEthernet (WSL) host IP, keys only,
 #     AllowUsers = the admin user, or each account in -AdminUser (both
 #     accounts while a host moves its distro to another account)
+#   - -AgentUser: the local user of the host server of the main agent (role
+#     windows_host_mcp_user) after them in AllowUsers, and a Match block of
+#     its own: its key file is C:\ProgramData\tnwks-host-mcp\authorized_keys,
+#     which only SYSTEM and the Administrators change, with no forwarding and
+#     no terminal
 #   - administrators_authorized_keys = the key(s) in -PublicKeyFile or
 #     -PublicKey, ACL Administrators + SYSTEM only (sshd ignores the file
 #     otherwise)
@@ -35,6 +40,8 @@ param(
     [string[]]$PublicKey,
     # One account or more for AllowUsers; the account that runs this when empty.
     [string[]]$AdminUser,
+    # The user of the host server; empty: none, and no Match block for it.
+    [string]$AgentUser,
     [switch]$Check,
     # Default: the address of the vEthernet (WSL) adapter, e.g. 172.26.80.1.
     [string]$ListenAddress
@@ -92,8 +99,37 @@ function Get-TnwksAllowUsers([string[]]$Names, [string]$Default) {
     , $users.ToArray()
 }
 # --- END allow users
+# --- BEGIN agent user (security/tests/test_host_mcp_user.py runs this part)
+# The user of the host server: one account, in lower case, by the rule of
+# AllowUsers and never one of its accounts. Its Match block names the key
+# file of role windows_host_mcp_user (host_mcp_agent_windows_dir), so a key
+# file in its profile counts for nothing. The global lines already turn off
+# agent and TCP forwarding; the block also turns off each other forwarding
+# and the terminal, which the reads of the host server do not use.
+$AgentKeysFile = '__PROGRAMDATA__/tnwks-host-mcp/authorized_keys'
+function Get-TnwksAgentUser([string]$Name, [string[]]$Admins) {
+    $user = "$Name".Trim().ToLower()
+    if (-not $user) { return '' }
+    if ($user -match '[\s"''*?!@\[\]{}#,]') { throw "not an account name for the user of the host server: '$user'" }
+    if (@($Admins) -contains $user) { throw 'the user of the host server is an account of AllowUsers' }
+    $user
+}
+function Get-TnwksAgentMatch([string]$User) {
+    if (-not $User) { return '' }
+    @(
+        "Match User $User",
+        "       AuthorizedKeysFile $AgentKeysFile",
+        '       DisableForwarding yes',
+        '       PermitTTY no'
+    ) -join "`n"
+}
+# --- END agent user
 $AllowUsers = Get-TnwksAllowUsers $AdminUser $env:USERNAME
-$AllowUsersLine = $AllowUsers -join ' '
+$Agent = Get-TnwksAgentUser $AgentUser $AllowUsers
+$AllowUsersLine = (@($AllowUsers) + @($Agent | Where-Object { $_ })) -join ' '
+# For the drift lines: the accounts of AllowUsers, and the user of the host
+# server by its role only.
+$AllowUsersShown = ($AllowUsers -join ' ') + $(if ($Agent) { ' and the user of the host server' } else { '' })
 # Under Ansible (win_powershell) there is an $Ansible object, and `exit` would
 # end the module instead of reporting.
 $UnderAnsible = [bool](Get-Variable -Name Ansible -ErrorAction SilentlyContinue)
@@ -173,10 +209,12 @@ Match Group administrators
        AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys
 "@ -replace "`r", ''
 $configWanted += "`n"
+$agentMatch = Get-TnwksAgentMatch $Agent
+if ($agentMatch) { $configWanted += "`n" + $agentMatch + "`n" }
 $configNow = if (Test-Path $SshdConfig) { (Get-Content -Raw $SshdConfig) -replace "`r", '' } else { '' }
 $configChanged = $false
 if ($configNow -ne $configWanted) {
-    Drift "$SshdConfig (ListenAddress $ListenAddress, keys only, AllowUsers $AllowUsersLine)"
+    Drift "$SshdConfig (ListenAddress $ListenAddress, keys only, AllowUsers $AllowUsersShown)"
     if (-not $Check) {
         New-Item -ItemType Directory -Force -Path $SshDir | Out-Null
         $tmp = Join-Path $SshDir 'sshd_config.tnwks-new'

@@ -22,7 +22,8 @@ run that shows drift.
 | `windows_wsl_move_rehearsal` (`wsl-move-rehearsal`) | hosts with `wsl_move_rehearsal` (none until the next rehearsal, which turns it on for WSL-02 only): two temporary standard accounts, a small distro, and the scripts of the move window, run phase by phase by hand ([below](#the-rehearsal-of-the-move)) |
 | `windows_wsl_move` (`wsl-move`) | hosts with `wsl_move` (none until the owner approves it for a host): step 3 of the account change, the account that owns the distro, its folder, and the tasks of the move window ([below](#the-move-of-the-distro)) |
 | `windows_power` (`power`)                   | hosts with `power_no_sleep` (WSL-02): standby (S1-S3) not allowed on the active scheme, plugged in or on battery, and hibernation off, so neither a program nor the Start menu can sleep the host. Skipped elsewhere; how to undo it is in the role's defaults |
-| `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
+| `windows_host_mcp_user` (`host-mcp`)       | sites with `host_mcp_agent_enabled` (none until the owner approves it for a site): the local user of the host server of the main agent, its rights, the startup folders of its profile and its key file ([host-mcp-user.md](host-mcp-user.md)) |
+| `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up, with the `Match` block of the user of the host server where the site turns it on ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
 | `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
 
 Every role is idempotent: on the live host, the first apply of each role
@@ -78,7 +79,9 @@ capability and sets:
 - `sshd_config`: `ListenAddress` = the vEthernet (WSL) address, read from the
   adapter at run time (172.26.80.1); `PasswordAuthentication no`,
   `KbdInteractiveAuthentication no`, `PubkeyAuthentication yes`,
-  `AllowUsers <admin>`, no agent or TCP forwarding. `AllowUsers` names each
+  `AllowUsers <admin>`, no agent or TCP forwarding. Where a site turns on
+  the user of the host server, `AllowUsers` also names it, and a `Match User`
+  block of its own names its key file ([host-mcp-user.md](host-mcp-user.md)). `AllowUsers` names each
   account of `windows_sshd_allow_users` (default: `ansible_user`). While a host
   moves its distro to another account (Design Doc 0004, section 9, step 2), the
   variables of that host list both accounts. The list must hold `ansible_user`:

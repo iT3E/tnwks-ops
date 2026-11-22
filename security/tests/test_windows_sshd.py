@@ -64,7 +64,9 @@ def test_allow_users_refuses_a_name_that_sshd_reads_as_more_than_one_account():
 def test_the_config_has_one_allow_users_line_with_the_list():
     text = SCRIPT.read_text()
     assert re.findall(r"^AllowUsers .*$", text, re.MULTILINE) == ["AllowUsers $AllowUsersLine"]
-    assert "$AllowUsersLine = $AllowUsers -join ' '" in text
+    # The accounts of the list, then the user of the host server when there
+    # is one (security/tests/test_host_mcp_user.py).
+    assert "$AllowUsersLine = (@($AllowUsers) + @($Agent | Where-Object { $_ })) -join ' '" in text
     assert "[string[]]$AdminUser" in text
 
 
@@ -92,7 +94,8 @@ def test_the_bootstrap_task_passes_the_list_and_keeps_the_account_of_ansible():
     assert "-AdminUser {{.ALLOW_USERS}}" in commands[run]
     check = tasks["sshd-check"]
     assert check["vars"] is sshd["vars"] or check["vars"] == sshd["vars"]
-    assert any("-AdminUser {{.ALLOW_USERS}} -Check" in str(c) for c in check["cmds"])
+    assert any("-AdminUser {{.ALLOW_USERS}}{{if .AGENT_USER}} -AgentUser {{.AGENT_USER}}{{end}} -Check" in str(c)
+               for c in check["cmds"])
     # The login check stays the account that Ansible logs in as.
     assert any('"{{.ADMIN_USER}}@{{.WINDOWS_ADDR}}" whoami' in str(c) for c in commands)
 

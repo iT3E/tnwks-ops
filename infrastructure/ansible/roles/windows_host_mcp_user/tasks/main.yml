@@ -1,0 +1,240 @@
+---
+# The play runs this role only where host_mcp_agent_enabled is on. The tasks
+# that name the account carry no_log or a label, so no run prints its name,
+# its key or the source address.
+
+- name: The values of the user of the host server are set and in their form
+  ansible.builtin.assert:
+    that:
+      - host_mcp_agent_user is match('^[a-z][a-z0-9-]{0,19}$')
+      - host_mcp_agent_public_key is match('^ssh-ed25519 [A-Za-z0-9+/=]+( [ -~]*)?$')
+      - host_mcp_agent_source_windows is match('^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$')
+      - (host_mcp_agent_user | lower) != (ansible_user | lower)
+      - (host_mcp_agent_user | lower) not in (windows_sshd_allow_users | default([ansible_user]) | map('lower') | list)
+    fail_msg: >-
+      host_mcp_agent_user (20 characters at most: lower case, digits, '-'), host_mcp_agent_public_key
+      (one ssh-ed25519 key) and host_mcp_agent_source_windows (an address or a network) are encrypted
+      variables of the host, and the user is not an account of AllowUsers. Nothing is changed.
+    quiet: true
+  no_log: true
+
+# A local account with no admin group, member of Users. Its password is
+# random, made here, and kept nowhere. No other account changes. A member of
+# any other group stops the run with no change: an admin looks first.
+- name: The account of the host server
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ host_mcp_agent_user }}"
+      Description: "{{ host_mcp_agent_description }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Name, [string]$Description)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
+      if (-not $user) {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Name, 'make the local account')) {
+              $bytes = New-Object byte[] 48
+              [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+              $secret = ConvertTo-SecureString ([Convert]::ToBase64String($bytes) + 'aA1!') -AsPlainText -Force
+              $user = New-LocalUser -Name $Name -Password $secret -PasswordNeverExpires -AccountNeverExpires `
+                  -UserMayNotChangePassword -Description $Description
+              $secret.Dispose()
+          }
+      }
+      if ($user) {
+          if (-not $user.Enabled) {
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess($Name, 'enable')) { Enable-LocalUser -SID $user.SID }
+          }
+          $users = @(Get-LocalGroupMember -SID 'S-1-5-32-545' | ForEach-Object { $_.SID.Value })
+          if ($users -notcontains $user.SID.Value) {
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess($Name, 'add to Users')) { Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $user }
+          }
+          $other = @(Get-LocalGroup | Where-Object { $_.SID.Value -ne 'S-1-5-32-545' } | Where-Object {
+                  @(Get-LocalGroupMember -Group $_ -ErrorAction SilentlyContinue | ForEach-Object { $_.SID.Value }) -contains $user.SID.Value
+              } | ForEach-Object { $_.SID.Value })
+          if ($other) { throw "The account of the host server is a member of a group other than Users ($($other -join ', ')). Nothing more is changed." }
+      }
+  no_log: true
+
+# A read, also in a check run.
+- name: Read the account of the host server
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ host_mcp_agent_user }}"
+    script: |
+      param([string]$Name)
+      $Ansible.Changed = $false
+      $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
+      if ($user) { $user.SID.Value } else { '' }
+  check_mode: false
+  no_log: true
+  register: host_mcp_agent_account
+
+- name: The SID of the account
+  ansible.builtin.set_fact:
+    host_mcp_agent_sid: "{{ host_mcp_agent_account.output | default([]) | last | default('') }}"
+
+# A check run before the first apply has no account to name: the tasks that
+# name it wait for the apply that makes it.
+- name: A check run before the account exists
+  ansible.builtin.debug:
+    msg: >-
+      The account of the host server does not exist yet. This check run does not check its rights, its
+      profile or its startup folders: the apply makes the account first.
+  when: host_mcp_agent_sid | length == 0
+
+- name: The account of the host server may not log on at the keyboard or by Remote Desktop
+  ansible.windows.win_user_right:
+    name: "{{ item }}"
+    users: ["{{ host_mcp_agent_sid }}"]
+    action: add
+  loop: "{{ host_mcp_agent_deny_rights }}"
+  when: host_mcp_agent_sid | length > 0
+
+- name: The account of the host server is not on the sign-in screen
+  ansible.windows.win_regedit:
+    path: "{{ host_mcp_agent_userlist_key }}"
+    name: "{{ host_mcp_agent_user }}"
+    data: 0
+    type: dword
+  no_log: true
+  diff: false
+
+# The profile, before any sign-in, so that its startup folders exist with
+# their rules before the host server signs in for the first time
+# (CreateProfile of userenv.dll, as the profile service makes it).
+- name: The profile of the account of the host server
+  ansible.windows.win_powershell:
+    parameters:
+      Sid: "{{ host_mcp_agent_sid }}"
+      Name: "{{ host_mcp_agent_user }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Sid, [string]$Name)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $key = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$Sid"
+      $path = (Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue).ProfileImagePath
+      if (-not $path) {
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($Name, 'make the profile')) {
+              Add-Type -Namespace Tnwks -Name UserEnv -MemberDefinition @'
+      [DllImport("userenv.dll", CharSet = CharSet.Unicode)]
+      public static extern int CreateProfile(string pszUserSid, string pszUserName, System.Text.StringBuilder pszProfilePath, uint cchProfilePath);
+      '@
+              $sb = New-Object Text.StringBuilder 260
+              $hr = [Tnwks.UserEnv]::CreateProfile($Sid, $Name, $sb, 260)
+              if ($hr -ne 0) { throw ('CreateProfile failed: 0x{0:X8}' -f $hr) }
+              $path = $sb.ToString()
+          }
+      }
+      if ($path) {
+          $docs = Join-Path $path 'Documents'
+          if (-not (Test-Path -LiteralPath $docs)) {
+              $Ansible.Changed = $true
+              if ($PSCmdlet.ShouldProcess($docs, 'make the folder')) { New-Item -ItemType Directory -Path $docs | Out-Null }
+          }
+          $path
+      } else { '' }
+  no_log: true
+  register: host_mcp_agent_profile_result
+  when: host_mcp_agent_sid | length > 0
+
+- name: The folder of the profile
+  ansible.builtin.set_fact:
+    host_mcp_agent_profile: "{{ host_mcp_agent_profile_result.output | default([]) | last | default('') }}"
+  no_log: true
+
+# The Administrators own each startup folder, SYSTEM and the Administrators
+# have full control, Users may read, and nothing below keeps rules of its
+# own. A link or a junction in its place stops the module with no change.
+- name: The startup folders of PowerShell of the account of the host server
+  tnwks_win_dir_acl:
+    path: "{{ host_mcp_agent_profile }}\\{{ item }}"
+    items: reset
+  loop: "{{ host_mcp_agent_startup_dirs }}"
+  loop_control:
+    label: "{{ item }}"
+  when: host_mcp_agent_profile | length > 0
+
+- name: The folder of the key file of the host server
+  tnwks_win_dir_acl:
+    path: "{{ host_mcp_agent_windows_dir }}"
+    items: reset
+
+# One key, for the address from which the cluster connects only (the address
+# of the distro, docs/wsl/host-mcp-user.md "Limits"). `restrict` turns off
+# each forwarding, the terminal and the rc file of the user.
+- name: The key file of the host server
+  ansible.windows.win_copy:
+    content: |
+      from="{{ host_mcp_agent_source_windows }}",restrict {{ host_mcp_agent_public_key }}
+    dest: '{{ host_mcp_agent_windows_dir }}\authorized_keys'
+  no_log: true
+  diff: false
+
+# Reads, also in a check run; a finding stops the run with no change.
+- name: The startup folders are empty, and the user reads no profile of an account of AllowUsers and no host key
+  ansible.windows.win_powershell:
+    parameters:
+      Sid: "{{ host_mcp_agent_sid }}"
+      ProfilePath: "{{ host_mcp_agent_profile }}"
+      StartupDirs: "{{ host_mcp_agent_startup_dirs }}"
+      Owners: "{{ windows_sshd_allow_users | default([ansible_user]) }}"
+      Extra: "{{ host_mcp_agent_private_paths_windows }}"
+    script: |
+      param([string]$Sid, [string]$ProfilePath, [string[]]$StartupDirs, [string[]]$Owners, [string[]]$Extra)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $found = New-Object System.Collections.Generic.List[string]
+      if ($ProfilePath) {
+          foreach ($d in $StartupDirs) {
+              $p = Join-Path $ProfilePath $d
+              if ((Test-Path -LiteralPath $p) -and @(Get-ChildItem -LiteralPath $p -Force).Count -gt 0) {
+                  $found.Add("an item in the startup folder $d")
+              }
+          }
+      }
+      # Who may read: Everyone, Authenticated Users, Users, INTERACTIVE,
+      # NETWORK, and the account itself.
+      $open = @('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545', 'S-1-5-4', 'S-1-5-2', $Sid)
+      $items = New-Object System.Collections.Generic.List[object]
+      $i = 0
+      foreach ($o in $Owners) {
+          $i++
+          $osid = ([Security.Principal.NTAccount]$o).Translate([Security.Principal.SecurityIdentifier]).Value
+          $key = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$osid"
+          $p = (Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue).ProfileImagePath
+          if ($p) {
+              $items.Add(@("the profile of account $i of AllowUsers", $p))
+              $items.Add(@("the .ssh folder of account $i of AllowUsers", (Join-Path $p '.ssh')))
+          }
+      }
+      foreach ($k in 'ssh_host_ed25519_key', 'ssh_host_ecdsa_key', 'ssh_host_rsa_key') {
+          $items.Add(@("the host key $k", (Join-Path $env:ProgramData "ssh\$k")))
+      }
+      $j = 0
+      foreach ($e in $Extra) { $j++; $items.Add(@("path $j of host_mcp_agent_private_paths_windows", $e)) }
+      foreach ($it in $items) {
+          if (-not (Test-Path -LiteralPath $it[1])) { continue }
+          foreach ($ace in (Get-Acl -LiteralPath $it[1]).Access) {
+              if ($ace.AccessControlType -ne 'Allow') { continue }
+              try { $s = $ace.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } catch { continue }
+              $r = [int]$ace.FileSystemRights
+              # ReadData, GENERIC_ALL or GENERIC_READ.
+              if ($open -contains $s -and (($r -band 1) -or ($r -band 0x10000000) -or ($r -band 0x80000000))) {
+                  $found.Add($it[0])
+                  break
+              }
+          }
+      }
+      if ($found.Count) {
+          throw ("The user of the host server: " + ($found -join '; ') + ". Nothing is changed: an admin looks first.")
+      }
+  check_mode: false
+  changed_when: false
+  when: host_mcp_agent_sid | length > 0
