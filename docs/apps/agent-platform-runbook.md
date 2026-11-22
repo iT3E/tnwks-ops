@@ -887,7 +887,8 @@ node; the errors after the head of the line do not ship.
   line that the product writes, such as an error text that holds content.
   A member can not cause the line itself.
 - **Not seen live yet.** The live start line of main is
-  `[plugins] host-approval: loaded, 0 read lines`. The refuse line comes
+  `[plugins] host-approval: loaded, 9 read lines` since the go-live of the
+  host server ([host-mcp.md](host-mcp.md#the-go-live)). The refuse line comes
   from the source of the plugin (agent image 0.5.0) and its lab.
 
 **First checks.** Read only.
@@ -2780,10 +2781,11 @@ values of the env, and stops the start before the gateway:
 the start when `TELEGRAM_ALLOW_FROM` is not one chat ID
 (`key=TELEGRAM_ALLOW_FROM reason=form`).
 
-**No host tool yet.** The plugin names the route `main-host` and the env
-var `MCP_HOST_KEY`, and neither exists until the host server of task
-6.22. With no key, the plugin gives no connection: the agent has no host
-tool, and each other tool works. The key of the host route is a key of its
+**The host tool.** The plugin names the route `main-host` and the env var
+`MCP_HOST_KEY`. Since the go-live of the host server
+([host-mcp.md](host-mcp.md#the-go-live)) both exist, and the read list
+has the nine lines of the design. With no key, the plugin gives no
+connection: the agent has no host tool, and each other tool works. The key of the host route is a key of its
 own: the plugin refuses each call when another server entry of the config
 carries its key, and the read routes carry `MCP_GATEWAY_KEY`. A lab with
 the config of the branch proved each of these: the plugin loaded, the
@@ -2796,11 +2798,12 @@ with no route left the other tools working.
 | Read | Pass rule |
 | --- | --- |
 | `kubectl -n agents-main logs deploy/agent -c values-check` | `values-check result=ok` |
-| `kubectl -n agents-main logs deploy/agent -c agent \| grep -c 'host-approval: loaded, 0 read lines'` | 1 for each start of the pod. No line `host-approval: refusing each tool call` ([AgentPluginRefusingTools](#agentpluginrefusingtools) counts it at run time) |
+| `kubectl -n agents-main logs deploy/agent -c agent \| grep -c 'host-approval: loaded, 9 read lines'` | 1 for each start of the pod. No line `host-approval: refusing each tool call` ([AgentPluginRefusingTools](#agentpluginrefusingtools) counts it at run time) |
 | The owner asks the agent for one read of the vault and of each read server | The agent answers each one |
 
 **The way back** is one revert of the squash commit: the image 0.4.1 and
-the config with no plugin.
+the config with no plugin. The host server goes first
+([host-mcp.md](host-mcp.md#the-way-back)).
 
 ### The browser of main
 

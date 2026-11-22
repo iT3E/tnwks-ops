@@ -49,8 +49,8 @@ spec:
       # a failure until a newer run ends, and KubeJobFailed then clears by
       # itself (docs/apps/agent-platform.md, "A failed Job").
       ttlSecondsAfterFinished: 93600
-      # The worst case, in seconds: eight straight connections of 5 each
-      # (40), then eighteen MCP requests of 30 each (540). That is 580. The
+      # The worst case, in seconds: nine straight connections of 5 each
+      # (45), then eighteen MCP requests of 30 each (540). That is 585. The
       # deadline only stops a Job that hangs; 900 leaves room for more tries.
       # The probe of main starts 16 minutes later, so the two never meet.
       activeDeadlineSeconds: 900
@@ -108,7 +108,7 @@ spec:
                 # a refusal (no ready backend), an answer and a name that
                 # does not resolve fail.
                 - name: GATEWAY_ONLY_SERVERS
-                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080,playwright-mcp.ai.svc.cluster.local:8000
+                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080,playwright-mcp.ai.svc.cluster.local:8000,host-mcp.agents-main.svc.cluster.local:8080
               # PROBE_KEY and NO_TOOLS_KEY.
               envFrom:
                 - secretRef:
@@ -193,6 +193,12 @@ spec:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-main
             app.kubernetes.io/name: github-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The host server of main (../../host-mcp, or
+        # ../../../main/host-mcp): its proxy port.
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: host-mcp
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

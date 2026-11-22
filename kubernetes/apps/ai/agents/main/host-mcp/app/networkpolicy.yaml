@@ -1,6 +1,7 @@
 ---
-# The host server of main. In: the central MCP gateway and the kubelet, on
-# the port of the proxy only. Out: port 22 of the SSH address of the Windows
+# The host server of main. In: the central MCP gateway on port 8080 (the
+# proxy), and the kubelet on 8080 and 3000 (the probes of the proxy and of
+# the server). Out: port 22 of the SSH address of the Windows
 # host of this site and of its WSL distro, and nothing else: no DNS, no pod,
 # no other address (Design Doc, section 4.2.6, "The network rule").
 #

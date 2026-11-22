@@ -3,8 +3,8 @@
 
 The static tests read the files:
 
-- The Flux Kustomization is not listed until the owner's apply of the
-  agent user and his gates. The Secret is in git with ciphertext only, the
+- The folder of main lists the Flux Kustomization (the go-live). The
+  Secret is in git with ciphertext only, the
   three keys of the server and the recipients of the other Secrets of the
   namespace. The address of the SSH server of the distro is set in the
   cluster settings of site 1.
@@ -14,9 +14,15 @@ The static tests read the files:
   Service and sets the token.
 - The network policy lets in the gateway and the kubelet, and lets out port
   22 of two addresses only.
-- The route main-host takes a key of its own (a placeholder until the lead
-  makes it), the one that the host approval plugin reads from MCP_HOST_KEY,
-  and names the six read tools of the read step.
+- The route main-host takes a key of its own, the one that the host
+  approval plugin reads from MCP_HOST_KEY, and names the six read tools of
+  the read step. Once the server is listed, its hash is not the placeholder:
+  the store step of the lead sets it, and
+  test_the_route_has_a_key_of_its_own_once_the_server_is_listed fails until
+  then.
+- The read list of the plugin is the nine lines of the design, for the
+  profile agent (the user in the distro of site 1) only.
+- Each gateway probe tries the server straight, and only a time out passes.
 
 The lab runs the gateway at its pin with the config of git (a key of the
 test in place of the placeholder), the proxy and the server from their
@@ -90,10 +96,56 @@ def plugin() -> dict:
     return json.loads(AGENT_CONFIG.read_text())["plugins"]["entries"]["host-approval"]["config"]
 
 
-def test_the_server_is_not_applied_until_the_owner_s_gates():
+def listed() -> bool:
     k = yaml.safe_load((MAIN / "kustomization.yaml").read_text())
-    assert "./host-mcp/ks.yaml" not in k["resources"]
-    assert "host-mcp" not in " ".join(k["resources"])
+    return "./host-mcp/ks.yaml" in k["resources"]
+
+
+def test_the_folder_of_main_lists_the_server_by_its_one_line():
+    # The go-live lists ./host-mcp/ks.yaml; the way back removes that line
+    # and nothing else (docs/apps/host-mcp.md, "The way back"). No other
+    # entry names the folder.
+    resources = yaml.safe_load((MAIN / "kustomization.yaml").read_text())["resources"]
+    assert [r for r in resources if "host-mcp" in r] in ([], ["./host-mcp/ks.yaml"])
+
+
+# The nine lines of the design (Design Doc of effort 0003, section 4.2.6,
+# "The first lines of the read list"), in its order, for the profile of the
+# user in the distro of site 1. No line is added or widened here.
+READ_UNITS = ["tnwks-host-check.timer", "tnwks-gdrive-sync.timer", "tnwks-aruba-backup.timer",
+              "tnwks-frr.service", "tnwks-site-routing.service"]
+READ_LIST = ["uptime", "free -m", "ps -eo comm,pcpu,pmem --sort=-pcpu", "df -h", "ip addr show",
+             "ip route show", "ss -t -l -n", "uname -r",
+             "systemctl status --no-pager --lines=0 " + " ".join(READ_UNITS)]
+
+
+def test_the_read_list_is_the_nine_lines_of_the_design_for_the_distro_profile():
+    config = plugin()
+    assert config["readList"] == READ_LIST
+    # The profile of the user in the distro of site 1; a call to the Windows
+    # profile with the same line makes a card.
+    assert config["readProfile"] == "agent"
+    # Each line is exact: no shell character, no free operand.
+    for line in READ_LIST:
+        assert re.fullmatch(r"[a-z][a-z0-9 ,=.-]*", line), line
+        assert line == line.strip() and "  " not in line, line
+    # The denylist of the server keeps the readers that can send data out.
+    assert not [line for line in READ_LIST if line.split()[0] in ("dig", "nslookup", "host", "ping", "traceroute")]
+
+
+@pytest.mark.parametrize("probe", ["main", "finance"])
+def test_each_probe_tries_the_host_server_straight(probe):
+    path = ROOT / f"kubernetes/apps/ai/agents/{probe}/checks/app/mcp-gateway-probe.yaml"
+    (cron,) = [d for d in docs(path) if d["kind"] == "CronJob"]
+    (c,) = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"]
+    env = {e["name"]: e.get("value") for e in c["env"]}
+    assert f"{SERVICE}:8080" in env["GATEWAY_ONLY_SERVERS"].split(",")
+    # The probe's own policy lets the try out, so a drop comes from the
+    # policy of the server (test_the_policy_lets_in_the_gateway_...).
+    (policy,) = [d for d in docs(path) if d["kind"] == "CiliumNetworkPolicy"]
+    out = [(p["io.kubernetes.pod.namespace"], p["app.kubernetes.io/name"], ports(r))
+           for r in policy["spec"]["egress"] for p in peers(r)]
+    assert ("agents-main", "host-mcp", ["8080"]) in out
 
 
 def sops_secret(path: Path) -> dict:
@@ -149,12 +201,16 @@ def test_the_dump_is_of_the_pinned_image_and_the_rule_names_the_six_reads():
     assert rule() == READS
 
 
-def test_the_key_of_the_route_is_the_placeholder_and_matches_no_key_in_use():
-    # At the merge the route goes live with no working key: the hash is the
-    # placeholder, which no key has, and no other route uses it. The pull
-    # request of the key replaces it, and this test with it.
+def test_the_route_has_a_key_of_its_own_once_the_server_is_listed():
+    # With the server listed, the hash of the route is the hash of
+    # MCP_HOST_KEY in agent-secret of main: the store step of the lead sets
+    # both, on top of the go-live commit (docs/apps/host-mcp.md, "The
+    # go-live"). This test fails until then. With the server not listed (the
+    # way back), the hash may stay, or be the placeholder, which no key has.
     (key,) = route(ROUTE)["policies"]["apiKey"]["keys"]
-    assert PLACEHOLDER.match(key["keyHash"]), key["keyHash"]
+    if listed():
+        assert not PLACEHOLDER.match(key["keyHash"]), "the route key is not stored yet: host-mcp-store.py gateway-key"
+    assert PLACEHOLDER.match(key["keyHash"]) or re.fullmatch(r"sha256:[0-9a-f]{64}", key["keyHash"])
     in_use = {k["keyHash"] for x in yaml.safe_load(CONFIG.read_text())["routes"] if x["name"] != ROUTE
               for k in x["policies"]["apiKey"]["keys"]}
     assert key["keyHash"] not in in_use
@@ -253,8 +309,8 @@ def test_the_policy_lets_in_the_gateway_and_out_port_22_of_two_addresses():
 
 def test_the_route_refuses_the_key_of_main():
     """The key of the agent of main is not a key of the host route, and the
-    rule lets in the client main-host only. Today the hash is a placeholder,
-    which no key matches, so the route refuses each key (the lab: 401)."""
+    rule lets in the client main-host only (the lab: 401 for the key of
+    main)."""
     routes = yaml.safe_load(CONFIG.read_text())["routes"]
     main = {k["keyHash"] for x in routes for k in x["policies"]["apiKey"]["keys"]
             if k["metadata"]["client"] == "main"}

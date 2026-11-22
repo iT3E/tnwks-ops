@@ -87,7 +87,7 @@ the MCP server and checks the headers that arrive.
 | `/main-github/` | `main` | the 17 kept reads of the code host server | the 17 kept reads, for the ops repository only |
 | `/main-browser/` | `main` | the 21 kept tools of the browser | the 21 kept tools of the browser |
 | `/main-browser/` | `main-probe` | the 21 kept tools of the browser | nothing |
-| `/main-host/` | `main-host` (the host approval plugin of main; a placeholder until its key exists) | the six read tools of the host server | the six read tools of the host server |
+| `/main-host/` | `main-host` (the host approval plugin of main) | the six read tools of the host server | the six read tools of the host server |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -281,6 +281,7 @@ its place for the container tests.
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
 | `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux`, `main-terraform`, `main-github` and `main-browser` (the same hash; `metadata: {client: main, route: <the route>}`) |
 | `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, routes `main-vault` and `main-browser` (the same hash) |
+| `main-host` | `MCP_HOST_KEY` of `agent-secret` of main, a key of its own for the host approval plugin, made by `host-mcp-store.py gateway-key` of the lead | `config.yaml`, route `main-host` (`metadata: {client: main-host, route: main-host}`) ([host-mcp.md](host-mcp.md#the-go-live)) |
 
 **The hash and the value stay in step** in two ways: the owner changes both
 in one commit (below), and a check finds a difference. The values check of
@@ -435,9 +436,10 @@ agent does, with two keys of its own and none of the agent's:
    straight connection to its server fails (R6). Each probe checks the
    other. The straight tries of items 5 and 6 have the rule of item 7: only
    a time out passes.
-7. The read servers and the browser of main (`GATEWAY_ONLY_SERVERS`:
-   `cluster-mcp`, `flux-mcp`, `terraform-mcp` and `github-mcp` in
-   `agents-main`, port 8080, and `playwright-mcp` in `ai`, port 8000): a straight
+7. The read servers, the browser and the host server of main
+   (`GATEWAY_ONLY_SERVERS`: `cluster-mcp`, `flux-mcp`, `terraform-mcp`,
+   `github-mcp` and `host-mcp` in `agents-main`, port 8080, and
+   `playwright-mcp` in `ai`, port 8000): a straight
    connection from its pod to each fails. No key is used. A time out passes:
    a policy drop in this cluster is silent. A refusal fails, since a
    Service with no ready pod refuses at once and so proves nothing; an

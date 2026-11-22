@@ -152,6 +152,17 @@ task wsl-host:sshd-check
 task wsl-host:check -- --limit site_wsl
 ```
 
+Where no terminal can show a UAC prompt, for example when the Windows
+account that owns the distro has no desktop session, step 3 runs as
+`task wsl-host:windows-apply -- --limit site_wsl --tags sshd -e windows_sshd_apply=true`
+([windows-ansible.md](windows-ansible.md)). That restarts the SSH server
+under the Ansible session. Then step 5 is the full check with no flag,
+which runs the check of `windows_sshd` with no prompt.
+
+The roles of the user and the step of the SSH server go back to back with
+the merge of the switch: until that merge, the checks of `main` read the
+applied user and its `Match` block as drift.
+
 Step 1 lists the Windows account, its sign-in screen value, its key folder
 and its key file, and the distro account. The rest needs the account, so
 steps 2 and 4 make it. Steps 2 and 4 end with the checks of "On the Windows
