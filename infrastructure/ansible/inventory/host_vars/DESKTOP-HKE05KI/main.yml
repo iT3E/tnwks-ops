@@ -83,6 +83,20 @@ wsl_move: true
 # session of the present account is on the host, and its way back does not
 # restart the host while one is on.
 wsl_move_session_check: true
+# The done switch of the move (section 9, step 6), only after a window that
+# ended done and the check play of step 6 that passed
+# (playbooks/windows-move-window.yml, -e wsl_move_window=check), with the
+# write test from the distro and the relay. From it, the account that owns
+# the distro is the new account, the copies of the start tasks stay enabled,
+# the play no longer registers the tasks of the present account (they stay on
+# the host until wsl_move_present_removed), and the host check reads the
+# rules of the moved disk file. A way back turns it off first.
+wsl_move_done: true
+# The done switch: the .wslconfig of the new account is the copy that the
+# move wrote (the keys of the present account, with its own comments), so
+# the first apply of the phase done writes the template, with the same
+# values. WSL reads it at its next start. Drop this after that apply.
+wslconfig_write: true
 # The disk file of the distro is on E:, and the move is a rename in one
 # volume, never a copy: the folder of the procedure and the folder of the
 # moved file are on E: too. Here so that the compaction and the host check

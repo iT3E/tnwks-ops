@@ -1132,16 +1132,32 @@ window. Site 2 (`host_vars/WSL-02`) has it on, and site 1 in the phase
   keepalive where it is on, and each UDP relay. It must be the copy of each
   task of `wsl_move_present_tasks` apart from the compaction, which has no
   copy. The play stops before any change on another list.
-- **Step 4: the SSH user.** On site 2, `ansible_user` is the administrator
-  account. `windows_desktop_user`, the account that owns the distro, is
+- **Step 4: the SSH user.** On site 2 and site 1, `ansible_user` is the
+  administrator account. `windows_desktop_user`, the account that owns the
+  distro, is
   `wsl_move_present_account` until the done switch and
   `wsl_move_new_account` from it. The jump logs in to the distro as the
   user of the distro (`wsl_distro_user`, from `wsl_move_present_account`).
   An apply as an account other than the present one stops before any write
   until an apply as the present account kept the reads of today and
   registered its window tasks.
-- **The done switch.** `wsl_move_done` of the host, only after the check
-  play of step 6, the write test from the distro and the relay passed. From
+- **In the phase move, a change of a task of the present account.** The
+  roles register the WSL tasks of the present account (`Register-ScheduledTask
+  -Xml`, an S4U principal, no `s4u_user`) until the done switch. Microsoft's
+  rule (Security Contexts for Tasks, "Security for Registering Tasks") asks
+  an administrator for the password of a different account to register an
+  S4U task for it. From step 4 Ansible logs in as the administrator account,
+  so in the phase move no change may touch the template or the values of a
+  task of the present account: an apply of such a change fails the Windows
+  play of the host at that task, and the distro play after it does not run.
+  Such a change waits for the done switch, from which the play registers no
+  task of the present account, or it is applied as the present account. The
+  copies of the new account take `s4u_user`, so a change of one is applied
+  as the administrator account in each phase
+  (`test_in_the_phase_move_a_task_of_the_present_account_is_registered_with_no_password_of_another_account`).
+- **The done switch.** `wsl_move_done` of the host, only after a window
+  that ended done and the check play of step 6, the write test from the
+  distro and the relay passed (site 2, then site 1). From
   it, `windows_desktop_user` is the new account, the compaction and the host
   check read the moved file (`vhdx_compact_vhdx`, in `wsl_move_disk_dir`),
   the host check reads the rules of that file (`host_check_wsl_disk_rules`
@@ -1394,7 +1410,12 @@ these differ, and lists each difference:
   The only edit so far (2026-11-03) replaced the outdated comment about
   re-attaching the Coral after a restart; the settings are unchanged. A host
   without a cluster yet (WSL-02) sets `wslconfig_write: true` in host_vars,
-  so CI writes it there and WSL picks it up at its next restart. The VM's
+  so CI writes it there and WSL picks it up at its next restart. A host
+  with a cluster sets it too for the first apply of the phase `done` of the
+  move, and drops it after that apply: the file of the new account is the
+  copy that the move wrote, with the same key lines as the template and its
+  own comments, so that write changes comments only and needs no
+  `wsl --shutdown`. The VM's
   memory is `wsl_memory` (40GB; WSL-02 sets 45GB in host_vars).
 - **Ethernet** (`host_settings_ethernet`, the Realtek 2.5GbE): power
   management "Allow the computer to turn off this device" off, and the
