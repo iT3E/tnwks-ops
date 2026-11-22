@@ -61,7 +61,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: restore
-          image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          image: ghcr.io/it3e/tnwks-agent-image:0.5.0@sha256:8839bc84d4286df7627c31f48e3a3e8efdb86bce3b0e152ec96118835d4660be
           imagePullPolicy: IfNotPresent
           env:
             # The copy of the state: start/openclaw-state-<release>-<time>.tar.gz,

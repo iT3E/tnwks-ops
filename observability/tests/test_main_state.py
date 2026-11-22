@@ -36,7 +36,10 @@ def test_the_inbox_runs_as_the_agent_on_its_node_and_volume():
     agent = doc(FINANCE / "deployment.yaml")["spec"]["template"]["spec"]
     spec = doc(APP / "state-inbox.yaml")["spec"]["template"]["spec"]
     (container,) = spec["containers"]
-    assert container["image"] == agent["containers"][0]["image"]
+    # The image of the main agent (0.5.0, with the host approval plugin),
+    # which finance does not run yet; the rest as the finance agent.
+    main = doc(APP / "deployment.yaml")["spec"]["template"]["spec"]
+    assert container["image"] == main["containers"][0]["image"]
     assert spec["nodeSelector"] == agent["nodeSelector"]
     assert spec["securityContext"] == agent["securityContext"]
     claims = {v["persistentVolumeClaim"]["claimName"] for v in spec["volumes"] if "persistentVolumeClaim" in v}
