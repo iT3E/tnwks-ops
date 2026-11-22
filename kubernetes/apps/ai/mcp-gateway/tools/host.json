@@ -1,0 +1,51 @@
+{
+ "groups": "all",
+ "image": "ghcr.io/it3e/tnwks-host-mcp:0.1.0@sha256:8c17e38459ed4c7bc11f967c40e73a7994a5f2bc5cac7c451a4a3f327d8909d6",
+ "tools": [
+  {
+   "name": "close-session"
+  },
+  {
+   "name": "list-connections"
+  },
+  {
+   "name": "list-sessions"
+  },
+  {
+   "name": "open-session"
+  },
+  {
+   "name": "privileged-command"
+  },
+  {
+   "name": "read-command"
+  },
+  {
+   "name": "read-session-output"
+  },
+  {
+   "name": "reload-config"
+  },
+  {
+   "name": "run-command"
+  },
+  {
+   "name": "sftp-download"
+  },
+  {
+   "name": "sftp-download-file"
+  },
+  {
+   "name": "sftp-list"
+  },
+  {
+   "name": "sftp-upload"
+  },
+  {
+   "name": "sftp-upload-file"
+  },
+  {
+   "name": "signal-process"
+  }
+ ]
+}

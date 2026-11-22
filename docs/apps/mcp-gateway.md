@@ -87,6 +87,7 @@ the MCP server and checks the headers that arrive.
 | `/main-github/` | `main` | the 17 kept reads of the code host server | the 17 kept reads, for the ops repository only |
 | `/main-browser/` | `main` | the 21 kept tools of the browser | the 21 kept tools of the browser |
 | `/main-browser/` | `main-probe` | the 21 kept tools of the browser | nothing |
+| `/main-host/` | `main-host` (the host approval plugin of main; a placeholder until its key exists) | the six read tools of the host server | the six read tools of the host server |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server

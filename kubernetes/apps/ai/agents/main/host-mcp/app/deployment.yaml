@@ -1,0 +1,226 @@
+---
+# The host server of main (kustomization.yaml). The SSH key, the config and
+# the token come from the Secret host-mcp-secret; the pod spec holds only
+# the references (Design Doc, section 7, row 46). No shared process
+# namespace: the server takes the token as a flag, so its command line holds
+# it, and no other container may read it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: host-mcp
+  labels:
+    app.kubernetes.io/name: host-mcp
+  annotations:
+    # A new key, config or token starts the pod again.
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: host-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: host-mcp
+        # Out of the DNS of the namespace, as the vault server: the profiles
+        # name the SSH addresses, and the proxy calls the server on
+        # loopback, so the pod looks up no name (networkpolicy.yaml).
+        agents.home.arpa/dns: none
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      shareProcessNamespace: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # The server takes its config and its key only with mode 0600 and
+        # its own uid, and a Secret volume gives files of root. So this step
+        # copies them, as uid 65532 with mode 0600, into volumes in memory.
+        - name: files
+          image: ghcr.io/it3e/tnwks-host-mcp:0.1.0@sha256:8c17e38459ed4c7bc11f967c40e73a7994a5f2bc5cac7c451a4a3f327d8909d6
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - install -m 600 /secret/config.toml /config/config.toml && install -m 600 /secret/agent_ed25519 /keys/agent_ed25519
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: secret
+              mountPath: /secret
+              readOnly: true
+            - name: config
+              mountPath: /config
+            - name: keys
+              mountPath: /keys
+      containers:
+        - name: server
+          # ssh-mcp v2.26.0, built with no change of code by
+          # iT3E/tnwks-host-mcp 0.1.0.
+          image: ghcr.io/it3e/tnwks-host-mcp:0.1.0@sha256:8c17e38459ed4c7bc11f967c40e73a7994a5f2bc5cac7c451a4a3f327d8909d6
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOST_MCP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: host-mcp-secret
+                  key: HOST_MCP_TOKEN
+          args:
+            - --config=/config/config.toml
+            - --transport=http
+            - --httpHost=0.0.0.0
+            - --httpPort=3000
+            - --hostKeyMode=strict
+            - --allowedHosts=host-mcp.agents-main.svc.cluster.local
+            # The kubelet fills this from the env var above; Flux does not
+            # touch this form.
+            - --bearerToken=$(HOST_MCP_TOKEN)
+          ports:
+            # Not in the Service, and no rule of the network policy names
+            # it: only the proxy calls it, on loopback.
+            - name: server
+              containerPort: 3000
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: server
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: server
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: keys
+              mountPath: /keys
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+        - name: proxy
+          image: docker.io/nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NGINX_ENVSUBST_FILTER
+              value: ^HOST_MCP_
+            - name: HOST_MCP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: host-mcp-secret
+                  key: HOST_MCP_TOKEN
+          ports:
+            - name: mcp
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 101
+            runAsGroup: 101
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: template
+              mountPath: /etc/nginx/templates
+              readOnly: true
+            # The rendered config, with the token: in memory only.
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+            - name: nginx-tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/nginx
+      volumes:
+        # The config and the key, read by the step files only (group
+        # 65532 by fsGroup).
+        - name: secret
+          secret:
+            secretName: host-mcp-secret
+            items:
+              - key: config.toml
+                path: config.toml
+              - key: agent_ed25519
+                path: agent_ed25519
+            defaultMode: 0440
+        - name: config
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: keys
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: template
+          configMap:
+            name: host-mcp-proxy-config
+        - name: conf
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: nginx-tmp
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: host-mcp
+  labels:
+    app.kubernetes.io/name: host-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: host-mcp
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: mcp
+      protocol: TCP

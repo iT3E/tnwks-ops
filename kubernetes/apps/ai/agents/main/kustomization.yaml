@@ -35,3 +35,5 @@ resources:
   - ./terraform-mcp/ks.yaml
   # Not ready until the Secret github-mcp-token exists (github-mcp/ks.yaml).
   - ./github-mcp/ks.yaml
+  # The host server of main (host-mcp/ks.yaml) is not listed until the
+  # values of its Secret exist (docs/apps/host-mcp.md, "What waits").

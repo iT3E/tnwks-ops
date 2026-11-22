@@ -6,8 +6,8 @@
 # supervisor of a sandbox carries the labels of a client. The admin port
 # listens on loopback and no rule names it.
 # Out: the MCP servers that are targets of the config (the finance app, the
-# vault server of finance, the vault server of main, the read servers of main
-# and the browser of main), and DNS for their names only. No app, no other namespace, nothing outside the cluster.
+# vault server of finance, the vault server of main, the read servers of main,
+# the browser of main and the host server of main), and DNS for their names only. No app, no other namespace, nothing outside the cluster.
 # A trust domain that gets a client adds its agent pod and its probe below,
 # and its MCP server and its name to the egress, in the same PR as its route.
 apiVersion: cilium.io/v2
@@ -127,6 +127,16 @@ spec:
         - ports:
             - port: "8080"
               protocol: TCP
+    # The host server of main (route main-host).
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: host-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
     # The browser of main (route main-browser).
     - toEndpoints:
         - matchLabels:
@@ -158,3 +168,4 @@ spec:
               - matchName: terraform-mcp.agents-main.svc.cluster.local
               - matchName: github-mcp.agents-main.svc.cluster.local
               - matchName: playwright-mcp.ai.svc.cluster.local
+              - matchName: host-mcp.agents-main.svc.cluster.local

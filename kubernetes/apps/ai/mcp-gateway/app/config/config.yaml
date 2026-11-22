@@ -676,3 +676,61 @@ routes:
               policies:
                 http:
                   requestTimeout: 30s
+
+  # The host server of main at site 1 (Design Doc of effort 0003, section
+  # 4.2.6, "The host server"; docs/apps/host-mcp.md). The key of its own of
+  # the host approval plugin of the main agent (MCP_HOST_KEY of the agent
+  # pod), never the key of main: the plugin refuses each call when another
+  # server entry carries this key. The hash is a placeholder until the lead
+  # makes the key, so each request gets a 401.
+  - name: main-host
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-host/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000007"
+            metadata: {client: main-host, route: main-host}
+      # A read on a host waits up to the command timeout of the server (30 s).
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The six read tools of the read step by exact name, from the dump of
+      # the pinned image (../../tools/host.json). Not the writes
+      # (run-command, privileged-command, open-session, close-session,
+      # signal-process, sftp-upload), not reload-config, and not the two
+      # tools that move a file of the server pod.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "list-connections",
+                "list-sessions",
+                "read-command",
+                "read-session-output",
+                "sftp-download",
+                "sftp-list"
+              ] && apiKey.client == "main-host"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The proxy in the server pod sets the token of the server: no
+            # backendAuth.
+            - name: host
+              mcp:
+                host: http://host-mcp.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s
