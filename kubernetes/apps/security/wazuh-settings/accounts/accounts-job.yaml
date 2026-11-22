@@ -95,7 +95,7 @@ spec:
             items:
               - key: ca.crt
                 path: ca.crt
-        # The Secrets that the owner makes (../../wazuh/README.md, "Secrets").
+        # The Secrets of step 1 (../../wazuh/README.md, "Secrets").
         - name: user
           secret:
             secretName: wazuh-accounts-user

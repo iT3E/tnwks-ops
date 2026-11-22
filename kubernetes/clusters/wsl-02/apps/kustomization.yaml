@@ -154,6 +154,10 @@ resources:
   # firmware of the router and the settings of Terraform Cloud, each day, as
   # a result file for the converter.
   - ../../../apps/security/api-checks/ks.yaml
+  # The Wazuh server (kubernetes/apps/security/wazuh/README.md): the manager,
+  # the indexer and the dashboard. Its settings (../../../apps/security/wazuh-settings)
+  # are a later merge.
+  - ../../../apps/security/wazuh/ks.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml

@@ -5,10 +5,9 @@ one manager node, one indexer node and the dashboard, at the tag
 `v5.0.0-rc2`. The agents of the hosts report to the manager, and the
 converter (`../converter`) reads the state of the hosts from the indexer.
 
-No cluster lists this app yet. It starts nothing until a pull request adds
-`ks.yaml`, and then `../wazuh-settings/ks.yaml`, to
-`kubernetes/clusters/wsl-02/apps/kustomization.yaml` (see "Before the merge
-that lists it").
+homelab-wsl-02 lists `ks.yaml` (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`).
+No cluster lists `../wazuh-settings/ks.yaml` yet: that is a later merge, the
+owner's (see "The merges that list it").
 
 ## How it is built
 
@@ -135,14 +134,24 @@ the manager to the indexer on 9200, the dashboard to the manager API on
 | --- | --- | --- |
 | `wazuh-dns` | The three parts | DNS of this cluster, through Cilium's DNS proxy |
 | `wazuh-indexer-feed` | The indexer | `api.pre.cloud.wazuh.com:443`, the default CTI API of the Content Manager at `v5.0.0-rc2` |
-| `wazuh-agents` | world, a node of either cluster (through the LAN bridge) | The manager on 1517 |
+| `wazuh-agents` | world, or a node of either cluster (the shared VIP, with `externalTrafficPolicy: Cluster`) | The manager on 1517 |
 | `wazuh-indexer-readers` | The two steps of the settings and the converter | The indexer on 9200 |
 
 The vendor's `manager-egress-external.yaml` (any address on 443) is not
 applied. The manager and the dashboard have no route out of the cluster, so
-neither reaches an update service. A host on site 1 needs the LAN bridge of
-site 2 for port 1517 (`docs/wsl/lan-exposure.md`), which is a change of the
-Windows host, not of this app.
+neither reaches an update service.
+
+The agents reach the manager on a shared VIP (`app/service-agents.yaml`,
+`docs/wsl/multi-site.md`, "Shared VIPs"): `WAZUH_AGENTS_LB_ADDR`, an address
+of `10.10.95.0/24` in the half that the router prefers on site 2. The label
+`tnwks.us/shared-vip: "true"` puts the Service in the pool `shared-vip` and in
+the BGP advertisement of the nodes (`kubernetes/apps/kube-system/cilium/bgp`).
+Only homelab-wsl-02 lists this app, so only its nodes announce the address. A
+host reaches it over the routed network, from a network that the router lets
+reach the shared VIPs. The agents dial `WAZUH_AGENTS_HOST`, which resolves to
+the VIP once its site record exists (see "The merges that list it"). Until
+then the name answers with the `internal.tnwks.us` wildcard, which is not the
+server, so the agents (a later workstream) wait for that record.
 
 ## Certificates
 
@@ -163,8 +172,8 @@ stricter later step is a CA in SOPS, as `observability-pki` has.
 
 ## Secrets
 
-The owner makes each one as a SOPS file in the app of the table, and lists
-it in that app's `kustomization.yaml`. No session reads them, and no
+Each one is a SOPS file in the app of the table, listed in that app's
+`kustomization.yaml`. No session reads them, and no
 password and no hash is in a plain file of this repository. Each password is
 only in the container of the part that logs in with it.
 
@@ -184,8 +193,8 @@ The password rule of the Wazuh images: 12 to 64 characters from
 one uppercase letter, one digit and one symbol
 ([credentials](https://github.com/wazuh/wazuh-kubernetes/blob/v5.0.0-rc2/docs/ref/credentials.md)).
 The users of `accounts.json` follow the same rule, and step 2 refuses a
-password of `tnwks-settings` that breaks it. The owner makes each hash from
-its password with a bcrypt tool, as the hash tool of the OpenSearch security
+password of `tnwks-settings` that breaks it. Each hash is made from its
+password with a bcrypt tool, as the hash tool of the OpenSearch security
 plugin (`plugins/opensearch-security/tools/hash.sh`).
 
 The vendor's parts store their passwords at their first start: a later
@@ -380,7 +389,7 @@ Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
 `tnwks-settings` at each merge that changes its files (the Job
 `wazuh-settings-git-<hash>`, named as the Job of step 1 from
 `retention.json`, `indexer.py` and `settings.py`) and once a day (the CronJob
-`wazuh-settings`, at 07:17 UTC). Both run one pod. In this order, it:
+`wazuh-settings`, at 08:22 UTC). Both run one pod. In this order, it:
 
 1. waits up to 300 seconds until `tnwks-settings` can log in;
 2. writes each policy of tnwks that is missing or differs, and never a
@@ -446,27 +455,46 @@ What other apps and workstreams read from here:
 | Index names for the converter | `wazuh-states-sca`, `wazuh-states-vulnerabilities`, the agent snapshots `wazuh-metrics-agents` (one snapshot each 600 seconds: `@timestamp`, `wazuh.agent.id`, `wazuh.agent.name`, `wazuh.agent.status`, `wazuh.agent.last_seen`, `wazuh.agent.disconnected_at`), and `.wazuh-cti-consumers` for the state of the content feed. Sources: [fields](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/wcs/stateless/metrics/agents/docs/fields.csv), [writer](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/framework/wazuh/core/indexer/metrics_snapshot.py) |
 | The read-only user of the converter | `tnwks-converter`, its password in the Secret `wazuh-converter-reader` (key `password`) |
 | The indexer for the converter | `https://wazuh-indexer.security.svc.cluster.local:9200`, verified with `ca.crt` of the Secret `wazuh-ca` (never its key) |
-| The manager for the agents | `${WAZUH_AGENTS_LB_ADDR}` port 1517 (TCP), with the name `${WAZUH_AGENTS_HOST}`. Both are keys of the cluster-settings of homelab-wsl-02 that the owner adds |
+| The manager for the agents | `${WAZUH_AGENTS_LB_ADDR}` port 1517 (TCP), with the name `${WAZUH_AGENTS_HOST}`. Both are keys of the cluster-settings of homelab-wsl-02. The name resolves to the address through its site record (see "The merges that list it") |
 | The manager API | `https://wazuh-api.security.svc.cluster.local:55000`, in the cluster only. How the enrollment step of the agent roles reaches it belongs to the agents workstream |
 
-## Before the merge that lists it
+## The merges that list it
 
-1. The owner adds `WAZUH_AGENTS_LB_ADDR` (a free address of the
-   LoadBalancer pool) and `WAZUH_AGENTS_HOST` to the cluster-settings of
-   homelab-wsl-02.
-2. The owner makes the Secrets of this app ("Secrets") and lists them.
-3. A first merge adds `ks.yaml` to the apps of homelab-wsl-02, and runs
-   `python3 kubernetes/apps/flux-system/admission/classlist.py write`. Both
-   Kustomizations build a path of this repository under
-   `kubernetes/apps/security/`, so the admission policy `flux-child-scope`
-   (`../../flux-system/admission`) lists both in its class.
-4. After the first start of the server, the owner makes the account user
-   with `admin` from `account-user.json` (see "Accounts"), and the Secrets
-   of `../wazuh-settings`.
-5. A second merge, the owner's, adds `../wazuh-settings/ks.yaml`. It first
+1. The first merge lists `ks.yaml` in the apps of homelab-wsl-02, with:
+   - `WAZUH_AGENTS_LB_ADDR` and `WAZUH_AGENTS_HOST` in the cluster-settings
+     of homelab-wsl-02;
+   - the four Secrets of this app ("Secrets"), listed in
+     `app/kustomization.yaml`;
+   - the output of
+     `python3 kubernetes/apps/flux-system/admission/classlist.py write`.
+     Both Kustomizations build a path of this repository under
+     `kubernetes/apps/security/`, so the admission policy
+     `flux-child-scope` (`../../flux-system/admission`) lists both in its
+     class.
+2. The owner adds the site record of the agents' name, in
+   `infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf`
+   (`site_dns_records`), and applies it:
+
+   ```hcl
+       vip_wazuh_agents = {
+         name            = "wazuh-agents.internal.tnwks.us"
+         address         = "10.10.95.201"
+         type            = "A"
+         ttl             = "5m"
+         match_subdomain = true
+         comment         = "shared VIP (homelab-wsl-02 only): wazuh agents, 1517"
+       }
+   ```
+
+   The name and the address are the values of the cluster-settings. No
+   agent enrolls before this record exists.
+3. After the first start of the server, the owner makes the account user
+   with `admin` from `account-user.json` (see "Accounts"). The Secrets of
+   `../wazuh-settings` are made then.
+4. A second merge, the owner's, adds `../wazuh-settings/ks.yaml`. It first
    applies the retention policies, and ISM deletes the data older than its
    ages (see "The merges that delete data").
-6. The owner checks each point of "Not yet proven on a cluster": the path
+5. The owner checks each point of "Not yet proven on a cluster": the path
    to the feed after the first merge, the rights of step 2 at its first
    run, the policy of a new backing index at the first rollover of each
    stream (`rollover_age` after the second merge), and the files of the

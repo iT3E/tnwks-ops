@@ -219,6 +219,8 @@ spec:
           'flux-system/security-registry-rules': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/security-trail-copy': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/security-trivy-operator': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-wazuh': ['flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-wazuh-server': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/site-lease-fence': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/sites-runner': ['flux-system/cluster-apps'],
           'flux-system/smokeping-prober': ['flux-system/cluster-apps'],

@@ -156,7 +156,7 @@ spec:
 # which config/wazuh-manager.conf keeps off. An enrollment token pins the CA
 # that signs it (the manager serves ca.crt on GET /cacerts).
 # WAZUH_AGENTS_HOST is the name the agents dial: a key of the cluster-settings
-# that the owner adds with WAZUH_AGENTS_LB_ADDR (README.md).
+# of homelab-wsl-02, with WAZUH_AGENTS_LB_ADDR (README.md).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

@@ -1,7 +1,7 @@
 """The Wazuh server (kubernetes/apps/security/wazuh) and the two steps of its
 settings (kubernetes/apps/security/wazuh-settings): the files of this repository.
 
-No cluster lists these apps yet, so the render of CI does not build them. These
+homelab-wsl-02 lists the server, and no cluster lists its settings yet. These
 tests read the files: the copy of the vendor's manifests against its sums, the
 files of the vendor that stay, the images by digest, the node selector and the memory lines against the tables of
 kubernetes/apps/security/README.md, nothing privileged, no route to any address,
@@ -12,6 +12,7 @@ of ks.yaml, as Flux builds it, when kustomize is installed; else it skips.
 """
 
 import hashlib
+import ipaddress
 import re
 import shutil
 import subprocess
@@ -161,10 +162,39 @@ def test_the_server_builds_the_source_with_no_substitution_of_its_own():
     assert app["dependsOn"] == [{"name": "cert-manager"}]
 
 
-def test_no_cluster_lists_the_apps_yet():
+def test_only_homelab_wsl_02_lists_the_server_and_no_cluster_the_settings():
     for listing in (ROOT / "kubernetes/clusters").glob("*/apps/kustomization.yaml"):
-        text = listing.read_text()
-        assert "security/wazuh" not in text, listing
+        listed = [r for r in yaml.safe_load(listing.read_text())["resources"] if "security/wazuh" in r]
+        site = listing.parent.parent.name
+        assert listed == (["../../../apps/security/wazuh/ks.yaml"] if site == "wsl-02" else []), listing
+
+
+def test_the_agents_reach_a_shared_vip_of_site_2():
+    """The Service of the agents is in the shared VIP pool and the BGP
+    advertisement (docs/wsl/multi-site.md, "Shared VIPs"), on a free address
+    of the half that the router prefers on site 2."""
+    settings = yaml.safe_load((ROOT / "kubernetes/clusters/wsl-02/cluster-settings.yaml").read_text())["data"]
+    assert settings["WAZUH_AGENTS_LB_ADDR"] == "10.10.95.201"
+    assert settings["WAZUH_AGENTS_HOST"] == "wazuh-agents.internal.tnwks.us"
+    assert ipaddress.ip_address(settings["WAZUH_AGENTS_LB_ADDR"]) in ipaddress.ip_network("10.10.95.128/25")
+    assert ipaddress.ip_address(settings["WAZUH_AGENTS_LB_ADDR"]) in ipaddress.ip_network(settings["SHARED_VIP_POOL"])
+    (service,) = docs(APP / "app/service-agents.yaml")
+    label = {"tnwks.us/shared-vip": "true"}
+    assert label.items() <= service["metadata"]["labels"].items()
+    assert service["spec"]["type"] == "LoadBalancer"
+    assert service["spec"]["loadBalancerIP"] == "${WAZUH_AGENTS_LB_ADDR}"
+    assert service["spec"]["externalTrafficPolicy"] == "Cluster"
+    bgp = ROOT / "kubernetes/apps/kube-system/cilium/bgp"
+    (pool,) = [d for d in docs(bgp / "shared-vip-pool.yaml") if d["kind"] == "CiliumLoadBalancerIPPool"]
+    assert pool["spec"]["serviceSelector"]["matchLabels"] == label
+    adverts = [a for d in docs(bgp / "bgp.yaml") if d["kind"] == "CiliumBGPAdvertisement"
+               for a in d["spec"]["advertisements"] if a.get("advertisementType") == "Service"]
+    assert any("LoadBalancerIP" in a["service"]["addresses"] and a["selector"]["matchLabels"] == label
+               for a in adverts)
+    # No other Service of git asks for the address.
+    others = [p for p in (ROOT / "kubernetes").rglob("*.yaml") if ".sops." not in p.name
+              and settings["WAZUH_AGENTS_LB_ADDR"] in p.read_text()]
+    assert others == [ROOT / "kubernetes/clusters/wsl-02/cluster-settings.yaml"]
 
 
 def test_each_image_is_pinned_by_digest():
@@ -312,15 +342,26 @@ def test_step2_runs_after_step1_completes():
 
 
 def test_no_secret_is_in_git():
+    """The Secrets are SOPS files: the server lists its four, and the settings,
+    which no cluster lists yet, none. No plain file holds a Secret."""
     for path in our_files():
-        assert not path.name.endswith(".sops.yaml"), path
-        if path.suffix == ".yaml":
+        if path.suffix == ".yaml" and not path.name.endswith(".sops.yaml"):
             assert "Secret" not in {d.get("kind") for d in docs(path)}, path
-    for kustomization in (APP / "app/kustomization.yaml", SETTINGS / "app/kustomization.yaml",
-                          SETTINGS / "accounts/kustomization.yaml"):
+    listed = {
+        APP / "app/kustomization.yaml": [
+            "./secret-indexer-credentials.sops.yaml",
+            "./secret-manager-credentials.sops.yaml",
+            "./secret-dashboard-credentials.sops.yaml",
+            "./secret-cluster-key.sops.yaml",
+        ],
+        SETTINGS / "app/kustomization.yaml": [],
+        SETTINGS / "accounts/kustomization.yaml": [],
+    }
+    for kustomization, names in listed.items():
         body = yaml.safe_load(kustomization.read_text())
         assert "secretGenerator" not in body
-        assert not [r for r in body["resources"] if "secret" in r]
+        assert [r for r in body["resources"] if "secret" in r] == names, kustomization
+        assert not [p for p in kustomization.parent.glob("*.sops.yaml") if f"./{p.name}" not in names]
 
 
 def test_the_jobs_mount_the_certificate_of_the_ca_and_not_its_key():

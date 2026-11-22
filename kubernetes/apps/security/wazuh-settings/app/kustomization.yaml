@@ -4,9 +4,8 @@ kind: Kustomization
 namespace: security
 # Step 2 of the settings of the Wazuh indexer, the retention. Step 1 and the
 # network rule of both steps are in ../accounts, which this app depends on
-# (../ks.yaml). The Secret of step 2 is a SOPS file that the owner makes and
-# lists here before a cluster lists this app (../../wazuh/README.md,
-# "Secrets"):
+# (../ks.yaml). The Secret of step 2 is a SOPS file, listed here by the
+# merge that lists ../ks.yaml (../../wazuh/README.md, "Secrets"):
 #   - ./secret-settings-user.sops.yaml
 # The password of tnwks-converter is in the Secret of the converter
 # (../../converter), not here.
