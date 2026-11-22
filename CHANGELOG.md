@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.290.1 - 2026-11-22
+
+### Security
+
+* Flux: the children outside the "ask first" class substitute from the reduced Secret cluster-secrets-apps, and only the direct children of the class get the full cluster-secrets; the parent of the apps no longer substitutes from it, and the admission policy flux-child-scope allows only the reduced Secret outside the class. A names-only check for the owner lists the variables of the encrypted files outside the class that the reduced Secret would not fill, with no value
+
 ## v2.290.0 - 2026-11-22
 
 ### Added
