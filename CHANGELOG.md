@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.298.0 - 2026-11-22
+
+### Added
+
+* agents: the token job of the App of the main agent, not listed yet: each 30 minutes an installation token for the ops repository, with read rights only for the read step, into one Secret; bin/main-app-key puts the private key of the App into its encrypted Secret at the terminal of the owner, and shows flags only
+
 ## v2.297.0 - 2026-11-22
 
 ### Added
