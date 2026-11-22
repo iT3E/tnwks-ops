@@ -71,11 +71,13 @@ to this table first, because the sum is the budget of the node.
 | Wazuh indexer (step 2) | homelab-wsl-02 | 3 GiB, with a heap of 1.5 GiB |
 | Wazuh manager (step 2) | homelab-wsl-02 | 1280 MiB |
 | Wazuh dashboard (step 2) | homelab-wsl-02 | 320 MiB |
+| Wazuh account job (step 2) | homelab-wsl-02, at a change of its files | 128 MiB |
+| Wazuh settings job (step 2) | homelab-wsl-02, at a change of its files and once a day | 128 MiB |
 
 | Budget | Sum |
 | --- | --- |
 | homelab-wsl | 1 GiB. Trivy by the count of the budget: the operator by its limit, 640, and one scan job by its measured peak, 627: 1267 MiB while a scan job runs, 243 MiB over the line, and 640 MiB between scans. By the measure alone, 361 + 627 = 988 MiB. The owner accepted one scan job at a time at its measured size |
-| homelab-wsl-02, worker 1 | 6 GiB. Step 1: about 2.0 GiB (2028 MiB) with the old measure of a scan job, about 3.8 to 4.9 GiB (3898 to 4978 MiB) with the estimate. The parts that always run, by their limits: the operator of Trivy 640, the converter 128, the TLS proxy 64. The jobs, by their measured peak or else their limit: two scan jobs (in a burst), 2 x 97 by the old measure, which no longer describes a job, or 2 x 1032 to 1572 by the estimate, until a cycle measures them; Prowler 682 (the measured peak of an AWS run), the trail copy 128, the API checks 128, the credential refresher 64. Step 2: 4.6 GiB (4672 MiB) for the Wazuh server. The two steps sum to about 6.5 GiB (6700 MiB) with the old measure, about 8.4 to 9.4 GiB (8570 to 9650 MiB) with the estimate, over the budget: a part goes down, or the budget up, before step 2. |
+| homelab-wsl-02, worker 1 | 6 GiB. Step 1: about 2.0 GiB (2028 MiB) with the old measure of a scan job, about 3.8 to 4.9 GiB (3898 to 4978 MiB) with the estimate. The parts that always run, by their limits: the operator of Trivy 640, the converter 128, the TLS proxy 64. The jobs, by their measured peak or else their limit: two scan jobs (in a burst), 2 x 97 by the old measure, which no longer describes a job, or 2 x 1032 to 1572 by the estimate, until a cycle measures them; Prowler 682 (the measured peak of an AWS run), the trail copy 128, the API checks 128, the credential refresher 64. Step 2: 4.8 GiB (4928 MiB): 4672 MiB for the Wazuh server, and 128 MiB each for its account job and its settings job. The two steps sum to about 6.8 GiB (6956 MiB) with the old measure, about 8.6 to 9.7 GiB (8826 to 9906 MiB) with the estimate, over the budget: a part goes down, or the budget up, before step 2. |
 
 The audit reader reads files of the control plane node, so it does not run
 on `SECURITY_NODE`, and its 128 MiB are not in the budget of worker 1.

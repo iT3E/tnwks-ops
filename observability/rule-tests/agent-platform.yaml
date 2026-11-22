@@ -560,3 +560,52 @@ tests:
       - alertname: AgentChannelFailing
         eval_time: 65m
         exp_alerts: []
+
+  - name: one refuse line of the approval plugin fires at once, holds for the hour, and is no channel failure
+    interval: 1m
+    input_series:
+      # The zero series of main, then one line at 10m.
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-main", pattern="plugin_refuse"}
+        values: 0x9 1x80
+    alert_rule_test:
+      - alertname: AgentPluginRefusingTools
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: AgentPluginRefusingTools
+        eval_time: 10m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-main}
+      # The range of the hour leaves out its start: at 69m the zero at 9m
+      # is out of it.
+      - alertname: AgentPluginRefusingTools
+        eval_time: 68m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-main}
+      - alertname: AgentPluginRefusingTools
+        eval_time: 69m
+        exp_alerts: []
+      - alertname: AgentChannelFailing
+        eval_time: 11m
+        exp_alerts: []
+
+  - name: a restart of the platform Vector after a refuse line does not fire again
+    interval: 1m
+    input_series:
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-main", pattern="plugin_refuse"}
+        values: 1x80 _x2 0x60
+    alert_rule_test:
+      - alertname: AgentPluginRefusingTools
+        eval_time: 140m
+        exp_alerts: []
+
+  - name: a refuse line of an agent with no zero series of it is not seen
+    interval: 1m
+    input_series:
+      # Finance does not load the plugin and has no zero series of the
+      # pattern: a series that starts at 1 has no increase.
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-finance", pattern="plugin_refuse"}
+        values: _x10 1x60
+    alert_rule_test:
+      - alertname: AgentPluginRefusingTools
+        eval_time: 20m
+        exp_alerts: []

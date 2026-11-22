@@ -1,0 +1,23 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+# The Secrets of the server are SOPS files that the owner makes and lists
+# here before a cluster lists this app (../README.md, "Secrets"):
+#   - ./secret-indexer-credentials.sops.yaml
+#   - ./secret-manager-credentials.sops.yaml
+#   - ./secret-dashboard-credentials.sops.yaml
+#   - ./secret-cluster-key.sops.yaml
+resources:
+  - ./certificates.yaml
+  - ./networkpolicy.yaml
+  - ./service-agents.yaml
+configMapGenerator:
+  # Mounted by the patch of the manager in ../ks.yaml, by this name.
+  - name: wazuh-manager-config
+    files:
+      - ./config/wazuh-manager.conf
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

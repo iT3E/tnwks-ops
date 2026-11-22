@@ -203,8 +203,9 @@ later, with its read credential):
   its 25 tools by exact name and leaves out the tools that run code or send
   a file of the server pod. The one stateful route: the browser keeps a
   page for each session, so each call of a session reaches the same server
-  session. Deployed, not live for use: the config of the agent has no
-  entry for it until [its switch](playwright-mcp.md#the-switch).
+  session. The config of the agent has its entry `browser`
+  ([the switch](playwright-mcp.md#the-switch)); it is not live for use
+  until the rows of the owner's test pass.
   `tools/browser.json` is the dump.
 
 **The read step.** The config of the main agent
@@ -432,7 +433,8 @@ agent does, with two keys of its own and none of the agent's:
 6. The vault of the other trust domain (`OTHER_VAULT_GATEWAY_URL`,
    `OTHER_VAULT_SERVER`): the probe key gets a 401 on its route, and a
    straight connection to its server fails (R6). Each probe checks the
-   other.
+   other. The straight tries of items 5 and 6 have the rule of item 7: only
+   a time out passes.
 7. The read servers and the browser of main (`GATEWAY_ONLY_SERVERS`:
    `cluster-mcp`, `flux-mcp`, `terraform-mcp` and `github-mcp` in
    `agents-main`, port 8080, and `playwright-mcp` in `ai`, port 8000): a straight

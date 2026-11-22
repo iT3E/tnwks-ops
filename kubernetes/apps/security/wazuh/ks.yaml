@@ -1,0 +1,286 @@
+---
+# The Wazuh server, step 2 of the security platform (README.md): one manager
+# node, one indexer node and the dashboard, on homelab-wsl-02 only. No
+# cluster lists this file yet (README.md, "Before the merge that lists it").
+#
+# security-wazuh applies what this repository adds: the certificates, the
+# network rules, the Service of the agents and the configuration of the
+# manager.
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: security-wazuh
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: cert-manager
+  path: ./kubernetes/apps/security/wazuh/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true # security-wazuh-server needs the certificates
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+# security-wazuh-server builds server/: the vendor's manifests that this
+# repository keeps, a byte-for-byte copy of wazuh/wazuh-kubernetes at
+# v5.0.0-rc2 (server/UPSTREAM.md), with the images and the patches below.
+#
+# The vendor's init containers are shell scripts with ${...} variables, so
+# this Kustomization opts out of the substitution of Flux (as onboard does).
+# It holds no Secret, so it needs no decryption: security-wazuh applies the
+# Secrets that the vendor's pods mount.
+# The ${...} below are substituted by the parent of the apps, which applies
+# this file with the cluster-settings.
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: security-wazuh-server
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  dependsOn:
+    - name: security-wazuh
+  path: ./kubernetes/apps/security/wazuh/server
+  targetNamespace: security
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 10m
+  # Each image by its digest. The tags are 5.0.0-rc2 (Docker Hub, read
+  # 2026-11-22, the digest of the index of each tag). The vendor's indexer
+  # init container volume-mount-hack uses busybox with no tag: the patch below
+  # gives it the indexer image, so no other image is pulled.
+  images:
+    - name: wazuh/wazuh-manager
+      newName: docker.io/wazuh/wazuh-manager
+      digest: sha256:a20c0323016f757543293dab8adaf8ac0ba497301b070ce8e253436b7d3b5d28
+    - name: wazuh/wazuh-indexer
+      newName: docker.io/wazuh/wazuh-indexer
+      digest: sha256:ee3950aeb755eca4042cdbc701562de8c5307f0d37f0ebea147f0d6ca5c8e4b5
+    - name: wazuh/wazuh-dashboard
+      newName: docker.io/wazuh/wazuh-dashboard
+      digest: sha256:277f74ecc206f135ad220d62f606e4611cd72f116e96efb54ccc88e6ca7022f9
+  # A strategic merge patch of a list puts the items it names first, so each
+  # patched init container runs before the others. None of them reads what
+  # another writes: each copies from its own Secret or image.
+  patches:
+    # The manager: placement, its memory line (../README.md, "Memory"), the
+    # certificates of app/certificates.yaml under the vendor's file names,
+    # the configuration of app/config, one indexer host, and a volume of
+    # 15 GiB for the CVE database and the logs.
+    - target:
+        kind: StatefulSet
+        name: wazuh-manager-master
+      patch: |-
+        apiVersion: apps/v1
+        kind: StatefulSet
+        metadata:
+          name: wazuh-manager-master
+          annotations:
+            secret.reloader.stakater.com/reload: "wazuh-manager-remoted,wazuh-manager-apid,wazuh-manager-indexer-client,wazuh-ca"
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/hostname: ${SECURITY_NODE}
+              enableServiceLinks: false
+              volumes:
+                - name: wazuh-manager-certs-raw
+                  secret: null
+                  projected:
+                    defaultMode: 0400
+                    sources:
+                      - secret:
+                          name: wazuh-manager-remoted
+                          items:
+                            - {key: tls.crt, path: manager-remoted.pem}
+                            - {key: tls.key, path: manager-remoted-key.pem}
+                            - {key: ca.crt, path: root-ca.pem}
+                      - secret:
+                          name: wazuh-manager-apid
+                          items:
+                            - {key: tls.crt, path: manager-apid.pem}
+                            - {key: tls.key, path: manager-apid-key.pem}
+                      - secret:
+                          name: wazuh-manager-indexer-client
+                          items:
+                            - {key: tls.crt, path: manager.pem}
+                            - {key: tls.key, path: manager-key.pem}
+                - name: wazuh-config-mount
+                  configMap:
+                    name: wazuh-manager-config
+              initContainers:
+                - name: init-wazuh-etc
+                  resources:
+                    requests: {cpu: 50m, memory: 64Mi}
+                    limits: {memory: 128Mi}
+              containers:
+                - name: wazuh-manager
+                  resources:
+                    requests: {cpu: 100m, memory: 1280Mi}
+                    limits: {cpu: null, memory: 1280Mi}
+                  volumeMounts:
+                    - name: wazuh-config-mount
+                      mountPath: /wazuh-config-mount/etc/wazuh-manager.conf
+                      subPath: wazuh-manager.conf
+                      readOnly: true
+                  env:
+                    - name: WAZUH_INDEXER_HOSTS
+                      value: "wazuh-indexer-0.wazuh-indexer:9200"
+          volumeClaimTemplates:
+            - metadata:
+                name: wazuh-manager-master
+              spec:
+                accessModes: ["ReadWriteOnce"]
+                storageClassName: ${STORAGE_CLASS_DEFAULT}
+                resources:
+                  requests:
+                    storage: 15Gi
+    # The indexer: one node. The opensearch.yml of the image names the
+    # initial cluster manager node-1 and sets no discovery type (wazuh-indexer
+    # v5.0.0-rc2, distribution/src/config/opensearch.prod.yml), so the
+    # vendor's variable cluster.initial_cluster_manager_nodes (wazuh-indexer-0)
+    # stays, and discovery.seed_hosts names this one pod by a name of its
+    # certificate (transport.ssl.enforce_hostname_verification). The settings
+    # of a cluster of three go. The privileged init container that sets
+    # vm.max_map_count goes: the namespace enforces the baseline level.
+    # OpenSearch enforces its bootstrap checks (the node publishes a
+    # non-loopback address), and node.store.allow_mmap false keeps the
+    # indexer off memory maps, so the check of vm.max_map_count does not apply
+    # and the indexer needs no node sysctl.
+    # The heap is half of the memory line. The update check ping of the
+    # Content Manager is off. A volume of 30 GiB (Design Doc 0004, 10.1).
+    - target:
+        kind: StatefulSet
+        name: wazuh-indexer
+      patch: |-
+        apiVersion: apps/v1
+        kind: StatefulSet
+        metadata:
+          name: wazuh-indexer
+          annotations:
+            secret.reloader.stakater.com/reload: "wazuh-indexer-node,wazuh-indexer-admin,wazuh-ca"
+        spec:
+          replicas: 1
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/hostname: ${SECURITY_NODE}
+              enableServiceLinks: false
+              volumes:
+                - name: indexer-certs-raw
+                  secret: null
+                  projected:
+                    defaultMode: 0400
+                    sources:
+                      - secret:
+                          name: wazuh-indexer-node
+                          items:
+                            - {key: tls.crt, path: indexer.pem}
+                            - {key: tls.key, path: indexer-key.pem}
+                            - {key: ca.crt, path: root-ca.pem}
+                      - secret:
+                          name: wazuh-indexer-admin
+                          items:
+                            - {key: tls.crt, path: admin.pem}
+                            - {key: tls.key, path: admin-key.pem}
+              initContainers:
+                - name: increase-the-vm-max-map-count
+                  $patch: delete
+                - name: volume-mount-hack
+                  image: wazuh/wazuh-indexer:5.0.0-rc2
+                  command:
+                    - sh
+                    - -c
+                    - '[ "$(stat -c %u:%g /var/lib/wazuh-indexer)" = "101:101" ] || chown -R 101:101 /var/lib/wazuh-indexer'
+                  securityContext:
+                    runAsUser: 0
+                    allowPrivilegeEscalation: false
+                  resources:
+                    requests: {cpu: 50m, memory: 64Mi}
+                    limits: {cpu: null, memory: 128Mi}
+              containers:
+                - name: wazuh-indexer
+                  resources:
+                    requests: {cpu: 250m, memory: 3Gi}
+                    limits: {cpu: null, memory: 3Gi}
+                  env:
+                    - name: OPENSEARCH_JAVA_OPTS
+                      value: "-Xms1536m -Xmx1536m -Dlog4j2.formatMsgNoLookups=true"
+                    - name: discovery.seed_hosts
+                      value: "wazuh-indexer-0.wazuh-indexer"
+                    - name: node.max_local_storage_nodes
+                      $patch: delete
+                    - name: NODES_DN
+                      $patch: delete
+                    - name: node.store.allow_mmap
+                      value: "false"
+                    - name: plugins.content_manager.telemetry.enabled
+                      value: "false"
+          volumeClaimTemplates:
+            - metadata:
+                name: wazuh-indexer
+              spec:
+                accessModes: ["ReadWriteOnce"]
+                storageClassName: ${STORAGE_CLASS_DEFAULT}
+                resources:
+                  requests:
+                    storage: 30Gi
+    # The dashboard: placement, its memory line, and its certificate. It has
+    # no route out of the cluster (the vendor's dashboard-egress.yaml names
+    # the indexer and the manager API only), so it reaches no update service.
+    - target:
+        kind: Deployment
+        name: wazuh-dashboard
+      patch: |-
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: wazuh-dashboard
+          annotations:
+            secret.reloader.stakater.com/reload: "wazuh-dashboard,wazuh-ca"
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/hostname: ${SECURITY_NODE}
+              enableServiceLinks: false
+              volumes:
+                - name: dashboard-certs-raw
+                  secret: null
+                  projected:
+                    defaultMode: 0400
+                    sources:
+                      - secret:
+                          name: wazuh-dashboard
+                          items:
+                            - {key: tls.crt, path: dashboard.pem}
+                            - {key: tls.key, path: dashboard-key.pem}
+                            - {key: ca.crt, path: root-ca.pem}
+              initContainers:
+                - name: init-dashboard-config
+                  resources:
+                    requests: {cpu: 50m, memory: 64Mi}
+                    limits: {memory: 128Mi}
+              containers:
+                - name: wazuh-dashboard
+                  resources:
+                    requests: {cpu: 100m, memory: 320Mi}
+                    limits: {cpu: null, memory: 320Mi}
+    - target:
+        kind: PersistentVolumeClaim
+        name: wazuh-dashboard-config
+      patch: |-
+        - op: replace
+          path: /spec/storageClassName
+          value: ${STORAGE_CLASS_DEFAULT}

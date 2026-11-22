@@ -1,0 +1,197 @@
+# Copyright (C) Wazuh Inc.
+#
+# This program is a free software; you can redistribute it
+# and/or modify it under the terms of the GNU General Public
+# License (version 2) as published by the FSF - Free Software
+# Foundation.
+
+# Dashboard Deployment
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wazuh-dashboard
+  namespace: wazuh
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: wazuh-dashboard
+  template:
+    metadata:
+      labels:
+        app: wazuh-dashboard
+      name: wazuh-dashboard
+    spec:
+      # No workload talks to the Kubernetes API.
+      automountServiceAccountToken: false
+      volumes:
+        # A Secret volume holds symbolic links: an init container copies the
+        # credentials to a regular file that only root can read.
+        - name: wazuh-credentials
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: wazuh-credentials-secret
+          secret:
+            secretName: dashboard-credentials
+            defaultMode: 0400
+        - name: dashboard-config
+          persistentVolumeClaim:
+            claimName: wazuh-dashboard-config
+        - name: dashboard-certs-raw
+          secret:
+            secretName: dashboard-certs
+            defaultMode: 0400
+        - name: dashboard-certs
+          emptyDir: {}
+      # No fsGroup: kubelet would make the configuration claim group-writable,
+      # and the dashboard refuses a configuration directory that is. The image
+      # binds 443 as its service user.
+      securityContext:
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "443"
+      initContainers:
+        - name: install-credentials
+          image: 'wazuh/wazuh-dashboard:5.0.0-rc2'
+          command:
+            - /bin/sh
+            - -c
+            - 'umask 077 && cp /credentials-secret/wazuh-credentials /run/secrets/wazuh-credentials && chmod 0400 /run/secrets/wazuh-credentials'
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: wazuh-credentials-secret
+              mountPath: /credentials-secret
+              readOnly: true
+            - name: wazuh-credentials
+              mountPath: /run/secrets
+        - name: init-dashboard-config
+          image: 'wazuh/wazuh-dashboard:5.0.0-rc2'
+          command:
+            - /bin/sh
+            - -c
+            - |
+              if [ ! -f /pvc-config/opensearch_dashboards.yml ]; then
+                cp -a /usr/share/wazuh-dashboard/config/. /pvc-config/
+              fi
+          volumeMounts:
+            - name: dashboard-config
+              mountPath: /pvc-config
+              subPath: config
+        - name: install-certs
+          image: 'wazuh/wazuh-dashboard:5.0.0-rc2'
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              # Regular files, never the secret's symbolic links,
+              # root:wazuh-dashboard 0640. One deployment CA, for the indexer
+              # and for the Server API.
+              certs=/certs-final
+              install -o 0 -g 101 -m 0640 /tmp/certs-raw/dashboard.pem "${certs}/dashboard.pem"
+              install -o 0 -g 101 -m 0640 /tmp/certs-raw/dashboard-key.pem "${certs}/dashboard-key.pem"
+              install -o 0 -g 101 -m 0640 /tmp/certs-raw/root-ca.pem "${certs}/indexer-ca.pem"
+              install -o 0 -g 101 -m 0640 /tmp/certs-raw/root-ca.pem "${certs}/manager-ca.pem"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: dashboard-certs-raw
+              mountPath: /tmp/certs-raw
+              readOnly: true
+            - name: dashboard-certs
+              mountPath: /certs-final
+      containers:
+        - name: wazuh-dashboard
+          image: 'wazuh/wazuh-dashboard:5.0.0-rc2'
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - name: wazuh-credentials
+              mountPath: /run/secrets
+              readOnly: true
+            - name: dashboard-config
+              mountPath: /usr/share/wazuh-dashboard/config
+              subPath: config
+            - name: dashboard-certs
+              mountPath: /usr/share/wazuh-dashboard/config/certs/dashboard.pem
+              readOnly: true
+              subPath: dashboard.pem
+            - name: dashboard-certs
+              mountPath: /usr/share/wazuh-dashboard/config/certs/dashboard-key.pem
+              readOnly: true
+              subPath: dashboard-key.pem
+            - name: dashboard-certs
+              mountPath: /usr/share/wazuh-dashboard/config/certs/indexer-ca.pem
+              subPath: indexer-ca.pem
+              readOnly: true
+            - name: dashboard-certs
+              mountPath: /usr/share/wazuh-dashboard/config/certs/manager-ca.pem
+              subPath: manager-ca.pem
+              readOnly: true
+          ports:
+            - containerPort: 443
+              name: dashboard
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - curl -k -s -o /dev/null https://localhost:443/app/login
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 12
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - curl -kfsS -o /dev/null https://localhost:443/app/login
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - curl -k -s -o /dev/null https://localhost:443/app/login
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          env:
+            - name: OPENSEARCH_HOSTS
+              value: 'https://wazuh-indexer:9200'
+            - name: SERVER_SSL_ENABLED
+              value: "true"
+            - name: SERVER_SSL_CERTIFICATE
+              value: /usr/share/wazuh-dashboard/config/certs/dashboard.pem
+            - name: SERVER_SSL_KEY
+              value: /usr/share/wazuh-dashboard/config/certs/dashboard-key.pem
+            - name: OPENSEARCH_SSL_CERTIFICATE_AUTHORITIES
+              value: /usr/share/wazuh-dashboard/config/certs/indexer-ca.pem
+            - name: WAZUH_API_URL
+              value: https://wazuh-api
+            - name: WAZUH_API_CA
+              value: /usr/share/wazuh-dashboard/config/certs/manager-ca.pem

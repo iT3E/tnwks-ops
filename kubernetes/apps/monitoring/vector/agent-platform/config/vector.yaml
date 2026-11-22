@@ -4,8 +4,9 @@
 # hold content before a line leaves the node, and sends the rest to the
 # aggregator, as the pod-log agent does. It also serves the gauges of the
 # alerts of the platform and the use of the Claude plan, and a count of
-# fixed error patterns of the chat channel of the agents (agent_channel):
-# that log never leaves the node, only the count. The tests are in
+# fixed error patterns of the chat channel of the agents and of the one
+# refuse line of the approval plugin (agent_channel): that log never leaves
+# the node, only the count. The tests are in
 # observability/vector-tests/agent-platform-logs.yaml.
 data_dir: /vector-data-dir
 # Vector's own metrics (internal_metrics) stay for an hour after their last
@@ -44,7 +45,8 @@ sources:
 
   # The log of the agent container of the agents with a Telegram channel
   # (main, finance), read from the files of the node, only to count the
-  # error lines of the channel (agent_channel_count). Its lines go to no sink:
+  # error lines of the channel and the refuse line of the approval plugin
+  # (agent_channel_count). Its lines go to no sink:
   # the count is the only thing that leaves the node. The pods exclude this
   # container from kubernetes_logs (vector.dev/exclude-containers: agent), so
   # a file source is the one way to read it, and the paths pin the namespace
@@ -91,6 +93,8 @@ sources:
   # The counter of each agent and pattern of agent_channel_count, at 0 from the
   # start of the pod and again every 30 seconds, as token_zero: increase()
   # then sees the first line, and the series lives while no line comes.
+  # plugin_refuse only for the agents that load the approval plugin (main;
+  # observability/tests/test_agent_channel_count.py reads their configs).
   channel_zero:
     type: static_metrics
     namespace: homelab
@@ -100,6 +104,7 @@ sources:
       - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-main, pattern: poll_stall}}
       - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-main, pattern: poll_restart}}
       - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-main, pattern: channel_restart}}
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-main, pattern: plugin_refuse}}
       - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-finance, pattern: send_failed}}
       - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-finance, pattern: poll_stall}}
       - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-finance, pattern: poll_restart}}
@@ -320,6 +325,15 @@ transforms:
   #     Telegram channel, its restart failed, or it hit its limit of restarts
   #     an hour (`[telegram:<account>] health-monitor: restarting|restart
   #     failed|hit`, channel-health-monitor.ts).
+  # And one line of the host approval plugin of the agent image (0.5.0,
+  # plugins/host-approval/index.js of iT3E/tnwks-agent-image):
+  #   - plugin_refuse: the plugin refuses each tool call of the agent,
+  #     because its form is not valid or a server entry failed its check
+  #     (`host-approval: refusing each tool call: <errors>`, an error line,
+  #     live as `[plugins] host-approval: ...`). It logs it once for each
+  #     fault, not for each call. Not its start line (`host-approval:
+  #     loaded, <n> read lines`) and not the refusal of one call
+  #     (`host-approval: refused <tool> (<reason>)`).
   # The console logger of the product drops the word "telegram" at the
   # start of a message of its telegram subsystem and writes "[telegram] "
   # before it (src/logging/subsystem.ts; the live line `[telegram] outbound
@@ -358,6 +372,8 @@ transforms:
         "poll_restart"
       } else if match(msg, r'\[telegram:[A-Za-z0-9_-]+\] health-monitor: (?:restarting \(reason: |restart failed: |hit \d+ restarts/hour limit)') {
         "channel_restart"
+      } else if match(msg, r'\bhost-approval: refusing each tool call: ') {
+        "plugin_refuse"
       } else {
         ""
       }

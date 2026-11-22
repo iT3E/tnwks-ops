@@ -3,6 +3,60 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.292.1 - 2026-11-22
+
+### Fixed
+
+* ansible: invoke-elevated.sh fails, with one line that says why, when the elevated process does not start or gives no exit code, so `task wsl-host:sshd` and `sshd-check` fail and do not end green on a script that did not run
+
+## v2.292.0 - 2026-11-22
+
+### Changed
+
+* security: the Wazuh server builds a byte-for-byte copy of the manifests of wazuh-kubernetes v5.0.0-rc2 in this repository (kubernetes/apps/security/wazuh/server), checked against its sha256 sums, in place of a GitRepository of the vendor. No cluster lists it yet.
+
+## v2.291.1 - 2026-11-22
+
+### Fixed
+
+* flux: the walk of the admission lists stops at a Flux Kustomization whose source is not this repository, or whose path is not in it, so the lists can not miss the objects of another source
+
+## v2.291.0 - 2026-11-22
+
+### Changed
+
+* agents: the host server of main, not applied yet, moves to the image 0.2.0, the upstream ssh-mcp v2.27.1, with the same tools and settings; upstream changed its command classifier only
+
+## v2.290.1 - 2026-11-22
+
+### Security
+
+* Flux: the children outside the "ask first" class substitute from the reduced Secret cluster-secrets-apps, and only the direct children of the class get the full cluster-secrets; the parent of the apps no longer substitutes from it, and the admission policy flux-child-scope allows only the reduced Secret outside the class. A names-only check for the owner lists the variables of the encrypted files outside the class that the reduced Secret would not fill, with no value
+
+## v2.290.0 - 2026-11-22
+
+### Added
+
+* agents: the main agent gets its browser tools: the server entry of the browser route and its 21 tools, each by name in the sandbox allow list
+
+## v2.289.0 - 2026-11-22
+
+### Added
+
+* security: the Wazuh server for step 2 of the security platform (task 8.3, 8.4 and 8.5), written and not listed by any cluster, so Flux applies none of it. An overlay on the vendor manifests of wazuh-kubernetes at v5.0.0-rc2 (images by digest): one manager, one indexer with single-node discovery and no privileged init container, and the dashboard, each with a node selector and the memory line of the security README. The overlay adds certificates from a CA of the server in cert-manager, the manager configuration (HTTPS on 1517 only, no legacy listener or legacy enrollment, no remote upgrade), the egress of the indexer to its content feed, the LoadBalancer of the agents, and the settings of the indexer from git in two steps: a Job that applies the accounts that carry its mark, with each hash from a SOPS Secret, only when its files change, and a Job at each change of its files plus a daily CronJob that apply the ISM retention of tnwks, move each index to it, start no move in the hour before a certificate renewal, and write the count of indices not on a policy of tnwks for the converter. A CI test pins each age, so a merge that lowers one needs an edit of the pin. To prove at the first run on site 2: the indexer reaches its feed through its egress rule only, step 2 needs no ISM action beyond the five of its role, a backing index made by a rollover takes the policy of tnwks, and which audit and alert files the image writes.
+
+## v2.288.0 - 2026-11-22
+
+### Added
+
+* Agent platform: the platform Vector also counts one fixed log line of the approval plugin, when it refuses each tool call (pattern plugin_refuse of homelab_agent_channel_error_lines_total; only the count leaves the node), and AgentPluginRefusingTools warns for an hour after such a line
+
+## v2.287.1 - 2026-11-22
+
+### Fixed
+
+* agents: the straight tries of the gateway probes to the two vault servers pass only on a time out, as the tries to the read servers do; a refusal, an answer or a name that does not resolve fails
+
 ## v2.287.0 - 2026-11-22
 
 ### Changed

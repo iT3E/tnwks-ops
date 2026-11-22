@@ -39,14 +39,14 @@ section here (`runbook_url`).
 
 ## The alerts
 
-27 alerts cover the platform: the 20 rules of
-`kubernetes/apps/ai/agents/monitoring/app/` (18 in `prometheusrule.yaml`, 2
+28 alerts cover the platform: the 21 rules of
+`kubernetes/apps/ai/agents/monitoring/app/` (19 in `prometheusrule.yaml`, 2
 in `heartbeat-prometheusrule.yaml`), the 2 rules of the model gateway in
 `kubernetes/apps/ai/litellm/app/prometheusrule.yaml`, and the 5 rules of the
 backup operator (the kopiur chart) that match the snapshot policy, the
 snapshots and the restores of a state volume. The other rules of the backup
 operator are about its repository and its controller, and `backups.md`
-covers them. Each of the 22 rules in `kubernetes/apps/ai/` opens the AI
+covers them. Each of the 23 rules in `kubernetes/apps/ai/` opens the AI
 board in Grafana (`tnwks-ai`), for the site whose Prometheus raised it
 (`observability/tests/test_alert_links.py`). No alert of the platform has
 fired live yet; the rule tests (`observability/tests/test_hand_written_rules.py`)
@@ -189,11 +189,12 @@ before the create, and fails a run that leaves its own record.
   wrong; fix it before the next run. Both probes also try the read servers
   of main straight (`cluster-mcp in agents-main, direct from a pod that is
   not the gateway`, and the same for `flux-mcp`, `terraform-mcp` and `github-mcp`).
-  Only `blocked: TimeoutError` passes there. `connected`: the policy of that
-  read server lets in more than the gateway; fix it before the next run.
-  `refused`: the Service had no ready pod (the server was down or rolling)
-  or the port is closed, so the check proved nothing; look at the server
-  pod. `unresolved`: the Service of that server is gone; find out why.
+  Only `blocked: TimeoutError` passes there, and at `vault server` and
+  `other vault server` too. `connected`: the policy of that server lets in
+  more than the gateway; fix it before the next run. `refused`: the
+  Service had no ready pod (the server was down or rolling) or the port is
+  closed, so the check proved nothing; look at the server pod.
+  `unresolved`: the Service of that server is gone; find out why.
 
 ### WorkflowProvidersStale
 
@@ -851,6 +852,64 @@ app.kubernetes.io/name=agent`); the channel starts in about two seconds.
 If the flows to the chat service are dropped, the cause is the network,
 not the agent: see the network rule of the namespace.
 
+### AgentPluginRefusingTools
+
+**What it means.** The host approval plugin of an agent (the label
+`pod_namespace`; only main loads it today) logged its fixed line
+`host-approval: refusing each tool call: <errors>` in the last hour. The
+plugin then refuses each tool call of the agent: the vault and the read
+routes too. The agent still chats, but it can do nothing for the person who
+asks. The plugin fails closed, so nothing runs without the approver, and
+the alert is a warning. The platform agent of Vector counts the line on the
+node as the pattern `plugin_refuse` of the count of
+[AgentChannelFailing](#agentchannelfailing). Only the count leaves the
+node; the errors after the head of the line do not ship.
+
+- **When it comes.** The values check of the pod runs the check of the
+  plugin on the config before the gateway starts, and stops the start on a
+  fault of the form ([the host approval plugin](#the-host-approval-plugin-main)).
+  So this alert is for a fault at run time: a server entry that failed its
+  check, a route name that does not resolve, or a check that failed.
+- **One line for each fault.** The plugin logs the line once for each
+  fault, not for each tool call. So the alert fires at once, and it ends
+  one hour after the line, also when the fault is still there.
+- **A line at the start that is not a fault.** When a route name does not
+  resolve at the start of the pod (DNS not ready), the plugin logs the line
+  once, tries again after 2, 5 and 10 seconds and then every 30 seconds,
+  and loads when the name resolves. The count can not tell that case from
+  a fault: read the log (step 2).
+- **Finance.** Finance does not load the plugin, so it has no zero series
+  of the pattern. If the line came there, its series would start at 1, and
+  `increase()` does not see it: the alert can not fire for finance. When
+  another agent loads the plugin, its zero series comes in the same change
+  (`observability/tests/test_agent_channel_count.py` fails until it does).
+- **False counts.** A false count needs the head of the line in another
+  line that the product writes, such as an error text that holds content.
+  A member can not cause the line itself.
+- **Not seen live yet.** The live start line of main is
+  `[plugins] host-approval: loaded, 0 read lines`. The refuse line comes
+  from the source of the plugin (agent image 0.5.0) and its lab.
+
+**First checks.** Read only.
+
+1. The count, in Grafana Explore on the Prometheus of homelab-wsl:
+   `sum by (pod_namespace) (increase(homelab_agent_channel_error_lines_total{pattern="plugin_refuse"}[6h]))`.
+2. The plugin lines on the pod, the heads only:
+   `kubectl -n agents-main logs deploy/agent -c agent --since=6h | grep -oE 'host-approval: (loaded|refusing each tool call)' | uniq -c`.
+   A `loaded` line after the last `refusing` line: the plugin loaded, and
+   the agent has its tools again (the case of the start above). The
+   errors after `refusing each tool call:` name keys and server entries of
+   the config, not chat content. The owner reads them on the pod.
+3. The values check of the last start:
+   `kubectl -n agents-main logs deploy/agent -c values-check`.
+
+**Fix.** With the go of the owner. A route name that did not resolve and
+then loaded needs nothing. A fault of a server entry or of the form is a
+fix of the config of the agent, in a pull request; the pod then starts
+again with it. If the cause is outside the config (the gateway route, DNS),
+delete the agent pod after the cause is fixed, so the plugin checks again
+(`kubectl -n agents-main delete pod -l app.kubernetes.io/name=agent`).
+
 ### AgentHeartbeatMissing
 
 **What it means.** The daily `agent-heartbeat-check` (06:33 UTC) found no
@@ -1063,7 +1122,9 @@ failed Restore in the same pull request, as the restore steps say.
 
 The pod is ready, and a message to the agent gets no answer.
 `AgentChannelFailing` fires when the Telegram channel of main or finance
-logs a failed send, a poll that stops or a restart of the channel. A
+logs a failed send, a poll that stops or a restart of the channel.
+`AgentPluginRefusingTools` fires when the approval plugin of main refuses
+each tool call: the agent answers, but does no tool call. A
 channel that takes no message and logs no error has no alert;
 `AgentHeartbeatMissing` fires on the next morning when the scheduled turn
 did not complete.
@@ -2735,7 +2796,7 @@ with no route left the other tools working.
 | Read | Pass rule |
 | --- | --- |
 | `kubectl -n agents-main logs deploy/agent -c values-check` | `values-check result=ok` |
-| `kubectl -n agents-main logs deploy/agent -c agent \| grep -c 'host-approval: loaded, 0 read lines'` | 1 for each start of the pod. No line `host-approval: refusing each tool call` |
+| `kubectl -n agents-main logs deploy/agent -c agent \| grep -c 'host-approval: loaded, 0 read lines'` | 1 for each start of the pod. No line `host-approval: refusing each tool call` ([AgentPluginRefusingTools](#agentpluginrefusingtools) counts it at run time) |
 | The owner asks the agent for one read of the vault and of each read server | The agent answers each one |
 
 **The way back** is one revert of the squash commit: the image 0.4.1 and
@@ -2745,15 +2806,16 @@ the config with no plugin.
 
 The route `main-browser`, the flags and the pin of the browser, the rule of
 the fetch proxy for it, the policies and the prompt before a form
-([playwright-mcp.md](playwright-mcp.md)). Deployed, not live for use: the
-agent has no browser tool until [the switch](playwright-mcp.md#the-switch).
+([playwright-mcp.md](playwright-mcp.md)). The agent has its browser tools
+since [the switch](playwright-mcp.md#the-switch), and they are not live for
+use until the owner's test rows pass.
 
 **After the merge:**
 
 | Read | Pass rule |
 | --- | --- |
 | `kubectl -n ai get deploy playwright-mcp` | 1 of 1 ready, the image with the digest of git |
-| `kubectl -n ai logs deploy/mcp-gateway --since=24h \| grep '"route":"default/main-browser"' \| grep -c '"client":"main"'` | 0 before the switch: the agent does not call it yet |
+| `kubectl -n ai logs deploy/mcp-gateway --since=24h \| grep '"route":"default/main-browser"' \| grep -c '"client":"main"'` | 0 before the switch; after it, a count for each browser call of the agent |
 | The next run of `platform-check-mcp-gateway-probe` in `agents-main` and in `agents-finance` | The line `playwright-mcp in ai, direct from a pod that is not the gateway` with `"ok": true` |
 | The next run of `platform-check-mcp-gateway-probe` in `agents-main` | The four lines that start with `browser:` with `"ok": true`, among them `browser: probe key: lists the 21 tools of the rule` with `"got": "same"` |
 

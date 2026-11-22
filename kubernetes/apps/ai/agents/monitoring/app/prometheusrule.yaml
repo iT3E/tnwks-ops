@@ -496,3 +496,30 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentchannelfailing"
             summary: "The Telegram channel of {{ $labels.pod_namespace }} logged {{ $labels.pattern }} lines in the last 30 minutes."
             description: "About {{ $value | humanize }} lines of the pattern {{ $labels.pattern }}. Only the count leaves the node; the runbook says how to read the lines on the pod. The chat may get no reply, or a reply may be lost."
+
+        - alert: AgentPluginRefusingTools
+          # The host approval plugin of an agent (main today) logged that it
+          # refuses each tool call: its form is not valid, or a server entry
+          # failed its check. The agent still chats, but it has no tool: the
+          # vault and the read routes are refused too. The values check of
+          # the pod stops a fault of the form at the start, so this is for a
+          # fault at run time, such as a route name that does not resolve.
+          # The platform Vector counts the line on the node, as a fixed
+          # pattern of the count of the channel, and only the count leaves
+          # the node (docs/apps/agent-platform.md, "Logs"). The plugin logs
+          # the line once for each fault, not for each call, so one line
+          # fires at once (no `for`), and the alert holds for the hour after
+          # the line. The count can not tell whether the plugin loaded after
+          # it: a name that did not resolve at the start of the pod gives
+          # one line, then the plugin loads after its next try.
+          # Warning: the plugin refuses, so nothing runs without the
+          # approver; the owner fixes it in the day.
+          expr: |
+            sum by (pod_namespace) (increase(homelab_agent_channel_error_lines_total{pattern="plugin_refuse"}[1h])) > 0
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-ai?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentpluginrefusingtools"
+            summary: "The approval plugin of {{ $labels.pod_namespace }} logged that it refuses each tool call, in the last hour."
+            description: "The agent chats but has no tool until the plugin loads. Only the count leaves the node; the runbook says how to read the line on the pod and whether the plugin loaded after it. The alert ends one hour after the line, also when the fault is still there."

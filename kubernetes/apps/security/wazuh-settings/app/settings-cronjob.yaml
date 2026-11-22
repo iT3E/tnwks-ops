@@ -1,0 +1,110 @@
+---
+# Step 2 of the settings of the Wazuh indexer, once a day (scripts/settings.py,
+# ../../wazuh/README.md, "Retention"). The Job of settings-job.yaml runs the
+# same pod at each merge that changes its files. The pod template of both is
+# one: security/tests/test_wazuh_settings.py checks it. A failed run raises
+# KubeJobFailed; the next run is the next day.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: wazuh-settings
+spec:
+  # UTC. After the API checks (06:47), one job at a time on the node.
+  schedule: "17 7 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      # The wait for the login (300 seconds), the wait for ISM (1200 seconds)
+      # and the calls around them.
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: wazuh-settings
+        spec:
+          restartPolicy: Never
+          # The job calls the indexer only, never the API server: no token.
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          # Placement and memory: ../../README.md.
+          nodeSelector:
+            kubernetes.io/hostname: ${SECURITY_NODE}
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: wazuh-settings
+              # The image of the converter and the API checks: the script uses
+              # the Python standard library only.
+              image: docker.io/library/python:3.15-alpine@sha256:a0f2e268f2ce8f3709611a90054ec6a8ae31f6251f5896b8648b9bb99835e30a
+              command: ["python3", "-u", "/app/settings.py"]
+              args:
+                - --indexer=https://wazuh-indexer.security.svc.cluster.local:9200
+                - --ca=/ca/ca.crt
+                - --retention=/app/retention.json
+                - --user=tnwks-settings
+                - --secret=/secrets/settings
+                - --results=/results
+                - --login-wait=300
+                - --wait=1200
+                # The renewBefore of the certificates of ../../wazuh/app/certificates.yaml.
+                - --renew-before=720h
+                - --margin=3600
+              env:
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: files
+                  mountPath: /app
+                  readOnly: true
+                - name: ca
+                  mountPath: /ca
+                  readOnly: true
+                - name: settings
+                  mountPath: /secrets/settings
+                  readOnly: true
+                # The whole volume, not a subPath (security/converter/README.md).
+                - name: results
+                  mountPath: /results
+          volumes:
+            - name: files
+              configMap:
+                name: wazuh-settings-files
+            # The certificate of the CA of the server, and not its key.
+            - name: ca
+              secret:
+                secretName: wazuh-ca
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+            # The password of tnwks-settings, and no other secret
+            # (../../wazuh/README.md, "Secrets").
+            - name: settings
+              secret:
+                secretName: wazuh-settings-user
+                items:
+                  - key: password
+                    path: password
+            - name: results
+              persistentVolumeClaim:
+                claimName: security-results

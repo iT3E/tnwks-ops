@@ -1,0 +1,21 @@
+---
+# The vendor's manifests of the Wazuh server that this repository keeps
+# (upstream/, a byte-for-byte copy of wazuh/wazuh-kubernetes at v5.0.0-rc2;
+# UPSTREAM.md). security-wazuh-server (../ks.yaml) builds this folder with the
+# images by digest and the patches of this repository.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./upstream/wazuh/indexer_stack/wazuh-dashboard/dashboard-deploy.yaml
+  - ./upstream/wazuh/indexer_stack/wazuh-dashboard/dashboard-egress.yaml
+  - ./upstream/wazuh/indexer_stack/wazuh-dashboard/dashboard-pvc.yaml
+  - ./upstream/wazuh/indexer_stack/wazuh-dashboard/dashboard-svc.yaml
+  - ./upstream/wazuh/indexer_stack/wazuh-indexer/cluster/indexer-sts.yaml
+  - ./upstream/wazuh/indexer_stack/wazuh-indexer/indexer-egress.yaml
+  - ./upstream/wazuh/indexer_stack/wazuh-indexer/indexer-ingress.yaml
+  - ./upstream/wazuh/indexer_stack/wazuh-indexer/indexer-svc.yaml
+  - ./upstream/wazuh/wazuh_managers/network-policies/manager-egress.yaml
+  - ./upstream/wazuh/wazuh_managers/network-policies/wazuh-master-ingress.yaml
+  - ./upstream/wazuh/wazuh_managers/wazuh-api-svc.yaml
+  - ./upstream/wazuh/wazuh_managers/wazuh-cluster-svc.yaml
+  - ./upstream/wazuh/wazuh_managers/wazuh-master-sts.yaml

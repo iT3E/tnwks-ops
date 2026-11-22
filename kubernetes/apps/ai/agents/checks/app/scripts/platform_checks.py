@@ -851,7 +851,7 @@ def vault(check: str, probe_key: str, no_tools_key: str | None) -> None:
     name and no note text."""
     host, port = VAULT_SERVER.rsplit(":", 1)
     report(check, "vault server, direct from a pod that is not the gateway", "blocked",
-           tcp(host, int(port)))
+           reach(host, int(port)))
     report(check, "vault: no key: tools/list", "refused: HTTP 401", listed(None, VAULT_GATEWAY_URL))
     report(check, "vault: a key that is not in the config: tools/list", "refused: HTTP 401",
            listed(secrets.token_hex(32), VAULT_GATEWAY_URL))
@@ -888,7 +888,7 @@ def other_vault(check: str, probe_key: str) -> None:
     other")."""
     host, port = OTHER_VAULT_SERVER.rsplit(":", 1)
     report(check, "other vault server, direct from this trust domain", "blocked",
-           tcp(host, int(port)))
+           reach(host, int(port)))
     if probe_key == PENDING:
         report(check, "other vault: probe key", SKIPPED, SKIPPED)
     else:

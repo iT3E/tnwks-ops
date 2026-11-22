@@ -57,6 +57,24 @@ the class without `classlist.py write` can not pass.
 The walk of git gave the same Kustomizations and HelmReleases as the two
 live sites on 2026-11-21: 155 and 85 on site 1, 85 and 51 on site 2.
 
+The walk follows a patch of a `kustomization.yaml` that changes the
+`spec.path` of a Flux Kustomization, as Flux does: the apps of site 2 move
+two children to folders of their own that way. It reads one form, a
+strategic merge patch with no target that names one Kustomization of that
+build. Another form that could change a `spec.path` (a JSON patch of the
+spec of a Kustomization, or a patch of a `spec.path` with a target) stops
+`classlist.py`.
+
+The walk reads this repository only. A Kustomization that it reaches with
+a `sourceRef` other than the GitRepository `flux-system` of the namespace
+`flux-system` stops it, with the name of that Kustomization: the objects of
+another source are not in git, so the lists can not hold them. A
+`spec.path` (or a component) that is not in the repository stops it too,
+as a build of nothing would pass with no object. A file with such a child
+that no cluster lists is not reached, so it does not stop the walk. To
+apply the manifests of another project, vendor them into a folder of this
+repository; to trust another source is a change of the design.
+
 ## The rules
 
 A child outside the class may not:
@@ -76,7 +94,7 @@ For each request of the two controllers:
 
 | Rule | What it checks |
 | --- | --- |
-| `kustomization-spec` | A Kustomization outside the class has a path in the form `a/b/c`, not in a class path and not above one (so not the root). It has no service account, no kubeconfig and no `commonMetadata` key of Flux. It substitutes from `cluster-settings`, `site-overrides` and `cluster-secrets` only |
+| `kustomization-spec` | A Kustomization outside the class has a path in the form `a/b/c`, not in a class path and not above one (so not the root). It has no service account, no kubeconfig and no `commonMetadata` key of Flux. It substitutes from `cluster-settings`, `site-overrides` and the reduced Secret `cluster-secrets-apps` only |
 | `kustomization-class` | A Kustomization of the class comes from one of its parents in git, with a path of the class |
 | `helmrelease-class` | A HelmRelease of the class comes from a Kustomization of the class |
 | `parent-objects` | A parent of the apps applies Kustomizations and the objects of its build in git only |
@@ -89,8 +107,27 @@ HelmRelease (a finalizer, an annotation) passes the last three rules.
 The class Kustomization `flux-substitution` makes the reduced Secret
 `cluster-secrets-apps` on each site: the keys of `cluster-secrets` that the
 children outside the class use, and no other. Flux fills its template from
-`cluster-secrets`. A later change gives it to the children outside the class
-in place of the full Secret; until then no child reads it.
+`cluster-secrets`. In `kubernetes/clusters/<site>/apps.yaml` the parent of
+the apps gives each child the reduced Secret, and a second patch gives the
+full one to the direct children of the class, by a list of names that
+`classlist.py write` keeps. The parent itself substitutes no key of
+`cluster-secrets`, because its build reads the `ks.yaml` of the children
+outside the class.
+
+Flux substitutes in strict mode (below), so a variable of a child with no
+key and no default stops the build of that child. So before this merge the
+owner runs
+`python3 kubernetes/apps/flux-system/admission/substitution_names.py` (with
+PyYAML and the key of the files). It decrypts each encrypted file of a child
+outside the class in memory and prints only its path and the names of its
+variables that are neither keys of the reduced Secret of its site nor
+settings of the site nor inline substitutes of the child. It reads each
+object and each form of a variable as the CI test below does, with the same
+functions of `classlist.py`; a form that Flux can not read prints as one
+fixed marker, with no text of the file. It prints, writes and logs no
+value. An empty output (exit 0) means the switch stops no build;
+a name in the output goes into the template of the reduced Secret of that
+site first.
 
 Each site has a template of its own, because the two `cluster-secrets` do
 not hold the same keys:
@@ -116,6 +153,47 @@ class). The CI tests fail until each variable of a template is a key of the
 `kubernetes/clusters/<site>/cluster-secrets.sops.yaml`, read with no value),
 and each variable of a child outside the class is a key of the template of
 its site or a setting of the site.
+
+A third CI test covers each Kustomization of each site that substitutes, in
+the class or outside it (`test_each_variable_of_each_site_has_a_definition_in_that_site`).
+It takes the `postBuild` of the child with the patches of its parent, and
+checks each variable of its manifests, and of the patches of each
+`kustomization.yaml` that its build reads, against the sources that it
+names on that site. The sources are its inline `substitute`, and the key
+names of each ConfigMap and Secret of `flux-system` that git makes there:
+the objects of the walk, and the SOPS files that a kustomization lists, by
+key name only. A source that the test can not read fails the test, unless
+it is `optional`, like `site-overrides`.
+
+The forms of a variable are the ones of the envsubst of Flux
+(`fluxcd/pkg/envsubst` v1.9.0, in kustomize-controller v1.10.1), as a lab of
+that library in strict mode shows:
+
+- `${NAME}` and each form that reads the value (`/`, `:`, `#`, `%`, `^`,
+  `,` after the name, or `#` before it) stop the build when the name has no
+  definition.
+- `:=`, `:-`, `:+`, `:?` and `=` after the name are a default, and do not
+  stop it. A variable inside the default still counts.
+- `-`, `+` or `?` alone after the name, a `${` with no name and a `${` with
+  no closing brace stop the build on each site, so the test fails on them.
+- `$${NAME}` is an escape.
+- A variable in a YAML comment does not stop the build, and the test skips
+  it: the controller substitutes each object of the build after a round
+  trip through JSON, which drops each comment. A line of a block string
+  that starts with `#` is text, not a comment, so a variable there counts.
+
+Its limits:
+
+- It reads only the objects that `classlist.py` builds. It does not read
+  what a `configMapGenerator` or a `secretGenerator` makes, or a SOPS file
+  that no kustomization lists. A source of that kind fails the test with a
+  message that says so.
+- It checks names, not values: a key with an empty or wrong value passes.
+- It reads a patch target of the parent by group, version, kind, name,
+  namespace or label selector, and a patch with no target by the kind and
+  name of the object that it names. Another form fails the test.
+- A patch of a `kustomization.yaml` that sets `postBuild` fails the test,
+  because the walk does not apply it.
 
 ## Failure and deletion
 

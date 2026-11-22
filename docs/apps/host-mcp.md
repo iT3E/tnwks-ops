@@ -1,7 +1,7 @@
 # The host server
 
-The SSH MCP server `ssh-mcp` `v2.26.0`, built with no change of code by
-iT3E/tnwks-host-mcp `0.1.0` and pinned by digest. It is the host tool of
+The SSH MCP server `ssh-mcp` `v2.27.1`, built with no change of code by
+iT3E/tnwks-host-mcp `0.2.0` and pinned by digest. It is the host tool of
 the main agent, behind the route `main-host` of the central MCP gateway
 ([mcp-gateway.md](mcp-gateway.md)), with the host approval plugin of the
 agent as its prompt (Design Doc of effort 0003, section 4.2.6, "The host

@@ -62,7 +62,7 @@ TEMPLATE = APP / "proxy/default.conf.template"
 AGENT_CONFIG = MAIN / "agent/config/openclaw.json"
 ROUTE = "main-host"
 SERVICE = "host-mcp.agents-main.svc.cluster.local"
-IMAGE = "ghcr.io/it3e/tnwks-host-mcp:0.1.0@sha256:8c17e38459ed4c7bc11f967c40e73a7994a5f2bc5cac7c451a4a3f327d8909d6"
+IMAGE = "ghcr.io/it3e/tnwks-host-mcp:0.2.0@sha256:e25c4739f47adf0c49dea1bcfc9a447a1ec2f0e885956374c4b23b127adf15df"
 READS = ["list-connections", "list-sessions", "read-command", "read-session-output", "sftp-download", "sftp-list"]
 WRITES = ["run-command", "privileged-command", "open-session", "close-session", "signal-process", "sftp-upload"]
 # Out of every rule: a reload of the config, and the two tools that move a

@@ -1906,7 +1906,8 @@ Not in Loki, on purpose:
   chat content and the name of its bot. The agent's log does not ship; a
   count of fixed error patterns does. For main and finance (the agents with
   Telegram), the platform agent reads that log on the node only to count
-  the error lines of the channel (the source `agent_channel` and the
+  the error lines of the channel and the refuse line of the approval plugin
+  (the source `agent_channel` and the
   transform `agent_channel_count`): a line of a known pattern becomes one
   count with two labels, the namespace and the name of the pattern, and
   each other line is dropped. No word of a line leaves the node, and the
@@ -1991,10 +1992,16 @@ Each label has the prefix `openclaw.` (in Prometheus `openclaw_`).
   delivery that failed),
   `poll_stall` (no completed poll for 2 minutes), `poll_restart` (the poll
   ended and starts again after a wait) and `channel_restart` (the health
-  monitor of the product restarted the channel, or could not). The config
-  lists the lines of the product for each (OpenClaw 2026.11.3). Each pair
+  monitor of the product restarted the channel, or could not), and
+  `plugin_refuse` (the host approval plugin logged that it refuses each
+  tool call, `host-approval: refusing each tool call:`). The config
+  lists the lines of the product and of the plugin for each (OpenClaw
+  2026.11.3, agent image 0.5.0). Each pair
   has a series at 0 from the start of the Vector pod, and a restart of that
-  pod starts the counter again. `AgentChannelFailing` reads it.
+  pod starts the counter again; `plugin_refuse` has its series at 0 only
+  for the agents that load the plugin (main). `AgentChannelFailing` reads
+  the four patterns of the channel, and `AgentPluginRefusingTools` reads
+  `plugin_refuse`.
 
 ## Checks
 
@@ -2054,7 +2061,9 @@ records of [Plan use](#plan-use) `ModelPlanNearLimit`) ([Logs](#logs)).
 `AgentBackupRepositoryNotReady` the phase gauge of the backup operator,
 `AgentTurnNotEnded` two counters of the product ([Metrics](#metrics)), and
 `AgentChannelFailing` the count of the error lines of the chat channel that
-the platform agent makes on the node ([Logs](#logs)).
+the platform agent makes on the node ([Logs](#logs)), and
+`AgentPluginRefusingTools` the refuse line of the approval plugin in the
+same count.
 
 [`agent-platform-runbook.md`](agent-platform-runbook.md) has a section for
 each alert (what it means, the first checks, what was seen so far, the fix),
@@ -2095,6 +2104,7 @@ policy that `observability/inventory.py` declares
 | `ModelPlanNearLimit` | The newest reading of the five hour window or a week window of the Claude plan is near the limit (`allowed_warning`, the warning of the vendor) or at it (`rejected`), and the window did not reset since ([Plan use](#plan-use)). The overage windows do not fire | 5m | The tab "Limits and security" of the AI board: the use and the reset time of each window. Slow the scheduled work of the agents, or wait for the reset |
 | `AgentTurnNotEnded` | A personal agent took a message and has not ended its turn for 30 minutes: its count of messages in (`openclaw_message_received_total`) is higher than its count of messages that ended (`openclaw_message_processed_total`, completed, skipped or error), by channel ([Metrics](#metrics)). It catches a turn that never ends (a model call, a tool or a streamed part that hangs), not a final reply that hangs or fails after the turn ended. A quiet evening has no message and does not fire | 30m | "Messages with no end" on the Messages tab of the AI board, then [its runbook](agent-platform-runbook.md#agentturnnotended). A restart of the agent pod ends it |
 | `AgentChannelFailing` | The Telegram channel of main or finance logged error lines in the last 30 minutes, by the count of fixed patterns on the node ([Logs](#logs)): one `send_failed` line (a reply or a part of it did not reach the chat) or one `channel_restart` line, or 3 lines of `poll_stall` or of `poll_restart` (the poll stopped and two restarts did not bring it back). It catches the two cases that `AgentTurnNotEnded` does not: a final reply that hangs or fails after the turn ended, and a poll that stops. It ends 30 minutes after the last line | none | The heads of the lines on the pod, then [its runbook](agent-platform-runbook.md#agentchannelfailing) |
+| `AgentPluginRefusingTools` | The host approval plugin of an agent (main) logged that it refuses each tool call, in the last hour, by the count of its fixed line on the node ([Logs](#logs)). The agent chats but has no tool, the vault and the read routes too. The values check stops a fault of the form at the start, so this is a fault at run time. The plugin logs the line once for each fault, so it fires at once and ends one hour after the line | none | The heads of the plugin lines on the pod (a `loaded` line after it: the plugin loaded), then [its runbook](agent-platform-runbook.md#agentpluginrefusingtools) |
 | `ModelGatewayCallsFailing` | At least 3 model calls of the key of a trust domain failed in 15 minutes, and more than half of its calls. One turn with its retries does not fire it | 20m | "Failed model calls by status" on the Model calls tab of the AI board: 429 the limit of the plan, 401 or 403 a key or a model list, 5xx the bridge, Bedrock or the vendor |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,
