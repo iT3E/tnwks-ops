@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.280.3 - 2026-11-22
+
+### Fixed
+
+* Flux: the reduced substitution Secret cluster-secrets-apps builds on the cluster of kubernetes/clusters/wsl-02. Flux substitutes in strict mode, and that cluster has a template of its own with only the keys of its cluster-secrets. A test checks each variable of the template of each site against the key names of the cluster-secrets of that site, read with no value
+
 ## v2.280.2 - 2026-11-22
 
 ### Security
