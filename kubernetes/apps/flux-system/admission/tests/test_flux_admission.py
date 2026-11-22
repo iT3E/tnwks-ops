@@ -7,12 +7,13 @@ impersonates the service account of that controller, with the owner labels
 that the controller sets. Each request that a case makes is a dry run, so no
 object is made, except the few that the cases of an update need.
 
-1. The policy of git with a Deny binding: each case of each rule, a child
+1. The policy of git with its binding (Deny and Audit): each case of each rule, a child
    outside the class refused, and the same object from a child of the class
    or from a person let through.
 2. Each Flux Kustomization and HelmRelease of both sites in git, from the
    Kustomization that applies it: none refused.
-3. The binding of git (Audit and Warn): a refused case passes with a warning.
+3. The binding of git (Deny and Audit) refuses each deny case; Audit and
+   Warn, the action of the break-glass path, lets it pass with a warning.
 4. Each rule switched off in turn: at least one of its own cases passes, so
    each case can fail.
 """
@@ -40,6 +41,9 @@ def read(name):
 
 
 POLICY = read("policy")
+# The actions of the binding of git: Deny, and Audit, which keeps the
+# annotation with the name of the object in the audit stream.
+GIT_ACTIONS = ["Deny", "Audit"]
 CRDS = read("crds")
 GIT_KUSTOMIZATIONS = read("kustomizations")
 GIT_HELMRELEASES = read("helmreleases")
@@ -490,7 +494,7 @@ class FluxAdmission(unittest.TestCase):
             assert status in (201, 409), (name, status)
         status, _, _ = create(TAKEN, dry=False)
         assert status in (201, 409), status
-        apply_policy(["Deny"])
+        apply_policy(GIT_ACTIONS)
         probe = ("cluster-object", "probe", KUSTOMIZE, "deny", obj("ClusterRole", "probe", None, OUT_K, rules=[]))
         try:
             wait_for("the policy in force", lambda: refused(send(probe)))
@@ -561,34 +565,39 @@ class FluxAdmission(unittest.TestCase):
             "validations": [{"expression": "true"}]}), KUSTOMIZE)
         self.assertEqual(status, 201)
 
-    def test_6_audit_and_warn(self):
+    def test_6_the_binding_of_git(self):
         actions = next(d for d in POLICY if d["kind"] == "ValidatingAdmissionPolicyBinding")["spec"]["validationActions"]
-        self.assertEqual(sorted(actions), ["Audit", "Warn"])
+        self.assertEqual(actions, GIT_ACTIONS)
+        apply_policy(actions)
+        for case in cases():
+            self.assertEqual(refused(send(case)), case[3] == "deny", case[:2])
+        # Audit and Warn, the action of the roll-out and of the break-glass
+        # path, lets each case through and warns on the ones it would refuse.
         try:
-            apply_policy(actions)
+            apply_policy(["Audit", "Warn"])
             deny = next(c for c in cases() if c[3] == "deny")
-            wait_for("the binding of git", lambda: send(deny)[0] in (200, 201))
+            wait_for("audit and warn", lambda: send(deny)[0] in (200, 201))
             for case in cases():
                 status, _, warnings = send(case)
                 warned = any("flux-child-scope/" in w for w in warnings)
                 self.assertEqual((status in (200, 201), warned), (True, case[3] == "deny"), case[:2])
         finally:
-            apply_policy(["Deny"])
+            apply_policy(GIT_ACTIONS)
 
     def test_7_each_rule_can_fail(self):
         rules = sorted({c[0] for c in cases() if c[3] == "deny"})
         self.assertEqual(len(rules), 12)
         try:
             for rule in rules:
-                apply_policy(["Deny"])
+                apply_policy(GIT_ACTIONS)
                 denied = [c for c in cases() if c[0] == rule and c[3] == "deny"]
                 wait_for(f"{rule} in force", lambda d=denied: refused(send(d[0])), 30)
-                apply_policy(["Deny"], drop=rule)
+                apply_policy(GIT_ACTIONS, drop=rule)
                 # With the rule off, at least one of its cases passes: so its
                 # test fails, and the rule is what refuses it.
                 wait_for(f"{rule} off", lambda d=denied: any(not refused(send(c)) for c in d), 30)
         finally:
-            apply_policy(["Deny"])
+            apply_policy(GIT_ACTIONS)
 
     def test_8_the_count_has_refusals_only(self):
         # apiserver_validating_admission_policy_check_total, the count that
