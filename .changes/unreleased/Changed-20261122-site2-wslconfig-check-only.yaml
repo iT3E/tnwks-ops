@@ -1,3 +1,0 @@
-kind: Changed
-body: 'windows: site 2 checks its .wslconfig and no longer writes it, the convention of a host with a cluster, as site 1 does'
-time: 2026-11-22T18:00:00.000000000Z
