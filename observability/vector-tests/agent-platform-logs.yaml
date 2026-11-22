@@ -2380,3 +2380,45 @@ tests:
       file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
   no_outputs_from:
   - agent_channel_count
+- name: 'channel count: a final reply that failed, with colour codes'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: "2026-11-21T03:00:00.000000000Z stderr F [telegram] \e[31mtelegram final reply failed: Error: SECRET\e[39m"
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "send_failed"})
+
+        '
+- name: 'channel count: a final reply that failed, as the console writes it'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F [telegram] final reply failed: Error: SECRET'
+      file: /var/log/pods/agents-finance_agent-7c8b-fghij_66666666-7777-8888-9999-000000000000/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-finance", "pattern": "send_failed"})
+
+        '
+- name: 'channel count: a block of a reply that failed'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F telegram block reply failed: Error: SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "send_failed"})
+
+        '

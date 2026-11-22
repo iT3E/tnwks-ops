@@ -777,9 +777,11 @@ the count leaves the node ([agent-platform.md](agent-platform.md), "Logs").
 
 - `send_failed`: a call to send or edit a message in the chat failed after
   its retries, or hung until its timeout (60 seconds for a text), or the
-  final delivery of a reply failed. One line fires the alert: a reply, or a
-  part of it, did not reach the chat. A send of the message tool counts
-  too. The typing cue does not.
+  final reply (or a block of it) or its final delivery failed, also before
+  the call to the chat API. One line fires the alert: a reply, or a part of
+  it, did not reach the chat. One failure can give two lines (the call and
+  the reply), which does not change the alert. A send of the message tool
+  counts too. The typing cue does not.
 - `poll_stall` and `poll_restart`: the channel saw no completed poll for 2
   minutes, or its poll ended and starts again after a wait (30 seconds,
   then longer). The product starts the poll again by itself, so it takes 3
@@ -792,9 +794,28 @@ the count leaves the node ([agent-platform.md](agent-platform.md), "Logs").
 
 The alert ends 30 minutes after the last line. It does not catch a reply
 that the chat service took and did not show, or a fault that the product
-does not log. A message whose text holds the words of a pattern can add a
-false count, because the product logs the text of a message in; it can
-not move any text out of the node.
+does not log.
+
+- **False counts.** A false count needs the words of a pattern in a line
+  that the product writes. At the default level the product does not log
+  the text of a message in (only its length), so a member can not type a
+  pattern into the log. An error text that holds content (of a tool, for
+  example) could still hold one. With verbose logging on, the text of each
+  message in is in the log, and a member could add counts at will.
+- **True counts that a member can cause.** A member who blocks the bot, or
+  deletes a message that the agent still edits, makes a send or an edit
+  fail. Each gives one `send_failed` line, so one such act fires the
+  warning, and doing it again keeps it firing. That is acceptable for a
+  warning, which only asks for a read.
+- **Lines that can be missed.** A line that the agent writes while the
+  platform Vector restarts (a change of its config, a restart of the node)
+  can be missed: the new Vector pod is a new series, it reads the lines of
+  the gap from its checkpoint at once, and `increase()` does not count the
+  first sample of a series.
+- **Not seen live yet.** No line of the four patterns has been seen on this
+  cluster yet. The forms come from the source of the release and from the
+  live line `[telegram] outbound send ok`. The first real fault is the
+  first proof.
 
 **First checks.** Read only.
 
@@ -802,11 +823,13 @@ not move any text out of the node.
    homelab-wsl:
    `sum by (pod_namespace, pattern) (increase(homelab_agent_channel_error_lines_total[2h]))`.
 2. The heads of the lines on the pod, and nothing after them:
-   `kubectl -n agents-<name> logs deploy/agent -c agent --since=2h | grep -oE '(send|edit)[A-Za-z]* failed|fallback delivery failed|Polling stall detected|isolated polling ingress (failed|stopped|restart requested); restarting|health-monitor: (restarting|restart failed|hit)' | sort | uniq -c`.
+   `kubectl -n agents-<name> logs deploy/agent -c agent --since=2h | grep -oE '(send|edit)[A-Za-z]* failed|(fallback delivery|final reply|block reply) failed|Polling stall detected|isolated polling ingress (failed|stopped|restart requested); restarting|health-monitor: (restarting|restart failed|hit)' | sort | uniq -c`.
    This also shows the typing cue (`sendChatAction failed`), which the
    count leaves out.
    The text after these heads can hold a chat ID or chat content: do not
-   copy it into an issue or a pull request.
+   copy it into an issue or a pull request. A `Forbidden` send or a
+   `message to edit not found` edit can be an act of a member (the bot
+   blocked, a message deleted); the owner reads that text on the pod.
 3. `AgentTurnNotEnded` and the Messages tab of the AI board: did messages
    come in, and did their turns end.
 4. The flows of the pod to the chat service in Hubble (dropped or not

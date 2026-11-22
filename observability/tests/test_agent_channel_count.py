@@ -12,10 +12,13 @@ count leaves the node. Here:
 - the count keeps no word of the line: its only fields are a namespace and a
   pattern, each from a fixed list of literals in the config;
 - the zero series are each namespace and pattern of that list;
+- the remap drops an event on an error, and sends it to no output;
+- the platform Vector runs with the reader of the file sources silent;
 - the pods still exclude the agent container from kubernetes_logs;
 - in a container, the pinned Vector with the source, the transforms and the
-  exporter of the config: lines with content and chat IDs give the counts,
-  and no word of them is in the output of the exporter.
+  exporter of the config, and the log setting of the HelmRelease: lines with
+  content and chat IDs, and a line over max_line_bytes, give the counts, and
+  no word of them is in the output of the exporter or in Vector's own log.
 
 `vector test` checks each pattern (observability/vector-tests/agent-platform-logs.yaml).
 The container test needs Docker: without it the test is skipped, except in CI,
@@ -32,6 +35,10 @@ import yaml
 from test_hand_written_rules import FLUX_DEFAULT, FLUX_VARIABLE, ROOT, docker, scratch, vector_image
 
 CONFIG = ROOT / "kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml"
+HELMRELEASE = ROOT / "kubernetes/apps/monitoring/vector/agent-platform/helmrelease.yaml"
+# The reader of the file sources logs nothing: at the pinned Vector its error
+# for a line over max_line_bytes holds the first 1000 bytes of the line.
+VECTOR_LOG = "info,vector::internal_events::file::source=off"
 AGENTS = ["main", "finance", "pilot"]
 SOURCE = "agent_channel"
 COUNT = "agent_channel_count"
@@ -71,6 +78,22 @@ def test_the_lines_of_the_agent_container_reach_only_the_exporter():
     # No other component reads the source, and the count reads only it.
     assert config["transforms"][COUNT]["inputs"] == [SOURCE]
     assert config["transforms"]["agent_channel_metrics"]["inputs"] == [COUNT]
+    # An error drops the event, and no `.dropped` output takes it.
+    assert config["transforms"][COUNT]["drop_on_error"] is True
+    assert config["transforms"][COUNT]["reroute_dropped"] is False
+
+
+def vector_log() -> str:
+    """The VECTOR_LOG of the platform Vector in its HelmRelease."""
+    release = yaml.safe_load(HELMRELEASE.read_text())
+    (controller,) = release["spec"]["values"]["controllers"].values()
+    return controller["containers"]["app"]["env"]["VECTOR_LOG"]
+
+
+def test_the_reader_of_the_file_sources_logs_nothing():
+    """Vector's own log can be read in the namespace of the platform Vector, so
+    no byte of a line of the agent may be in it."""
+    assert vector_log() == VECTOR_LOG
 
 
 def test_the_count_keeps_no_word_of_the_line():
@@ -122,6 +145,7 @@ def cri(message: str) -> str:
 
 SECRET = "SECRET words of a chat"
 CHAT = "-1009876543210"
+LONG = " ".join(["LONGLINE", SECRET] * 6000)
 LOGS = {
     "agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log": [
         f'2026-11-21T03:00:00.000Z telegram sendMessage failed: network request failed transport={{"code":"ETIMEDOUT"}} chat={CHAT} {SECRET}',
@@ -132,8 +156,13 @@ LOGS = {
         "[telegram] isolated polling ingress failed; restarting in 30s.",
         f"[telegram] fallback delivery failed: {SECRET}",
         f"[telegram] sendChatAction failed: {SECRET}",
+        f"\x1b[31mtelegram final reply failed: Error: {SECRET}\x1b[39m",
     ],
     "agents-finance_agent-7c8b-fghij_66666666-7777-8888-9999-000000000000/agent/0.log": [
+        # Over max_line_bytes (100 KiB), with a pattern: discarded, not
+        # counted, and not quoted in Vector's own log. The lines after it
+        # count, so the reader went past it.
+        f"telegram sendMessage failed: {LONG}",
         "[health-monitor] [telegram:default] health-monitor: restarting (reason: stuck)",
         "[health-monitor] [telegram:default] health-monitor: hit 10 restarts/hour limit, skipping",
     ],
@@ -145,7 +174,7 @@ LOGS = {
         f"telegram sendMessage failed: {SECRET}",
     ],
 }
-EXPECTED = {("agents-main", "send_failed"): 3, ("agents-main", "poll_stall"): 1,
+EXPECTED = {("agents-main", "send_failed"): 4, ("agents-main", "poll_stall"): 1,
             ("agents-main", "poll_restart"): 1, ("agents-main", "channel_restart"): 0,
             ("agents-finance", "send_failed"): 0, ("agents-finance", "poll_stall"): 0,
             ("agents-finance", "poll_restart"): 0, ("agents-finance", "channel_restart"): 2}
@@ -196,7 +225,8 @@ def wait_for(binary: str, name: str, want: dict) -> str:
 
 def test_in_the_pinned_vector_only_the_counts_leave():
     """The zero series come first; then the lines of new pods are counted by
-    pattern, and the output of the exporter has no word of them."""
+    pattern, and neither the output of the exporter nor Vector's own log has
+    a word of them."""
     binary = docker()
     work = scratch()
     pods = work / "pods"
@@ -208,6 +238,7 @@ def test_in_the_pinned_vector_only_the_counts_leave():
         subprocess.run([binary, "run", "-d", "--name", name, "--network", "host", "--read-only", "--tmpfs", "/tmp",
                         "--mount", f"type=bind,src={work},dst=/w,readonly",
                         "--mount", f"type=bind,src={pods},dst=/var/log/pods,readonly",
+                        "--env", f"VECTOR_LOG={vector_log()}",
                         vector_image(CONFIG), "--config", "/w/vector.yaml"],
                        check=True, capture_output=True, text=True, timeout=300)
         wait_for(binary, name, dict.fromkeys(EXPECTED, 0))
@@ -221,6 +252,11 @@ def test_in_the_pinned_vector_only_the_counts_leave():
         text = wait_for(binary, name, EXPECTED)
         for word in ("SECRET", "chat", CHAT.lstrip("-"), "ETIMEDOUT", "stuck", "default", "telegram", "pilot"):
             assert word not in text, word
+        logs = subprocess.run([binary, "logs", name], capture_output=True, text=True, check=True)
+        own = logs.stdout + logs.stderr
+        assert "Vector has started" in own, own[-3000:]
+        for word in ("SECRET", "LONGLINE", CHAT.lstrip("-"), "ETIMEDOUT", "Bad Request", "sendMessage"):
+            assert word not in own, (word, own[-3000:])
     finally:
         subprocess.run([binary, "rm", "-f", name], capture_output=True, check=False)
         subprocess.run(["rm", "-rf", str(work)], check=False)

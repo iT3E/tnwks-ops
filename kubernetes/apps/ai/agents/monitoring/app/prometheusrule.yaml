@@ -474,8 +474,9 @@ spec:
           # (docs/apps/agent-platform.md, "Logs"). One line is enough for a
           # reply that did not reach the chat (send_failed: a call to send or
           # edit a message failed after its retries, or it hung until its
-          # timeout of 60 seconds) and for a restart of the channel by the
-          # health monitor of the product (channel_restart: the channel was
+          # timeout of 60 seconds, or the final reply failed) and for a
+          # restart of the channel by the health monitor of the product
+          # (channel_restart: the channel was
           # stuck or its socket stale for 25 to 30 minutes). The poll restarts
           # itself after one stall, so it takes 3 lines of the poll
           # (poll_stall, poll_restart) in 30 minutes: the poll stopped and did

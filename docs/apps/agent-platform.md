@@ -1910,7 +1910,11 @@ Not in Loki, on purpose:
   transform `agent_channel_count`): a line of a known pattern becomes one
   count with two labels, the namespace and the name of the pattern, and
   each other line is dropped. No word of a line leaves the node, and the
-  count goes to Prometheus, not to Loki ([Metrics](#metrics)).
+  count goes to Prometheus, not to Loki ([Metrics](#metrics)). The file
+  source does not log a discarded line: Vector's own log, which can be read
+  in `monitoring`, holds no byte of a line of the agent, because the reader
+  of the file sources logs nothing (`VECTOR_LOG` in the HelmRelease), and
+  containerd splits a line at 16 KiB.
 - **Every other pod of the trust domains**: the gateways and supervisors of
   `agents-pilot`, `agents-main` and `agents-finance`, the agent pods of main
   and finance, and the Signal daemon (its log holds phone numbers). Read
@@ -1983,7 +1987,8 @@ Each label has the prefix `openclaw.` (in Prometheus `openclaw_`).
   agent container of main and finance ([Logs](#logs)). Its labels are
   `pod_namespace` (`agents-main` or `agents-finance`) and `pattern`:
   `send_failed` (a send or an edit of a message that failed after its
-  retries or at its timeout, or a final delivery that failed),
+  retries or at its timeout, or a final reply, a block of it or its final
+  delivery that failed),
   `poll_stall` (no completed poll for 2 minutes), `poll_restart` (the poll
   ended and starts again after a wait) and `channel_restart` (the health
   monitor of the product restarted the channel, or could not). The config

@@ -305,7 +305,11 @@ transforms:
   #     (extensions/telegram/src/api-logging.ts); a send that hangs ends at
   #     its timeout (60 s for sendMessage, request-timeouts.ts) with the same
   #     line. Also the final delivery of a reply that failed (`telegram
-  #     fallback delivery failed:`). Not the typing cue (`sendChatAction`),
+  #     fallback delivery failed:`), and a final reply or a block of it that
+  #     failed, also before the call to the chat API (`telegram final reply
+  #     failed:`, `telegram block reply failed:`, bot-message-dispatch-reply.ts;
+  #     logged with the default error policy `always`, which the agents keep).
+  #     Not the typing cue (`sendChatAction`),
   #     and not an edit that changed nothing (the product does not log it).
   #   - poll_stall: the watchdog of the poll saw no completed getUpdates for
   #     2 minutes (`Polling stall detected (`, polling-session.ts).
@@ -329,6 +333,10 @@ transforms:
     type: remap
     inputs:
       - agent_channel
+    # The program has no call that can fail at run time, but if a later edit
+    # adds one, the event is dropped and goes to no output.
+    drop_on_error: true
+    reroute_dropped: false
     source: |
       path = string(.file) ?? ""
       ns = if starts_with(path, "/var/log/pods/agents-main_agent-") {
@@ -342,7 +350,7 @@ transforms:
       msg = replace(string(.message) ?? "", r'\x1b\[[0-9;]*m', "")
       pattern = if match(msg, r'(?:\[telegram\] (?:\[[A-Za-z0-9_-]+\] )?|\btelegram )(?:send|edit)[A-Za-z]* failed: ') && !match(msg, r'(?:\[telegram\] (?:\[[A-Za-z0-9_-]+\] )?|\btelegram )sendChatAction failed: ') {
         "send_failed"
-      } else if match(msg, r'(?:\[telegram\] (?:\[[A-Za-z0-9_-]+\] )?|\btelegram )fallback delivery failed: ') {
+      } else if match(msg, r'(?:\[telegram\] (?:\[[A-Za-z0-9_-]+\] )?|\btelegram )(?:fallback delivery|final reply|block reply) failed: ') {
         "send_failed"
       } else if match(msg, r'\bPolling stall detected \((?:active getUpdates stuck|no completed getUpdates) for ') {
         "poll_stall"
