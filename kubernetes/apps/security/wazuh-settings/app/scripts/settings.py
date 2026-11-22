@@ -16,10 +16,13 @@ password of that user. In this order:
   4. Moves each index of the patterns of a stream that is not on the current
      version of its policy (change_policy, or add for an index with no
      policy), and waits until the ISM explain API names the policy and its
-     version on each one. A restart of the indexer before that drops a move
-     that waits (docs/ref/modules/setup/retention.md, "Opting in to a hard
-     time ceiling"). So it moves nothing when the certificates of the indexer
-     renew within --margin seconds: Reloader restarts the indexer at a renewal.
+     version on each one. A run that writes no policy finds each index on
+     its policy, so it starts no move. A restart of the indexer before that
+     drops a move that waits (docs/ref/modules/setup/retention.md, "Opting
+     in to a hard time ceiling"). So it moves nothing when the certificates
+     of the indexer renew within --margin seconds: Reloader restarts the
+     indexer at a renewal. That guard reads the certificate in the TLS
+     handshake and the CA file of the pod, and needs no right in Kubernetes.
   5. Counts the indices of those patterns that are not on the policy of tnwks
      of their stream, with those that have no policy, and the documents of the
      streams that must hold none. It writes the counts to

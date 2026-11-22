@@ -176,12 +176,20 @@ sha256 of the three files, one after another, so a change makes a new Job,
 Flux runs it once, and prune removes the old one. It does not run each day.
 `security/tests/test_wazuh_settings.py` fails when the name does not match
 the files, and names the right one. To run it again with the same files,
-for example after a failure, delete the Job: Flux makes it again.
+for example after a failure, delete the Job: Flux makes it again. So step 1
+runs when `accounts.json`, its script or a hash changes: a change of a file
+gives the Job a new name, and at a change of a hash only (in
+`wazuh-accounts-hashes`) the owner deletes the Job.
 
 It runs as the account user, which the owner makes once, by hand, with
-`admin`: an internal user mapped to the reserved role
-`security_rest_api_access`, with its name and password in
-`wazuh-accounts-user`. That role can make, change and delete users, roles
+`admin`, from `../wazuh-settings/app/config/account-user.json`: an internal
+user mapped to the reserved role `security_rest_api_access`, with its name
+and password in `wazuh-accounts-user`. The file holds no hash, and step 1
+never reads it. The owner applies it through the Security API: a `PUT` of
+the user with the hash of its password, and an add of the user to the role
+mapping of `security_rest_api_access`. The image of the indexer gives the
+Security API to that role and to `all_access` only
+([opensearch.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/build-scripts/docker/config/opensearch.yml#L49-L51)). That role can make, change and delete users, roles
 and role mappings that are neither reserved nor hidden, so it can also give
 itself wide rights on the data
 ([API permissions, OpenSearch](https://github.com/opensearch-project/documentation-website/blob/d4a12efae197ed01306f752eb1406072ad18bb58/_security/access-control/api.md#L67)).
@@ -220,10 +228,10 @@ IDs of its own (`tnwks-stream-<stream>`, priority 1, above the shipped
 priority 0), from `../wazuh-settings/app/config/retention.json`. This is the
 way that the vendor gives for a custom policy (same page).
 
-| Value | Now | Open at the design gate |
+| Value | Now | Why |
 | --- | --- | --- |
 | `rollover_age` | 30 days | |
-| `delete_age` (host events, findings, raw events) | 120 days | 90 days as a floor (120 days) or as a ceiling (90 days). The file holds the floor, the recommended answer of the open decision |
+| `delete_age` (host events, findings, raw events) | 120 days | The design of effort 0004 sets 90 days as a floor: 90 days plus one rollover period, so each record stays 90 to 120 days |
 | `metrics_delete_age` | 60 days | |
 | `index_raw_events` | `false` | |
 
@@ -265,11 +273,13 @@ lower age needs a deliberate edit that the review sees.
 
 ### No restart while a move waits
 
-Step 2 moves each index that is not on the current version of its policy
-(`change_policy`, or `add` for an index with no policy), and waits until the
-ISM explain API names the new version on each one. A restart of the indexer
-before that drops the move (same page, "Opting in to a hard time ceiling").
-What restarts the indexer:
+Step 2 moves only an index that the ISM explain API does not show on its
+policy of tnwks, at the version that the run reads (`change_policy`, or
+`add` for an index with no policy), and waits until explain names the new
+version on each one. A run that writes no policy, as at a merge that does
+not change `retention.json`, finds each index on its policy, so it starts no
+move. A restart of the indexer before a move applies drops it (same page,
+"Opting in to a hard time ceiling"). What restarts the indexer:
 
 - Reloader, when a certificate of the indexer or the CA renews (the
   annotation of the StatefulSet in `ks.yaml`). Step 2 reads the end of the
@@ -279,15 +289,18 @@ What restarts the indexer:
   the deadline of a run). It still writes its counts, and the next run
   moves. The node and admin certificates of the indexer come from one apply,
   with the same duration and `renewBefore`, so the certificate that the
-  indexer serves stands for both.
+  indexer serves stands for both. The guard needs no right in Kubernetes:
+  it reads the certificate in the TLS handshake with the indexer and the CA
+  file of its pod, and the pod has no token of the API server.
 - A merge that changes the StatefulSet of the indexer, its configuration or
   its Secrets, or the tag. Merge such a change apart from a change of
   `retention.json`, and not while a run of step 2 runs:
   `kubectl -n security get jobs -l app.kubernetes.io/name=wazuh-settings`
   shows no active Job.
 
-When a restart drops a move all the same, the index keeps its old policy,
-the count of `indices.json` is above zero, and the next run moves it again.
+A kill at the memory limit or a crash can still meet a move. Then the index
+keeps its old policy, the count of `indices.json` is above zero, and the
+next daily run moves it again, up to about one day later.
 
 ### What step 2 does
 
@@ -336,7 +349,8 @@ What other apps and workstreams read from here:
 4. A first merge adds `ks.yaml` to the apps of homelab-wsl-02, and runs
    `python3 kubernetes/apps/flux-system/admission/classlist.py write`.
 5. After the first start of the server, the owner makes the account user
-   with `admin` (see "Accounts"), and the Secrets of `../wazuh-settings`.
+   with `admin` from `account-user.json` (see "Accounts"), and the Secrets
+   of `../wazuh-settings`.
 6. A second merge, the owner's, adds `../wazuh-settings/ks.yaml`. It first
    applies the retention policies, and ISM deletes the data older than its
    ages (see "The merges that delete data").

@@ -571,10 +571,10 @@ def test_the_patterns_are_those_of_the_shipped_policies():
     assert retention()["index_raw_events"] is False
 
 
-def test_the_delete_age_is_the_recommended_answer_of_the_open_decision():
-    assert retention()["delete_age"] == "120d"
-    assert any("Open decision" in note and "recommended answer of the open decision" in note
-               for note in retention()["notes"])
+def test_the_delete_age_is_the_floor_that_the_design_sets():
+    # 90 days as a floor: the delete at 90 days plus one rollover period.
+    assert days(retention()["delete_age"]) == 90 + days(retention()["rollover_age"])
+    assert any("design of effort 0004 sets 90 days as a floor" in note for note in retention()["notes"])
 
 
 def test_no_password_and_no_hash_is_in_git():
@@ -664,3 +664,77 @@ def test_step2_waits_out_a_renewal_of_the_certificates():
     # No move starts in the last margin before a renewal, and a run ends inside it.
     assert float(args["margin"]) > spec["activeDeadlineSeconds"] >= float(args["wait"]) + float(
         args["login-wait"])
+
+
+def test_step2_at_a_restart_of_the_indexer_starts_no_move(tmp_path):
+    """A restart makes the Setup plugin write its shipped policies again. A run
+    after it, with the same retention.json, finds each index on its policy."""
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    assert run2(fake, argv)[0] == 0
+    fake.seq += 1
+    fake.policies["stream-events-policy"] = {"seq": fake.seq, "term": 2, "policy": {"description": "shipped"}}
+    events = fake.policies["tnwks-stream-events"]
+    # A rollover after the restart: the new index takes the policy of tnwks by its template.
+    fake.indices[".ds-wazuh-events-v5-system-000002"] = ["tnwks-stream-events", events["seq"], events["term"]]
+    fake.writes.clear()
+    code, lines = run2(fake, argv)
+    assert code == 0, lines
+    assert fake.writes == [("PUT", "/_plugins/_setup/settings")]
+    found = results(argv)
+    assert (found["moves"], found["indices"], found["off_policy"]) == ("applied", 3, 0)
+
+
+def test_step2_moves_no_index_that_explain_shows_on_its_policy_with_no_version(tmp_path):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    fake.indices = {".ds-wazuh-findings-v5-system-000001": ["tnwks-stream-findings", None, None]}
+    argv = step2_files(tmp_path)
+    code, lines = run2(fake, argv)
+    assert code == 0, lines
+    assert not [w for w in fake.writes if "/_ism/add/" in w[1] or "/_ism/change_policy/" in w[1]]
+
+
+def test_the_guard_reads_the_handshake_and_the_ca_file_and_no_api(monkeypatch):
+    """The ends come from the certificate that the indexer serves and from the CA
+    file of the pod, so the pod needs no token and no right in Kubernetes."""
+    opened = []
+
+    class Raw:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    class Context:
+        def wrap_socket(self, raw, server_hostname):
+            opened.append(server_hostname)
+            served = {"notAfter": "Feb  1 00:00:00 2027 GMT"}
+            return type("Tls", (Raw,), {"getpeercert": lambda self: served})()
+
+        def get_ca_certs(self):
+            return [{"notAfter": "Jan  1 00:00:00 2036 GMT"}]
+
+    monkeypatch.setattr(settings_step.socket, "create_connection", lambda address, timeout: (
+        opened.append(address), Raw())[1])
+    monkeypatch.setattr(settings_step, "tls_context", lambda ca_file: Context())
+    ends = settings_step.certificate_ends("https://wazuh-indexer.security.svc.cluster.local:9200", "/ca/ca.crt")
+    assert ends == [1801440000.0, 2082758400.0]
+    assert opened == [("wazuh-indexer.security.svc.cluster.local", 9200), "wazuh-indexer.security.svc.cluster.local"]
+    for name in ("accounts-job.yaml", "settings-job.yaml", "settings-cronjob.yaml"):
+        (workload,) = docs(name)
+        assert pod(workload)["automountServiceAccountToken"] is False and "serviceAccountName" not in pod(workload)
+
+
+def test_the_account_user_file_grants_the_security_api_and_holds_no_hash():
+    user = json.loads((CONFIG / "account-user.json").read_text())
+    assert user["role"] == "security_rest_api_access"
+    assert user["user"].startswith("tnwks-") and user["user"] not in accounts()["users"]
+    assert user["user"] not in accounts_step.UPSTREAM_USERS and user["attributes"] == {}
+    assert not [k for k in user if "hash" in k or "password" in k]
+    assert not re.search(r"\$2[aby]\$", (CONFIG / "account-user.json").read_text())
+    # Step 1 never reads it: no Job mounts it.
+    kustomization = yaml.safe_load((APP / "kustomization.yaml").read_text())
+    assert not [f for g in kustomization["configMapGenerator"] for f in g["files"] if "account-user" in f]
