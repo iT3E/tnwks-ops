@@ -1,3 +1,0 @@
-kind: Changed
-body: 'site 1 Windows host: the allow list of sshd names only the account that Ansible logs in as (step 6 of the account change, before the removal of the tasks of the present account)'
-time: 2026-11-22T04:10:00.000000000Z

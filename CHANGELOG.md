@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.272.0 - 2026-11-22
+
+### Changed
+
+* site 1 Windows host: the allow list of sshd names only the account that Ansible logs in as (step 6 of the account change, before the removal of the tasks of the present account)
+
 ## v2.271.0 - 2026-11-22
 
 ### Changed
