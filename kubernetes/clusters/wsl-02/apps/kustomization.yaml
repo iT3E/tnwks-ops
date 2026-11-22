@@ -15,8 +15,9 @@ resources:
   # What a Flux child outside the "ask first" class may apply
   # (docs/operations/flux-admission.md). Both WSL clusters.
   - ../../../apps/flux-system/admission/ks.yaml
-  # The reduced substitution Secret of the children outside the class.
-  - ../../../apps/flux-system/substitution/ks.yaml
+  # The reduced substitution Secret of the children outside the class, with
+  # this cluster's template (the keys of its cluster-secrets).
+  - ./flux-substitution-ks.yaml
   - ../../../apps/kube-system/namespace.yaml
   # CNI and LoadBalancer IPs (Cilium LB IPAM + L2), instead of Flannel and
   # MetalLB on homelab-wsl.

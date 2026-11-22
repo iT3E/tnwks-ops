@@ -87,15 +87,59 @@ def test_no_child_outside_the_class_applies_an_object_of_an_operator_of_the_clas
     assert all(f"'{g}'" in policy for g in OPERATOR_GROUPS)
 
 
-SUBSTITUTION = ROOT / "kubernetes/apps/flux-system/substitution/app/secret.yaml"
+# The Kustomization of the reduced substitution Secret, and its template on
+# each site (docs/operations/flux-admission.md, "Substitution").
+SUBSTITUTION_CHILD = "flux-system/flux-substitution"
+SUBSTITUTION_KS = {
+    "wsl": "../../../apps/flux-system/substitution/ks.yaml",
+    "wsl-02": "./flux-substitution-ks.yaml",
+}
 # A variable of Flux; a doubled dollar sign is an escape, which Flux writes
 # as one.
 VARIABLE = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)(:=[^}]*)?\}")
 
 
+def substitution_template(site):
+    """The child of the reduced Secret on a site, and the Secret of its build."""
+    child = classlist.walk(site)[SUBSTITUTION_CHILD]
+    (secret,) = [d for d in child.build.docs
+                 if d.get("kind") == "Secret" and d["metadata"]["name"] == "cluster-secrets-apps"]
+    return child, secret
+
+
+def secret_key_names(site):
+    """The key names of the cluster-secrets of a site, from its SOPS file in
+    git. SOPS encrypts the values and leaves the names in the clear; this
+    reads the names only, and never a value."""
+    (doc,) = [d for d in yaml.safe_load_all(
+        (ROOT / f"kubernetes/clusters/{site}/cluster-secrets.sops.yaml").read_text()) if d]
+    assert doc["kind"] == "Secret" and doc["metadata"]["name"] == "cluster-secrets", site
+    return set(doc.get("stringData") or {}) | set(doc.get("data") or {})
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_the_reduced_secret_builds_in_strict_mode_with_the_keys_of_the_site(site):
+    """Flux substitutes in strict mode (the default of kustomize-controller
+    since v1.9): a bare variable whose key is missing stops the build. So each
+    variable of the template of a site is a key of its cluster-secrets."""
+    child, secret = substitution_template(site)
+    sources = child.doc["spec"]["postBuild"]["substituteFrom"]
+    assert sources == [{"kind": "Secret", "name": "cluster-secrets"}], site
+    inline = set(child.doc["spec"]["postBuild"].get("substitute") or {})
+    names = secret_key_names(site)
+    used = {m.group(1) for m in VARIABLE.finditer(yaml.safe_dump(secret)) if m.group(2) is None}
+    missing = sorted(used - names - inline)
+    assert not missing, f"{site}: these variables of the template are not keys of its cluster-secrets: {missing}"
+    # No empty default: a key that the site lacks stays out of its template.
+    assert all(m.group(2) is None for m in VARIABLE.finditer(yaml.safe_dump(secret))), site
+    # Each key is its own variable, so the Secret holds the values of its site and no other.
+    assert all(v == "${%s}" % k for k, v in secret["stringData"].items()), site
+
+
 @pytest.mark.parametrize("site", classlist.SITES)
 def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(site):
-    keys = set(yaml.safe_load(SUBSTITUTION.read_text())["stringData"])
+    _, secret = substitution_template(site)
+    keys = set(secret["stringData"])
     (settings,) = [d for d in yaml.safe_load_all((ROOT / f"kubernetes/clusters/{site}/cluster-settings.yaml").read_text()) if d]
     known = keys | set(settings["data"])
     missing = {}
@@ -107,14 +151,16 @@ def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(sit
             for m in VARIABLE.finditer(yaml.safe_dump(doc)):
                 if m.group(2) is None and m.group(1) not in known | inline:
                     missing.setdefault(child.key, set()).add(m.group(1))
-    assert not missing, f"add these keys to {SUBSTITUTION.relative_to(ROOT)}, or a default: {missing}"
+    assert not missing, f"add these keys to the template of {site}, or a default: {missing}"
 
 
 def test_both_sites_list_the_policy():
     for site in classlist.SITES:
         text = (ROOT / f"kubernetes/clusters/{site}/apps/kustomization.yaml").read_text()
         assert "- ../../../apps/flux-system/admission/ks.yaml" in text, site
-        assert "- ../../../apps/flux-system/substitution/ks.yaml" in text, site
+        assert f"- {SUBSTITUTION_KS[site]}" in text, site
+        others = set(SUBSTITUTION_KS.values()) - {SUBSTITUTION_KS[site]}
+        assert not any(f"- {o}" in text for o in others), site
 
 
 def objects_check():

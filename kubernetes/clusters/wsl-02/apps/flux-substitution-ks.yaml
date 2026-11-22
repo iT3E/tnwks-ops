@@ -1,0 +1,28 @@
+---
+# kubernetes/apps/flux-system/substitution/ks.yaml for this cluster: same
+# name, this cluster's template (flux-substitution/secret.yaml). Flux
+# substitutes in strict mode (the default of kustomize-controller since
+# v1.9), so a template variable that is not a key of this cluster's
+# cluster-secrets stops the build. This cluster's cluster-secrets has fewer
+# keys than the one of kubernetes/clusters/wsl, so its template names only the keys it has.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-substitution
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  path: ./kubernetes/clusters/wsl-02/apps/flux-substitution
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+  postBuild:
+    substituteFrom:
+      - kind: Secret
+        name: cluster-secrets
