@@ -1,0 +1,108 @@
+---
+# The rules of the Wazuh server that the vendor's manifests do not bring.
+# The vendor's policies stay for the traffic inside the server (the files
+# under wazuh_managers/network-policies and indexer_stack that
+# gitrepository.yaml keeps): the dashboard and the manager to the indexer on
+# 9200, the dashboard to the manager API on 55000, and the manager cluster
+# port 1516 between manager pods. default-deny (../../namespace.yaml) denies
+# the rest.
+#
+# DNS for the three parts, through Cilium's DNS proxy, so the rule of the
+# feed below can name a host.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: wazuh-dns
+spec:
+  endpointSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["wazuh-manager", "wazuh-indexer", "wazuh-dashboard"]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+# The content feed of the indexer: the Content Manager plugin reads the
+# rules, the CVE feed and the IoCs from the CTI API of the vendor, and the
+# manager reads them from the indexer. At v5.0.0-rc2 the default of
+# plugins.content_manager.cti.api is https://api.pre.cloud.wazuh.com/api/v1
+# (wazuh-indexer-plugins v5.0.0-rc2,
+# docs/ref/modules/content-manager/configuration.md). A later tag that moves
+# the default moves this host too. Without the feed, the plugin falls back to
+# the snapshot packaged in the image.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: wazuh-indexer-feed
+spec:
+  endpointSelector:
+    matchLabels:
+      app: wazuh-indexer
+  egress:
+    - toFQDNs:
+        - matchName: api.pre.cloud.wazuh.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# The agents, on 1517 through the LoadBalancer of service-agents.yaml. A host
+# reaches it through the LAN bridge of its site, so it arrives as world or as
+# a node of either cluster (remote-node; the control plane node also carries
+# kube-apiserver), as for the peer Service of Prometheus
+# (kubernetes/apps/monitoring/kube-prometheus-stack/app/networkpolicy.yaml).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: wazuh-agents
+spec:
+  endpointSelector:
+    matchLabels:
+      app: wazuh-manager
+      node-type: master
+  ingress:
+    - fromEntities:
+        - world
+        - remote-node
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "1517"
+              protocol: TCP
+---
+# The readers of the indexer in this namespace, on 9200, each with a user of
+# its own (README.md, "Accounts"): the two steps of the settings
+# (../../wazuh-settings) and the converter (../../converter), which reads
+# the index names of README.md, "Contract". The egress side is in the policy of each app.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: wazuh-indexer-readers
+spec:
+  endpointSelector:
+    matchLabels:
+      app: wazuh-indexer
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: wazuh-accounts
+        - matchLabels:
+            app.kubernetes.io/name: wazuh-settings
+        - matchLabels:
+            app.kubernetes.io/name: security-converter
+      toPorts:
+        - ports:
+            - port: "9200"
+              protocol: TCP

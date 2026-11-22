@@ -1,0 +1,46 @@
+{
+  "notes": [
+    "The retention of the Wazuh indexer (kubernetes/apps/security/wazuh/README.md, 'Retention'). Step 2 (scripts/settings.py) builds one ISM policy of tnwks for each stream below, under an ID of its own: the shipped policies roll over only at 20 GB for each primary shard, so at a low volume they delete nothing, and the Setup plugin writes them again at each start (wazuh-indexer-plugins v5.0.0-rc2, docs/ref/modules/setup/retention.md).",
+    "Each policy rolls over at rollover_age, or at the shipped size or count, whichever comes first, and deletes a backing index at its delete age, counted from the creation of the index. So an event stays from the delete age less rollover_age up to the delete age.",
+    "The delete age: the design of effort 0004 sets 90 days as a floor for host events and findings, so delete_age is 120 days (90 days plus one rollover period) and each record stays 90 to 120 days. One edit of delete_age changes the policies of events, findings and raw events.",
+    "metrics_delete_age keeps the agent snapshots for 30 to 60 days.",
+    "A merge that lowers an age deletes the data older than the new age at the next run of ISM, with no way back, and it is the owner's merge. security/tests/test_wazuh_settings.py pins each age: a change of one needs an edit of the pin in the same change.",
+    "The other stores of Wazuh keep their shipped rule (the active responses stream, the AI assistant sessions, the alert history of the alerting plugin) or have no age (the state indices): kubernetes/apps/security/wazuh/README.md, 'Retention'.",
+    "The patterns are those of the shipped policies at v5.0.0-rc2 (plugins/setup/src/main/resources/policies/). The first backing index of each stream starts on the shipped policy: the Setup plugin registers it with ISM at its start, with the policy_id that the stream template sets (plugins/setup/src/main/java/com/wazuh/setup/index/StreamIndex.java, registerWithISM; plugins/setup/src/main/resources/templates/streams/). A backing index that a rollover makes takes the policy with the highest ism_template priority, so priority 1 puts it on the policy of tnwks above the shipped one (priority 0), when tnwks-settings, the user that writes the policy, holds indices:admin/opensearch/ism/managedindex on the stream (index-management 3.6.0.0, ManagedIndexCoordinator.findMatchingPolicy). Step 2 moves each index that is not on its policy at each run."
+  ],
+  "rollover_age": "30d",
+  "delete_age": "120d",
+  "metrics_delete_age": "60d",
+  "priority": 1,
+  "streams": {
+    "events": {
+      "patterns": [
+        ".ds-wazuh-events-v5-*",
+        "wazuh-events-v5*"
+      ],
+      "delete": "delete_age"
+    },
+    "findings": {
+      "patterns": [
+        ".ds-wazuh-findings-v5-*",
+        "wazuh-findings-v5*"
+      ],
+      "delete": "delete_age"
+    },
+    "raw-events": {
+      "patterns": [
+        ".ds-wazuh-events-raw-v5-*",
+        "wazuh-events-raw-v5*"
+      ],
+      "delete": "delete_age"
+    },
+    "metrics": {
+      "patterns": [
+        ".ds-wazuh-metrics-*",
+        "wazuh-metrics*"
+      ],
+      "delete": "metrics_delete_age"
+    }
+  },
+  "index_raw_events": false
+}

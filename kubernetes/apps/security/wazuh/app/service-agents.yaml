@@ -1,0 +1,29 @@
+---
+# The one port of the agents: a 5.x agent enrolls and reports over HTTPS on
+# 1517 (wazuh-kubernetes v5.0.0-rc2, docs/ref/getting-started/requirements.md,
+# "Network ports"). It replaces the vendor's wazuh-agents Service, which
+# gitrepository.yaml ignores. The manager pod serves the TLS itself, with the
+# certificate wazuh-manager-remoted (certificates.yaml).
+#
+# WAZUH_AGENTS_LB_ADDR is a key of the cluster-settings of homelab-wsl-02 that
+# the owner adds, a free address of the LoadBalancer pool, before a cluster
+# lists this app (README.md, "Before the merge that lists it"). A host
+# outside the cluster reaches it through the LAN bridge of its site
+# (docs/wsl/lan-exposure.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: wazuh-agents
+  labels:
+    app: wazuh-manager
+spec:
+  type: LoadBalancer
+  loadBalancerIP: "${WAZUH_AGENTS_LB_ADDR}"
+  selector:
+    app: wazuh-manager
+    node-type: master
+  ports:
+    - name: agents-https
+      port: 1517
+      targetPort: 1517
+      protocol: TCP

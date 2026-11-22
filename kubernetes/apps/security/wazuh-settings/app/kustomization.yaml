@@ -1,0 +1,27 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+# Step 2 of the settings of the Wazuh indexer, the retention. Step 1 and the
+# network rule of both steps are in ../accounts, which this app depends on
+# (../ks.yaml). The Secret of step 2 is a SOPS file that the owner makes and
+# lists here before a cluster lists this app (../../wazuh/README.md,
+# "Secrets"):
+#   - ./secret-settings-user.sops.yaml
+# The password of tnwks-converter is in the Secret of the converter
+# (../../converter), not here.
+resources:
+  - ./settings-job.yaml
+  - ./settings-cronjob.yaml
+configMapGenerator:
+  # The files of step 2, which the hash in the name of its Job covers.
+  # Tests: security/tests/test_wazuh_settings.py.
+  - name: wazuh-settings-files
+    files:
+      - ./config/retention.json
+      - ./scripts/indexer.py
+      - ./scripts/settings.py
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

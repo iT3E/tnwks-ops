@@ -302,8 +302,9 @@ reads as late.
 
 ## The files of results
 
-This is the contract for the two jobs that write files for the converter:
-the Prowler job and the API checks job. Both run on homelab-wsl-02. The
+This is the contract for the jobs that write files for the converter: the
+Prowler job and the API checks job, and step 2 of the settings of the Wazuh
+indexer for the Wazuh source. Each runs on homelab-wsl-02. The
 converter reads the files each 5 minutes, and serves
 `homelab_security_check_result` and the time of the last result:
 
@@ -369,6 +370,7 @@ the converter can read them.
 | `prowler/cloudflare/` | The Prowler job | The OCSF files of the Cloudflare account |
 | `prowler/github/` | The Prowler job | The OCSF files of the GitHub organization |
 | `api-check/` | The API checks job | The result file |
+| `wazuh-settings/` | Step 2 of the settings of the Wazuh indexer (`kubernetes/apps/security/wazuh-settings`) | The count file ([below](#the-count-file-of-the-wazuh-settings)) |
 
 The providers are the keys of `prowler` in `../generated/scan-lists.json`. A
 new provider gets a directory of its name.
@@ -460,6 +462,49 @@ One file, `api-check/results.json`. Each run writes
   that the list accepts, and lists no finding for it.
 - **A system that is not in the registry** has no result and no time. The
   log says it one time.
+
+### The count file of the Wazuh settings
+
+One file, `wazuh-settings/indices.json`, from step 2 of the settings of the
+Wazuh indexer (`kubernetes/apps/security/wazuh/README.md`, "Retention"). Each
+run writes `wazuh-settings/indices.json.tmp` and moves it to that name. The
+converter does not read it yet: the change that adds the Wazuh source to the
+converter reads it, serves the count of indices that are not on their policy
+of tnwks as a result series, and adds this file to the table of
+[A file that does not fit](#a-file-that-does-not-fit).
+
+```json
+{
+  "version": 1,
+  "source": "wazuh-settings",
+  "time": 1794550000,
+  "moves": "applied",
+  "indices": 9,
+  "off_policy": 0,
+  "no_policy": 0,
+  "streams": {
+    "events": { "indices": 4, "off_policy": 0, "no_policy": 0 },
+    "findings": { "indices": 2, "off_policy": 0, "no_policy": 0 },
+    "raw-events": { "indices": 1, "off_policy": 0, "no_policy": 0 },
+    "metrics": { "indices": 2, "off_policy": 0, "no_policy": 0 }
+  },
+  "documents": { "wazuh-events-raw-v5": 0, "wazuh-active-responses": 0 }
+}
+```
+
+| Field | Value |
+| --- | --- |
+| `version` | 1 |
+| `source` | `wazuh-settings` |
+| `time` | The Unix time, in seconds, at which the run counted |
+| `moves` | `applied`: each move of policy applied. `pending`: a move did not apply in time, and the run failed. `skipped`: a certificate of the server renews within the hour, so the run moved nothing |
+| `indices` | The indices of the patterns of the four policies of tnwks |
+| `off_policy` | Of those, the indices that are not on the policy of tnwks of their stream, with those that have no policy. Above 0, the age of their data is not the age of git |
+| `no_policy` | Of those, the indices that have no policy at all |
+| `streams` | The same three counts for each stream |
+| `documents` | The count of documents in each stream that must hold none, from the index stats |
+
+The file holds counts and stream names only: no index content, no secret.
 
 ### A file that does not fit
 
