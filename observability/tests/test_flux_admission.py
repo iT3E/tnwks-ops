@@ -154,6 +154,148 @@ def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(sit
     assert not missing, f"add these keys to the template of {site}, or a default: {missing}"
 
 
+# Each Kustomization of each site that substitutes: in strict mode a bare
+# variable with no definition stops its build on that site. CI applies
+# nothing, so this test reads the sources of each site by name: the objects
+# that the walk builds, and the key names of the SOPS files of the cluster
+# entry, with no value.
+SUBSTITUTE_OFF = "kustomize.toolkit.fluxcd.io/substitute"
+REQUIREMENT = re.compile(r"\s*(!?)([\w./-]+)\s*(?:(==|=|!=)\s*([\w./-]*)|\s(in|notin)\s*\(([^)]*)\))?\s*")
+
+
+def selects(selector, labels):
+    """A label selector of a Flux patch target against the labels of an object."""
+    for requirement in re.split(r",(?![^(]*\))", selector):
+        m = REQUIREMENT.fullmatch(requirement)
+        assert m, f"a label selector that this test can not read: {selector!r}"
+        bang, key, op, value, set_op, values = m.groups()
+        have = labels.get(key)
+        if set_op:
+            inside = have is not None and str(have) in {v.strip() for v in values.split(",")}
+            ok = inside if set_op == "in" else not inside
+        elif op:
+            ok = (str(have) == value) if op in ("=", "==") else (str(have) != value)
+        else:
+            ok = (have is None) if bang else (have is not None)
+        if not ok:
+            return False
+    return True
+
+
+def targets(target, doc):
+    meta = doc.get("metadata") or {}
+    assert set(target) <= {"group", "version", "kind", "name", "namespace", "labelSelector"}, target
+    return all((
+        target.get("group", classlist.api_group(doc)) == classlist.api_group(doc),
+        target.get("kind", doc.get("kind")) == doc.get("kind"),
+        re.fullmatch(target.get("name", ".*"), meta.get("name", "")),
+        re.fullmatch(target.get("namespace", ".*"), meta.get("namespace", "flux-system")),
+        selects(target["labelSelector"], meta.get("labels") or {}) if "labelSelector" in target else True,
+    ))
+
+
+def post_build(child, children):
+    """The postBuild of a child as Flux applies it: its own, with the patches
+    of its parent that target it merged in."""
+    out = dict(child.doc["spec"].get("postBuild") or {})
+    parent = children.get(child.parent)
+    for patch in (parent.doc["spec"].get("patches") or []) if parent else []:
+        if not targets(patch.get("target") or {}, child.doc):
+            continue
+        body = yaml.safe_load(patch["patch"])
+        assert isinstance(body, dict), f"{parent.key}: a patch that this test can not read"
+        new = (body.get("spec") or {}).get("postBuild") or {}
+        inline = {**(out.get("substitute") or {}), **(new.get("substitute") or {})}
+        out.update(new)
+        if inline:
+            out["substitute"] = inline
+    return out
+
+
+def sops_key_names(path):
+    """The key names of each Secret of a SOPS file. SOPS encrypts the values
+    and leaves the names in the clear; this reads the names only."""
+    return [(d, set(d.get("stringData") or {}) | set(d.get("data") or {}))
+            for d in yaml.safe_load_all(path.read_text()) if d]
+
+
+def site_sources(site, children):
+    """The key names of each ConfigMap and Secret of flux-system on a site,
+    by (kind, name), from git."""
+    entry = ROOT / f"kubernetes/clusters/{site}"
+    docs = list(classlist.build(entry).docs)
+    for child in children.values():
+        docs += [d for d in child.build.docs if classlist.namespace_of(d, child) in (None, "flux-system")]
+    named = [(d, set(d.get("data") or {}) | set(d.get("stringData") or {})) for d in docs
+             if d.get("kind") in ("ConfigMap", "Secret")]
+    resources = yaml.safe_load((entry / "kustomization.yaml").read_text()).get("resources") or []
+    for name in resources:
+        if ".sops." in name:
+            named += sops_key_names(entry / name)
+    out = {}
+    for d, keys in named:
+        if (d.get("metadata") or {}).get("namespace") in (None, "flux-system"):
+            out.setdefault((d["kind"], d["metadata"]["name"]), set()).update(keys)
+    return out
+
+
+def undefined_variables(site):
+    """Each bare variable of a child of a site that no source of that child
+    defines, by child."""
+    children = classlist.walk(site)
+    sources = site_sources(site, children)
+    missing = {}
+    for child in children.values():
+        spec = post_build(child, children)
+        if not spec.get("substitute") and not spec.get("substituteFrom"):
+            continue
+        known = set(spec.get("substitute") or {})
+        for source in spec.get("substituteFrom") or []:
+            keys = sources.get((source["kind"], source["name"]))
+            if keys is None and not source.get("optional"):
+                missing.setdefault(child.key, set()).add(f"<no {source['kind']} {source['name']} in git>")
+            known |= keys or set()
+        for doc in child.build.docs:
+            meta = doc.get("metadata") or {}
+            if "disabled" in ((meta.get("annotations") or {}).get(SUBSTITUTE_OFF),
+                              (meta.get("labels") or {}).get(SUBSTITUTE_OFF)):
+                continue
+            for m in VARIABLE.finditer(yaml.safe_dump(doc)):
+                if m.group(2) is None and m.group(1) not in known:
+                    missing.setdefault(child.key, set()).add(m.group(1))
+    return {k: sorted(v) for k, v in sorted(missing.items())}
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_each_variable_of_each_site_has_a_definition_in_that_site(site):
+    """A change that adds a variable to a manifest, or a key to a template,
+    that one site does not define fails here, not in the build of that site."""
+    missing = undefined_variables(site)
+    assert not missing, f"{site}: add these keys to the sources of {site}, or a default: {missing}"
+
+
+def test_the_selector_and_the_patch_of_the_parent():
+    off = "substitution.flux.home.arpa/disabled"
+    assert selects(f"{off} notin (true)", {})
+    assert not selects(f"{off} notin (true)", {off: "true"})
+    assert selects(f"{off} in (true, yes)", {off: "yes"})
+    assert selects(f"a=b,!{off}", {"a": "b"}) and not selects("a!=b", {"a": "b"})
+    with pytest.raises(AssertionError):
+        selects("a notin true", {})
+    ks = {"apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+          "metadata": {"name": "x", "namespace": "flux-system", "labels": {off: "true"}},
+          "spec": {"postBuild": {"substitute": {"A": "1"}}}}
+    patch = {"target": {"group": "kustomize.toolkit.fluxcd.io", "kind": "Kustomization",
+                        "labelSelector": f"{off} notin (true)"},
+             "patch": "spec:\n  postBuild:\n    substitute: {B: '2'}\n    substituteFrom: [{kind: Secret, name: s}]\n"}
+    parent = classlist.Child("p", "", "p", {"spec": {"patches": [patch]}}, classlist.Build())
+    child = classlist.Child("c", "p", "c", ks, classlist.Build())
+    assert post_build(child, {"p": parent}) == {"substitute": {"A": "1"}}
+    del ks["metadata"]["labels"]
+    assert post_build(child, {"p": parent}) == {"substitute": {"A": "1", "B": "2"},
+                                                "substituteFrom": [{"kind": "Secret", "name": "s"}]}
+
+
 def test_both_sites_list_the_policy():
     for site in classlist.SITES:
         text = (ROOT / f"kubernetes/clusters/{site}/apps/kustomization.yaml").read_text()

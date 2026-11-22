@@ -117,6 +117,23 @@ class). The CI tests fail until each variable of a template is a key of the
 and each variable of a child outside the class is a key of the template of
 its site or a setting of the site.
 
+A third CI test covers each Kustomization of each site that substitutes, in
+the class or outside it (`test_each_variable_of_each_site_has_a_definition_in_that_site`).
+It takes the `postBuild` of the child with the patch of its parent, and
+checks each bare variable of its manifests against the sources that it
+names on that site: its inline `substitute`, and the key names of each
+ConfigMap and Secret of `flux-system` that git makes there (the SOPS files of
+the cluster entry by name only). A source that git does not make fails the
+test, unless it is `optional`, like `site-overrides`. Its limits:
+
+- It finds variables with the pattern of the tests, not with the envsubst of
+  Flux, and it reads only the objects that `classlist.py` builds. The
+  content of a `configMapGenerator` or a `secretGenerator` is not read.
+- It checks names, not values: a key with an empty or wrong value passes.
+- It reads the patches of the parent that set `postBuild`, with a target by
+  group, kind, name, namespace or label selector. Another form of target
+  fails the test, so that it can not pass by a target that it can not read.
+
 ## Failure and deletion
 
 - `failurePolicy: Fail`. An error of an expression refuses that one request
