@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.299.1 - 2026-11-22
+
+### Fixed
+
+* agents: a session of the main agent now gets the six read tools of the host server: the sandbox allow list names them, as it names the tools of each other server
+
 ## v2.299.0 - 2026-11-22
 
 ### Changed
