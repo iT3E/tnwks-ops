@@ -17,11 +17,18 @@ Python standard library only. Each test reads, and none changes a setting:
                      give no result. The newest
                      stable release, from the release feed of the vendor. The
                      feed holds the newest release only, so the job keeps each
-                     newest release it saw, with its date, in
-                     api-check/routeros-releases.json. It fails (1) when the
-                     router runs an older version than a release of that list
-                     that came out more than 14 days ago. A list that is there
-                     and can not be read gives no result and stays as it is.
+                     newest release it saw, with its date, and the time of its
+                     last read of the feed, in api-check/routeros-releases.json.
+                     It fails (1) when the router runs an older version than a
+                     release of that list that came out more than 14 days ago,
+                     and at once when the router runs a version older than each
+                     release of the list, as the age of the releases between is
+                     not known (Design Doc 0004, section 5.6). A release that the
+                     job sees first came out after its last read of the feed, so
+                     its date is the time of that read, or the date of the feed
+                     if that is earlier: a stop of the job never moves a fail
+                     late. A list that is there and can not be read gives no
+                     result and stays as it is.
   tfc-mfa-required   tnwks-ops (terraform-cloud-organization). The
                      authentication policy of the organization. It fails (1)
                      when the policy is not two_factor_mandatory. It runs only
@@ -189,7 +196,7 @@ def http_get(url: str, headers: dict[str, str] | None = None) -> tuple[int, byte
 
 
 def version_key(text: str) -> tuple[int, ...]:
-    """7.25.1 -> (7, 25, 1). The leading number of a label such as "7.25.1 (stable)"."""
+    """7.90.1 -> (7, 90, 1). The leading number of a label such as "7.90.1 (stable)"."""
     match = re.match(r"\s*([0-9]+(?:\.[0-9]+)*)", text)
     if not match:
         raise QueryError("not a version")
@@ -283,8 +290,10 @@ def router_version(args: argparse.Namespace, now: datetime.datetime, get=http_ge
         answer = None
     if lines:
         (line,) = lines
-        if answer is not None and answer != line:
-            raise QueryError("the version lines and Prometheus give two versions")
+        if answer is not None:
+            if answer != line:
+                raise QueryError("the version lines and Prometheus give two versions")
+            print(f"routeros-firmware for {args.router}: the version lines and Prometheus agree", flush=True)
         return line
     print(f"routeros-firmware for {args.router}: no version line in {LINE_WINDOW_HOURS} hours", flush=True)
     if answer is None:
@@ -320,25 +329,43 @@ def newest_release(get=http_get, feed: str = FEED) -> tuple[tuple[int, ...], dat
     return max(releases)
 
 
-def read_releases(path: Path) -> dict[str, float]:
-    """{version: the time it came out} of each newest release the job saw. A missing file
-    is the first run. A file that is there and can not be read is a QueryError."""
+def read_releases(path: Path) -> tuple[dict[str, float], float | None]:
+    """{version: the time it came out} of each newest release the job saw, and the time of
+    the last read of the feed (None in the first run, and in a list of the old form,
+    version 1). A file that is there and can not be read is a QueryError."""
     if not path.exists():
-        return {}
+        return {}, None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         seen = data["first_seen"]
-        if data.get("version") != 1 or not isinstance(seen, dict):
-            raise ValueError("not version 1")
+        if data.get("version") not in (1, 2) or not isinstance(seen, dict):
+            raise ValueError("not version 1 or 2")
+        last_read = None
+        if data["version"] == 2:
+            last_read = data["last_read"]
+            if not isinstance(last_read, (int, float)) or isinstance(last_read, bool):
+                raise TypeError("the time of the last read is not a number")
+            last_read = float(last_read)
         out = {}
         for version, moment in seen.items():
             version_key(version)
             if not isinstance(moment, (int, float)) or isinstance(moment, bool):
                 raise TypeError("a time is not a number")
             out[version] = float(moment)
-        return out
+        return out, last_read
     except (OSError, ValueError, KeyError, TypeError, QueryError) as error:
         raise QueryError(f"{path.name} can not be read: {type(error).__name__}") from None
+
+
+def first_date(published: datetime.datetime, last_read: float | None, now: datetime.datetime) -> float:
+    """The date of a release that the job sees first. It came out after the last read of
+    the feed, so that time, or the date of the feed if that is earlier. With no last read,
+    the date of the feed, or now if the feed gives a later one. A last read after now
+    comes from a clock that was ahead: it bounds nothing, so the age is not known, and
+    counts as old (the time 0)."""
+    if last_read is not None and last_read > now.timestamp():
+        return 0.0
+    return min(published.timestamp(), now.timestamp() if last_read is None else last_read)
 
 
 def firmware(running: tuple[int, ...], releases: dict[str, float], now: datetime.datetime,
@@ -348,6 +375,12 @@ def firmware(running: tuple[int, ...], releases: dict[str, float], now: datetime
     limit = now.timestamp() - grace_days * 86400
     late = [version for version, moment in releases.items() if version_key(version) > running and moment < limit]
     return sorted(late, key=version_key, reverse=True)
+
+
+def behind_each(running: tuple[int, ...], releases: dict[str, float]) -> bool:
+    """The router runs a version older than each release of the list: the releases between
+    are not in it, so their age is not known, and it counts as old."""
+    return bool(releases) and all(version_key(version) > running for version in releases)
 
 
 def tfc_policy(token: str, organization: str = TFC_ORGANIZATION, get=http_get) -> str:
@@ -380,16 +413,27 @@ def tests(args: argparse.Namespace, now: datetime.datetime, get=http_get) -> tup
 
     try:
         path = args.results / SOURCE / RELEASES
-        releases = read_releases(path)
+        releases, last_read = read_releases(path)
         newest, published = newest_release(get, args.feed)
         if show(newest) not in releases:
-            # The date of the feed, or now if the feed gives a later one.
-            releases[show(newest)] = min(published.timestamp(), now.timestamp())
-            write_json(args.results, RELEASES, {"version": 1, "first_seen": releases})
+            releases[show(newest)] = first_date(published, last_read, now)
+        # Each read of the feed is kept, so the next release that the job sees first
+        # gets this time at the latest.
+        write_json(args.results, RELEASES, {"version": 2, "first_seen": releases, "last_read": now.timestamp()})
         running = router_version(args, now, get)
         late = firmware(running, releases, now, args.grace_days)
-        entry = {"check": "routeros-firmware", "system": args.router, "failed": int(bool(late)), "severity": "high"}
-        if late:
+        unknown = behind_each(running, releases)
+        entry = {"check": "routeros-firmware", "system": args.router, "failed": int(bool(late) or unknown),
+                 "severity": "high"}
+        if unknown:
+            oldest = min(releases, key=version_key)
+            seen = datetime.datetime.fromtimestamp(releases[oldest], UTC).date().isoformat()
+            entry["findings"] = [{
+                "resource": args.router,
+                "message": f"RouterOS {show(running)} runs, older than each stable release that the job has seen"
+                           f" (the oldest is {oldest}, dated {seen}). The age of the releases between is not known.",
+            }]
+        elif late:
             out = datetime.datetime.fromtimestamp(releases[late[0]], UTC).date().isoformat()
             entry["findings"] = [{
                 "resource": args.router,

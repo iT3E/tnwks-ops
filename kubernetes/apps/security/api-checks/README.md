@@ -12,7 +12,7 @@ the API checks"). On homelab-wsl-02 only.
 
 | Check | System | What it reads | What fails | Severity |
 | --- | --- | --- | --- | --- |
-| `routeros-firmware` (safeguard 12.1) | `sce-rtr01` | The version that the router runs: its version lines of the last 3 hours in the Loki of this site, and the label `version` of `mktxp_system_uptime` in the Prometheus of homelab-wsl, where mktxp reads the router with its read-only account (below). The newest stable release and its date: the release feed of the vendor, `https://cdn.mikrotik.com/routeros/latest-stable.rss` | The router runs an older version than a stable release that came out more than 14 days ago (Design Doc 0004, section 4.1.4), of each release that the job has seen | `high`, so a new fail alerts |
+| `routeros-firmware` (safeguard 12.1) | `sce-rtr01` | The version that the router runs: its version lines of the last 3 hours in the Loki of this site, and the label `version` of `mktxp_system_uptime` in the Prometheus of homelab-wsl, where mktxp reads the router with its read-only account (below). The newest stable release and its date: the release feed of the vendor, `https://cdn.mikrotik.com/routeros/latest-stable.rss` | The router runs an older version than a stable release that came out more than 14 days ago (Design Doc 0004, section 4.1.4), of each release that the job has seen. Or, at once, a version older than each release that the job has seen, as the age of the releases between is not known (section 5.6) | `high`, so a new fail alerts |
 | `tfc-mfa-required` (safeguards 6.3 and 6.5) | `tnwks-ops` | `collaborator-auth-policy` of `GET https://app.terraform.io/api/v2/organizations/tnwks-ops` ([the API of HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organizations#show-an-organization)) | The policy is not `two_factor_mandatory` | `high` (Design Doc 0004, section 5.8), so a new fail alerts |
 
 Each test reads, and none changes a setting. The test of the router needs no
@@ -46,7 +46,9 @@ decides:
 A line that disagrees with another line, or with an answering Prometheus,
 gives no result. A fault of mktxp alone shows as a late result while the
 lines still come. An upgrade of the router in the 3 hours before a run also
-gives no result that day.
+gives no result that day. The log of each run names the source of the version:
+the version lines and Prometheus agree, the lines decide, or no version line
+came in 3 hours.
 
 **The way back** of the version line is a revert of its merge, and three
 steps that a revert does not do. The apply of Terraform removes the
@@ -70,15 +72,39 @@ after the converter reads the file. With no token, the test of Terraform Cloud d
 run, and the run does not fail for it.
 
 The feed holds the newest release only. So the job keeps each newest
-release it sees, with the date of the feed (or the time of the run, when
-the feed gives a later one), in `api-check/routeros-releases.json` on the
-volume, written in one move. A router two releases behind then fails on the
-older release, even while the newest is less than 14 days old. The list
-starts at the first run: a release older than the first run that the feed no
-longer shows is not in it. A list that is there and can not be read gives no
-result for the router, and the run leaves it as it is, so no date is lost.
-The converter reads `api-check/results.json` only, so it does not read the
-list.
+release it sees, with its date, and the time of its last read of the feed,
+in `api-check/routeros-releases.json` on the volume, written in one move
+after each read of the feed. A router two releases behind then fails on the
+older release, even while the newest is less than 14 days old.
+
+**An age that the job does not know counts as old** (Design Doc 0004,
+section 5.6).
+
+- **The date of a release that the job sees first.** It came out after the
+  last read of the feed. So its date is the time of that read, or the date
+  of the feed if that is earlier. In daily runs, that moves a fail up to one
+  day early. After a stop of the job, it moves a fail up to the length of the
+  stop early, and never late. With no last read (the first run, or a list of
+  the old form), the date is the one of the feed, or the time of the run if
+  the feed gives a later one. A last read later than the time of the run
+  comes from a clock that was ahead. It bounds nothing, so such a release
+  gets the time 0, and a router behind it fails at once.
+- **A router behind each release of the list.** The list starts at the
+  first run, so a release between the router and the oldest release of the
+  list is not in it. A router that runs a version older than each release of
+  the list fails at once, and the finding says that the age is not known.
+  This rule assumes that the vendor numbers its stable releases in the order
+  that it publishes them.
+
+A list that is there and can not be read gives no result for the router, and
+the run leaves it as it is, so no date is lost. A release that the vendor
+withdraws stays in the list, so a router below it fails until it runs a
+newer version.
+
+**The way back for a damaged list.** Delete `api-check/routeros-releases.json`
+from the volume of results. The next run starts a new list, and a router
+behind the newest release then fails at once, as its age is not known. The converter reads
+`api-check/results.json` only, so it does not read the list.
 
 **The first result, then the source.** A system lists `api-check` in
 `sources` of `security/registry/systems.yaml` only after its first result is

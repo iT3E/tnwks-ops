@@ -15,9 +15,9 @@ tests:
       - insert_at: routeros_security
         type: vrl
         source: |
-          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01 version=7.25")
+          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01 version=7.90")
           assert_eq!(.appname, "tnwks-routeros-version")
-          assert_eq!(.message, "router=sce-rtr01 version=7.25")
+          assert_eq!(.message, "router=sce-rtr01 version=7.90")
     no_outputs_from:
       - routeros_security
   - name: the version line with its channel as the syslog source parses it stays out too
@@ -37,7 +37,7 @@ tests:
           facility: daemon
           host: sce-rtr01
           hostname: sce-rtr01
-          message: "router=sce-rtr01 version=7.25"
+          message: "router=sce-rtr01 version=7.90"
           severity: info
           source_ip: 192.0.2.1
           source_type: syslog
@@ -48,7 +48,7 @@ tests:
       - insert_at: routeros_security
         type: vrl
         source: |
-          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01 version=7.25 and more")
+          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01 version=7.90 and more")
     outputs:
       - extract_from: routeros_security
         conditions:
@@ -67,6 +67,46 @@ tests:
           - type: vrl
             source: |
               assert_eq!(.message, "router=sce-rtr01")
+  - name: a line with the tag of the version line and a version that is not one stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: vrl
+        source: |
+          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 tnwks-routeros-version router=sce-rtr01 version=x")
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "router=sce-rtr01 version=x")
+  - name: a line with a tag that only contains the prefix stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: vrl
+        source: |
+          . = parse_syslog!("<30>2026-11-16T09:15:00.000+00:00 sce-rtr01 my-tnwks-routeros-version router=sce-rtr01 version=7.90.1")
+          assert_eq!(.appname, "my-tnwks-routeros-version")
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.appname, "my-tnwks-routeros-version")
+  - name: a line with a tag that holds the prefix and goes on stays in the security stream
+    inputs:
+      - insert_at: routeros_security
+        type: log
+        log_fields:
+          appname: tnwks-routeros-versions
+          message: "router=sce-rtr01 version=7.90.1"
+          hostname: sce-rtr01
+          severity: info
+    outputs:
+      - extract_from: routeros_security
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.appname, "tnwks-routeros-versions")
   - name: a line of the router as the syslog source parses it stays in the security stream
     inputs:
       - insert_at: routeros_security
