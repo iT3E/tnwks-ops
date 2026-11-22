@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.278.1 - 2026-11-22
+
+### Security
+
+* CI: the gates that run code of a branch ask pr-trust.yaml first, which runs owner-label-check.py --trust of main. For anyone but the owner or Renovate alone, the job Changes runs bin/ci-changes and .github/ci of main from the merge base and fails a PR whose base is not main, the rendered diff runs the scripts of main, the Terraform plan waits for the owner, the EdgeOS plan does not run, and the host check waits for the approval of the owner. The job Changes chooses the jobs before any code of the branch runs in it. A PR of Renovate runs nothing in the host workflow, as before. The host workflow and the link check run a hand start on main only, and an apply of the host workflow waits in the environment prod. The privacy check and the secret scan run on each push to a branch under agent/, with no path filter. A new workflow, merge-notice.yaml, posts each merge of the App of the main agent to the owner, and opens an issue for the owner when the notice fails. Test: .github/scripts/test_ci_gates.py.
+
 ## v2.278.0 - 2026-11-22
 
 ### Added
