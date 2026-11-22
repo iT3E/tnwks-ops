@@ -579,6 +579,161 @@ tests:
     exp_samples:
     - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
       value: 3
+- name: a Flux object not Ready for an hour fires once, across its retries and a scrape gap
+  interval: 1m
+  input_series:
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="broken",pod="a"}
+    values: 0x19 stale 0x19 stale 0x9 stale _x2 0x15 1x30
+  - series: homelab_flux_resource_suspended{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="broken",pod="a"}
+    values: 0x51 stale _x2 0x46
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="fine",pod="a"}
+    values: 1x100
+  - series: homelab_flux_resource_suspended{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="fine",pod="a"}
+    values: '0x100'
+  alert_rule_test:
+  - alertname: FluxResourceNotReady
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: FluxResourceNotReady
+    eval_time: 61m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        namespace: flux-system
+        kind: Kustomization
+        resource: broken
+      exp_annotations:
+        summary: The Kustomization flux-system/broken on one has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=one
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
+  - alertname: FluxResourceNotReady
+    eval_time: 75m
+    exp_alerts: []
+- name: a Flux object that waits out its timeout at each try fires after an hour
+  interval: 1m
+  input_series:
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="waits",pod="a"}
+    values: 0 stale _x14 0 stale _x14 0 stale _x14 0 stale _x14 0 stale _x14 0 stale _x14 0 stale _x14
+  - series: homelab_flux_resource_suspended{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="waits",pod="a"}
+    values: '0x112'
+  alert_rule_test:
+  - alertname: FluxResourceNotReady
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: FluxResourceNotReady
+    eval_time: 62m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        namespace: flux-system
+        kind: Kustomization
+        resource: waits
+      exp_annotations:
+        summary: The Kustomization flux-system/waits on one has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=one
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
+  - alertname: FluxResourceNotReady
+    eval_time: 100m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        namespace: flux-system
+        kind: Kustomization
+        resource: waits
+      exp_annotations:
+        summary: The Kustomization flux-system/waits on one has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=one
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
+- name: a new pod of the collector gives no second alert
+  interval: 1m
+  input_series:
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="broken",pod="a"}
+    values: 0x40 stale
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="broken",pod="b"}
+    values: _x38 0x60
+  alert_rule_test:
+  - alertname: FluxResourceNotReady
+    eval_time: 70m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        namespace: flux-system
+        kind: Kustomization
+        resource: broken
+      exp_annotations:
+        summary: The Kustomization flux-system/broken on one has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=one
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
+- name: a suspended object, one that is Ready again in time, and a first install do not fire
+  interval: 1m
+  input_series:
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="paused",pod="a"}
+    values: '0x90'
+  - series: homelab_flux_resource_suspended{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="paused",pod="a"}
+    values: 1x90
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="flaky",pod="a"}
+    values: 0x50 1x40
+  - series: homelab_flux_resource_suspended{k8s_cluster="one",namespace="flux-system",kind="HelmRelease",resource="installing",pod="a"}
+    values: '0x90'
+  alert_rule_test:
+  - alertname: FluxResourceNotReady
+    eval_time: 85m
+    exp_alerts: []
+- name: an object of each site fires on its own
+  interval: 1m
+  input_series:
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="same",pod="a"}
+    values: '0x90'
+  - series: homelab_flux_resource_ready{k8s_cluster="two",namespace="flux-system",kind="Kustomization",resource="same",pod="a"}
+    values: '0x90'
+  - series: homelab_flux_resource_ready{k8s_cluster="two",namespace="flux-system",kind="Kustomization",resource="other",source_site="two"}
+    values: '0x90'
+  alert_rule_test:
+  - alertname: FluxResourceNotReady
+    eval_time: 70m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        namespace: flux-system
+        kind: Kustomization
+        resource: same
+      exp_annotations:
+        summary: The Kustomization flux-system/same on one has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=one
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
+    - exp_labels:
+        severity: warning
+        k8s_cluster: two
+        namespace: flux-system
+        kind: Kustomization
+        resource: same
+      exp_annotations:
+        summary: The Kustomization flux-system/same on two has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=two
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
 - name: an app's backup age is its oldest piece, and a piece without evidence is Unknown
   interval: 1m
   input_series:
