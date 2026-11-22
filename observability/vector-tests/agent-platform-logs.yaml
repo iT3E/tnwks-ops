@@ -2130,3 +2130,253 @@ tests:
       kubernetes.pod_namespace: agents-main
   no_outputs_from:
   - platform_gauges
+- name: 'channel count: a send of a reply that hung until its timeout, with a chat ID and content'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F 2026-11-21T03:00:00.000Z telegram sendMessage failed: network request failed transport={"code":"ETIMEDOUT"} chat=-1009876543210 SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "send_failed"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: an edit of a streamed reply that failed, with colour codes'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: "2026-11-21T03:00:00.000000000Z stderr F \e[31mtelegram editMessageText failed: Bad Request SECRET\e[39m"
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "send_failed"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: the final delivery that failed'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F telegram fallback delivery failed: SECRET'
+      file: /var/log/pods/agents-finance_agent-7c8b-fghij_66666666-7777-8888-9999-000000000000/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-finance", "pattern": "send_failed"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: a stall of the poll'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: 2026-11-21T03:00:00.000000000Z stderr F [telegram] Polling stall detected (active getUpdates stuck for 2m 0.1s); forcing restart.
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "poll_stall"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: a restart of the poll'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: 2026-11-21T03:00:00.000000000Z stderr F [telegram] Telegram isolated polling ingress stopped; restarting in 1m 0s.
+      file: /var/log/pods/agents-finance_agent-7c8b-fghij_66666666-7777-8888-9999-000000000000/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-finance", "pattern": "poll_restart"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: a restart of the channel by the health monitor'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F [health-monitor] [telegram:default] health-monitor: restarting (reason: stale-socket)'
+      file: /var/log/pods/agents-finance_agent-7c8b-fghij_66666666-7777-8888-9999-000000000000/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-finance", "pattern": "channel_restart"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: the typing cue is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F telegram sendChatAction failed: SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: a message in is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: 2026-11-21T03:00:00.000000000Z stderr F [telegram] Inbound message telegram:-1009876543210 -> SECRET
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: a line of the pilot is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F telegram sendMessage failed: SECRET'
+      file: /var/log/pods/agents-pilot_agent-1a2b-klmno_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/agent/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: a line of another container of the pod is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F telegram sendMessage failed: SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/backup/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: the counter has only the namespace and the pattern'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F telegram sendMessage failed: SECRET -1009876543210'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_metrics
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.name, "agent_channel_error_lines_total")
+
+        assert_eq!(.namespace, "homelab")
+
+        assert_eq!(.kind, "incremental")
+
+        assert_eq!(.tags, {"pattern": "send_failed", "pod_namespace": "agents-main"})
+
+        '
+- name: 'channel count: a failed send as the console writes it'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F 2026-11-21T03:00:00.000+00:00 [telegram] sendMessage failed: network request failed transport={"code":"ECONNRESET"} SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "send_failed"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: a failed final delivery as the console writes it'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F [telegram] fallback delivery failed: SECRET'
+      file: /var/log/pods/agents-finance_agent-7c8b-fghij_66666666-7777-8888-9999-000000000000/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-finance", "pattern": "send_failed"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: a restart of the poll as the console writes it'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: 2026-11-21T03:00:00.000000000Z stderr F [telegram] isolated polling ingress restart requested; restarting in 30s.
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "poll_restart"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: the typing cue as the console writes it is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F [telegram] sendChatAction failed: SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: the diag line of a failed poll is not counted twice'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F [telegram] [diag] isolated polling ingress failed: SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: a send that went out is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: 2026-11-21T03:00:00.000000000Z stderr F [telegram] outbound send ok accountId=default chatId=-1009876543210 messageId=7 operation=sendMessage
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: a failed send with the tag of the account'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F [telegram] [default] sendMessage failed: SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "send_failed"})
+
+        '
+- name: 'channel count: the typing cue with the tag of the account is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-21T03:00:00.000000000Z stderr F [telegram] [default] sendChatAction failed: SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  no_outputs_from:
+  - agent_channel_count

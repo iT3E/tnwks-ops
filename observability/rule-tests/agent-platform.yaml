@@ -496,3 +496,67 @@ tests:
       - alertname: AgentTurnNotEnded
         eval_time: 80m
         exp_alerts: []
+
+  - name: one failed send of a reply fires, and the alert ends 30 minutes after the last line
+    interval: 1m
+    input_series:
+      # The zero series of the platform Vector, then one send_failed line at 10m.
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-main", pattern="send_failed"}
+        values: 0x9 1x60
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-finance", pattern="send_failed"}
+        values: 0x70
+    alert_rule_test:
+      - alertname: AgentChannelFailing
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: AgentChannelFailing
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-main, pattern: send_failed}
+      - alertname: AgentChannelFailing
+        eval_time: 41m
+        exp_alerts: []
+
+  - name: a restart of the channel by the health monitor fires
+    interval: 1m
+    input_series:
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-finance", pattern="channel_restart"}
+        values: 0x19 1x30
+    alert_rule_test:
+      - alertname: AgentChannelFailing
+        eval_time: 21m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-finance, pattern: channel_restart}
+
+  - name: a poll that stalls once and comes back does not fire, a poll that stops does
+    interval: 1m
+    input_series:
+      # One stall and one restart at 5m (the poll came back), then from 61m
+      # a stall and a restart every 6 minutes: 2 in the 30 minutes up to
+      # 68m, 3 up to 75m.
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-main", pattern="poll_stall"}
+        values: 0x4 1x55 2x5 3x5 4x5 5x30
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-main", pattern="poll_restart"}
+        values: 0x4 1x55 2x5 3x5 4x5 5x30
+    alert_rule_test:
+      - alertname: AgentChannelFailing
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: AgentChannelFailing
+        eval_time: 68m
+        exp_alerts: []
+      - alertname: AgentChannelFailing
+        eval_time: 75m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-main, pattern: poll_stall}
+          - exp_labels: {severity: warning, pod_namespace: agents-main, pattern: poll_restart}
+
+  - name: a restart of the platform Vector starts the count again and does not fire
+    interval: 1m
+    input_series:
+      - series: homelab_agent_channel_error_lines_total{namespace="monitoring", pod="vector-agent-platform-a", pod_namespace="agents-main", pattern="send_failed"}
+        values: 3x40 _x2 0x30
+    alert_rule_test:
+      - alertname: AgentChannelFailing
+        eval_time: 65m
+        exp_alerts: []

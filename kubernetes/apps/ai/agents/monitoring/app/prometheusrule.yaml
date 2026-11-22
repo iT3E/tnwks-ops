@@ -465,3 +465,33 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentturnnotended"
             summary: "{{ $labels.job }} took a message on {{ $labels.openclaw_channel }} and has not ended its turn for 30 minutes."
             description: "{{ $value }} messages of this agent have no end of their turn. The AI board, tab Messages, row Messages with no end, shows the gap. The chat may get no reply until the channel or the pod starts again."
+
+        - alert: AgentChannelFailing
+          # The Telegram channel of a personal agent logged error lines in the
+          # last 30 minutes. The platform Vector counts them on the node from
+          # the log of the agent container, as fixed patterns, and only the
+          # count leaves the node: the log itself does not ship
+          # (docs/apps/agent-platform.md, "Logs"). One line is enough for a
+          # reply that did not reach the chat (send_failed: a call to send or
+          # edit a message failed after its retries, or it hung until its
+          # timeout of 60 seconds) and for a restart of the channel by the
+          # health monitor of the product (channel_restart: the channel was
+          # stuck or its socket stale for 25 to 30 minutes). The poll restarts
+          # itself after one stall, so it takes 3 lines of the poll
+          # (poll_stall, poll_restart) in 30 minutes: the poll stopped and did
+          # not come back after two restarts. This catches what
+          # AgentTurnNotEnded does not: a final reply that hangs or fails
+          # after the turn ended, and a poll that stops. A reply that the chat
+          # API took but did not show, and a failure that the product does
+          # not log, are not caught.
+          expr: |
+            sum by (pod_namespace, pattern) (increase(homelab_agent_channel_error_lines_total{pattern=~"send_failed|channel_restart"}[30m])) > 0
+            or
+            sum by (pod_namespace, pattern) (increase(homelab_agent_channel_error_lines_total{pattern=~"poll_stall|poll_restart"}[30m])) >= 3
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-ai?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentchannelfailing"
+            summary: "The Telegram channel of {{ $labels.pod_namespace }} logged {{ $labels.pattern }} lines in the last 30 minutes."
+            description: "About {{ $value | humanize }} lines of the pattern {{ $labels.pattern }}. Only the count leaves the node; the runbook says how to read the lines on the pod. The chat may get no reply, or a reply may be lost."

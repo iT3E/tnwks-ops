@@ -3,7 +3,9 @@
 # allowlist and of the sandbox supervisors of agents-workflows, drops what can
 # hold content before a line leaves the node, and sends the rest to the
 # aggregator, as the pod-log agent does. It also serves the gauges of the
-# alerts of the platform and the use of the Claude plan. The tests are in
+# alerts of the platform and the use of the Claude plan, and a count of
+# fixed error patterns of the chat channel of the agents (agent_channel):
+# that log never leaves the node, only the count. The tests are in
 # observability/vector-tests/agent-platform-logs.yaml.
 data_dir: /vector-data-dir
 # Vector's own metrics (internal_metrics) stay for an hour after their last
@@ -40,6 +42,23 @@ sources:
     extra_label_selector: "openshell.ai/component=supervisor,openshell.ai/boundary-role=supervisor"
     glob_minimum_cooldown_ms: 2000
 
+  # The log of the agent container of the agents with a Telegram channel
+  # (main, finance), read from the files of the node, only to count the
+  # error lines of the channel (agent_channel_count). Its lines go to no sink:
+  # the count is the only thing that leaves the node. The pods exclude this
+  # container from kubernetes_logs (vector.dev/exclude-containers: agent), so
+  # a file source is the one way to read it, and the paths pin the namespace
+  # and the container. At the start of Vector it reads from the end of each
+  # file, so old lines are not counted again; a file that comes later (a new
+  # pod) is read from its start, and a restart resumes at the checkpoint.
+  agent_channel:
+    type: file
+    include:
+      - /var/log/pods/agents-main_agent-*/agent/*.log
+      - /var/log/pods/agents-finance_agent-*/agent/*.log
+    read_from: end
+    glob_minimum_cooldown_ms: 2000
+
   internal_metrics:
     type: internal_metrics
 
@@ -68,6 +87,23 @@ sources:
       - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: output}}
       - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: cache_read}}
       - {name: model_bridge_tokens_total, kind: incremental, value: {counter: {value: 0}}, tags: {domain: workflows, model: claude-opus-5-5, token: cache_write}}
+
+  # The counter of each agent and pattern of agent_channel_count, at 0 from the
+  # start of the pod and again every 30 seconds, as token_zero: increase()
+  # then sees the first line, and the series lives while no line comes.
+  channel_zero:
+    type: static_metrics
+    namespace: homelab
+    interval_secs: 30
+    metrics:
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-main, pattern: send_failed}}
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-main, pattern: poll_stall}}
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-main, pattern: poll_restart}}
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-main, pattern: channel_restart}}
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-finance, pattern: send_failed}}
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-finance, pattern: poll_stall}}
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-finance, pattern: poll_restart}}
+      - {name: agent_channel_error_lines_total, kind: incremental, value: {counter: {value: 0}}, tags: {pod_namespace: agents-finance, pattern: channel_restart}}
 
 transforms:
   # The gateway's lines lose, in order: colour codes; a whole OCSF JSON
@@ -261,6 +297,78 @@ transforms:
         abort
       }
 
+  # The error lines of the Telegram channel of an agent, from the product's
+  # source at the pinned release (OpenClaw 2026.11.3, agent image 0.4.1),
+  # as fixed patterns:
+  #   - send_failed: a reply that did not reach the chat. Each call of the
+  #     chat API that fails after its retries logs `telegram <method> failed:`
+  #     (extensions/telegram/src/api-logging.ts); a send that hangs ends at
+  #     its timeout (60 s for sendMessage, request-timeouts.ts) with the same
+  #     line. Also the final delivery of a reply that failed (`telegram
+  #     fallback delivery failed:`). Not the typing cue (`sendChatAction`),
+  #     and not an edit that changed nothing (the product does not log it).
+  #   - poll_stall: the watchdog of the poll saw no completed getUpdates for
+  #     2 minutes (`Polling stall detected (`, polling-session.ts).
+  #   - poll_restart: the poll ended and restarts after a wait
+  #     (`Telegram isolated polling ingress failed|stopped|restart requested;
+  #     restarting in`).
+  #   - channel_restart: the health monitor of the product restarted the
+  #     Telegram channel, its restart failed, or it hit its limit of restarts
+  #     an hour (`[telegram:<account>] health-monitor: restarting|restart
+  #     failed|hit`, channel-health-monitor.ts).
+  # The console logger of the product drops the word "telegram" at the
+  # start of a message of its telegram subsystem and writes "[telegram] "
+  # before it (src/logging/subsystem.ts; the live line `[telegram] outbound
+  # send ok` is the message `telegram outbound send ok`), so a pattern takes
+  # both forms, with or without the tag of the account ([default]) after
+  # "[telegram] ", as the start line of the channel has it.
+  # The event becomes only {pod_namespace, pattern}: the namespace from the path
+  # of the file (a fixed list), the pattern a fixed name. No word of the line
+  # stays, and any other line is dropped.
+  agent_channel_count:
+    type: remap
+    inputs:
+      - agent_channel
+    source: |
+      path = string(.file) ?? ""
+      ns = if starts_with(path, "/var/log/pods/agents-main_agent-") {
+        "agents-main"
+      } else if starts_with(path, "/var/log/pods/agents-finance_agent-") {
+        "agents-finance"
+      } else {
+        ""
+      }
+      if ns == "" || !contains(path, "/agent/") { abort }
+      msg = replace(string(.message) ?? "", r'\x1b\[[0-9;]*m', "")
+      pattern = if match(msg, r'(?:\[telegram\] (?:\[[A-Za-z0-9_-]+\] )?|\btelegram )(?:send|edit)[A-Za-z]* failed: ') && !match(msg, r'(?:\[telegram\] (?:\[[A-Za-z0-9_-]+\] )?|\btelegram )sendChatAction failed: ') {
+        "send_failed"
+      } else if match(msg, r'(?:\[telegram\] (?:\[[A-Za-z0-9_-]+\] )?|\btelegram )fallback delivery failed: ') {
+        "send_failed"
+      } else if match(msg, r'\bPolling stall detected \((?:active getUpdates stuck|no completed getUpdates) for ') {
+        "poll_stall"
+      } else if match(msg, r'(?:\[telegram\] (?:\[[A-Za-z0-9_-]+\] )?|\bTelegram )isolated polling ingress (?:failed|stopped|restart requested); restarting in ') {
+        "poll_restart"
+      } else if match(msg, r'\[telegram:[A-Za-z0-9_-]+\] health-monitor: (?:restarting \(reason: |restart failed: |hit \d+ restarts/hour limit)') {
+        "channel_restart"
+      } else {
+        ""
+      }
+      if pattern == "" { abort }
+      . = {"pod_namespace": ns, "pattern": pattern}
+
+  agent_channel_metrics:
+    type: log_to_metric
+    inputs:
+      - agent_channel_count
+    metrics:
+      - type: counter
+        namespace: homelab
+        name: agent_channel_error_lines_total
+        field: pattern
+        tags:
+          pod_namespace: "{{ pod_namespace }}"
+          pattern: "{{ pattern }}"
+
   platform_gauge_route:
     type: route
     inputs:
@@ -430,4 +538,6 @@ sinks:
       - plan_metrics
       - token_now
       - token_zero
+      - agent_channel_metrics
+      - channel_zero
     address: 0.0.0.0:9598
