@@ -3,6 +3,13 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.277.0 - 2026-11-22
+
+### Changed
+
+* Security: the firmware test of the API checks job counts an age that it does not know as old. A router that runs a version older than each release that the job has seen fails at once, and a release that the job sees first is dated by its last read of the feed, or by the date of the feed if that is earlier, so a stop of the job never moves a fail late. The list of releases keeps the time of the last read (version 2).
+* Security: the log of each run of the API checks job says when the version lines of the router and Prometheus agree, so it names the source of the version in each case. The tests of the version line add a tag that only contains the prefix, a version that is not one, and a line that is not the JSON of an event.
+
 ## v2.276.0 - 2026-11-22
 
 ### Changed
