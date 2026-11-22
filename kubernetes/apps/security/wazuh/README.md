@@ -36,7 +36,7 @@ policy `flux-child-scope`, `../../flux-system/admission`):
 
 | Kustomization | What it applies |
 | --- | --- |
-| `security-wazuh` | `app/`: the certificates, the network rules, the agents Service and the configuration of the manager |
+| `security-wazuh` | `app/`: the four Secrets, the certificates, the network rules, the agents Service and the configuration of the manager |
 | `security-wazuh-server` | `server/`: the vendor's manifests that this app keeps, with the images by digest and the patches of `ks.yaml` |
 
 The vendor's files left out, so they never reach a cluster:
@@ -84,8 +84,9 @@ The patches of `security-wazuh-server`:
   vendor's init containers read, through projected volumes.
 - The manager reads `app/config/wazuh-manager.conf` (see "The manager").
 - Volumes on `${STORAGE_CLASS_DEFAULT}`: 15 GiB for the manager and 30 GiB
-  for the indexer (Design Doc 0004, section 10.1). The class enforces no
-  size, so the drive of the site is the real limit.
+  for the indexer (Design Doc 0004, section 10.1), and the vendor's 1 GiB
+  PVC of the dashboard's configuration (`wazuh-dashboard-config`). The class
+  enforces no size, so the drive of the site is the real limit.
 
 A strategic merge patch of a list puts the init containers that it names
 first. None of them reads what another one writes.
@@ -155,6 +156,10 @@ the manager to the indexer on 9200, the dashboard to the manager API on
 The vendor's `manager-egress-external.yaml` (any address on 443) is not
 applied. The manager and the dashboard have no route out of the cluster, so
 neither reaches an update service.
+
+No route reaches the dashboard: its Service is ClusterIP, there is no
+Ingress or HTTPRoute, and no network rule lets traffic in. How a person
+reaches it, and as which user, is a later change.
 
 The agents reach the manager on a shared VIP (`app/service-agents.yaml`,
 `docs/wsl/multi-site.md`, "Shared VIPs"): `WAZUH_AGENTS_LB_ADDR`, an address
@@ -476,11 +481,13 @@ What other apps and workstreams read from here:
 ## The merges that list it
 
 Before the first merge, the memory limit of the node container of worker 1
-of homelab-wsl-02 goes up to the figure of `../README.md`, "Placement" (a
-change of its own), so the server fits in the budget of `../README.md`,
-"Memory".
+of homelab-wsl-02 goes up to the figure of `../README.md`, "Placement", so
+the server fits in the budget of `../README.md`, "Memory". That is a change
+of its own, merged by the session that the owner names; its play runs on
+site 2 on the owner's go.
 
-1. The first merge lists `ks.yaml` in the apps of homelab-wsl-02, with:
+1. The first merge, merged after an independent review, lists `ks.yaml` in
+   the apps of homelab-wsl-02, with:
    - `WAZUH_AGENTS_LB_ADDR` and `WAZUH_AGENTS_HOST` in the cluster-settings
      of homelab-wsl-02;
    - the four Secrets of this app ("Secrets"), listed in
@@ -491,6 +498,23 @@ change of its own), so the server fits in the budget of `../README.md`,
      `kubernetes/apps/security/`, so the admission policy
      `flux-child-scope` (`../../flux-system/admission`) lists both in its
      class.
+
+   After it, check that:
+   - both Kustomizations, `security-wazuh` and `security-wazuh-server`, are
+     Ready;
+   - the three pods (`wazuh-manager-master-0`, `wazuh-indexer-0` and the
+     dashboard) are Ready;
+   - the Service `wazuh-agents` holds `WAZUH_AGENTS_LB_ADDR`.
+
+   `security-wazuh-server` has `wait: false`, so Flux stays Ready while a
+   pod fails. The rules of the platform then tell: `KubePodNotReady` and
+   the replica mismatch of a StatefulSet or a Deployment, after 15 minutes;
+   `KubePodCrashLooping` for a container that restarts again and again, as
+   with a bad credential; `OOMKilled` for a container killed at its memory
+   limit; `CertManagerCertNotReady` for a certificate that cert-manager does
+   not issue; and `FluxResourceNotReady` for a Kustomization that does not
+   apply. The table of shared VIPs in `docs/wsl/multi-site.md` gets its row
+   for the address once the address is live.
 2. The owner adds the site record of the agents' name, in
    `infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf`
    (`site_dns_records`), and applies it:
@@ -521,6 +545,28 @@ change of its own), so the server fits in the budget of `../README.md`,
    run, the policy of a new backing index at the first rollover of each
    stream (`rollover_age` after the second merge), and the files of the
    last point at the first start.
+
+## The way back
+
+A revert of the merge that lists `ks.yaml` also reverts, in the same pull
+request, what `classlist.py write` wrote for the two Kustomizations (in
+`policy.yaml` and in the name list of `kubernetes/clusters/wsl-02/apps.yaml`),
+and the pinned listing in `security/tests/test_wazuh_manifests.py`. Without
+them, `classlist.py check` and the test fail. Flux then deletes both
+Kustomizations and what they applied: the four Secrets, the certificates
+and issuers, the network rules, the Service of the agents (its address
+leaves the BGP advertisement), the workloads and the PVC of the dashboard.
+The storage class deletes the volume of a deleted PVC (`reclaimPolicy:
+Delete`), so the dashboard's configuration is lost. Flux leaves the PVCs of
+the StatefulSets (`wazuh-manager-master-wazuh-manager-master-0`,
+`wazuh-indexer-wazuh-indexer-0`): the StatefulSet controller makes them,
+they are not in the inventory of Flux, and the StatefulSets keep them
+(the default retention), with the stored passwords and the data. It also
+leaves the Secrets that cert-manager made (`wazuh-ca` and the six leaf
+Secrets), because nothing gives them an owner reference to their
+Certificates. The owner deletes them, and keeps them only for a return with
+the same four Secrets, because the vendor's parts keep what they stored at
+their first start.
 
 ## Not yet proven on a cluster
 
