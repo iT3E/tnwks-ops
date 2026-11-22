@@ -71,7 +71,7 @@ spec:
                 # The ID of the App is no secret (Design Doc, section 4.2.6).
                 # bin/main-app-key sets it with the key.
                 - name: GITHUB_APP_ID
-                  value: "SET-BY-MAIN-APP-KEY"
+                  value: "5869559"
                 - name: GITHUB_APP_KEY_FILE
                   value: /github-app/private-key.pem
                 # What the token may do, in one place: the one repository and
