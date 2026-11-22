@@ -113,6 +113,16 @@ and `sftp-list`. The writes (`run-command`, `privileged-command`,
 `reload-config` and the two tools that move a file of the server pod are
 refused at the gateway.
 
+The agent sees a tool of the server as `host__<tool>`, because the
+manifest of the plugin names the server `host`. Each session of the main
+agent is sandboxed, and in a sandboxed session an MCP tool also passes the
+sandbox allow list. So `tools.sandbox.tools.alsoAllow` in the config of
+the agent names the same six tools as `host__<tool>`, one by one, with no
+wildcard. Without those names the agent lists the tools of the route at
+each turn and gets none of them, so it makes no call and no card. A test
+holds the six names equal to the rule of the route
+(`test_main_host_approval.py`).
+
 ## Network policy
 
 - **In:** port 8080 from the central MCP gateway, and ports 8080 and 3000
@@ -154,6 +164,7 @@ server straight; `test_main_host_approval.py` checks the plugin entry.
 | The Secret `host-mcp-secret`: the profiles with the pinned host key of each target, the private key of the agent user, the bearer token | In git, encrypted to the recipients of the other Secrets of `agents-main`; Flux applies it with the folder. Each value was made or read by a script, and none was typed or shown | `app/secret-host-mcp.sops.yaml`, a resource of `app/kustomization.yaml` |
 | The listing | `./host-mcp/ks.yaml` is listed | `kubernetes/apps/ai/agents/main/kustomization.yaml` |
 | The read list of the plugin | The nine lines of the design, for the profile `agent` (the user in the distro of site 1) | `readList` in the config of the agent |
+| The tools that a session of the agent gets | The six read tools of the route, as `host__<tool>` | `tools.sandbox.tools.alsoAllow` in the config of the agent |
 | `MCP_HOST_KEY` and its hash on `main-host` | Made by the store step of the lead, in the go-live pull request | `agent-secret` of main, and the route |
 | The values of the agent user at site 1: its name, its public key and the source network of its key | In the host secrets of the Windows host and of the distro, with the switch of the role off | The host variables of the Ansible tree |
 | The address at which the pod reaches the SSH server of the distro | Set | `HOST_MCP_DISTRO_ADDR` in the cluster settings of site 1 |
@@ -271,10 +282,11 @@ with `classlist.py write` (the class list loses the child) and
 the declared parts equal to the applied ones). Flux prunes the pod, the
 Service, the policy and the Secret (`prune: true`).
 The route stays with no backend, so a call gets an error from the gateway
-and runs nothing. The key, its hash and the read list can stay; the tests
-take that. A revert of the squash commit of the go-live does the same and
-also takes back the key, its hash and the read list. Until a way back
-merges, the owner answers no card, and a read of the list still runs.
+and runs nothing. The key, its hash, the read list and the six tool names
+of the sandbox allow list can stay; the tests take that. A revert of the
+squash commit of the go-live does the same and also takes back the key,
+its hash and the read list. Until a way back merges, the owner answers no
+card, and a read of the list still runs.
 
 ### The limits
 

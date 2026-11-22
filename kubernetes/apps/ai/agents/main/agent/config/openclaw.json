@@ -96,7 +96,13 @@
       "browser__browser_tabs",
       "browser__browser_take_screenshot",
       "browser__browser_type",
-      "browser__browser_wait_for"
+      "browser__browser_wait_for",
+      "host__list-connections",
+      "host__list-sessions",
+      "host__read-command",
+      "host__read-session-output",
+      "host__sftp-download",
+      "host__sftp-list"
     ]}},
     "sessions": {"visibility": "all"},
     "web": {
