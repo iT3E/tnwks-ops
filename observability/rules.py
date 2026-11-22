@@ -627,6 +627,7 @@ def capacity_alerts():
          "for": "15m", "labels": {"severity": "warning"},
          "annotations": {"summary": f"The drive under the WSL disk of {{{{ $labels.instance }}}} has less than {CAPACITY_DRIVE_FLOOR_GB} GB free",
                          "dashboard_url": board("tnwks-hosts"),
+                         "runbook_url": security_runbook("WslDriveSpaceLow"),
                          "description": ("{{ $labels.volume }} of {{ $labels.instance }} holds the WSL disk file of its cluster, and WSL stops when that drive is full."
                                          " The stores of the cluster delete at a set age: lower the age of the largest one, or free space on the drive.")}},
     ]

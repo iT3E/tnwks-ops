@@ -1628,6 +1628,7 @@ tests:
       exp_annotations:
         summary: The drive under the WSL disk of WSL-02 has less than 100 GB free
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#wsldrivespacelow
         description: 'C: of WSL-02 holds the WSL disk file of its cluster, and WSL stops when that drive is full.
           The stores of the cluster delete at a set age: lower the age of the largest one, or free space on the
           drive.'

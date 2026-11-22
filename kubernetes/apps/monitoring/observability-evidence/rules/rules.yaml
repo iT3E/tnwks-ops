@@ -551,6 +551,7 @@ spec:
       annotations:
         summary: The drive under the WSL disk of {{ $labels.instance }} has less than 100 GB free
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#wsldrivespacelow
         description: '{{ $labels.volume }} of {{ $labels.instance }} holds the WSL disk file of its cluster, and
           WSL stops when that drive is full. The stores of the cluster delete at a set age: lower the age of the
           largest one, or free space on the drive.'

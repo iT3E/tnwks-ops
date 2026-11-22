@@ -39,21 +39,21 @@ own section here (`runbook_url`).
 
 ## The alerts
 
-14 alerts cover the platform:
+15 alerts cover the platform:
 
 - the 3 rules that `security/generate.py` writes from the registry
   (`SecurityResultLate`, `SecurityHostUnreachable`,
   `SecurityAcceptedFindingExpired`);
 - the 8 rules of the group `homelab.security` in `observability/rules.py`;
-- 2 rules of the group `homelab.capacity` in `observability/rules.py` for
+- 3 rules of the group `homelab.capacity` in `observability/rules.py` for
   the room of site 2, where the platform runs (`NodeContainerMemoryNearLimit`,
-  `LokiSecurityIngestAbovePlan`);
+  `LokiSecurityIngestAbovePlan`, `WslDriveSpaceLow`);
 - `PeerSiteUnreachable`, in
   `kubernetes/apps/monitoring/kube-prometheus-stack/app/peer-rules.yaml`,
   which `SecurityHostUnreachable` holds.
 
 The generated rule tests (`promtool test rules`, the `rule-tests` job) are
-the proof of each expression of the first 12. The text of an alert names no
+the proof of each expression of the first 14. The text of an alert names no
 check, finding or value ([`security/README.md`](../../security/README.md#the-text-of-an-alert)).
 
 ### SecurityResultLate
@@ -408,6 +408,42 @@ the WSL VM, and the rule then needs that size too.
 **When it ends.** When the working set is under 90%.
 
 **Who decides.** The owner.
+
+### WslDriveSpaceLow
+
+**What it means.** The drive under the WSL disk of the Windows host of site
+2 has had less than 100 GB free for 15 minutes (`CAPACITY_DRIVE_FLOOR_GB`
+in `observability/rules.py`). The disk file of the distro holds the
+cluster and the stores of the platform, and WSL stops when that drive is
+full. Site 1 evaluates the rule, as it scrapes both Windows hosts.
+
+**First reads.**
+
+1. The board `Hosts` (`tnwks-hosts`): the free space of the drive.
+2. In the Prometheus of site 1:
+   `min by (instance, volume) (windows_logical_disk_free_bytes{volume="C:"})`.
+3. The stores of the cluster of site 2, the largest first:
+
+   ```sh
+   kubectl get pvc -A
+   ```
+
+   and in its Prometheus,
+   `sort_desc(max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes))`.
+
+**The fix.** The stores of the cluster delete at a set age: lower the age
+of the largest one through git, or free space on the drive. The disk file
+of WSL does not give back space that the distro freed until it is
+compacted. On a host in the phase `done` of the move, the compaction is
+the task of SYSTEM `tnwks-vhdx-compact-system`, run on demand
+([`docs/wsl/windows-ansible.md`](../wsl/windows-ansible.md), "The start
+tasks of the account that owns the distro"). It stops the distro for its
+run, so it is owner approval.
+
+**When it ends.** When the drive has 100 GB free again.
+
+**Who decides.** The owner: the age of a store, the space on the drive, and
+each compaction.
 
 ### PeerSiteUnreachable
 
