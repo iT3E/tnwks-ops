@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'security: the runbook of the security platform names the cluster of each kubectl read and the Loki of Trivy Operator on homelab-wsl, makes each read on a Windows host wait for the owner, and says that the compaction of the WSL disk stops the cluster of site 2 for its run'
-time: 2026-11-22T16:00:00.000000000Z

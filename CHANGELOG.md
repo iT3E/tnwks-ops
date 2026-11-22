@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.281.1 - 2026-11-22
+
+### Fixed
+
+* security: the runbook of the security platform names the cluster of each kubectl read and the Loki of Trivy Operator on homelab-wsl, makes each read on a Windows host wait for the owner, and says that the compaction of the WSL disk stops the cluster of site 2 for its run
+
 ## v2.281.0 - 2026-11-22
 
 ### Added
