@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.273.0 - 2026-11-22
+
+### Changed
+
+* windows: site 1 checks its .wslconfig again and no longer writes it, the convention of a host with a cluster, after the first apply of the phase done of the move
+
 ## v2.272.0 - 2026-11-22
 
 ### Changed
