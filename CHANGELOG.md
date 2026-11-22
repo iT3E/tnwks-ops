@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.265.0 - 2026-11-22
+
+### Added
+
+* agents: AgentPlatformCheckStale also covers the daily key check of the model gateway (ai/litellm-key-check): it fires when the check has not passed in 26 hours, or never passed once a run was due. Before, a key check that stopped (its CronJob suspended, or its failed Job gone with no newer run) raised no alert.
+
 ## v2.264.1 - 2026-11-22
 
 ### Security

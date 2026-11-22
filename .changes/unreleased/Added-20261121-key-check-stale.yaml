@@ -1,3 +1,0 @@
-kind: Added
-body: 'agents: AgentPlatformCheckStale also covers the daily key check of the model gateway (ai/litellm-key-check): it fires when the check has not passed in 26 hours, or never passed once a run was due. Before, a key check that stopped (its CronJob suspended, or its failed Job gone with no newer run) raised no alert.'
-time: 2026-11-21T23:10:00.000000000Z
