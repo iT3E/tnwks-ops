@@ -46,7 +46,7 @@ spec:
         # and the root of an emptyDir is open to all (mode 0777 with the
         # group of fsGroup). So the config goes in a folder of mode 0700.
         - name: files
-          image: ghcr.io/it3e/tnwks-host-mcp:0.2.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/it3e/tnwks-host-mcp:0.2.0@sha256:e25c4739f47adf0c49dea1bcfc9a447a1ec2f0e885956374c4b23b127adf15df
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -75,7 +75,7 @@ spec:
         - name: server
           # ssh-mcp v2.27.1, built with no change of code by
           # iT3E/tnwks-host-mcp 0.2.0.
-          image: ghcr.io/it3e/tnwks-host-mcp:0.2.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/it3e/tnwks-host-mcp:0.2.0@sha256:e25c4739f47adf0c49dea1bcfc9a447a1ec2f0e885956374c4b23b127adf15df
           imagePullPolicy: IfNotPresent
           env:
             - name: HOST_MCP_TOKEN
