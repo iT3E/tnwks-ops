@@ -42,7 +42,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from indexer import Indexer, Stop, password_ok, q, read_secret
+from indexer import Indexer, Stop, password_ok, q, read_secret, tls_context
 
 # The policy IDs that the Setup plugin writes again at each election of a
 # cluster manager (plugins/setup/src/main/resources/policies/ at v5.0.0-rc2).
@@ -228,16 +228,14 @@ def certificate_ends(indexer_url: str, ca_file: str) -> list:
     serves and of the CA of the server. Reloader restarts the indexer when
     either one renews (the annotations of ../../wazuh/ks.yaml)."""
     url = urllib.parse.urlsplit(indexer_url)
-    context = ssl.create_default_context(cafile=ca_file or None)
+    context = tls_context(ca_file)
     try:
         with socket.create_connection((url.hostname, url.port or 443), timeout=30) as raw, \
                 context.wrap_socket(raw, server_hostname=url.hostname) as tls:
             served = tls.getpeercert()
     except OSError as error:
         raise Stop(f"can not read the certificate of the indexer: {error}") from None
-    store = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    store.load_verify_locations(cafile=ca_file)
-    return [ssl.cert_time_to_seconds(cert["notAfter"]) for cert in [served, *store.get_ca_certs()]]
+    return [ssl.cert_time_to_seconds(cert["notAfter"]) for cert in [served, *context.get_ca_certs()]]
 
 
 def write_results(results: Path, document: dict) -> Path:

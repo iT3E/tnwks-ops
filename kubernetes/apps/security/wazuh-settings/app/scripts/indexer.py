@@ -45,6 +45,14 @@ def read_secret(path) -> str:
     return value
 
 
+def tls_context(ca_file: str) -> ssl.SSLContext:
+    """A client context that checks the certificate and the name of the server,
+    with TLS 1.2 or later."""
+    context = ssl.create_default_context(cafile=ca_file or None)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    return context
+
+
 class Indexer:
     """One user's calls to the indexer. send() is the transport, so a test can give
     a fake one: send(method, path, body, user, password) -> (status, data)."""
@@ -56,7 +64,7 @@ class Indexer:
         self._send = send or self._https(ca_file)
 
     def _https(self, ca_file: str):
-        context = ssl.create_default_context(cafile=ca_file or None)
+        context = tls_context(ca_file)
 
         def send(method, path, body, user, password):
             data = None if body is None else json.dumps(body).encode()

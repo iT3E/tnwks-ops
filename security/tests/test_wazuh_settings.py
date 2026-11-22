@@ -54,8 +54,10 @@ def invented(name: str) -> str:
 
 
 def invented_hash(password: str) -> str:
-    """A string in the form of a bcrypt hash, made up for the tests."""
-    return "$2y$12$" + hashlib.sha256(password.encode()).hexdigest()[:53]
+    """A string in the form of a bcrypt hash, made up for the tests from the
+    letters and digits of an invented password: no hash function."""
+    letters = "".join(c for c in password if c.isalnum())
+    return "$2y$12$" + (letters * 53)[:53]
 
 
 ACCOUNT_PASSWORD = invented("account")
