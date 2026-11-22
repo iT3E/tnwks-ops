@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.287.0 - 2026-11-22
+
+### Changed
+
+* ansible: the roles of the user of the host server change a host only with -e host_mcp_agent_apply=true; without it, as in each CI run, they check only and a difference fails the run with a drift message, and each role comes after the roles that apply on its host; the comment of the distro account has no colon, which useradd refused
+
 ## v2.286.0 - 2026-11-22
 
 ### Changed
