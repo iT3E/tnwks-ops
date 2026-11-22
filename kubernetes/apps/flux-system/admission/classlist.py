@@ -21,8 +21,9 @@ lists of the policy:
   Flux Kustomizations, as kind/namespace/name.
 
 It reads no SOPS file: a file with ".sops." in its name is skipped. It
-follows the resources of a kustomization.yaml and its patches that delete an
-object, which is what the trees of the clusters use; a feature it does not
+follows the resources of a kustomization.yaml, its patches that delete an
+object, and its patches that change the spec.path of a Flux Kustomization,
+which is what the trees of the clusters use; a feature it does not
 read stops it (UnreadKustomization). observability/tests/test_flux_admission.py
 checks that the lists of the policy are the ones of git.
 
@@ -184,13 +185,42 @@ def build(path: Path) -> Build:
             if d.get("kind") != "Namespace":
                 d["metadata"]["namespace"] = kz["namespace"]
     for patch in kz.get("patches") or []:
-        body = yaml.safe_load(patch["patch"]) if patch.get("patch") else None
         if patch.get("path"):
             out.files.add(rel(path / patch["path"]))
-        if isinstance(body, dict) and body.get("$patch") == "delete":
-            out.docs = [d for d in out.docs if not (
-                d.get("kind") == body.get("kind") and d.get("metadata", {}).get("name") == body["metadata"]["name"])]
+            text = (path / patch["path"]).read_text(encoding="utf-8")
+        else:
+            text = patch.get("patch") or ""
+        for body in yaml.safe_load_all(text):
+            if isinstance(body, dict) and body.get("$patch") == "delete":
+                out.docs = [d for d in out.docs if not (
+                    d.get("kind") == body.get("kind") and d.get("metadata", {}).get("name") == body["metadata"]["name"])]
+            else:
+                apply_path_patch(rel(k), patch, body, out.docs)
     return out
+
+
+def apply_path_patch(where: str, patch: dict, body, docs: list[dict]) -> None:
+    """A patch that changes the spec.path of a Flux Kustomization: the walk
+    then builds the folder of the patch, as Flux does. It reads one form, a
+    strategic merge patch with no target that names one Kustomization of the
+    build; another form that could change a spec.path stops it."""
+    target = patch.get("target") or {}
+    if isinstance(body, list):
+        # A JSON patch: it could set the path of each object of its target.
+        if target.get("kind") in (None, "Kustomization") and any(
+                isinstance(op, dict) and str(op.get("path", "")) in ("", "/spec", "/spec/path") for op in body):
+            raise UnreadKustomization(f"{where}: a JSON patch of the spec of a Kustomization")
+        return
+    if not isinstance(body, dict) or "path" not in (body.get("spec") or {}):
+        return
+    if target or not is_kind(body, KUSTOMIZE_GROUP, "Kustomization"):
+        raise UnreadKustomization(f"{where}: a patch of a spec.path with a target, or of another kind")
+    meta = body.get("metadata") or {}
+    found = [d for d in flux_kustomizations(docs) if d["metadata"].get("name") == meta.get("name")
+             and d["metadata"].get("namespace") == meta.get("namespace", d["metadata"].get("namespace"))]
+    if len(found) != 1:
+        raise UnreadKustomization(f"{where}: a patch of a spec.path that names no Kustomization of the build")
+    found[0]["spec"]["path"] = body["spec"]["path"]
 
 
 def flux_kustomizations(docs: list[dict]) -> list[dict]:

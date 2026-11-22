@@ -57,6 +57,14 @@ the class without `classlist.py write` can not pass.
 The walk of git gave the same Kustomizations and HelmReleases as the two
 live sites on 2026-11-21: 155 and 85 on site 1, 85 and 51 on site 2.
 
+The walk follows a patch of a `kustomization.yaml` that changes the
+`spec.path` of a Flux Kustomization, as Flux does: the apps of site 2 move
+two children to folders of their own that way. It reads one form, a
+strategic merge patch with no target that names one Kustomization of that
+build. Another form that could change a `spec.path` (a JSON patch of the
+spec of a Kustomization, or a patch of a `spec.path` with a target) stops
+`classlist.py`.
+
 ## The rules
 
 A child outside the class may not:
@@ -152,8 +160,7 @@ Its limits:
   namespace or label selector, and a patch with no target by the kind and
   name of the object that it names. Another form fails the test.
 - A patch of a `kustomization.yaml` that sets `postBuild` fails the test,
-  because the walk does not apply it. The walk also does not apply a patch
-  of `spec.path`, so for a child with one it reads the folder of the base.
+  because the walk does not apply it.
 
 ## Failure and deletion
 
