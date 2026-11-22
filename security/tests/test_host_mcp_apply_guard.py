@@ -10,9 +10,12 @@ container with no network, against the states that a CI apply from main can meet
 
 - the switch off: the role is skipped, and nothing changes;
 - the switch on, the user missing, no flag: the run fails with the drift message, and
-  nothing changes;
+  nothing changes, in a check run (the nightly check) and in an apply;
+- the switch on, the user missing, a check run with the flag (step 1 of the owner): it
+  shows the account as a change, passes, and changes nothing;
 - the switch on, the flag (the owner's run): the user is made;
-- the switch on, the user present and equal, no flag: the checks pass, changed=0;
+- the switch on, the user present and equal: the checks pass with changed=0, in an apply
+  and a check run with no flag, and in a check run with the flag;
 - the switch on, the key file different, no flag: the run fails with the drift message,
   and the file stays as it was.
 
@@ -106,11 +109,14 @@ def test_the_flag_is_off_in_git_and_a_check_run_is_check_only():
     common = load(COMMON)
     assert common["host_mcp_agent_apply"] is False
     assert common["host_mcp_agent_check_only"] == "{{ ansible_check_mode or not (host_mcp_agent_apply | bool) }}"
-    # No other plain file of the repository turns the flag on.
-    for path in ANSIBLE.rglob("*.yml"):
-        if ".sops." in path.name or path == COMMON:
-            continue
-        assert "host_mcp_agent_apply: true" not in path.read_text(), path
+    # No other file of the Ansible tree defines either one, with any value: a group
+    # or host variables file, a SOPS file (its key names are plain text), a role or a
+    # playbook. Only the key names are matched; no value is read or printed.
+    key = re.compile(r"^\s*-?\s*[\"']?host_mcp_agent_(apply|check_only)[\"']?\s*:", re.MULTILINE)
+    found = [str(path.relative_to(ANSIBLE)) for path in sorted(ANSIBLE.rglob("*"))
+             if path.is_file() and path.suffix in {".yml", ".yaml", ".json"} and path != COMMON
+             and "/.venv/" not in str(path) and key.search(path.read_text(errors="replace"))]
+    assert found == [], f"files that define the flag of the guard: {found}"
 
 
 def test_the_comment_of_the_distro_account_is_one_that_useradd_takes():
@@ -203,10 +209,12 @@ def lab(tmp_path_factory):
         sh(STUBS)
         sh("uv sync -q --locked --project /w/infrastructure/ansible --link-mode=copy")
 
-        def play_(enabled: bool, apply: bool) -> subprocess.CompletedProcess:
+        def play_(enabled: bool, apply: bool, check: bool = False) -> subprocess.CompletedProcess:
             extra = f"-e host_mcp_agent_enabled={str(enabled).lower()}"
             if apply:
                 extra += " -e host_mcp_agent_apply=true"
+            if check:
+                extra += " --check --diff"
             return sh("cd /tmp && /opt/venv/bin/ansible-playbook -i /lab/hosts.yml /lab/play.yml "
                       f"-e @/w/infrastructure/ansible/inventory/group_vars/all/host_mcp.yml -e @/lab/values.json {extra}",
                       check=False)
@@ -233,6 +241,18 @@ def test_the_states_that_a_ci_apply_from_main_meets(lab):
     assert recap(off)["changed"] == 0 and DRIFT not in off.stdout
     assert sh(STATE).stdout == before
 
+    # The switch on and no user, as the nightly check of CI (--check, no flag): drift, no change.
+    nightly = play(enabled=True, apply=False, check=True)
+    assert nightly.returncode != 0
+    assert f"{DRIFT}: the account; its password field. " in nightly.stdout, nightly.stdout[-3000:]
+    assert sh(STATE).stdout == before
+
+    # Step 1 of the owner (--check with the flag): it shows the account, and passes.
+    preview = play(enabled=True, apply=True, check=True)
+    assert preview.returncode == 0, preview.stdout[-3000:]
+    assert recap(preview)["changed"] == 1 and DRIFT not in preview.stdout
+    assert sh(STATE).stdout == before
+
     # The switch on and no user, as a CI apply before the owner's run: drift, no change.
     missing = play(enabled=True, apply=False)
     assert missing.returncode != 0
@@ -253,6 +273,11 @@ def test_the_states_that_a_ci_apply_from_main_meets(lab):
     equal = play(enabled=True, apply=False)
     assert equal.returncode == 0, equal.stdout[-4000:]
     assert recap(equal)["changed"] == 0 and DRIFT not in equal.stdout
+    assert sh(STATE).stdout == after
+    # The nightly check, and step 1 of the owner, after his run: changed=0.
+    for check in (play(enabled=True, apply=False, check=True), play(enabled=True, apply=True, check=True)):
+        assert check.returncode == 0, check.stdout[-3000:]
+        assert recap(check)["changed"] == 0 and DRIFT not in check.stdout
     assert sh(STATE).stdout == after
 
     # The key file different: drift, and the file stays as it is.

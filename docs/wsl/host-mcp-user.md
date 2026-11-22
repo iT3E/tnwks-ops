@@ -98,11 +98,12 @@ What a CI run from `main` does on a site:
 | --- | --- |
 | Switch off (each site today) | Skipped; nothing changes |
 | Switch on, the user present and equal to the values | The checks run and pass; `changed=0` |
-| Switch on, the user missing or different | The run fails at "No drift of the user of the host server", with the items that differ; nothing changes |
+| Switch on, the user missing or different | The run fails at "No drift of the user of the host server", with the items that differ; nothing changes, and the later roles of that host do not run in that run. So each role of the user comes after each role that applies: last in the distro, and on Windows only the two rehearsals (off unless given by hand) follow it |
 
 `windows_sshd` has the same form (`windows_sshd_apply`): with the switch on
 and no `task wsl-host:sshd` yet, CI fails its drift check and changes
-nothing. A test runs the role of the distro in a container in each of these
+nothing. It runs before the user role on Windows, so in that state it stops
+the Windows roles after it, as any drift of sshd does today. A test runs the role of the distro in a container in each of these
 states (`security/tests/test_host_mcp_apply_guard.py`).
 
 ## A first apply

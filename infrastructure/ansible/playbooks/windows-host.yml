@@ -161,20 +161,24 @@
     # each host (security/README.md, the source host-check).
     - role: windows_host_check
       tags: [host-check]
-    # The local user of the host server of the main agent, where the site
-    # turns it on (docs/wsl/host-mcp-user.md). Before windows_sshd, which
-    # names its key file in a Match block of its own.
-    - role: windows_host_mcp_user
-      when: host_mcp_agent_enabled | bool
-      tags: [host-mcp]
     # Check-only by default (an sshd_config rewrite restarts sshd under the
     # session). Like host-settings, near the end: a failed assertion stops
     # nothing else.
     - role: windows_sshd
       tags: [sshd]
-    # Check-only settings; last, so a failed assertion stops nothing else.
+    # Check-only settings; near the end, so a failed assertion stops nothing
+    # else but the roles below.
     - role: windows_host_settings
       tags: [host-settings]
+    # The local user of the host server of the main agent, where the site
+    # turns it on (docs/wsl/host-mcp-user.md). Without the flag of the owner
+    # it checks only, and a difference fails the host for the rest of the
+    # run, so it comes after each role that applies; only the two rehearsals,
+    # off unless given by hand, follow it. windows_sshd names its key file
+    # from a variable, not from this role, so the order does not matter to it.
+    - role: windows_host_mcp_user
+      when: host_mcp_agent_enabled | bool
+      tags: [host-mcp]
     # The rehearsal of the account change (Design Doc 0004, section 9, step
     # 0). After every other role, so a failed step of it stops no other role.
     - role: windows_wsl_rehearsal

@@ -33,11 +33,6 @@
     # The tnwks-ansible runners' key (CI reaches the distro over SSH).
     - role: wsl_ci_access
       tags: [ci-access]
-    # The local user of the host server of the main agent, where the site
-    # turns it on (docs/wsl/host-mcp-user.md).
-    - role: wsl_host_mcp_user
-      when: host_mcp_agent_enabled | bool
-      tags: [host-mcp]
     - role: wsl_time
       tags: [time]
     # Exposes *.internal.tnwks.us services to the LAN with the Windows-side
@@ -76,3 +71,10 @@
     # windows_host_check).
     - role: wsl_host_check
       tags: [host-check]
+    # The local user of the host server of the main agent, where the site
+    # turns it on (docs/wsl/host-mcp-user.md). Last: without the flag of the
+    # owner it checks only, and a difference fails the host for the rest of
+    # the run, so no other role of the distro waits on it.
+    - role: wsl_host_mcp_user
+      when: host_mcp_agent_enabled | bool
+      tags: [host-mcp]
