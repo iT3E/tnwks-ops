@@ -15,7 +15,7 @@ from pathlib import Path
 import ansible_render
 import pytest
 import yaml
-from test_wsl_start_unelevated import needs_pwsh, pwsh
+from test_wsl_start_unelevated import needs_pwsh, pwsh, windows_hosts
 
 ROOT = Path(__file__).resolve().parents[2]
 ANSIBLE = ROOT / "infrastructure/ansible"
@@ -712,6 +712,36 @@ def test_only_windows_host_settings_writes_the_wslconfig_of_the_new_account_once
     assert settings["wslconfig_path"] == "C:\\Users\\{{ windows_desktop_user }}\\.wslconfig"
     site2 = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
     assert site2["wslconfig_write"] is True
+    # Site 1 has a cluster, and writes the file only for the first apply of the phase done: the copy of the
+    # move has its own comments, which the byte check of the template would count as drift.
+    site1 = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI/main.yml").read_text())
+    assert site1["wsl_move_done"] is True and site1["wslconfig_write"] is True
+
+
+@needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.
+@ansible_render.no_ansible
+def test_the_first_write_of_the_phase_done_keeps_each_setting_of_the_copy_of_the_move(tmp_path):
+    """The copy of the move holds the key lines of the .wslconfig of the present account, which the byte check of
+    windows_host_settings holds to the template in the phase move. Ansible renders the template of site 1 in the
+    phases move and done, and the copy that the role makes from the file of the phase move: each has the same
+    key lines, in the same order, so the write of the template in the phase done changes comments only."""
+    read = next(t for t in tasks("read_today.yml") if t.get("name") == "The .wslconfig of the new account, from the present one")
+    template = ANSIBLE / "roles/windows_host_settings/templates/wslconfig.j2"
+    values = {**ansible_render.load("roles/windows_host_settings/defaults/main.yml", "roles/windows_wsl_move/defaults/main.yml",
+                                    "inventory/group_vars/windows_hosts.yml", "inventory/host_vars/DESKTOP-HKE05KI/main.yml"),
+              "wsl_move_present_account": "standin1", "wsl_move_new_account": "standin-wsl",
+              "settings": f"{{{{ lookup('ansible.builtin.template', {str(template)!r}) }}}}",
+              "wsl_move_wslconfig_present": "{{ settings }}", **read["vars"], **read["ansible.builtin.set_fact"]}
+    hosts = {"done": values, "move": {**values, "wsl_move_done": False}}
+    out = ansible_render.render(tmp_path, hosts, list(hosts), {
+        "settings": "settings", "copy": "wsl_move_wslconfig", "ok": "wsl_move_wslconfig_ok | bool", "phase": "wsl_move_phase"})
+    def keys(text):
+        return [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith(("#", ";"))]
+    assert (out["done"]["phase"], out["move"]["phase"]) == ("done", "move")
+    assert out["move"]["ok"] is True
+    assert keys(out["move"]["copy"]) == keys(out["move"]["settings"]) == keys(out["done"]["settings"])
+    assert [line.split("=")[0].strip() for line in keys(out["done"]["settings"])] == [
+        "[wsl2]", "memory", "processors", "swap", "kernelCommandLine"]
 
 
 # --- The deletion of the tasks of the present account (section 9, step 6) ------------------
@@ -818,6 +848,14 @@ def test_in_the_phase_move_a_task_of_the_present_account_is_registered_with_no_p
                 found.add((role, task["name"]))
                 assert "wsl_move_phase != 'done'" in str(task.get("when")), (role, task["name"])
     assert found == PRESENT_ACCOUNT_TASKS
+    # The mount task of the monitoring volume is an S4U task of the present account too, registered only with
+    # the VHDX; each host with the move has the monitoring data in the file, or no monitoring volume.
+    mount = next(t for t in yaml.safe_load((roles / "windows_observability_storage/tasks/main.yml").read_text())
+                 if "tnwks_win_scheduled_task" in t)
+    assert mount["when"] == "observability_storage_mount != 'file'" and "s4u_user" not in mount["tnwks_win_scheduled_task"]
+    for name, host in windows_hosts().items():
+        if host.get("wsl_move"):
+            assert not host.get("observability_storage_enabled") or host.get("observability_storage_mount") == "file", name
     module = (ANSIBLE / "playbooks/library/tnwks_win_scheduled_task.ps1").read_text()
     assert "Register-ScheduledTask -TaskPath $path -TaskName $name -Xml $xml -Force" in module
     docs = " ".join((ROOT / "docs/wsl/windows-ansible.md").read_text().split())

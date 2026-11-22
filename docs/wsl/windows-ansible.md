@@ -1410,7 +1410,12 @@ these differ, and lists each difference:
   The only edit so far (2026-11-03) replaced the outdated comment about
   re-attaching the Coral after a restart; the settings are unchanged. A host
   without a cluster yet (WSL-02) sets `wslconfig_write: true` in host_vars,
-  so CI writes it there and WSL picks it up at its next restart. The VM's
+  so CI writes it there and WSL picks it up at its next restart. A host
+  with a cluster sets it too for the first apply of the phase `done` of the
+  move, and drops it after that apply: the file of the new account is the
+  copy that the move wrote, with the same key lines as the template and its
+  own comments, so that write changes comments only and needs no
+  `wsl --shutdown`. The VM's
   memory is `wsl_memory` (40GB; WSL-02 sets 45GB in host_vars).
 - **Ethernet** (`host_settings_ethernet`, the Realtek 2.5GbE): power
   management "Allow the computer to turn off this device" off, and the
