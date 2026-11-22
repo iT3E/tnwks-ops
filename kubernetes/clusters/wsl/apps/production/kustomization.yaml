@@ -26,12 +26,12 @@ resources:
   # site. Gated by the same oauth2-proxy that protects /<project>/private/*,
   # persists to the cnpg `vantrip` database. WSL-only, same as sites.
   - ../../../../apps/production/packing-api/ks.yaml
-  # The storefront write-backend (*-things-api): one service, two ingresses,
+  # The storefront write-backend (things-api): one service, two ingresses,
   # a public one (catalog/checkout/webhook/tracking) and an oauth2-gated one
   # for /admin/*. Persists to its own cnpg database; Stripe + SMTP creds via
   # its own SOPS secret. WSL-only, same as sites. Its name is a privacy
   # exception (.github/privacy-allow).
-  - ../../../../apps/production/raines-things-api/ks.yaml # privacy:allow
+  - ../../../../apps/production/things-api/ks.yaml
   # firefly: Firefly III, the household ledger, migrated off the bare Docker
   # stack on this same WSL host 2026-11-02. WSL-only: the finance agent's cron
   # scripts run on this host and talk to it over the internal ingress.

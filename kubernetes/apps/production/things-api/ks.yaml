@@ -6,7 +6,7 @@ metadata:
   name: things-api-db
   namespace: flux-system
 spec:
-  path: ./kubernetes/apps/production/raines-things-api/db
+  path: ./kubernetes/apps/production/things-api/db
   components:
     - ../../../../components/cnpg-cluster
   dependsOn:
@@ -44,7 +44,7 @@ metadata:
   name: raines-things-api
   namespace: flux-system
 spec:
-  path: ./kubernetes/apps/production/raines-things-api/app
+  path: ./kubernetes/apps/production/things-api/app
   prune: true
   sourceRef:
     kind: GitRepository
