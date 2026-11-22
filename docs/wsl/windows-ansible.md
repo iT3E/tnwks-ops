@@ -1186,12 +1186,19 @@ it off.
   account back in Administrators and in the allow list, with the apply of
   sshd; this switch and the done switch off, as the roles register the WSL
   tasks of the present account only before the phase `done`; the revert of
-  step 4, so that an apply as the present account registers its window tasks
-  and the boot task again as at step 3, and its WSL tasks, which come back
-  enabled; that apply starts its keepalive and relays, which fail and retry
-  until way back step 2 stops the copies; step 4 again, as the window play
-  starts no window while Ansible logs in as the present account; the window in
-  its way back mode; then the revert of step 3. On each site that needs a
+  step 4. An apply as the present account then stops in the role
+  `windows_wsl_move`, before any WSL role: the role registers the window
+  tasks of the present account and the boot task only while no window is
+  started (`wsl_move_window_started`, `tasks/host_files.yml`), and the last
+  marker `window-done` counts as started, so "Each window task of the present
+  account is there" fails. A way back after the deletion therefore first
+  needs a change of the role that registers those tasks again after a window
+  that ended done. With it, that apply registers them and the WSL tasks of
+  the present account, which come back enabled, and starts its keepalive and
+  relays, which fail and retry until way back step 2 stops the copies; then
+  step 4 again, as the window play starts no window while Ansible logs in as
+  the present account; the window in its way back mode; then the revert of
+  step 3. On each site that needs a
   working path to the host, or someone at the keyboard. Site 2, then site 1,
   have the switch on.
 

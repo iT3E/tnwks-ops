@@ -779,6 +779,29 @@ def test_the_deletion_needs_the_phase_done_and_the_allow_list_without_the_presen
         "The deletion of the tasks of the present account")
 
 
+def test_a_way_back_after_the_deletion_needs_a_change_of_the_role_as_the_docs_say():
+    """The docs say that after the deletion, an apply as the present account stops in the role: the window tasks of
+    the present account and the boot task are registered only while no window is started, and the last marker
+    window-done counts as started. A change of that gate changes the way back, and the docs with it."""
+    started = next(t for t in tasks("main.yml") if t.get("name") == "Whether a window is started")["ansible.builtin.set_fact"]
+    assert started["wsl_move_window_started"] == (
+        "{{ (wsl_move_marker_read.output | last | default('')) not in ['', 'wayback-done'] }}")
+    host = {t.get("name"): t for t in tasks("host_files.yml")}
+    block = host["The copies of the role, while no window is started or after the deletion"]
+    inner = {t["name"]: t for t in block["block"]}
+    assert block["when"] == "not wsl_move_copies_frozen | bool"
+    assert "not wsl_move_window_started | bool" in inner["Tasks of the present account, while Ansible logs in as it"]["when"]
+    assert inner["The window procedure and the boot task of the way back, tasks of SYSTEM"]["when"] == (
+        "not wsl_move_window_started | bool")
+    assert host["Each window task of the present account is there"]["when"] == [
+        "not ansible_check_mode", "not (wsl_move_present_removed | bool)"]
+    docs = " ".join((ROOT / "docs/wsl/windows-ansible.md").read_text().split())
+    assert ("the role registers the window tasks of the present account and the boot task only while no window is "
+            "started (`wsl_move_window_started`, `tasks/host_files.yml`), and the last marker `window-done` counts as "
+            "started") in docs
+    assert "A way back after the deletion therefore first needs a change of the role" in docs
+
+
 def test_the_deletion_unregisters_each_task_of_the_present_account_and_the_boot_task_and_none_comes_back():
     assert VARS["wsl_move_removed_tasks"].strip() == (
         "{{ wsl_move_present_tasks + (wsl_move_window_tasks.present.values() | list) + [wsl_move_boot_task] }}")
