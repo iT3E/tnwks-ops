@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.271.0 - 2026-11-22
+
+### Changed
+
+* windows: the done switch of the move of the distro on site 1: the account that owns the distro is the new account, the copies of the start tasks stay enabled, the play no longer registers the tasks of the present account, and the host check reads the moved disk file and its rules
+
 ## v2.270.0 - 2026-11-22
 
 ### Added
