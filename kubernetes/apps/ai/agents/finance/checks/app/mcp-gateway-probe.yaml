@@ -17,12 +17,16 @@
 #   reach it (../../firefly-mcp/app/networkpolicy.yaml);
 # - the vault route of finance with the same checks, and the vault of main:
 #   the probe key gets a 401 on its route, and a straight connection to its
-#   server fails (R6).
+#   server fails (R6);
+# - a straight connection to each read server of main (cluster, Flux,
+#   Terraform) fails: this pod is a pod of another namespace, and the
+#   policy of each server names the gateway only. No key is used on a read
+#   route.
 # Until the owner's values step the two keys are placeholders: the checks
 # that need them print "skipped: the key is pending" and pass, and the
 # values step ends that (docs/apps/agent-platform-runbook.md,
 # AgentPlatformCronJobFailed). The checks with no key and with an unknown
-# key, and the straight connection, always run. It changes no
+# key, and the straight connections, always run. It changes no
 # data. A failed run alerts as the other checks do
 # (AgentPlatformCronJobFailed, AgentPlatformCheckStale).
 apiVersion: batch/v1
@@ -45,8 +49,8 @@ spec:
       # a failure until a newer run ends, and KubeJobFailed then clears by
       # itself (docs/apps/agent-platform.md, "A failed Job").
       ttlSecondsAfterFinished: 93600
-      # The worst case, in seconds: the straight connection 5, then ten
-      # MCP requests of 30 each (300). That is 305.
+      # The worst case, in seconds: six straight connections of 5 each
+      # (30), then eighteen MCP requests of 30 each (540). That is 570.
       activeDeadlineSeconds: 600
       template:
         metadata:
@@ -97,6 +101,11 @@ spec:
                   value: http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp
                 - name: OTHER_VAULT_SERVER
                   value: vault-server.agents-main.svc.cluster.local:8080
+                # The read servers of main, straight from another namespace:
+                # their own policies must stop that. A name that does not
+                # resolve fails.
+                - name: GATEWAY_ONLY_SERVERS
+                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080
               # PROBE_KEY and NO_TOOLS_KEY.
               envFrom:
                 - secretRef:
@@ -155,8 +164,8 @@ spec:
         - ports:
             - port: "3000"
               protocol: TCP
-    # The vault servers of finance and of main, straight: their own
-    # policies must stop that.
+    # The vault servers of finance and of main, and the read servers of
+    # main, straight: their own policies must stop that.
     - toEndpoints:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-finance
@@ -165,6 +174,18 @@ spec:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-main
             app.kubernetes.io/name: vault-server
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: cluster-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: flux-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: terraform-mcp
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

@@ -462,11 +462,19 @@ def lab():
             path.chmod(0o644)
     tag = uuid.uuid4().hex[:8]
     front, back = f"mcpgw-front-{tag}", f"mcpgw-back-{tag}"
-    names = {n: f"mcpgw-{n}-{tag}" for n in ("app", "mcp", "recorder", "gateway")}
+    names = {n: f"mcpgw-{n}-{tag}" for n in ("app", "mcp", "recorder", "gateway", "refuser")}
     python = probe_python()
     try:
         for net in (front, back):
             run([tool, "network", "create", "--internal", net])
+        # The names of the read servers of main resolve on the front network
+        # and nothing listens there: a refusal, as the policy of each server
+        # gives the probe in the cluster (test_main_read_servers.py).
+        aliases = [x for s in probe_env()["GATEWAY_ONLY_SERVERS"].split(",")
+                   for x in ("--network-alias", s.rsplit(":", 1)[0])]
+        run([tool, "run", "-d", "--name", names["refuser"], "--network", front, *aliases,
+             "--read-only", "--cap-drop", "ALL", "--user", "65534", python,
+             "python3", "-I", "-c", "import time; time.sleep(3600)"])
         # The fake app has the name of the proxy, as the MCP server calls it.
         run([tool, "run", "-d", "--name", names["app"], "--network", back,
              "--network-alias", "firefly-proxy.agents-finance.svc.cluster.local",
@@ -589,6 +597,9 @@ def test_the_probe_passes_and_the_app_sees_only_its_read(lab):
     assert got["probe key: allowed read (get_about)"] == "reached: ok"
     assert got["key with no tool: tools/list"] == "tools: 0"
     assert got["probe key with headers that name the client finance: a write"] == "refused: gateway"
+    for name in ("cluster-mcp", "flux-mcp", "terraform-mcp"):
+        assert got[f"{name} in agents-main, direct from a pod that is not the gateway"] == (
+            "blocked: ConnectionRefusedError")
     assert not [k for k in got if "skipped" in got[k]]
     calls = app_requests(lab)[before:]
     assert [(c["method"], c["path"]) for c in calls] == [("GET", "/api/v1/about")]
