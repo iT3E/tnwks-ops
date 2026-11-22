@@ -6,9 +6,9 @@
 # backup. Elevated, it attaches with usbipd and restarts worker-2 after a
 # fresh attach. With no elevation (wsl_start_unelevated) it runs the attach
 # script of the distro once through wsl.exe and restarts nothing: usbipd
-# attach asks the service control manager, which a task with no elevation
-# may not, and worker-2 binds the /dev of the distro, so the device node
-# reaches zwave-js-ui with no restart.
+# attach reads the list of services at the service control manager, which a
+# task with no elevation may not, and zwave-js-ui mounts the /dev of the
+# distro that worker-2 binds, so the device node reaches it with no restart.
 # The Coral isn't on usbip any more (docs/wsl/coral-detector.md), so the task
 # passes no Coral IDs and the script leaves it alone.
 

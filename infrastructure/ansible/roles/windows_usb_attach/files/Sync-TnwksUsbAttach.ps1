@@ -23,19 +23,21 @@ flip below) is off unless both -CoralDfuVidPid and -CoralRuntimeVidPid are
 given, which is only for the usbip fallback in coral-detector.md.
 
 Run elevated, or with -NoElevation. usbipd-win needs an admin right to bind a
-device. `usbipd attach --wsl` and `usbipd list` ask the Windows service
-control manager whether the usbipd service runs (usbipd-win 4.3.0,
-Usbipd/CommandHandlersCli.cs and ConsoleTools.cs, CheckAndReportServerRunning),
-and the service control manager and the service grant that to interactive and
-service logons, SYSTEM and the Administrators only: a task with no elevation
-holds none of them. `usbipd state` and `usbipd --version` do not ask.
+device. `usbipd attach --wsl` and `usbipd list` read the list of services at
+the Windows service control manager (usbipd-win 4.3.0:
+CheckAndReportServerRunning, VBoxUsbMon.IsServiceInstalled,
+ServiceController.GetDevices), and the service control manager grants the
+list of services to interactive and service logons, SYSTEM and the
+Administrators only: a task with no elevation is none of them. `usbipd state`
+and `usbipd --version` do not read it.
 With -NoElevation (the start of WSL with no elevation, Design Doc 0004,
 section 5.9) the script runs neither bind nor attach nor list: the play binds
 each device, forced, and the bind persists across reboots, and the script
 hands a device that is not attached to the distro, whose script attaches it
 with the usbip client of usbipd-win (role wsl_usb_attach, `--once`). It
 restarts no worker then: worker-2 binds the whole /dev of the distro at
-/hostdev, so the device node reaches it with no restart. It logs to -LogPath
+/hostdev, and the zwave-js-ui pod mounts that folder, so the device node
+reaches it with no restart. It logs to -LogPath
 and -StatePath, in a directory that the account may write.
 
 Devices are matched by VID:PID from the USB InstanceId, NOT busid, because the
@@ -243,7 +245,7 @@ function Set-DeviceAttached {
     }
 
     # With no elevation: no bind (the play binds it) and no usbipd attach, which
-    # asks the service control manager first. The distro attaches the device
+    # reads the list of services at the service control manager first. The distro attaches the device
     # with the usbip client, once.
     if ($NoElevation) {
         Write-Log "$Label ($VidPid busid $($device.BusId)): no bind with no elevation; the play binds it" 'INFO'
@@ -419,8 +421,8 @@ function Invoke-Sync {
         Write-Log 'no attachment changes; worker restart not needed' 'OK'
     }
 
-    # usbipd list asks the service control manager, which a task with no
-    # elevation may not: the state above is the log then.
+    # usbipd list reads the list of services at the service control manager,
+    # which a task with no elevation may not: the state above is the log then.
     if (-not $NoElevation) {
         $final = Invoke-Usbipd @('list')
         Write-Log 'final usbipd state:'

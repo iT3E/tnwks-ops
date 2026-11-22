@@ -49,8 +49,8 @@ wsl_start_unelevated: true
 # session of the owner holds one (the account that owns the distro after the
 # move has none). The watchdog starts it again after a restart of WSL; it
 # keeps its check of the gateway. It skips the Z-Stick, as each task with no
-# elevation: usbipd attach asks the service control manager, which such a
-# task may not. The unit of the distro keeps the Z-Stick attached with the
+# elevation: usbipd attach reads the list of services at the service control
+# manager, which such a task may not. The unit of the distro keeps the Z-Stick attached with the
 # usbip client (role wsl_usb_attach).
 wsl_keepalive_enabled: true
 wsl_watchdog_args: -SkipUsb -KeepAliveTask tnwks-wsl-keepalive

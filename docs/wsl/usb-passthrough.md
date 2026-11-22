@@ -85,13 +85,19 @@ usbipd attach --wsl --busid 4-1
 >   in mirrored networking mode and the default gateway of the distro in
 >   NAT mode, as `usbipd attach --wsl` finds it. This is what
 >   `usbipd attach --wsl --auto-attach` runs in the distro itself, with no
->   call to usbipd.exe: `usbipd attach` and `usbipd list` first ask the
->   Windows service control manager whether the usbipd service runs, and
->   the service control manager and the service grant that to interactive
->   and service logons, SYSTEM and the Administrators only. A batch logon
->   of a standard account (the account that owns the distro with
->   `wsl_start_unelevated`) holds none of them; the usbip client needs no
->   Windows right. The log is the journal of the unit. The Coral's instance
+>   call to usbipd.exe: `usbipd attach` and `usbipd list` first read the
+>   list of services at the Windows service control manager (usbipd-win
+>   4.3.0: `CheckAndReportServerRunning`, `VBoxUsbMon.IsServiceInstalled`,
+>   `ServiceController.GetDevices`), and the service control manager grants
+>   the list of services to interactive and service logons, SYSTEM and the
+>   Administrators only. A batch logon of a standard account (the account
+>   that owns the distro with `wsl_start_unelevated`) is none of them; the
+>   usbip client needs no Windows right. The client calls have time limits
+>   (20 s for the list, 30 s for the attach). Before it attaches, the unit
+>   removes an empty directory named `ttyACM*` directly under `/dev`
+>   (`rmdir` only): a pod that mounted the node itself and started before
+>   the device left one there (Step 3), and the kernel makes no node at a
+>   name that a directory holds. The log is the journal of the unit. The Coral's instance
 >   (`18d1:9302`) is kept stopped and disabled
 >   (`wsl_usb_attach_retired_devices`).
 >
@@ -112,8 +118,8 @@ usbipd attach --wsl --busid 4-1
 >   (`wsl.exe -u root --exec /usr/local/bin/tnwks-usb-attach --once
 >   <VID:PID>`) for a device that is not attached. It restarts no worker
 >   then: worker-2 binds the whole `/dev` of the distro at `/hostdev`
->   (Step 2), so the device node reaches the node and the pod with no
->   restart. It logs to `C:\ProgramData\tnwks-usb-attach\log\sync.log`. In the move of
+>   (Step 2), and the zwave-js-ui pod mounts that folder (Step 3), so the
+>   node reaches the pod with no restart. It logs to `C:\ProgramData\tnwks-usb-attach\log\sync.log`. In the move of
 >   the distro the account that owns the distro runs its copy,
 >   `tnwks-usb-attach-account` ([windows-ansible.md](windows-ansible.md)). Its Coral handling (the DFU to runtime firmware flip) is off
 >   unless `-CoralDfuVidPid` and `-CoralRuntimeVidPid` are passed
@@ -121,9 +127,10 @@ usbipd attach --wsl --busid 4-1
 > - **The watchdog `tnwks-wsl-watchdog`** (role `windows_wsl_maintenance`)
 >   tries the Z-Stick attach with usbipd every 5 minutes and restarts
 >   worker-2 after it had to cold-start the distro. A host with
->   `wsl_start_unelevated` passes it `-SkipUsb`, as usbipd attach needs the
->   rights at the service control manager that a task with no elevation
->   does not hold; the unit inside WSL attaches there.
+>   `wsl_start_unelevated` passes it `-SkipUsb`, as usbipd attach reads the
+>   list of services at the service control manager, which a task with no
+>   elevation may not; the unit inside WSL attaches there, and no restart of
+>   the worker is needed at a cold start (Step 3).
 >
 > **Windows side:** the role `windows_usb_attach` installs the pinned
 > usbipd-win (`usb_attach_usbipd_version`) and keeps each device in
@@ -242,7 +249,7 @@ talosctl -n 10.5.0.4 ls /hostdev | grep ttyACM  # Z-Stick lands here
 >   container's `/dev` would shadow Talos's `/dev/pts`, `/dev/shm` and
 >   submounts and break the node, so it gets its own path. The live
 >   `/hostdev/ttyACM0` appears even when the Z-Stick is attached after
->   worker-2 started — which is exactly the host-reboot ordering that used
+>   worker-2 started, which is exactly the host-reboot ordering that used
 >   to wedge the pod.
 
 ---
@@ -295,9 +302,40 @@ persistence:
     hostPathType: CharDevice
 ```
 
-The WSL overlay patches this to `/hostdev/ttyACM0` (the host `/dev` tree is
-bind-mounted into worker-2 at `/hostdev`) and pins the pod to
-`homelab-wsl-worker-2`:
+The WSL overlay mounts the folder `/hostdev` (the host `/dev` tree,
+bind-mounted into worker-2 at `/hostdev`) at `/hostdev` in the pod, in place
+of the node, and pins the pod to `homelab-wsl-worker-2`. The application
+still opens `/hostdev/ttyACM0`, its stored setting. Why the folder:
+
+- A hostPath of type `""` whose path does not exist is made by the
+  container runtime as an empty directory. With the node itself as the
+  hostPath, a pod that starts before the device leaves an empty directory
+  at `/dev/ttyACM0` in the distro, the kernel then makes no node there, and
+  the pod keeps its directory. `/hostdev` always exists, so nothing is made,
+  and a node that appears later is in the running pod at once.
+- A type check (`CharDevice`, `Directory`) can not take its place: the
+  kubelet of a Talos node in Docker runs in a mount namespace that does not
+  hold `/hostdev`, so the check would never pass.
+- zwave-js-ui starts its driver again by itself, with a backoff of at most
+  15 seconds, when the port is missing at its start or lost later (11.26.2,
+  `ZwaveClient.backoffRestart`), so no restart of the pod or the worker is
+  needed at a cold start, an attach or a replug.
+- The container is privileged already: it opens a host character device,
+  read and write. The folder adds no power, as a privileged container may
+  make any device node itself.
+
+**Known limit: the node name.** cdc-acm names the node by its minor. A
+second ACM device, or an attach while a process still holds the old node
+open, gives `ttyACM1`, which the application does not open. zwave-js-ui
+closes the port when its driver fails, so the old node is usually free by
+the time the unit attaches again (5 seconds). The hand step otherwise: in
+the distro, as root, detach the device
+(`"/mnt/c/Program Files/usbipd-win/WSL/usbip" port` gives the port,
+`... detach -p <port>`); the unit attaches it again at `ttyACM0`. Or set
+the serial port in the zwave-js-ui settings to the node that is there.
+A stable path would be the by-id link (`/hostdev/serial/by-id/...`) if the
+distro's udev makes one; the link is relative, so it resolves inside the
+folder, but it changes the application's stored setting.
 
 ```
 kubernetes/clusters/wsl/apps/home-automation/zwave-js-ui-ks.yaml
@@ -359,7 +397,8 @@ If any layer doesn't see the device, fix that layer before going up.
 | Devices drop out after every WSL/Windows restart | `bind` is persistent; `attach` is per-session, and the WSL attach service isn't installed/enabled | `task wsl-host:usb-attach` (then confirm `systemctl is-enabled 'tnwks-usb-attach@0658:0200'`) |
 | Pod crashes with "no such device" / zwave "is not a character device" | worker-2 container doesn't see the live node (stale `--device` snapshot, or attached after container start) | Re-run `task bootstrap:wsl` to recreate worker-2 with the `rslave` binds (Step 2) |
 | (usbip fallback only) Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | `--auto-attach` should re-grab it; if stuck, `systemctl restart 'tnwks-usb-attach@18d1:9302'` or manually re-bind/attach the runtime VID (see Coral gotcha) |
-| Z-Wave controller "stuck" | wrong CDC path in hostPath | `talosctl -n <node> ls /hostdev \| grep ttyACM` (WSL) and confirm the overlay path |
+| Z-Wave controller "stuck" | wrong CDC path in hostPath, or the node is `ttyACM1` (Step 3, known limit) | `talosctl -n <node> ls /hostdev \| grep ttyACM` (WSL) and confirm the overlay path |
+| `/dev/ttyACM0` in the distro is a directory | a pod mounted the node itself and started before the device | the attach unit removes it before its next attach (`journalctl -u 'tnwks-usb-attach@*'`) |
 
 ## References
 

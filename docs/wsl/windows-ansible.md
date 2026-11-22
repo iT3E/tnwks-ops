@@ -204,10 +204,11 @@ that runs it (the first task of the play, with each tag). The USB attach
 runs with no elevation with the switch (`-NoElevation`): the play binds each
 device as admin, and the attach script of the distro attaches a bound device
 with the usbip client of usbipd-win, which needs no Windows right. The task
-runs no `usbipd attach` and no `usbipd list`: both ask the Windows service
-control manager whether the usbipd service runs (usbipd-win 4.3.0,
-`CheckAndReportServerRunning`), and the service control manager and the
-service grant that to interactive and service logons, SYSTEM and the
+runs no `usbipd attach` and no `usbipd list`: both read the list of
+services at the Windows service control manager (usbipd-win 4.3.0:
+`CheckAndReportServerRunning`, `VBoxUsbMon.IsServiceInstalled`,
+`ServiceController.GetDevices`), and the service control manager grants the
+list of services to interactive and service logons, SYSTEM and the
 Administrators only, which a batch logon of a standard account is not. It
 reads `usbipd state` and runs the script of the distro once
 ([usb-passthrough.md](usb-passthrough.md)), and the watchdog of a host with

@@ -520,8 +520,8 @@ def run_usb(tmp_path: Path, args: str, admin: bool, attached: bool = False, wsl_
     return out
 
 
-# usbipd attach and usbipd list ask the Windows service control manager whether the usbipd service runs,
-# which a task with no elevation may not; usbipd state and usbipd --version do not (usbipd-win 4.3.0).
+# usbipd attach and usbipd list read the list of services at the Windows service control manager, which a
+# task with no elevation may not; usbipd state and usbipd --version do not (usbipd-win 4.3.0).
 NO_SERVICE_MANAGER = {"usbipd --version", "usbipd state"}
 
 

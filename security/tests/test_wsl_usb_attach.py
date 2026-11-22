@@ -1,13 +1,15 @@
 """The attach of a USB device into the WSL distro (roles wsl_usb_attach and windows_usb_attach).
 
-usbipd attach --wsl and usbipd list first ask the Windows service control manager whether the
-usbipd service runs (usbipd-win 4.3.0, CheckAndReportServerRunning), and the service control
-manager and the service grant that to interactive and service logons, SYSTEM and the
-Administrators only. A task with no elevation (wsl_start_unelevated) holds none of them. The unit
-of the distro attaches with the usbip client of usbipd-win instead, straight against the usbipd
-service of the host, which needs no Windows right. These tests run the script of the unit in bash
-with fakes of the usbip client, modprobe, ip and wslinfo, and of the USB devices in sysfs, and pin
-that no attach path with the switch on runs a usbipd command that asks the service control manager.
+usbipd attach --wsl and usbipd list first read the list of services at the Windows service control
+manager (usbipd-win 4.3.0: CheckAndReportServerRunning, VBoxUsbMon.IsServiceInstalled,
+ServiceController.GetDevices), and the service control manager grants the list of services to
+interactive and service logons, SYSTEM and the Administrators only. A task with no elevation
+(wsl_start_unelevated) is none of them. The unit of the distro attaches with the usbip client of
+usbipd-win instead, straight against the usbipd service of the host, which needs no Windows right.
+These tests run the script of the unit in bash with fakes of the usbip client, modprobe, ip and
+wslinfo, of the USB devices in sysfs and of /dev, and pin that no attach path with the switch on runs
+a usbipd command that reads the list of services, and that the WSL pod of zwave-js-ui mounts the
+folder of the node, not the node.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -56,10 +59,14 @@ class Fake:
         self.devices.mkdir(parents=True)
         self.calls = tmp_path / "calls"
         self.calls.write_text("")
+        self.dev = tmp_path / "dev"
+        self.dev.mkdir()
         for name, body in {
             "modprobe": 'echo "modprobe $*" >>"$FAKE/calls"',
             "ip": 'echo "ip $*" >>"$FAKE/calls"; cat "$FAKE/route" 2>/dev/null || true',
             "usbip": r'''echo "usbip $*" >>"$FAKE/calls"
+# A host that drops the packets: the call hangs (exec, so the time limit stops the one process).
+if [[ -f "$FAKE/hang.$1" ]]; then exec sleep 300; fi
 case "$1" in
   list) cat "$FAKE/list"; exit "$(cat "$FAKE/list.rc" 2>/dev/null || echo 0)" ;;
   attach)
@@ -116,6 +123,7 @@ esac''',
                    'main "$@"\n')
         env = {"PATH": f"{self.bin}:/usr/bin:/bin", "FAKE": str(self.root), "USBIP_CLIENT": str(self.bin / "usbip"),
                "TNWKS_USB_DEVICES": str(self.devices), "TNWKS_USB_INTERVAL": str(ROUND),
+               "TNWKS_DEV_ROOT": str(self.dev), "TNWKS_USB_LIST_TIMEOUT": "1", "TNWKS_USB_ATTACH_TIMEOUT": "1",
                "FAKE_VID": ZSTICK[:4], "FAKE_PID": ZSTICK[5:]}
         result = subprocess.run([BASH, "-c", harness, "tnwks-usb-attach", *args], env=env, check=False,
                                 capture_output=True, text=True, timeout=60)
@@ -228,6 +236,87 @@ def test_a_wrong_argument_is_a_usage_error(fake, arg):
     assert out["code"] == 2 and "usage:" in out["err"] and out["calls"] == [], out
 
 
+@needs_bash
+def test_an_empty_directory_at_the_name_of_an_acm_node_is_removed_before_the_attach(fake):
+    """A hostPath of type "" that does not exist is made by the runtime as an empty directory, and
+    the kernel makes no node at a name that a directory holds. Only an empty directory goes: one with
+    content, a link, a file and other names stay."""
+    (fake.dev / "ttyACM0").mkdir()
+    (fake.dev / "ttyACM1").mkdir()
+    (fake.dev / "ttyACM1/keep").write_text("")
+    (fake.dev / "ttyACM2").write_text("")
+    (fake.dev / "ttyACM3").symlink_to(fake.dev / "ttyACM1")
+    (fake.dev / "ttyUSB0").mkdir()
+    out = fake.run("--once", ZSTICK)
+    assert out["code"] == 0, out
+    assert not (fake.dev / "ttyACM0").exists()
+    assert (fake.dev / "ttyACM1/keep").exists() and (fake.dev / "ttyACM2").is_file()
+    assert (fake.dev / "ttyACM3").is_symlink() and (fake.dev / "ttyUSB0").is_dir()
+    assert out["out"] == [f"removed the empty directory {fake.dev}/ttyACM0 at the name of a device node",
+                          (f"the directory {fake.dev}/ttyACM1 is at the name of a device node and is not empty: "
+                           "left as it is"),
+                          f"0658:0200 is attached (bus id 1-6 from {GATEWAY})"]
+    assert out["calls"][-1] == f"usbip attach -r {GATEWAY} -b 1-6"
+
+
+@needs_bash
+def test_an_attached_device_leaves_the_directories_of_dev_alone(fake):
+    fake.attached()
+    (fake.dev / "ttyACM0").mkdir()
+    out = fake.run("--once", ZSTICK)
+    assert out["code"] == 0 and out["calls"] == [] and (fake.dev / "ttyACM0").is_dir(), out
+
+
+@needs_bash
+def test_a_directory_that_stays_is_logged_once_in_the_loop(fake):
+    (fake.dev / "ttyACM1").mkdir()
+    (fake.dev / "ttyACM1/keep").write_text("")
+    fake.exports(())
+    out = fake.run(ZSTICK, rounds=3)
+    assert out["out"].count(f"the directory {fake.dev}/ttyACM1 is at the name of a device node and is not empty: "
+                            "left as it is") == 1, out
+
+
+@needs_bash
+@pytest.mark.parametrize(("call", "error"), [
+    ("list", f"the host {GATEWAY} does not answer yet: no answer in 1 s"),
+    ("attach", f"usbip attach of 1-6 from {GATEWAY}: no answer in 1 s")])
+def test_a_client_call_that_hangs_stops_at_its_time_limit(fake, call, error):
+    """A host that drops the packets holds a call for about 2 minutes; the limits are 20 s for the
+    list and 30 s for the attach (1 s here)."""
+    (fake.root / f"hang.{call}").write_text("")
+    started = time.monotonic()
+    out = fake.run("--once", ZSTICK)
+    assert time.monotonic() - started < 10, out
+    assert out["code"] == 1 and out["out"] == [f"0658:0200 is not attached: {error}"], out
+
+
+def test_the_client_calls_have_time_limits():
+    script = "\n".join(code_lines(SCRIPT))
+    assert 'LIST_TIMEOUT="${TNWKS_USB_LIST_TIMEOUT:-20}"' in script
+    assert 'ATTACH_TIMEOUT="${TNWKS_USB_ATTACH_TIMEOUT:-30}"' in script
+    assert re.findall(r'(timeout "\$\w+" )?"\$USBIP" (\w+)', script) == [
+        ('timeout "$LIST_TIMEOUT" ', "list"), ('timeout "$ATTACH_TIMEOUT" ', "attach")]
+
+
+def test_the_wsl_pod_of_zwave_js_ui_mounts_the_folder_of_the_node_not_the_node():
+    """A hostPath of type "" whose path does not exist is made by the runtime as an empty directory,
+    so the pod mounts /hostdev, which always exists, and the application still opens
+    /hostdev/ttyACM0. A type check can not pass: the kubelet of a Talos node in Docker does not hold
+    /hostdev. The container is privileged already."""
+    overlay = yaml.safe_load((ROOT / "kubernetes/clusters/wsl/apps/home-automation/zwave-js-ui-ks.yaml").read_text())
+    patches = yaml.safe_load(overlay["spec"]["patches"][0]["patch"])
+    usb = {op["path"].removeprefix("/spec/values/persistence/usb/"): op["value"] for op in patches
+           if op["path"].startswith("/spec/values/persistence/usb/")}
+    assert usb == {"hostPath": "/hostdev", "hostPathType": "", "globalMounts/0/path": "/hostdev"}
+    base = yaml.safe_load((ROOT / "kubernetes/apps/home-automation/zwave-js-ui/app/helmrelease.yaml").read_text())
+    values = base["spec"]["values"]
+    assert values["persistence"]["usb"]["type"] == "hostPath"
+    assert values["persistence"]["usb"]["globalMounts"][0]["mountPropagation"] == "HostToContainer"
+    assert values["controllers"]["zwave-js-ui"]["containers"]["app"]["securityContext"]["privileged"] is True
+    assert values["controllers"]["zwave-js-ui"]["type"] == "statefulset"
+
+
 def code_lines(path: Path) -> list[str]:
     return [line for line in path.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
 
@@ -238,9 +327,9 @@ def test_the_unit_runs_the_script_as_root_and_starts_it_again():
     assert "Restart=always" in unit and "User=root" in unit and "WantedBy=multi-user.target" in unit
 
 
-def test_with_the_switch_on_no_attach_path_runs_a_usbipd_command_that_asks_the_service_manager():
-    """usbipd attach and usbipd list ask the service control manager; usbipd state and
-    usbipd --version do not (usbipd-win 4.3.0). The unit of the distro runs no usbipd.exe at all,
+def test_with_the_switch_on_no_attach_path_runs_a_usbipd_command_that_reads_the_list_of_services():
+    """usbipd attach and usbipd list read the list of services at the service control manager;
+    usbipd state and usbipd --version do not (usbipd-win 4.3.0). The unit of the distro runs no usbipd.exe at all,
     the Windows task runs no attach, bind or list with no elevation (its pwsh tests in
     test_wsl_move_start_tasks.py), and the watchdog of each host with the switch skips its USB
     attach."""
