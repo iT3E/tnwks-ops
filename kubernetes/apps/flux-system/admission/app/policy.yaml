@@ -41,8 +41,8 @@
 # - kustomization-spec: a Kustomization outside the class has a path in the
 #   form a/b/c that is not in a class path and holds none (so not the root),
 #   no service account, no kubeconfig, no commonMetadata key of Flux, and
-#   substitutes from cluster-settings, site-overrides and cluster-secrets
-#   only;
+#   substitutes from cluster-settings, site-overrides and the reduced
+#   Secret cluster-secrets-apps only;
 # - kustomization-class: a Kustomization of the class comes from one of its
 #   parents in git, with a path of the class;
 # - helmrelease-class: a HelmRelease of the class comes from a Kustomization
@@ -604,13 +604,13 @@ spec:
           !object.spec.?commonMetadata.?annotations.orValue({}).exists(k, k.contains('toolkit.fluxcd.io')) &&
           object.spec.?postBuild.?substituteFrom.orValue([]).all(s,
             [s.kind, s.name] in [
-              ['ConfigMap', 'cluster-settings'], ['ConfigMap', 'site-overrides'], ['Secret', 'cluster-secrets']
+              ['ConfigMap', 'cluster-settings'], ['ConfigMap', 'site-overrides'], ['Secret', 'cluster-secrets-apps']
             ]))
       messageExpression: >-
         'flux-child-scope/kustomization-spec: ' + variables.what +
         ' is outside the class: its path must be in the form a/b/c, not in or above a path of the class,' +
         ' with no service account, kubeconfig or commonMetadata key of Flux, and substitution from' +
-        ' cluster-settings, site-overrides and cluster-secrets only'
+        ' cluster-settings, site-overrides and cluster-secrets-apps only'
       reason: Forbidden
     - expression: >-
         !variables.isKustomization || !(variables.self in variables.classKustomizations) || variables.sameSpec || (

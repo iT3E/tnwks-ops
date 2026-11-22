@@ -2806,15 +2806,16 @@ the config with no plugin.
 
 The route `main-browser`, the flags and the pin of the browser, the rule of
 the fetch proxy for it, the policies and the prompt before a form
-([playwright-mcp.md](playwright-mcp.md)). Deployed, not live for use: the
-agent has no browser tool until [the switch](playwright-mcp.md#the-switch).
+([playwright-mcp.md](playwright-mcp.md)). The agent has its browser tools
+since [the switch](playwright-mcp.md#the-switch), and they are not live for
+use until the owner's test rows pass.
 
 **After the merge:**
 
 | Read | Pass rule |
 | --- | --- |
 | `kubectl -n ai get deploy playwright-mcp` | 1 of 1 ready, the image with the digest of git |
-| `kubectl -n ai logs deploy/mcp-gateway --since=24h \| grep '"route":"default/main-browser"' \| grep -c '"client":"main"'` | 0 before the switch: the agent does not call it yet |
+| `kubectl -n ai logs deploy/mcp-gateway --since=24h \| grep '"route":"default/main-browser"' \| grep -c '"client":"main"'` | 0 before the switch; after it, a count for each browser call of the agent |
 | The next run of `platform-check-mcp-gateway-probe` in `agents-main` and in `agents-finance` | The line `playwright-mcp in ai, direct from a pod that is not the gateway` with `"ok": true` |
 | The next run of `platform-check-mcp-gateway-probe` in `agents-main` | The four lines that start with `browser:` with `"ok": true`, among them `browser: probe key: lists the 21 tools of the rule` with `"got": "same"` |
 

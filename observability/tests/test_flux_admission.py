@@ -24,6 +24,8 @@ ADMISSION = ROOT / "kubernetes/apps/flux-system/admission"
 sys.path.insert(0, str(ADMISSION))
 
 import classlist
+from classlist import flux_text as text_of
+from classlist import flux_variables, substitution_off
 
 
 def docs():
@@ -31,8 +33,8 @@ def docs():
 
 
 def test_the_lists_of_the_policy_are_the_class_of_git():
-    text, want = classlist.current()
-    assert text == want, "run: python3 kubernetes/apps/flux-system/admission/classlist.py write"
+    stale = [str(path.relative_to(ROOT)) for path, text, want in classlist.targets() if text != want]
+    assert not stale, f"{stale}: run python3 kubernetes/apps/flux-system/admission/classlist.py write"
 
 
 def test_the_walk_finds_each_child_of_each_site():
@@ -100,6 +102,69 @@ def test_the_walk_reads_one_form_of_a_patch_of_a_path(tmp_path, monkeypatch, pat
     assert web["spec"]["path"] == want
 
 
+SOURCE_TREE = {
+    "kubernetes/clusters/lab/kustomization.yaml": "resources: [./apps.yaml]\n",
+    "kubernetes/clusters/lab/apps.yaml": (
+        "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n"
+        "metadata: {name: cluster-apps, namespace: flux-system}\n"
+        "spec: {path: ./kubernetes/clusters/lab/apps, sourceRef: {kind: GitRepository, name: flux-system}}\n"),
+    "kubernetes/clusters/lab/apps/kustomization.yaml": "resources: [./web.yaml]\n",
+    "kubernetes/apps/web/app/configmap.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: web}\n",
+    "kubernetes/apps/web/component/configmap.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: extra}\n",
+    # A file with a child of another source that no cluster lists.
+    "kubernetes/apps/other/ks.yaml": (
+        "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n"
+        "metadata: {name: other, namespace: flux-system}\n"
+        "spec: {path: ./vendor, sourceRef: {kind: GitRepository, name: vendor, namespace: security}}\n"),
+}
+OWN = {"kind": "GitRepository", "name": "flux-system"}
+
+
+@pytest.mark.parametrize(("namespace", "spec", "error"), [
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": OWN}, None),
+    ("flux-system", {"path": "kubernetes/apps/web/app/", "sourceRef": {**OWN, "namespace": "flux-system"}}, None),
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": OWN, "components": ["../component"]}, None),
+    # Another source: its objects are not in this repository.
+    ("flux-system", {"path": "./vendor", "sourceRef": {"kind": "GitRepository", "name": "vendor",
+                                                      "namespace": "security"}},
+     "flux-system/web: the source GitRepository security/vendor is not the GitRepository flux-system/flux-system"),
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": {**OWN, "namespace": "security"}},
+     "flux-system/web: the source GitRepository security/flux-system"),
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": {"kind": "OCIRepository", "name": "flux-system"}},
+     "flux-system/web: the source OCIRepository flux-system/flux-system"),
+    ("flux-system", {"path": "./kubernetes/apps/web/app"}, "flux-system/web: the source None flux-system/None"),
+    # The namespace of a sourceRef is the one of the Kustomization by default.
+    ("security", {"path": "./kubernetes/apps/web/app", "sourceRef": OWN},
+     "security/web: the source GitRepository security/flux-system"),
+    # A path that is not in the repository: a build of nothing.
+    ("flux-system", {"path": "./kubernetes/apps/web/missing", "sourceRef": OWN},
+     "flux-system/web: the path kubernetes/apps/web/missing is not in the repository"),
+    ("flux-system", {"path": "../outside", "sourceRef": OWN},
+     "flux-system/web: the path ../outside is not in the repository"),
+    ("flux-system", {"path": "./kubernetes/apps/web/app", "sourceRef": OWN, "components": ["../none"]},
+     "flux-system/web: the path kubernetes/apps/web/app/../none is not in the repository"),
+])
+def test_the_walk_stops_at_a_child_that_it_can_not_read_from_this_repository(
+        tmp_path, monkeypatch, namespace, spec, error):
+    root = tmp_path / "repo"
+    (tmp_path / "outside").mkdir()
+    web = {"apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+           "metadata": {"name": "web", "namespace": namespace}, "spec": spec}
+    for name, text in {**SOURCE_TREE, "kubernetes/clusters/lab/apps/web.yaml": yaml.safe_dump(web)}.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    monkeypatch.setattr(classlist, "ROOT", root)
+    if error:
+        with pytest.raises(classlist.UnreadKustomization, match=re.escape(error)):
+            classlist.walk("lab")
+        return
+    children = classlist.walk("lab")
+    # The unlisted file of another source is not reached, so it does not stop the walk.
+    assert sorted(children) == ["flux-system/cluster-apps", "flux-system/web"]
+    want = ["web", "extra"] if spec.get("components") else ["web"]
+    assert [d["metadata"]["name"] for d in children["flux-system/web"].build.docs] == want
+
+
 def test_only_the_parents_of_the_apps_read_files_outside_the_class():
     # A child of the class whose build reads a file outside the class would
     # apply that file with the rights of the class. The two parents of the
@@ -149,9 +214,6 @@ SUBSTITUTION_KS = {
     "wsl": "../../../apps/flux-system/substitution/ks.yaml",
     "wsl-02": "./flux-substitution-ks.yaml",
 }
-# A variable of Flux; a doubled dollar sign is an escape, which Flux writes
-# as one.
-VARIABLE = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)(:=[^}]*)?\}")
 
 
 def substitution_template(site):
@@ -182,13 +244,43 @@ def test_the_reduced_secret_builds_in_strict_mode_with_the_keys_of_the_site(site
     assert sources == [{"kind": "Secret", "name": "cluster-secrets"}], site
     inline = set(child.doc["spec"]["postBuild"].get("substitute") or {})
     names = secret_key_names(site)
-    used = {m.group(1) for m in VARIABLE.finditer(yaml.safe_dump(secret)) if m.group(2) is None}
+    used = set(flux_variables(yaml.safe_dump(secret)))
     missing = sorted(used - names - inline)
     assert not missing, f"{site}: these variables of the template are not keys of its cluster-secrets: {missing}"
-    # No empty default: a key that the site lacks stays out of its template.
-    assert all(m.group(2) is None for m in VARIABLE.finditer(yaml.safe_dump(secret))), site
-    # Each key is its own variable, so the Secret holds the values of its site and no other.
+    # Each key is its own variable with no default, so the Secret holds the
+    # values of its site and no other, and a key that the site lacks stays out
+    # of its template.
     assert all(v == f"${{{k}}}" for k, v in secret["stringData"].items()), site
+
+
+def substitution_of(site, child):
+    """The substituteFrom of a direct child of the parent of the apps, after
+    the patches of the parent, as (kind, name) pairs."""
+    parent = next(d for d in yaml.safe_load_all((ROOT / f"kubernetes/clusters/{site}/apps.yaml").read_text()) if d)
+    labels = child.doc["metadata"].get("labels") or {}
+    sources = (child.doc["spec"].get("postBuild") or {}).get("substituteFrom")
+    for patch in parent["spec"]["patches"]:
+        target = patch["target"]
+        assert target["labelSelector"] == "substitution.flux.home.arpa/disabled notin (true)"
+        if labels.get("substitution.flux.home.arpa/disabled") == "true":
+            continue
+        if "name" in target and not re.fullmatch(target["name"], child.doc["metadata"]["name"]):
+            continue
+        sources = yaml.safe_load(patch["patch"])["spec"]["postBuild"]["substituteFrom"]
+    return [(s["kind"], s["name"]) for s in sources or []]
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_only_the_children_of_the_class_get_the_full_secret(site):
+    for child in classlist.walk(site).values():
+        if child.parent != classlist.APPS_PARENT[site]:
+            continue
+        sources = substitution_of(site, child)
+        if classlist.is_class_path(child.path):
+            assert ("Secret", "cluster-secrets-apps") not in sources, child.key
+        else:
+            assert ("Secret", "cluster-secrets") not in sources, child.key
+            assert ("Secret", "cluster-secrets-apps") in sources, child.key
 
 
 @pytest.mark.parametrize("site", classlist.SITES)
@@ -203,9 +295,9 @@ def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(sit
             continue
         inline = set((child.doc["spec"].get("postBuild") or {}).get("substitute") or {})
         for doc in child.build.docs:
-            for m in VARIABLE.finditer(yaml.safe_dump(doc)):
-                if m.group(2) is None and m.group(1) not in known | inline:
-                    missing.setdefault(child.key, set()).add(m.group(1))
+            for name in flux_variables(yaml.safe_dump(doc)):
+                if name not in known | inline:
+                    missing.setdefault(child.key, set()).add(name)
     assert not missing, f"add these keys to the template of {site}, or a default: {missing}"
 
 
@@ -214,46 +306,9 @@ def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(sit
 # nothing, so this test reads the sources of each site by name: the objects
 # that the walk builds, and the key names of the SOPS files that its
 # kustomizations list, with no value.
-SUBSTITUTE_OFF = "kustomize.toolkit.fluxcd.io/substitute"
 REQUIREMENT = re.compile(r"\s*(!?)([\w./-]+)\s*(?:(==|=|!=)\s*([\w./-]*)|\s(in|notin)\s*\(([^)]*)\))?\s*")
-# Each "${" of the envsubst of Flux (fluxcd/pkg/envsubst v1.9.0, the version
-# of kustomize-controller v1.10.1). A run of dollar signs of even length is
-# an escape. A "#" may come before the name (the length form). What comes
-# after the name decides the form. A lab of that library in strict mode
-# shows:
-# - "}" and the forms that read the value ("/", ":", "#", "%", "^", ","):
-#   a name with no definition stops the build;
-# - ":=", ":-", ":+", ":?" and "=": a default, and no stop (a variable in
-#   the default still counts, because Flux reads it first);
-# - each other form ("-", "+", "?", no name, no closing brace): the build
-#   stops on each site.
-FLUX_VARIABLE = re.compile(r"(?<!\$)(\$+)\{#?([A-Za-z0-9_]*)(?=(.{0,2}))", re.DOTALL)
-DEFAULTS = (":=", ":-", ":+", ":?", "=")
-READS_THE_VALUE = tuple("}/:#%^,")
-
-
-def flux_variables(text):
-    """Each name of a text that needs a definition in strict mode. A form
-    that Flux can not read gives a name in angle brackets, which no source
-    defines."""
-    for m in FLUX_VARIABLE.finditer(text):
-        dollars, name, after = m.groups()
-        if len(dollars) % 2 == 0 or after.startswith(DEFAULTS):
-            continue
-        if name and after[:1] in READS_THE_VALUE:
-            yield name
-        else:
-            yield f"<a form that Flux can not read: ${{{name}{after[:1]}...}}>"
-
-
-def text_of(doc):
-    return yaml.safe_dump(doc, width=float("inf"))
-
-
-def substitution_off(doc):
-    meta = doc.get("metadata") or {}
-    return "disabled" in ((meta.get("annotations") or {}).get(SUBSTITUTE_OFF),
-                          (meta.get("labels") or {}).get(SUBSTITUTE_OFF))
+# Each form of a variable of Flux is read by classlist.flux_variables, the
+# one reader that the names-only check of the encrypted files uses too.
 
 
 def selects(selector, labels):

@@ -21,18 +21,23 @@ spec:
     provider: sops
     secretRef:
       name: sops-age
+  # No cluster-secrets here: this build reads the ks.yaml of the children
+  # outside the class, and none of its files needs a key of that Secret.
   postBuild:
     substituteFrom:
       - kind: ConfigMap
         name: cluster-settings
-      - kind: Secret
-        name: cluster-secrets
       # Runtime switchover (docs/wsl/multi-site.md, "Switching an app"): last,
       # so it wins. Never in git: `task failover` creates it, and an alert
       # fires when one lives longer than a day.
       - kind: ConfigMap
         name: site-overrides
         optional: true
+  # Each child gets the reduced Secret cluster-secrets-apps (the keys that
+  # the children outside the class use, kubernetes/apps/flux-system/
+  # substitution); the second patch gives the children of the class the full
+  # cluster-secrets. The admission policy flux-child-scope refuses
+  # cluster-secrets in a Kustomization outside the class.
   patches:
     - patch: |-
         apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -49,7 +54,7 @@ spec:
               - kind: ConfigMap
                 name: cluster-settings
               - kind: Secret
-                name: cluster-secrets
+                name: cluster-secrets-apps
               # Runtime switchover (docs/wsl/multi-site.md, "Switching an app"): last,
               # so it wins. Never in git: `task failover` creates it, and an alert
               # fires when one lives longer than a day.
@@ -60,3 +65,26 @@ spec:
         group: kustomize.toolkit.fluxcd.io
         kind: Kustomization
         labelSelector: substitution.flux.home.arpa/disabled notin (true)
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          postBuild:
+            substituteFrom:
+              - kind: ConfigMap
+                name: cluster-settings
+              - kind: Secret
+                name: cluster-secrets
+              - kind: ConfigMap
+                name: site-overrides
+                optional: true
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        labelSelector: substitution.flux.home.arpa/disabled notin (true)
+        # The direct children of the class.
+        # BEGIN classlist.py: written by classlist.py write, do not edit by hand.
+        name: actions-runner-controller|actions-runner-controller-monitoring|alertmanager|aws-backup-credentials|cert-manager|cert-manager-issuers|cilium|cilium-bgp|cilium-clustermesh|cilium-config|cloudnative-pg-app|cloudnative-pg-plugin-barman-cloud|finance-sync-db|firefly-db|flux-admission|flux-substitution|grafana|grafana-db|home-assistant-db|ingress-nginx-certificates|ingress-nginx-internal|ingress-nginx-internal-shared-vip|kopiur|kopiur-policies|kopiur-repository|kopiur-standby-repository|kube-prometheus-stack|kube-prometheus-stack-addons|local-path-provisioner|loki|mealie-db|metrics-server|node-exporter|observability-dashboards|observability-evidence|observability-garage|observability-pki|observability-rules|plausible-db|pyrra|pyrra-crds|qbittorrent|reloader|security-api-checks|security-aws-credentials|security-converter|security-loki-proxy|security-prowler|security-registry-rules|security-trail-copy|security-trivy-operator|security-wazuh|security-wazuh-server|site-lease-fence|standby-restore|thanos-metrics|thanos-metrics-archive|tnwks-ops-runner|transcriber-db|unifi|unpoller|vector-agent|vector-aggregator|vector-audit-reader
+        # END classlist.py

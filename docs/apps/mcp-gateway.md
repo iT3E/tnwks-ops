@@ -203,8 +203,9 @@ later, with its read credential):
   its 25 tools by exact name and leaves out the tools that run code or send
   a file of the server pod. The one stateful route: the browser keeps a
   page for each session, so each call of a session reaches the same server
-  session. Deployed, not live for use: the config of the agent has no
-  entry for it until [its switch](playwright-mcp.md#the-switch).
+  session. The config of the agent has its entry `browser`
+  ([the switch](playwright-mcp.md#the-switch)); it is not live for use
+  until the rows of the owner's test pass.
   `tools/browser.json` is the dump.
 
 **The read step.** The config of the main agent
