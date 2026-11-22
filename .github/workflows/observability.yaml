@@ -45,11 +45,17 @@ jobs:
           cache-dependency-glob: observability/uv.lock
       - name: Install pinned toolchain
         run: uv sync --project observability --locked --python 3.13
+      # The tests of observability/tests start containers and wait for them,
+      # so one after the other they took 13 of the 15 minutes of this job.
+      # One pytest-xdist worker for each CPU, and a file stays whole on one
+      # worker (loadfile): the tests of a file share its containers, and some
+      # need its order. The step is then as long as its longest file, and
+      # --durations names the tests that make it so.
       - name: Generated resources and evidence contracts
         run: |
           uv run --project observability python observability/generate.py --check
           uv run --project observability ruff check observability
-          uv run --project observability pytest observability/tests -q
+          uv run --project observability pytest observability/tests -q -n auto --dist loadfile --durations=15
           uv run --project observability python observability/validate.py
           uv run --project observability python observability/validate_health.py
       - name: Native storage safety contracts and disposable mount rehearsal
@@ -73,7 +79,7 @@ jobs:
         run: |
           uv run --project observability python security/generate.py --check
           uv run --project observability ruff check --config observability/pyproject.toml security
-          uv run --project observability pytest security/tests -q -m "not pwsh"
+          uv run --project observability pytest security/tests -q -m "not pwsh" -n auto
 
   # promtool on the generated rule tests: the recording rules and failure
   # fixtures of observability/, and the rules of the control registry that
@@ -117,11 +123,19 @@ jobs:
 
   # The tests of security/ that start PowerShell (the `pwsh` mark,
   # security/tests/conftest.py): the host check of a Windows host and the
-  # folder ACL module.
+  # folder ACL module. One runner took 7.5 minutes for them with a worker on
+  # each CPU, so the runners of the matrix share them: `--shard I/N` of
+  # conftest.py puts each test in exactly one shard. For more runners, add
+  # the shards here (test_pwsh_parallel.py checks that none is missing).
   powershell:
+    name: powershell (${{ matrix.shard }})
     if: inputs.long_tests
     runs-on: ubuntu-26.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/2", "2/2"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -137,7 +151,9 @@ jobs:
       - name: Install pinned toolchain
         run: uv sync --project observability --locked --python 3.13
       - name: PowerShell tests
-        run: uv run --project observability pytest security/tests -q -m pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: uv run --project observability pytest security/tests -q -m pwsh --shard "$SHARD" --durations=15
 
   rehearsals:
     if: inputs.rehearse
