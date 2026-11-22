@@ -1,3 +1,0 @@
-kind: Added
-body: 'Ansible: the roles windows_host_mcp_user and wsl_host_mcp_user make the local user of the host server of the main agent on the Windows host and in the distro of a site, with no admin group, a key that holds only for the address from which the cluster connects (on Windows, the address of the distro), and a key file and shell startup files that only an admin changes (docs/wsl/host-mcp-user.md names the limits on Windows); windows_sshd gives it a Match block of its own. Off on each site until the owner turns it on, so this change makes no change on a host'
-time: 2026-11-22T10:00:00.000000+00:00

@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.282.0 - 2026-11-22
+
+### Added
+
+* Ansible: the roles windows_host_mcp_user and wsl_host_mcp_user make the local user of the host server of the main agent on the Windows host and in the distro of a site, with no admin group, a key that holds only for the address from which the cluster connects (on Windows, the address of the distro), and a key file and shell startup files that only an admin changes (docs/wsl/host-mcp-user.md names the limits on Windows); windows_sshd gives it a Match block of its own. Off on each site until the owner turns it on, so this change makes no change on a host
+
 ## v2.281.1 - 2026-11-22
 
 ### Fixed
