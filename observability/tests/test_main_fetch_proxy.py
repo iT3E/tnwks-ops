@@ -355,11 +355,15 @@ def test_the_config_turns_web_fetch_on_through_the_proxy():
 # The lab: the proxy of this repository in Docker, with the security
 # settings of the pod, on an internal network. The client is the agent image
 # (node): it sends the requests and listens on 443 as the name
-# inside.lab.test, so a connection of the proxy to it is counted.
+# inside.lab.test, so a connection of the proxy to it is counted. The hit
+# counts before any write. The client closes its tunnel as soon as it reads
+# the 200, so the proxy can close or reset its side to the server before the
+# server socket has closed; node ends the process on an error event with no
+# handler, so the server socket takes its error and does nothing with it.
 CLIENT = r"""
 const net = require("net");
 let hits = 0;
-net.createServer((c) => { hits++; c.end("HTTP/1.1 200 OK\r\n\r\n"); }).listen(443);
+net.createServer((c) => { hits++; c.on("error", () => {}); c.end("HTTP/1.1 200 OK\r\n\r\n"); }).listen(443);
 const [proxy, cases] = [process.argv[1], JSON.parse(process.argv[2])];
 function send(req) {
   return new Promise((resolve) => {
