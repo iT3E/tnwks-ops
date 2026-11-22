@@ -64,7 +64,7 @@ zone pair with no rule falls to the terminal forward drop.
 | --- | --- | --- | --- |
 | 1 (native) | `switch-mgmt` | `10.98.0.1/24` | Switch management, untagged on ether2. From 910 only the desktop to SW03: SNMP (udp/161) for snmp-exporter and ICMP for smokeping |
 | — | `transit-10` | — | The outside (internet) zone: only `ether1`. Its old VLAN 10 transit hop is disabled, so `172.16.1.0/24` is not routed |
-| 140 | `UISP-140` | `10.10.140.1/24` | EP-R6 bridge; `10.60.10.0/24` is routed via `10.10.140.140`. From 910 only ICMP from the desktop, to the EP-R6 (smokeping) and to the LiteAP radio `.45`, the LiteBeam radio `.43` and the airCube `.46` in `10.60.10.0/24`; their SSH and UIs are VPN-only |
+| 140 | `UISP-140` | `10.10.140.1/24` | EP-R6 bridge; `10.60.10.0/24` is routed via `10.10.140.140`. From 910 only the desktop: ICMP to the EP-R6 (smokeping) and to the LiteAP radio `.45`, the LiteBeam radio `.43` and the airCube `.46` in `10.60.10.0/24`, and SNMP (udp/161) to the two radios; their SSH and UIs are VPN-only |
 | 610 | `seccam-610` | `10.10.60.1/24` | Cameras. Untrusted: router services only, Frigate pulls RTSP |
 | 900 | `unifi-mgmt-900` | `10.10.90.1/24` | UniFi AP management. From 910: the controller (inform, SSH, STUN) and ICMP from the desktop to the 3 APs (smokeping) |
 | 910 | `unifi-frontend-910` | `10.10.91.1/24` | Main client network; hosts the WSL desktop |
@@ -144,7 +144,10 @@ flowchart LR
   the generator; the EP-R6 in pair `200-unifi-frontend-910-UISP-140`). The
   same pair also allows ICMP from that list to the three devices behind the
   EP-R6: the LiteAP radio `10.60.10.45`, the LiteBeam radio `10.60.10.43`
-  and the airCube `10.60.10.46`, and nothing else in `10.60.10.0/24`.
+  and the airCube `10.60.10.46`. It allows SNMP (udp/161) from that list
+  to the two radios only, for snmp-exporter; SNMP is still off in the
+  radios, so nothing reads their signal yet. Nothing else in
+  `10.60.10.0/24` is open from 910.
   The radio link has one alert per hop, each quiet while the hop in front
   of it or the probe's own path (router and SW03) loses pings, so a fault
   pages once: `RadioGatewayUnreachable` (the EP-R6, 4 minutes over half
