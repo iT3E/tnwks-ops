@@ -712,10 +712,10 @@ def test_only_windows_host_settings_writes_the_wslconfig_of_the_new_account_once
     assert settings["wslconfig_path"] == "C:\\Users\\{{ windows_desktop_user }}\\.wslconfig"
     site2 = yaml.safe_load((ANSIBLE / "inventory/host_vars/WSL-02/main.yml").read_text())
     assert site2["wslconfig_write"] is True
-    # Site 1 has a cluster, and writes the file only for the first apply of the phase done: the copy of the
-    # move has its own comments, which the byte check of the template would count as drift.
+    # Site 1 has a cluster: it set the write only for the first apply of the phase done, whose file was the copy
+    # of the move with its own comments, and keeps the default (check only) after that apply.
     site1 = yaml.safe_load((ANSIBLE / "inventory/host_vars/DESKTOP-HKE05KI/main.yml").read_text())
-    assert site1["wsl_move_done"] is True and site1["wslconfig_write"] is True
+    assert site1["wsl_move_done"] is True and "wslconfig_write" not in site1
 
 
 @needs_pwsh  # In the job of the pwsh tests, which runs ansible-playbook too.

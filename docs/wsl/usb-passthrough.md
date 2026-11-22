@@ -398,7 +398,7 @@ If any layer doesn't see the device, fix that layer before going up.
 | Pod crashes with "no such device" / zwave "is not a character device" | worker-2 container doesn't see the live node (stale `--device` snapshot, or attached after container start) | Re-run `task bootstrap:wsl` to recreate worker-2 with the `rslave` binds (Step 2) |
 | (usbip fallback only) Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | `--auto-attach` should re-grab it; if stuck, `systemctl restart 'tnwks-usb-attach@18d1:9302'` or manually re-bind/attach the runtime VID (see Coral gotcha) |
 | Z-Wave controller "stuck" | wrong CDC path in hostPath, or the node is `ttyACM1` (Step 3, known limit) | `talosctl -n <node> ls /hostdev \| grep ttyACM` (WSL) and confirm the overlay path |
-| `/dev/ttyACM0` in the distro is a directory | a pod mounted the node itself and started before the device | the attach unit removes it before its next attach (`journalctl -u 'tnwks-usb-attach@*'`) |
+| `/dev/ttyACM0` in the distro is a directory | a pod mounted the node itself and started before the device | the attach unit removes it before its next attach (`journalctl -u 'tnwks-usb-attach@*'`); if the device is attached, detach it first (the hand step in Step 3) |
 
 ## References
 
