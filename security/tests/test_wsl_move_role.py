@@ -394,7 +394,8 @@ def test_site_1_turns_the_move_on_in_the_phase_of_step_3_with_the_copies_that_it
     assert host["udp_relays"] == relay["udp_relays"]
     assert host["usb_attach_bound_devices"] == usb["usb_attach_bound_devices"] != []
     assert host["wsl_keepalive_enabled"] is True
-    assert host["wsl_watchdog_args"] == "-KeepAliveTask " + maintenance["wsl_keepalive_task"]
+    # The watchdog skips its USB attach with no elevation (test_wsl_usb_attach.py).
+    assert host["wsl_watchdog_args"] == "-SkipUsb -KeepAliveTask " + maintenance["wsl_keepalive_task"]
     copies = [maintenance["wsl_watchdog_task"], bridge["lan_bridge_ip_task"], maintenance["wsl_keepalive_task"],
               usb["usb_attach_task"]] + [r["task"] for r in host["udp_relays"]]
     assert sorted(host["wsl_move_present_tasks"]) == sorted(copies + [maintenance["vhdx_compact_task"]])

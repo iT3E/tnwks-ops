@@ -48,9 +48,12 @@ wsl_start_unelevated: true
 # One long-running wsl.exe client, so WSL does not stop the distro once no
 # session of the owner holds one (the account that owns the distro after the
 # move has none). The watchdog starts it again after a restart of WSL; it
-# keeps its checks of the gateway and the Z-Stick.
+# keeps its check of the gateway. It skips the Z-Stick, as each task with no
+# elevation: usbipd attach asks the service control manager, which such a
+# task may not. The unit of the distro keeps the Z-Stick attached with the
+# usbip client (role wsl_usb_attach).
 wsl_keepalive_enabled: true
-wsl_watchdog_args: -KeepAliveTask tnwks-wsl-keepalive
+wsl_watchdog_args: -SkipUsb -KeepAliveTask tnwks-wsl-keepalive
 # The UDP relays and the USB device of this host, the values of the roles'
 # defaults, here as on site 2: the play of the move window loads only the role
 # windows_wsl_move, so the start tasks of the new account

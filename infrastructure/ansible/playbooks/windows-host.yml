@@ -74,8 +74,9 @@
     # With the monitoring data in the file on the distro disk
     # (observability_storage_mount file, section 5.13), the mount task is
     # disabled and the role starts nothing. The USB attach runs with no
-    # elevation with the switch: the play binds each device, and usbipd-win
-    # attaches a bound device with no admin right.
+    # elevation with the switch: the play binds each device, and the distro
+    # attaches a bound device with the usbip client, which needs no Windows
+    # right (roles wsl_usb_attach and windows_usb_attach).
     - name: The start with no elevation has each role it needs
       ansible.builtin.assert:
         that:

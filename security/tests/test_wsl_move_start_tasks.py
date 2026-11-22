@@ -15,6 +15,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from test_wsl_start_unelevated import needs_pwsh, pwsh
 from winacl import ACL_FAKES
@@ -492,12 +493,13 @@ function usbipd {
     if ($args[0] -eq '--version') { '4.3.0' }
     if ($args[0] -eq 'state') { $global:State }
 }
-function wsl.exe { $global:Calls.Add('wsl ' + ($args -join ' ')); $global:LASTEXITCODE = 0 }
+function wsl.exe { $global:Calls.Add('wsl ' + ($args -join ' ')); $global:LASTEXITCODE = $global:WslExit; '0658:0200 is attached' }
 function Test-Admin { $global:Admin }
+$global:WslExit = 0
 """
 
 
-def run_usb(tmp_path: Path, args: str, admin: bool, attached: bool = False) -> dict:
+def run_usb(tmp_path: Path, args: str, admin: bool, attached: bool = False, wsl_exit: int = 0) -> dict:
     """The script, with the identity read and Test-Admin as stand-ins (Windows only)."""
     text = USB_SCRIPT.read_text()
     assert text.count("function Test-Admin {") == 1 and text.count("[Security.Principal.WindowsIdentity]::GetCurrent().Name") == 1
@@ -509,7 +511,7 @@ def run_usb(tmp_path: Path, args: str, admin: bool, attached: bool = False) -> d
     script.write_text(text)
     client = "172.25.20.9" if attached else ""
     state = json.dumps({"Devices": [{"BusId": "1-6", "InstanceId": "USB\\VID_0658&PID_0200\\5&1", "ClientIPAddress": client}]})
-    result = pwsh(USB_FAKES + f"$global:Admin = ${str(admin).lower()}\n$global:State = '{state}'\n"
+    result = pwsh(USB_FAKES + f"$global:Admin = ${str(admin).lower()}\n$global:State = '{state}'\n$global:WslExit = {wsl_exit}\n"
                   + f"& '{script}' -LogPath '{tmp_path / 'sync.log'}' -StatePath '{tmp_path / 'sync-state.json'}' {args} | Out-Null\n"
                   + "[Console]::Out.Write((@{ calls = @($global:Calls); exit = $global:Exit } | ConvertTo-Json -Compress))")
     assert result.returncode == 0, result.stderr
@@ -518,19 +520,47 @@ def run_usb(tmp_path: Path, args: str, admin: bool, attached: bool = False) -> d
     return out
 
 
+# usbipd attach and usbipd list ask the Windows service control manager whether the usbipd service runs,
+# which a task with no elevation may not; usbipd state and usbipd --version do not (usbipd-win 4.3.0).
+NO_SERVICE_MANAGER = {"usbipd --version", "usbipd state"}
+
+
 @needs_pwsh
-def test_with_no_elevation_the_script_attaches_with_no_bind_and_restarts_the_worker(tmp_path):
+def test_with_no_elevation_the_script_attaches_through_the_distro_and_restarts_no_worker(tmp_path):
+    """No bind (the play binds), no usbipd attach or list: the attach script of the distro attaches
+    with the usbip client, once. worker-2 binds the /dev of the distro, so no restart."""
     out = run_usb(tmp_path, "-NoElevation", admin=False)
     assert out["exit"] == 0, out["log"]
-    assert out["calls"] == ["usbipd --version", "usbipd state", "usbipd attach --wsl --busid 1-6",
-                            "wsl -d Ubuntu --exec docker restart homelab-wsl-worker-2", "usbipd list"]
+    assert out["calls"] == ["usbipd --version", "usbipd state",
+                            "wsl -d Ubuntu -u root --exec /usr/local/bin/tnwks-usb-attach --once 0658:0200"]
     assert "no bind with no elevation; the play binds it" in out["log"]
+    assert "attached in the distro: 0658:0200 is attached" in out["log"]
+    assert "no worker restart with no elevation" in out["log"]
+    assert not (tmp_path / "sync-state.json").exists()
+
+
+@needs_pwsh
+def test_with_no_elevation_a_failed_attach_in_the_distro_is_logged_and_restarts_nothing(tmp_path):
+    out = run_usb(tmp_path, "-NoElevation", admin=False, wsl_exit=1)
+    assert out["exit"] == 0, out["log"]
+    assert [call for call in out["calls"] if not call.startswith("usbipd ")] == [
+        "wsl -d Ubuntu -u root --exec /usr/local/bin/tnwks-usb-attach --once 0658:0200"]
+    assert "Z-Stick attach in the distro FAILED (exit 1)" in out["log"]
+    assert "no attachment changes; worker restart not needed" in out["log"]
 
 
 @needs_pwsh
 def test_with_no_elevation_an_attached_device_is_left_as_it_is(tmp_path):
     out = run_usb(tmp_path, "-NoElevation", admin=False, attached=True)
-    assert out["exit"] == 0 and out["calls"] == ["usbipd --version", "usbipd state", "usbipd list"], out["log"]
+    assert out["exit"] == 0 and out["calls"] == ["usbipd --version", "usbipd state"], out["log"]
+
+
+@needs_pwsh
+@pytest.mark.parametrize("attached", [True, False])
+@pytest.mark.parametrize("wsl_exit", [0, 1])
+def test_with_no_elevation_no_usbipd_command_asks_the_service_manager(tmp_path, attached, wsl_exit):
+    out = run_usb(tmp_path, "-NoElevation", admin=False, attached=attached, wsl_exit=wsl_exit)
+    assert {call for call in out["calls"] if call.startswith("usbipd ")} <= NO_SERVICE_MANAGER, out["calls"]
 
 
 @needs_pwsh

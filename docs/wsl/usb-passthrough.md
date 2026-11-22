@@ -73,11 +73,25 @@ usbipd attach --wsl --busid 4-1
 > it:
 >
 > - **A systemd service inside WSL** (`tnwks-usb-attach@0658:0200`, role
->   `wsl_usb_attach`). It runs `usbipd.exe attach --wsl --auto-attach
->   --hardware-id <VID:PID>` over interop and is `enabled`
->   (`WantedBy=multi-user.target`), so it fires on every WSL boot, including
->   a WSL-only restart. `--auto-attach` re-attaches on replug and
->   `Restart=always` covers the interop child exiting. The Coral's instance
+>   `wsl_usb_attach`). It is `enabled` (`WantedBy=multi-user.target`), so
+>   it fires on every WSL boot, including a WSL-only restart, and it loops:
+>   every 5 seconds it checks that a device with the VID:PID is on the
+>   `vhci_hcd` bus, and when none is, it attaches it with the Linux usbip
+>   client that usbipd-win installs for WSL
+>   (`C:\Program Files\usbipd-win\WSL\usbip`), straight against the usbipd
+>   service of the host: `usbip list -r <host>` gives the bus id of the
+>   VID:PID (found again at each try, as it changes at a replug), and
+>   `usbip attach -r <host> -b <busid>` attaches it. The host is 127.0.0.1
+>   in mirrored networking mode and the default gateway of the distro in
+>   NAT mode, as `usbipd attach --wsl` finds it. This is what
+>   `usbipd attach --wsl --auto-attach` runs in the distro itself, with no
+>   call to usbipd.exe: `usbipd attach` and `usbipd list` first ask the
+>   Windows service control manager whether the usbipd service runs, and
+>   the service control manager and the service grant that to interactive
+>   and service logons, SYSTEM and the Administrators only. A batch logon
+>   of a standard account (the account that owns the distro with
+>   `wsl_start_unelevated`) holds none of them; the usbip client needs no
+>   Windows right. The log is the journal of the unit. The Coral's instance
 >   (`18d1:9302`) is kept stopped and disabled
 >   (`wsl_usb_attach_retired_devices`).
 >
@@ -89,25 +103,33 @@ usbipd attach --wsl --busid 4-1
 >   `windows_usb_attach`, `task wsl-host:windows-apply -- --tags usb-attach`).
 >   It runs `Sync-TnwksUsbAttach.ps1` as the desktop user at logon, every 15
 >   minutes and 15s after a WSL vNIC reset (Hyper-V VmSwitch EventID 232 in
->   the System log). When it attaches the Z-Stick itself, it also restarts
->   `homelab-wsl-worker-2` (with a 15 minute cooldown) so the device reaches
->   the node. Log: `C:\ProgramData\tnwks-usb-attach\sync.log`; dry run with
+>   the System log). Elevated, when it attaches the Z-Stick itself with
+>   usbipd, it also restarts `homelab-wsl-worker-2` (with a 15 minute
+>   cooldown). Log: `C:\ProgramData\tnwks-usb-attach\sync.log`; dry run with
 >   `-DryRun`. With `wsl_start_unelevated` it runs with no elevation
->   (`-NoElevation`): it attaches and does not bind (the role binds), and it
->   logs to `C:\ProgramData\tnwks-usb-attach\log\sync.log`. In the move of
+>   (`-NoElevation`): it reads `usbipd state` only, does not bind (the role
+>   binds), and runs the attach script of the distro once
+>   (`wsl.exe -u root --exec /usr/local/bin/tnwks-usb-attach --once
+>   <VID:PID>`) for a device that is not attached. It restarts no worker
+>   then: worker-2 binds the whole `/dev` of the distro at `/hostdev`
+>   (Step 2), so the device node reaches the node and the pod with no
+>   restart. It logs to `C:\ProgramData\tnwks-usb-attach\log\sync.log`. In the move of
 >   the distro the account that owns the distro runs its copy,
 >   `tnwks-usb-attach-account` ([windows-ansible.md](windows-ansible.md)). Its Coral handling (the DFU to runtime firmware flip) is off
 >   unless `-CoralDfuVidPid` and `-CoralRuntimeVidPid` are passed
 >   (`usb_attach_args`).
 > - **The watchdog `tnwks-wsl-watchdog`** (role `windows_wsl_maintenance`)
->   tries the Z-Stick attach every 5 minutes and restarts worker-2 after it
->   had to cold-start the distro.
+>   tries the Z-Stick attach with usbipd every 5 minutes and restarts
+>   worker-2 after it had to cold-start the distro. A host with
+>   `wsl_start_unelevated` passes it `-SkipUsb`, as usbipd attach needs the
+>   rights at the service control manager that a task with no elevation
+>   does not hold; the unit inside WSL attaches there.
 >
 > **Windows side:** the role `windows_usb_attach` installs the pinned
 > usbipd-win (`usb_attach_usbipd_version`) and keeps each device in
 > `usb_attach_bound_devices` bound with `--force`, so it's shareable and the
-> binding persists (`attach`, which the service does repeatedly, needs no
-> elevation). By hand that is:
+> binding persists. The usbipd service exports each bound device to the
+> usbip client of the distro, which needs no Windows right. By hand that is:
 >
 > ```powershell
 > usbipd bind --force --hardware-id 0658:0200   # Z-Stick
@@ -333,7 +355,7 @@ If any layer doesn't see the device, fix that layer before going up.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `usbipd list` shows device but `lsusb` in WSL is empty | Attach service not running (or `vhci_hcd` not loaded) | `systemctl status 'tnwks-usb-attach@*'`; if absent, `task wsl-host:usb-attach` |
+| `usbipd list` shows device but `lsusb` in WSL is empty | Attach service not running (or `vhci_hcd` not loaded) | `systemctl status 'tnwks-usb-attach@*'` and `journalctl -u 'tnwks-usb-attach@*'` (the unit logs why it can not attach: no route, the host not answering, the device not exported); if absent, `task wsl-host:usb-attach` |
 | Devices drop out after every WSL/Windows restart | `bind` is persistent; `attach` is per-session, and the WSL attach service isn't installed/enabled | `task wsl-host:usb-attach` (then confirm `systemctl is-enabled 'tnwks-usb-attach@0658:0200'`) |
 | Pod crashes with "no such device" / zwave "is not a character device" | worker-2 container doesn't see the live node (stale `--device` snapshot, or attached after container start) | Re-run `task bootstrap:wsl` to recreate worker-2 with the `rslave` binds (Step 2) |
 | (usbip fallback only) Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | `--auto-attach` should re-grab it; if stuck, `systemctl restart 'tnwks-usb-attach@18d1:9302'` or manually re-bind/attach the runtime VID (see Coral gotcha) |

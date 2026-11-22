@@ -202,10 +202,18 @@ so a SYSTEM task can not start a process in it. The monitoring volume has
 no part with no elevation yet, and the play refuses the switch on a host
 that runs it (the first task of the play, with each tag). The USB attach
 runs with no elevation with the switch (`-NoElevation`): the play binds each
-device as admin, usbipd-win attaches a bound device with no admin right
-(usbipd-win 4.3.0: `Bind` checks write access, `AttachWsl` does not), and the
-task logs to `C:\ProgramData\tnwks-usb-attach\log`, the folder that its
-account may write. In the move of the distro it has a copy for the account
+device as admin, and the attach script of the distro attaches a bound device
+with the usbip client of usbipd-win, which needs no Windows right. The task
+runs no `usbipd attach` and no `usbipd list`: both ask the Windows service
+control manager whether the usbipd service runs (usbipd-win 4.3.0,
+`CheckAndReportServerRunning`), and the service control manager and the
+service grant that to interactive and service logons, SYSTEM and the
+Administrators only, which a batch logon of a standard account is not. It
+reads `usbipd state` and runs the script of the distro once
+([usb-passthrough.md](usb-passthrough.md)), and the watchdog of a host with
+the switch skips its USB attach (`-SkipUsb`). The task logs to
+`C:\ProgramData\tnwks-usb-attach\log`, the folder that its account may
+write. In the move of the distro it has a copy for the account
 that owns the distro (`tnwks-usb-attach-account`), as the UDP relays and the
 address task of the LAN bridge do.
 
