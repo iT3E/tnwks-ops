@@ -24,6 +24,8 @@ ADMISSION = ROOT / "kubernetes/apps/flux-system/admission"
 sys.path.insert(0, str(ADMISSION))
 
 import classlist
+from classlist import flux_text as text_of
+from classlist import flux_variables, substitution_off
 
 
 def docs():
@@ -149,9 +151,6 @@ SUBSTITUTION_KS = {
     "wsl": "../../../apps/flux-system/substitution/ks.yaml",
     "wsl-02": "./flux-substitution-ks.yaml",
 }
-# A variable of Flux; a doubled dollar sign is an escape, which Flux writes
-# as one.
-VARIABLE = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)(:=[^}]*)?\}")
 
 
 def substitution_template(site):
@@ -182,12 +181,12 @@ def test_the_reduced_secret_builds_in_strict_mode_with_the_keys_of_the_site(site
     assert sources == [{"kind": "Secret", "name": "cluster-secrets"}], site
     inline = set(child.doc["spec"]["postBuild"].get("substitute") or {})
     names = secret_key_names(site)
-    used = {m.group(1) for m in VARIABLE.finditer(yaml.safe_dump(secret)) if m.group(2) is None}
+    used = set(flux_variables(yaml.safe_dump(secret)))
     missing = sorted(used - names - inline)
     assert not missing, f"{site}: these variables of the template are not keys of its cluster-secrets: {missing}"
-    # No empty default: a key that the site lacks stays out of its template.
-    assert all(m.group(2) is None for m in VARIABLE.finditer(yaml.safe_dump(secret))), site
-    # Each key is its own variable, so the Secret holds the values of its site and no other.
+    # Each key is its own variable with no default, so the Secret holds the
+    # values of its site and no other, and a key that the site lacks stays out
+    # of its template.
     assert all(v == f"${{{k}}}" for k, v in secret["stringData"].items()), site
 
 
@@ -233,9 +232,9 @@ def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(sit
             continue
         inline = set((child.doc["spec"].get("postBuild") or {}).get("substitute") or {})
         for doc in child.build.docs:
-            for m in VARIABLE.finditer(yaml.safe_dump(doc)):
-                if m.group(2) is None and m.group(1) not in known | inline:
-                    missing.setdefault(child.key, set()).add(m.group(1))
+            for name in flux_variables(yaml.safe_dump(doc)):
+                if name not in known | inline:
+                    missing.setdefault(child.key, set()).add(name)
     assert not missing, f"add these keys to the template of {site}, or a default: {missing}"
 
 
@@ -244,46 +243,9 @@ def test_the_reduced_secret_holds_each_key_of_the_children_outside_the_class(sit
 # nothing, so this test reads the sources of each site by name: the objects
 # that the walk builds, and the key names of the SOPS files that its
 # kustomizations list, with no value.
-SUBSTITUTE_OFF = "kustomize.toolkit.fluxcd.io/substitute"
 REQUIREMENT = re.compile(r"\s*(!?)([\w./-]+)\s*(?:(==|=|!=)\s*([\w./-]*)|\s(in|notin)\s*\(([^)]*)\))?\s*")
-# Each "${" of the envsubst of Flux (fluxcd/pkg/envsubst v1.9.0, the version
-# of kustomize-controller v1.10.1). A run of dollar signs of even length is
-# an escape. A "#" may come before the name (the length form). What comes
-# after the name decides the form. A lab of that library in strict mode
-# shows:
-# - "}" and the forms that read the value ("/", ":", "#", "%", "^", ","):
-#   a name with no definition stops the build;
-# - ":=", ":-", ":+", ":?" and "=": a default, and no stop (a variable in
-#   the default still counts, because Flux reads it first);
-# - each other form ("-", "+", "?", no name, no closing brace): the build
-#   stops on each site.
-FLUX_VARIABLE = re.compile(r"(?<!\$)(\$+)\{#?([A-Za-z0-9_]*)(?=(.{0,2}))", re.DOTALL)
-DEFAULTS = (":=", ":-", ":+", ":?", "=")
-READS_THE_VALUE = tuple("}/:#%^,")
-
-
-def flux_variables(text):
-    """Each name of a text that needs a definition in strict mode. A form
-    that Flux can not read gives a name in angle brackets, which no source
-    defines."""
-    for m in FLUX_VARIABLE.finditer(text):
-        dollars, name, after = m.groups()
-        if len(dollars) % 2 == 0 or after.startswith(DEFAULTS):
-            continue
-        if name and after[:1] in READS_THE_VALUE:
-            yield name
-        else:
-            yield f"<a form that Flux can not read: ${{{name}{after[:1]}...}}>"
-
-
-def text_of(doc):
-    return yaml.safe_dump(doc, width=float("inf"))
-
-
-def substitution_off(doc):
-    meta = doc.get("metadata") or {}
-    return "disabled" in ((meta.get("annotations") or {}).get(SUBSTITUTE_OFF),
-                          (meta.get("labels") or {}).get(SUBSTITUTE_OFF))
+# Each form of a variable of Flux is read by classlist.flux_variables, the
+# one reader that the names-only check of the encrypted files uses too.
 
 
 def selects(selector, labels):

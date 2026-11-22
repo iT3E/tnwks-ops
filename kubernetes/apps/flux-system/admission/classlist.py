@@ -135,6 +135,57 @@ def is_kind(doc: dict, group: str, kind: str) -> bool:
     return doc.get("kind") == kind and api_group(doc) == group
 
 
+# Each "${" of the envsubst of Flux (fluxcd/pkg/envsubst v1.9.0, the version
+# of kustomize-controller v1.10.1). A run of dollar signs of even length is
+# an escape. A "#" may come before the name (the length form). What comes
+# after the name decides the form. A lab of that library in strict mode
+# shows:
+# - "}" and the forms that read the value ("/", ":", "#", "%", "^", ","):
+#   a name with no definition stops the build;
+# - ":=", ":-", ":+", ":?" and "=": a default, and no stop (a variable in
+#   the default still counts, because Flux reads it first);
+# - each other form ("-", "+", "?", no name, no closing brace): the build
+#   stops on each site.
+# The CI test of each site (observability/tests/test_flux_admission.py) and
+# the names-only check of the encrypted files (substitution_names.py) both
+# read each object with flux_text, substitution_off and flux_variables below,
+# so they read each object and each form the same way.
+FLUX_VARIABLE = re.compile(r"(?<!\$)(\$+)\{#?([A-Za-z0-9_]*)(?=(.{0,2}))", re.DOTALL)
+FLUX_DEFAULTS = (":=", ":-", ":+", ":?", "=")
+FLUX_READS_THE_VALUE = tuple("}/:#%^,")
+UNREADABLE = "<a form that Flux can not read"
+
+
+def flux_variables(text: str):
+    """Each name of a text that needs a definition in strict mode. A form
+    that Flux can not read gives a name that starts with UNREADABLE, which
+    no source defines."""
+    for m in FLUX_VARIABLE.finditer(text):
+        dollars, name, after = m.groups()
+        if len(dollars) % 2 == 0 or after.startswith(FLUX_DEFAULTS):
+            continue
+        if name and after[:1] in FLUX_READS_THE_VALUE:
+            yield name
+        else:
+            yield f"{UNREADABLE}: ${{{name}{after[:1]}...}}>"
+
+
+SUBSTITUTE_OFF = "kustomize.toolkit.fluxcd.io/substitute"
+
+
+def flux_text(doc) -> str:
+    """The text of an object that the controller substitutes: it reads each
+    object after a round trip through JSON, which drops each YAML comment."""
+    return yaml.safe_dump(doc, width=float("inf"))
+
+
+def substitution_off(doc) -> bool:
+    """An object that turns substitution off for itself."""
+    meta = doc.get("metadata") or {}
+    return "disabled" in ((meta.get("annotations") or {}).get(SUBSTITUTE_OFF),
+                          (meta.get("labels") or {}).get(SUBSTITUTE_OFF))
+
+
 def norm(path: str) -> str:
     return path.removeprefix("./").rstrip("/")
 

@@ -111,8 +111,11 @@ owner runs
 PyYAML and the key of the files). It decrypts each encrypted file of a child
 outside the class in memory and prints only its path and the names of its
 variables that are neither keys of the reduced Secret of its site nor
-settings of the site nor inline substitutes of the child. It prints, writes
-and logs no value. An empty output (exit 0) means the switch stops no build;
+settings of the site nor inline substitutes of the child. It reads each
+object and each form of a variable as the CI test below does, with the same
+functions of `classlist.py`; a form that Flux can not read prints as one
+fixed marker, with no text of the file. It prints, writes and logs no
+value. An empty output (exit 0) means the switch stops no build;
 a name in the output goes into the template of the reduced Secret of that
 site first.
 

@@ -39,6 +39,62 @@ def test_names_reads_variables_and_skips_escapes_and_defaults():
     assert check.names(TEXT) == {"KNOWN_HOST", "MISSING_ONE", "MISSING_TWO"}
 
 
+# Each form of the table of the CI test (test_flux_admission.py,
+# test_the_forms_of_a_variable), the lab of the envsubst of Flux in strict mode.
+STOPS = ["${X}", "${X/./-}", "${X//./-}", "${X/#a/b}", "${X/%a/b}", "${X:1}", "${X:1:2}", "${#X}",
+         "${X^}", "${X^^}", "${X,}", "${X,,}", "${X#a}", "${X##a}", "${X%a}", "${X%%a}", "$$${X}"]
+PASSES = ["${X:=d}", "${X:-d}", "${X=d}", "${X:+d}", "${X:?d}", "${X:-$${Y}}", "$${X}", "$$$${X}", "$X"]
+UNREADABLE = ["${X-d}", "${X+d}", "${X?d}", "${}", "${ X}", "${X"]
+
+
+def value(text):
+    """A made-up Secret with one value, in a block string, so that each form
+    reaches the reader as it stands."""
+    return "kind: Secret\nstringData:\n  v: |\n    " + text + "\n"
+
+
+def test_names_reads_each_form_as_the_ci_test_does():
+    for text in STOPS:
+        assert check.names(value(text)) == {"X"}, text
+    for text in PASSES:
+        assert check.names(value(text)) == set(), text
+    assert check.names(value("${X:-${Y}}")) == {"Y"}
+    for text in UNREADABLE:
+        assert check.names(value(text)) == {"<a form that Flux can not read>"}, text
+
+
+def test_names_skips_comments_and_objects_that_turn_substitution_off():
+    text = ("kind: Secret\n# ${IN_A_COMMENT}\nstringData:\n  a: ${KEPT}  # ${AFTER_A_VALUE}\n"
+            "  b: |\n    # ${IN_A_BLOCK}\n---\nkind: Secret\nmetadata:\n  annotations:\n"
+            "    kustomize.toolkit.fluxcd.io/substitute: disabled\nstringData:\n  c: ${OFF}\n")
+    assert check.names(text) == {"KEPT", "IN_A_BLOCK"}
+
+
+def test_a_text_that_is_not_yaml_shows_its_path_only():
+    text = "stringData: [" + MADE_UP
+    lines, code = check.report([("site", "x.sops.yaml", set())], lambda path: text)
+    assert (lines, code) == (["site x.sops.yaml: did not parse as YAML"], 2)
+
+
+def test_the_script_and_the_ci_test_have_one_reader():
+    # Both call classlist.flux_variables; neither has a pattern of its own.
+    source = (ROOT / "kubernetes/apps/flux-system/admission/substitution_names.py").read_text()
+    assert "re.compile" not in source and "classlist.flux_variables(" in source
+    assert "classlist.flux_text(" in source and "classlist.substitution_off(" in source
+    test = (ROOT / "observability/tests/test_flux_admission.py").read_text()
+    assert "FLUX_VARIABLE" not in test and "def flux_variables" not in test
+    assert "def text_of" not in test and "def substitution_off" not in test
+
+
+def test_an_unreadable_form_shows_no_text_of_the_file():
+    # A value that holds "${" with no closing brace stops the build too; the
+    # line names the path and a fixed marker, and no part of the value.
+    text = "kind: Secret\nstringData:\n  token: \"" + MADE_UP + "${abc" + MADE_UP + "\"\n"
+    lines, code = check.report([("site", "x.sops.yaml", set())], lambda path: text)
+    assert (lines, code) == (["site x.sops.yaml: <a form that Flux can not read>"], 1)
+    assert "abc" not in lines[0] and MADE_UP not in lines[0]
+
+
 def test_report_prints_paths_and_names_only():
     items = [("site", "kubernetes/apps/a/app/secret.sops.yaml", {"KNOWN_HOST"}),
              ("site", "kubernetes/apps/b/app/secret.sops.yaml", {"KNOWN_HOST", "MISSING_ONE", "MISSING_TWO"}),
