@@ -154,7 +154,12 @@ def tree(tmp_path):
         shutil.copy2(ROOT / "bin" / name, tmp_path / "bin" / name)
     app = tmp_path / APP.relative_to(ROOT)
     app.mkdir(parents=True)
-    shutil.copy2(APP / "cronjob.yaml", app / "cronjob.yaml")
+    # The copy starts as before the step of the owner, also once the
+    # repository holds his ID of the App.
+    cron = re.sub(r"(?m)^(\s*- name: GITHUB_APP_ID\n\s*value: ).*$", r'\g<1>"SET-BY-MAIN-APP-KEY"',
+                  (APP / "cronjob.yaml").read_text())
+    assert "SET-BY-MAIN-APP-KEY" in cron
+    (app / "cronjob.yaml").write_text(cron)
     fake = tmp_path / "fake"
     fake.mkdir()
     (fake / "sops").write_text(FAKE_SOPS.replace("#!/usr/bin/env python3", f"#!{sys.executable}"))
