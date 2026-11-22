@@ -143,20 +143,23 @@ def cri(message: str) -> str:
     return f"2026-11-21T03:00:00.000000000Z stderr F {message}\n"
 
 
-SECRET = "SECRET words of a chat"
+# A made-up word in place of the text of a message: no count, label or
+# log line may carry it.
+MARKER_WORD = "ZZMARKERZZ"
+MARKER = f"{MARKER_WORD} words of a chat"
 CHAT = "-1009876543210"
-LONG = " ".join(["LONGLINE", SECRET] * 6000)
+LONG = " ".join(["LONGLINE", MARKER] * 6000)
 LOGS = {
     "agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log": [
-        f'2026-11-21T03:00:00.000Z telegram sendMessage failed: network request failed transport={{"code":"ETIMEDOUT"}} chat={CHAT} {SECRET}',
-        f"\x1b[31mtelegram editMessageText failed: Call to 'editMessageText' failed! (400: Bad Request: {SECRET})\x1b[39m",
-        f"telegram sendChatAction failed: {SECRET}",
-        f"[telegram] Inbound message telegram:{CHAT} -> {SECRET}",
+        f'2026-11-21T03:00:00.000Z telegram sendMessage failed: network request failed transport={{"code":"ETIMEDOUT"}} chat={CHAT} {MARKER}',
+        f"\x1b[31mtelegram editMessageText failed: Call to 'editMessageText' failed! (400: Bad Request: {MARKER})\x1b[39m",
+        f"telegram sendChatAction failed: {MARKER}",
+        f"[telegram] Inbound message telegram:{CHAT} -> {MARKER}",
         "[telegram] Polling stall detected (no completed getUpdates for 2m 0.1s); forcing restart.",
         "[telegram] isolated polling ingress failed; restarting in 30s.",
-        f"[telegram] fallback delivery failed: {SECRET}",
-        f"[telegram] sendChatAction failed: {SECRET}",
-        f"\x1b[31mtelegram final reply failed: Error: {SECRET}\x1b[39m",
+        f"[telegram] fallback delivery failed: {MARKER}",
+        f"[telegram] sendChatAction failed: {MARKER}",
+        f"\x1b[31mtelegram final reply failed: Error: {MARKER}\x1b[39m",
     ],
     "agents-finance_agent-7c8b-fghij_66666666-7777-8888-9999-000000000000/agent/0.log": [
         # Over max_line_bytes (100 KiB), with a pattern: discarded, not
@@ -168,10 +171,10 @@ LOGS = {
     ],
     # Not read: the pilot has no Telegram, and another container of the pod.
     "agents-pilot_agent-1a2b-klmno_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/agent/0.log": [
-        f"telegram sendMessage failed: {SECRET}",
+        f"telegram sendMessage failed: {MARKER}",
     ],
     "agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/backup/0.log": [
-        f"telegram sendMessage failed: {SECRET}",
+        f"telegram sendMessage failed: {MARKER}",
     ],
 }
 EXPECTED = {("agents-main", "send_failed"): 4, ("agents-main", "poll_stall"): 1,
@@ -250,12 +253,12 @@ def test_in_the_pinned_vector_only_the_counts_leave():
             target.write_text("".join(cri(line) for line in lines))
         subprocess.run(["chmod", "-R", "a+rX", str(pods)], check=True)
         text = wait_for(binary, name, EXPECTED)
-        for word in ("SECRET", "chat", CHAT.lstrip("-"), "ETIMEDOUT", "stuck", "default", "telegram", "pilot"):
+        for word in (MARKER_WORD, "chat", CHAT.lstrip("-"), "ETIMEDOUT", "stuck", "default", "telegram", "pilot"):
             assert word not in text, word
         logs = subprocess.run([binary, "logs", name], capture_output=True, text=True, check=True)
         own = logs.stdout + logs.stderr
         assert "Vector has started" in own, own[-3000:]
-        for word in ("SECRET", "LONGLINE", CHAT.lstrip("-"), "ETIMEDOUT", "Bad Request", "sendMessage"):
+        for word in (MARKER_WORD, "LONGLINE", CHAT.lstrip("-"), "ETIMEDOUT", "Bad Request", "sendMessage"):
             assert word not in own, (word, own[-3000:])
     finally:
         subprocess.run([binary, "rm", "-f", name], capture_output=True, check=False)
