@@ -18,9 +18,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The owner or Renovate as author and actor, with nobody else's push on
+  # the branch (pr-trust.yaml, owner-label-check.py --trust of main).
+  trust:
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/pr-trust.yaml
+
   plan:
-    # Never run fork or third-party code on the self-hosted runner.
+    # Never run fork or third-party code on the self-hosted runner, and no
+    # branch that another identity pushed to.
+    needs: trust
     if: >-
+      needs.trust.outputs.trusted == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login == 'iT3E'
     name: "EdgeOS Plan"

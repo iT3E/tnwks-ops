@@ -11,6 +11,9 @@ permissions: {}
 jobs:
   link-check:
     name: Link Check
+    # The job checks with the PRIVACY_TERMS secret and writes an issue, so a
+    # hand start runs on main only.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:

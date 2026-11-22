@@ -1,0 +1,111 @@
+---
+name: "Merge notice"
+
+# Each merge of the App of the main agent posts one notice to the owner's
+# direct chat: the PR number, its title, its files and its body (the reason
+# of the agent), as plain text (docs/operations/ci.md, "Agent pull
+# requests"). It runs on every push to main, with no path filter, and its
+# steps are inline: no checkout, no script and no action of this
+# repository, so a merge of the App can not change or skip it. The App has
+# no Workflows permission, so it can not change this file.
+#
+# The App is MAIN_AGENT_APP in .github/scripts/owner-label-check.py on main
+# before the push (its bot login, "<slug>[bot]"), the one name that
+# "Owner label" reads too; the step reads it with the contents API. Until
+# task 6.20 sets it, no merge is the App's and the step posts nothing. The
+# job runs for each push to main whose actor is not the owner or Renovate.
+# The bot token and the chat ID are secrets of the environment
+# merge-notice (MERGE_NOTICE_BOT_TOKEN, MERGE_NOTICE_CHAT_ID), which
+# allows the branch main only. No agent holds them.
+#
+# A failed notice opens an issue assigned to the repository owner, with a
+# neutral title and the link to the run: the mail of a failed run goes to
+# the actor, here the App, which reads no mail.
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  notice:
+    name: notice
+    if: github.actor != github.repository_owner && github.actor != 'renovate[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    environment:
+      name: merge-notice
+      deployment: false
+    permissions:
+      contents: read # the script on main, and the compare API
+      pull-requests: read # the PR of the merge
+      issues: write # the issue of a failed notice
+    steps:
+      - name: Post the notice
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BOT_TOKEN: ${{ secrets.MERGE_NOTICE_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.MERGE_NOTICE_CHAT_ID }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          api() {
+            curl -fsS --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: ${2:-application/vnd.github+json}" "https://api.github.com/repos/${REPO}/$1"
+          }
+          # The name on main before this push: a merge can not change it for itself.
+          script="$(api "contents/.github/scripts/owner-label-check.py?ref=${BEFORE}" application/vnd.github.raw)"
+          app="$(sed -nE 's/^MAIN_AGENT_APP = "([^"]*)"$/\1/p' <<<"$script")"
+          if [ -z "$app" ] || [ "$ACTOR" != "$app" ]; then
+            echo "not a merge of the App of the main agent"
+            exit 0
+          fi
+          if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+            echo "::error::the secrets of the environment merge-notice are missing"
+            exit 1
+          fi
+          pr="$(api "commits/${AFTER}/pulls" | jq -c 'map(select(.merged_at != null)) | first // {}')"
+          compare="$(api "compare/${BEFORE}...${AFTER}")"
+          files="$(jq -r '[.files[]?.filename] | .[:40] | join("\n")' <<<"$compare")"
+          count="$(jq -r '.files | length' <<<"$compare")"
+          text="$(jq -r --arg actor "$ACTOR" --arg files "$files" --arg count "$count" \
+            --arg commit "${SERVER}/${REPO}/commit/${AFTER}" '
+            "Merged by " + $actor + ": " +
+            (if .number then "#" + (.number | tostring) + " " + (.title // "") else "a push with no PR" end) +
+            "\n\nFiles (" + $count + "):\n" + $files +
+            "\n\nReason:\n" + ((.body // "") | .[:1500]) +
+            "\n\n" + (.html_url // $commit)' <<<"$pr")"
+          text="${text:0:4000}"
+          for attempt in 1 2 3; do
+            if curl -fsS -o /dev/null "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${CHAT_ID}" --data-urlencode "text=${text}" \
+                --data-urlencode "disable_web_page_preview=true"; then
+              echo "posted the notice of ${AFTER}"
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::error::the notice did not post"
+          exit 1
+
+      - name: Tell the owner
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          AFTER: ${{ github.sha }}
+          OWNER: ${{ github.repository_owner }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          body="$(jq -cn --arg title "Merge notice failed for ${AFTER:0:7}" --arg owner "$OWNER" \
+            --arg body "The merge notice of commit ${AFTER} did not post. The run: ${RUN_URL}" \
+            '{title: $title, body: $body, assignees: [$owner]}')"
+          curl -fsS --retry 3 -o /dev/null -X POST -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/issues" \
+            --data "$body"
+          echo "opened an issue for the owner"

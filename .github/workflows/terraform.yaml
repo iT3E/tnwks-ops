@@ -23,6 +23,10 @@ on:
         description: plan, apply or drift
         type: string
         required: true
+      trusted:
+        description: 'plan: "true" when pr-trust.yaml trusts the run (the owner or Renovate, with nobody else''s push)'
+        type: string
+        default: "false"
     secrets:
       TF_API_TOKEN:
         required: true
@@ -40,12 +44,14 @@ env:
 
 jobs:
   # Trusted: a same-repo PR opened by the owner or Renovate (whose Terraform
-  # bumps wait 3 days after release, .github/renovate.json5). Keyed on the
-  # PR's author and source repo, not github.actor. Nothing else runs on the
-  # self-hosted runners or with the token.
+  # bumps wait 3 days after release, .github/renovate.json5), with the
+  # owner or Renovate as the actor of the event and nobody else's push on
+  # the branch (inputs.trusted, from pr-trust.yaml). Nothing else runs on
+  # the self-hosted runners or with the token.
   plan:
     if: >-
       inputs.mode == 'plan' &&
+      inputs.trusted == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(fromJSON('["iT3E", "renovate[bot]"]'), github.event.pull_request.user.login)
     name: Plan ${{ matrix.title }}
@@ -133,6 +139,7 @@ jobs:
   plan-approval:
     if: >-
       inputs.mode == 'plan' && (
+        inputs.trusted != 'true' ||
         github.event.pull_request.head.repo.full_name != github.repository ||
         !contains(fromJSON('["iT3E", "renovate[bot]"]'), github.event.pull_request.user.login))
     name: Plan ${{ matrix.title }} (approval)

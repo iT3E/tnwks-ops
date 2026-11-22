@@ -1,0 +1,67 @@
+---
+name: "PR trust"
+
+# Reusable (workflow_call), for the gates that run code of a branch with a
+# secret, with a write token or on a runner of the house: the Terraform
+# plan, the host check, the EdgeOS plan, the rendered diff and the job
+# Changes (docs/operations/ci.md, "Agent pull requests"). One output,
+# trusted: "true" or "false".
+#
+# On a PR it runs owner-label-check.py --trust of main (never of the
+# branch): true only when the author and the actor of the event are the
+# owner or Renovate, the head is in this repository, the base is the
+# default branch, nobody else pushed to the branch and no other bot made
+# one of its commits (the same rules that "Owner label" reads), and the
+# newest push of the branch made the head of the event. On any other
+# event: true when the actor is the owner or Renovate. It answers false
+# when it can't tell.
+on:
+  workflow_call:
+    outputs:
+      trusted:
+        description: "true or false"
+        value: ${{ jobs.trust.outputs.trusted }}
+
+permissions: {}
+
+jobs:
+  trust:
+    name: trust
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read # the script from main, and the activity API
+      pull-requests: read # the PR
+    outputs:
+      trusted: ${{ steps.answer.outputs.trusted }}
+    steps:
+      - name: Checkout the script from main
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts/owner-label-check.py
+          sparse-checkout-cone-mode: false
+
+      - name: Answer
+        id: answer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          OWNER_ID: ${{ github.repository_owner_id }}
+          OWNER_LOGIN: ${{ github.repository_owner }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            answer="$(python3 -I .github/scripts/owner-label-check.py --trust)" || answer=trusted=false
+          elif [ "$ACTOR" = "$OWNER_LOGIN" ] || [ "$ACTOR" = "renovate[bot]" ]; then
+            answer=trusted=true
+          else
+            answer=trusted=false
+          fi
+          [ "$answer" = trusted=true ] || answer=trusted=false
+          echo "$answer" | tee -a "$GITHUB_OUTPUT"

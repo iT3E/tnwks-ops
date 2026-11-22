@@ -10,6 +10,11 @@ name: "Kubernetes"
 on:
   # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
   workflow_call:
+    inputs:
+      trusted:
+        description: '"true" when pr-trust.yaml trusts the run; else the rendered diff runs the scripts of main'
+        type: string
+        default: "false"
 
 permissions: {}
 
@@ -203,12 +208,31 @@ jobs:
         with:
           version: ${{ env.FLATE_VERSION }}
 
-      # flate can't read SOPS, so supply placeholders for cluster-secrets'
-      # keys (.github/flate/supply.sh has why). The path is absolute because
-      # bin/images-added also runs flate inside a worktree of the base.
-      - name: Placeholder cluster-secrets
+      # The job has a write token, so for anyone but the owner and Renovate
+      # alone (inputs.trusted) its scripts come from main, not the branch.
+      - name: Scripts
+        id: scripts
+        env:
+          TRUSTED: ${{ inputs.trusted }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          .github/flate/supply.sh > "${RUNNER_TEMP}/flate-supply.yaml"
+          if [ "$TRUSTED" = true ]; then
+            echo "dir=${GITHUB_WORKSPACE}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          dir="${RUNNER_TEMP}/main"
+          mkdir -p "$dir"
+          git archive "origin/${DEFAULT_BRANCH}" .github/flate .github/scripts/flate-diff-comment.py | tar -x -C "$dir"
+          echo "::notice::not the owner or Renovate alone: the scripts of main render the diff"
+          echo "dir=${dir}" >> "$GITHUB_OUTPUT"
+
+      # flate can't read SOPS, so supply placeholders for cluster-secrets'
+      # keys (.github/flate/supply.sh has why).
+      - name: Placeholder cluster-secrets
+        env:
+          SCRIPTS: ${{ steps.scripts.outputs.dir }}
+        run: |
+          "${SCRIPTS}/.github/flate/supply.sh" > "${RUNNER_TEMP}/flate-supply.yaml"
           echo "FLATE_SUPPLY=${RUNNER_TEMP}/flate-supply.yaml" >> "${GITHUB_ENV}"
 
       - name: Diff
@@ -217,7 +241,8 @@ jobs:
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: python3 .github/scripts/flate-diff-comment.py
+          SCRIPTS: ${{ steps.scripts.outputs.dir }}
+        run: python3 -I "${SCRIPTS}/.github/scripts/flate-diff-comment.py"
 
       # A PR with no rendered changes gets no comment, or has its existing one
       # updated to say so.

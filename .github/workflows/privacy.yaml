@@ -19,10 +19,12 @@ on:
     # edited: a changed title or body is checked again.
     types: [opened, synchronize, reopened, edited]
   push:
-    branches: ["main"]
-    # Release commits (CHANGELOG.md + .changes/ only) carry nothing new to
-    # check: their fragments were checked in the PR that added them.
-    paths-ignore: [CHANGELOG.md, .changes/**]
+    # agent/**: a branch of the App of the main agent is checked on each
+    # push, with or without a PR (the reusable workflow checks what the
+    # branch adds to main, with the checker of main).
+    # No path filter: a push of an agent branch with only fragments is
+    # checked too, and a release commit costs one short run.
+    branches: ["main", "agent/**"]
 
 permissions: {}
 
