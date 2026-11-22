@@ -3,9 +3,9 @@
 # node, one indexer node and the dashboard, on homelab-wsl-02 only. No
 # cluster lists this file yet (README.md, "Before the merge that lists it").
 #
-# security-wazuh applies what this repository adds: the source of the
-# vendor's manifests, the certificates, the network rules, the Service of the
-# agents and the configuration of the manager.
+# security-wazuh applies what this repository adds: the certificates, the
+# network rules, the Service of the agents and the configuration of the
+# manager.
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -20,18 +20,19 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  wait: true # security-wazuh-server needs the source and the certificates
+  wait: true # security-wazuh-server needs the certificates
   interval: 30m
   retryInterval: 1m
   timeout: 5m
 ---
-# security-wazuh-server builds the vendor's folder wazuh/ at the tag of
-# app/gitrepository.yaml, with the patches below. With no kustomization file
-# there (the GitRepository ignores it), Flux builds every manifest under the
-# path.
+# security-wazuh-server builds server/: the vendor's manifests that this
+# repository keeps, a byte-for-byte copy of wazuh/wazuh-kubernetes at
+# v5.0.0-rc2 (server/UPSTREAM.md), with the images and the patches below.
 #
 # The vendor's init containers are shell scripts with ${...} variables, so
 # this Kustomization opts out of the substitution of Flux (as onboard does).
+# It holds no Secret, so it needs no decryption: security-wazuh applies the
+# Secrets that the vendor's pods mount.
 # The ${...} below are substituted by the parent of the apps, which applies
 # this file with the cluster-settings.
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
@@ -45,13 +46,12 @@ metadata:
 spec:
   dependsOn:
     - name: security-wazuh
-  path: ./wazuh
+  path: ./kubernetes/apps/security/wazuh/server
   targetNamespace: security
   prune: true
   sourceRef:
     kind: GitRepository
-    name: wazuh-kubernetes
-    namespace: security
+    name: flux-system
   wait: false # no flux ks dependents
   interval: 30m
   retryInterval: 1m

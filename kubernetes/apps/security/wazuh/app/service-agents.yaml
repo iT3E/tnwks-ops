@@ -2,7 +2,7 @@
 # The one port of the agents: a 5.x agent enrolls and reports over HTTPS on
 # 1517 (wazuh-kubernetes v5.0.0-rc2, docs/ref/getting-started/requirements.md,
 # "Network ports"). It replaces the vendor's wazuh-agents Service, which
-# gitrepository.yaml ignores. The manager pod serves the TLS itself, with the
+# ../server does not keep. The manager pod serves the TLS itself, with the
 # certificate wazuh-manager-remoted (certificates.yaml).
 #
 # WAZUH_AGENTS_LB_ADDR is a key of the cluster-settings of homelab-wsl-02 that

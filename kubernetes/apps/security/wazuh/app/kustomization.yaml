@@ -9,7 +9,6 @@ namespace: security
 #   - ./secret-dashboard-credentials.sops.yaml
 #   - ./secret-cluster-key.sops.yaml
 resources:
-  - ./gitrepository.yaml
   - ./certificates.yaml
   - ./networkpolicy.yaml
   - ./service-agents.yaml
