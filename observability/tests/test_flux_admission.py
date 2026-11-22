@@ -195,3 +195,31 @@ def test_no_build_of_flux_uses_a_remote_source():
                           if isinstance(entry, str) and REMOTE.search(entry)]
     assert {path for path, _ in found} == {"kubernetes/bootstrap/kustomization.yaml"}, found
     assert not any(p == "kubernetes/bootstrap" or p.startswith("kubernetes/bootstrap/") for p in built)
+
+
+@pytest.mark.parametrize(
+    ("api_version", "group", "kustomization", "helmrelease"),
+    [
+        ("kustomize.toolkit.fluxcd.io/v1", "kustomize.toolkit.fluxcd.io", True, False),
+        ("helm.toolkit.fluxcd.io/v2", "helm.toolkit.fluxcd.io", False, True),
+        ("v1", "", False, False),
+        ("", "", False, False),
+        # Groups that a substring or prefix match takes: "fluxcd.io" in the
+        # version, or a group that starts with a Flux group.
+        ("evil.fluxcd.io/v1", "evil.fluxcd.io", False, False),
+        ("kustomize.toolkit.fluxcd.io.example.com/v1", "kustomize.toolkit.fluxcd.io.example.com", False, False),
+        ("helm.toolkit.fluxcd.io.example.com/v2", "helm.toolkit.fluxcd.io.example.com", False, False),
+        ("example.com/kustomize.toolkit.fluxcd.io/v1", "example.com", False, False),
+        ("xkustomize.toolkit.fluxcd.io/v1", "xkustomize.toolkit.fluxcd.io", False, False),
+    ],
+)
+def test_the_walk_takes_the_api_group_of_a_document_exactly(api_version, group, kustomization, helmrelease):
+    for kind, expect, flux_group in (
+        ("Kustomization", kustomization, classlist.KUSTOMIZE_GROUP),
+        ("HelmRelease", helmrelease, classlist.HELM_GROUP),
+    ):
+        doc = {"apiVersion": api_version, "kind": kind, "metadata": {"name": "x"}}
+        assert classlist.api_group(doc) == group
+        assert classlist.is_kind(doc, flux_group, kind) is expect
+        if kind == "Kustomization":
+            assert (classlist.flux_kustomizations([doc]) == [doc]) is expect

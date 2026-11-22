@@ -90,7 +90,7 @@ def main(out: Path) -> None:
         for child in classlist.walk(site).values():
             kustomizations.append({"site": site, "parent": child.parent, "doc": substitute(child.doc, settings)})
             for d in child.build.docs:
-                if d.get("kind") == "HelmRelease" and str(d.get("apiVersion", "")).startswith("helm.toolkit.fluxcd.io/"):
+                if classlist.is_kind(d, classlist.HELM_GROUP, "HelmRelease"):
                     d = substitute(d, settings)
                     d["metadata"]["namespace"] = classlist.namespace_of(d, child)
                     helmreleases.append({"site": site, "applier": child.key, "doc": d})
