@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.275.0 - 2026-11-22
+
+### Added
+
+* The Telegram channel of main and finance has an alert, AgentChannelFailing: the platform Vector counts the error lines of the channel on the node, as fixed patterns (a failed or hung send of a reply, a poll that stops, a restart of the channel), and only the count leaves the node; the log of the agent container still does not ship
+
 ## v2.274.0 - 2026-11-22
 
 ### Added
