@@ -585,6 +585,29 @@ WEB = "kubernetes/apps/web/configmap.yaml"
 CONFIGMAP = LAB[WEB].replace('site: "${CLUSTER_NAME}"', 'site: "%s"')
 CANT_READ = ("<no ConfigMap web-generated that this test can read: it reads the objects of the walk and the SOPS "
              "files that a kustomization lists, and no generator>")
+# A variable in a YAML comment does not stop the build: the controller
+# substitutes each object of the build as res.AsYAML() gives it, which goes
+# through JSON, so no comment is left (the lab of kustomize api v0.21.1 and
+# fluxcd/pkg/envsubst v1.9.0 in strict mode, at kustomize-controller
+# v1.10.1). A line of a block string that starts with "#" is text, and does.
+COMMENTED = """
+    # ${NEW_KEY}
+    apiVersion: v1
+    kind: ConfigMap
+    metadata: {name: web, namespace: default}  # ${NEW_KEY}
+    data:
+      # ${NEW_KEY}
+      site: "${CLUSTER_NAME}"  # ${NEW_KEY}
+    """
+BLOCK_STRING = """
+    apiVersion: v1
+    kind: ConfigMap
+    metadata: {name: web, namespace: default}
+    data:
+      conf: |
+        # ${NEW_KEY}
+        site=${CLUSTER_NAME}
+    """
 
 
 @pytest.mark.parametrize(("change", "want"), [
@@ -615,6 +638,9 @@ CANT_READ = ("<no ConfigMap web-generated that this test can read: it reads the 
     # it names, so web does not get NEW_KEY from it.
     ({"kubernetes/clusters/lab/apps.yaml": NO_TARGET, WEB: CONFIGMAP % "${NEW_KEY}"},
      {"flux-system/web": ["NEW_KEY"]}),
+    # A variable in a comment passes, and one in a block string fails.
+    ({WEB: COMMENTED}, {}),
+    ({WEB: BLOCK_STRING}, {"flux-system/web": ["NEW_KEY"]}),
 ])
 def test_the_check_of_the_variables_on_a_small_tree(tmp_path, monkeypatch, change, want):
     import textwrap

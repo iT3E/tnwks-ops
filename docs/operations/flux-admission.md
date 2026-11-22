@@ -148,6 +148,10 @@ that library in strict mode shows:
 - `-`, `+` or `?` alone after the name, a `${` with no name and a `${` with
   no closing brace stop the build on each site, so the test fails on them.
 - `$${NAME}` is an escape.
+- A variable in a YAML comment does not stop the build, and the test skips
+  it: the controller substitutes each object of the build after a round
+  trip through JSON, which drops each comment. A line of a block string
+  that starts with `#` is text, not a comment, so a variable there counts.
 
 Its limits:
 
