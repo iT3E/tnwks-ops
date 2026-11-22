@@ -139,7 +139,7 @@ The sink also serves one series that is not Vector's own:
 result}`, the time of the newest result line of a pod in a namespace
 `agents-*` (a line that starts with `<check> result=<result>`). The
 transforms `agent_platform_results` and `agent_platform_result_metrics` make
-it, and the alert `WorkflowAppDrift` reads it
+it, and the alerts `WorkflowAppDrift` and `MainGithubAppDrift` read it
 (`docs/apps/agent-platform.md`, "Alerts"). Each sample carries the time of
 its line, so Prometheus holds it for 5 minutes, its lookback, and the sink
 drops the series a minute after its last line. A rule on it reads

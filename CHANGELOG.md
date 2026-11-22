@@ -3,6 +3,34 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.301.1 - 2026-11-22
+
+### Fixed
+
+* mikrotik: the REST accept of the CI runner tunnel (rule 590) writes its source as the prefix 10.10.32.10/31, the same two addresses as the range before. RouterOS stores an IPv4 range that is exactly one prefix as that prefix, and the provider compares src_address as written, so the plan of the root is empty when nothing changes.
+
+## v2.301.0 - 2026-11-22
+
+### Added
+
+* agents: the alerts MainGithubTokenStale and MainGithubAppDrift for the token job of the App of main, its Job dropped from KubeJobFailed, and the order of the admission lists and the new child after its listing
+
+### Changed
+
+* agents: the token job of the App of the main agent is listed, with its key: each 30 minutes a token with read rights for the ops repository; two alerts for a stale token and for a drift of the installation
+
+## v2.300.0 - 2026-11-22
+
+### Added
+
+* security: homelab-wsl-02 lists the settings of the Wazuh indexer, with their SOPS Secrets. Step 1 makes the users of accounts.json, and step 2 writes the retention policies of tnwks (a rollover at 30 days, a delete at 120 days, 60 days for metrics), turns raw events off, and moves the first index of each stream onto its policy. ISM runs the steps of those policies with the role tnwks-settings, so the role holds the index stats and the rollover on the stream names and the index stats and the delete on their backing indices. Step 2 counts the indices at a failed step of ISM and fails when there is one, and step 1 waits for the indexer. The Secret of the converter's reader is in git and not listed yet.
+
+## v2.299.1 - 2026-11-22
+
+### Fixed
+
+* agents: a session of the main agent now gets the six read tools of the host server: the sandbox allow list names them, as it names the tools of each other server
+
 ## v2.299.0 - 2026-11-22
 
 ### Changed

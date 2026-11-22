@@ -2046,12 +2046,12 @@ The rules are in `monitoring/app/prometheusrule.yaml` and
 `monitoring/app/heartbeat-prometheusrule.yaml` (the Flux Kustomization
 `agents-monitoring`, homelab-wsl only). Each alert goes to the
 War Room, the default Telegram route of Alertmanager, with severity
-`warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
+`warning`. Most read kube-state-metrics; `WorkflowAppDrift`, `MainGithubAppDrift`,
 `AgentInstructionFileChanged`, `AgentInstructionCheckStale`,
 `AgentMemoryIndexFailed`, `AgentAutomationsSyncFailed`,
 `ModelBridgeRateLimited` and `ModelPlanNearLimit` read lines of the logs, as
 gauges of Vector: the
-aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
+aggregator for the `<check> result=` lines (`WorkflowAppDrift`, `MainGithubAppDrift`,
 `AgentInstructionCheckStale`, `AgentMemoryIndexFailed`,
 `AgentAutomationsSyncFailed`),
 the platform agent for the `instruction-check file=` lines and the bridge
@@ -2088,6 +2088,8 @@ policy that `observability/inventory.py` declares
 | `AgentPlatformCronJobFailed` | The last run of a CronJob of a trust domain failed, and no run passed since: the providers job, the sweep, a daily check. It resolves at the next good run | none | Its log in Loki (below). A `result=failed` line of the providers job names the step |
 | `WorkflowProvidersStale` | No good run of `workflow-providers` in 35 minutes, or the CronJob is gone. A token of the reviewer lives one hour, so about 25 minutes are left | 5m | `kubectl -n agents-workflows get cronjob,jobs`, then the log of the last run |
 | `WorkflowAppDrift` | An `app-drift result=drift` line in the last 20 minutes: the App or its installation has more permissions than the list in git | none | The `detail=` of the line names each one. Set the App back, or change the list by a pull request |
+| `MainGithubTokenStale` | No good run of the token job of the App of main (`github-token` in `agents-main`) in 35 minutes, or the CronJob is gone: the last run failed or did not run. Its token lives one hour, so about 25 minutes are left before a call of the code host server gets 401 | 5m | `kubectl -n agents-main get cronjob,jobs -l app.kubernetes.io/name=github-token` |
+| `MainGithubAppDrift` | A `github-token result=drift` line in the last 40 minutes: the App of main or its installation has more permissions or repositories than the design | none | The `what=` of the line names it ([github-token.md](github-token.md)) |
 | `AgentHeartbeatMissing` | The daily `agent-heartbeat-check` (06:33 UTC) found no completed heartbeat run of an agent in Tempo in the last 26 hours, or could not ask Tempo. It asks 3 times, 60 seconds apart, and a failed pod gets one more try, so one short break of Tempo does not fire. It resolves at the next good run | none | Its log in Loki (`{namespace="monitoring", app="agent-heartbeat-check"}`): `result=missing` names the service, `result=error` is Tempo. Then the agent pod and its traces |
 | `AgentHeartbeatCheckStale` | The heartbeat check itself was not scheduled in 26 hours, or its CronJob is gone | 15m | `kubectl -n monitoring get cronjob agent-heartbeat-check` |
 | `AgentPlatformCheckStale` | A daily check of a trust domain (`platform-check-*`), or the daily key check of the model gateway (`ai/litellm-key-check`), has not passed in 26 hours, or never passed once a run was due | 15m | The CronJob (suspended?) and its Jobs |

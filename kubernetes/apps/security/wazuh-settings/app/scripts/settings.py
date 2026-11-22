@@ -26,13 +26,18 @@ password of that user. In this order:
      indexer at a renewal. That guard reads the certificate in the TLS
      handshake and the CA file of the pod, and needs no right in Kubernetes.
   5. Counts the indices of those patterns that are not on the policy of tnwks
-     of their stream, with those that have no policy, and the documents of the
-     streams that must hold none. It writes the counts to
+     of their stream, with those that have no policy, those whose policy
+     stopped at a failed step, and the documents of the streams that must
+     hold none. It writes the counts to
      wazuh-settings/indices.json on the volume of results, where the converter
      reads them (security/converter/README.md, "The files of results").
 
-The run exits 1 at the first error, and when a move did not apply in --wait
-seconds (after it writes the counts), so KubeJobFailed fires. Tests:
+The run exits 1 at the first error, and, after it writes the counts, when a
+move did not apply in --wait seconds or an index is at a failed step of ISM,
+so KubeJobFailed fires. ISM runs each step of a policy of tnwks with the roles
+of tnwks-settings, the user that wrote and moved it (index-management 3.6.0.0,
+ManagedIndexRunner): a step that the role does not allow fails, and only the
+count shows it. Tests:
 security/tests/test_wazuh_settings.py.
 """
 
@@ -157,16 +162,28 @@ def apply_raw_events(client: Indexer, cfg: dict, log) -> None:
     log(f"setting engine.index_raw_events: {str(value).lower()}")
 
 
+def step_failed(info: dict) -> bool:
+    """A managed index whose policy stopped at a failed step, as the ISM explain
+    API shows it (index-management 3.6.0.0, ManagedIndexMetaData.toXContent):
+    the status of its step is failed (ISM may still retry the action), its
+    action failed (the retries of the action are used up), or the policy
+    failed (retry_info). ISM itself counts the last two as failed
+    (ManagedIndexMetaData.isFailed)."""
+    step, action, retry = (info.get(key) or {} for key in ("step", "action", "retry_info"))
+    return step.get("step_status") == "failed" or action.get("failed") is True or retry.get("failed") is True
+
+
 def explain(client: Indexer, patterns) -> dict:
     """Each index of the patterns, with the policy and version that ISM reports
-    for it: {index: (policy_id or None, seq_no, primary_term)}."""
+    for it, and whether its policy stopped at a failed step:
+    {index: (policy_id or None, seq_no, primary_term, failed)}."""
     status, data = client.call("GET", f"/_plugins/_ism/explain/{q(','.join(patterns))}", ok=(200, 404))
     found = {}
     for index, info in (data or {}).items() if status == 200 else ():
         if not isinstance(info, dict):
             continue  # total_managed_indices
         policy_id = info.get("policy_id") or info.get("index.plugins.index_state_management.policy_id")
-        found[index] = (policy_id, info.get("policy_seq_no"), info.get("policy_primary_term"))
+        found[index] = (policy_id, info.get("policy_seq_no"), info.get("policy_primary_term"), step_failed(info))
     return found
 
 
@@ -174,7 +191,7 @@ def _to_move(found: dict, policy_id: str, version: tuple) -> dict:
     """The indices that are not on the version of the policy. When ISM gives no
     version for an index, its policy ID alone decides."""
     moves = {}
-    for index, (current, seq_no, primary_term) in found.items():
+    for index, (current, seq_no, primary_term, _) in found.items():
         same = current == policy_id and (seq_no is None or (seq_no, primary_term) == tuple(version))
         if not same:
             moves[index] = current
@@ -215,8 +232,9 @@ def count_indices(client: Indexer, cfg: dict) -> dict:
         found = explain(client, spec["patterns"])
         streams[stream] = {
             "indices": len(found),
-            "off_policy": sum(1 for policy_id, _, _ in found.values() if policy_id != POLICY_PREFIX + stream),
-            "no_policy": sum(1 for policy_id, _, _ in found.values() if policy_id is None),
+            "off_policy": sum(1 for policy_id, *_ in found.values() if policy_id != POLICY_PREFIX + stream),
+            "no_policy": sum(1 for policy_id, *_ in found.values() if policy_id is None),
+            "failed": sum(1 for *_, failed in found.values() if failed),
         }
     return streams
 
@@ -311,15 +329,24 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
             "indices": sum(s["indices"] for s in streams.values()),
             "off_policy": sum(s["off_policy"] for s in streams.values()),
             "no_policy": sum(s["no_policy"] for s in streams.values()),
+            "failed": sum(s["failed"] for s in streams.values()),
             "streams": streams,
             "documents": count_documents(client),
         }
         write_results(Path(args.results), document)
         out(f"wrote {SOURCE}/indices.json: {document['indices']} indices, {document['off_policy']} not on "
-            f"their policy of tnwks, {document['no_policy']} with no policy, documents {document['documents']}")
+            f"their policy of tnwks, {document['no_policy']} with no policy, {document['failed']} at a failed "
+            f"step, documents {document['documents']}")
+        problems = []
         if pending:
-            raise Stop("ISM has not applied the move yet for " + ", ".join(pending)
-                       + ": do not restart the indexer before a run ends well")
+            problems.append("ISM has not applied the move yet for " + ", ".join(pending)
+                            + ": do not restart the indexer before a run ends well")
+        failed = sorted(stream for stream, counts in streams.items() if counts["failed"])
+        if failed:
+            problems.append("ISM stopped at a failed step on indices of " + ", ".join(failed)
+                            + ": read the info of the ISM explain API of each one, fix the cause, and retry them")
+        if problems:
+            raise Stop("; ".join(problems))
     except Stop as error:
         out(f"error: {error}")
         return 1

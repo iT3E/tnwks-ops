@@ -39,7 +39,7 @@ from pathlib import Path
 import pytest
 import yaml
 from test_main_agent import APP, CONFIG, GATEWAY_CONFIG, MAIN, good, run_values
-from test_main_host_server import READ_LIST
+from test_main_host_server import READ_LIST, READS
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_PATH = "/opt/openclaw/local-plugins/host-approval"
@@ -142,7 +142,21 @@ def test_the_host_key_is_in_agent_secret_once_the_server_is_listed():
         assert f"/{HOST_ROUTE}/" not in server["url"], name
     text = CONFIG.read_text()
     assert text.count(KEY_ENV) == 1  # the plugin entry only
-    assert not any(t.startswith("host__") for t in c["tools"]["sandbox"]["tools"]["alsoAllow"])
+
+
+def test_the_sandbox_allow_list_names_the_six_reads_once_the_server_is_listed():
+    """In a sandboxed session an MCP tool also passes the sandbox allow list
+    (test_main_read_servers.py). The manifest of the plugin declares the
+    server `host`, so its tools are `host__<tool>`. With the server listed,
+    the list names the six read tools of the route by their exact names and
+    no other tool of the server: without them the agent lists the tools and
+    never sees one. With the server not listed (the way back), the names may
+    stay, as the read list, or go."""
+    allow = config()["tools"]["sandbox"]["tools"]["alsoAllow"]
+    host = [t for t in allow if t.startswith("host__")]
+    assert len(host) == len(set(host))
+    six = sorted(f"host__{tool}" for tool in READS)
+    assert sorted(host) == six or (not host_listed() and host == [])
 
 
 def test_the_values_check_runs_the_check_of_the_plugin():

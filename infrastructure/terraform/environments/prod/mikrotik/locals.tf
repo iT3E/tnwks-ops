@@ -718,7 +718,7 @@ locals {
       protocol          = "tcp"
       dst_port          = "443"
       in_interface_list = "vpn-ci"
-      src_address       = "10.10.32.10-10.10.32.11"
+      src_address       = "10.10.32.10/31"
     }
   }
 

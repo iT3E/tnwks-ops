@@ -960,6 +960,15 @@
         ]
       },
       {
+        "trust_domain": "main",
+        "namespace": "agents-main",
+        "cronjob": "github-token",
+        "within": 2100,
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
         "trust_domain": "shared",
         "namespace": "monitoring",
         "cronjob": "agent-heartbeat-check",

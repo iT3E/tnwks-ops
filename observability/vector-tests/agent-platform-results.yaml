@@ -32,6 +32,38 @@ tests:
               assert_eq!(.tags.check, "app-drift")
               assert_eq!(.tags.result, "drift")
               assert_eq!(.kind, "absolute")
+  - name: the drift line of the token job of main counts
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "github-token result=drift what=permissions"
+          timestamp: "2026-11-14T02:22:03Z"
+          kubernetes.pod_namespace: agents-main
+          kubernetes.pod_labels.app: github-token
+    outputs:
+      - extract_from: agent_platform_results
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.check, "github-token")
+              assert_eq!(.result, "drift")
+              assert_eq!(.app, "github-token")
+              assert_eq!(.pod_namespace, "agents-main")
+              assert!(!exists(.message))
+  # The form before the fix: a result with a dash does not match the
+  # pattern, so MainGithubAppDrift would never see it.
+  - name: the old drift line of the token job gives no output
+    inputs:
+      - insert_at: kubernetes_remap
+        type: log
+        log_fields:
+          message: "github-token result=app-drift what=permissions"
+          timestamp: "2026-11-14T02:22:03Z"
+          kubernetes.pod_namespace: agents-main
+          kubernetes.pod_labels.app: github-token
+    no_outputs_from:
+      - agent_platform_results
   - name: providers ok line
     inputs:
       - insert_at: kubernetes_remap

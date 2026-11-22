@@ -1,7 +1,7 @@
 """The Wazuh server (kubernetes/apps/security/wazuh) and the two steps of its
 settings (kubernetes/apps/security/wazuh-settings): the files of this repository.
 
-homelab-wsl-02 lists the server, and no cluster lists its settings yet. These
+homelab-wsl-02 lists the server and its settings, and no other cluster. These
 tests read the files: the copy of the vendor's manifests against its sums, the
 files of the vendor that stay, the images by digest, the node selector and the memory lines against the tables of
 kubernetes/apps/security/README.md, nothing privileged, no route to any address,
@@ -162,11 +162,12 @@ def test_the_server_builds_the_source_with_no_substitution_of_its_own():
     assert app["dependsOn"] == [{"name": "cert-manager"}, {"name": "cilium-bgp"}]
 
 
-def test_only_homelab_wsl_02_lists_the_server_and_no_cluster_the_settings():
+def test_only_homelab_wsl_02_lists_the_server_and_its_settings():
     for listing in (ROOT / "kubernetes/clusters").glob("*/apps/kustomization.yaml"):
         listed = [r for r in yaml.safe_load(listing.read_text())["resources"] if "security/wazuh" in r]
         site = listing.parent.parent.name
-        assert listed == (["../../../apps/security/wazuh/ks.yaml"] if site == "wsl-02" else []), listing
+        both = ["../../../apps/security/wazuh/ks.yaml", "../../../apps/security/wazuh-settings/ks.yaml"]
+        assert listed == (both if site == "wsl-02" else []), listing
 
 
 def test_the_site_record_of_the_agents_is_that_of_the_cluster_settings():
@@ -381,15 +382,27 @@ def test_step2_runs_after_step1_completes():
     assert seconds > job["spec"]["activeDeadlineSeconds"]
     step1 = yaml.safe_load((SETTINGS / "accounts/kustomization.yaml").read_text())
     step2 = yaml.safe_load((SETTINGS / "app/kustomization.yaml").read_text())
-    assert step1["resources"] == ["./networkpolicy.yaml", "./accounts-job.yaml"]
-    assert step2["resources"] == ["./settings-job.yaml", "./settings-cronjob.yaml"]
+    # The Secrets: test_no_secret_is_in_git.
+    assert [r for r in step1["resources"] if "sops" not in r] == ["./networkpolicy.yaml", "./accounts-job.yaml"]
+    assert [r for r in step2["resources"] if "sops" not in r] == ["./settings-job.yaml", "./settings-cronjob.yaml"]
     assert [g["name"] for g in step1["configMapGenerator"]] == ["wazuh-accounts-files"]
     assert [g["name"] for g in step2["configMapGenerator"]] == ["wazuh-settings-files"]
 
 
+def sops_header(path: Path) -> dict:
+    """The plain fields of a SOPS file of a Secret: the lines before its data,
+    which SOPS leaves as they are (encrypted_regex of .sops.yaml)."""
+    lines = []
+    for line in path.read_text().splitlines():
+        if line.startswith(("stringData:", "data:")):
+            break
+        lines.append(line)
+    return yaml.safe_load("\n".join(lines))
+
+
 def test_no_secret_is_in_git():
-    """The Secrets are SOPS files: the server lists its four, and the settings,
-    which no cluster lists yet, none. No plain file holds a Secret."""
+    """The Secrets are SOPS files: the server lists its four, step 1 its two
+    and step 2 its one. No plain file holds a Secret."""
     for path in our_files():
         if path.suffix == ".yaml" and not path.name.endswith(".sops.yaml"):
             assert "Secret" not in {d.get("kind") for d in docs(path)}, path
@@ -400,14 +413,56 @@ def test_no_secret_is_in_git():
             "./secret-dashboard-credentials.sops.yaml",
             "./secret-cluster-key.sops.yaml",
         ],
-        SETTINGS / "app/kustomization.yaml": [],
-        SETTINGS / "accounts/kustomization.yaml": [],
+        SETTINGS / "app/kustomization.yaml": ["./secret-settings-user.sops.yaml"],
+        SETTINGS / "accounts/kustomization.yaml": [
+            "./secret-accounts-user.sops.yaml",
+            "./secret-accounts-hashes.sops.yaml",
+        ],
     }
     for kustomization, names in listed.items():
         body = yaml.safe_load(kustomization.read_text())
         assert "secretGenerator" not in body
         assert [r for r in body["resources"] if "secret" in r] == names, kustomization
         assert not [p for p in kustomization.parent.glob("*.sops.yaml") if f"./{p.name}" not in names]
+        for name in names:
+            header = sops_header(kustomization.parent / name)
+            assert header["kind"] == "Secret" and header["metadata"]["namespace"] == "security", name
+
+
+def test_the_reader_secret_of_the_converter_waits_for_its_workstream():
+    """The password of tnwks-converter, made with its hash in
+    wazuh-accounts-hashes, is a SOPS file of the converter that no
+    kustomization lists yet: the change of the converter that reads the
+    indexer lists it (README.md, "Contract")."""
+    converter = SECURITY / "converter/app"
+    assert sorted(p.name for p in converter.glob("*.sops.yaml")) == ["secret-wazuh-converter-reader.sops.yaml"]
+    header = sops_header(converter / "secret-wazuh-converter-reader.sops.yaml")
+    assert (header["kind"], header["metadata"]["name"], header["metadata"]["namespace"]) == (
+        "Secret", "wazuh-converter-reader", "security")
+    resources = yaml.safe_load((converter / "kustomization.yaml").read_text())["resources"]
+    assert not [r for r in resources if "sops" in r]
+
+
+def test_flux_substitutes_nothing_in_the_hashes():
+    """The parent of the apps of homelab-wsl-02 gives the two Kustomizations of
+    the settings decryption and substitution (no label turns it off), and
+    kustomize-controller substitutes a decrypted Secret too. A bcrypt hash
+    holds no "${" and no "$$", the only forms that the envsubst of Flux reads,
+    and the hashes Secret turns substitution off in its plain metadata, which
+    the controller reads for each object."""
+    off = "substitution.flux.home.arpa/disabled"
+    settings = {d["metadata"]["name"]: d for d in docs(SETTINGS / "ks.yaml")}
+    for name in ("security-wazuh-accounts", "security-wazuh-settings"):
+        assert off not in (settings[name]["metadata"].get("labels") or {}), name
+    header = sops_header(SETTINGS / "accounts/secret-accounts-hashes.sops.yaml")
+    assert header["metadata"]["name"] == "wazuh-accounts-hashes"
+    assert header["metadata"]["annotations"] == {"kustomize.toolkit.fluxcd.io/substitute": "disabled"}
+    # The form that step 1 accepts (scripts/accounts.py, BCRYPT).
+    text = (SETTINGS / "app/scripts/accounts.py").read_text()
+    assert 'BCRYPT = re.compile(r"\\$2[aby]\\$\\d{2}\\$[./A-Za-z0-9]{53}")' in text
+    sample = "$2y$12$" + ("./AZaz09" * 7)[:53]
+    assert re.fullmatch(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}", sample)
+    assert "${" not in sample and "$$" not in sample
 
 
 def test_the_jobs_mount_the_certificate_of_the_ca_and_not_its_key():

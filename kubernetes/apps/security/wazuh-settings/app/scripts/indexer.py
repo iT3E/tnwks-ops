@@ -26,6 +26,10 @@ class Stop(Exception):
     """An error that ends the run. The text never holds a secret."""
 
 
+class NoAnswer(Stop):
+    """The indexer gave no HTTP answer: it is not up, or it restarts."""
+
+
 def password_ok(value: str) -> bool:
     return bool(PASSWORD.fullmatch(value)) and all((
         any(c.islower() for c in value),
@@ -77,7 +81,7 @@ class Indexer:
             except urllib.error.HTTPError as error:
                 return error.code, _parse(error.read())
             except (urllib.error.URLError, TimeoutError) as error:
-                raise Stop(f"{method} {path}: no answer ({getattr(error, 'reason', error)})") from None
+                raise NoAnswer(f"{method} {path}: no answer ({getattr(error, 'reason', error)})") from None
         return send
 
     def call(self, method: str, path: str, body=None, ok=(200, 201)):

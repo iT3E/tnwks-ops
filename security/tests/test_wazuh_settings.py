@@ -98,6 +98,8 @@ class FakeIndexer:
         self.indices = {".ds-wazuh-events-v5-system-000001": ["stream-events-policy", 1, 1],
                         ".ds-wazuh-metrics-agents-000001": [None, None, None]}
         self.pending = {}
+        # index -> the managed index metadata of a failed step, as explain shows it
+        self.failed = {}
         self.settings = None
         self.documents = {}
         self.writes = []
@@ -188,7 +190,12 @@ class FakeIndexer:
                 self.indices[index] = [policy_id, p["seq"], p["term"]]
             found = {i: {"index.plugins.index_state_management.policy_id": self.indices[i][0],
                          "policy_id": self.indices[i][0], "policy_seq_no": self.indices[i][1],
-                         "policy_primary_term": self.indices[i][2]} for i in matched}
+                         "policy_primary_term": self.indices[i][2],
+                         **self.failed.get(i, {"step": {"name": "attempt_rollover",
+                                                        "step_status": "condition_not_met"},
+                                               "action": {"name": "rollover", "failed": False},
+                                               "retry_info": {"failed": False, "consumed_retries": 0}})}
+                     for i in matched}
             return 200, {**found, "total_managed_indices": len(found)}
         if parts[0] in ("add", "change_policy"):
             self.pending[parts[1]] = body["policy_id"]
@@ -215,9 +222,12 @@ def step1_files(tmp_path, hashes=None):
             f"--hashes={folder}"]
 
 
-def run1(fake, argv):
+def run1(fake, argv, sleeps=None):
     lines = []
-    code = accounts_step.main(argv, send=fake.handle, out=lines.append)
+    clock = iter(range(0, 100_000, 15))
+    code = accounts_step.main(argv, send=fake.handle, out=lines.append,
+                              sleep=(sleeps.append if sleeps is not None else lambda _: None),
+                              clock=lambda: next(clock))
     return code, lines
 
 
@@ -327,8 +337,53 @@ def test_step1_with_a_wrong_password_stops_at_once(tmp_path):
     (tmp_path / "user/password").write_text(invented("wrong"))
     code, lines = run1(fake, argv)
     assert code == 1
-    assert lines == [f"error: GET /_plugins/_security/api/roles as {OWN_USER}: HTTP 401 (security_exception)"]
+    assert lines == [f"error: GET /_plugins/_security/authinfo as {OWN_USER}: HTTP 401"]
     assert fake.writes == []
+
+
+def not_ready(fake, answers):
+    """The indexer gives these answers to authinfo first: None for no answer."""
+    real = fake.handle
+
+    def handle(method, path, body, user, password):
+        if path == "/_plugins/_security/authinfo" and answers:
+            answer = answers.pop(0)
+            if answer is None:
+                raise accounts_step.NoAnswer(f"{method} {path}: no answer (Connection refused)")
+            return answer, None
+        return real(method, path, body, user, password)
+    return handle
+
+
+def test_step1_waits_while_the_indexer_restarts(tmp_path):
+    """security-wazuh-server has wait: false, so Flux can apply the Job of step
+    1 while the indexer starts or restarts: step 1 waits for it."""
+    fake = FakeIndexer()
+    fake.handle = not_ready(fake, [None, 503, None])
+    sleeps = []
+    code, lines = run1(fake, step1_files(tmp_path), sleeps)
+    assert code == 0, lines
+    assert sleeps == [15, 15, 15]
+    refused = "the indexer is not ready yet (GET /_plugins/_security/authinfo: no answer (Connection refused)): waits"
+    assert lines[:3] == [refused, "the indexer is not ready yet (HTTP 503): waits", refused]
+    assert lines[-1] == "done"
+
+
+def test_step1_stops_when_the_indexer_is_not_ready_in_time(tmp_path):
+    fake = FakeIndexer()
+    fake.handle = not_ready(fake, [503] * 1000)
+    argv = step1_files(tmp_path) + ["--login-wait=60"]
+    code, lines = run1(fake, argv)
+    assert code == 1
+    assert lines[-1] == "error: the indexer is not ready after 60 seconds: HTTP 503"
+    assert fake.writes == []
+
+
+def test_step1_waits_no_longer_than_the_deadline_of_its_job():
+    job = yaml.safe_load((ACCOUNTS / "accounts-job.yaml").read_text())
+    (container,) = job["spec"]["template"]["spec"]["containers"]
+    wait = int(next(a for a in container["args"] if a.startswith("--login-wait=")).split("=")[1])
+    assert wait < job["spec"]["activeDeadlineSeconds"]
 
 
 # --- step 2 ------------------------------------------------------------------
@@ -445,6 +500,74 @@ def test_step2_moves_each_index_to_the_new_version_of_a_changed_policy(tmp_path)
     assert "policy tnwks-stream-metrics: unchanged" in lines
 
 
+# The forms of a failed step in the ISM explain API (index-management 3.6.0.0,
+# ManagedIndexMetaData, ActionMetaData, StepMetaData, PolicyRetryInfoMetaData):
+# a step that failed while ISM still retries its action, an action whose
+# retries are used up, and a policy that failed.
+FAILED_STEPS = {
+    "step": {"step": {"name": "attempt_rollover", "step_status": "failed"},
+             "action": {"name": "rollover", "failed": False},
+             "retry_info": {"failed": False, "consumed_retries": 0},
+             "info": {"message": "Failed to evaluate conditions for rollover",
+                      "cause": "no permissions for [indices:monitor/stats]"}},
+    "action": {"action": {"name": "rollover", "failed": True, "consumed_retries": 3},
+               "retry_info": {"failed": False, "consumed_retries": 0}},
+    "policy": {"retry_info": {"failed": True, "consumed_retries": 0}},
+}
+
+
+@pytest.mark.parametrize("form", sorted(FAILED_STEPS))
+def test_step2_counts_an_index_at_a_failed_step_and_fails(tmp_path, form):
+    """ISM runs each step of a policy of tnwks with the roles of the user that
+    wrote and moved it. A step that the role does not allow fails, the index
+    stays on its policy, and only the count shows it: the run writes it and
+    fails, so KubeJobFailed fires."""
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    assert run2(fake, argv)[0] == 0
+    assert results(argv)["failed"] == 0
+    fake.failed[".ds-wazuh-events-v5-system-000001"] = FAILED_STEPS[form]
+    code, lines = run2(fake, argv)
+    assert code == 1
+    found = results(argv)
+    assert (found["moves"], found["off_policy"], found["failed"]) == ("applied", 0, 1)
+    assert found["streams"]["events"]["failed"] == 1
+    assert found["streams"]["metrics"]["failed"] == 0
+    assert lines[-1].startswith("error: ISM stopped at a failed step on indices of events:")
+
+
+def test_step2_counts_no_failure_for_a_step_that_waits_or_completed(tmp_path):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    fake.failed[".ds-wazuh-events-v5-system-000001"] = {
+        "step": {"name": "attempt_transition_step", "step_status": "completed"},
+        "action": {"name": "transition", "failed": False}, "retry_info": {"failed": False}}
+    code, lines = run2(fake, argv)
+    assert code == 0, lines
+    assert results(argv)["failed"] == 0
+
+
+def test_step2_names_both_problems_when_a_move_waits_and_a_step_failed(tmp_path):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    fake.failed[".ds-wazuh-metrics-agents-000001"] = FAILED_STEPS["policy"]
+    real = fake.ism
+
+    def stuck(method, parts, path, body):
+        if parts[0] == "explain":
+            fake.pending.pop(".ds-wazuh-events-v5-system-000001", None)
+        return real(method, parts, path, body)
+    fake.ism = stuck
+    code, lines = run2(fake, argv)
+    assert code == 1
+    assert "ISM has not applied the move yet for events" in lines[-1]
+    assert "ISM stopped at a failed step on indices of metrics" in lines[-1]
+    assert results(argv)["failed"] == 1
+
+
 def test_step2_moves_the_first_index_of_a_stream_from_the_shipped_policy(tmp_path):
     """The Setup plugin puts the first backing index of a stream on the shipped
     policy at its start (wazuh-indexer-plugins v5.0.0-rc2, StreamIndex.java,
@@ -514,7 +637,7 @@ def test_step2_writes_the_counts_and_fails_when_ism_does_not_apply_a_move(tmp_pa
                          "indexer before a run ends well")
     found = results(argv)
     assert (found["moves"], found["off_policy"], found["no_policy"]) == ("pending", 2, 1)
-    assert found["streams"]["metrics"] == {"indices": 1, "off_policy": 1, "no_policy": 1}
+    assert found["streams"]["metrics"] == {"indices": 1, "off_policy": 1, "no_policy": 1, "failed": 0}
 
 
 def test_step2_moves_nothing_when_a_certificate_renews_soon(tmp_path):
@@ -683,8 +806,15 @@ def test_the_index_permissions_of_each_role_are_pinned():
     roles = accounts()["roles"]
     assert roles["tnwks-settings"]["index_permissions"] == [
         {"index_patterns": STREAM_NAMES, "allowed_actions": ["indices:admin/opensearch/ism/*"]},
-        {"index_patterns": [".ds-wazuh-events-raw-v5-*", "wazuh-events-raw-v5*",
-                            ".ds-wazuh-active-responses-*", "wazuh-active-responses*"],
+        # What ISM calls with this role for a policy of tnwks (wazuh/README.md,
+        # "Retention"): the rollover of a data stream asks for the stats of the
+        # stream name and rolls it over (OpenSearch 3.6.0,
+        # TransportRolloverAction), the rollover step asks for the stats of the
+        # backing index (index-management 3.6.0.0, AttemptRolloverStep), and the
+        # delete step deletes the backing index (AttemptDeleteStep).
+        {"index_patterns": DATA_STREAMS, "allowed_actions": ["indices:monitor/stats", "indices:admin/rollover"]},
+        {"index_patterns": BACKING_INDICES, "allowed_actions": ["indices:monitor/stats", "indices:admin/delete"]},
+        {"index_patterns": [".ds-wazuh-active-responses-*", "wazuh-active-responses*"],
          "allowed_actions": ["indices:monitor/stats"]},
         {"index_patterns": [".wazuh-settings"],
          "allowed_actions": ["indices:data/write/index", "indices:data/write/bulk[s]"]},
@@ -699,6 +829,32 @@ def test_the_index_permissions_of_each_role_are_pinned():
         {"index_patterns": ["wazuh-*", ".ds-wazuh-*", ".wazuh-*"], "allowed_actions": ["indices:monitor/stats"]},
     ]
     assert roles["tnwks-converter"]["cluster_permissions"] == ["cluster_composite_ops_ro"]
+
+
+DATA_STREAMS = [p for p in STREAM_NAMES if not p.startswith(".ds-")]
+BACKING_INDICES = [p for p in STREAM_NAMES if p.startswith(".ds-")]
+
+
+def allowed(role: dict, action: str, name: str) -> bool:
+    return any(action in e["allowed_actions"] and any(fnmatch.fnmatchcase(name, p) for p in e["index_patterns"])
+               for e in role["index_permissions"])
+
+
+@pytest.mark.parametrize("stream", ["wazuh-events-v5-system-activity", "wazuh-findings-v5-vulnerabilities",
+                                    "wazuh-events-raw-v5", "wazuh-metrics-agents", "wazuh-metrics-comms"])
+def test_ism_may_roll_over_and_delete_the_indices_of_each_stream_with_the_role_for_settings(stream):
+    """ISM runs each step of a policy of tnwks with the roles of tnwks-settings,
+    the user that wrote and moved it: the rollover and the delete need these
+    rights, and a delete never reaches the name of a stream."""
+    role = accounts()["roles"]["tnwks-settings"]
+    backing = f".ds-{stream}-000001"
+    assert allowed(role, "indices:monitor/stats", stream) and allowed(role, "indices:admin/rollover", stream)
+    assert allowed(role, "indices:monitor/stats", backing) and allowed(role, "indices:admin/delete", backing)
+    assert not allowed(role, "indices:admin/delete", stream)
+    assert not allowed(role, "indices:admin/rollover", backing)
+    for other in (".ds-wazuh-states-sca-000001", "wazuh-states-sca", ".ds-wazuh-active-responses-000001",
+                  ".ds-wazuh-ai-assistant-sessions-000001", ".wazuh-settings"):
+        assert not allowed(role, "indices:admin/delete", other), other
 
 
 @pytest.mark.parametrize("stream", ["wazuh-events-v5-system-activity", "wazuh-findings-v5-vulnerabilities",
