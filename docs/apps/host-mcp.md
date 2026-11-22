@@ -7,10 +7,11 @@ the main agent, behind the route `main-host` of the central MCP gateway
 agent as its prompt (Design Doc of effort 0003, section 4.2.6, "The host
 server"; task 6.22).
 
-**Not applied yet.** The manifests are in git, and
+**Not applied yet.** The manifests and the encrypted Secret are in git, and
 `kubernetes/apps/ai/agents/main/kustomization.yaml` does not list them
-until the values of their Secret exist ([What waits](#what-waits)). The
-agent has no host tool until then, and after it only through the plugin.
+until the owner's apply of the agent user and his gates
+([What waits](#what-waits)). The agent has no host tool until then, and
+after it only through the plugin.
 
 Manifests: `kubernetes/apps/ai/agents/main/host-mcp/`.
 
@@ -20,7 +21,7 @@ Manifests: `kubernetes/apps/ai/agents/main/host-mcp/`.
 | --- | --- |
 | Pod | Deployment `host-mcp` in `agents-main`: the step `files`, then two containers, `server` (port 3000, loopback use only) and `proxy` (nginx, port 8080) |
 | Service | `host-mcp`, port 8080, the proxy only |
-| Secret | `host-mcp-secret`: `config.toml`, `agent_ed25519` and `HOST_MCP_TOKEN` (not in git yet) |
+| Secret | `host-mcp-secret`: `config.toml`, `agent_ed25519` and `HOST_MCP_TOKEN`, in `app/secret-host-mcp.sops.yaml` (in git, not applied) |
 | Audit log | `/audit/ssh-mcp/audit.log` in the server container (`XDG_DATA_HOME=/audit`), an emptyDir `audit` of its own, 64Mi ([below](#the-audit-log)) |
 | Gateway route | `main-host`, a key of its own (`client: main-host`), the six read tools |
 | Tool dump | `kubernetes/apps/ai/mcp-gateway/tools/host.json`, the tool names of the pinned image |
@@ -70,7 +71,7 @@ place for the line. So `XDG_DATA_HOME` is `/audit`, an emptyDir of its own
 with a limit of 64Mi. In the lab a line was 270 to 330 bytes, so the limit
 holds about 200,000 calls; past it, the kubelet evicts the pod.
 
-**The log is lost at each pod restart.** It is a file on an emptyDir, and
+**The log is lost at each new pod.** It is a file on an emptyDir, and
 no other container reads it. The approved design text says that the log
 agent ships the audit log of the server. This manifest does not do that, so
 it is an open item at the owner's gate before the apply. Until his answer,
@@ -142,23 +143,29 @@ host is built from its Dockerfile (the recipe of the update check of the
 plugin in the agent image repository), or taken from
 `HOST_MCP_LAB_SSHD_IMAGE` for a run with no network.
 
+## State
+
+| Item | State | Where |
+| --- | --- | --- |
+| The Secret `host-mcp-secret`: the profiles with the pinned host key of each target, the private key of the agent user, the bearer token | In git, encrypted to the recipients of the other Secrets of `agents-main`; not applied, because no Kustomization that Flux applies lists the folder. Each value was made or read by a script, and none was typed or shown | `app/secret-host-mcp.sops.yaml`, a resource of `app/kustomization.yaml` |
+| The values of the agent user at site 1: its name, its public key and the source address of its key | In the host secrets of the Windows host and of the distro, with the switch of the role off | The host variables of the Ansible tree |
+| The address at which the pod reaches the SSH server of the distro | Set | `HOST_MCP_DISTRO_ADDR` in the cluster settings of site 1 |
+
 ## What waits
 
 | Item | Who | Where |
 | --- | --- | --- |
-| The agent user on the Windows host and in the WSL distro of each site, with its file rights | The owner, by the Ansible role of task 6.21 (D145) | The host |
+| The run of the agent user on the Windows host and in the distro of site 1, with its file rights and its public key. The role of task 6.21 is in main with its switch off; its run waits | The owner, by a pull request that turns the switch on, then his apply | The host |
 | The `Match` block of the agent user in the SSH server of Windows | The owner, by the role `windows_sshd` (task 6.21) | The host |
-| The SSH key pair of the agent user, the public key on each target, held for the source address of the cluster only | The owner | The host, and `agent_ed25519` of the Secret |
-| The source address of the cluster at each host, and the address at which the pod reaches the SSH server of the distro | A read on the host, then the lead | `HOST_MCP_DISTRO_ADDR` in cluster-settings |
-| The pinned host key of each target | A read on each host | `config.toml` of the Secret |
-| The profiles: one for each target, the user of the agent | The lead, from the reads above | `config.toml` of the Secret |
-| The bearer token of the server | The lead (a key inside the cluster) | `HOST_MCP_TOKEN` of the Secret |
-| `MCP_HOST_KEY` and its hash on `main-host` | The lead (a key inside the cluster) | `agent-secret` of main, and the route |
+| The answer on the audit log: the design text says that the log agent ships it, and the manifest keeps it on an emptyDir ([The audit log](#the-audit-log)) | The owner, at his gate before the apply | This doc and the manifest |
 | The read list of the plugin | Empty until the owner's gate | `readList` in the config of the agent |
+| The line that lists `./host-mcp/ks.yaml` | The lead, after the owner's apply and his gates | `kubernetes/apps/ai/agents/main/kustomization.yaml` |
+| `MCP_HOST_KEY` and its hash on `main-host` | The lead (a key inside the cluster), with the line above | `agent-secret` of main, and the route |
 | The pod at site 2 | A later step: site 2 runs no part of the AI domain yet | The cluster of site 2, with a global Service |
 
-When the Secret exists, a pull request adds `secret-host-mcp.sops.yaml`
-to `app/kustomization.yaml` and lists `./host-mcp/ks.yaml`.
+After the owner's apply and his gates, one pull request lists
+`./host-mcp/ks.yaml` in the folder of main and sets the hash of the key of
+the route.
 
 ## What is left
 
