@@ -67,10 +67,14 @@ def test_the_playbooks_run_each_role_only_where_the_site_turns_it_on():
     roles = [r["role"] for r in windows["roles"]]
     entry = windows["roles"][roles.index("windows_host_mcp_user")]
     assert entry["when"] == "host_mcp_agent_enabled | bool" and entry["tags"] == ["host-mcp"]
-    assert roles.index("windows_host_mcp_user") < roles.index("windows_sshd")
+    # Without the flag a difference fails the host for the rest of the run: so
+    # the role comes after each role that applies. On Windows only the two
+    # rehearsals, off unless given by hand, follow it; in the distro it is last.
+    assert roles[roles.index("windows_host_mcp_user") + 1:] == ["windows_wsl_rehearsal", "windows_wsl_move_rehearsal"]
     (distro,) = load(ANSIBLE / "playbooks/wsl-distro.yml")
     entry = next(r for r in distro["roles"] if r["role"] == "wsl_host_mcp_user")
     assert entry["when"] == "host_mcp_agent_enabled | bool" and entry["tags"] == ["host-mcp"]
+    assert distro["roles"][-1] is entry
     assert distro["become"] is True
 
 

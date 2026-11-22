@@ -50,6 +50,12 @@ paths = [
   # test the scripts of both roles.
   "infrastructure/ansible/roles/windows_host_check/**",
   "infrastructure/ansible/roles/wsl_host_check/**",
+  # The user of the host server and its guard: security/tests/test_host_mcp_*.py
+  # read the roles and run the role of the distro in a container.
+  "infrastructure/ansible/roles/windows_host_mcp_user/**",
+  "infrastructure/ansible/roles/wsl_host_mcp_user/**",
+  "infrastructure/ansible/roles/windows_sshd/**",
+  "infrastructure/ansible/inventory/group_vars/all/host_mcp.yml",
   ".github/workflows/observability.yaml",
 ]
 
@@ -68,6 +74,9 @@ paths = [
   "infrastructure/ansible/roles/windows_wsl_maintenance/**",
   "infrastructure/ansible/roles/windows_host_check/**",
   "infrastructure/ansible/roles/wsl_host_check/**",
+  # The PowerShell tests of the Match block of the user of the host server.
+  "infrastructure/ansible/roles/windows_host_mcp_user/**",
+  "infrastructure/ansible/roles/windows_sshd/**",
   ".github/workflows/observability.yaml",
 ]
 

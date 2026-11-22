@@ -2,6 +2,12 @@
 # The play runs this role only where host_mcp_agent_enabled is on, as root.
 # The tasks that name the account, its key or the source address carry
 # no_log or a label.
+#
+# Check only unless host_mcp_agent_apply is true (group_vars/all/host_mcp.yml):
+# each task that can change the host runs in check mode then, and a
+# difference fails the run at "No drift of the user of the host server",
+# with no change. The owner's run passes -e host_mcp_agent_apply=true; CI
+# never does.
 
 - name: The values of the user of the host server are set and in their form
   ansible.builtin.assert:
@@ -32,12 +38,14 @@
   ansible.builtin.set_fact:
     # In a check run before the first apply, the tasks that need the account
     # or its group wait for the apply that makes it.
-    host_mcp_agent_ready: "{{ host_mcp_agent_getent.rc == 0 or not ansible_check_mode }}"
+    host_mcp_agent_ready: "{{ host_mcp_agent_getent.rc == 0 or not (host_mcp_agent_check_only | bool) }}"
 
 # Its own group only: `groups: []` with `append: false` takes it out of any
 # other group. No home from the skeleton: the tasks below make the home and
 # its files, owned by root.
 - name: The account of the host server
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_account
   ansible.builtin.user:
     name: "{{ host_mcp_agent_user }}"
     comment: "{{ host_mcp_agent_description }}"
@@ -60,6 +68,8 @@
   no_log: true
 
 - name: The account has no password
+  # A command does not run in check mode: "No drift" reads the field itself.
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
   ansible.builtin.command:
     argv: [usermod, -p, "{{ host_mcp_agent_shadow_field }}", "{{ host_mcp_agent_user }}"]
   changed_when: true
@@ -67,6 +77,8 @@
   no_log: true
 
 - name: The home of the account of the host server, owned by root
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_home
   ansible.builtin.file:
     path: "{{ host_mcp_agent_home }}"
     state: directory
@@ -77,6 +89,8 @@
   when: host_mcp_agent_ready | bool
 
 - name: The startup files of its shell, owned by root
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_startup
   ansible.builtin.copy:
     content: |
       # Managed by tnwks-ops (role wsl_host_mcp_user). root owns this file, and
@@ -93,6 +107,8 @@
   when: host_mcp_agent_ready | bool
 
 - name: The .ssh folder of the account, owned by root
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_ssh
   ansible.builtin.file:
     path: "{{ host_mcp_agent_home }}/.ssh"
     state: directory
@@ -105,6 +121,8 @@
 # One key, for the node network of the cluster only. `restrict` turns off
 # each forwarding, the terminal and the rc file of the user.
 - name: The key file of the host server
+  check_mode: "{{ host_mcp_agent_check_only | bool }}"
+  register: host_mcp_agent_change_keyfile
   ansible.builtin.copy:
     content: |
       from="{{ host_mcp_agent_source_distro }}",restrict {{ host_mcp_agent_public_key }}
@@ -115,6 +133,25 @@
   no_log: true
   diff: false
   when: host_mcp_agent_ready | bool
+
+- name: No drift of the user of the host server
+  ansible.builtin.assert:
+    that: host_mcp_agent_drift | length == 0 or (host_mcp_agent_apply | bool)
+    fail_msg: >-
+      Drift of the user of the host server: {{ host_mcp_agent_drift | join('; ') }}. Ansible changes it
+      only with -e host_mcp_agent_apply=true, in the owner's run (docs/wsl/host-mcp-user.md). Nothing is
+      changed.
+    quiet: true
+  vars:
+    host_mcp_agent_drift: >-
+      {{ [
+        ('the account', host_mcp_agent_change_account is changed),
+        ('its password field', (host_mcp_agent_shadow.stdout.split(':')[1] | default('')) != host_mcp_agent_shadow_field),
+        ('its home', host_mcp_agent_change_home is changed),
+        ('its startup files', host_mcp_agent_change_startup is changed),
+        ('its .ssh folder', host_mcp_agent_change_ssh is changed),
+        ('its key file', host_mcp_agent_change_keyfile is changed)
+      ] | selectattr('1') | map('first') | list }}
 
 # The checks below are reads, also in a check run; a finding stops the run.
 - name: Checks of the account of the host server
