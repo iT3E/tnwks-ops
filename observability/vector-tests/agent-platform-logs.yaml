@@ -2422,3 +2422,71 @@ tests:
       source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "send_failed"})
 
         '
+- name: 'channel count: the approval plugin refusing each tool call, as the console writes it'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-22T03:00:00.000000000Z stdout F 2026-11-22T03:00:00.000+00:00 [plugins] host-approval: refusing each tool call: SECRET is not valid; mcp.servers.SECRET does not resolve'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "plugin_refuse"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: the approval plugin refusing each tool call, with colour codes'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: "2026-11-22T03:00:00.000000000Z stderr F \e[31m[plugins] host-approval: refusing each tool call: SECRET\e[39m"
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_count
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(., {"pod_namespace": "agents-main", "pattern": "plugin_refuse"})
+
+        assert!(!contains(encode_json(.), "SECRET"))
+
+        '
+- name: 'channel count: the start line of the approval plugin is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-22T03:00:00.000000000Z stdout F 2026-11-22T03:00:00.000+00:00 [plugins] host-approval: loaded, 0 read lines'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: the refusal of one tool call by the approval plugin is not counted'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-22T03:00:00.000000000Z stdout F 2026-11-22T03:00:00.000+00:00 [plugins] host-approval: refused "SECRET" (the plugin config is not valid (SECRET))'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  no_outputs_from:
+  - agent_channel_count
+- name: 'channel count: the refuse line of the approval plugin has a counter of its own pattern'
+  inputs:
+  - insert_at: agent_channel_count
+    type: log
+    log_fields:
+      message: '2026-11-22T03:00:00.000000000Z stdout F [plugins] host-approval: refusing each tool call: SECRET'
+      file: /var/log/pods/agents-main_agent-6d9f-abcde_11111111-2222-3333-4444-555555555555/agent/0.log
+  outputs:
+  - extract_from: agent_channel_metrics
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.name, "agent_channel_error_lines_total")
+
+        assert_eq!(.namespace, "homelab")
+
+        assert_eq!(.tags, {"pattern": "plugin_refuse", "pod_namespace": "agents-main"})
+
+        '

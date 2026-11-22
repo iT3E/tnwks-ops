@@ -1,5 +1,6 @@
-"""The count of the error lines of the chat channel of the agents
-(docs/apps/agent-platform.md, "Logs" and "Metrics").
+"""The count of the error lines of the chat channel of the agents, and of the
+refuse line of the approval plugin (docs/apps/agent-platform.md, "Logs" and
+"Metrics").
 
 The log of the agent container can hold chat content, so it does not ship.
 The platform agent of Vector
@@ -11,20 +12,23 @@ count leaves the node. Here:
   aggregator, which feeds Loki;
 - the count keeps no word of the line: its only fields are a namespace and a
   pattern, each from a fixed list of literals in the config;
-- the zero series are each namespace and pattern of that list;
+- the zero series are each namespace and pattern of the channel, and the
+  refuse line of the plugin for each agent whose config loads the plugin;
 - the remap drops an event on an error, and sends it to no output;
 - the platform Vector runs with the reader of the file sources silent;
 - the pods still exclude the agent container from kubernetes_logs;
 - in a container, the pinned Vector with the source, the transforms and the
   exporter of the config, and the log setting of the HelmRelease: lines with
-  content and chat IDs, and a line over max_line_bytes, give the counts, and
-  no word of them is in the output of the exporter or in Vector's own log.
+  content and chat IDs, lines of the plugin, and lines over max_line_bytes,
+  give the counts, and no word of them is in the output of the exporter or in
+  Vector's own log.
 
 `vector test` checks each pattern (observability/vector-tests/agent-platform-logs.yaml).
 The container test needs Docker: without it the test is skipped, except in CI,
 where it fails.
 """
 
+import json
 import re
 import subprocess
 import time
@@ -44,7 +48,9 @@ SOURCE = "agent_channel"
 COUNT = "agent_channel_count"
 METRIC = "homelab_agent_channel_error_lines_total"
 NAMESPACES = ["agents-main", "agents-finance"]
-PATTERNS = ["send_failed", "poll_stall", "poll_restart", "channel_restart"]
+CHANNEL_PATTERNS = ["send_failed", "poll_stall", "poll_restart", "channel_restart"]
+PLUGIN_PATTERN = "plugin_refuse"
+PATTERNS = [*CHANNEL_PATTERNS, PLUGIN_PATTERN]
 PORT = 13597
 
 
@@ -118,6 +124,22 @@ def test_the_count_keeps_no_word_of_the_line():
     assert metric["tags"] == {"pod_namespace": "{{ pod_namespace }}", "pattern": "{{ pattern }}"}
 
 
+def plugin_namespaces() -> list[str]:
+    """The namespaces of the agents whose config loads the approval plugin."""
+    found = []
+    for agent in AGENTS:
+        product = json.loads((ROOT / f"kubernetes/apps/ai/agents/{agent}/agent/config/openclaw.json").read_text())
+        if (product.get("plugins", {}).get("entries", {}).get("host-approval") or {}).get("enabled"):
+            found.append(f"agents-{agent}")
+    return found
+
+
+def test_only_main_loads_the_approval_plugin_today():
+    """When another agent loads it, its zero series of the refuse line comes
+    with it (the test below), and the lab and the docs change too."""
+    assert plugin_namespaces() == ["agents-main"]
+
+
 def test_each_namespace_and_pattern_has_a_zero_series():
     config = load()
     source = config["sources"]["channel_zero"]
@@ -126,7 +148,8 @@ def test_each_namespace_and_pattern_has_a_zero_series():
     assert all(m["name"] == "agent_channel_error_lines_total" and m["kind"] == "incremental"
                and m["value"] == {"counter": {"value": 0}} for m in source["metrics"])
     found = sorted((m["tags"]["pod_namespace"], m["tags"]["pattern"]) for m in source["metrics"])
-    assert found == sorted((ns, p) for ns in NAMESPACES for p in PATTERNS)
+    assert found == sorted([*((ns, p) for ns in NAMESPACES for p in CHANNEL_PATTERNS),
+                            *((ns, PLUGIN_PATTERN) for ns in plugin_namespaces())])
     assert {"agent_channel_metrics", "channel_zero"} <= set(config["sinks"]["prometheus"]["inputs"])
 
 
@@ -160,6 +183,13 @@ LOGS = {
         f"[telegram] fallback delivery failed: {MARKER}",
         f"[telegram] sendChatAction failed: {MARKER}",
         f"\x1b[31mtelegram final reply failed: Error: {MARKER}\x1b[39m",
+        # The approval plugin: its start line and the refusal of one call
+        # are not counted; a line over max_line_bytes is discarded; the
+        # refuse line counts once.
+        "2026-11-22T03:00:00.000+00:00 [plugins] host-approval: loaded, 0 read lines",
+        f'[plugins] host-approval: refused "{MARKER_WORD}" (the plugin config is not valid ({MARKER}))',
+        f"\x1b[31m[plugins] host-approval: refusing each tool call: {LONG}\x1b[39m",
+        f"\x1b[31m[plugins] host-approval: refusing each tool call: mcp.servers.{MARKER_WORD} is not valid\x1b[39m",
     ],
     "agents-finance_agent-7c8b-fghij_66666666-7777-8888-9999-000000000000/agent/0.log": [
         # Over max_line_bytes (100 KiB), with a pattern: discarded, not
@@ -168,6 +198,9 @@ LOGS = {
         f"telegram sendMessage failed: {LONG}",
         "[health-monitor] [telegram:default] health-monitor: restarting (reason: stuck)",
         "[health-monitor] [telegram:default] health-monitor: hit 10 restarts/hour limit, skipping",
+        # Finance does not load the plugin: if the line came, its series
+        # would start at 1, with no zero series before it.
+        f"[plugins] host-approval: refusing each tool call: {MARKER}",
     ],
     # Not read: the pilot has no Telegram, and another container of the pod.
     "agents-pilot_agent-1a2b-klmno_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/agent/0.log": [
@@ -177,10 +210,13 @@ LOGS = {
         f"telegram sendMessage failed: {MARKER}",
     ],
 }
+ZERO = {**{(ns, p): 0 for ns in NAMESPACES for p in CHANNEL_PATTERNS}, ("agents-main", PLUGIN_PATTERN): 0}
 EXPECTED = {("agents-main", "send_failed"): 4, ("agents-main", "poll_stall"): 1,
             ("agents-main", "poll_restart"): 1, ("agents-main", "channel_restart"): 0,
+            ("agents-main", PLUGIN_PATTERN): 1,
             ("agents-finance", "send_failed"): 0, ("agents-finance", "poll_stall"): 0,
-            ("agents-finance", "poll_restart"): 0, ("agents-finance", "channel_restart"): 2}
+            ("agents-finance", "poll_restart"): 0, ("agents-finance", "channel_restart"): 2,
+            ("agents-finance", PLUGIN_PATTERN): 1}
 
 
 def lab_config() -> dict:
@@ -244,7 +280,7 @@ def test_in_the_pinned_vector_only_the_counts_leave():
                         "--env", f"VECTOR_LOG={vector_log()}",
                         vector_image(CONFIG), "--config", "/w/vector.yaml"],
                        check=True, capture_output=True, text=True, timeout=300)
-        wait_for(binary, name, dict.fromkeys(EXPECTED, 0))
+        wait_for(binary, name, ZERO)
         # New pods: their files come after the start, so Vector reads them
         # from their first line.
         for path, lines in LOGS.items():
@@ -253,12 +289,14 @@ def test_in_the_pinned_vector_only_the_counts_leave():
             target.write_text("".join(cri(line) for line in lines))
         subprocess.run(["chmod", "-R", "a+rX", str(pods)], check=True)
         text = wait_for(binary, name, EXPECTED)
-        for word in (MARKER_WORD, "chat", CHAT.lstrip("-"), "ETIMEDOUT", "stuck", "default", "telegram", "pilot"):
+        for word in (MARKER_WORD, "chat", CHAT.lstrip("-"), "ETIMEDOUT", "stuck", "default", "telegram", "pilot",
+                     "host-approval", "mcp.servers", "read lines"):
             assert word not in text, word
         logs = subprocess.run([binary, "logs", name], capture_output=True, text=True, check=True)
         own = logs.stdout + logs.stderr
         assert "Vector has started" in own, own[-3000:]
-        for word in (MARKER_WORD, "LONGLINE", CHAT.lstrip("-"), "ETIMEDOUT", "Bad Request", "sendMessage"):
+        for word in (MARKER_WORD, "LONGLINE", CHAT.lstrip("-"), "ETIMEDOUT", "Bad Request", "sendMessage",
+                     "host-approval", "refusing", "mcp.servers"):
             assert word not in own, (word, own[-3000:])
     finally:
         subprocess.run([binary, "rm", "-f", name], capture_output=True, check=False)
