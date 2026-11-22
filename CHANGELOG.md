@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.299.0 - 2026-11-22
+
+### Changed
+
+* security: the memory limit and request of the Wazuh indexer go from 3 GiB to 4 GiB, by the owner's decision for the budget of step 2; the heap stays at 1536 MiB. The merge replaces the indexer pod once.
+
 ## v2.298.1 - 2026-11-22
 
 ### Fixed
