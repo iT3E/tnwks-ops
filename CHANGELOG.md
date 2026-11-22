@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.290.0 - 2026-11-22
+
+### Added
+
+* agents: the main agent gets its browser tools: the server entry of the browser route and its 21 tools, each by name in the sandbox allow list
+
 ## v2.289.0 - 2026-11-22
 
 ### Added
