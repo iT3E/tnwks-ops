@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.279.2 - 2026-11-22
+
+### Fixed
+
+* ci: the observability checks no longer take 15 minutes. The tests of observability/tests ran one after the other in the contracts job and were 13 of them: they are their own job on two runners, one worker for each CPU and a file on one worker, and the lab of the scheduled jobs runs a sync pass each second, not each 5. Three runners share the PowerShell tests (`--shard I/N` of security/tests), and each test step prints its slowest tests
+
 ## v2.279.1 - 2026-11-22
 
 ### Security
