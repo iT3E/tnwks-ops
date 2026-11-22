@@ -1,6 +1,6 @@
 ---
 # The alerts of the agent platform (docs/apps/agent-platform.md, "Alerts").
-# Most read kube-state-metrics. WorkflowAppDrift, AgentInstructionFileChanged,
+# Most read kube-state-metrics. WorkflowAppDrift, MainGithubAppDrift, AgentInstructionFileChanged,
 # AgentInstructionCheckStale, AgentMemoryIndexFailed, AgentAutomationsSyncFailed
 # and ModelBridgeRateLimited
 # read the time of the newest line of a kind, a gauge that Vector serves: the
@@ -134,6 +134,51 @@ spec:
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#workflowappdrift"
             summary: "The GitHub App of the reviewer has more permissions than the list in git."
             description: "The detail= of the app-drift line in Loki ({namespace=\"agents-workflows\", app=\"workflow-providers\"} |= \"app-drift\") names each extra one; set the App back in its settings, or change the list in app/providers.yaml by a pull request."
+
+        - alert: MainGithubTokenStale
+          # A dead man's switch, the pattern of WorkflowProvidersStale: no
+          # good run of the token job of the App of main in 35 minutes (two
+          # runs an hour, plus the `for`), so two runs in a row failed or did
+          # not run (suspended, the CronJob gone, an image that does not
+          # pull). AgentPlatformCronJobFailed fires on a failed Job only. The
+          # token in the Secret lives one hour from its last good run, so
+          # this leaves about 25 minutes before a call of the code host
+          # server gets 401 (docs/apps/github-token.md).
+          expr: |
+            (time() - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace="agents-main", cronjob="github-token"})) > 30 * 60
+            or (
+              (time() - max by (namespace, cronjob) (kube_cronjob_created{namespace="agents-main", cronjob="github-token"})) > 30 * 60
+              unless on (namespace, cronjob) kube_cronjob_status_last_successful_time{namespace="agents-main", cronjob="github-token"}
+            )
+            or absent(kube_cronjob_created{namespace="agents-main", cronjob="github-token"})
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-ai?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#maingithubtokenstale"
+            summary: "The token job of the App of main has had no good run in 35 minutes."
+            description: "kubectl -n agents-main get cronjob,jobs -l app.kubernetes.io/name=github-token; read the last run in Loki ({namespace=\"agents-main\", app=\"github-token\"}); after a fix, run it now with create job --from=cronjob/github-token."
+
+        - alert: MainGithubAppDrift
+          # The App of main, or its installation, has more permissions than
+          # the design (GITHUB_APP_INSTALLED of its token job), or more
+          # repositories. The token job logs one
+          # `github-token result=drift what=<what>` line for each run (two an
+          # hour) and still asks for a narrow token, so this is not an
+          # outage. The value is the time of the newest such line, which
+          # Prometheus holds for 5 minutes only: max_over_time bridges the 30
+          # minutes between two runs. It resolves 40 minutes after the last
+          # one.
+          expr: |
+            time() - max by (pod_namespace, app) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-main", check="github-token", result="drift"}[40m])) < 40 * 60
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-ai?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#maingithubappdrift"
+            summary: "The App of main has more permissions or repositories than the design."
+            description: "The what= of the drift line in Loki ({namespace=\"agents-main\", app=\"github-token\"} |= \"result=drift\") names it; set the App back in its settings, or change GITHUB_APP_INSTALLED in github-token/app/cronjob.yaml by a pull request with the word of the owner."
 
         - alert: AgentPlatformCheckStale
           # A daily check of a trust domain (platform-check-*: the isolation

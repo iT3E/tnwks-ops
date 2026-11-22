@@ -247,6 +247,58 @@ change on the installation), or a pull request changes the list in git
 job before any token, and shows as
 [AgentPlatformCronJobFailed](#agentplatformcronjobfailed).
 
+### MainGithubTokenStale
+
+**What it means.** The token job of the App of main (`github-token` in
+`agents-main`) has had no good run in 35 minutes, or its CronJob is gone.
+Two runs in a row failed or did not run (suspended, not applied, an image
+that does not pull). The token in the Secret `github-mcp-app-token` lives
+one hour from its last good run, so about 25 minutes are left before a call
+of the code host server gets 401.
+
+**First checks.**
+
+```sh
+kubectl -n agents-main get cronjob github-token -o wide
+kubectl -n agents-main get jobs -l app.kubernetes.io/name=github-token
+kubectl -n flux-system get kustomization agents-main-github-token
+```
+
+Then the last run in Loki: `{namespace="agents-main", app="github-token"}`.
+Its one line names the step that failed
+([github-token.md](github-token.md), "A run").
+
+**Seen so far.** Never.
+
+**Fix.** As for [AgentPlatformCronJobFailed](#agentplatformcronjobfailed).
+After a fix, run it now:
+`kubectl -n agents-main create job --from=cronjob/github-token github-token-now`.
+If the key of the App was deleted at the code host, the owner puts a new
+one in with `bin/main-app-key --replace` ([github-token.md](github-token.md),
+"The key").
+
+### MainGithubAppDrift
+
+**What it means.** The App of main, or its installation, has more
+permissions than the design (`GITHUB_APP_INSTALLED` in
+`main/github-token/app/cronjob.yaml`), or more repositories than the ops
+repository. The token job logs `github-token result=drift what=<what>` each
+run and still asks for a narrow token, so this is not an outage. It
+resolves 40 minutes after the last such line.
+
+**First checks.** In Loki:
+`{namespace="agents-main", app="github-token"} |= "result=drift"`. The
+`what=` is `permissions` or `repositories`.
+
+**Seen so far.** Never.
+
+**Fix.** Either the owner sets the App back in its settings (and accepts the
+change on the installation), or a pull request changes
+`GITHUB_APP_INSTALLED` (owner approval). An installation with less than the
+token asks for fails the job before any token, and shows as
+[MainGithubTokenStale](#maingithubtokenstale) and
+[AgentPlatformCronJobFailed](#agentplatformcronjobfailed).
+
 ### AgentPlatformCheckStale
 
 **What it means.** A daily check of a trust domain (the isolation check at

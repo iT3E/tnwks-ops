@@ -15,7 +15,7 @@ the code host server reads. An installation token lives one hour at most.
 - The job asks for each permission of GITHUB_APP_PERMISSIONS exactly.
   When the installation has more than GITHUB_APP_INSTALLED (the
   permissions of the App by the design), or more repositories, it logs
-  one line with app-drift and goes on: the token stays narrow. When the
+  one line with result=drift and goes on: the token stays narrow. When the
   installation has less than the token asks for, or the token that comes
   back is not exactly what was asked for, it fails.
 - The account of the job may update the one Secret by its name, and
@@ -179,7 +179,9 @@ def run(now: int | None = None) -> list[str]:
     write(value, env("TOKEN_SECRET"), env("TOKEN_KEY"), until)
     del value
     stamp = datetime.datetime.fromtimestamp(until, datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    lines = [f"github-token result=app-drift what={x}" for x in drift]
+    # The result is letters only, so the aggregator of Vector counts the
+    # line (MainGithubAppDrift).
+    lines = [f"github-token result=drift what={x}" for x in drift]
     lines.append(f"github-token result=ok secret={env('TOKEN_SECRET')} expires={stamp}")
     return lines
 

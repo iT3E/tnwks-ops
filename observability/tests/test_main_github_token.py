@@ -527,7 +527,7 @@ def test_the_job_writes_a_narrow_token_into_the_one_secret(job):
         "kustomize.toolkit.fluxcd.io/name": ks["metadata"]["name"],
         "kustomize.toolkit.fluxcd.io/namespace": ks["metadata"]["namespace"]}
     # And no drift line for an installation of the design.
-    assert "app-drift" not in result.stdout
+    assert "result=drift" not in result.stdout
 
 
 @needs_openssl
@@ -570,8 +570,8 @@ def test_a_wider_installation_is_drift_and_the_token_stays_narrow(job):
     fake.install["repository_selection"] = "all"
     result = go()
     assert result.returncode == 0, result.stdout
-    assert result.stdout.splitlines()[:2] == ["github-token result=app-drift what=permissions",
-                                             "github-token result=app-drift what=repositories"]
+    assert result.stdout.splitlines()[:2] == ["github-token result=drift what=permissions",
+                                             "github-token result=drift what=repositories"]
     (ask,) = [body for method, _, _, body in fake.calls if method == "POST"]
     assert ask["permissions"] == PERMISSIONS and ask["repositories"] == ["tnwks-ops"]
 

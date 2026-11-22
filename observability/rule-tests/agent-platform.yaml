@@ -140,6 +140,91 @@ tests:
         eval_time: 22m
         exp_alerts: []
 
+  - name: no good run of the token job of main in 35 minutes
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_created{namespace="agents-main", cronjob="github-token"}
+        values: 0x60
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-main", cronjob="github-token"}
+        values: 0x60
+      # The providers job of workflows, also old, fires its own alert only.
+      - series: kube_cronjob_created{namespace="agents-workflows", cronjob="workflow-providers"}
+        values: 0x60
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-workflows", cronjob="workflow-providers"}
+        values: 0x60
+    alert_rule_test:
+      - alertname: MainGithubTokenStale
+        eval_time: 34m
+        exp_alerts: []
+      - alertname: MainGithubTokenStale
+        eval_time: 37m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main, cronjob: github-token}
+
+  - name: a token job of main that never passed
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_created{namespace="agents-main", cronjob="github-token"}
+        values: 0x60
+    alert_rule_test:
+      - alertname: MainGithubTokenStale
+        eval_time: 34m
+        exp_alerts: []
+      - alertname: MainGithubTokenStale
+        eval_time: 40m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main, cronjob: github-token}
+
+  - name: the token job of main is gone
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_created{namespace="agents-main", cronjob="platform-check-isolation"}
+        values: 0x20
+    alert_rule_test:
+      - alertname: MainGithubTokenStale
+        eval_time: 4m
+        exp_alerts: []
+      - alertname: MainGithubTokenStale
+        eval_time: 6m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main, cronjob: github-token}
+
+  - name: a drift line of the token job of main fires across the 30 minutes to the next run, and resolves 40 minutes after it
+    interval: 1m
+    input_series:
+      # One drift line at 1m; Prometheus holds the sample for 5 minutes.
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-main", app="github-token", check="github-token", result="drift"}
+        values: _ 60x4 _x50
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-main", app="github-token", check="github-token", result="ok"}
+        values: 60x55
+      # The drift line of the reviewer of workflows is not this alert.
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-workflows", app="workflow-providers", check="app-drift", result="drift"}
+        values: 60x55
+    alert_rule_test:
+      - alertname: MainGithubAppDrift
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-main, app: github-token}
+      - alertname: MainGithubAppDrift
+        eval_time: 30m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-main, app: github-token}
+      - alertname: MainGithubAppDrift
+        eval_time: 42m
+        exp_alerts: []
+
+  - name: an ok line and a failed line of the token job of main are not drift
+    interval: 1m
+    input_series:
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-main", app="github-token", check="github-token", result="ok"}
+        values: 60x20
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-main", app="github-token", check="github-token", result="failed"}
+        values: 60x20
+    alert_rule_test:
+      - alertname: MainGithubAppDrift
+        eval_time: 10m
+        exp_alerts: []
+
   - name: a daily check that has not passed in 26 hours
     interval: 2m
     input_series:

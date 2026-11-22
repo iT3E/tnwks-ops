@@ -37,8 +37,8 @@ Manifests: `kubernetes/apps/ai/agents/main/github-token/`.
    permissions of the App by the design (`GITHUB_APP_INSTALLED`: Metadata
    read, Contents write, Pull requests write, Actions read, Issues read
    and write; D138, D140), or more repositories, the run logs
-   `github-token result=app-drift what=<what>` and goes on: the token
-   stays narrow.
+   `github-token result=drift what=<what>` and goes on: the token stays
+   narrow. `MainGithubAppDrift` fires on it.
 3. One installation token for the ops repository only, with exactly the
    permissions of `GITHUB_APP_PERMISSIONS`. In the read step that is each
    of the five, read only (Design Doc, section 4.2.6). The write step
@@ -56,8 +56,10 @@ One line for each run:
 
 The line never holds the token, the key or the body of an answer.
 
-A failed run fails its Job, and `AgentPlatformCronJobFailed` fires. The
-last token stays in the Secret, valid for at least 30 minutes after the
+A failed run fails its Job, and `AgentPlatformCronJobFailed` fires. No
+good run in 35 minutes fires `MainGithubTokenStale`, and a drift line fires
+`MainGithubAppDrift` ([the runbook](agent-platform-runbook.md#maingithubtokenstale)).
+The last token stays in the Secret, valid for at least 30 minutes after the
 last good run. Run it now with
 `kubectl -n agents-main create job --from=cronjob/github-token github-token-now`.
 
@@ -101,14 +103,41 @@ The owner deletes each copy of the `.pem` for good (not only to a trash).
 A run that is cut in the editor step can leave the clear temporary file of
 sops in a new folder under `$TMPDIR` (or `/tmp`): delete it too.
 
+## After the listing
+
+The listing adds a child of the class with the admission policy at Deny.
+Flux applies the lists (`flux-admission`) and the new child
+(`cluster-apps`) at the same new revision, and nothing orders the two.
+Read `flux-admission` and then `cluster-apps` Ready at the commit of the
+merge. If `cluster-apps` reports a refusal of `flux-child-scope` for
+`agents-main-github-token`, it applies at its next run, in 30 minutes at
+most (its interval, with no retry interval), and nothing is lost: the
+code host server still reads its stopgap token until its own switch. The
+short cut, which is a write: when `flux-admission` is Ready at the commit
+of the merge, `flux -n flux-system reconcile kustomization cluster-apps`.
+
+Then, read only:
+
+| Read | Pass rule |
+| --- | --- |
+| `flux -n flux-system get kustomization flux-admission cluster-apps` | Both Ready at the commit of the merge |
+| `flux -n flux-system get kustomization agents-main-github-token` | Ready, at the commit of the merge |
+| `kubectl -n agents-main get cronjob github-token` | Present, not suspended |
+| The first run at minute 13 or 43, or one made with `create job --from` | The line `github-token result=ok` and no `result=drift` line |
+| `ALERTS{alertname=~"MainGithubTokenStale\|MainGithubAppDrift"}` | None firing after the first good run |
+
 ## The way back
 
 - **Stop the tokens at once:** the owner deletes the private key in the
   settings of the App, or suspends the installation. Each token that the
   job made then stops working within one hour at most, and the next run
   fails.
-- **Take the job out:** remove the line `./github-token/ks.yaml`. Flux
-  prunes the CronJob, the account and the two Secrets.
+- **Take the job out:** remove the line `./github-token/ks.yaml`, its row
+  of `AI_SCHEDULES` in `observability/inventory.py` (then
+  `observability/generate.py` and `classlist.py write`), and the two rules
+  `MainGithubTokenStale` and `MainGithubAppDrift` with their rule tests:
+  the stale rule fires when the CronJob is gone. Flux prunes the CronJob,
+  the account and the two Secrets.
 
 ## Tests
 

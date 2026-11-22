@@ -65,8 +65,9 @@ route:
         - alertname = "InfoInhibitor"
     # The Jobs of the agent platform have alerts of their own, and each one
     # resolves when its cause goes (docs/apps/agent-platform.md, "Alerts"):
-    # AgentPlatformCronJobFailed for the daily checks, the providers job and
-    # the sweep (with AgentPlatformCheckStale and WorkflowProvidersStale),
+    # AgentPlatformCronJobFailed for the daily checks, the providers job, the
+    # sweep and the token job of main (with AgentPlatformCheckStale,
+    # WorkflowProvidersStale and MainGithubTokenStale),
     # and AgentWorkflowRunFailed for a run, for 2 hours. KubeJobFailed fires
     # for such a Job while the Job is kept (a failed CronJob run until three
     # newer runs fail, a run for 7 days), also after a good run, and all of
@@ -90,6 +91,13 @@ route:
         - alertname = "KubeJobFailed"
         - namespace = "agents-workflows"
         - job_name =~ "workflow-(providers|sweep)-[0-9]+|run-[0-9a-f]{20}"
+    # The token job of the App of main, in agents-main only
+    # (AgentPlatformCronJobFailed, MainGithubTokenStale).
+    - receiver: "null"
+      matchers:
+        - alertname = "KubeJobFailed"
+        - namespace = "agents-main"
+        - job_name =~ "github-token-[0-9]+"
     # Pushed by the finance-sync CronJob after it has already corrected the
     # balance. It fires on timing (a bank balance moves before its
     # transactions reach Simplifi, then the correction reverses next run) and
