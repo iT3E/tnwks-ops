@@ -65,8 +65,13 @@ jobs:
       - name: Test the privacy denylist edit and sync
         run: python3 -m unittest discover -s .github/scripts -p test_privacy_terms.py
 
+      # The content rule parses YAML: the pinned parser of the check itself.
       - name: Test the owner label check
-        run: python3 -m unittest discover -s .github/scripts -p test_owner_label_check.py
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/owner-label"
+          "${RUNNER_TEMP}/owner-label/bin/pip" install --quiet --disable-pip-version-check \
+            --require-hashes --only-binary :all: --no-deps -r .github/scripts/owner-label-requirements.txt
+          "${RUNNER_TEMP}/owner-label/bin/python" -m unittest discover -s .github/scripts -p test_owner_label_check.py
 
       - name: Test the gates of agent branches
         run: python3 -m unittest discover -s .github/scripts -p test_ci_gates.py
