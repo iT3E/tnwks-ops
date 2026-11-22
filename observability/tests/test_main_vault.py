@@ -11,6 +11,7 @@ other fails here.
 
 import copy
 import hashlib
+import importlib.util
 import json
 import re
 import subprocess
@@ -316,6 +317,13 @@ def vault_lab():
                    for x in ("--network-alias", s.rsplit(":", 1)[0])]
         run([tool, "run", "-d", "--name", names["dropper"], "--network", front, *aliases,
              "--read-only", "--cap-drop", "ALL", "--user", "65534", python, "python3", "-I", "-c", DROPPER])
+        # The probe's straight tries to the two vault servers reach the
+        # dropper too, by a hosts line of the probe container only: the name
+        # of the vault server of main is also the name that the gateway calls
+        # on the back network, and that one must stay the real server.
+        dropper = run([tool, "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+                       names["dropper"]]).stdout.strip()
+        assert re.fullmatch(r"[0-9.]+", dropper), dropper
         run([tool, "run", "-d", "--name", names["server"], "--network", back,
              "--network-alias", "vault-server.agents-main.svc.cluster.local",
              "--read-only", "--cap-drop", "ALL", "--user", "1000:1000",
@@ -341,7 +349,7 @@ def vault_lab():
                 "    raise SystemExit('gateway not ready')\n")
         run([tool, "run", "--rm", "--network", front, python, "python3", "-I", "-c", wait])
         time.sleep(2)
-        yield {"tool": tool, "work": work, "key": key, "front": front, "python": python}
+        yield {"tool": tool, "work": work, "key": key, "front": front, "python": python, "dropper": dropper}
     finally:
         for name in names.values():
             subprocess.run([tool, "container", "remove", "-f", name], capture_output=True, check=False)
@@ -358,6 +366,8 @@ def run_probe(lab: dict, key: str | None) -> tuple[int, dict[str, str]]:
     if key is not None:
         env["PROBE_KEY"] = key
     flags = [x for k, v in env.items() for x in ("-e", f"{k}={v}")]
+    flags += [x for name in ("VAULT_SERVER", "OTHER_VAULT_SERVER")
+              for x in ("--add-host", f"{env[name].rsplit(':', 1)[0]}:{lab['dropper']}")]
     result = run([lab["tool"], "run", "--rm", "--network", lab["front"], "--read-only", "--cap-drop", "ALL",
                   "--user", "65534", "-v", f"{CHECKS.parent}:/scripts:ro",
                   "-v", f"{lab['work'] / 'gateway'}:/gateway:ro", *flags, lab["python"],
@@ -370,14 +380,14 @@ def run_probe(lab: dict, key: str | None) -> tuple[int, dict[str, str]]:
 def test_the_probe_of_main_passes_with_its_key(vault_lab):
     code, got = run_probe(vault_lab, vault_lab["key"])
     assert code == 0
-    assert got["vault server, direct from a pod that is not the gateway"].startswith("blocked")
+    assert got["vault server, direct from a pod that is not the gateway"] == "blocked: TimeoutError"
     assert got["vault: no key: tools/list"] == "refused: HTTP 401"
     assert got["vault: a key that is not in the config: tools/list"] == "refused: HTTP 401"
     assert got["vault: probe key: lists the 9 tools of the rule"] == "same"
     assert got["vault: probe key: the facts of the root (get_file_info /vault)"] == "reached: ok"
     assert got["vault: probe key: a write (write_file), not the probe's"] == "refused: gateway"
     assert got["vault: probe key: a move (move_file), off every rule"] == "refused: gateway"
-    assert got["other vault server, direct from this trust domain"].startswith("blocked")
+    assert got["other vault server, direct from this trust domain"] == "blocked: TimeoutError"
     assert got["other vault: probe key: tools/list"] == "refused: HTTP 401"
     for name in ("cluster-mcp", "flux-mcp", "terraform-mcp", "github-mcp"):
         assert got[f"{name} in agents-main, direct from a pod that is not the gateway"] == (
@@ -393,6 +403,56 @@ def test_the_probe_of_main_skips_and_passes_with_no_key(vault_lab):
     assert code == 0
     assert got["vault: probe key"] == got["other vault: probe key"] == "skipped: the key is pending"
     assert got["vault: no key: tools/list"] == "refused: HTTP 401"
+
+
+@pytest.mark.parametrize("path", [PROBE, FINANCE_PROBE], ids=["main", "finance"])
+@pytest.mark.parametrize(("connect", "ok", "got"), [
+    ("timeout", True, "blocked: TimeoutError"),
+    ("refused", False, "refused: ConnectionRefusedError (no ready backend or a closed port: proves nothing)"),
+    ("answer", False, "connected"),
+    ("no name", False, "unresolved: gaierror"),
+])
+def test_the_straight_tries_to_the_vault_servers_pass_on_a_time_out_only(monkeypatch, capsys, path,
+                                                                          connect, ok, got):
+    """The two straight tries of each probe, to its own vault server and to
+    the one of the other trust domain, have the rule of the read servers
+    (test_main_read_servers.py): a time out passes, since a policy drop is
+    silent. A refusal fails, since a vault server that is down or rolling
+    refuses at once; an answer and a name that does not resolve fail."""
+    env = probe_env(path)
+    for name in ("OWN_NAMESPACE", "TRUST_DOMAIN_NAMESPACES", "VAULT_SERVER", "OTHER_VAULT_SERVER"):
+        monkeypatch.setenv(name, env.get(name) or "agents-x")
+    spec = importlib.util.spec_from_file_location("platform_checks_vault", CHECKS)
+    checks = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checks)
+
+    def getaddrinfo(host, port, *args, **kwargs):
+        if connect == "no name":
+            raise checks.socket.gaierror(-2, "Name or service not known")
+        return [(2, 1, 6, "", ("192.0.2.1", port))]
+
+    class Answer:
+        def close(self):
+            pass
+
+    def create_connection(address, timeout=None):
+        if connect == "refused":
+            raise ConnectionRefusedError(111, "Connection refused")
+        if connect == "timeout":
+            raise TimeoutError("timed out")
+        return Answer()
+    monkeypatch.setattr(checks.socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(checks.socket, "create_connection", create_connection)
+    # The calls through the gateway are not this test's: each gets its 401.
+    monkeypatch.setattr(checks, "listed", lambda *a, **k: "refused: HTTP 401")
+    checks.vault("mcp-gateway", checks.PENDING, None)
+    checks.other_vault("mcp-gateway", checks.PENDING)
+    lines = {line["target"]: line for line in map(json.loads, capsys.readouterr().out.splitlines())}
+    straight = ["vault server, direct from a pod that is not the gateway",
+                "other vault server, direct from this trust domain"]
+    assert {(lines[t]["ok"], lines[t]["got"]) for t in straight} == {(ok, got)}
+    assert all(line["ok"] for t, line in lines.items() if t not in straight)
+    assert checks.failures == (0 if ok else 2)
 
 
 # The main agent and its share (step D)

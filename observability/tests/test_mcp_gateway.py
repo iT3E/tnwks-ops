@@ -505,7 +505,9 @@ def lab():
         # test_main_read_servers.py). Its listener never accepts, and one
         # connection of its own fills its queue: the kernel then drops each
         # SYN.
-        aliases = [x for s in probe_env()["GATEWAY_ONLY_SERVERS"].split(",")
+        # The vault server of main, the other trust domain of this probe, has
+        # no container in this lab: its name goes to the dropper too.
+        aliases = [x for s in [*probe_env()["GATEWAY_ONLY_SERVERS"].split(","), probe_env()["OTHER_VAULT_SERVER"]]
                    for x in ("--network-alias", s.rsplit(":", 1)[0])]
         run([tool, "run", "-d", "--name", names["dropper"], "--network", front, *aliases,
              "--read-only", "--cap-drop", "ALL", "--user", "65534", python, "python3", "-I", "-c", DROPPER])
@@ -634,6 +636,8 @@ def test_the_probe_passes_and_the_app_sees_only_its_read(lab):
     for name in ("cluster-mcp", "flux-mcp", "terraform-mcp", "github-mcp"):
         assert got[f"{name} in agents-main, direct from a pod that is not the gateway"] == (
             "blocked: TimeoutError")
+    assert got["other vault server, direct from this trust domain"] == "blocked: TimeoutError"
+    assert got["other vault: probe key: tools/list"] == "refused: HTTP 401"
     assert not [k for k in got if "skipped" in got[k]]
     calls = app_requests(lab)[before:]
     assert [(c["method"], c["path"]) for c in calls] == [("GET", "/api/v1/about")]
