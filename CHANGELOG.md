@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.263.0 - 2026-11-22
+
+### Added
+
+* agents: the alert AgentTurnNotEnded fires when a personal agent took a message and has not ended its turn for 30 minutes (its count of messages in is higher than its count of messages that ended, from the metrics of the product). It catches a turn that never ends (a model call, a tool or a streamed part that hangs), not a final reply that hangs after the turn ended; a quiet evening has no message and does not fire. The AI board has the row Messages with no end on its Messages tab, and the runbook has a section.
+
 ## v2.262.0 - 2026-11-22
 
 ### Changed
