@@ -103,6 +103,19 @@
       "internalChecksFilter": "strict"
     },
     {
+      // The host server of main (kubernetes/apps/ai/agents/main/host-mcp)
+      // runs commands on a host for the main agent. It is our own image, but
+      // each release carries a new upstream release of the SSH MCP server.
+      // So it waits 7 days after its release, as the other MCP servers do,
+      // and a person reviews each update (renovate/autoMerge.json5, the last
+      // rule), with the new tool dump.
+      "description": "The host server of main: 7 days after release",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/it3e/tnwks-host-mcp"],
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict"
+    },
+    {
       "description": "Coral: queue NumPy majors until its Windows runtime supports them",
       "matchFileNames": ["infrastructure/ansible/roles/windows_coral_detector/**"],
       "matchPackageNames": ["numpy"],

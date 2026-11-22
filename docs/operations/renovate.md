@@ -63,6 +63,18 @@ negation as their package matcher. Terraform, ImmichFrame and the Flux CLI
 rules can't match an `it3e` image, so they are left as they are. A third
 party's 0.x minor or major still gets `impact/high`.
 
+One of our own images is reviewed: the host server of main
+(`ghcr.io/it3e/tnwks-host-mcp`, [host-mcp.md](../apps/host-mcp.md)). It
+runs commands on a host for the main agent, and each of its releases
+carries a new upstream release of the SSH MCP server. So it is treated as
+the other MCP servers are: its update opens 7 days after the release at the
+earliest (`.github/renovate.json5`), at the base schedule, with
+`impact/high` and no automerge. Its rule is the last one in
+`autoMerge.json5`, after the rule of our own images, so it wins. A
+security release of it has no fast path, because Renovate finds no advisory
+for a container image: a person forces it from the dashboard ("Pending
+Status Checks") or moves the pin by hand.
+
 **Third-party digest updates open on Mondays.** Base images such as
 `python`, `busybox` and `eclipse-mosquitto` re-push the same tag several
 times a week. Each re-push was its own digest PR and CI run (14 in the 30

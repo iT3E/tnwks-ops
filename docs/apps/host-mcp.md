@@ -173,3 +173,14 @@ the route.
   key of the probe for `tools/list` only, as on the browser route, is a
   later step.
 - **One maintainer upstream**, so its upkeep is a risk to watch.
+- **Updates are reviewed.** A new release of the image opens a Renovate
+  pull request 7 days after the release at the earliest, with
+  `impact/high` and no automerge, as for the other MCP servers
+  ([renovate.md](../operations/renovate.md)). That pull request changes the
+  pin in the Deployment only; the review sets the same digest in the tool
+  dump and in the test, and checks the new tool dump.
+- **A security release gets no fast path.** Renovate finds no advisory for
+  a container image, so the update waits 7 days like each other release.
+  To move it at once, tick its box under "Pending Status Checks" on the
+  Renovate dashboard, or move the pin by hand. Either way a person reviews
+  it, with the tool dump.

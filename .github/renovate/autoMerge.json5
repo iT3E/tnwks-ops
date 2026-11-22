@@ -20,7 +20,8 @@
   // the bottom override any automerge rule above them. addLabels accumulate,
   // so a later automerge rule can't take an impact/* label back off: our own
   // images (ghcr.io/it3e/*) are negated in every review rule that could
-  // match them, and the last rule automerges them.
+  // match them, and the rule after them automerges them. One of our own
+  // images, the host server of main, is reviewed: the last rule.
   packageRules: [
     // ---------------------------------------------------------------- automerge
     {
@@ -349,6 +350,21 @@
       matchPackageNames: ["/^ghcr\\.io\\/it3e\\//"],
       automerge: true,
       schedule: ["at any time"],
+    },
+    // ------------------------------------------------- the host server of main
+    {
+      // The host server of main runs commands on a host for the main agent
+      // (docs/apps/host-mcp.md). Each of its releases carries a new upstream
+      // release of the SSH MCP server, so it is reviewed as the other MCP
+      // servers are: no automerge, impact/high, the base schedule, after the
+      // 7 days of renovate.json5. It comes after the rule of our own images,
+      // so it wins over it.
+      description: "The host server of main: every update reviewed",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/it3e/tnwks-host-mcp"],
+      automerge: false,
+      addLabels: ["impact/high"],
+      schedule: ["before 7am"],
     },
   ],
 }

@@ -28,8 +28,11 @@ the Dockerfile) releases a patch by itself (github-workflows'
 `release.yaml`, `auto-fragment`); a person's PR releases through its own
 Changie fragment. The release builds `:<version>`, and Renovate here opens
 a PR for it that automerges behind Build Success, at every update type and
-any time of day (the last rule in `.github/renovate/autoMerge.json5`,
-[docs/operations/renovate.md](../operations/renovate.md)).
+any time of day (the rule of our own images in
+`.github/renovate/autoMerge.json5`,
+[docs/operations/renovate.md](../operations/renovate.md)). The image of the
+host server of main is the one that a person reviews, as the other MCP
+servers are.
 
 | Repo | Language | Image | Pinned here as |
 | --- | --- | --- | --- |
