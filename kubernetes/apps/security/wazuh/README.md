@@ -407,8 +407,12 @@ A failed Job keeps `KubeJobFailed` on until the Job is deleted:
 While runs of step 2 fail:
 
 - An index that is not on its policy of tnwks stays on the policy that it
-  has, as the first index of a stream on the shipped policy, until a run
-  moves it.
+  has until a run moves it. On the shipped policy at low volume, the first
+  index of a stream neither rolls over nor is deleted. A move later than
+  `rollover_age` after its creation rolls it over at once, and its delete
+  still counts from its creation, so its newest records stay less than 90
+  days. A move later than `delete_age` after its creation deletes it at
+  once.
 - `KubeJobFailed` shows the failed run.
 - Step 2 writes `indices.json` after the moves. A run that fails before
   that writes no file, so the file of the last run that reached it stays,
@@ -440,11 +444,11 @@ What other apps and workstreams read from here:
 5. A second merge, the owner's, adds `../wazuh-settings/ks.yaml`. It first
    applies the retention policies, and ISM deletes the data older than its
    ages (see "The merges that delete data").
-6. The owner checks each point of "Not yet proven on a cluster": the first
-   two after the first merge, the rights of step 2 at its first run, the
-   policy of a new backing index at the first rollover of each stream
-   (`rollover_age` after the second merge), and the files of the last
-   point at the first start.
+6. The owner checks each point of "Not yet proven on a cluster": the path
+   to the feed after the first merge, the rights of step 2 at its first
+   run, the policy of a new backing index at the first rollover of each
+   stream (`rollover_age` after the second merge), and the files of the
+   last point at the first start.
 
 ## Not yet proven on a cluster
 
