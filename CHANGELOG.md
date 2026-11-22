@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.283.0 - 2026-11-22
+
+### Added
+
+* Observability: FluxResourceNotReady warns when a Flux object of a site has had Ready False for one hour, on the rules that both sites run, from the evidence collector of each site; site 2 had no alert for a Flux object that is not Ready
+
 ## v2.282.0 - 2026-11-22
 
 ### Added

@@ -1,3 +1,0 @@
-kind: Added
-body: 'Observability: FluxResourceNotReady warns when a Flux object of a site has had Ready False for one hour, on the rules that both sites run, from the evidence collector of each site; site 2 had no alert for a Flux object that is not Ready'
-time: 2026-11-22T09:30:00.000000000+00:00
