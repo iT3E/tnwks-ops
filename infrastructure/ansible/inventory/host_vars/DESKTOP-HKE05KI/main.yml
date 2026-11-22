@@ -92,6 +92,10 @@ wsl_move_session_check: true
 # the host until wsl_move_present_removed), and the host check reads the
 # rules of the moved disk file. A way back turns it off first.
 wsl_move_done: true
+# The deletion of the tasks of the present account, after the account was
+# taken out of windows_sshd_allow_users in secrets.sops.yml. Its apply is the
+# point of no return of the move.
+wsl_move_present_removed: true
 # The disk file of the distro is on E:, and the move is a rename in one
 # volume, never a copy: the folder of the procedure and the folder of the
 # moved file are on E: too. Here so that the compaction and the host check
