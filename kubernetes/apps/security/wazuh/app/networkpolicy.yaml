@@ -1,8 +1,8 @@
 ---
 # The rules of the Wazuh server that the vendor's manifests do not bring.
 # The vendor's policies stay for the traffic inside the server (the files
-# under wazuh_managers/network-policies and indexer_stack that
-# gitrepository.yaml keeps): the dashboard and the manager to the indexer on
+# under wazuh_managers/network-policies and indexer_stack that ../server
+# keeps): the dashboard and the manager to the indexer on
 # 9200, the dashboard to the manager API on 55000, and the manager cluster
 # port 1516 between manager pods. default-deny (../../namespace.yaml) denies
 # the rest.

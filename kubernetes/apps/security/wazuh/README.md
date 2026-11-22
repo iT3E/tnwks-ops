@@ -12,14 +12,33 @@ that lists it").
 
 ## How it is built
 
-Flux reads the vendor's manifests from `wazuh/wazuh-kubernetes` at the tag
-(`app/gitrepository.yaml`), and this repository patches them. Two
-Kustomizations (`ks.yaml`):
+The vendor's manifests of the server are in this repository, in
+`server/upstream/`: a byte-for-byte copy of the files of
+`wazuh/wazuh-kubernetes` at `v5.0.0-rc2` that this app uses, with the
+vendor's licence (`server/UPSTREAM.md` lists them, the commit, and how to
+update). This repository patches them. Flux builds both Kustomizations
+(`ks.yaml`) from the repository itself, so each object of the server is in
+git, and a change of the vendor's files comes as a reviewed diff.
 
 | Kustomization | What it applies |
 | --- | --- |
-| `security-wazuh` | `app/`: the GitRepository of the vendor's manifests, the certificates, the network rules, the agents Service and the configuration of the manager |
-| `security-wazuh-server` | The vendor's folder `wazuh/`, without the files that `app/gitrepository.yaml` ignores, with the images by digest and the patches of `ks.yaml` |
+| `security-wazuh` | `app/`: the certificates, the network rules, the agents Service and the configuration of the manager |
+| `security-wazuh-server` | `server/`: the vendor's manifests that this app keeps, with the images by digest and the patches of `ks.yaml` |
+
+The vendor's files left out, so they never reach a cluster:
+
+- `wazuh/kustomization.yml`: it makes the Secrets from local files and sets
+  the namespace `wazuh`.
+- `wazuh/base/`: the namespace, a storage class, the Traefik routes, and a
+  deny-all and DNS policy for the whole namespace. The namespace `security`
+  has its own (`../namespace.yaml`), and `app/networkpolicy.yaml` brings the
+  DNS rule.
+- The worker node, its Service of port 1514 and its policy: one manager
+  node only.
+- The Service of port 1515: legacy enrollment is off.
+- `manager-egress-external.yaml`: egress to any address on port 443 (see
+  "Network").
+- The agents Service: `app/service-agents.yaml` replaces it.
 
 The patches of `security-wazuh-server`:
 
@@ -437,7 +456,10 @@ What other apps and workstreams read from here:
    homelab-wsl-02.
 2. The owner makes the Secrets of this app ("Secrets") and lists them.
 3. A first merge adds `ks.yaml` to the apps of homelab-wsl-02, and runs
-   `python3 kubernetes/apps/flux-system/admission/classlist.py write`.
+   `python3 kubernetes/apps/flux-system/admission/classlist.py write`. Both
+   Kustomizations build a path of this repository under
+   `kubernetes/apps/security/`, so the admission policy `flux-child-scope`
+   (`../../flux-system/admission`) lists both in its class.
 4. After the first start of the server, the owner makes the account user
    with `admin` from `account-user.json` (see "Accounts"), and the Secrets
    of `../wazuh-settings`.
@@ -473,12 +495,13 @@ by the tests below. The first run on site 2 shows these points:
 
 ## Tests
 
-- `security/tests/test_wazuh_manifests.py`: the tag and the ignored files,
+- `security/tests/test_wazuh_manifests.py`: the copy of the vendor's files
+  against its sums and `server/UPSTREAM.md`, the files that `server/` builds,
   the images by digest, the node selector and the memory lines against the
   table above, nothing privileged, no `0.0.0.0/0` and no `world` egress, the
   Secrets that nothing in git holds, and the configuration of the manager.
-  A render of the overlay against a local copy of the vendor's files runs
-  when `WAZUH_KUBERNETES_DIR` names that copy and `kustomize` is installed.
+  A render of `server/` with the patches of `ks.yaml` runs when `kustomize`
+  is installed.
 - `security/tests/test_wazuh_settings.py`: the two steps against a fake
   indexer API; the pin of each age; the hash in the name of each Job; each
   Secret in the one pod that uses it; the guard of a renewal; no password

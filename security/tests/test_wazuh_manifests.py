@@ -2,17 +2,16 @@
 settings (kubernetes/apps/security/wazuh-settings): the files of this repository.
 
 No cluster lists these apps yet, so the render of CI does not build them. These
-tests read the files: the tag and the files of the vendor that stay, the images
-by digest, the node selector and the memory lines against the tables of
+tests read the files: the copy of the vendor's manifests against its sums, the
+files of the vendor that stay, the images by digest, the node selector and the memory lines against the tables of
 kubernetes/apps/security/README.md, nothing privileged, no route to any address,
 no Secret in git, and the configuration of the manager.
 
-test_the_render_of_the_overlay builds the overlay with kustomize against a local
-copy of wazuh/wazuh-kubernetes at the tag, as Flux builds it, when
-WAZUH_KUBERNETES_DIR names that copy and kustomize is installed; else it skips.
+test_the_render_of_the_overlay builds server/ with the images and the patches
+of ks.yaml, as Flux builds it, when kustomize is installed; else it skips.
 """
 
-import os
+import hashlib
 import re
 import shutil
 import subprocess
@@ -26,9 +25,13 @@ ROOT = Path(__file__).resolve().parents[2]
 SECURITY = ROOT / "kubernetes/apps/security"
 APP = SECURITY / "wazuh"
 SETTINGS = SECURITY / "wazuh-settings"
+SERVER = APP / "server"
+# The vendor's manifests in server/upstream (server/UPSTREAM.md): the tag, its
+# commit, and the files.
 TAG = "v5.0.0-rc2"
+COMMIT = "ceacd20b73fbe5252cc0af1a5429916c4e980fa9"
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
-# The files of wazuh/ at the tag that the GitRepository keeps.
+# The files of wazuh/ at the tag that server/upstream keeps.
 KEPT = [
     "wazuh/indexer_stack/wazuh-dashboard/dashboard-deploy.yaml",
     "wazuh/indexer_stack/wazuh-dashboard/dashboard-egress.yaml",
@@ -104,7 +107,10 @@ def settings_pods() -> dict:
 
 
 def our_files() -> list[Path]:
-    return sorted(p for d in (APP, SETTINGS) for p in d.rglob("*") if p.suffix in (".yaml", ".json"))
+    """The files of this repository, not the vendor's copy (the render test reads
+    that, as Flux builds it)."""
+    return sorted(p for d in (APP, SETTINGS) for p in d.rglob("*")
+                  if p.suffix in (".yaml", ".json") and SERVER / "upstream" not in p.parents)
 
 
 def walk(node):
@@ -117,29 +123,37 @@ def walk(node):
             yield from walk(value)
 
 
-def test_the_source_is_the_vendor_repository_at_the_tag():
-    (repo,) = docs(APP / "app/gitrepository.yaml")
-    assert repo["spec"]["url"] == "https://github.com/wazuh/wazuh-kubernetes"
-    assert repo["spec"]["ref"] == {"tag": TAG}
-    lines = [x.strip() for x in repo["spec"]["ignore"].splitlines() if x.strip() and not x.strip().startswith("#")]
-    assert lines[:2] == ["/*", "!/wazuh/"]
-    assert set(lines[2:]) == {
-        "/wazuh/kustomization.yml",
-        "/wazuh/base/",
-        "/wazuh/wazuh_managers/wazuh-worker-sts.yaml",
-        "/wazuh/wazuh_managers/wazuh-events-svc.yaml",
-        "/wazuh/wazuh_managers/network-policies/wazuh-worker-egress.yaml",
-        "/wazuh/wazuh_managers/wazuh-registration-svc.yaml",
-        "/wazuh/wazuh_managers/network-policies/manager-egress-external.yaml",
-        "/wazuh/wazuh_managers/wazuh-agents-svc.yaml",
-    }
+def test_the_copy_of_the_vendor_is_the_one_of_its_sums():
+    """Each file of server/upstream has the sha256 of upstream.sha256, which
+    server/UPSTREAM.md checks against a clone of the vendor at COMMIT."""
+    sums = {}
+    for line in (SERVER / "upstream.sha256").read_text().splitlines():
+        digest, name = line.split("  ", 1)
+        sums[name] = digest
+    files = sorted(str(p.relative_to(SERVER / "upstream")) for p in (SERVER / "upstream").rglob("*") if p.is_file())
+    assert files == sorted(sums) == sorted(["LICENSE", *KEPT])
+    for name, digest in sums.items():
+        assert hashlib.sha256((SERVER / "upstream" / name).read_bytes()).hexdigest() == digest, name
+    note = (SERVER / "UPSTREAM.md").read_text()
+    assert f"`{TAG}`" in note and f"`{COMMIT}`" in note
+    assert [line[3:-1] for line in note.splitlines() if line.startswith("- `")] == ["LICENSE", *KEPT]
+
+
+def test_the_server_builds_the_copy_of_the_vendor():
+    body = yaml.safe_load((SERVER / "kustomization.yaml").read_text())
+    assert body["resources"] == [f"./upstream/{rel}" for rel in KEPT]
+    assert set(body) == {"apiVersion", "kind", "resources"}
+    # No other source: Flux builds each Kustomization of the app from this
+    # repository.
+    assert not [p for p in APP.rglob("*.yaml") if any(d.get("kind") == "GitRepository" for d in docs(p))
+                and SERVER / "upstream" not in p.parents]
 
 
 def test_the_server_builds_the_source_with_no_substitution_of_its_own():
     spec = server()["spec"]
     assert server()["metadata"]["labels"] == {"substitution.flux.home.arpa/disabled": "true"}
-    assert spec["sourceRef"] == {"kind": "GitRepository", "name": "wazuh-kubernetes", "namespace": "security"}
-    assert (spec["path"], spec["targetNamespace"]) == ("./wazuh", "security")
+    assert spec["sourceRef"] == {"kind": "GitRepository", "name": "flux-system"}
+    assert (spec["path"], spec["targetNamespace"]) == ("./kubernetes/apps/security/wazuh/server", "security")
     assert spec["dependsOn"] == [{"name": "security-wazuh"}]
     assert "postBuild" not in spec
     app = kustomizations()["security-wazuh"]["spec"]
@@ -357,37 +371,27 @@ def test_each_certificate_comes_from_the_ca_of_the_server():
     assert "wazuh-indexer-0.wazuh-indexer.security.svc.cluster.local" in node["spec"]["dnsNames"]
 
 
-def render(upstream: Path, out: Path) -> tuple[list[str], list[dict]]:
-    """Build the server as Flux does: the kept files, the images and the patches,
-    with the values of the cluster-settings that the parent substitutes."""
+def render(out: Path) -> list[dict]:
+    """Build the server as Flux does: server/, with the target namespace, the
+    images and the patches of ks.yaml, and the values of the cluster-settings
+    that the parent substitutes in ks.yaml."""
     values = {"SECURITY_NODE": "node", "STORAGE_CLASS_DEFAULT": "local-path"}
     text = re.sub(r"\$\{([A-Z_]+)\}", lambda m: values[m.group(1)], (APP / "ks.yaml").read_text())
     (spec,) = [d["spec"] for d in yaml.safe_load_all(text) if d and d["metadata"]["name"] == "security-wazuh-server"]
-    present = sorted(str(p.relative_to(upstream)) for p in (upstream / "wazuh").rglob("*.yaml")
-                     if not any(str(p.relative_to(upstream)).startswith(x) for x in ("wazuh/base/",)))
-    for rel in KEPT:
-        (out / rel).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(upstream / rel, out / rel)
+    shutil.copytree(SERVER, out / "server")
     body = {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
-            "namespace": spec["targetNamespace"], "resources": KEPT, "images": spec["images"],
+            "namespace": spec["targetNamespace"], "resources": ["./server"], "images": spec["images"],
             "patches": spec["patches"]}
     (out / "kustomization.yaml").write_text(yaml.safe_dump(body))
     result = subprocess.run(["kustomize", "build", str(out)], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
-    return present, [d for d in yaml.safe_load_all(result.stdout) if d]
+    return [d for d in yaml.safe_load_all(result.stdout) if d]
 
 
-@pytest.mark.skipif(not os.environ.get("WAZUH_KUBERNETES_DIR") or not shutil.which("kustomize"),
-                    reason="needs WAZUH_KUBERNETES_DIR (wazuh-kubernetes at the tag) and kustomize")
+@pytest.mark.skipif(not shutil.which("kustomize"), reason="needs kustomize")
 def test_the_render_of_the_overlay(tmp_path):
-    upstream = Path(os.environ["WAZUH_KUBERNETES_DIR"])
-    present, rendered = render(upstream, tmp_path)
-    ignored = {"wazuh/wazuh_managers/wazuh-worker-sts.yaml", "wazuh/wazuh_managers/wazuh-events-svc.yaml",
-               "wazuh/wazuh_managers/network-policies/wazuh-worker-egress.yaml",
-               "wazuh/wazuh_managers/wazuh-registration-svc.yaml",
-               "wazuh/wazuh_managers/network-policies/manager-egress-external.yaml",
-               "wazuh/wazuh_managers/wazuh-agents-svc.yaml"}
-    assert sorted(set(present) - ignored) == KEPT
+    rendered = render(tmp_path)
+    assert len(rendered) == len(KEPT)
     text = yaml.safe_dump_all(rendered)
     assert "busybox" not in text and "privileged:" not in text and "0.0.0.0/0" not in text
     for d in rendered:

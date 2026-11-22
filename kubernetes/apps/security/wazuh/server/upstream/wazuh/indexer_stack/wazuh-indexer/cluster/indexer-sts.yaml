@@ -1,0 +1,241 @@
+# Copyright (C) Wazuh Inc.
+#
+# This program is a free software; you can redistribute it
+# and/or modify it under the terms of the GNU General Public
+# License (version 2) as published by the FSF - Free Software
+# Foundation.
+
+# Indexer StatefulSet: 3 master nodes.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: wazuh-indexer
+  namespace: wazuh
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: wazuh-indexer
+  serviceName: wazuh-indexer
+  # The indexer nodes form a quorum and have to be recreated together.
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: wazuh-indexer
+      name: wazuh-indexer
+    spec:
+      # No workload talks to the Kubernetes API.
+      automountServiceAccountToken: false
+      # No fsGroup: volume-mount-hack gives the data volume to the service
+      # user, and the certificates are copied with their own ownership.
+      volumes:
+        # A Secret volume holds symbolic links: an init container copies the
+        # credentials to a regular file that only root can read.
+        - name: wazuh-credentials
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: wazuh-credentials-secret
+          secret:
+            secretName: indexer-credentials
+            defaultMode: 0400
+        - name: indexer-certs-raw
+          secret:
+            secretName: indexer-certs
+            defaultMode: 0400
+        - name: indexer-certs
+          emptyDir: {}
+      initContainers:
+        - name: install-credentials
+          image: 'wazuh/wazuh-indexer:5.0.0-rc2'
+          command:
+            - /bin/sh
+            - -c
+            - 'umask 077 && cp /credentials-secret/wazuh-credentials /run/secrets/wazuh-credentials && chmod 0400 /run/secrets/wazuh-credentials'
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: wazuh-credentials-secret
+              mountPath: /credentials-secret
+              readOnly: true
+            - name: wazuh-credentials
+              mountPath: /run/secrets
+        - name: install-certs
+          image: 'wazuh/wazuh-indexer:5.0.0-rc2'
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              # Regular files, never the secret's symbolic links: the node
+              # pair and the CA root:wazuh-indexer 0640, the admin pair root's.
+              certs=/certs-final
+              install -o 0 -g 101 -m 0640 /tmp/certs-raw/indexer.pem "${certs}/indexer.pem"
+              install -o 0 -g 101 -m 0640 /tmp/certs-raw/indexer-key.pem "${certs}/indexer-key.pem"
+              install -o 0 -g 101 -m 0640 /tmp/certs-raw/root-ca.pem "${certs}/root-ca.pem"
+              install -o 0 -g 0 -m 0600 /tmp/certs-raw/admin.pem "${certs}/admin.pem"
+              install -o 0 -g 0 -m 0600 /tmp/certs-raw/admin-key.pem "${certs}/admin-key.pem"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: indexer-certs-raw
+              mountPath: /tmp/certs-raw
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /certs-final
+        - name: volume-mount-hack
+          image: busybox
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          command:
+            - sh
+            - '-c'
+            - 'chown -R 101:101 /var/lib/wazuh-indexer'
+          volumeMounts:
+            - name: wazuh-indexer
+              mountPath: /var/lib/wazuh-indexer
+        - name: increase-the-vm-max-map-count
+          image: busybox
+          command:
+            - sysctl
+            - -w
+            - vm.max_map_count=262144
+          securityContext:
+            privileged: true
+      containers:
+        - name: wazuh-indexer
+          image: 'wazuh/wazuh-indexer:5.0.0-rc2'
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1564Mi
+          env:
+            - name: bootstrap.memory_lock
+              value: "false"
+            - name: network.host
+              value: "0.0.0.0"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Keep below POD_NAME and POD_NAMESPACE: $(VAR) expands backwards only.
+            - name: network.publish_host
+              value: "$(POD_NAME).wazuh-indexer.$(POD_NAMESPACE).svc.cluster.local"
+            - name: node.name
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: cluster.initial_cluster_manager_nodes
+              value: wazuh-indexer-0
+            # For a 3-node cluster, all nodes should be listed here, if another node is added, it should be included as well
+            - name: discovery.seed_hosts
+              value: "wazuh-indexer-0.wazuh-indexer,wazuh-indexer-1.wazuh-indexer,wazuh-indexer-2.wazuh-indexer"
+            - name: node.max_local_storage_nodes
+              value: "3"
+            - name: plugins.security.allow_default_init_securityindex
+              value: "true"
+            - name: NODES_DN
+              value: CN=indexer,OU=Wazuh,O=Wazuh,L=California,C=US
+            - name: OPENSEARCH_JAVA_OPTS
+              value: '-Xms1g -Xmx1g -Dlog4j2.formatMsgNoLookups=true'
+            - name: DISCOVERY_SERVICE
+              value: wazuh-indexer
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: wazuh-credentials
+              mountPath: /run/secrets
+              readOnly: true
+            - name: wazuh-indexer
+              mountPath: /var/lib/wazuh-indexer
+            - name: indexer-certs
+              mountPath: /usr/share/wazuh-indexer/config/certs/indexer-key.pem
+              subPath: indexer-key.pem
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /usr/share/wazuh-indexer/config/certs/indexer.pem
+              subPath: indexer.pem
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /usr/share/wazuh-indexer/config/certs/root-ca.pem
+              subPath: root-ca.pem
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /usr/share/wazuh-indexer/config/certs/admin.pem
+              subPath: admin.pem
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /usr/share/wazuh-indexer/config/certs/admin-key.pem
+              subPath: admin-key.pem
+              readOnly: true
+          ports:
+            - containerPort: 9200
+              name: indexer-rest
+            - containerPort: 9300
+              name: indexer-nodes
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - curl -fks https://localhost:9200/_plugins/_security/health | grep -q '"status":"UP"'
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - curl -fks https://localhost:9200/_plugins/_security/health | grep -q '"status":"UP"'
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - curl -fks https://localhost:9200/_plugins/_security/health | grep -q '"status":"UP"'
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: wazuh-indexer
+        namespace: indexer-cluster
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: wazuh-storage
+        resources:
+          requests:
+            storage: 500Mi

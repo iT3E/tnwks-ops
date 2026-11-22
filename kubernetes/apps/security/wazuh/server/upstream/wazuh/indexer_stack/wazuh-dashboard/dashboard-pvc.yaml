@@ -1,0 +1,21 @@
+# Copyright (C) Wazuh Inc.
+#
+# This program is a free software; you can redistribute it
+# and/or modify it under the terms of the GNU General Public
+# License (version 2) as published by the FSF - Free Software
+# Foundation.
+
+# Wazuh dashboard configuration claim
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wazuh-dashboard-config
+  namespace: wazuh
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: wazuh-storage
+  resources:
+    requests:
+      storage: 1Gi
