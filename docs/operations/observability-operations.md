@@ -54,6 +54,62 @@ WSL-02, which has that cluster's kubeconfig
   bytes of its 90-day streams in a day, before compression.
   `WslDriveSpaceLow`: the drive under the WSL disk of WSL-02 has less than
   100 GB free (evaluated by site 1, which scrapes both Windows hosts).
+- **Room on site 1:** three alerts of the group `homelab.capacity`
+  (`observability/rules.py`) on the kubelet's `node_memory_working_set_bytes`
+  of each node container of homelab-wsl, scraped on that site. Each node
+  container has a Docker memory limit: 13 GiB for a worker
+  (`memory_workers` of `talos_clusters` in the Ansible inventory) and 4 GiB
+  for the control plane (`memory_controlplanes`).
+  `observability/tests/test_node_container_memory.py` holds the rules equal
+  to the inventory.
+  - `WorkerContainerMemoryNearLimit` (warning): a worker past 90% of its
+    limit for 5 minutes.
+  - `WorkerContainerMemoryAtLimit` (critical): a worker past 95% for 2
+    minutes.
+  - `ControlPlaneContainerMemoryNearLimit` (warning): the control plane
+    past 90% for 15 minutes.
+
+  What the numbers mean:
+  - The kubelet does not see these limits. It reports the memory of the
+    whole WSL VM, so its allocatable memory is the VM, the scheduler keeps
+    placing pods by their requests against the VM, and the kubelet does not
+    evict, because it sees free memory.
+  - So today the pod limit of the kubelet (110, its default) is the only
+    stop below the memory limit of a worker. A higher pod limit removes that
+    stop.
+  - These alerts warn. They do not stop the scheduler, and a rollout or a
+    burst of Jobs can cross from 90% to the limit in minutes; that is why
+    the rules of a worker wait 5 and 2 minutes.
+  - At the limit, the kernel kills processes inside the node container by
+    their score (BestEffort pods first, then Burstable ones). The kubelet
+    does not evict first.
+  - The control plane runs no workload pods. Its working set also counts
+    active file pages, for example of the database file of etcd, which the
+    kernel can take back before it kills. No series in Prometheus separates
+    them: the chart drops cAdvisor's series of the node's own cgroup. Read
+    the summary of the kubelet (below): `rssBytes` is the anonymous memory,
+    which the kernel can not take back, and the working set less
+    `rssBytes` is mostly file pages. Judge the alert by `rssBytes` against
+    4 GiB. At the time of this change, the control plane was past 90%, so
+    the rule fires as soon as it is live.
+
+  Steps, read only first:
+  1. The memory of each node:
+     `kubectl get --raw /api/v1/nodes/<node>/proxy/stats/summary`, the
+     `node.memory` fields `workingSetBytes` and `rssBytes`, or the series in
+     Prometheus.
+  2. The largest pods: `kubectl top pod -A --sort-by=memory`, and the node
+     of each from `kubectl get pod -A -o wide`. Note the pods that came to
+     the node last.
+  3. With the go of the owner, move or shrink one: lower its replicas, or
+     move it with a node selector to the other worker when that worker has
+     room. A pod that the scheduler puts back on the same node needs its
+     memory request raised.
+
+  More memory for a node is a size of its own in `memory_nodes`, set on the
+  running container by `06-talos-node-memory.yml`, within the memory of the
+  WSL VM. The rules then need that size too (the test fails until they
+  have it).
 - **Certificates of the security platform:** `SecurityCertificateExpiring`
   (group `homelab.security`, `observability/rules.py`) fires 30 days before
   a certificate for IAM Roles Anywhere of the namespace `security` on

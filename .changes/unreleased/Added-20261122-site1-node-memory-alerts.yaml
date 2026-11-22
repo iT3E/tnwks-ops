@@ -1,0 +1,3 @@
+kind: Added
+body: 'homelab-wsl: alerts on the memory of the node containers, which the kubelet does not see (it reports the whole WSL VM): WorkerContainerMemoryNearLimit (90% of 13 GiB, 5 minutes, warning), WorkerContainerMemoryAtLimit (95%, 2 minutes, critical) and ControlPlaneContainerMemoryNearLimit (90% of 4 GiB, 15 minutes, warning); site 1 now scrapes the working set of its nodes'
+time: 2026-11-22T05:10:00.000000000+00:00

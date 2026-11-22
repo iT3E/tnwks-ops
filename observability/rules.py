@@ -520,14 +520,38 @@ SECURITY_INGEST_PLAN_GB = 1.2
 CAPACITY_DRIVE_HOST = "WSL-02"
 CAPACITY_DRIVE_VOLUME = "C:"
 CAPACITY_DRIVE_FLOOR_GB = 100
+# The node containers of homelab-wsl and their Docker memory limits, in GiB:
+# memory_workers and memory_controlplanes of talos_clusters.wsl in the Ansible
+# inventory (that cluster sets no memory_nodes, so both workers have the same
+# limit). No series carries a limit, so it is stated again here, and
+# observability/tests/test_node_container_memory.py holds it equal to the
+# inventory. The kubelet of a node reports the memory of the whole WSL VM, so
+# neither the scheduler nor the evictions of the kubelet see these limits.
+SITE1_CLUSTER = "homelab-wsl"
+SITE1_WORKER_LIMIT_GIB = 13
+SITE1_CONTROLPLANE_LIMIT_GIB = 4
 
 
 def capacity_alerts():
     """Each alert reads a series that only one site's Prometheus has, so the rule
-    is quiet on the other site: the kubelet's node figure and Loki's own series
-    are scraped on homelab-wsl-02, and the Windows hosts by homelab-wsl."""
+    is quiet on the other site: the kubelet's node figure of each site is
+    scraped on that site (each rule names its nodes), Loki's own series on
+    homelab-wsl-02, and the Windows hosts by homelab-wsl."""
     def board(uid):
         return f'https://grafana.${{INTERNAL_DOMAIN}}/d/{uid}?var-cluster={{{{ $labels.k8s_cluster }}}}'
+
+    def site1_memory(role, limit_gib, share):
+        """The working set of the node containers of homelab-wsl of one role
+        past a share of their limit. A node name of Talos in Docker ends in
+        -worker-<n> or -controlplane-<n>."""
+        return (f'max by (k8s_cluster, node) (node_memory_working_set_bytes{{k8s_cluster="{SITE1_CLUSTER}",node=~".+-{role}-[0-9]+"}})'
+                f' > {share} * {limit_gib} * 1024^3')
+
+    steps = " docs/operations/observability-operations.md, Room on site 1, has the steps."
+    worker_limit = (f"The node container of a worker of {SITE1_CLUSTER} has a memory limit of {SITE1_WORKER_LIMIT_GIB} GiB"
+                    " (memory_workers of talos_clusters in the Ansible inventory). The scheduler and the evictions of the"
+                    " kubelet do not see it, because the node reports the memory of the whole WSL VM: only the pod limit"
+                    " of the kubelet stops the scheduler. This alert warns; it stops nothing.")
 
     return [
         # The working set of the node's root cgroup, which is the node container
@@ -541,6 +565,36 @@ def capacity_alerts():
                          "description": (f"The node container has a memory limit of {CAPACITY_NODE_LIMIT_GIB} GiB. The scheduler does not see it,"
                                          " because the node reports the memory of the whole WSL VM. Find the largest pods of the node,"
                                          " and move or shrink one. The limit is memory_nodes of talos_clusters in the Ansible inventory.")}},
+        # The same figure for the nodes of homelab-wsl, scraped there
+        # (kubernetes/clusters/wsl/apps). A worker can fill in minutes (a
+        # rollout, or Jobs that all land on it), so its rules wait less.
+        {"alert": "WorkerContainerMemoryNearLimit",
+         "expr": site1_memory("worker", SITE1_WORKER_LIMIT_GIB, 0.9),
+         "for": "5m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "{{ $labels.node }} is above 90% of the memory limit of its node container",
+                         "dashboard_url": board("tnwks-kubernetes"),
+                         "description": (worker_limit + " Find the largest pods of the node, and move or shrink one." + steps)}},
+        {"alert": "WorkerContainerMemoryAtLimit",
+         "expr": site1_memory("worker", SITE1_WORKER_LIMIT_GIB, 0.95),
+         "for": "2m", "labels": {"severity": "critical"},
+         "annotations": {"summary": "{{ $labels.node }} is above 95% of the memory limit of its node container",
+                         "dashboard_url": board("tnwks-kubernetes"),
+                         "description": (worker_limit + " At the limit, the kernel kills processes inside the node container,"
+                                         " BestEffort pods first, and the kubelet does not evict before. Move a large pod off"
+                                         " the node now." + steps)}},
+        # The control plane runs no workload pods (its taint), so its memory
+        # moves slowly, and its working set counts file pages that the kernel
+        # can take back.
+        {"alert": "ControlPlaneContainerMemoryNearLimit",
+         "expr": site1_memory("controlplane", SITE1_CONTROLPLANE_LIMIT_GIB, 0.9),
+         "for": "15m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "{{ $labels.node }} is above 90% of the memory limit of its node container",
+                         "dashboard_url": board("tnwks-kubernetes"),
+                         "description": (f"The node container of the control plane of {SITE1_CLUSTER} has a memory limit of"
+                                         f" {SITE1_CONTROLPLANE_LIMIT_GIB} GiB (memory_controlplanes of talos_clusters in the"
+                                         " Ansible inventory). It runs the API server and etcd. Its working set also counts"
+                                         " active file pages, such as the database file of etcd, which the kernel can take back:"
+                                         " compare rssBytes in the summary of the kubelet before you act." + steps)}},
         {"alert": "LokiSecurityIngestAbovePlan",
          "expr": ('sum by (k8s_cluster) (increase(loki_distributor_bytes_received_total'
                   f'{{retention_hours="{SECURITY_RETENTION_HOURS}"}}[1d])) > 2 * {SECURITY_INGEST_PLAN_GB}e9'),
@@ -2159,10 +2213,14 @@ def capacity_fixtures():
             for label, value in labels.items():
                 text = text.replace("{{ $labels." + label + " }}", value)
             annotations[key] = text
-        return {"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}
+        return {"exp_labels": {"severity": rule["labels"]["severity"], **labels}, "exp_annotations": annotations}
 
     def node(name, value, extra=""):
         return {"series": f'node_memory_working_set_bytes{{k8s_cluster="{site}",node="{name}"{extra}}}',
+                "values": f"{value}+0x30"}
+
+    def site1_node(name, value):
+        return {"series": f'node_memory_working_set_bytes{{k8s_cluster="{SITE1_CLUSTER}",node="{name}"}}',
                 "values": f"{value}+0x30"}
 
     def loki(retention_hours, per_minute):
@@ -2190,6 +2248,55 @@ def capacity_fixtures():
          "input_series": [node(CAPACITY_NODE, int(16 * gib))],
          "alert_rule_test": [
              {"alertname": "NodeContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
+         ]},
+        # Made-up node names of the form of Talos in Docker.
+        {"name": "a worker of site 1 past 90% of its limit warns after 5 minutes; the control plane and site 2 at the same figure do not",
+         "interval": "1m",
+         "input_series": [
+             # 12 of 13 GiB: 92%.
+             site1_node("lab-worker-1", int(12 * gib)),
+             site1_node("lab-worker-2", int(11 * gib)),
+             site1_node("lab-controlplane-1", int(12 * gib)),
+             node("other-worker-1", int(12 * gib)),
+         ], "alert_rule_test": [
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "4m", "exp_alerts": []},
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "6m", "exp_alerts": [
+                 expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1")]},
+             {"alertname": "WorkerContainerMemoryAtLimit", "eval_time": "20m", "exp_alerts": []},
+         ]},
+        {"name": "a worker of site 1 past 95% of its limit is critical after 2 minutes", "interval": "1m",
+         "input_series": [
+             # 12.5 of 13 GiB: 96%.
+             site1_node("lab-worker-1", int(12.5 * gib)),
+         ], "alert_rule_test": [
+             {"alertname": "WorkerContainerMemoryAtLimit", "eval_time": "1m", "exp_alerts": []},
+             {"alertname": "WorkerContainerMemoryAtLimit", "eval_time": "3m", "exp_alerts": [
+                 expected("WorkerContainerMemoryAtLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1")]},
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "6m", "exp_alerts": [
+                 expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1")]},
+         ]},
+        {"name": "a worker of site 1 at 89% of its limit does not alert", "interval": "1m",
+         "input_series": [site1_node("lab-worker-1", int(0.89 * SITE1_WORKER_LIMIT_GIB * gib))],
+         "alert_rule_test": [
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
+             {"alertname": "WorkerContainerMemoryAtLimit", "eval_time": "20m", "exp_alerts": []},
+         ]},
+        {"name": "the control plane of site 1 past 90% of its limit warns after 15 minutes; a worker at the same figure does not",
+         "interval": "1m",
+         "input_series": [
+             # 3.7 of 4 GiB: 92%.
+             site1_node("lab-controlplane-1", int(3.7 * gib)),
+             site1_node("lab-worker-1", int(3.7 * gib)),
+             node("other-controlplane-1", int(3.7 * gib)),
+         ], "alert_rule_test": [
+             {"alertname": "ControlPlaneContainerMemoryNearLimit", "eval_time": "14m", "exp_alerts": []},
+             {"alertname": "ControlPlaneContainerMemoryNearLimit", "eval_time": "16m", "exp_alerts": [
+                 expected("ControlPlaneContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-controlplane-1")]},
+         ]},
+        {"name": "the control plane of site 1 at 89% of its limit does not alert", "interval": "1m",
+         "input_series": [site1_node("lab-controlplane-1", int(0.89 * SITE1_CONTROLPLANE_LIMIT_GIB * gib))],
+         "alert_rule_test": [
+             {"alertname": "ControlPlaneContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
          ]},
         # 2 MB a minute is 2.88 GB a day, past twice the plan of 1.2 GB. The
         # streams with the default retention take in ten times that and don't count.
