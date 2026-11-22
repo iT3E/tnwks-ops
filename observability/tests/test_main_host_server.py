@@ -103,8 +103,8 @@ def listed() -> bool:
 
 def test_the_folder_of_main_lists_the_server_by_its_one_line():
     # The go-live lists ./host-mcp/ks.yaml; the way back removes that line
-    # and nothing else (docs/apps/host-mcp.md, "The way back"). No other
-    # entry names the folder.
+    # and the row of the inventory (docs/apps/host-mcp.md, "The way back").
+    # No other entry names the folder.
     resources = yaml.safe_load((MAIN / "kustomization.yaml").read_text())["resources"]
     assert [r for r in resources if "host-mcp" in r] in ([], ["./host-mcp/ks.yaml"])
 

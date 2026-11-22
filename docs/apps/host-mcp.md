@@ -264,9 +264,12 @@ host tool).
 
 ### The way back
 
-Remove the line `./host-mcp/ks.yaml` from the folder of main, in one pull
-request, with `classlist.py write` (the class list loses the child). Flux
-prunes the pod, the Service, the policy and the Secret (`prune: true`).
+Remove the line `./host-mcp/ks.yaml` from the folder of main and the row
+`Host MCP server` from `observability/inventory.py`, in one pull request,
+with `classlist.py write` (the class list loses the child) and
+`observability/generate.py` (the inventory loses the part; a test holds
+the declared parts equal to the applied ones). Flux prunes the pod, the
+Service, the policy and the Secret (`prune: true`).
 The route stays with no backend, so a call gets an error from the gateway
 and runs nothing. The key, its hash and the read list can stay; the tests
 take that. A revert of the squash commit of the go-live does the same and
