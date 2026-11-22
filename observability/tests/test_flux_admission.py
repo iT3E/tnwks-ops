@@ -45,6 +45,61 @@ def test_the_walk_finds_each_child_of_each_site():
         "flux-system/cluster-apps", "flux-system/cluster-apps-wsl-02"]
 
 
+def test_the_walk_follows_the_patches_of_a_path():
+    # The apps of the second site move two children to folders of their own
+    # with a patch of spec.path; Flux builds those folders, so the walk does.
+    walked = classlist.walk("wsl-02")
+    assert {key: walked[key].path for key in ("flux-system/kube-prometheus-stack-addons",
+                                              "flux-system/kopiur-policies")} == {
+        "flux-system/kube-prometheus-stack-addons": "kubernetes/clusters/wsl-02/apps/monitoring-addons",
+        "flux-system/kopiur-policies": "kubernetes/clusters/wsl-02/apps/kopiur-policies",
+    }
+    assert walked["flux-system/kube-prometheus-stack-addons"].build.files >= {
+        "kubernetes/clusters/wsl-02/apps/monitoring-addons/kustomization.yaml"}
+    assert classlist.walk("wsl")["flux-system/kopiur-policies"].path == "kubernetes/apps/kopiur-system/kopiur/policies"
+
+
+PATH_KS = """
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata: {name: web, namespace: flux-system}
+spec: {path: ./base, sourceRef: {kind: GitRepository, name: flux-system}}
+"""
+PATH_PATCH = """
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata: {name: %s, namespace: flux-system}
+spec: {path: ./site}
+"""
+
+
+@pytest.mark.parametrize(("patch", "want"), [
+    ({"patch": PATH_PATCH % "web"}, "./site"),
+    ({"path": "patch.yaml"}, "./site"),
+    # A patch that does not touch the path changes nothing.
+    ({"patch": "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n"
+               "metadata: {name: web}\nspec: {dependsOn: [{name: db}]}\n"}, "./base"),
+    ({"target": {"kind": "HelmRelease"}, "patch": "- {op: add, path: /spec/install, value: {}}"}, "./base"),
+    # The forms that it can not read stop it.
+    ({"patch": PATH_PATCH % "other"}, None),
+    ({"target": {"kind": "Kustomization", "name": "web"}, "patch": PATH_PATCH % "web"}, None),
+    ({"target": {"kind": "Kustomization"}, "patch": "- {op: replace, path: /spec/path, value: ./site}"}, None),
+    ({"target": {"name": "web"}, "patch": "- {op: replace, path: /spec, value: {path: ./site}}"}, None),
+])
+def test_the_walk_reads_one_form_of_a_patch_of_a_path(tmp_path, monkeypatch, patch, want):
+    (tmp_path / "apps").mkdir()
+    (tmp_path / "apps/web.yaml").write_text(PATH_KS)
+    (tmp_path / "apps/patch.yaml").write_text(PATH_PATCH % "web")
+    (tmp_path / "apps/kustomization.yaml").write_text(yaml.safe_dump({"resources": ["./web.yaml"], "patches": [patch]}))
+    monkeypatch.setattr(classlist, "ROOT", tmp_path)
+    if want is None:
+        with pytest.raises(classlist.UnreadKustomization):
+            classlist.build(tmp_path / "apps")
+        return
+    (web,) = classlist.flux_kustomizations(classlist.build(tmp_path / "apps").docs)
+    assert web["spec"]["path"] == want
+
+
 def test_only_the_parents_of_the_apps_read_files_outside_the_class():
     # A child of the class whose build reads a file outside the class would
     # apply that file with the rights of the class. The two parents of the
