@@ -1422,9 +1422,10 @@ these differ, and lists each difference:
   wslconfig_write=true`, and plan the `wsl --shutdown` for a quiet moment.
   The only edit so far (2026-11-03) replaced the outdated comment about
   re-attaching the Coral after a restart; the settings are unchanged. A host
-  without a cluster yet (WSL-02) sets `wslconfig_write: true` in host_vars,
-  so CI writes it there and WSL picks it up at its next restart. A host
-  with a cluster sets it too for the first apply of the phase `done` of the
+  without a cluster yet sets `wslconfig_write: true` in host_vars, so CI
+  writes it there and WSL picks it up at its next restart; both hosts run
+  a cluster, so neither sets it. A host with a cluster sets it only for the
+  first apply of the phase `done` of the
   move, and drops it after that apply: the file of the new account is the
   copy that the move wrote, with the same key lines as the template and its
   own comments, so that write changes comments only and needs no
