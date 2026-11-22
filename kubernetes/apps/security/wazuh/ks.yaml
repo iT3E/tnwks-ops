@@ -15,6 +15,9 @@ metadata:
 spec:
   dependsOn:
     - name: cert-manager
+    # The pool and the BGP advertisement of the shared VIP of the agents
+    # (app/service-agents.yaml), as the other shared VIPs.
+    - name: cilium-bgp
   path: ./kubernetes/apps/security/wazuh/app
   prune: true
   sourceRef:

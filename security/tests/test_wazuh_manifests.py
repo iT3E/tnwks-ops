@@ -159,7 +159,7 @@ def test_the_server_builds_the_source_with_no_substitution_of_its_own():
     assert "postBuild" not in spec
     app = kustomizations()["security-wazuh"]["spec"]
     assert app["path"] == "./kubernetes/apps/security/wazuh/app"
-    assert app["dependsOn"] == [{"name": "cert-manager"}]
+    assert app["dependsOn"] == [{"name": "cert-manager"}, {"name": "cilium-bgp"}]
 
 
 def test_only_homelab_wsl_02_lists_the_server_and_no_cluster_the_settings():
