@@ -50,8 +50,11 @@ spec:
       # a failure until a newer run ends, and KubeJobFailed then clears by
       # itself (docs/apps/agent-platform.md, "A failed Job").
       ttlSecondsAfterFinished: 93600
-      # The worst case, in seconds: six straight connections of 5 each
-      # (30), then seven MCP requests of 30 each (210). That is 240. The
+      # The worst case, in seconds: seven straight connections of 5 each
+      # (35), then fourteen MCP requests of 30 each (420): seven for the
+      # vaults, and seven for the browser route (two refused initialize,
+      # then initialize, initialized, tools/list, one refused call and the
+      # close of the session). That is 455. The
       # deadline only stops a Job that hangs; 900 leaves room for more tries.
       activeDeadlineSeconds: 900
       template:
@@ -100,8 +103,14 @@ spec:
                 # their own policies must drop that. Only a time out passes;
                 # a refusal (no ready backend), an answer and a name that
                 # does not resolve fail.
+                # The browser route of main: the probe key may open a session
+                # and list its tools, and call none.
+                - name: BROWSER_GATEWAY_URL
+                  value: http://mcp-gateway.ai.svc.cluster.local:3000/main-browser/mcp
+                - name: BROWSER_ROUTE
+                  value: main-browser
                 - name: GATEWAY_ONLY_SERVERS
-                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080
+                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080,playwright-mcp.ai.svc.cluster.local:8000
               # PROBE_KEY, once the lead makes the Secret.
               envFrom:
                 - secretRef:
@@ -136,8 +145,8 @@ spec:
                 name: mcp-gateway-probe-config
 ---
 # The gateway probe may call the MCP gateway, and may try both vault servers
-# and the read servers of main straight: the policy of each server, not this
-# one, must stop that.
+# and the read servers and the browser of main straight: the policy of each
+# server, not this one, must stop that.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -188,4 +197,14 @@ spec:
       toPorts:
         - ports:
             - port: "8080"
+              protocol: TCP
+    # The browser of main, straight: its own policy must stop that.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: playwright-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8000"
               protocol: TCP

@@ -85,6 +85,8 @@ the MCP server and checks the headers that arrive.
 | `/main-flux/` | `main` | the eight kept reads of the Flux server | the eight kept reads of the Flux server |
 | `/main-terraform/` | `main` | the nine tools of the registry | the nine tools of the registry |
 | `/main-github/` | `main` | the 17 kept reads of the code host server | the 17 kept reads, for the ops repository only |
+| `/main-browser/` | `main` | the 21 kept tools of the browser | the 21 kept tools of the browser |
+| `/main-browser/` | `main-probe` | the 21 kept tools of the browser | nothing |
 
 **The vault of finance** has a route of its own, `/finance-vault/`, so the
 tool names of the finance app do not change. Its target is the vault server
@@ -194,6 +196,16 @@ later, with its read credential):
   4 and 5 need the key of main, which only the agent holds, so they need a
   question of the owner to the agent.
 
+- `/main-browser/`: the browser of main (`kubernetes/apps/ai/playwright-mcp`,
+  [playwright-mcp.md](playwright-mcp.md)), the Playwright MCP server of
+  the vendor at a pinned digest, with no credential. The rule keeps 21 of
+  its 25 tools by exact name and leaves out the tools that run code or send
+  a file of the server pod. The one stateful route: the browser keeps a
+  page for each session, so each call of a session reaches the same server
+  session. Deployed, not live for use: the config of the agent has no
+  entry for it until [its switch](playwright-mcp.md#the-switch).
+  `tools/browser.json` is the dump.
+
 **The read step.** The config of the main agent
 (`agents/main/agent/config/openclaw.json`) has one server entry for each
 read route, beside its vault entry, at
@@ -265,8 +277,8 @@ its place for the container tests.
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
-| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux`, `main-terraform` and `main-github` (the same hash; `metadata: {client: main, route: <the route>}`) |
-| `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, route `main-vault` |
+| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux`, `main-terraform`, `main-github` and `main-browser` (the same hash; `metadata: {client: main, route: <the route>}`) |
+| `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, routes `main-vault` and `main-browser` (the same hash) |
 
 **The hash and the value stay in step** in two ways: the owner changes both
 in one commit (below), and a check finds a difference. The values check of
@@ -420,16 +432,22 @@ agent does, with two keys of its own and none of the agent's:
    `OTHER_VAULT_SERVER`): the probe key gets a 401 on its route, and a
    straight connection to its server fails (R6). Each probe checks the
    other.
-7. The read servers of main (`GATEWAY_ONLY_SERVERS`: `cluster-mcp`,
-   `flux-mcp`, `terraform-mcp` and `github-mcp` in `agents-main`, port
-   8080): a straight
+7. The read servers and the browser of main (`GATEWAY_ONLY_SERVERS`:
+   `cluster-mcp`, `flux-mcp`, `terraform-mcp` and `github-mcp` in
+   `agents-main`, port 8080, and `playwright-mcp` in `ai`, port 8000): a straight
    connection from its pod to each fails. No key is used. A time out passes:
    a policy drop in this cluster is silent. A refusal fails, since a
    Service with no ready pod refuses at once and so proves nothing; an
    answer and a name that does not resolve fail too.
+8. The browser route of main (`BROWSER_GATEWAY_URL`, the probe of main
+   only): no key and a random key get a 401 on `initialize`. The probe key
+   opens a session, lists exactly the tools of the rule (through the
+   gateway and the browser, so the reach of the gateway to the browser is
+   proved too), and its call of `browser_snapshot` is refused at the
+   gateway; then it closes the session. It never drives the browser.
 
 **The probe of main** (`agents/main/checks/app/`, daily at 05:53) is the
-same probe for the route `main-vault`: items 5, 6 and 7, with its key
+same probe for the route `main-vault`: items 5, 6, 7 and 8, with its key
 `main-probe`, and no key with no tool. The read routes of main take the
 key of main only, so the probe calls none of them; item 7 tries their
 servers straight. Its
@@ -476,8 +494,9 @@ and the container test runs the new image with the config of the repo.
   network between the nodes in clear, as the model calls do.
 - **One replica.** While it is down or rolls, the agents have no tools; they
   keep their model and their sandboxes.
-- **Stateless MCP.** Each request opens its own session with the MCP
-  server, which costs a little time for each call.
+- **Stateless MCP**, but for the browser. Each request opens its own
+  session with the MCP server, which costs a little time for each call.
+  The route of the browser is stateful (above).
 - **No rate limit for each client yet.** The simplest version first; a
   limit by client (`localRateLimit`, by `apiKey.client`) is a later step.
 - **The probe key** may list the tools of finance and call `get_about`; a

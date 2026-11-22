@@ -39,18 +39,35 @@ spec:
             # upstream by ~27 releases and pushes its Helm chart into the same
             # repo as tag 1.0.0, which Renovate can't tell apart from an image.
             # The entrypoint already runs headless Chromium with --no-sandbox;
-            # these args add the HTTP transport (/mcp, plus legacy /sse).
+            # these args add the HTTP transport (/mcp, plus legacy /sse). The
+            # tool list of this image is in
+            # kubernetes/apps/ai/mcp-gateway/tools/browser.json: read it again
+            # at each update (docs/apps/playwright-mcp.md, "Updates").
             image:
               repository: mcr.microsoft.com/playwright/mcp
-              tag: v0.0.85
+              tag: v0.0.85@sha256:8ca417ff2a3660b770d7dd4a293bd179d0f3c29d0d5fb5bc43d3be617b1566a2
+            # The flags of the design (Design Doc of effort 0003, section
+            # 4.2.6, "The browser, its rails"), each in the README of this
+            # release.
             args:
               - --port=8000
               - --host=0.0.0.0
-              # Requests arrive with the Service name as Host; the default
-              # only allows localhost.
-              - --allowed-hosts=*
-              # Fresh in-memory browser profile per session.
+              # Requests arrive with the Service name as Host. Only that
+              # name: the central MCP gateway is the one caller.
+              - --allowed-hosts=playwright-mcp.ai.svc.cluster.local:8000
+              # A browser context of its own, in memory, for each session.
               - --isolated
+              - --headless
+              # A page can not add tools.
+              - --no-webmcp
+              - --block-service-workers
+              # These values of a URL show as <redacted> in a tool answer.
+              - --redact-url-params=access_token,id_token,refresh_token,code,token,key,api_key,apikey,password,secret,signature,sig
+              # Each page through the fetch proxy of the main agent, which
+              # takes a CONNECT to port 443 of a public address only: so the
+              # browser loads HTTPS pages only. The network policy is the
+              # wall, not this flag.
+              - --proxy-server=http://fetch-proxy.agents-main.svc.cluster.local:8080
             probes:
               # No health endpoint (GET / is a 400), so probe the socket.
               liveness: &probes

@@ -311,6 +311,8 @@ def test_the_gateway_takes_the_agent_and_its_probe_and_reaches_the_mcp_server_on
                    ("agents-main", "flux-mcp"): ["8080"],
                    ("agents-main", "terraform-mcp"): ["8080"],
                    ("agents-main", "github-mcp"): ["8080"],
+                   # The browser of main (test_main_browser.py).
+                   ("ai", "playwright-mcp"): ["8000"],
                    ("kube-system", "kube-dns"): ["53"]}
     (dns,) = [r for r in policy["egress"] if peers(r)[0].get("k8s-app") == "kube-dns"]
     names = [d for tp in dns["toPorts"] for d in tp["rules"]["dns"]]
@@ -378,21 +380,24 @@ class H(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0", 8080), H).serve_forever()
 '''
 
-# A server that drops each new connection on port 8080, as a policy drop of
+# A server that drops each new connection on ports 8080 and 8000, as a policy drop of
 # Cilium does (a time out). It listens with a queue of one and never
 # accepts; its own connection fills the queue, and the kernel then drops
 # each SYN that comes.
 DROPPER = r'''
 import socket, time
-server = socket.socket()
-server.bind(("0.0.0.0", 8080))
-server.listen(0)
 held = []
-for _ in range(2):
-    c = socket.socket()
-    c.setblocking(False)
-    c.connect_ex(("127.0.0.1", 8080))
-    held.append(c)
+# The port of the read servers of main, and the port of its browser.
+for port in (8080, 8000):
+    server = socket.socket()
+    server.bind(("0.0.0.0", port))
+    server.listen(0)
+    held.append(server)
+    for _ in range(2):
+        c = socket.socket()
+        c.setblocking(False)
+        c.connect_ex(("127.0.0.1", port))
+        held.append(c)
 time.sleep(3600)
 '''
 

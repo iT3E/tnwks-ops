@@ -2741,6 +2741,25 @@ with no route left the other tools working.
 **The way back** is one revert of the squash commit: the image 0.4.1 and
 the config with no plugin.
 
+### The browser of main
+
+The route `main-browser`, the flags and the pin of the browser, the rule of
+the fetch proxy for it, the policies and the prompt before a form
+([playwright-mcp.md](playwright-mcp.md)). Deployed, not live for use: the
+agent has no browser tool until [the switch](playwright-mcp.md#the-switch).
+
+**After the merge:**
+
+| Read | Pass rule |
+| --- | --- |
+| `kubectl -n ai get deploy playwright-mcp` | 1 of 1 ready, the image with the digest of git |
+| `kubectl -n ai logs deploy/mcp-gateway --since=24h \| grep '"route":"default/main-browser"' \| grep -c '"client":"main"'` | 0 before the switch: the agent does not call it yet |
+| The next run of `platform-check-mcp-gateway-probe` in `agents-main` and in `agents-finance` | The line `playwright-mcp in ai, direct from a pod that is not the gateway` with `"ok": true` |
+| The next run of `platform-check-mcp-gateway-probe` in `agents-main` | The four lines that start with `browser:` with `"ok": true`, among them `browser: probe key: lists the 21 tools of the rule` with `"got": "same"` |
+
+**The way back** is one revert of the squash commit. The switch, when it
+is in, is reverted first.
+
 ### The way back of the main agent
 
 - **Telegram, before step 5:** a pull request takes out the files of step 4

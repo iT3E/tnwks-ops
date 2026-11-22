@@ -74,7 +74,10 @@ def test_the_plugin_config_is_the_form_of_the_design():
         "readProfile": "agent",
         # The fixed lines of the ten checks come with the write step.
         "readList": [],
-        "promptTools": [],
+        # The browser tools that can send a form (test_main_browser.py).
+        "promptTools": ["browser__browser_click", "browser__browser_drag", "browser__browser_fill_form",
+                        "browser__browser_handle_dialog", "browser__browser_press_key",
+                        "browser__browser_select_option", "browser__browser_type"],
         "approverId": "${TELEGRAM_ALLOW_FROM}",
         "approvalChannel": "telegram",
         "timeoutMs": 600000,
