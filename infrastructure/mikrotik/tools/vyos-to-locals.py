@@ -471,8 +471,14 @@ EXTRA_WIREGUARD = {
     },
 }
 # The wg03 peers that may use the router's REST API: the two runners, not the
-# device access pod.
-CI_RUNNER_SOURCES = "10.10.32.10-10.10.32.11"
+# device access pod. 10.10.32.10 and 10.10.32.11, written as their prefix:
+# RouterOS stores an IPv4 range that is exactly one prefix as that prefix
+# (manual.mikrotik.com, Firewall, Address lists, "Addresses, prefixes and
+# ranges"; src-address is the same ipRange type, CLI reference
+# /ip/firewall/filter), and the provider compares src_address as written
+# (terraform-routeros v1.99.1, resource_ip_firewall_filter.go, no diff
+# suppression), so the plan of the root is empty when nothing changes.
+CI_RUNNER_SOURCES = "10.10.32.10/31"
 
 # Admin SSH public keys added on top of the ones ported from VyOS (comment
 # stripped). The VyOS-era RSA key stays for any machine that still has it.
