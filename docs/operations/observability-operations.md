@@ -51,11 +51,18 @@ WSL-02, which has that cluster's kubeconfig
   only.
   - It fires once for each object and site. A suspended object does not
     fire. A first install or a reconcile in progress has Ready Unknown, and
-    does not fire; an object that stays Unknown has no alert.
+    does not fire.
   - An object that fails is tried again each minute or so, and its Ready
-    condition is Unknown for a moment at each try. The rule holds the last
-    True or False of the last 15 minutes, so those moments do not start the
-    hour again. It ends at the first Ready True.
+    condition is Unknown for a moment at each try; with `wait: true` it is
+    Unknown for the whole try, up to its timeout (15 or 20 minutes here).
+    The rule holds the last True or False of the last 30 minutes, so those
+    moments do not start the hour again. It ends at the first Ready True.
+  - Limits: a timeout over about 25 minutes can still start the hour again.
+    A deleted object, or a collector that stopped, keeps the alert for up to
+    30 minutes.
+  - Not covered yet: an object that stays Unknown. A rule for it needs to
+    leave out the objects that never have a condition (the OCI
+    HelmRepositories, 7 on each site), or it fires with no end.
   - An object that waits for a failed one (a `dependsOn`) reports Ready
     False too, so one fault can fire several alerts. Fix the first one.
 

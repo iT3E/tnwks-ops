@@ -389,9 +389,9 @@ groups:
       description: Scrape success does not establish fresh upstream evidence. Check the collector source and network
         access.
   - alert: FluxResourceNotReady
-    expr: (max by (k8s_cluster, namespace, kind, resource) (last_over_time(homelab_flux_resource_ready{source_site=""}[15m]))
+    expr: (max by (k8s_cluster, namespace, kind, resource) (last_over_time(homelab_flux_resource_ready{source_site=""}[30m]))
       == 0) unless on (k8s_cluster, namespace, kind, resource) (max by (k8s_cluster, namespace, kind, resource)
-      (last_over_time(homelab_flux_resource_suspended{source_site=""}[15m])) == 1)
+      (last_over_time(homelab_flux_resource_suspended{source_site=""}[30m])) == 1)
     for: 1h
     labels:
       severity: warning

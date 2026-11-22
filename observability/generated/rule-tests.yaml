@@ -613,6 +613,49 @@ tests:
   - alertname: FluxResourceNotReady
     eval_time: 75m
     exp_alerts: []
+- name: a Flux object that waits out its timeout at each try fires after an hour
+  interval: 1m
+  input_series:
+  - series: homelab_flux_resource_ready{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="waits",pod="a"}
+    values: 0 stale _x14 0 stale _x14 0 stale _x14 0 stale _x14 0 stale _x14 0 stale _x14 0 stale _x14
+  - series: homelab_flux_resource_suspended{k8s_cluster="one",namespace="flux-system",kind="Kustomization",resource="waits",pod="a"}
+    values: '0x112'
+  alert_rule_test:
+  - alertname: FluxResourceNotReady
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: FluxResourceNotReady
+    eval_time: 62m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        namespace: flux-system
+        kind: Kustomization
+        resource: waits
+      exp_annotations:
+        summary: The Kustomization flux-system/waits on one has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=one
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
+  - alertname: FluxResourceNotReady
+    eval_time: 100m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        namespace: flux-system
+        kind: Kustomization
+        resource: waits
+      exp_annotations:
+        summary: The Kustomization flux-system/waits on one has not been Ready for 1 hour
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=one
+        description: 'Flux reports Ready False for this object, so the change it carries is not on the cluster.
+          Its Ready message says why: flux get on that site, or kubectl describe of the object. An object that waits
+          for it reports Ready False too: fix the first one. docs/operations/observability-operations.md, Flux object
+          not Ready, has the steps.'
 - name: a new pod of the collector gives no second alert
   interval: 1m
   input_series:

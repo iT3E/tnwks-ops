@@ -1134,15 +1134,17 @@ def rule_resource():
         # homelab_flux_resource_ready only while Ready is True (1) or False
         # (0): Unknown (a reconcile or a first install in progress) has no
         # series. An object that fails retries each minute or so, and its
-        # Ready condition is Unknown for a moment at each try; a scrape of the
-        # collector can fail too. last_over_time over 15 minutes holds the last
-        # True or False across those, so `for` does not start again at each
-        # try. A suspended object is left out: its condition is old, and the
+        # Ready condition is Unknown for a moment at each try; with `wait:
+        # true` it is Unknown for the whole reconcile, up to its timeout (15
+        # minutes for most of ours, 20 for one HelmRelease), and a scrape of
+        # the collector can fail too. last_over_time over 30 minutes holds the
+        # last True or False across those, so `for` does not start again at
+        # each try. A suspended object is left out: its condition is old, and the
         # Kubernetes board shows the suspension. max by drops the pod of the
         # collector, so a new collector pod gives no second alert.
         {"alert": "FluxResourceNotReady",
-         "expr": (f'(max by ({FLUX}) (last_over_time(homelab_flux_resource_ready{{source_site=""}}[15m])) == 0)'
-                  f' unless on ({FLUX}) (max by ({FLUX}) (last_over_time(homelab_flux_resource_suspended{{source_site=""}}[15m])) == 1)'),
+         "expr": (f'(max by ({FLUX}) (last_over_time(homelab_flux_resource_ready{{source_site=""}}[30m])) == 0)'
+                  f' unless on ({FLUX}) (max by ({FLUX}) (last_over_time(homelab_flux_resource_suspended{{source_site=""}}[30m])) == 1)'),
          "for": "1h", "labels": {"severity": "warning"},
          "annotations": {"summary": "The {{ $labels.kind }} {{ $labels.namespace }}/{{ $labels.resource }} on {{ $labels.k8s_cluster }} has not been Ready for 1 hour",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}',
@@ -1225,6 +1227,18 @@ def flux_fixtures():
              {"alertname": "FluxResourceNotReady", "eval_time": "59m", "exp_alerts": []},
              {"alertname": "FluxResourceNotReady", "eval_time": "61m", "exp_alerts": [fired("broken")]},
              {"alertname": "FluxResourceNotReady", "eval_time": "75m", "exp_alerts": []},
+         ]},
+        # With `wait: true`, each try holds Ready Unknown until its timeout:
+        # one False minute, then 15 minutes with no ready series, again and
+        # again. It still fires after an hour.
+        {"name": "a Flux object that waits out its timeout at each try fires after an hour", "interval": "1m",
+         "input_series": [
+             flux("homelab_flux_resource_ready", "waits", " ".join(["0 stale _x14"] * 7)),
+             flux("homelab_flux_resource_suspended", "waits", "0x112"),
+         ], "alert_rule_test": [
+             {"alertname": "FluxResourceNotReady", "eval_time": "59m", "exp_alerts": []},
+             {"alertname": "FluxResourceNotReady", "eval_time": "62m", "exp_alerts": [fired("waits")]},
+             {"alertname": "FluxResourceNotReady", "eval_time": "100m", "exp_alerts": [fired("waits")]},
          ]},
         {"name": "a new pod of the collector gives no second alert", "interval": "1m",
          "input_series": [
