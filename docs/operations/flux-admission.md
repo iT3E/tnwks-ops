@@ -119,20 +119,41 @@ its site or a setting of the site.
 
 A third CI test covers each Kustomization of each site that substitutes, in
 the class or outside it (`test_each_variable_of_each_site_has_a_definition_in_that_site`).
-It takes the `postBuild` of the child with the patch of its parent, and
-checks each bare variable of its manifests against the sources that it
-names on that site: its inline `substitute`, and the key names of each
-ConfigMap and Secret of `flux-system` that git makes there (the SOPS files of
-the cluster entry by name only). A source that git does not make fails the
-test, unless it is `optional`, like `site-overrides`. Its limits:
+It takes the `postBuild` of the child with the patches of its parent, and
+checks each variable of its manifests, and of the patches of each
+`kustomization.yaml` that its build reads, against the sources that it
+names on that site. The sources are its inline `substitute`, and the key
+names of each ConfigMap and Secret of `flux-system` that git makes there:
+the objects of the walk, and the SOPS files that a kustomization lists, by
+key name only. A source that the test can not read fails the test, unless
+it is `optional`, like `site-overrides`.
 
-- It finds variables with the pattern of the tests, not with the envsubst of
-  Flux, and it reads only the objects that `classlist.py` builds. The
-  content of a `configMapGenerator` or a `secretGenerator` is not read.
+The forms of a variable are the ones of the envsubst of Flux
+(`fluxcd/pkg/envsubst` v1.9.0, in kustomize-controller v1.10.1), as a lab of
+that library in strict mode shows:
+
+- `${NAME}` and each form that reads the value (`/`, `:`, `#`, `%`, `^`,
+  `,` after the name, or `#` before it) stop the build when the name has no
+  definition.
+- `:=`, `:-`, `:+`, `:?` and `=` after the name are a default, and do not
+  stop it. A variable inside the default still counts.
+- `-`, `+` or `?` alone after the name, a `${` with no name and a `${` with
+  no closing brace stop the build on each site, so the test fails on them.
+- `$${NAME}` is an escape.
+
+Its limits:
+
+- It reads only the objects that `classlist.py` builds. It does not read
+  what a `configMapGenerator` or a `secretGenerator` makes, or a SOPS file
+  that no kustomization lists. A source of that kind fails the test with a
+  message that says so.
 - It checks names, not values: a key with an empty or wrong value passes.
-- It reads the patches of the parent that set `postBuild`, with a target by
-  group, kind, name, namespace or label selector. Another form of target
-  fails the test, so that it can not pass by a target that it can not read.
+- It reads a patch target of the parent by group, version, kind, name,
+  namespace or label selector, and a patch with no target by the kind and
+  name of the object that it names. Another form fails the test.
+- A patch of a `kustomization.yaml` that sets `postBuild` fails the test,
+  because the walk does not apply it. The walk also does not apply a patch
+  of `spec.path`, so for a child with one it reads the folder of the base.
 
 ## Failure and deletion
 
