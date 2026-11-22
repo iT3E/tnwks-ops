@@ -1,0 +1,25 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+# The Secrets of the job are SOPS files that the owner makes and lists here
+# before a cluster lists this app (../../wazuh/README.md, "Secrets"):
+#   - ./secret-accounts.sops.yaml
+#   - ./secret-settings-user.sops.yaml
+#   - ./secret-converter-reader.sops.yaml
+resources:
+  - ./networkpolicy.yaml
+  - ./cronjob.yaml
+configMapGenerator:
+  # Tests: security/tests/test_wazuh_settings.py.
+  - name: wazuh-settings-scripts
+    files:
+      - ./scripts/apply.py
+  - name: wazuh-settings-config
+    files:
+      - ./config/accounts.json
+      - ./config/retention.json
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

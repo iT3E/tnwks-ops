@@ -1,0 +1,59 @@
+{
+  "notes": [
+    "The accounts of the Wazuh indexer that this repository holds (kubernetes/apps/security/wazuh/README.md, 'Accounts'). The job makes each role, each user and each role mapping here, and changes one when it differs. It never changes a reserved, hidden or static resource, and never a user or role that is not in this file.",
+    "Each user's password is a file of a Secret that the owner makes (password_file). The job sets it when the user can not log in with it, and never prints it.",
+    "Open decision, at the design gate: the account step runs as a user of its own (tnwks-accounts, mapped by the owner to security_rest_api_access), and the settings step as tnwks-settings, which has no right to the Security API. The simpler form runs both steps as admin.",
+    "tnwks-converter reads the index names of the contract (kubernetes/apps/security/wazuh/README.md, 'Contract'). On the agent snapshots it reads only the fields of the agent list (field-level security), not the host address, the system or the groups."
+  ],
+  "roles": {
+    "tnwks-settings": {
+      "description": "The settings job: the ISM policies of tnwks, the move of backing indices to them, and the raw events setting.",
+      "cluster_permissions": [
+        "cluster:admin/opendistro/ism/*",
+        "cluster:admin/setup/settings/update"
+      ],
+      "index_permissions": [
+        {
+          "index_patterns": [".ds-wazuh-*", "wazuh-*"],
+          "allowed_actions": ["indices:admin/opensearch/ism/*"]
+        },
+        {
+          "index_patterns": [".ds-wazuh-events-raw-v5-*", "wazuh-events-raw-v5*"],
+          "allowed_actions": ["read"]
+        }
+      ]
+    },
+    "tnwks-converter": {
+      "description": "The converter: the state of SCA and vulnerabilities, the agent list, and the state of the content feed. No event, no inventory, no file integrity.",
+      "cluster_permissions": ["cluster_composite_ops_ro"],
+      "index_permissions": [
+        {
+          "index_patterns": ["wazuh-states-sca", "wazuh-states-vulnerabilities", ".wazuh-cti-consumers"],
+          "allowed_actions": ["read"]
+        },
+        {
+          "index_patterns": ["wazuh-metrics-agents", ".ds-wazuh-metrics-agents-*"],
+          "fls": [
+            "@timestamp",
+            "wazuh.agent.id",
+            "wazuh.agent.name",
+            "wazuh.agent.status",
+            "wazuh.agent.last_seen",
+            "wazuh.agent.disconnected_at"
+          ],
+          "allowed_actions": ["read"]
+        }
+      ]
+    }
+  },
+  "users": {
+    "tnwks-settings": {
+      "password_file": "/secrets/settings/password",
+      "roles": ["tnwks-settings"]
+    },
+    "tnwks-converter": {
+      "password_file": "/secrets/converter/password",
+      "roles": ["tnwks-converter"]
+    }
+  }
+}

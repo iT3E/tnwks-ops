@@ -1,0 +1,244 @@
+---
+# The certificates of the Wazuh server, from a CA of its own that cert-manager
+# makes in the cluster: a self-signed issuer signs the CA once, and the CA
+# issues the rest. No key is in git, and no person makes one.
+#
+# The vendor's manifests mount the files under fixed names (for example
+# indexer.pem, manager-remoted.pem): ../ks.yaml maps the keys of these Secrets
+# (tls.crt, tls.key, ca.crt) to those names with a projected volume.
+#
+# The indexer reads the DN of its own certificate and of the admin certificate
+# from the files at each start, and writes them to plugins.security.nodes_dn
+# and plugins.security.authcz.admin_dn (wazuh-docker v5.0.0-rc2,
+# build-docker-images/wazuh-indexer/config/entrypoint.sh, configureOpensearch),
+# so the DNs here are ours, not the vendor's demo DNs. OpenSearch reads a
+# private key in PKCS#8 only, so each key of the indexer side is PKCS#8.
+#
+# An init container of each pod copies the files at its start, so a renewed
+# certificate takes effect at the next start: Reloader restarts each workload
+# when one of its Secrets changes (the annotations in ../ks.yaml). A leaf
+# certificate lasts 90 days and renews 30 days before its end.
+#
+# A rebuild of the cluster makes a new CA, and each agent then enrolls again
+# (README.md, "Certificates").
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: wazuh-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wazuh-ca
+spec:
+  isCA: true
+  commonName: wazuh-ca
+  subject:
+    organizations: ["tnwks"]
+  secretName: wazuh-ca
+  duration: 87600h
+  renewBefore: 720h
+  issuerRef:
+    name: wazuh-selfsigned
+    kind: Issuer
+  privateKey:
+    algorithm: RSA
+    size: 3072
+    encoding: PKCS8
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: wazuh-ca
+spec:
+  ca:
+    secretName: wazuh-ca
+---
+# The indexer node: HTTPS on 9200 and the transport on 9300. The transport
+# checks the host name against the published name of the node
+# (transport.ssl.enforce_hostname_verification in the image), which the
+# vendor's StatefulSet sets to <pod>.wazuh-indexer.<namespace>.svc.cluster.local.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wazuh-indexer-node
+spec:
+  secretName: wazuh-indexer-node
+  commonName: wazuh-indexer
+  subject:
+    organizations: ["tnwks"]
+    organizationalUnits: ["wazuh"]
+  dnsNames:
+    - wazuh-indexer
+    - wazuh-indexer.security.svc
+    - wazuh-indexer.security.svc.cluster.local
+    - wazuh-indexer-0.wazuh-indexer
+    - wazuh-indexer-0.wazuh-indexer.security.svc
+    - wazuh-indexer-0.wazuh-indexer.security.svc.cluster.local
+  duration: 2160h
+  renewBefore: 720h
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+  issuerRef:
+    name: wazuh-ca
+    kind: Issuer
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    encoding: PKCS8
+    rotationPolicy: Always
+---
+# The admin certificate of the indexer: the image applies its security
+# configuration with it. Only the indexer pod mounts it.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wazuh-indexer-admin
+spec:
+  secretName: wazuh-indexer-admin
+  commonName: wazuh-indexer-admin
+  subject:
+    organizations: ["tnwks"]
+    organizationalUnits: ["wazuh"]
+  duration: 2160h
+  renewBefore: 720h
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  issuerRef:
+    name: wazuh-ca
+    kind: Issuer
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    encoding: PKCS8
+    rotationPolicy: Always
+---
+# The client certificate of the manager for the indexer (the vendor's
+# manager.pem, installed as indexer-connector.pem).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wazuh-manager-indexer-client
+spec:
+  secretName: wazuh-manager-indexer-client
+  commonName: wazuh-manager
+  subject:
+    organizations: ["tnwks"]
+    organizationalUnits: ["wazuh"]
+  duration: 2160h
+  renewBefore: 720h
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  issuerRef:
+    name: wazuh-ca
+    kind: Issuer
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    encoding: PKCS8
+    rotationPolicy: Always
+---
+# The listener of the agents on 1517, and the legacy enrollment listener,
+# which config/wazuh-manager.conf keeps off. An enrollment token pins the CA
+# that signs it (the manager serves ca.crt on GET /cacerts).
+# WAZUH_AGENTS_HOST is the name the agents dial: a key of the cluster-settings
+# that the owner adds with WAZUH_AGENTS_LB_ADDR (README.md).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wazuh-manager-remoted
+spec:
+  secretName: wazuh-manager-remoted
+  commonName: wazuh-manager
+  subject:
+    organizations: ["tnwks"]
+    organizationalUnits: ["wazuh"]
+  dnsNames:
+    - ${WAZUH_AGENTS_HOST}
+    - wazuh-agents.security.svc.cluster.local
+  ipAddresses:
+    - ${WAZUH_AGENTS_LB_ADDR}
+  duration: 2160h
+  renewBefore: 720h
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    name: wazuh-ca
+    kind: Issuer
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    encoding: PKCS8
+    rotationPolicy: Always
+---
+# The manager API on 55000, which the dashboard and the enrollment step of the
+# agent roles call.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wazuh-manager-apid
+spec:
+  secretName: wazuh-manager-apid
+  commonName: wazuh-api
+  subject:
+    organizations: ["tnwks"]
+    organizationalUnits: ["wazuh"]
+  dnsNames:
+    - wazuh-api
+    - wazuh-api.security.svc
+    - wazuh-api.security.svc.cluster.local
+  duration: 2160h
+  renewBefore: 720h
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    name: wazuh-ca
+    kind: Issuer
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    encoding: PKCS8
+    rotationPolicy: Always
+---
+# The dashboard on 443.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wazuh-dashboard
+spec:
+  secretName: wazuh-dashboard
+  commonName: wazuh-dashboard
+  subject:
+    organizations: ["tnwks"]
+    organizationalUnits: ["wazuh"]
+  dnsNames:
+    - dashboard
+    - dashboard.security.svc
+    - dashboard.security.svc.cluster.local
+  duration: 2160h
+  renewBefore: 720h
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    name: wazuh-ca
+    kind: Issuer
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    encoding: PKCS8
+    rotationPolicy: Always
