@@ -12,6 +12,9 @@ with no change. This repository changes them only through the patches of
 | Licence | GPL-2.0, `upstream/LICENSE` |
 | Sums | `upstream.sha256`: the sha256 of each file of `upstream/` |
 
+The files under `upstream/` stay under GPL-2.0 (`upstream/LICENSE`); the
+rest of this repository keeps its own licence.
+
 The files, with their paths in the vendor's repository:
 
 - `LICENSE`
@@ -47,18 +50,21 @@ The files of `wazuh/` that this app leaves out, and why, are in
 
 ## How to update
 
-Nothing tracks the tag of these files: Renovate reads the images of
-`../ks.yaml`, not this copy. To move to a new tag:
+Nothing tracks the tag of these files: Renovate updates the images of
+`../ks.yaml` (its flux manager), and a rule of `.github/renovate.json5` keeps
+it off this copy. To move to a new tag:
 
 1. Clone the vendor's repository at the new tag, and note its commit.
 2. Copy the files of the list above over `upstream/`, with the same paths.
    Read the vendor's changelog for a new file under `wazuh/` that the
    server needs, and for one that moves.
-3. Write `upstream.sha256` again, from `upstream/`:
+3. Write `upstream.sha256` again. From `server/`:
    `(cd upstream && find . -type f | sed 's|^\./||' | LC_ALL=C sort | xargs sha256sum) > upstream.sha256`.
-4. Change the tag and the commit here, in `../ks.yaml`, and in
+4. For a file that is added or moves: change `kustomization.yaml`, the list
+   of files above, and `KEPT` in `security/tests/test_wazuh_manifests.py`.
+5. Change the tag and the commit here, in `../ks.yaml`, and in
    `security/tests/test_wazuh_manifests.py` (`TAG`, `COMMIT`), and the
    images of the same tag in `../ks.yaml`.
-5. Read the diff of `upstream/` in the pull request: each changed line of
+6. Read the diff of `upstream/` in the pull request: each changed line of
    the vendor is in it. Check that each patch of `../ks.yaml` still applies,
    with the render test (`kustomize` installed).
