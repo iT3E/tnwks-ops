@@ -1,10 +1,11 @@
 ---
 # Step 1 of the settings of the Wazuh indexer: the accounts of
-# config/accounts.json (scripts/accounts.py, ../../wazuh/README.md,
-# "Accounts"). It runs only when its files change, never each day: the name
-# carries the first 10 hex digits of the sha256 of config/accounts.json,
-# scripts/indexer.py and scripts/accounts.py, one after another, so a change
-# of one of them makes a new Job, Flux runs it, and prune removes the old one.
+# ../app/config/accounts.json (../app/scripts/accounts.py,
+# ../../wazuh/README.md, "Accounts"). It runs only when its files change,
+# never each day: the name carries the first 10 hex digits of the sha256 of
+# config/accounts.json, scripts/indexer.py and scripts/accounts.py of ../app,
+# one after another, so a change of one of them makes a new Job, Flux runs
+# it, and prune removes the old one.
 # security/tests/test_wazuh_settings.py checks the name, and names the right
 # one when it differs.
 #
@@ -20,7 +21,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wazuh-accounts-9dd8c36fba
+  name: wazuh-accounts-6792a82811
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:

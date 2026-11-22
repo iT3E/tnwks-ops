@@ -7,9 +7,13 @@
   ],
   "roles": {
     "tnwks-settings": {
-      "description": "Step 2: the ISM policies of tnwks, the move of the indices of their streams to them, the raw events setting (the Setup plugin writes its document in .wazuh-settings with the rights of the caller, as a bulk request: the cluster action indices:data/write/bulk and the index actions on .wazuh-settings), and the document count of the streams that hold none. No Security API, and no read of a document.",
+      "description": "Step 2: the ISM policies of tnwks (the five ISM actions of the script: policy get and write, managed index add, change and explain; index-management 3.6.0.0, transport/action/*/*Action.kt), the move of the indices of their streams to them, the raw events setting (the Setup plugin writes its document in .wazuh-settings with the rights of the caller, as a bulk request: the cluster action indices:data/write/bulk and the index actions on .wazuh-settings), and the document count of the streams that hold none. No Security API, and no read of a document.",
       "cluster_permissions": [
-        "cluster:admin/opendistro/ism/*",
+        "cluster:admin/opendistro/ism/policy/get",
+        "cluster:admin/opendistro/ism/policy/write",
+        "cluster:admin/opendistro/ism/managedindex/add",
+        "cluster:admin/opendistro/ism/managedindex/change",
+        "cluster:admin/opendistro/ism/managedindex/explain",
         "cluster:admin/setup/settings/update",
         "indices:data/write/bulk"
       ],

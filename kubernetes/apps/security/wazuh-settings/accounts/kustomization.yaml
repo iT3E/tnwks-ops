@@ -1,0 +1,29 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+# Step 1 of the settings of the Wazuh indexer, the accounts
+# (../../wazuh/README.md, "Accounts"), and the network rule of both steps.
+# security-wazuh-accounts applies it with wait: true, and
+# security-wazuh-settings (../app) depends on it (../ks.yaml), so step 2 runs
+# after the Job of step 1 completes. The files of the step stay in ../app with
+# those of step 2, because both steps share ../app/scripts/indexer.py.
+# The Secrets of step 1 are SOPS files that the owner makes and lists here
+# before a cluster lists this app (../../wazuh/README.md, "Secrets"):
+#   - ./secret-accounts-user.sops.yaml
+#   - ./secret-accounts-hashes.sops.yaml
+resources:
+  - ./networkpolicy.yaml
+  - ./accounts-job.yaml
+configMapGenerator:
+  # The files of step 1, which the hash in the name of its Job covers.
+  # Tests: security/tests/test_wazuh_settings.py.
+  - name: wazuh-accounts-files
+    files:
+      - ../app/config/accounts.json
+      - ../app/scripts/indexer.py
+      - ../app/scripts/accounts.py
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

@@ -52,8 +52,9 @@ MEMORY_ROWS = {
     "wazuh-accounts": "Wazuh account job (step 2)",
     "wazuh-settings": "Wazuh settings job (step 2)",
 }
-# The workloads of the settings, in ../wazuh-settings/app.
-SETTINGS_WORKLOADS = ("accounts-job.yaml", "settings-job.yaml", "settings-cronjob.yaml")
+# The workloads of the settings: step 1 in ../wazuh-settings/accounts, step 2
+# in ../wazuh-settings/app.
+SETTINGS_WORKLOADS = ("accounts/accounts-job.yaml", "app/settings-job.yaml", "app/settings-cronjob.yaml")
 
 
 def docs(path: Path) -> list[dict]:
@@ -96,9 +97,9 @@ def settings_pods() -> dict:
     """The pod spec of each workload of the settings, by file name."""
     found = {}
     for name in SETTINGS_WORKLOADS:
-        (workload,) = docs(SETTINGS / "app" / name)
+        (workload,) = docs(SETTINGS / name)
         spec = workload["spec"]
-        found[name] = (spec["jobTemplate"]["spec"] if "jobTemplate" in spec else spec)["template"]["spec"]
+        found[name.split("/")[1]] = (spec["jobTemplate"]["spec"] if "jobTemplate" in spec else spec)["template"]["spec"]
     return found
 
 
@@ -271,12 +272,38 @@ def test_the_feed_is_the_one_host_of_the_indexer():
     assert by_name["wazuh-indexer-feed"]["spec"]["endpointSelector"] == {"matchLabels": {"app": "wazuh-indexer"}}
 
 
+def test_step2_runs_after_step1_completes():
+    """Step 1 is a Flux Kustomization of its own with wait: true, and the one of
+    step 2 depends on it, so Flux applies step 2 after the Job of step 1
+    completes."""
+    by_name = {d["metadata"]["name"]: d["spec"] for d in docs(SETTINGS / "ks.yaml")}
+    assert sorted(by_name) == ["security-wazuh-accounts", "security-wazuh-settings"]
+    accounts, settings = by_name["security-wazuh-accounts"], by_name["security-wazuh-settings"]
+    assert accounts["path"] == "./kubernetes/apps/security/wazuh-settings/accounts"
+    assert accounts["wait"] is True and accounts["prune"] is True
+    assert {d["name"] for d in accounts["dependsOn"]} == {"security-wazuh-server"}
+    assert settings["path"] == "./kubernetes/apps/security/wazuh-settings/app"
+    assert {d["name"] for d in settings["dependsOn"]} == {
+        "security-wazuh-server", "security-converter", "security-wazuh-accounts"}
+    (job,) = docs(SETTINGS / "accounts/accounts-job.yaml")
+    # The timeout of the health check is more than the deadline of the Job.
+    seconds = int(accounts["timeout"].rstrip("m")) * 60
+    assert seconds > job["spec"]["activeDeadlineSeconds"]
+    step1 = yaml.safe_load((SETTINGS / "accounts/kustomization.yaml").read_text())
+    step2 = yaml.safe_load((SETTINGS / "app/kustomization.yaml").read_text())
+    assert step1["resources"] == ["./networkpolicy.yaml", "./accounts-job.yaml"]
+    assert step2["resources"] == ["./settings-job.yaml", "./settings-cronjob.yaml"]
+    assert [g["name"] for g in step1["configMapGenerator"]] == ["wazuh-accounts-files"]
+    assert [g["name"] for g in step2["configMapGenerator"]] == ["wazuh-settings-files"]
+
+
 def test_no_secret_is_in_git():
     for path in our_files():
         assert not path.name.endswith(".sops.yaml"), path
         if path.suffix == ".yaml":
             assert "Secret" not in {d.get("kind") for d in docs(path)}, path
-    for kustomization in (APP / "app/kustomization.yaml", SETTINGS / "app/kustomization.yaml"):
+    for kustomization in (APP / "app/kustomization.yaml", SETTINGS / "app/kustomization.yaml",
+                          SETTINGS / "accounts/kustomization.yaml"):
         body = yaml.safe_load(kustomization.read_text())
         assert "secretGenerator" not in body
         assert not [r for r in body["resources"] if "secret" in r]

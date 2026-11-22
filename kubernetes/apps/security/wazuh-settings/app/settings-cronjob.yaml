@@ -20,9 +20,9 @@ spec:
     spec:
       backoffLimit: 0
       ttlSecondsAfterFinished: 86400
-      # The wait for the login (300 seconds), the wait for ISM (900 seconds)
+      # The wait for the login (300 seconds), the wait for ISM (1200 seconds)
       # and the calls around them.
-      activeDeadlineSeconds: 1500
+      activeDeadlineSeconds: 1800
       template:
         metadata:
           labels:
@@ -55,7 +55,7 @@ spec:
                 - --secret=/secrets/settings
                 - --results=/results
                 - --login-wait=300
-                - --wait=900
+                - --wait=1200
                 # The renewBefore of the certificates of ../../wazuh/app/certificates.yaml.
                 - --renew-before=720h
                 - --margin=3600

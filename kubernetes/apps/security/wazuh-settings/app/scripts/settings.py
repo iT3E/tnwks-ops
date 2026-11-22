@@ -16,9 +16,11 @@ password of that user. In this order:
   4. Moves each index of the patterns of a stream that is not on the current
      version of its policy (change_policy, or add for an index with no
      policy), and waits until the ISM explain API names the policy and its
-     version on each one. A run that writes no policy finds each index on
-     its policy, so it starts no move. A restart of the indexer before that
-     drops a move that waits (docs/ref/modules/setup/retention.md, "Opting
+     version on each one. A run that writes no policy starts a move for each
+     index that is not on its policy (the first index of a stream, which the
+     Setup plugin puts on the shipped policy, or one that ISM put on another
+     policy), and no other. A restart of the indexer before that drops a
+     move that waits (docs/ref/modules/setup/retention.md, "Opting
      in to a hard time ceiling"). So it moves nothing when the certificates
      of the indexer renew within --margin seconds: Reloader restarts the
      indexer at a renewal. That guard reads the certificate in the TLS
@@ -278,7 +280,7 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
                         help="the folder of the Secret wazuh-settings-user: the file password")
     parser.add_argument("--results", required=True, help="the root of the volume of results")
     parser.add_argument("--login-wait", type=float, default=300, help="seconds to wait for the login")
-    parser.add_argument("--wait", type=float, default=900, help="seconds to wait for ISM")
+    parser.add_argument("--wait", type=float, default=1200, help="seconds to wait for ISM")
     parser.add_argument("--renew-before", type=hours, default=720,
                         help="the renewBefore of the certificates of the server, as 720h")
     parser.add_argument("--margin", type=float, default=3600,

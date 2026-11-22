@@ -13,6 +13,7 @@ an age of retention.json fails it until the same change edits PINNED.
 """
 
 import copy
+import fnmatch
 import hashlib
 import importlib.util
 import json
@@ -26,6 +27,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "kubernetes/apps/security/wazuh-settings/app"
+# Step 1 and the network rule, in their own Flux Kustomization.
+ACCOUNTS = ROOT / "kubernetes/apps/security/wazuh-settings/accounts"
 CONFIG = APP / "config"
 SCRIPTS = APP / "scripts"
 CERTIFICATES = ROOT / "kubernetes/apps/security/wazuh/app/certificates.yaml"
@@ -442,6 +445,53 @@ def test_step2_moves_each_index_to_the_new_version_of_a_changed_policy(tmp_path)
     assert "policy tnwks-stream-metrics: unchanged" in lines
 
 
+def test_step2_moves_the_first_index_of_a_stream_from_the_shipped_policy(tmp_path):
+    """The Setup plugin puts the first backing index of a stream on the shipped
+    policy at its start (wazuh-indexer-plugins v5.0.0-rc2, StreamIndex.java,
+    registerWithISM). A run moves it, and the count goes back to 0."""
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    assert run2(fake, argv)[0] == 0
+    assert results(argv)["off_policy"] == results(argv)["no_policy"] == 0
+    # Between two runs: a start of the indexer registers the first index of the
+    # findings stream on its shipped policy, and a rollover of the events
+    # stream makes an index that ISM puts on the policy of tnwks by its
+    # ism_template priority (index-management 3.6.0.0, ManagedIndexCoordinator).
+    fake.policies["stream-findings-policy"] = {"seq": 2, "term": 1, "policy": {"description": "shipped"}}
+    fake.indices[".ds-wazuh-findings-v5-system-000001"] = ["stream-findings-policy", 2, 1]
+    events = fake.policies["tnwks-stream-events"]
+    fake.indices[".ds-wazuh-events-v5-system-000002"] = ["tnwks-stream-events", events["seq"], events["term"]]
+    writes = len(fake.writes)
+    code, lines = run2(fake, argv)
+    assert code == 0, lines
+    moves = [w for w in fake.writes[writes:] if "/_ism/add/" in w[1] or "/_ism/change_policy/" in w[1]]
+    assert moves == [("POST", "/_plugins/_ism/change_policy/.ds-wazuh-findings-v5-system-000001")]
+    findings = fake.policies["tnwks-stream-findings"]
+    assert fake.indices[".ds-wazuh-findings-v5-system-000001"] == [
+        "tnwks-stream-findings", findings["seq"], findings["term"]]
+    assert results(argv)["off_policy"] == results(argv)["no_policy"] == 0
+
+
+SHIPPED_STATES = [("hot", ["retry", "rollover"], ["delete"]), ("delete", ["retry", "delete"], [])]
+
+
+def test_each_policy_has_the_states_and_actions_of_the_shipped_policies():
+    """The shipped stream policies at v5.0.0-rc2 have a state hot with the
+    rollover and a state delete with the delete
+    (plugins/setup/src/main/resources/policies/). Each policy of tnwks has the
+    same states with the same actions, so a move from a shipped policy finds
+    the state of the index in the new policy."""
+    for policy_id, policy in settings_step.build_policies(retention()).items():
+        assert policy["default_state"] == "hot", policy_id
+        shape = [(st["name"], [k for a in st["actions"] for k in a], [t["state_name"] for t in st["transitions"]])
+                 for st in policy["states"]]
+        assert shape == SHIPPED_STATES, policy_id
+        (hot, delete) = policy["states"]
+        assert list(hot["transitions"][0]["conditions"]) == ["min_index_age"], policy_id
+        assert delete["actions"][0]["delete"] == {}, policy_id
+
+
 def test_step2_writes_the_counts_and_fails_when_ism_does_not_apply_a_move(tmp_path):
     fake = FakeIndexer()
     fake.add_settings_user()
@@ -520,7 +570,8 @@ def accounts():
 
 
 def docs(name):
-    return [d for d in yaml.safe_load_all((APP / name).read_text()) if d]
+    folder = ACCOUNTS if name == "accounts-job.yaml" else APP
+    return [d for d in yaml.safe_load_all((folder / name).read_text()) if d]
 
 
 def pod(workload: dict) -> dict:
@@ -614,11 +665,69 @@ def test_the_converter_reads_no_host_field_and_no_event():
             assert permission["allowed_actions"] == ["indices:monitor/stats"]
 
 
+# The streams of the policies of tnwks, by the name of each data stream and of
+# its backing indices: OpenSearch names a backing index .ds-<stream>-<generation>
+# (OpenSearch 3.6.0, DataStream.getDefaultBackingIndexName). ISM applies a policy
+# to a new backing index only when the user who wrote it holds
+# indices:admin/opensearch/ism/managedindex on the name that the template
+# matched (index-management 3.6.0.0, ManagedIndexCoordinator.canPolicyManagedIndex).
+STREAM_NAMES = [
+    ".ds-wazuh-events-v5-*", "wazuh-events-v5*",
+    ".ds-wazuh-findings-v5-*", "wazuh-findings-v5*",
+    ".ds-wazuh-events-raw-v5-*", "wazuh-events-raw-v5*",
+    ".ds-wazuh-metrics-*", "wazuh-metrics*",
+]
+
+
+def test_the_index_permissions_of_each_role_are_pinned():
+    roles = accounts()["roles"]
+    assert roles["tnwks-settings"]["index_permissions"] == [
+        {"index_patterns": STREAM_NAMES, "allowed_actions": ["indices:admin/opensearch/ism/*"]},
+        {"index_patterns": [".ds-wazuh-events-raw-v5-*", "wazuh-events-raw-v5*",
+                            ".ds-wazuh-active-responses-*", "wazuh-active-responses*"],
+         "allowed_actions": ["indices:monitor/stats"]},
+        {"index_patterns": [".wazuh-settings"],
+         "allowed_actions": ["indices:data/write/index", "indices:data/write/bulk[s]"]},
+    ]
+    assert roles["tnwks-converter"]["index_permissions"] == [
+        {"index_patterns": ["wazuh-states-sca", "wazuh-states-vulnerabilities", ".wazuh-cti-consumers"],
+         "allowed_actions": ["read"]},
+        {"index_patterns": ["wazuh-metrics-agents", ".ds-wazuh-metrics-agents-*"],
+         "fls": ["@timestamp", "wazuh.agent.id", "wazuh.agent.name", "wazuh.agent.status",
+                 "wazuh.agent.last_seen", "wazuh.agent.disconnected_at"],
+         "allowed_actions": ["read"]},
+        {"index_patterns": ["wazuh-*", ".ds-wazuh-*", ".wazuh-*"], "allowed_actions": ["indices:monitor/stats"]},
+    ]
+    assert roles["tnwks-converter"]["cluster_permissions"] == ["cluster_composite_ops_ro"]
+
+
+@pytest.mark.parametrize("stream", ["wazuh-events-v5-system-activity", "wazuh-findings-v5-vulnerabilities",
+                                    "wazuh-events-raw-v5", "wazuh-metrics-agents", "wazuh-metrics-comms"])
+def test_the_user_for_settings_may_manage_each_stream_and_its_backing_indices(stream):
+    def matched(name):
+        return any(fnmatch.fnmatchcase(name, p) for p in STREAM_NAMES)
+
+    for name in (stream, f".ds-{stream}-000001", f".ds-{stream}-000002"):
+        assert matched(name), name
+    for pattern in (p for s in retention()["streams"].values() for p in s["patterns"]):
+        assert matched(pattern.rstrip("*") + "x"), pattern
+
+
 def test_the_user_for_settings_has_no_security_api_and_reads_no_document():
     role = accounts()["roles"]["tnwks-settings"]
     assert "restapi" not in json.dumps(role) and "security" not in json.dumps(role["cluster_permissions"])
-    assert role["cluster_permissions"] == ["cluster:admin/opendistro/ism/*", "cluster:admin/setup/settings/update",
-                                           "indices:data/write/bulk"]
+    # The five ISM actions that the script calls, by their names in
+    # index-management 3.6.0.0 (transport/action/*/*Action.kt, NAME), and no
+    # other ISM action.
+    assert role["cluster_permissions"] == [
+        "cluster:admin/opendistro/ism/policy/get",
+        "cluster:admin/opendistro/ism/policy/write",
+        "cluster:admin/opendistro/ism/managedindex/add",
+        "cluster:admin/opendistro/ism/managedindex/change",
+        "cluster:admin/opendistro/ism/managedindex/explain",
+        "cluster:admin/setup/settings/update",
+        "indices:data/write/bulk",
+    ]
     for permission in role["index_permissions"]:
         assert "read" not in permission["allowed_actions"]
         if permission["index_patterns"] == [".wazuh-settings"]:
@@ -637,10 +746,11 @@ def test_the_name_of_each_job_carries_the_hash_of_its_files(prefix):
     found = [d["metadata"]["name"] for name in ("accounts-job.yaml", "settings-job.yaml") for d in docs(name)
              if d["metadata"]["name"].startswith(prefix + "-")]
     assert found == [want], f"the Job of {prefix} must be named {want}: its files changed"
-    kustomization = yaml.safe_load((APP / "kustomization.yaml").read_text())
+    folder, files, base = {"wazuh-accounts": (ACCOUNTS, "wazuh-accounts-files", "../app/"),
+                           "wazuh-settings-git": (APP, "wazuh-settings-files", "./")}[prefix]
+    kustomization = yaml.safe_load((folder / "kustomization.yaml").read_text())
     generated = {g["name"]: g["files"] for g in kustomization["configMapGenerator"]}
-    files = {"wazuh-accounts": "wazuh-accounts-files", "wazuh-settings-git": "wazuh-settings-files"}[prefix]
-    assert generated[files] == [f"./{f}" for f in HASHED[prefix]]
+    assert generated == {files: [base + f for f in HASHED[prefix]]}
 
 
 def test_the_jobs_of_git_stay_and_the_job_of_step2_is_the_pod_of_the_cronjob():
@@ -755,8 +865,9 @@ def test_the_account_user_file_grants_the_security_api_and_holds_no_hash():
     assert not [k for k in user if "hash" in k or "password" in k]
     assert not re.search(r"\$2[aby]\$", (CONFIG / "account-user.json").read_text())
     # Step 1 never reads it: no Job mounts it.
-    kustomization = yaml.safe_load((APP / "kustomization.yaml").read_text())
-    assert not [f for g in kustomization["configMapGenerator"] for f in g["files"] if "account-user" in f]
+    for folder in (ACCOUNTS, APP):
+        kustomization = yaml.safe_load((folder / "kustomization.yaml").read_text())
+        assert not [f for g in kustomization["configMapGenerator"] for f in g["files"] if "account-user" in f]
 
 
 def test_step2_writes_no_policy_again_when_the_api_gives_it_back_with_its_defaults(tmp_path):
