@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-16"?>
 <!-- Managed by tnwks-ops (role windows_usb_attach). With
-     wsl_start_unelevated, it runs with no elevation: usbipd-win attaches a
-     device that is bound with no admin right, and the play binds it. -->
+     wsl_start_unelevated, it runs with no elevation: the play binds each
+     device, and the attach script of the distro (role wsl_usb_attach)
+     attaches it with the usbip client, which needs no Windows right. -->
 <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Principals>
     <Principal id="Author">

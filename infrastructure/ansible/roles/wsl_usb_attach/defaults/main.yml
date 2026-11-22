@@ -14,6 +14,6 @@ wsl_usb_attach_devices:
 wsl_usb_attach_retired_devices:
   - "18d1:9302"   # Google Coral TPU, runtime VID
 
-# The absolute path to usbipd.exe is set in tnwks-usb-attach.sh (USBIPD_EXE
-# overridable there). interop appendWindowsPath is disabled, so a bare name
-# does not resolve.
+# The absolute path to the usbip client of usbipd-win is set in
+# tnwks-usb-attach.sh (USBIP_CLIENT overridable there). interop
+# appendWindowsPath is disabled, so a bare name does not resolve.

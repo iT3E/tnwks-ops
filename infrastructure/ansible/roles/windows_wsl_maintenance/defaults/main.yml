@@ -4,6 +4,13 @@
 #   tnwks-wsl-watchdog  every 5 min and at boot: WSL service up, Ubuntu running,
 #                       the OpenClaw gateway unit active, the Z-Stick attached;
 #                       restarts worker-2 after a cold start of the distro.
+#                       It attaches with usbipd, so a host with
+#                       wsl_start_unelevated passes -SkipUsb: usbipd attach
+#                       reads the list of services at the service control
+#                       manager, which a task with no elevation may not. The
+#                       unit of the distro attaches there (role
+#                       wsl_usb_attach), and zwave-js-ui mounts the folder of
+#                       the node, so a cold start needs no worker restart.
 #   tnwks-vhdx-compact  on demand: offline compaction of the WSL vhdx on E:
 #                       (stops WSL and the cluster; homelab-windows-host notes).
 #

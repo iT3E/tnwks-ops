@@ -23,12 +23,22 @@ flip below) is off unless both -CoralDfuVidPid and -CoralRuntimeVidPid are
 given, which is only for the usbip fallback in coral-detector.md.
 
 Run elevated, or with -NoElevation. usbipd-win needs an admin right to bind a
-device, and none to attach a device that is bound (usbipd-win 4.3.0,
-Usbipd/CommandHandlersCli.cs: Bind checks write access, AttachWsl does not).
+device. `usbipd attach --wsl` and `usbipd list` read the list of services at
+the Windows service control manager (usbipd-win 4.3.0:
+CheckAndReportServerRunning, VBoxUsbMon.IsServiceInstalled,
+ServiceController.GetDevices), and the service control manager grants the
+list of services to interactive and service logons, SYSTEM and the
+Administrators only: a task with no elevation is none of them. `usbipd state`
+and `usbipd --version` do not read it.
 With -NoElevation (the start of WSL with no elevation, Design Doc 0004,
-section 5.9) the script does not bind: the play binds each device, forced,
-and the bind persists across reboots. It then logs to -LogPath and -StatePath,
-in a directory that the account may write.
+section 5.9) the script runs neither bind nor attach nor list: the play binds
+each device, forced, and the bind persists across reboots, and the script
+hands a device that is not attached to the distro, whose script attaches it
+with the usbip client of usbipd-win (role wsl_usb_attach, `--once`). It
+restarts no worker then: worker-2 binds the whole /dev of the distro at
+/hostdev, and the zwave-js-ui pod mounts that folder, so the device node
+reaches it with no restart. It logs to -LogPath
+and -StatePath, in a directory that the account may write.
 
 Devices are matched by VID:PID from the USB InstanceId, NOT busid, because the
 busid changes across reboots and replugs.
@@ -83,6 +93,8 @@ param(
     [string]$CoralRuntimeVidPid = '',
     [string]$WorkerContainer    = 'homelab-wsl-worker-2',
     [string]$WslDistro          = 'Ubuntu',
+    # The attach script in the distro (role wsl_usb_attach), for -NoElevation.
+    [string]$DistroAttach       = '/usr/local/bin/tnwks-usb-attach',
     [int]   $FlipTimeoutSec     = 90,
     [int]   $RestartCooldownMin = 15,
     # NOTE: do NOT default these with $PSScriptRoot. Under `powershell.exe -File`
@@ -232,15 +244,25 @@ function Set-DeviceAttached {
         return [pscustomobject]@{ Present = $true; Changed = $true }
     }
 
-    # bind --force is persistent and safe to repeat; it just ensures the device is
-    # shared before we attach it into the WSL VM. With no elevation the play binds it.
+    # With no elevation: no bind (the play binds it) and no usbipd attach, which
+    # reads the list of services at the service control manager first. The distro attaches the device
+    # with the usbip client, once.
     if ($NoElevation) {
         Write-Log "$Label ($VidPid busid $($device.BusId)): no bind with no elevation; the play binds it" 'INFO'
-    } else {
-        $bind = Invoke-Usbipd @('bind', '--force', '--busid', $device.BusId)
-        if ($bind.ExitCode -ne 0) {
-            Write-Log "$Label bind returned exit $($bind.ExitCode): $($bind.Output)" 'WARN'
+        $attach = Invoke-Native -FilePath 'wsl.exe' -Arguments @('-d', $WslDistro, '-u', 'root', '--exec', $DistroAttach, '--once', $VidPid)
+        if ($attach.ExitCode -ne 0) {
+            Write-Log "$Label attach in the distro FAILED (exit $($attach.ExitCode)): $($attach.Output)" 'ERROR'
+            return [pscustomobject]@{ Present = $true; Changed = $false }
         }
+        Write-Log "$Label ($VidPid): attached in the distro: $($attach.Output)" 'OK'
+        return [pscustomobject]@{ Present = $true; Changed = $true }
+    }
+
+    # bind --force is persistent and safe to repeat; it just ensures the device is
+    # shared before we attach it into the WSL VM.
+    $bind = Invoke-Usbipd @('bind', '--force', '--busid', $device.BusId)
+    if ($bind.ExitCode -ne 0) {
+        Write-Log "$Label bind returned exit $($bind.ExitCode): $($bind.Output)" 'WARN'
     }
     $attach = Invoke-Usbipd @('attach', '--wsl', '--busid', $device.BusId)
     if ($attach.ExitCode -ne 0) {
@@ -389,7 +411,9 @@ function Invoke-Sync {
         Write-Log 'Coral: not handled here (Windows-native detector service)' 'INFO'
     }
 
-    if ($needsRestart -and $NoWorkerRestart) {
+    if ($needsRestart -and $NoElevation) {
+        Write-Log 'device attached; no worker restart with no elevation: worker-2 binds the /dev of the distro' 'INFO'
+    } elseif ($needsRestart -and $NoWorkerRestart) {
         Write-Log 'device attachment changed but worker restart suppressed (-NoWorkerRestart)' 'INFO'
     } elseif ($needsRestart) {
         Restart-WorkerContainer
@@ -397,10 +421,14 @@ function Invoke-Sync {
         Write-Log 'no attachment changes; worker restart not needed' 'OK'
     }
 
-    $final = Invoke-Usbipd @('list')
-    Write-Log 'final usbipd state:'
-    foreach ($line in ($final.Output -split "`r?`n")) {
-        if ($line.Trim()) { Write-Log "  $line" }
+    # usbipd list reads the list of services at the service control manager,
+    # which a task with no elevation may not: the state above is the log then.
+    if (-not $NoElevation) {
+        $final = Invoke-Usbipd @('list')
+        Write-Log 'final usbipd state:'
+        foreach ($line in ($final.Output -split "`r?`n")) {
+            if ($line.Trim()) { Write-Log "  $line" }
+        }
     }
     Write-Log '=== tnwks-usb-attach sync done ==='
     return 0
