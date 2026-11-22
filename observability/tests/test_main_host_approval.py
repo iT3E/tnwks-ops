@@ -21,10 +21,12 @@ code of the plugin in the image on the config, with the values of the env,
 and stops the start first (test_main_agent.py has the other rows of the
 values check).
 
-The host server has no route yet (task 6.22): the plugin names the route
-main-host and the env var MCP_HOST_KEY, and neither exists. With no key in
-the env the resolver of the plugin gives no connection, so the agent has no
-host tool and the server gets no call.
+The plugin names the route main-host of the host server (task 6.22) and
+the env var MCP_HOST_KEY, which the store step of the lead puts in
+agent-secret with its hash on the route. With no key in the env the
+resolver of the plugin gives no connection, so the agent has no host tool
+and the server gets no call. The read list holds the nine lines of the
+design (test_main_host_server.py).
 
 The container tests need Docker. Without it a test is skipped, except in
 CI, where it fails. RESTORE_TEST_IMAGE names a local build of the image.
@@ -37,6 +39,7 @@ from pathlib import Path
 import pytest
 import yaml
 from test_main_agent import APP, CONFIG, GATEWAY_CONFIG, MAIN, good, run_values
+from test_main_host_server import READ_LIST
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_PATH = "/opt/openclaw/local-plugins/host-approval"
@@ -72,8 +75,10 @@ def test_the_plugin_config_is_the_form_of_the_design():
     assert entry()["config"] == {
         "serverPrefixes": ["host__"],
         "readProfile": "agent",
-        # The fixed lines of the ten checks come with the write step.
-        "readList": [],
+        # The nine lines of the design for the user in the distro of site 1
+        # (test_main_host_server.py); the PowerShell lines of the ten checks
+        # come with the write step.
+        "readList": READ_LIST,
         # The browser tools that can send a form (test_main_browser.py).
         "promptTools": ["browser__browser_click", "browser__browser_drag", "browser__browser_fill_form",
                         "browser__browser_handle_dialog", "browser__browser_press_key",
@@ -104,21 +109,39 @@ def test_the_tools_that_change_the_product_are_denied():
     assert {"openclaw", "plugins", "terminal", "portal"} <= set(config()["tools"]["deny"])
 
 
-def test_the_host_server_has_no_key_yet_and_no_server_entry():
-    """The route of the host server is in git with a placeholder hash
-    (test_main_host_server.py), so it takes no key. No server entry of the
-    config points at it, and no part of the pod or the config names the key
-    of the plugin until the lead makes the key."""
+def host_listed() -> bool:
+    k = yaml.safe_load((ROOT / "kubernetes/apps/ai/agents/main/kustomization.yaml").read_text())
+    return "./host-mcp/ks.yaml" in k["resources"]
+
+
+def test_the_host_key_is_in_agent_secret_once_the_server_is_listed():
+    """With the host server listed, the key of the plugin is in agent-secret
+    of main as ciphertext, and its hash is on the route
+    (test_main_host_server.py): the store step of the lead makes both, on
+    top of the go-live commit, so this test fails until then. With the
+    server not listed (the way back), the key and its hash may stay, or
+    neither: a placeholder hash and no file of the pod that names the key.
+    No server entry of the config points at the route, and the config names
+    the key in the plugin entry only."""
     (route,) = [r for r in yaml.safe_load(GATEWAY_CONFIG.read_text())["routes"] if r["name"] == HOST_ROUTE]
     ((key,),) = [route["policies"]["apiKey"]["keys"]]
-    assert re.fullmatch(r"sha256:0{63}[0-9]", key["keyHash"])
+    holders = sorted(p.name for p in APP.iterdir() if KEY_ENV in p.read_text())
+    stored = holders == ["secret.sops.yaml"]
+    if host_listed():
+        assert stored, f"the key is not stored yet: host-mcp-store.py gateway-key ({holders})"
+    if stored:
+        (secret,) = [d for d in yaml.safe_load_all((APP / "secret.sops.yaml").read_text()) if d]
+        # No value is printed in a failure message: the assert is on a bool.
+        assert str(secret["stringData"][KEY_ENV]).startswith("ENC[AES256_GCM,data:")
+        assert not re.fullmatch(r"sha256:0{63}[0-9]", key["keyHash"])
+    else:
+        assert holders == []
+        assert re.fullmatch(r"sha256:0{63}[0-9]", key["keyHash"])
     c = config()
     for name, server in c["mcp"]["servers"].items():
         assert f"/{HOST_ROUTE}/" not in server["url"], name
     text = CONFIG.read_text()
     assert text.count(KEY_ENV) == 1  # the plugin entry only
-    for path in APP.iterdir():
-        assert KEY_ENV not in path.read_text(), path.name
     assert not any(t.startswith("host__") for t in c["tools"]["sandbox"]["tools"]["alsoAllow"])
 
 

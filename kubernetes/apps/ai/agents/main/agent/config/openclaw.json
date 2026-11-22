@@ -327,7 +327,17 @@
         "config": {
           "serverPrefixes": ["host__"],
           "readProfile": "agent",
-          "readList": [],
+          "readList": [
+            "uptime",
+            "free -m",
+            "ps -eo comm,pcpu,pmem --sort=-pcpu",
+            "df -h",
+            "ip addr show",
+            "ip route show",
+            "ss -t -l -n",
+            "uname -r",
+            "systemctl status --no-pager --lines=0 tnwks-host-check.timer tnwks-gdrive-sync.timer tnwks-aruba-backup.timer tnwks-frr.service tnwks-site-routing.service"
+          ],
           "promptTools": [
             "browser__browser_click",
             "browser__browser_drag",

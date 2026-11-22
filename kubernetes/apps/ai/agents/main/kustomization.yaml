@@ -35,6 +35,8 @@ resources:
   - ./terraform-mcp/ks.yaml
   # Not ready until the Secret github-mcp-token exists (github-mcp/ks.yaml).
   - ./github-mcp/ks.yaml
-  # The host server of main (host-mcp/ks.yaml) is not listed until the
-  # owner's apply of its user and his gates (docs/apps/host-mcp.md, "What
-  # waits").
+  # The host server of main (host-mcp/ks.yaml), behind the central MCP
+  # gateway (route main-host), with the host approval plugin of the agent as
+  # its prompt (docs/apps/host-mcp.md). The way back is to remove this line:
+  # Flux then prunes its pod, Service, policy and Secret.
+  - ./host-mcp/ks.yaml

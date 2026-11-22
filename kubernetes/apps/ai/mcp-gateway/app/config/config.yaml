@@ -696,7 +696,7 @@ routes:
             name: Authorization
             prefix: "Bearer "
         keys:
-          - keyHash: "sha256:0000000000000000000000000000000000000000000000000000000000000007"
+          - keyHash: "sha256:4cd647220ca22d2350cfd945185ad2f54ef4d20c3e7a2cca4c4ae9e71afd56a7"
             metadata: {client: main-host, route: main-host}
       # A read on a host waits up to the command timeout of the server (30 s).
       timeout:

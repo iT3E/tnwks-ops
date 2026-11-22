@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.297.0 - 2026-11-22
+
+### Added
+
+* agents: the host server of main goes live behind the route main-host, with the nine read lines of the design for the user in the distro of site 1; each other call waits for the yes of the owner, and each gateway probe tries the server straight
+
 ## v2.296.1 - 2026-11-22
 
 ### Fixed
