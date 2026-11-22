@@ -243,11 +243,37 @@ def test_the_memory_lines_are_those_of_the_readme():
         assert found[container]["requests"]["memory"] == found[container]["limits"]["memory"]
 
 
-def test_the_heap_is_half_of_the_indexer_line():
+def test_the_memory_lines_of_this_readme_are_those_of_the_manifests():
+    """The table of wazuh/README.md, "Memory": the request and the limit of
+    each container, as the patches and the settings set them."""
+    rows = {}
+    for line in (APP / "README.md").read_text().splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        name = re.match(r"`([a-z-]+)`", cells[0]) if len(cells) == 3 else None
+        if name and name.group(1) in MEMORY_ROWS:
+            unit = r"\d+ (?:GiB|MiB)"
+            rows[name.group(1)] = (mib(re.match(unit, cells[1]).group(0)), mib(re.match(unit, cells[2]).group(0)))
+    found = {}
+    for (kind, _), body in patches().items():
+        if kind in ("StatefulSet", "Deployment"):
+            for c in body["spec"]["template"]["spec"]["containers"]:
+                found[c["name"]] = c["resources"]
+    for spec in settings_pods().values():
+        for c in spec["containers"]:
+            found[c["name"]] = c["resources"]
+    assert set(rows) == set(MEMORY_ROWS)
+    for name, (request, limit) in rows.items():
+        assert (mib(found[name]["requests"]["memory"]), mib(found[name]["limits"]["memory"])) == (request, limit), name
+
+
+def test_the_heap_is_under_half_of_the_indexer_line():
+    """OpenSearch recommends a heap of half of the memory of the system; the
+    engine and the page cache use the rest (wazuh/README.md, "Memory")."""
     (indexer,) = patches()[("StatefulSet", "wazuh-indexer")]["spec"]["template"]["spec"]["containers"]
     opts = {e["name"]: e.get("value") for e in indexer["env"]}["OPENSEARCH_JAVA_OPTS"]
     assert "-Xms1536m" in opts.split() and "-Xmx1536m" in opts.split()
-    assert 1536 * 2 == mib(indexer["resources"]["limits"]["memory"])
+    assert mib(indexer["resources"]["limits"]["memory"]) == 4096
+    assert 1536 * 2 <= mib(indexer["resources"]["limits"]["memory"])
     assert "heap of 1.5 GiB" in (SECURITY / "README.md").read_text()
 
 

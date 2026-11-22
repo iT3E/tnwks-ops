@@ -161,7 +161,8 @@ spec:
     # non-loopback address), and node.store.allow_mmap false keeps the
     # indexer off memory maps, so the check of vm.max_map_count does not apply
     # and the indexer needs no node sysctl.
-    # The heap is half of the memory line. The update check ping of the
+    # The heap is 1536 MiB, under half of the memory line (README.md,
+    # "Memory"). The update check ping of the
     # Content Manager is off. A volume of 30 GiB (Design Doc 0004, 10.1).
     - target:
         kind: StatefulSet
@@ -215,8 +216,8 @@ spec:
               containers:
                 - name: wazuh-indexer
                   resources:
-                    requests: {cpu: 250m, memory: 3Gi}
-                    limits: {cpu: null, memory: 3Gi}
+                    requests: {cpu: 250m, memory: 4Gi}
+                    limits: {cpu: null, memory: 4Gi}
                   env:
                     - name: OPENSEARCH_JAVA_OPTS
                       value: "-Xms1536m -Xmx1536m -Dlog4j2.formatMsgNoLookups=true"

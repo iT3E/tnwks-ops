@@ -1,0 +1,3 @@
+kind: Changed
+body: 'security: the memory limit and request of the Wazuh indexer go from 3 GiB to 4 GiB, by the owner''s decision for the budget of step 2; the heap stays at 1536 MiB. The merge replaces the indexer pod once.'
+time: 2026-11-22T22:00:00.000000000Z
