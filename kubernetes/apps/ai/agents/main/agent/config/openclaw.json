@@ -75,7 +75,28 @@
       "github__list_pull_requests",
       "github__list_releases",
       "github__list_tags",
-      "github__pull_request_read"
+      "github__pull_request_read",
+      "browser__browser_click",
+      "browser__browser_close",
+      "browser__browser_console_messages",
+      "browser__browser_drag",
+      "browser__browser_emulate_media",
+      "browser__browser_fill_form",
+      "browser__browser_find",
+      "browser__browser_handle_dialog",
+      "browser__browser_hover",
+      "browser__browser_navigate",
+      "browser__browser_navigate_back",
+      "browser__browser_network_request",
+      "browser__browser_network_requests",
+      "browser__browser_press_key",
+      "browser__browser_resize",
+      "browser__browser_select_option",
+      "browser__browser_snapshot",
+      "browser__browser_tabs",
+      "browser__browser_take_screenshot",
+      "browser__browser_type",
+      "browser__browser_wait_for"
     ]}},
     "sessions": {"visibility": "all"},
     "web": {
@@ -171,6 +192,36 @@
             "list_releases",
             "list_tags",
             "pull_request_read"
+          ]
+        }
+      },
+      "browser": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-browser/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "browser_click",
+            "browser_close",
+            "browser_console_messages",
+            "browser_drag",
+            "browser_emulate_media",
+            "browser_fill_form",
+            "browser_find",
+            "browser_handle_dialog",
+            "browser_hover",
+            "browser_navigate",
+            "browser_navigate_back",
+            "browser_network_request",
+            "browser_network_requests",
+            "browser_press_key",
+            "browser_resize",
+            "browser_select_option",
+            "browser_snapshot",
+            "browser_tabs",
+            "browser_take_screenshot",
+            "browser_type",
+            "browser_wait_for"
           ]
         }
       }
