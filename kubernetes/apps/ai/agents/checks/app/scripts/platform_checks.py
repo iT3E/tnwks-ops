@@ -26,7 +26,8 @@ A CronJob in each agents-<name> namespace runs one of:
       the tools of the domain's rule, its read reaches the app through the
       MCP server and the proxy, and a tool off the rule is refused at the
       gateway. The key with no tool lists nothing and is refused. A pod that
-      is not the gateway can not reach the MCP server.
+      is not the gateway can not reach the MCP server, and can not reach
+      the servers of GATEWAY_ONLY_SERVERS (the read servers of main).
   platform_checks.py dns
       A pod with its own DNS rule, out of the namespace's rule for any name,
       resolves the names of DNS_ALLOWED and none of DNS_REFUSED (finance
@@ -668,6 +669,12 @@ def firefly_probe() -> None:
 # OTHER_VAULT_GATEWAY_URL and OTHER_VAULT_SERVER are the vault route and the
 # vault server of the other trust domain: the probe key gets a 401 there, and
 # a straight connection is blocked (R6).
+# GATEWAY_ONLY_SERVERS are more MCP servers (host:port, separated by commas)
+# that only the gateway may reach: the read servers of main (Design Doc,
+# section 4.2.6). Each is tried straight, as the vault servers are, and only
+# a time out passes: in this cluster a policy drop is silent, while a
+# Service with no ready pod refuses at once. A refusal, an answer and a name
+# that does not resolve each fail.
 MCP_GATEWAY_URL = os.environ.get("MCP_GATEWAY_URL", "")
 MCP_SERVER = os.environ.get("MCP_SERVER", "")
 GATEWAY_CONFIG = os.environ.get("GATEWAY_CONFIG", "")
@@ -676,6 +683,8 @@ VAULT_SERVER = os.environ.get("VAULT_SERVER", "")
 VAULT_ROUTE = os.environ.get("VAULT_ROUTE", "finance-vault")
 OTHER_VAULT_GATEWAY_URL = os.environ.get("OTHER_VAULT_GATEWAY_URL", "")
 OTHER_VAULT_SERVER = os.environ.get("OTHER_VAULT_SERVER", "")
+GATEWAY_ONLY_SERVERS = [s.strip() for s in os.environ.get("GATEWAY_ONLY_SERVERS", "").split(",")
+                        if s.strip()]
 PENDING = "pending"
 SKIPPED = "skipped: the key is pending"
 
@@ -781,6 +790,8 @@ def mcp_gateway() -> None:
         vault(check, probe_key, no_tools_key)
     if OTHER_VAULT_GATEWAY_URL:
         other_vault(check, probe_key)
+    for server in GATEWAY_ONLY_SERVERS:
+        gateway_only(check, server)
 
 
 def domain(check: str, probe_key: str, no_tools_key: str) -> None:
@@ -872,6 +883,34 @@ def other_vault(check: str, probe_key: str) -> None:
     else:
         report(check, "other vault: probe key: tools/list", "refused: HTTP 401",
                listed(probe_key, OTHER_VAULT_GATEWAY_URL))
+
+
+def gateway_only(check: str, server: str) -> None:
+    """A server that only the gateway may reach: a straight connection
+    from this pod must fail. No key is used."""
+    host, port = server.rsplit(":", 1)
+    name, namespace = host.split(".")[:2]
+    report(check, f"{name} in {namespace}, direct from a pod that is not the gateway", "blocked",
+           reach(host, int(port)))
+
+
+def reach(host: str, port: int, timeout: float = 5) -> str:
+    """A straight try that only a drop of the network passes. A policy drop
+    in this cluster is silent (no answer to the connect: a time out). A
+    refusal is what a Service with no ready pod, or a closed port, gives at
+    once, so it proves nothing about the policy. A name that does not
+    resolve proves nothing either."""
+    try:
+        socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError as e:
+        return f"unresolved: {type(e).__name__}"
+    try:
+        socket.create_connection((host, port), timeout=timeout).close()
+        return "connected"
+    except TimeoutError:
+        return "blocked: TimeoutError"
+    except OSError as e:
+        return f"refused: {type(e).__name__} (no ready backend or a closed port: proves nothing)"
 
 
 if __name__ == "__main__":

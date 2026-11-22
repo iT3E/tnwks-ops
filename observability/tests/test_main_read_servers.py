@@ -6,8 +6,10 @@ in agents-main, each behind a route of its own on the central MCP gateway
 The static tests read the files: each route names exactly the kept tools of
 the dump of the pinned image, takes the key of the main agent only, and sets
 no credential on its target; each pod is restricted and pinned; only the
-gateway reaches a server; and the read account has the role view in each
-namespace of the repository but agents-finance and ai.
+gateway reaches a server, no other policy lets a pod into it, and both
+gateway probes try each server straight each day and pass on a time out
+only; and the read account has the role view in each namespace of the
+repository but agents-finance and ai.
 
 The container test runs the pinned gateway with the config of the repo (the
 hash of the main key swapped for the hash of a test key) and each pinned
@@ -16,6 +18,7 @@ without it the test is skipped, except in CI, where it fails.
 """
 
 import hashlib
+import importlib.util
 import json
 import subprocess
 import time
@@ -273,6 +276,163 @@ def test_the_gateway_reaches_the_server_by_its_name(server):
     names = [d["matchName"] for r in policy["egress"] for tp in r.get("toPorts", [])
              for d in (tp.get("rules") or {}).get("dns", [])]
     assert f"{spec['dir']}.agents-main.svc.cluster.local" in names
+
+
+# The reach, proven each day: both gateway probes (main and finance) try each
+# read server straight and need a time out: a policy drop in this cluster is
+# silent, while a Service with no ready pod refuses at once, which proves
+# nothing. The probe of finance is a pod of
+# another namespace; the probe of main is a pod of the agent's namespace that
+# is not the gateway, as the agent pod is. The policy of the server names the
+# gateway only (above) and no other policy lets anything into the server
+# (below), so the agent pod meets the rule that the probe of main meets.
+
+PROBES = {"main": MAIN / "checks/app/mcp-gateway-probe.yaml",
+          "finance": ROOT / "kubernetes/apps/ai/agents/finance/checks/app/mcp-gateway-probe.yaml"}
+CHECKS = ROOT / "kubernetes/apps/ai/agents/checks/app/scripts/platform_checks.py"
+POLICY_SELECTORS = {"CiliumNetworkPolicy": "endpointSelector",
+                    "CiliumClusterwideNetworkPolicy": "endpointSelector", "NetworkPolicy": "podSelector"}
+
+
+def service(server: str) -> str:
+    spec = SERVERS[server]
+    return f"{spec['dir']}.agents-main.svc.cluster.local:{spec['port']}"
+
+
+def probe_container(path: Path) -> dict:
+    cron = kind(path, "CronJob")
+    (found,) = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"]
+    return found
+
+
+@pytest.mark.parametrize("probe", PROBES)
+def test_each_gateway_probe_tries_each_read_server_straight(probe):
+    env = {e["name"]: e.get("value") for e in probe_container(PROBES[probe])["env"]}
+    assert env["GATEWAY_ONLY_SERVERS"].split(",") == [service(s) for s in SERVERS]
+    # The probe's own policy lets the try out, so a drop comes from the
+    # policy of the server.
+    (policy,) = [d for d in docs(PROBES[probe]) if d["kind"] == "CiliumNetworkPolicy"]
+    out = [(p["io.kubernetes.pod.namespace"], p["app.kubernetes.io/name"], ports(r))
+           for r in policy["spec"]["egress"] for p in peers(r)]
+    for spec in SERVERS.values():
+        assert ("agents-main", spec["dir"], [str(spec["port"])]) in out
+
+
+def test_the_probes_use_no_key_on_a_read_route():
+    """The read routes take the key of main only (above); the probes name no
+    read route and get no key but their own Secret."""
+    routes = {s["route"] for s in SERVERS.values()}
+    for path in PROBES.values():
+        c = probe_container(path)
+        values = " ".join(str(e.get("value", "")) for e in c["env"])
+        assert not [r for r in routes if f"/{r}/" in values]
+        assert [e["secretRef"]["name"] for e in c["envFrom"]] == ["mcp-gateway-probe-secret"]
+
+
+def selects(selector: dict | None, labels: dict) -> bool:
+    """Whether a pod selector (Kubernetes or Cilium) selects a pod with these
+    labels. The cluster label of Cilium is taken as a match."""
+    if selector is None:
+        return False
+
+    def key(k: str) -> str:
+        source, _, rest = k.partition(":")
+        return rest if rest and source in {"k8s", "any"} else k
+    for k, v in (selector.get("matchLabels") or {}).items():
+        if key(k) != "io.cilium.k8s.policy.cluster" and labels.get(key(k)) != v:
+            return False
+    for e in selector.get("matchExpressions") or []:
+        k, op, values = key(e["key"]), e["operator"], e.get("values", [])
+        if ((op == "In" and labels.get(k) not in values) or (op == "NotIn" and labels.get(k) in values)
+                or (op == "Exists" and k not in labels) or (op == "DoesNotExist" and k in labels)):
+            return False
+    return True
+
+
+def test_the_selector_reading_is_right():
+    labels = {"app.kubernetes.io/name": "cluster-mcp", "agents.home.arpa/dns": "own"}
+    assert selects({}, labels)
+    assert selects({"matchLabels": {"k8s:app.kubernetes.io/name": "cluster-mcp"}}, labels)
+    assert not selects({"matchLabels": {"app.kubernetes.io/name": "agent"}}, labels)
+    assert not selects({"matchExpressions": [{"key": "agents.home.arpa/dns", "operator": "DoesNotExist"}]}, labels)
+    assert selects({"matchExpressions": [{"key": "x", "operator": "NotIn", "values": ["y"]}]}, labels)
+    assert not selects(None, labels)
+
+
+@pytest.mark.parametrize("server", SERVERS)
+def test_no_other_policy_lets_a_pod_into_the_server(server):
+    """Each network policy of the repository that may select the server pod
+    (one of agents-main, one with no namespace, which a Flux Kustomization
+    may put there, or a cluster-wide one) has no ingress rule, but the
+    server's own. Policies that a Helm chart makes are not in this reading."""
+    labels = {**pod(server)["metadata"]["labels"], "io.kubernetes.pod.namespace": "agents-main"}
+    own = MAIN / SERVERS[server]["dir"] / "app/networkpolicy.yaml"
+    found, other = [], []
+    for path in sorted((ROOT / "kubernetes").rglob("*.yaml")):
+        text = path.read_text()
+        if path.name.endswith(".sops.yaml") or "NetworkPolicy" not in text:
+            continue
+        for d in yaml.safe_load_all(text):
+            if not isinstance(d, dict) or d.get("kind") not in POLICY_SELECTORS:
+                continue
+            found.append(d)
+            namespace = (d.get("metadata") or {}).get("namespace")
+            if d["kind"] != "CiliumClusterwideNetworkPolicy" and namespace not in (None, "agents-main"):
+                continue
+            spec = d.get("spec") or {}
+            if selects(spec.get(POLICY_SELECTORS[d["kind"]]), labels) and spec.get("ingress") and path != own:
+                other.append((str(path.relative_to(ROOT)), d["metadata"]["name"]))
+    assert len(found) > 20
+    assert other == []
+
+
+def load_checks(monkeypatch, servers: str):
+    monkeypatch.setenv("OWN_NAMESPACE", "agents-main")
+    monkeypatch.setenv("TRUST_DOMAIN_NAMESPACES", "agents-main")
+    monkeypatch.setenv("GATEWAY_ONLY_SERVERS", servers)
+    for name in ("MCP_GATEWAY_URL", "VAULT_GATEWAY_URL", "OTHER_VAULT_GATEWAY_URL"):
+        monkeypatch.delenv(name, raising=False)
+    spec = importlib.util.spec_from_file_location("platform_checks_reach", CHECKS)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(("connect", "ok", "got"), [
+    ("timeout", True, "blocked: TimeoutError"),
+    ("refused", False, "refused: ConnectionRefusedError (no ready backend or a closed port: proves nothing)"),
+    ("answer", False, "connected"),
+    ("no name", False, "unresolved: gaierror"),
+])
+def test_the_try_passes_on_a_time_out_only(monkeypatch, capsys, connect, ok, got):
+    """A time out passes: a policy drop is silent. A refusal fails, since a
+    server that is down or rolling refuses at once; an answer fails; a name
+    that does not resolve fails, so a server that is gone does not pass."""
+    checks = load_checks(monkeypatch, ",".join(service(s) for s in SERVERS))
+
+    def getaddrinfo(host, port, *args, **kwargs):
+        if connect == "no name":
+            raise checks.socket.gaierror(-2, "Name or service not known")
+        return [(2, 1, 6, "", ("192.0.2.1", port))]
+
+    class Answer:
+        def close(self):
+            pass
+
+    def create_connection(address, timeout=None):
+        if connect == "refused":
+            raise ConnectionRefusedError(111, "Connection refused")
+        if connect == "timeout":
+            raise TimeoutError("timed out")
+        return Answer()
+    monkeypatch.setattr(checks.socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(checks.socket, "create_connection", create_connection)
+    checks.mcp_gateway()
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert [line["target"] for line in lines] == [
+        f"{s['dir']} in agents-main, direct from a pod that is not the gateway" for s in SERVERS.values()]
+    assert {(line["ok"], line["got"]) for line in lines} == {(ok, got)}
+    assert checks.failures == (0 if ok else 3)
 
 
 # The cluster server and the read rights

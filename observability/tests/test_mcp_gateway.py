@@ -371,6 +371,24 @@ class H(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0", 8080), H).serve_forever()
 '''
 
+# A server that drops each new connection on port 8080, as a policy drop of
+# Cilium does (a time out). It listens with a queue of one and never
+# accepts; its own connection fills the queue, and the kernel then drops
+# each SYN that comes.
+DROPPER = r'''
+import socket, time
+server = socket.socket()
+server.bind(("0.0.0.0", 8080))
+server.listen(0)
+held = []
+for _ in range(2):
+    c = socket.socket()
+    c.setblocking(False)
+    c.connect_ex(("127.0.0.1", 8080))
+    held.append(c)
+time.sleep(3600)
+'''
+
 # A recorder in front of the MCP server: it writes the headers of each
 # request that the gateway sends on, then forwards it to the server.
 RECORDER = r'''
@@ -462,11 +480,21 @@ def lab():
             path.chmod(0o644)
     tag = uuid.uuid4().hex[:8]
     front, back = f"mcpgw-front-{tag}", f"mcpgw-back-{tag}"
-    names = {n: f"mcpgw-{n}-{tag}" for n in ("app", "mcp", "recorder", "gateway")}
+    names = {n: f"mcpgw-{n}-{tag}" for n in ("app", "mcp", "recorder", "gateway", "dropper")}
     python = probe_python()
     try:
         for net in (front, back):
             run([tool, "network", "create", "--internal", net])
+        # The names of the read servers of main resolve on the front network
+        # to a container that drops each new connection on port 8080, as the
+        # policy of each server drops the probe in the cluster (a time out;
+        # test_main_read_servers.py). Its listener never accepts, and one
+        # connection of its own fills its queue: the kernel then drops each
+        # SYN.
+        aliases = [x for s in probe_env()["GATEWAY_ONLY_SERVERS"].split(",")
+                   for x in ("--network-alias", s.rsplit(":", 1)[0])]
+        run([tool, "run", "-d", "--name", names["dropper"], "--network", front, *aliases,
+             "--read-only", "--cap-drop", "ALL", "--user", "65534", python, "python3", "-I", "-c", DROPPER])
         # The fake app has the name of the proxy, as the MCP server calls it.
         run([tool, "run", "-d", "--name", names["app"], "--network", back,
              "--network-alias", "firefly-proxy.agents-finance.svc.cluster.local",
@@ -589,6 +617,9 @@ def test_the_probe_passes_and_the_app_sees_only_its_read(lab):
     assert got["probe key: allowed read (get_about)"] == "reached: ok"
     assert got["key with no tool: tools/list"] == "tools: 0"
     assert got["probe key with headers that name the client finance: a write"] == "refused: gateway"
+    for name in ("cluster-mcp", "flux-mcp", "terraform-mcp"):
+        assert got[f"{name} in agents-main, direct from a pod that is not the gateway"] == (
+            "blocked: TimeoutError")
     assert not [k for k in got if "skipped" in got[k]]
     calls = app_requests(lab)[before:]
     assert [(c["method"], c["path"]) for c in calls] == [("GET", "/api/v1/about")]

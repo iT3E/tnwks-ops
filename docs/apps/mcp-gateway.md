@@ -370,10 +370,18 @@ agent does, with two keys of its own and none of the agent's:
    `OTHER_VAULT_SERVER`): the probe key gets a 401 on its route, and a
    straight connection to its server fails (R6). Each probe checks the
    other.
+7. The read servers of main (`GATEWAY_ONLY_SERVERS`: `cluster-mcp`,
+   `flux-mcp` and `terraform-mcp` in `agents-main`, port 8080): a straight
+   connection from its pod to each fails. No key is used. A time out passes:
+   a policy drop in this cluster is silent. A refusal fails, since a
+   Service with no ready pod refuses at once and so proves nothing; an
+   answer and a name that does not resolve fail too.
 
 **The probe of main** (`agents/main/checks/app/`, daily at 05:47) is the
-same probe for the route `main-vault` only, since main has no other route:
-items 5 and 6, with its key `main-probe`, and no key with no tool. Its
+same probe for the route `main-vault`: items 5, 6 and 7, with its key
+`main-probe`, and no key with no tool. The read routes of main take the
+key of main only, so the probe calls none of them; item 7 tries their
+servers straight. Its
 Secret `mcp-gateway-probe-secret` (`PROBE_KEY`) is read with
 `optional: true`: with no Secret, the checks of its key print `skipped: the
 key is pending` and pass. A container test
@@ -387,6 +395,16 @@ pass, for as long as the keys are placeholders. The owner's values step
 `AgentPlatformCronJobFailed`. It can not run as the identity of the agent pod (a pod with its
 labels would be an agent pod), so the policy of the MCP server, which lets
 in the gateway only, is a test in git as well.
+
+For the read servers of main, item 7 stands for two sources. The probe of
+finance is a pod of another namespace. The probe of main is a pod of the
+agent's namespace that is not the gateway; the agent pod is another such
+pod. The policy of each read server names the gateway (and the kubelet, for
+the health checks) only, and no other policy lets anything into these pods
+(`observability/tests/test_main_read_servers.py`), so the probe and the
+agent pod meet the same rule. The run does not prove the rule for the
+identity of the agent pod itself, and it does not try the egress policy of
+the agent pod, which is a second wall.
 
 ## Updates
 

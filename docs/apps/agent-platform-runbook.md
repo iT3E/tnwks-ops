@@ -186,7 +186,14 @@ before the create, and fails a run that leaves its own record.
   namespace, `other vault server` with `connected`, or `other vault: probe
   key` with anything but a 401, is a path across the two trust domains
   (R6): the policy of that vault server or the keys of that route are
-  wrong; fix it before the next run.
+  wrong; fix it before the next run. Both probes also try the read servers
+  of main straight (`cluster-mcp in agents-main, direct from a pod that is
+  not the gateway`, and the same for `flux-mcp` and `terraform-mcp`).
+  Only `blocked: TimeoutError` passes there. `connected`: the policy of that
+  read server lets in more than the gateway; fix it before the next run.
+  `refused`: the Service had no ready pod (the server was down or rolling)
+  or the port is closed, so the check proved nothing; look at the server
+  pod. `unresolved`: the Service of that server is gone; find out why.
 
 ### WorkflowProvidersStale
 
