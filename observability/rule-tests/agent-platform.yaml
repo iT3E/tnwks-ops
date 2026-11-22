@@ -402,3 +402,63 @@ tests:
       - {alertname: AgentBackupRepositoryNotReady, eval_time: 59m, exp_alerts: []}
       - {alertname: AgentBackupRepositoryNotReady, eval_time: 61m, exp_alerts: [{exp_labels: {severity: warning, name: agents, phase: Initializing}}]}
       - {alertname: AgentBackupRepositoryNotReady, eval_time: 100m, exp_alerts: []}
+
+  - name: a message with no end of its turn for 30 minutes fires, a quiet evening does not
+    interval: 1m
+    input_series:
+      # main: two messages ended (one completed, one skipped in a group),
+      # then a third came at 10m and its turn never ended.
+      - series: openclaw_message_received_total{job="openclaw-agents-main", openclaw_channel="telegram", openclaw_source="dispatchInboundMessage"}
+        values: 2x9 3x60
+      - series: openclaw_message_processed_total{job="openclaw-agents-main", openclaw_channel="telegram", openclaw_outcome="completed"}
+        values: 1x70
+      - series: openclaw_message_processed_total{job="openclaw-agents-main", openclaw_channel="telegram", openclaw_outcome="skipped"}
+        values: 1x70
+      # finance: a quiet evening, no message at all; only the heartbeat turn
+      # of the day, which ended.
+      - series: openclaw_message_received_total{job="openclaw-agents-finance", openclaw_channel="unknown", openclaw_source="dispatchInboundMessage"}
+        values: 1x70
+      - series: openclaw_message_processed_total{job="openclaw-agents-finance", openclaw_channel="unknown", openclaw_outcome="completed"}
+        values: 1x70
+      # pilot: a long turn of 20 minutes that ends.
+      - series: openclaw_message_received_total{job="openclaw-agents-pilot", openclaw_channel="telegram", openclaw_source="dispatchInboundMessage"}
+        values: 0x4 1x65
+      - series: openclaw_message_processed_total{job="openclaw-agents-pilot", openclaw_channel="telegram", openclaw_outcome="completed"}
+        values: 0x24 1x45
+    alert_rule_test:
+      - alertname: AgentTurnNotEnded
+        eval_time: 39m
+        exp_alerts: []
+      - alertname: AgentTurnNotEnded
+        eval_time: 41m
+        exp_alerts:
+          - exp_labels: {severity: warning, job: openclaw-agents-main, openclaw_channel: telegram}
+
+  - name: the first message after a start of the pod hangs, before any message ended
+    interval: 1m
+    input_series:
+      # The counter of ended messages does not exist until the first end.
+      - series: openclaw_message_received_total{job="openclaw-agents-main", openclaw_channel="telegram", openclaw_source="dispatchInboundMessage"}
+        values: _x5 1x60
+    alert_rule_test:
+      - alertname: AgentTurnNotEnded
+        eval_time: 34m
+        exp_alerts: []
+      - alertname: AgentTurnNotEnded
+        eval_time: 36m
+        exp_alerts:
+          - exp_labels: {severity: warning, job: openclaw-agents-main, openclaw_channel: telegram}
+
+  - name: a restart of the pod starts both counters again and does not fire
+    interval: 1m
+    input_series:
+      # 5 messages ended, the pod starts again at 20m (no series for 2
+      # minutes), then one message comes at 30m and ends at 33m.
+      - series: openclaw_message_received_total{job="openclaw-agents-main", openclaw_channel="telegram", openclaw_source="dispatchInboundMessage"}
+        values: 5x19 _x2 0x7 1x60
+      - series: openclaw_message_processed_total{job="openclaw-agents-main", openclaw_channel="telegram", openclaw_outcome="completed"}
+        values: 5x19 _x10 _x3 1x60
+    alert_rule_test:
+      - alertname: AgentTurnNotEnded
+        eval_time: 80m
+        exp_alerts: []

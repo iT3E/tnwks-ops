@@ -2020,8 +2020,9 @@ aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
 the platform agent for the `instruction-check file=` lines and the bridge
 (`AgentInstructionFileChanged`, `ModelBridgeRateLimited`, and through the
 records of [Plan use](#plan-use) `ModelPlanNearLimit`) ([Logs](#logs)).
-`AgentBackupMoverConfigMapDenied` reads a counter of the API server, and
-`AgentBackupRepositoryNotReady` the phase gauge of the backup operator.
+`AgentBackupMoverConfigMapDenied` reads a counter of the API server,
+`AgentBackupRepositoryNotReady` the phase gauge of the backup operator, and
+`AgentTurnNotEnded` two counters of the product ([Metrics](#metrics)).
 
 [`agent-platform-runbook.md`](agent-platform-runbook.md) has a section for
 each alert (what it means, the first checks, what was seen so far, the fix),
@@ -2060,6 +2061,7 @@ policy that `observability/inventory.py` declares
 | `AgentBackupRepositoryNotReady` | The backup repository of the trust domains (`agents`) is `Pending` or `Initializing`: it never got `Ready`, so no snapshot of a trust domain runs. `Failed` and `Degraded` are the chart rule `KopiurRepositoryNotReady` | 1h | `kubectl get clusterrepository agents -o yaml`, then the refresher of its session ([Backups of the agent trust domains](#backups-of-the-agent-trust-domains)) |
 | `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |
 | `ModelPlanNearLimit` | The newest reading of the five hour window or a week window of the Claude plan is near the limit (`allowed_warning`, the warning of the vendor) or at it (`rejected`), and the window did not reset since ([Plan use](#plan-use)). The overage windows do not fire | 5m | The tab "Limits and security" of the AI board: the use and the reset time of each window. Slow the scheduled work of the agents, or wait for the reset |
+| `AgentTurnNotEnded` | A personal agent took a message and has not ended its turn for 30 minutes: its count of messages in (`openclaw_message_received_total`) is higher than its count of messages that ended (`openclaw_message_processed_total`, completed, skipped or error), by channel ([Metrics](#metrics)). It catches a turn that never ends (a model call, a tool or a streamed part that hangs), not a final reply that hangs or fails after the turn ended. A quiet evening has no message and does not fire | 30m | "Messages with no end" on the Messages tab of the AI board, then [its runbook](agent-platform-runbook.md#agentturnnotended). A restart of the agent pod ends it |
 | `ModelGatewayCallsFailing` | At least 3 model calls of the key of a trust domain failed in 15 minutes, and more than half of its calls. One turn with its retries does not fire it | 20m | "Failed model calls by status" on the Model calls tab of the AI board: 429 the limit of the plan, 401 or 403 a key or a model list, 5xx the bridge, Bedrock or the vendor |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,

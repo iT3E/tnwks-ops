@@ -5432,7 +5432,7 @@
     "dashboard": "tnwks-ai",
     "tab": "Parts",
     "panel": "AI alerts firing",
-    "query": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "query": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentTurnNotEnded|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
     "unit": "short",
     "query_mode": "instant",
     "inputs": [
@@ -5859,6 +5859,37 @@
     "sources": [
       {
         "metric": "openclaw_session_stuck_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/apps/agent-platform-runbook.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "panel": "Messages with no end",
+    "query": "sum by (k8s_cluster, trust_domain, openclaw_channel) (label_replace((sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_received_total{k8s_cluster=~\"$cluster\"}) - (sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_processed_total{k8s_cluster=~\"$cluster\"}) or sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_received_total{k8s_cluster=~\"$cluster\"}) * 0)), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "openclaw_message_processed_total",
+      "openclaw_message_received_total"
+    ],
+    "sources": [
+      {
+        "metric": "openclaw_message_processed_total",
+        "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
+        "availability": "configured"
+      },
+      {
+        "metric": "openclaw_message_received_total",
         "producer": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
         "availability": "configured"
       }

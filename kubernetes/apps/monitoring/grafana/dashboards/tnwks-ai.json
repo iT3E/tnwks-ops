@@ -695,7 +695,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentTurnNotEnded|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{cluster}} {{alertname}} {{severity}}",
@@ -3365,6 +3365,219 @@
         "kind": "Panel",
         "spec": {
           "id": 23,
+          "title": "Messages with no end",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, trust_domain, openclaw_channel) (label_replace((sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_received_total{k8s_cluster=~\"$cluster\"}) - (sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_processed_total{k8s_cluster=~\"$cluster\"}) or sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_received_total{k8s_cluster=~\"$cluster\"}) * 0)), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{trust_domain}} {{openclaw_channel}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "trust_domain": "Trust domain",
+                        "part": "Part",
+                        "check": "Check",
+                        "policy": "Policy",
+                        "result": "Result",
+                        "route": "Route",
+                        "method": "Method",
+                        "status": "Status",
+                        "api_key_alias": "Key",
+                        "requested_model": "Name asked for",
+                        "api_provider": "Provider",
+                        "status_code": "Status",
+                        "exception_status": "Status",
+                        "window": "Plan window",
+                        "token": "Kind of token",
+                        "openclaw_channel": "Channel",
+                        "openclaw_outcome": "Outcome",
+                        "openclaw_delivery_kind": "Kind",
+                        "openclaw_errorCategory": "Error",
+                        "openclaw_trigger": "Trigger",
+                        "openclaw_state": "Session state",
+                        "openclaw_provider": "Provider",
+                        "openclaw_model": "Model",
+                        "openclaw_failover_to_model": "Moved to",
+                        "Value": "Messages"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "None in range",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Messages"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "The messages that each agent took and has not ended its turn for, by channel: a turn that runs now, or one that hangs (a model call, a tool, a streamed part). A final reply that hangs after the turn ended is not counted here. AgentTurnNotEnded fires when one stays for 30 minutes. A restart of the agent pod starts the count again.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-23": {
+        "kind": "Panel",
+        "spec": {
+          "id": 24,
           "title": "Model failovers",
           "links": [
             {
@@ -3574,10 +3787,10 @@
           "description": "The times in the selected range that an agent moved a turn to a second model. Each trust domain has one model name, so each row here is against the rule of one model for each domain.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-23": {
+      "panel-24": {
         "kind": "Panel",
         "spec": {
-          "id": 24,
+          "id": 25,
           "title": "MCP requests by route",
           "links": [
             {
@@ -3787,10 +4000,10 @@
           "description": "Requests to the MCP gateway in the selected range, by route, HTTP method and status. The GET with 405 that each start of a client makes is left out: the gateway offers no stream on a stateless route, and that is not a failure. A route is the tools of one trust domain (default/finance, default/finance-vault).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-24": {
+      "panel-25": {
         "kind": "Panel",
         "spec": {
-          "id": 25,
+          "id": 26,
           "title": "MCP failed requests",
           "links": [
             {
@@ -3866,10 +4079,10 @@
           "description": "Requests to the MCP gateway with a 4xx or 5xx status, by route, less the GET with 405 of a client start. A 401 is a client with no key or a wrong key, a 400 a tool that the route does not allow.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-25": {
+      "panel-26": {
         "kind": "Panel",
         "spec": {
-          "id": 26,
+          "id": 27,
           "title": "Scheduled check state",
           "links": [
             {
@@ -4140,10 +4353,10 @@
           "description": "Each declared CronJob of the platform: Healthy when its last good run is within its window (26 hours for a daily check, 35 minutes for the workflow jobs), Degraded when it is older, Failed when the newest run failed after the last good one, Standby when the CronJob is suspended, Unknown with no evidence.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-26": {
+      "panel-27": {
         "kind": "Panel",
         "spec": {
-          "id": 27,
+          "id": 28,
           "title": "Time since the last good run",
           "links": [
             {
@@ -4353,10 +4566,10 @@
           "description": "The time since the last good run of each declared CronJob, from kube-state-metrics.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-27": {
+      "panel-28": {
         "kind": "Panel",
         "spec": {
-          "id": 28,
+          "id": 29,
           "title": "Result line state",
           "links": [
             {
@@ -4627,10 +4840,10 @@
           "description": "The newest `<check> result=` line of each declared check of an agent pod in its window (26 hours for the instruction check and the daily archive, 15 days for the memory index, which runs at each start of the pod, 3 hours for the sync of the automations, 30 minutes for the drift of the app of the reviewer): Healthy when it is a good result, Failed when it is not, Unknown when no line came.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-28": {
+      "panel-29": {
         "kind": "Panel",
         "spec": {
-          "id": 29,
+          "id": 30,
           "title": "Workflow run Jobs",
           "links": [
             {
@@ -4840,10 +5053,10 @@
           "description": "The run Jobs of the workflow agents that Kubernetes still keeps, by result. A failed run alerts for 2 hours (AgentWorkflowRunFailed).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-29": {
+      "panel-30": {
         "kind": "Panel",
         "spec": {
-          "id": 30,
+          "id": 31,
           "title": "Backup state",
           "links": [
             {
@@ -5114,10 +5327,10 @@
           "description": "Each declared snapshot policy of a trust domain: Healthy when its last good snapshot is within the recovery point objective (30 hours), Failed when it is older, Unknown with no evidence from Kopiur.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-30": {
+      "panel-31": {
         "kind": "Panel",
         "spec": {
-          "id": 31,
+          "id": 32,
           "title": "Backup age",
           "links": [
             {
@@ -5327,10 +5540,10 @@
           "description": "The time since the last good snapshot of each declared policy, from Kopiur.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-31": {
+      "panel-32": {
         "kind": "Panel",
         "spec": {
-          "id": 32,
+          "id": 33,
           "title": "Last restore test",
           "links": [
             {
@@ -5540,10 +5753,10 @@
           "description": "The time of the newest result line of each restore test, by result. A restore test runs by hand, and its line lives 5 minutes as a series, so a recording rule keeps its time for the local history of Prometheus (15 days). An older test is not shown here, and no test reads Unknown.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-32": {
+      "panel-33": {
         "kind": "Panel",
         "spec": {
-          "id": 33,
+          "id": 34,
           "title": "Five hour window used",
           "links": [
             {
@@ -5619,10 +5832,10 @@
           "description": "How much of the five hour window of the Claude plan is used, from the newest reading of the model bridge. At 100% the calls of each trust domain stop until the window resets. The bridge reads the plan on each answer, and logs a reading when the use moves by a whole percent, so the share can be up to one percent low.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-33": {
+      "panel-34": {
         "kind": "Panel",
         "spec": {
-          "id": 34,
+          "id": 35,
           "title": "Five hour window resets in",
           "links": [
             {
@@ -5698,10 +5911,10 @@
           "description": "The time until the five hour window starts again at 0%. The window starts with the first call after the last reset.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-34": {
+      "panel-35": {
         "kind": "Panel",
         "spec": {
-          "id": 35,
+          "id": 36,
           "title": "Week used",
           "links": [
             {
@@ -5777,10 +5990,10 @@
           "description": "How much of the weekly window of the Claude plan is used, from the newest reading of the model bridge. At 100% the calls of each trust domain stop until the week resets.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-35": {
+      "panel-36": {
         "kind": "Panel",
         "spec": {
-          "id": 36,
+          "id": 37,
           "title": "Week resets in",
           "links": [
             {
@@ -5856,10 +6069,10 @@
           "description": "The time until the weekly window starts again at 0%.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-36": {
+      "panel-37": {
         "kind": "Panel",
         "spec": {
-          "id": 37,
+          "id": 38,
           "title": "State of each plan window",
           "links": [
             {
@@ -6115,10 +6328,10 @@
           "description": "One row for each window of the plan that the bridge read: Allowed, Near the limit (the warning of the vendor, which also sends the alert ModelPlanNearLimit to the chat), or At the limit (calls stop). Not given: the vendor sent the use of the window but no status, as it does for a window that does not limit now. A row goes when its window resets. five_hour is the five hour window, seven_day the week; seven_day_opus and seven_day_sonnet are week windows of one model family, and the overage rows are extra use, not a limit.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-37": {
+      "panel-38": {
         "kind": "Panel",
         "spec": {
-          "id": 38,
+          "id": 39,
           "title": "Plan use over time",
           "links": [
             {
@@ -6195,10 +6408,10 @@
           "description": "The share used of each window of the plan, from the newest reading at each time. A line drops to nothing when its window resets, and comes back with the next call.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-38": {
+      "panel-39": {
         "kind": "Panel",
         "spec": {
-          "id": 39,
+          "id": 40,
           "title": "Age of the last reading",
           "links": [
             {
@@ -6408,10 +6621,10 @@
           "description": "The time since the bridge last logged a reading of each window. The bridge logs one when the use, the status or the reset time moves, and at most every 30 minutes while calls go on, so an old reading with no calls since is still true.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-39": {
+      "panel-40": {
         "kind": "Panel",
         "spec": {
-          "id": 40,
+          "id": 41,
           "title": "Model tokens by trust domain",
           "links": [
             {
@@ -6487,10 +6700,10 @@
           "description": "The tokens of the calls through the bridge, by trust domain and kind: input, output, cache_read (input read again from the cache, the cheapest kind) and cache_write. All trust domains use the same plan, so this says which domain uses it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-40": {
+      "panel-41": {
         "kind": "Panel",
         "spec": {
-          "id": 41,
+          "id": 42,
           "title": "Model tokens in the range",
           "links": [
             {
@@ -6700,10 +6913,10 @@
           "description": "The tokens of the calls through the bridge in the selected range, by trust domain and kind. A restart of the log agent starts the count again; the increase still counts across it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-41": {
+      "panel-42": {
         "kind": "Panel",
         "spec": {
-          "id": 42,
+          "id": 43,
           "title": "Plan limit reached",
           "links": [
             {
@@ -6913,10 +7126,10 @@
           "description": "The newest time in the range that the model bridge logged a call of a trust domain stopped by the limit of the Claude plan. The calls of that domain fail until the limit resets.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-42": {
+      "panel-43": {
         "kind": "Panel",
         "spec": {
-          "id": 43,
+          "id": 44,
           "title": "Instruction file changes",
           "links": [
             {
@@ -7126,10 +7339,10 @@
           "description": "The newest time in the range that the daily check of an agent pod found an instruction file new, changed or gone. The name of the file stays in Loki.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-43": {
+      "panel-44": {
         "kind": "Panel",
         "spec": {
-          "id": 44,
+          "id": 45,
           "title": "Mover denials",
           "links": [
             {
@@ -7700,6 +7913,15 @@
                                     "name": "panel-22"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-23"
+                                  }
+                                }
                               }
                             ],
                             "maxColumnCount": 2,
@@ -7737,7 +7959,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-24"
+                                    "name": "panel-25"
                                   }
                                 }
                               }
@@ -7764,7 +7986,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-23"
+                                    "name": "panel-24"
                                   }
                                 }
                               }
@@ -7804,7 +8026,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-25"
+                                    "name": "panel-26"
                                   }
                                 }
                               },
@@ -7813,7 +8035,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-27"
+                                    "name": "panel-28"
                                   }
                                 }
                               }
@@ -7840,7 +8062,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-26"
+                                    "name": "panel-27"
                                   }
                                 }
                               },
@@ -7849,7 +8071,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-28"
+                                    "name": "panel-29"
                                   }
                                 }
                               }
@@ -7889,7 +8111,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-29"
+                                    "name": "panel-30"
                                   }
                                 }
                               }
@@ -7916,7 +8138,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-30"
+                                    "name": "panel-31"
                                   }
                                 }
                               },
@@ -7925,7 +8147,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-31"
+                                    "name": "panel-32"
                                   }
                                 }
                               }
@@ -7965,15 +8187,6 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-32"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
                                     "name": "panel-33"
                                   }
                                 }
@@ -7993,6 +8206,15 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-35"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-36"
                                   }
                                 }
                               }
@@ -8019,7 +8241,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-36"
+                                    "name": "panel-37"
                                   }
                                 }
                               }
@@ -8029,42 +8251,6 @@
                           }
                         },
                         "title": "Status",
-                        "collapse": false
-                      }
-                    },
-                    {
-                      "kind": "RowsLayoutRow",
-                      "spec": {
-                        "layout": {
-                          "kind": "AutoGridLayout",
-                          "spec": {
-                            "columnWidthMode": "narrow",
-                            "rowHeightMode": "standard",
-                            "items": [
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-37"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-39"
-                                  }
-                                }
-                              }
-                            ],
-                            "maxColumnCount": 2,
-                            "fillScreen": false
-                          }
-                        },
-                        "title": "Trends",
                         "collapse": false
                       }
                     },
@@ -8094,6 +8280,33 @@
                                     "name": "panel-40"
                                   }
                                 }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-39"
+                                  }
+                                }
                               },
                               {
                                 "kind": "AutoGridLayoutItem",
@@ -8119,6 +8332,15 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-43"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-44"
                                   }
                                 }
                               }

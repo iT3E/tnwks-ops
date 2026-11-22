@@ -1315,7 +1315,7 @@
     "dashboard": "tnwks-ai",
     "tab": "Parts",
     "title": "AI alerts firing",
-    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",alertname=~\"AgentAutomationsSyncFailed|AgentBackupMoverConfigMapDenied|AgentBackupRepositoryNotReady|AgentDailyArchiveFailed|AgentHeartbeatCheckStale|AgentHeartbeatMissing|AgentInstructionCheckStale|AgentInstructionFileChanged|AgentMemoryIndexFailed|AgentPlatformCheckStale|AgentPlatformCronJobFailed|AgentPlatformWorkloadNotReady|AgentRunSandboxTooOld|AgentTurnNotEnded|AgentWorkflowRunFailed|LiteLLMBedrockCertificateExpiring|ModelBridgeRateLimited|ModelGatewayCallsFailing|ModelPlanNearLimit|WorkflowAppDrift|WorkflowProvidersStale\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
     "unit": "short",
     "kiosk": false
   },
@@ -1444,6 +1444,14 @@
     "tab": "Messages",
     "title": "Stuck sessions",
     "expr": "sum by (k8s_cluster, trust_domain, openclaw_state) (label_replace(increase(openclaw_session_stuck_total{k8s_cluster=~\"$cluster\"}[$__range]), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-ai",
+    "tab": "Messages",
+    "title": "Messages with no end",
+    "expr": "sum by (k8s_cluster, trust_domain, openclaw_channel) (label_replace((sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_received_total{k8s_cluster=~\"$cluster\"}) - (sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_processed_total{k8s_cluster=~\"$cluster\"}) or sum by (k8s_cluster, job, openclaw_channel) (openclaw_message_received_total{k8s_cluster=~\"$cluster\"}) * 0)), \"trust_domain\", \"$1\", \"job\", \"(?:openclaw-agents-)?(.+)\")) > 0",
     "unit": "short",
     "kiosk": false
   },
