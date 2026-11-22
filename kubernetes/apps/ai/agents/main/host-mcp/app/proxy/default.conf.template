@@ -1,0 +1,37 @@
+# The proxy of the host server (../kustomization.yaml). The gateway sends
+# each MCP request here; the proxy replaces the Authorization header of the
+# client with the bearer token of the server and sends it to the server in
+# the same pod. The token is in the env var HOST_MCP_TOKEN of this container
+# only; the entrypoint of the image renders this file into an emptyDir in
+# memory (NGINX_ENVSUBST_FILTER). Each other $name is nginx's own.
+server {
+    listen 8080;
+    server_tokens off;
+    client_max_body_size 1m;
+
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+    }
+
+    # The MCP path of the gateway target, to the MCP path of the server
+    # (its root), and nothing else.
+    location = /mcp {
+        proxy_pass http://127.0.0.1:3000/;
+        proxy_http_version 1.1;
+        # The server answers its Service name only (--allowedHosts).
+        proxy_set_header Host host-mcp.agents-main.svc.cluster.local;
+        proxy_set_header Authorization "Bearer ${HOST_MCP_TOKEN}";
+        proxy_set_header Connection "";
+        proxy_set_header Cookie "";
+        proxy_set_header X-Forwarded-For "";
+        proxy_buffering off;
+        # A read on a host can take as long as the command timeout of the
+        # server (30 s), and the gateway waits 30 s.
+        proxy_read_timeout 60s;
+    }
+
+    location / {
+        return 404;
+    }
+}

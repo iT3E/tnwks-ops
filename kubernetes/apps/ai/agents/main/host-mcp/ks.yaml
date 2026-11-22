@@ -1,0 +1,27 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The host server of main at site 1 (Design Doc of effort 0003, section
+# 4.2.6, "The host server"; task 6.22; docs/apps/host-mcp.md): ssh-mcp from
+# the image repository of ours, behind the central MCP gateway (route
+# main-host), with a proxy in its pod that sets its bearer token.
+#
+# Not applied yet: ../kustomization.yaml does not list this file until the
+# values of its Secret exist (docs/apps/host-mcp.md, "What waits").
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-main-host-mcp
+  namespace: flux-system
+spec:
+  targetNamespace: agents-main
+  path: ./kubernetes/apps/ai/agents/main/host-mcp/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # Ready when the proxy answers and the server container runs. No probe
+  # calls the MCP path yet (docs/apps/host-mcp.md, "What is left").
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

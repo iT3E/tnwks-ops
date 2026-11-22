@@ -98,7 +98,8 @@ def test_the_server_gets_no_dns_rule_of_the_namespace_of_main():
 
 def test_no_other_pod_of_main_has_the_dns_label():
     """The label takes a pod out of the DNS of the namespace: only the vault
-    server, which calls nothing, and the read servers, each with a DNS rule
+    server, which calls nothing, the host server, which calls addresses
+    only (test_main_host_server.py), and the read servers, each with a DNS rule
     of its own for the names it needs (test_main_read_servers.py), may carry
     it."""
     holders = []
@@ -111,7 +112,7 @@ def test_no_other_pod_of_main_has_the_dns_label():
             if "agents.home.arpa/dns" in template.get("metadata", {}).get("labels", {}):
                 holders.append(str(path.relative_to(MAIN)))
     assert sorted(holders) == ["cluster-mcp/app/deployment.yaml", "flux-mcp/app/deployment.yaml",
-                               "github-mcp/app/deployment.yaml",
+                               "github-mcp/app/deployment.yaml", "host-mcp/app/deployment.yaml",
                                "terraform-mcp/app/deployment.yaml", "vault-server/app/deployment.yaml"]
 
 

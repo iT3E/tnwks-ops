@@ -1,0 +1,27 @@
+---
+# The host server of main (../ks.yaml): one pod with two containers.
+# - server: ssh-mcp, HTTP mode, its own approval off (the approval plugin of
+#   the main agent is the prompt), strict host keys, the read profile of the
+#   agent user. It reads its config and its SSH key from the Secret.
+# - proxy: nginx, the one port that the gateway reaches. It sets the bearer
+#   token of the server on each request, so the gateway and the agent hold
+#   none.
+#
+# The Secret host-mcp-secret (secret-host-mcp.sops.yaml, not in git yet)
+# holds the config of the server (the profiles, the SSH addresses and the
+# pinned host key of each), the SSH key of the agent user, and the token.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml
+configMapGenerator:
+  - name: host-mcp-proxy-config
+    files:
+      - default.conf.template=./proxy/default.conf.template
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    # Each ${NAME} in the template is for the entrypoint of the image, which
+    # fills it from an env var of the container, not for Flux.
+    kustomize.toolkit.fluxcd.io/substitute: disabled

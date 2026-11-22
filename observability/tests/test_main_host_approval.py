@@ -104,12 +104,14 @@ def test_the_tools_that_change_the_product_are_denied():
     assert {"openclaw", "plugins", "terminal", "portal"} <= set(config()["tools"]["deny"])
 
 
-def test_the_host_server_has_no_route_and_no_key_yet():
-    """The host tools come with task 6.22. Until then no route of the
-    gateway is the host route, no server entry of the config points at it,
-    and no part of the pod or the config names the key of the plugin."""
-    routes = {r["name"] for r in yaml.safe_load(GATEWAY_CONFIG.read_text())["routes"]}
-    assert HOST_ROUTE not in routes
+def test_the_host_server_has_no_key_yet_and_no_server_entry():
+    """The route of the host server is in git with a placeholder hash
+    (test_main_host_server.py), so it takes no key. No server entry of the
+    config points at it, and no part of the pod or the config names the key
+    of the plugin until the lead makes the key."""
+    (route,) = [r for r in yaml.safe_load(GATEWAY_CONFIG.read_text())["routes"] if r["name"] == HOST_ROUTE]
+    ((key,),) = [route["policies"]["apiKey"]["keys"]]
+    assert re.fullmatch(r"sha256:0{63}[0-9]", key["keyHash"])
     c = config()
     for name, server in c["mcp"]["servers"].items():
         assert f"/{HOST_ROUTE}/" not in server["url"], name

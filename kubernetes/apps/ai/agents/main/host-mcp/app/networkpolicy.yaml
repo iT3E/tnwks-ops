@@ -1,0 +1,46 @@
+---
+# The host server of main. In: the central MCP gateway and the kubelet, on
+# the port of the proxy only. Out: port 22 of the SSH address of the Windows
+# host of this site and of its WSL distro, and nothing else: no DNS, no pod,
+# no other address (Design Doc, section 4.2.6, "The network rule").
+#
+# WINDOWS_HOST_IP is in cluster-settings. HOST_MCP_DISTRO_ADDR is not yet:
+# the address at which the pod reaches the SSH server of the distro is read
+# first (docs/apps/host-mcp.md, "What waits"). A CIDR rule never selects a
+# node of the cluster, so if that address is a node, this rule changes.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: host-mcp
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: host-mcp
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: mcp-gateway
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # The kubelet: the probe of the proxy, and the TCP probe of the server.
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+            - port: "3000"
+              protocol: TCP
+  egress:
+    - toCIDR:
+        - ${WINDOWS_HOST_IP}/32
+        - ${HOST_MCP_DISTRO_ADDR}/32
+      toPorts:
+        - ports:
+            - port: "22"
+              protocol: TCP

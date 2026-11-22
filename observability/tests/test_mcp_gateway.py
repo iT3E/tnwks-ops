@@ -313,6 +313,8 @@ def test_the_gateway_takes_the_agent_and_its_probe_and_reaches_the_mcp_server_on
                    ("agents-main", "github-mcp"): ["8080"],
                    # The browser of main (test_main_browser.py).
                    ("ai", "playwright-mcp"): ["8000"],
+                   # The host server of main (test_main_host_server.py).
+                   ("agents-main", "host-mcp"): ["8080"],
                    ("kube-system", "kube-dns"): ["53"]}
     (dns,) = [r for r in policy["egress"] if peers(r)[0].get("k8s-app") == "kube-dns"]
     names = [d for tp in dns["toPorts"] for d in tp["rules"]["dns"]]
