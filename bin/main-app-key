@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""The private key of the App of the main agent, into the encrypted Secret
+of its token job (docs/apps/github-token.md, "The key").
+
+    bin/main-app-key --app-id <ID> <path of the .pem>            # the first key
+    bin/main-app-key --app-id <ID> --replace <path of the .pem>  # a new key of the App
+
+The owner runs it at his own terminal, from the repo root of the branch of
+the token job, with the access of the owner to the age key or KMS of the
+file (bin/sops). The key never passes through another session:
+
+- The script checks the form of the file with openssl: an RSA private key
+  of 2048 bits or more, with no passphrase. It prints a flag only.
+- The key goes into the clear text of the Secret in the editor step of
+  `bin/sops <file>`: sops calls this script with its own temporary file,
+  the script writes the Secret with the key, and sops encrypts it. The key
+  is never an argument, an env var or a line of output; the editor step
+  gets the path of the .pem only.
+- It reads the key back through `bin/sops -d --extract` in a pipe and
+  compares it with the file, in this process, and prints a flag only.
+- It sets the ID of the App (no secret) in the CronJob of the token job.
+- It prints the names of the files and "ok", and at the end the line that
+  tells the owner to delete the download. It never prints the key, a hash
+  of it, or the output of sops or openssl.
+
+A file that holds a key already stays as it is unless --replace is given.
+Commit both files, the Secret and the CronJob, in one commit.
+"""
+
+import hashlib
+import os
+import re
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SOPS = ROOT / "bin/sops"
+APP = ROOT / "kubernetes/apps/ai/agents/main/github-token/app"
+SECRET = APP / "secret.sops.yaml"
+CRONJOB = APP / "cronjob.yaml"
+NAME = "main-github-app"
+KEY = "private-key.pem"
+MIN_BITS = 2048
+MAX_BYTES = 16384
+APP_ID = re.compile(r"[1-9][0-9]{0,11}")
+ID_LINE = re.compile(r'(?m)^(?P<head>\s*- name: GITHUB_APP_ID\n\s*value: ")(?P<id>[^"]*)(?P<tail>")$')
+BEGIN = re.compile(r"-----BEGIN (RSA )?PRIVATE KEY-----\n")
+
+
+def say(*words: str) -> None:
+    print(" ".join(words), flush=True)
+
+
+def stop(*words: str) -> None:
+    say(*words)
+    sys.exit(1)
+
+
+def openssl(*args: str, data: bytes | None = None) -> subprocess.CompletedProcess:
+    # Each output stays in this process. -passin pass: makes a key with a
+    # passphrase fail, where openssl would ask for one.
+    return subprocess.run(["openssl", *args], input=data, capture_output=True, timeout=30, check=False)
+
+
+def pem_text(path: Path) -> str:
+    """The key as the Secret holds it: LF line ends and one final LF."""
+    raw = path.read_bytes()
+    text = raw.decode("ascii").replace("\r\n", "\n").strip("\n") + "\n"
+    del raw
+    return text
+
+
+def check_form(path: Path) -> None:
+    if not path.is_file():
+        stop("key file", "found=no")
+    if path.stat().st_size > MAX_BYTES:
+        stop("key file", "form=not-a-key")
+    try:
+        text = pem_text(path)
+    except (UnicodeDecodeError, OSError):
+        stop("key file", "form=not-a-key")
+    if text.startswith("-----BEGIN ENCRYPTED PRIVATE KEY-----") or "Proc-Type: 4,ENCRYPTED" in text:
+        stop("key file", "form=has-a-passphrase")
+    if not BEGIN.match(text):
+        stop("key file", "form=not-a-pem-private-key")
+    del text
+    if openssl("rsa", "-in", str(path), "-passin", "pass:", "-noout", "-check").returncode != 0:
+        stop("key file", "form=not-an-rsa-private-key")
+    public = openssl("pkey", "-in", str(path), "-passin", "pass:", "-pubout")
+    if public.returncode != 0:
+        stop("key file", "form=not-an-rsa-private-key")
+    shown = openssl("pkey", "-pubin", "-noout", "-text", data=public.stdout)
+    found = re.search(rb"\((\d+) bit", shown.stdout)
+    if shown.returncode != 0 or not found:
+        stop("key file", "form=not-an-rsa-private-key")
+    if int(found[1]) < MIN_BITS:
+        stop("key file", "form=too-short")
+    say("key file", "form=ok")
+
+
+def has_key() -> bool:
+    if not SECRET.exists():
+        return False
+    found = subprocess.run([str(SOPS), "-d", "--extract", f'["stringData"]["{KEY}"]', str(SECRET)],
+                           capture_output=True, check=False)
+    if found.returncode != 0:
+        # A file that sops can not read is never written over.
+        stop(SECRET.name, "read=failed")
+    held = found.stdout.strip() not in (b"", b"pending")
+    del found
+    return held
+
+
+def editor_step(pem: Path, clear: Path) -> None:
+    """The editor of sops: the whole clear text of the Secret, with the key."""
+    text = pem_text(pem)
+    body = "".join(f"        {line}\n" for line in text.splitlines())
+    clear.write_text(
+        "apiVersion: v1\n"
+        "kind: Secret\n"
+        "metadata:\n"
+        f"    name: {NAME}\n"
+        "type: Opaque\n"
+        "stringData:\n"
+        f"    {KEY}: |\n"
+        f"{body}")
+    del text, body
+
+
+def put_key(pem: Path) -> None:
+    editor = shlex.join([sys.executable, str(Path(__file__).resolve()), "--editor-step", str(pem.resolve())])
+    env = dict(os.environ, EDITOR=editor, SOPS_EDITOR=editor)
+    done = subprocess.run([str(SOPS), str(SECRET)], env=env, capture_output=True, check=False)
+    if done.returncode != 0:
+        stop(SECRET.name, f"key={KEY}", "write=failed")
+
+
+def same_key(pem: Path) -> bool:
+    found = subprocess.run([str(SOPS), "-d", "--extract", f'["stringData"]["{KEY}"]', str(SECRET)],
+                           capture_output=True, check=False)
+    if found.returncode != 0:
+        return False
+    held = hashlib.sha256(found.stdout.decode("ascii", "replace").strip("\n").encode()).digest()
+    want = hashlib.sha256(pem_text(pem).strip("\n").encode()).digest()
+    del found
+    return held == want
+
+
+def encrypted() -> bool:
+    text = SECRET.read_text()
+    value = re.search(rf"(?m)^\s*{re.escape(KEY)}: (?P<v>.*)$", text)
+    return bool(value) and value["v"].startswith("ENC[AES256_GCM,data:") and "\nsops:\n" in text
+
+
+def set_app_id(app_id: str) -> None:
+    text = CRONJOB.read_text()
+    if len(ID_LINE.findall(text)) != 1:
+        stop(CRONJOB.name, "app-id=line-missing")
+    new = ID_LINE.sub(lambda m: m["head"] + app_id + m["tail"], text)
+    if new != text:
+        CRONJOB.write_text(new)
+    say(CRONJOB.name, "app-id=set", "ok")
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    if args[:1] == ["--editor-step"] and len(args) == 3:
+        editor_step(Path(args[1]), Path(args[2]))
+        return
+    replace = "--replace" in args
+    args = [a for a in args if a != "--replace"]
+    if len(args) != 3 or args[0] != "--app-id":
+        stop("usage: bin/main-app-key --app-id <ID> [--replace] <path of the .pem>")
+    app_id, pem = args[1], Path(args[2]).expanduser()
+    if not APP_ID.fullmatch(app_id):
+        stop("app-id", "form=not-a-number")
+    if not SOPS.is_file() or not CRONJOB.is_file():
+        stop("run from the root of the branch of the token job")
+    check_form(pem)
+    if has_key() and not replace:
+        stop(SECRET.name, f"key={KEY}", "held=yes", "(--replace puts a new key in its place)")
+    put_key(pem)
+    if not same_key(pem):
+        stop(SECRET.name, f"key={KEY}", "read-back=differs")
+    if not encrypted():
+        stop(SECRET.name, f"key={KEY}", "encrypted=no")
+    say(SECRET.name, f"key={KEY}", "replaced" if replace else "stored", "ok")
+    set_app_id(app_id)
+    say("Now delete the download:", shlex.quote(str(pem)))
+
+
+if __name__ == "__main__":
+    main()

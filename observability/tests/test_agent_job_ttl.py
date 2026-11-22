@@ -40,7 +40,7 @@ def test_each_cronjob_of_the_trust_domains_and_ai_deletes_a_finished_job_after_2
         assert spec["jobTemplate"]["spec"].get("ttlSecondsAfterFinished") == TTL, (path, cron["metadata"]["name"])
         # The time to live is the limit; the history limits stay as before.
         assert spec["failedJobsHistoryLimit"] == 3 and spec["successfulJobsHistoryLimit"] == 1, path
-    assert len(seen) == 9, seen
+    assert len(seen) == 10, seen
 
 
 def test_a_failed_job_stays_until_the_next_run_has_ended():

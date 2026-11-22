@@ -1,0 +1,121 @@
+---
+# The token job of the App of the main agent (scripts/github_token.py;
+# docs/apps/github-token.md). Each 30 minutes it makes one installation
+# token of the App, for the ops repository and the permissions of the
+# design, and writes it into the Secret github-mcp-app-token. An
+# installation token lives one hour, so the Secret always holds a token
+# with at least 30 minutes left, and a failed run leaves the last token in
+# place. A failed run logs "github-token result=failed step=<step>" and
+# fails the Job (AgentPlatformCronJobFailed).
+#
+# The private key of the App is the file /github-app/private-key.pem, from
+# secret.sops.yaml, which only this pod mounts; openssl reads it to sign the
+# JWT. To run it now:
+# `kubectl -n agents-main create job --from=cronjob/github-token github-token-now`.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: github-token
+  labels:
+    app.kubernetes.io/name: github-token
+spec:
+  schedule: "13,43 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      # A finished Job goes after 26 hours, also a failed one, as for the
+      # other jobs of the platform (docs/apps/agent-platform.md, "A failed
+      # Job").
+      ttlSecondsAfterFinished: 93600
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: github-token
+            # Its own DNS rule, for the name of the API of the code host
+            # only (networkpolicy.yaml).
+            agents.home.arpa/dns: own-rule
+        spec:
+          restartPolicy: Never
+          serviceAccountName: github-token
+          # The token of the account, for the update of the one Secret.
+          automountServiceAccountToken: true
+          enableServiceLinks: false
+          dnsConfig:
+            options:
+              - name: ndots
+                value: "1"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            # The key file (mode 0440) is readable by the group.
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: token
+              # Debian with the openssl command.
+              image: docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+              imagePullPolicy: IfNotPresent
+              command: ["python3", "/app/github_token.py"]
+              env:
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                # The ID of the App is no secret (Design Doc, section 4.2.6).
+                # bin/main-app-key sets it with the key.
+                - name: GITHUB_APP_ID
+                  value: "SET-BY-MAIN-APP-KEY"
+                - name: GITHUB_APP_KEY_FILE
+                  value: /github-app/private-key.pem
+                # What the token may do, in one place: the one repository and
+                # the permissions of D138 and D140. A token never has more,
+                # whatever the App or its installation has.
+                - name: GITHUB_REPOSITORY
+                  value: iT3E/tnwks-ops
+                - name: GITHUB_APP_PERMISSIONS
+                  value: metadata:read,contents:write,pull_requests:write,actions:read,issues:write
+                - name: TOKEN_SECRET
+                  value: github-mcp-app-token
+                - name: TOKEN_KEY
+                  value: GITHUB_MCP_TOKEN
+                - name: POD_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: script
+                  mountPath: /app
+                  readOnly: true
+                - name: github-app
+                  mountPath: /github-app
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: github-token-script
+            # The private key of the App, readable by the group only.
+            - name: github-app
+              secret:
+                secretName: main-github-app
+                defaultMode: 0440
+                items:
+                  - key: private-key.pem
+                    path: private-key.pem

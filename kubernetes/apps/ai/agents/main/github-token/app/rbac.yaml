@@ -1,0 +1,31 @@
+---
+# The account of the token job: it may update the one Secret of the token
+# by its name, and nothing else. An update needs no read, so the job never
+# reads the token back. No other pod uses this account.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: github-token
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-token
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["github-mcp-app-token"]
+    verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-token
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: github-token
+subjects:
+  - kind: ServiceAccount
+    name: github-token

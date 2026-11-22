@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the token job of the App of the main agent, not listed yet: each 30 minutes an installation token for the ops repository with the permissions of the design, into one Secret; bin/main-app-key puts the private key of the App into its encrypted Secret at the terminal of the owner, and shows flags only'
+time: 2026-11-22T12:00:00.000000000Z
