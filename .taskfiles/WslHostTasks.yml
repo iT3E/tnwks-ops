@@ -137,7 +137,8 @@ tasks:
     desc: Report drift of the Windows OpenSSH server setup; changes nothing (UAC prompt)
     vars: *sshd_vars
     cmds:
-      # The script exits 2 when something differs.
+      # The script exits 2 when something differs. The helper exits 125 when
+      # the script did not run (security/tests/test_invoke_elevated.py).
       - "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r '.windows_sshd_authorized_keys[]' > {{.SSHD_KEYS}}"
       - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ALLOW_USERS}}{{if .AGENT_USER}} -AgentUser {{.AGENT_USER}}{{end}} -Check || [ $? -eq 2 ]'
 
