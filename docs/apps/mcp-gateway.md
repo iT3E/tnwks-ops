@@ -432,7 +432,8 @@ agent does, with two keys of its own and none of the agent's:
 6. The vault of the other trust domain (`OTHER_VAULT_GATEWAY_URL`,
    `OTHER_VAULT_SERVER`): the probe key gets a 401 on its route, and a
    straight connection to its server fails (R6). Each probe checks the
-   other.
+   other. The straight tries of items 5 and 6 have the rule of item 7: only
+   a time out passes.
 7. The read servers and the browser of main (`GATEWAY_ONLY_SERVERS`:
    `cluster-mcp`, `flux-mcp`, `terraform-mcp` and `github-mcp` in
    `agents-main`, port 8080, and `playwright-mcp` in `ai`, port 8000): a straight
