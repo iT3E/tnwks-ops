@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'playwright-mcp: the browser of main takes the Host that the central MCP gateway sends (the name of its Service with no port), so the route main-browser answers; the route is not live for use yet'
+time: 2026-11-22T08:30:00.000000000Z

@@ -67,7 +67,7 @@ Each flag is in the README of the pinned release.
 | `--block-service-workers` | A page leaves no worker behind |
 | `--redact-url-params=...` | The values of the common names of a token, a code, a key or a password in a URL show as `<redacted>` in a tool answer |
 | `--proxy-server=http://fetch-proxy.agents-main.svc.cluster.local:8080` | Each page through the fetch proxy |
-| `--allowed-hosts=playwright-mcp.ai.svc.cluster.local:8000` | The server answers the Host of its Service only (a `403` for any other Host). The gateway is the one caller |
+| `--allowed-hosts=playwright-mcp.ai.svc.cluster.local` | The server answers one Host only, the name of its Service with no port (a `403` for any other Host). The server matches the whole Host exactly, and the gateway, the one caller, sends the host name of the target without its port |
 
 No `--caps`, so no capability adds a tool. No storage state, no secrets
 file, no profile folder and no saved session: the browser holds no
