@@ -825,7 +825,7 @@ the model gateway. It shows no product metrics and no money.
 - **Homelab.** The AI tile is the worst of the parts, the checks, the result
   lines and the backups. Needs attention has a row for each part that is not
   Healthy, Standby or Not applicable.
-- **Alerts.** Each of the 20 rules in `kubernetes/apps/ai/` opens this board
+- **Alerts.** Each of the 23 rules in `kubernetes/apps/ai/` opens this board
   (`tests/test_alert_links.py`). Its runbook is
   [`agent-platform-runbook.md`](../apps/agent-platform-runbook.md).
 - **No picker of the trust domain yet.** Each table has the trust domain as

@@ -1,0 +1,3 @@
+kind: Added
+body: 'Agent platform: the platform Vector also counts one fixed log line of the approval plugin, when it refuses each tool call (pattern plugin_refuse of homelab_agent_channel_error_lines_total; only the count leaves the node), and AgentPluginRefusingTools warns for an hour after such a line'
+time: 2026-11-22T08:10:00.000000000+00:00

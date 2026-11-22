@@ -63,7 +63,7 @@ def test_each_ai_alert_opens_the_ai_board_scoped_to_its_site():
         match = URL.fullmatch((rule.get("annotations") or {}).get("dashboard_url", ""))
         assert match and match[1] == "tnwks-ai", (str(path), rule["alert"])
         names.append(rule["alert"])
-    assert len(names) == 22
+    assert len(names) == 23
     assert sorted(names) == alert_names()
     assert {str(path) for path, _ in alerts() if str(path).startswith("kubernetes/apps/ai/")} == set(ALERT_FILES)
 
