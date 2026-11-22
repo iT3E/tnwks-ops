@@ -6,11 +6,11 @@ browser of the main agent, through the route `main-browser` of the central
 MCP gateway ([mcp-gateway.md](mcp-gateway.md)), with the rails of the
 Design Doc of effort 0003, section 4.2.6 ("The browser, its rails").
 
-**Deployed, not live for use.** The route, the flags, the proxy and the
-policies are in, and the probe and the tests can prove them. The config of
-the main agent names no server at the route yet, so the agent has no
-browser tool. [The switch](#the-switch) turns it on, after the rows that a
-probe can prove pass and the owner's test questions.
+**Switched on, not live for use.** The config of the main agent has the
+entry `browser` at the route, with the 21 tools of the rule ([the
+switch](#the-switch)). It is live for use when the rows of the owner's test
+pass: two chats keep two pages, the pages go through the fetch proxy, and a
+form tool makes a card.
 
 Manifests: `kubernetes/apps/ai/playwright-mcp/`, image
 `mcr.microsoft.com/playwright/mcp` `v0.0.85`, pinned by digest, in
@@ -119,12 +119,13 @@ can; the egress goes to public sites through the fetch proxy only.
 
 ## The switch
 
-The browser is live for use when the config of the main agent
+The switch turns the browser on when the config of the main agent
 (`agents/main/agent/config/openclaw.json`) has the entry `browser` at
 `http://mcp-gateway.ai.svc.cluster.local:3000/main-browser/mcp`, with
 `Bearer ${MCP_GATEWAY_KEY}` and a `toolFilter` of the 21 tools of the rule,
 and `tools.sandbox.tools.alsoAllow` names each of them as
-`browser__<tool>`, with no wildcard. That is one small pull request, the
+`browser__<tool>`, with no wildcard. The browser is live for use when the
+rows of the owner's test then pass. The switch is one small pull request, the
 last of the browser step; it opens after the rows below that a probe can
 prove pass, and the owner's word. Its way back is its revert.
 `observability/tests/test_main_browser.py` holds both states: no entry and
@@ -159,7 +160,8 @@ example `KubeDeploymentReplicasMismatch` after 15 minutes.
 
 ## What is left
 
-- **Not live for use** until [the switch](#the-switch).
+- **Not live for use** until the rows of the owner's test pass, after
+  [the switch](#the-switch).
 - **No signed-in site.** A signed-in session is a credential in this pod
   (R2); each site would get an account of its own, a Secret and a route of
   its own, on the owner's word.

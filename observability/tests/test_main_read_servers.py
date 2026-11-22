@@ -246,8 +246,9 @@ def test_the_sandbox_allow_list_names_each_kept_tool_by_its_exact_name():
     assert not [a for a in mcp if "*" in a or "?" in a]
     assert sorted(mcp) == sorted(f"{s}__{t}" for s in SERVERS
                                  for t in config["mcp"]["servers"][s]["toolFilter"]["include"])
-    # The vault of main (test_main_vault.py) and the read servers, no other.
-    assert set(config["mcp"]["servers"]) == {"vault"} | set(SERVERS)
+    # The vault of main (test_main_vault.py), the read servers and the
+    # browser (test_main_browser.py), no other.
+    assert set(config["mcp"]["servers"]) == {"vault", "browser"} | set(SERVERS)
 
 
 def test_the_live_step_has_the_key_of_main_and_its_hash():
