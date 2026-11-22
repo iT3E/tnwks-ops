@@ -217,7 +217,7 @@ PARENT = k_labels(NAMES["parent"])
 OUT_H = h_labels(NAMES["outsideHR"])
 CLASS_H = h_labels(NAMES["classHR"])
 SUBST = {"substituteFrom": [{"kind": "ConfigMap", "name": "cluster-settings"},
-                            {"kind": "Secret", "name": "cluster-secrets"}]}
+                            {"kind": "Secret", "name": "cluster-secrets-apps"}]}
 APP_PATH = "./kubernetes/apps/production/new-app/app"
 
 
@@ -340,6 +340,8 @@ def cases():
              "labels": {"kustomize.toolkit.fluxcd.io/name": NAMES["classK"].split("/")[1]}})),
         ("kustomization-spec", "substitution from another Secret of flux-system", KUSTOMIZE, "deny",
          kustomization("new-app", APP_PATH, PARENT, postBuild={"substituteFrom": [{"kind": "Secret", "name": "flux-system"}]})),
+        ("kustomization-spec", "substitution from the full cluster-secrets", KUSTOMIZE, "deny",
+         kustomization("new-app", APP_PATH, PARENT, postBuild={"substituteFrom": [{"kind": "Secret", "name": "cluster-secrets"}]})),
         ("kustomization-spec", "a Kustomization of an app", KUSTOMIZE, "allow",
          kustomization("new-app", APP_PATH, PARENT, postBuild=SUBST,
                        decryption={"provider": "sops", "secretRef": {"name": "sops-age"}})),
