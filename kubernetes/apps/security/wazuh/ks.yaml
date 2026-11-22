@@ -1,7 +1,7 @@
 ---
 # The Wazuh server, step 2 of the security platform (README.md): one manager
-# node, one indexer node and the dashboard, on homelab-wsl-02 only. No
-# cluster lists this file yet (README.md, "Before the merge that lists it").
+# node, one indexer node and the dashboard, on homelab-wsl-02 only, which
+# lists this file (README.md, "The merges that list it").
 #
 # security-wazuh applies what this repository adds: the certificates, the
 # network rules, the Service of the agents and the configuration of the
@@ -15,6 +15,9 @@ metadata:
 spec:
   dependsOn:
     - name: cert-manager
+    # The pool and the BGP advertisement of the shared VIP of the agents
+    # (app/service-agents.yaml), as the other shared VIPs.
+    - name: cilium-bgp
   path: ./kubernetes/apps/security/wazuh/app
   prune: true
   sourceRef:

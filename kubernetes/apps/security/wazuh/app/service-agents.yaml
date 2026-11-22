@@ -5,20 +5,25 @@
 # ../server does not keep. The manager pod serves the TLS itself, with the
 # certificate wazuh-manager-remoted (certificates.yaml).
 #
-# WAZUH_AGENTS_LB_ADDR is a key of the cluster-settings of homelab-wsl-02 that
-# the owner adds, a free address of the LoadBalancer pool, before a cluster
-# lists this app (README.md, "Before the merge that lists it"). A host
-# outside the cluster reaches it through the LAN bridge of its site
-# (docs/wsl/lan-exposure.md).
+# WAZUH_AGENTS_LB_ADDR, a key of the cluster-settings of homelab-wsl-02, is an
+# address of the shared VIP pool, in the half that the router prefers on
+# site 2 (docs/wsl/multi-site.md, "Shared VIPs"). The label puts it in that
+# pool and in the BGP advertisement of the nodes
+# (kubernetes/apps/kube-system/cilium/bgp), so a host reaches it over the
+# routed network, with no LAN bridge. Only homelab-wsl-02 lists this app, so
+# only its nodes announce the address. Any node may receive it, so the
+# traffic policy is Cluster, as for the other shared VIPs.
 apiVersion: v1
 kind: Service
 metadata:
   name: wazuh-agents
   labels:
     app: wazuh-manager
+    tnwks.us/shared-vip: "true"
 spec:
   type: LoadBalancer
   loadBalancerIP: "${WAZUH_AGENTS_LB_ADDR}"
+  externalTrafficPolicy: Cluster
   selector:
     app: wazuh-manager
     node-type: master

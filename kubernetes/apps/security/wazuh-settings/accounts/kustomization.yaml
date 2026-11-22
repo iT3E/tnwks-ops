@@ -8,8 +8,8 @@ namespace: security
 # security-wazuh-settings (../app) depends on it (../ks.yaml), so step 2 runs
 # after the Job of step 1 completes. The files of the step stay in ../app with
 # those of step 2, because both steps share ../app/scripts/indexer.py.
-# The Secrets of step 1 are SOPS files that the owner makes and lists here
-# before a cluster lists this app (../../wazuh/README.md, "Secrets"):
+# The Secrets of step 1 are SOPS files, listed here by the merge that lists
+# ../ks.yaml (../../wazuh/README.md, "Secrets"):
 #   - ./secret-accounts-user.sops.yaml
 #   - ./secret-accounts-hashes.sops.yaml
 resources:

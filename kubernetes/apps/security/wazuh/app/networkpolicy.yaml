@@ -58,11 +58,10 @@ spec:
             - port: "443"
               protocol: TCP
 ---
-# The agents, on 1517 through the LoadBalancer of service-agents.yaml. A host
-# reaches it through the LAN bridge of its site, so it arrives as world or as
-# a node of either cluster (remote-node; the control plane node also carries
-# kube-apiserver), as for the peer Service of Prometheus
-# (kubernetes/apps/monitoring/kube-prometheus-stack/app/networkpolicy.yaml).
+# The agents, on 1517 through the shared VIP of service-agents.yaml. A host
+# arrives over the routed network as world, or, when the node that receives
+# it forwards to the pod on another node, as that node (remote-node; the
+# control plane node also carries kube-apiserver).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:

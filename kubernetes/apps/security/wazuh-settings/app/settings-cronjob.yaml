@@ -9,8 +9,13 @@ kind: CronJob
 metadata:
   name: wazuh-settings
 spec:
-  # UTC. After the API checks (06:47), one job at a time on the node.
-  schedule: "17 7 * * *"
+  # 08:22 UTC: after the deadline of each daily job on the node, so it runs
+  # alone among them. The AWS runs of Prowler start at 03:17 and 05:17 with a
+  # deadline of 3 hours, its Cloudflare run at 07:17 with 1 hour, and the API
+  # checks at 06:47 with 10 minutes: the last one ends by 08:17. The trail
+  # copy (each 15 minutes) and the credential refresher (each 30 minutes) are
+  # small and run beside it.
+  schedule: "22 8 * * *"
   timeZone: Etc/UTC
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 3600
