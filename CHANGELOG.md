@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.265.1 - 2026-11-22
+
+### Fixed
+
+* wsl: the USB attach unit of the distro attaches with the usbip client of usbipd-win against the usbipd service of the host, as usbipd attach reads the list of services at the Windows service control manager, which grants it to interactive and service logons, SYSTEM and the Administrators only; with no elevation the Windows backup task hands the attach to the distro and the watchdog skips its USB attach; on WSL zwave-js-ui mounts the folder /hostdev, so a pod that starts before the device leaves no directory at the name of the node, and the unit removes such an empty directory before it attaches
+
 ## v2.265.0 - 2026-11-22
 
 ### Added
