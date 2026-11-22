@@ -89,6 +89,8 @@ AI_PARTS = [
      "workload": "terraform-mcp"},
     {"trust_domain": "main", "part": "Code host MCP server", "namespace": "agents-main", "kind": "deployment",
      "workload": "github-mcp"},
+    {"trust_domain": "main", "part": "Host MCP server", "namespace": "agents-main", "kind": "deployment",
+     "workload": "host-mcp"},
     {"trust_domain": "finance", "part": "Finance MCP server", "namespace": "agents-finance", "kind": "deployment",
      "workload": "firefly-mcp"},
     {"trust_domain": "finance", "part": "Finance proxy", "namespace": "agents-finance", "kind": "deployment",

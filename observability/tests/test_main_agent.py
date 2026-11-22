@@ -218,11 +218,18 @@ def test_the_steps_never_meet_in_a_wrong_order():
 
 
 def test_the_secrets_of_the_owner_hold_each_value_the_pod_names():
-    """The three files are in git with the name and the keys the pod reads."""
+    """The three files are in git with the name and the keys the pod reads.
+    With the host server listed, agent-secret also holds MCP_HOST_KEY, the
+    key of the host approval plugin (test_main_host_approval.py): the store
+    step of the lead adds it on top of the go-live commit. With the server
+    not listed (the way back), the key may stay."""
+    host = "./host-mcp/ks.yaml" in yaml.safe_load((AGENTS / "main/kustomization.yaml").read_text())["resources"]
     for name, (secret, keys) in SECRETS.items():
         assert (APP / name).exists(), f"{name}: the owner's file is not in git yet"
         d = doc(APP / name)
         assert d["metadata"]["name"] == secret
+        if name == "secret.sops.yaml" and (host or "MCP_HOST_KEY" in d["stringData"]):
+            keys = keys | {"MCP_HOST_KEY"}
         assert set(d["stringData"]) == keys
     named = set(re.findall(r"\$\{([A-Z0-9_]+)\}", CONFIG.read_text()))
     assert named <= SECRETS["secret.sops.yaml"][1] | SECRETS["secret-search.sops.yaml"][1]
