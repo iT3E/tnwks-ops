@@ -11,12 +11,21 @@
   "acp": {"enabled": false},
   "commands": {
     "config": false,
-    "ownerAllowFrom": ["telegram:${TELEGRAM_ALLOW_FROM}"]
+    "ownerAllowFrom": ["telegram:${TELEGRAM_ALLOW_FROM}"],
+    "allowFrom": {"telegram": ["${TELEGRAM_ALLOW_FROM}"], "*": []}
+  },
+  "approvals": {
+    "plugin": {
+      "enabled": true,
+      "mode": "targets",
+      "targets": [{"channel": "telegram", "to": "${TELEGRAM_ALLOW_FROM}"}]
+    }
   },
   "session": {"dmScope": "per-channel-peer"},
   "tools": {
     "elevated": {"enabled": false},
-    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish",
+             "openclaw", "plugins", "terminal", "portal"],
     "sandbox": {"tools": {"alsoAllow": [
       "memory_search",
       "memory_get",
@@ -230,7 +239,8 @@
       "groups": {"$include": "./telegram-groups.json"},
       "historyLimit": 15,
       "streaming": {"mode": "partial"},
-      "configWrites": false
+      "configWrites": false,
+      "execApprovals": {"enabled": true, "approvers": ["${TELEGRAM_ALLOW_FROM}"]}
     }
   },
   "plugins": {
@@ -238,13 +248,15 @@
       "active-memory",
       "brave",
       "diagnostics-otel",
+      "host-approval",
       "memory-core",
       "openshell",
       "telegram"
     ],
     "load": {
       "paths": [
-        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox"
+        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox",
+        "/opt/openclaw/local-plugins/host-approval"
       ]
     },
     "entries": {
@@ -259,6 +271,20 @@
         }
       },
       "brave": {"enabled": true},
+      "host-approval": {
+        "enabled": true,
+        "config": {
+          "serverPrefixes": ["host__"],
+          "readProfile": "agent",
+          "readList": [],
+          "promptTools": [],
+          "approverId": "${TELEGRAM_ALLOW_FROM}",
+          "approvalChannel": "telegram",
+          "timeoutMs": 600000,
+          "mcpUrl": "http://mcp-gateway.ai.svc.cluster.local:3000/main-host/mcp",
+          "mcpKeyEnv": "MCP_HOST_KEY"
+        }
+      },
       "diagnostics-otel": {"enabled": true},
       "active-memory": {
         "enabled": true,

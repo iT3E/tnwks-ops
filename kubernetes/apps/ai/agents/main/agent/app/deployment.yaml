@@ -14,7 +14,9 @@
 # the share: the seed stops at a share that is not empty. M7b, the read
 # step: the read tools of the cluster, Flux, Terraform and code host
 # servers, through the same gateway with the same key (Design Doc, section
-# 4.2.6). No finance app, no Signal and no scheduled job (the Monday job
+# 4.2.6). The host approval plugin of the image (task 6.22), with no host
+# tool yet (docs/apps/agent-platform-runbook.md, "The host approval plugin
+# (main)"). No finance app, no Signal and no scheduled job (the Monday job
 # comes with the Signal step). Each command it runs goes to a sandbox of this trust domain,
 # through the sandbox gateway; each model call goes to the model gateway,
 # with the key of this trust domain.
@@ -92,14 +94,21 @@ spec:
         # the SHA-256 of MCP_GATEWAY_KEY is not the hash of the client main
         # on the route main-vault in the config of the MCP gateway (the same
         # file, mounted here), or while the file of the Telegram group is not
-        # one group: a JSON object with one key, a negative chat id. It
+        # one group: a JSON object with one key, a negative chat id. It also
+        # stops the start while TELEGRAM_ALLOW_FROM is not one chat ID (it
+        # is the approver of the host approval plugin), or while the config
+        # does not hold the approval form that the plugin checks at its
+        # load (key=host-approval). With a fault of that form the plugin
+        # refuses each tool call of the agent, the vault and the read routes
+        # too. The check runs the code of the plugin in the image on the
+        # config with the values of the env. It
         # prints `values-check result=ok` or `values-check result=failed
         # key=<name> reason=empty|placeholder|hash|form`, the name of the key
         # only, never a value or a hash, and fails the start. The pod then stays in
         # Init:CrashLoopBackOff, not ready, and AgentPlatformWorkloadNotReady
         # fires after 10 minutes.
         - name: values-check
-          image: &image ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.5.0@sha256:8839bc84d4286df7627c31f48e3a3e8efdb86bce3b0e152ec96118835d4660be
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -120,6 +129,29 @@ spec:
               if [ "$(cat "$g")" = pending ]; then echo "values-check result=failed key=$k reason=placeholder"; exit 1; fi
               if ! node -e 'const g = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const k = Object.keys(g); process.exit(g && typeof g === "object" && !Array.isArray(g) && k.length === 1 && /^-[0-9]+$/.test(k[0]) ? 0 : 1)' "$g" 2> /dev/null; then
                 echo "values-check result=failed key=$k reason=form"; exit 1
+              fi
+              case "$TELEGRAM_ALLOW_FROM" in
+                *[!0-9]*) echo "values-check result=failed key=TELEGRAM_ALLOW_FROM reason=form"; exit 1 ;;
+              esac
+              # No dollar sign before a brace here: Flux substitutes that form
+              # in this file. \x24 and \x7b are those two characters.
+              if ! node --input-type=module -e '
+                import fs from "node:fs";
+                const lib = await import("/opt/openclaw/local-plugins/host-approval/lib.js");
+                const ref = /\x24\x7b([A-Z_][A-Z0-9_]*)\x7d/g;
+                const fill = (v) => typeof v === "string" ? v.replace(ref, (m, n) => process.env[n] ?? m)
+                  : Array.isArray(v) ? v.map(fill)
+                  : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)])) : v;
+                const c = fill(JSON.parse(fs.readFileSync("/home/node/config/openclaw.json", "utf8")));
+                const entry = c.plugins?.entries?.["host-approval"];
+                if (!entry || entry.enabled !== true) process.exit(1);
+                const parsed = lib.parseConfig(entry.config);
+                if (!parsed.ok) process.exit(1);
+                if (lib.checkProductConfig(c, parsed.config, process.env).length) process.exit(1);
+                const byName = async (host) => [{ address: host }];
+                if ((await lib.checkServerRoutes(c.mcp?.servers, parsed.config, byName)).length) process.exit(1);
+              ' 2> /dev/null; then
+                echo "values-check result=failed key=host-approval reason=form"; exit 1
               fi
               echo "values-check result=ok"
           envFrom:

@@ -76,7 +76,10 @@ def test_the_pod_is_the_finance_pod_with_no_scheduled_job():
     assert MAIN["nodeSelector"] == FIN["nodeSelector"]
     assert MAIN["securityContext"] == FIN["securityContext"]
     for a, b in zip(MAIN["containers"], FIN["containers"], strict=False):
-        assert a["image"] == b["image"]
+        # The same image repository. Main runs 0.5.0 first, for the host
+        # approval plugin (test_main_host_approval.py); finance takes the
+        # release when Renovate moves its pin.
+        assert a["image"].split(":")[0] == b["image"].split(":")[0]
         assert a["securityContext"] == b["securityContext"], a["name"]
     text = (APP / "deployment.yaml").read_text()
     body = text[text.index("apiVersion:"):]
@@ -149,9 +152,13 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     assert "policy" not in c["plugins"]["entries"]["openshell"]["config"]
     assert c["diagnostics"]["otel"]["serviceName"] == "openclaw-agents-main"
     # Every other setting is the one of finance.
-    for key in ("gateway", "update", "telemetry", "acp", "commands", "session"):
+    for key in ("gateway", "update", "telemetry", "acp", "session"):
         assert c[key] == f[key], key
-    assert c["plugins"]["allow"] == f["plugins"]["allow"]
+    # The command rule of the host approval plugin comes on top
+    # (test_main_host_approval.py).
+    assert {k: v for k, v in c["commands"].items() if k != "allowFrom"} == f["commands"]
+    # The host approval plugin of main (test_main_host_approval.py) on top.
+    assert [p for p in c["plugins"]["allow"] if p != "host-approval"] == f["plugins"]["allow"]
     # Active memory as finance has it, on the model of the session (the
     # decision of the owner for the first run).
     assert c["plugins"]["entries"]["active-memory"] == f["plugins"]["entries"]["active-memory"]
@@ -232,6 +239,7 @@ def test_the_model_gateway_has_the_embeddings_of_main_on_the_host_model():
 
 VALUES = sorted(SECRETS["secret.sops.yaml"][1] | SECRETS["secret-search.sops.yaml"][1])
 VALUE = "a-real-looking-value"
+APPROVER = "1000000001"  # a test chat ID, not a real one
 GROUP = '{"-1000000000001": {"requireMention": false}}'
 
 
@@ -249,9 +257,19 @@ def with_hash(client, key):
     return text.replace(old, "sha256:" + hashlib.sha256(key.encode()).hexdigest())
 
 
-def run_values(env, group=GROUP, config=None):
+def good() -> dict[str, str]:
+    """Each value set; TELEGRAM_ALLOW_FROM is one chat ID, the approver of
+    the host approval plugin."""
+    env = dict.fromkeys(VALUES, VALUE)
+    env["TELEGRAM_ALLOW_FROM"] = APPROVER
+    return env
+
+
+def run_values(env, group=GROUP, config=None, agent_config=None):
     (check,) = [c for c in MAIN["initContainers"] if c["name"] == "values-check"]
     tmp = scratch()
+    (tmp / "openclaw.json").write_text(CONFIG.read_text() if agent_config is None else agent_config)
+    (tmp / "openclaw.json").chmod(0o644)
     if group is not None:
         (tmp / "telegram-groups.json").write_text(group)
         (tmp / "telegram-groups.json").chmod(0o644)
@@ -323,19 +341,19 @@ def test_the_values_check_refuses_a_key_whose_hash_is_not_the_one_of_main(config
         "other key": with_hash("main", "another-value"),
         "probe key": with_hash("main-probe", VALUE),
     }[config]
-    code, out = run_values(dict.fromkeys(VALUES, VALUE), config=text)
+    code, out = run_values(good(), config=text)
     assert code != 0
     assert out == "values-check result=failed key=MCP_GATEWAY_KEY reason=hash"
     assert hashlib.sha256(VALUE.encode()).hexdigest() not in out
 
 
 def test_the_values_check_passes_with_every_value():
-    assert run_values(dict.fromkeys(VALUES, VALUE)) == (0, "values-check result=ok")
+    assert run_values(good()) == (0, "values-check result=ok")
 
 
 @pytest.mark.parametrize(("value", "reason"), [("pending", "placeholder"), ("", "empty")])
 def test_the_values_check_refuses_a_placeholder(value, reason):
-    env = dict.fromkeys(VALUES, VALUE)
+    env = good()
     env["TELEGRAM_BOT_TOKEN"] = value
     code, out = run_values(env)
     assert code != 0
@@ -352,7 +370,7 @@ def test_the_values_check_refuses_a_placeholder(value, reason):
     ("not json", "form"),
 ])
 def test_the_values_check_refuses_a_group_file_that_is_not_one_group(group, reason):
-    code, out = run_values(dict.fromkeys(VALUES, VALUE), group)
+    code, out = run_values(good(), group)
     assert code != 0
     assert out == f"values-check result=failed key=telegram-groups.json reason={reason}"
     assert "100000000000" not in out

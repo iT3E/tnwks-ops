@@ -2691,6 +2691,56 @@ routes and hashes, the read bindings and the three server entries go out
 together. The key of main and its vault route stay, and the agent pod
 starts again with its vault tools.
 
+### The host approval plugin (main)
+
+The agent image 0.5.0 has the host approval plugin of task 6.22 in
+`/opt/openclaw/local-plugins/host-approval` (the README of
+iT3E/tnwks-agent-image, "The host approval plugin"). The config of main
+loads it (`plugins.load.paths`, `plugins.entries.host-approval`), with the
+approval form that the plugin checks at its load:
+
+| Key | Value |
+| --- | --- |
+| `approvals.plugin` | `enabled`, `mode: "targets"`, one target: the direct chat of `${TELEGRAM_ALLOW_FROM}` on the channel `telegram` |
+| `channels.telegram.execApprovals` | `enabled`, the approvers `${TELEGRAM_ALLOW_FROM}` only |
+| `commands.allowFrom` | `telegram`: the allow list of the channel (the same members), and `"*"`: an empty list |
+| `commands.ownerAllowFrom` | `telegram:${TELEGRAM_ALLOW_FROM}`, as before |
+| `tools.deny` | Also `openclaw`, `plugins`, `terminal` and `portal` |
+
+The approver is `TELEGRAM_ALLOW_FROM`, the one sender of the allow list of
+main. No new value comes into the Secret.
+
+**A fault of that form stops each tool of main.** The plugin then refuses
+each tool call of the agent, the vault and the read routes too, and logs
+`host-approval: refusing each tool call: <errors>`. So the values check
+of the pod runs the code of the plugin in the image on the config, with the
+values of the env, and stops the start before the gateway:
+`values-check result=failed key=host-approval reason=form`. It also stops
+the start when `TELEGRAM_ALLOW_FROM` is not one chat ID
+(`key=TELEGRAM_ALLOW_FROM reason=form`).
+
+**No host tool yet.** The plugin names the route `main-host` and the env
+var `MCP_HOST_KEY`, and neither exists until the host server of task
+6.22. With no key, the plugin gives no connection: the agent has no host
+tool, and each other tool works. The key of the host route is a key of its
+own: the plugin refuses each call when another server entry of the config
+carries its key, and the read routes carry `MCP_GATEWAY_KEY`. A lab with
+the config of the branch proved each of these: the plugin loaded, the
+vault and the three read routes answered, a host tool was unknown, a
+missing `commands.allowFrom` made the plugin refuse each call, and a key
+with no route left the other tools working.
+
+**After the merge:**
+
+| Read | Pass rule |
+| --- | --- |
+| `kubectl -n agents-main logs deploy/agent -c values-check` | `values-check result=ok` |
+| `kubectl -n agents-main logs deploy/agent -c agent \| grep -c 'host-approval: loaded, 0 read lines'` | 1 for each start of the pod. No line `host-approval: refusing each tool call` |
+| The owner asks the agent for one read of the vault and of each read server | The agent answers each one |
+
+**The way back** is one revert of the squash commit: the image 0.4.1 and
+the config with no plugin.
+
 ### The way back of the main agent
 
 - **Telegram, before step 5:** a pull request takes out the files of step 4
