@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.274.0 - 2026-11-22
+
+### Added
+
+* agents: the code host server of main (task 6.19, the read step of M7b, one pull request after the other three servers; the config of the main agent lists its 17 reads). Deployed, not live for use until its live rows pass. Its read credential is a stopgap of the owner: a read-only token for this repository only, until the token job of the App of the main agent writes the Secret. The GitHub MCP server v2.2.0 (pinned by digest) in agents-main, read only, in lockdown mode, with its 17 reads by name, behind a proxy container that sets the token of the Secret github-mcp-token on each request and drops each mode header. The route main-github on the central MCP gateway takes the key of the main agent only, names the 17 reads from the dump tools/github.json, and a guardrail refuses a call for any repository but the ops repository. The pod reaches the API of the code host and its raw content host only. The gateway probes of main and finance also try it straight each day.
+
 ## v2.273.0 - 2026-11-22
 
 ### Changed
