@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.266.0 - 2026-11-22
+
+### Added
+
+* monitoring: smokeping pings the LiteAP radio (liteap-gps) and the LiteBeam radio (litebeam-5ac) behind the EP-R6 (role radio), and the radio link has one alert per hop: RadioAPUnreachable when the LiteAP stops answering while the EP-R6 answers, RadioStationUnreachable when the LiteBeam stops answering while the LiteAP answers (RadioLinkProbeMissing when nothing probes them). The Network & Routing tab Radio gateway becomes Radio link: a state per hop (Unknown behind a hop that is down), loss and latency per hop. The airCube rejects pings and is not watched
+
 ## v2.265.1 - 2026-11-22
 
 ### Fixed
