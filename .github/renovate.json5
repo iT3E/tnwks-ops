@@ -163,6 +163,16 @@
       "matchUpdateTypes": ["digest"],
       "matchPackageNames": ["!/^ghcr\\.io\\/it3e\\//"],
       "schedule": ["before 7am on monday"]
+    },
+    {
+      // The kubernetes manager reads every YAML file under kubernetes/, so
+      // without this it would propose edits inside the copy, which its sums
+      // test refuses. The images of the server are updated in
+      // kubernetes/apps/security/wazuh/ks.yaml (the flux manager), and the
+      // copy by hand.
+      "description": "The vendored manifests of the Wazuh server: a byte-for-byte copy, updated by hand (kubernetes/apps/security/wazuh/server/UPSTREAM.md)",
+      "matchFileNames": ["kubernetes/apps/security/wazuh/server/upstream/**"],
+      "enabled": false
     }
   ],
   "pre-commit": {

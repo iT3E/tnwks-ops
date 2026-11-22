@@ -20,6 +20,21 @@ update). This repository patches them. Flux builds both Kustomizations
 (`ks.yaml`) from the repository itself, so each object of the server is in
 git, and a change of the vendor's files comes as a reviewed diff.
 
+Why a copy, and not a source of the vendor's repository (the Flux admission
+policy `flux-child-scope`, `../../flux-system/admission`):
+
+- The class of the policy is what git of this repository builds at a class
+  path. A Kustomization whose source is another repository is outside the
+  class, and the objects it applies into a class namespace (here `security`)
+  do not pass the rules for objects from outside the class.
+- The walk that makes the class list (`classlist.py`) builds the path inside
+  this repository, whatever the source says, so it can not see the objects
+  of another source.
+- A tag of another repository can move, and its content does not pass the
+  review of this repository. So the manifests are here, at the commit of the
+  pinned tag, with a check against the vendor's repository
+  (`server/UPSTREAM.md`).
+
 | Kustomization | What it applies |
 | --- | --- |
 | `security-wazuh` | `app/`: the certificates, the network rules, the agents Service and the configuration of the manager |
