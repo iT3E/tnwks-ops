@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.287.1 - 2026-11-22
+
+### Fixed
+
+* agents: the straight tries of the gateway probes to the two vault servers pass only on a time out, as the tries to the read servers do; a refusal, an answer or a name that does not resolve fails
+
 ## v2.287.0 - 2026-11-22
 
 ### Changed
