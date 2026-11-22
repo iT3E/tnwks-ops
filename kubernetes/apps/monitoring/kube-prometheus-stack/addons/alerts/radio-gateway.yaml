@@ -1,8 +1,16 @@
 ---
-# The EP-R6 (sce-ep01, 10.10.140.140 on VLAN 140): the gateway of the radio
-# network 10.60.10.0/24 (infrastructure/edgeos). Fed by smokeping-prober
-# (role edge, 1 ping/s; smokeping:loss_ratio:rate1m from wan-latency.yaml).
-# Dashboard: Network & Routing, tab Radio gateway.
+# The radio link, hop by hop: the EP-R6 (sce-ep01, 10.10.140.140 on VLAN
+# 140), the gateway of the radio network 10.60.10.0/24 (infrastructure/edgeos),
+# then the LiteAP radio beside it (liteap-gps, 10.60.10.45, the AP end), then
+# over the air the LiteBeam radio (litebeam-5ac, 10.60.10.43, the station end).
+# Fed by smokeping-prober (roles edge and radio, 1 ping/s;
+# smokeping:loss_ratio:rate1m from wan-latency.yaml). The airCube behind the
+# LiteBeam rejects pings on its WAN side, so it has no probe and no alert.
+#
+# One alert per fault: each hop's alert needs the hop before it and the
+# probe's own path (the router hop, role lan, and SW03, role switch) under 10%
+# loss, so a hop that is down silences every hop behind it.
+# Dashboard: Network & Routing, tab Radio link.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -28,7 +36,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-gateway"
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-link"
             summary: "Radio gateway (EP-R6) not answering pings"
             description: >-
               {{ $labels.name }} ({{ $labels.host }}) lost {{ $value | humanizePercentage }}
@@ -40,6 +48,66 @@ spec:
               `ssh` to 10.10.140.140. Right after a change to the router's
               MONITORING_ZONE_RULES, check that rule
               200-unifi-frontend-910-UISP-140 is applied.
+
+        # The LiteAP sits beside the EP-R6, cabled to it: same place, so the
+        # same 4 min as the gateway (an airOS reboot takes about
+        # 2 min). Its management address keeps answering while its radio
+        # changes channel, so a DFS move doesn't reach this alert.
+        - alert: RadioAPUnreachable
+          expr: |
+            max by (host, name) (smokeping:loss_ratio:rate1m{role="radio",name="liteap-gps"}) > 0.5
+            and on ()
+            max(smokeping:loss_ratio:rate1m{role="edge",name="sce-ep01"}) < 0.1
+            and on ()
+            max(smokeping:loss_ratio:rate1m{role="lan"}) < 0.1
+            and on ()
+            max(smokeping:loss_ratio:rate1m{role="switch"}) < 0.1
+          for: 4m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-link"
+            summary: "Radio AP (LiteAP) not answering pings"
+            description: >-
+              The LiteAP radio, {{ $labels.name }} ({{ $labels.host }}), lost
+              {{ $value | humanizePercentage }} of its pings over the last minute
+              while the EP-R6 in front of it, the router and SW03 answer. The
+              far end of the radio link is cut off: nothing crosses the link
+              without the AP end. Check the LiteAP's power and its cable to
+              the EP-R6; over wg01, `ssh` to 10.60.10.45.
+
+        # The station end of the link, over the air. 10 min, not 4: the far
+        # end of the radio link can be switched off and on by hand (the
+        # LiteBeam then boots and re-associates in about 3 min), and a radar
+        # hit on a DFS channel moves the link, which waits a 1 min channel
+        # check before the station joins again. Pings can't tell a far end
+        # that is switched off on purpose from a fault, so one off for longer
+        # than 10 min fires this. An outage notifies about 11 min after it
+        # starts.
+        - alert: RadioStationUnreachable
+          expr: |
+            max by (host, name) (smokeping:loss_ratio:rate1m{role="radio",name="litebeam-5ac"}) > 0.5
+            and on ()
+            max(smokeping:loss_ratio:rate1m{role="radio",name="liteap-gps"}) < 0.1
+            and on ()
+            max(smokeping:loss_ratio:rate1m{role="lan"}) < 0.1
+            and on ()
+            max(smokeping:loss_ratio:rate1m{role="switch"}) < 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-link"
+            summary: "Radio link down: the station (LiteBeam) not answering pings"
+            description: >-
+              The LiteBeam radio at the far end of the radio link,
+              {{ $labels.name }} ({{ $labels.host }}), lost
+              {{ $value | humanizePercentage }} of its pings over the last
+              minute while the LiteAP at this end, the EP-R6, the router and
+              SW03 answer. The wireless link is down or the station is off, so
+              the far end of the radio link has no Internet. Ask whether the
+              far end was switched off; if not, check the LiteAP's wireless
+              status over wg01 (`ssh` to 10.60.10.45).
 
         # The series is gone while the prober is up: the target left the
         # config, or the prober stopped probing it. SmokepingProberDown covers
@@ -54,10 +122,34 @@ spec:
           labels:
             severity: warning
           annotations:
-            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-gateway"
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-link"
             summary: "Nothing probes the radio gateway (EP-R6)"
             description: >-
               smokeping-prober is up but exports no series for sce-ep01, so
               RadioGatewayUnreachable can't fire. Check the target in
+              monitoring/smokeping-prober/app/config/smokeping.yaml and
+              `kubectl -n monitoring logs deploy/smokeping-prober --tail=20`.
+
+        # The same for the two radios, one alert per missing target (absent
+        # keeps each selector's name label).
+        - alert: RadioLinkProbeMissing
+          expr: |
+            (
+              absent(smokeping_requests_total{role="radio",name="liteap-gps"})
+              or
+              absent(smokeping_requests_total{role="radio",name="litebeam-5ac"})
+            )
+            and on ()
+            (max(up{job="smokeping-prober"}) == 1)
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-network?var-cluster={{ $externalLabels.cluster }}&dtab=radio-link"
+            summary: "Nothing probes {{ $labels.name }} on the radio link"
+            description: >-
+              smokeping-prober is up but exports no series for {{ $labels.name }},
+              so RadioAPUnreachable and RadioStationUnreachable can't tell which
+              hop of the radio link failed. Check the target in
               monitoring/smokeping-prober/app/config/smokeping.yaml and
               `kubectl -n monitoring logs deploy/smokeping-prober --tail=20`.

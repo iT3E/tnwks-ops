@@ -117,7 +117,7 @@ flowchart LR
     end
 
     mktxp -->|"api-ssl 8729, read-only"| rtr
-    smoke -->|"ICMP 1/s: router, APs, SW03, EP-R6"| rtr
+    smoke -->|"ICMP 1/s: router, APs, SW03, EP-R6, radios"| rtr
     rtr -->|"syslog tcp 6001"| win
     rtr -->|"NetFlow v9 udp 2055"| win
     win --> bridge
@@ -138,25 +138,35 @@ flowchart LR
 - **Flows:** NetFlow v9 from the WAN interface goes to `flow-collector`, for
   per-client upload and download.
 - **Reachability:** `smokeping-prober` pings the router, the Internet
-  targets, the 3 APs, SW03 and the EP-R6 once a second, from the desktop's
-  address. The router allows ICMP from the `monitoring` list to the
-  management addresses (`MONITORING_ZONE_RULES` in the generator; the EP-R6
-  in pair `200-unifi-frontend-910-UISP-140`). The same pair also allows ICMP
-  from that list to the three devices behind the EP-R6: the LiteAP radio
-  `10.60.10.45`, the LiteBeam radio `10.60.10.43` and the airCube
-  `10.60.10.46`, and nothing else in `10.60.10.0/24`.
-  `RadioGatewayUnreachable`
-  fires when the EP-R6 loses over half its pings for 4 minutes while the
-  router and SW03 answer. Its board is Network & Routing, tab Radio gateway:
-  the pings, the router's VLAN 140 counters and the EP-R6's Internet traffic
-  from flow export.
+  targets, the 3 APs, SW03, the EP-R6 and the two radios behind it once a
+  second, from the desktop's address. The router allows ICMP from the
+  `monitoring` list to the management addresses (`MONITORING_ZONE_RULES` in
+  the generator; the EP-R6 in pair `200-unifi-frontend-910-UISP-140`). The
+  same pair also allows ICMP from that list to the three devices behind the
+  EP-R6: the LiteAP radio `10.60.10.45`, the LiteBeam radio `10.60.10.43`
+  and the airCube `10.60.10.46`, and nothing else in `10.60.10.0/24`.
+  The radio link has one alert per hop, each quiet while the hop in front
+  of it or the probe's own path (router and SW03) loses pings, so a fault
+  pages once: `RadioGatewayUnreachable` (the EP-R6, 4 minutes over half
+  lost), `RadioAPUnreachable` (the LiteAP, 4 minutes) and
+  `RadioStationUnreachable` (the LiteBeam: the link is down or the station
+  is off; 10 minutes, as the far end can be switched off by hand). The
+  board is Network & Routing, tab Radio link: a state per hop, loss and
+  latency per hop, the router's VLAN 140 counters and the EP-R6's Internet
+  traffic from flow export.
 
 ## Not running
 
 UISP ran as a container on VyOS and has no host yet. The radios keep working
 without it; adoption and firmware changes wait until it is hosted again.
-Until then nothing reads the radios themselves: the EP-R6 is watched only by
-pings and the router's counters (Reachability, above).
+Until then nothing reads the radios themselves: the EP-R6 and the two radios
+are watched only by pings and the router's counters (Reachability, above),
+and nothing reads their signal or health.
+
+The airCube `10.60.10.46` is not watched: it rejects pings on its WAN side
+(ICMP port unreachable), so a probe would read it as always lost. The
+router's ICMP rule for it stays, so a probe can be added once the device
+answers pings or another source of data exists.
 
 The UniFi controller moved to the WSL cluster (`networking/unifi`), with its
 configuration in Terraform; see [`unifi.md`](unifi.md).

@@ -7,11 +7,19 @@ from ..model import Board, p
 from ..queries import WAN_CLIENT, changes, metric, reachability, selector
 from .wan_clients import both
 
-# The EP-R6 (sce-ep01, 10.10.140.140 on VLAN 140): the gateway of the radio
-# network 10.60.10.0/24, pinged by smokeping as role edge (radio-gateway.yaml).
+# The radio link in path order, as smokeping pings it (radio-gateway.yaml): the
+# EP-R6 (sce-ep01, 10.10.140.140 on VLAN 140), the gateway of the radio network
+# 10.60.10.0/24 (role edge); the LiteAP radio beside it (10.60.10.45, the AP end)
+# and, over the air, the LiteBeam radio (10.60.10.43, the station end), role
+# radio. The airCube behind the LiteBeam rejects pings, so it isn't a hop here.
 RADIO_GATEWAY = 'role="edge",name="sce-ep01"'
-# The gateway beside the router hop, so a probe path at fault shows as both.
-PINGED = 'role=~"lan|edge"'
+RADIO_AP = 'role="radio",name="liteap-gps"'
+RADIO_STATION = 'role="radio",name="litebeam-5ac"'
+# Every hop beside the router hop, so a probe path at fault shows as all of them,
+# and a hop at fault as it and every hop behind it.
+PINGED = 'role=~"lan|edge|radio"'
+STATES = (("1", "Reachable"), ("2", "Losing pings"), ("3", "Unreachable"), ("0", "Unknown"))
+LOSS = "Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half"
 SITE1_PROBES = "Only site 1 probes it, so the site filter doesn't apply"
 
 
@@ -79,17 +87,24 @@ def board() -> Board:
                   "Whether the RouterBOOT firmware is behind the installed RouterOS. It's upgraded from the router, followed by a reboot. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.",
                   "table", column="Upgrade", words=("Available", "Up to date")),
             ],
-            # The radio network's gateway: the second router the house runs. Pings say
-            # whether it answers; the router's VLAN 140 counters and flow export say
-            # whether it passes traffic. Nothing here reads the radios themselves.
-            "Radio gateway": [
-                p("Radio gateway reachability", reachability(RADIO_GATEWAY), "state",
-                  "Whether the EP-R6 (sce-ep01, 10.10.140.140), the gateway of the radio network 10.60.10.0/24, answers smokeping's pings: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioGatewayUnreachable fires after 4 minutes of that). Unknown while the router hop or SW03 lose pings too, as the probe's own path is at fault then, and when the EP-R6 isn't probed. Pings only: nothing reads the radios or a UISP controller. " + SITE1_PROBES + ".",
-                  "stat", states=(("1", "Reachable"), ("2", "Losing pings"), ("3", "Unreachable"), ("0", "Unknown"))),
-                p("Radio gateway packet loss", f'max by (name) (smokeping:loss_ratio:rate1m{{{PINGED}}})', "percentunit",
-                  "Share of pings lost over each minute: the EP-R6 (sce-ep01) beside the router hop (sce-rtr01). Both rising together is the probe's path, not the gateway. " + SITE1_PROBES + "; no sce-ep01 line means the EP-R6 isn't probed."),
-                p("Radio gateway latency", f'max by (name) (smokeping:rtt_p90:rate1m{{{PINGED}}})', "s",
-                  "p90 round trip over each minute to the EP-R6 and the router hop. A lost ping has no round trip, so an unreachable gateway is a gap here and 100% on packet loss. " + SITE1_PROBES + "."),
+            # The radio link hop by hop: the radio network's gateway (the second router
+            # the house runs), then the two radios. Pings say which hop answers; the
+            # router's VLAN 140 counters and flow export say whether the link passes
+            # traffic. Nothing here reads the radios' signal or health yet.
+            "Radio link": [
+                p("EP-R6 reachability", reachability(RADIO_GATEWAY), "state",
+                  "Hop 1 of the radio link. Whether the EP-R6 (sce-ep01, 10.10.140.140), the gateway of the radio network 10.60.10.0/24, answers smokeping's pings: " + LOSS + " (RadioGatewayUnreachable fires after 4 minutes of that). Unknown while the router hop or SW03 lose pings too, as the probe's own path is at fault then, and when the EP-R6 isn't probed. Pings only: nothing reads the radios or a UISP controller. " + SITE1_PROBES + ".",
+                  "stat", states=STATES),
+                p("LiteAP reachability", reachability(RADIO_AP, behind=RADIO_GATEWAY), "state",
+                  "Hop 2 of the radio link. Whether the LiteAP radio (liteap-gps, 10.60.10.45), the AP end of the link beside the EP-R6, answers smokeping's pings: " + LOSS + " (RadioAPUnreachable fires after 4 minutes of that). Unknown while the EP-R6 in front of it, the router hop or SW03 lose pings, as the fault is in front of it then, and when the LiteAP isn't probed. " + SITE1_PROBES + ".",
+                  "stat", states=STATES),
+                p("LiteBeam reachability", reachability(RADIO_STATION, behind=RADIO_AP), "state",
+                  "Hop 3 of the radio link. Whether the LiteBeam radio (litebeam-5ac, 10.60.10.43), the station end at the far end of the radio link, answers smokeping's pings over the air: " + LOSS + " (RadioStationUnreachable fires after 10 minutes of that: the link is down or the station is off). Unknown while the LiteAP in front of it, or any hop before that, loses pings, and when the LiteBeam isn't probed. The airCube behind it rejects pings, so it has no state here. " + SITE1_PROBES + ".",
+                  "stat", states=STATES),
+                p("Radio link packet loss", f'max by (name) (smokeping:loss_ratio:rate1m{{{PINGED}}})', "percentunit",
+                  "Share of pings lost over each minute at each hop: the router hop (sce-rtr01), the EP-R6 (sce-ep01), the LiteAP (liteap-gps) and the LiteBeam (litebeam-5ac). A fault at one hop rises there and at every hop behind it; all of them rising together with sce-rtr01 is the probe's path. " + SITE1_PROBES + "; a missing line means that hop isn't probed."),
+                p("Radio link latency", f'max by (name) (smokeping:rtt_p90:rate1m{{{PINGED}}})', "s",
+                  "p90 round trip over each minute to each hop and the router hop. The LiteBeam's includes the air between the radios. A lost ping has no round trip, so an unreachable hop is a gap here and 100% on packet loss. " + SITE1_PROBES + "."),
                 p("VLAN 140 traffic", 'sum by (direction) (label_replace(rate(mktxp_interface_rx_byte_total{name="bridge-lan-vlan140"}[5m]), "direction", "from VLAN 140", "", "") or label_replace(rate(mktxp_interface_tx_byte_total{name="bridge-lan-vlan140"}[5m]), "direction", "to VLAN 140", "", ""))', "Bps",
                   "The router's counters on its VLAN 140 interface, where the EP-R6 is the only client. Nothing received for hours means nothing comes from the radio network, whatever the pings say. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
                 p("Radio network Internet traffic", both("client, direction", '{sel}{{client_ip="10.10.140.140"}}'), "bps",

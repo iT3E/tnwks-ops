@@ -665,31 +665,47 @@
   },
   {
     "dashboard": "tnwks-network",
-    "tab": "Radio gateway",
-    "title": "Radio gateway reachability",
+    "tab": "Radio link",
+    "title": "EP-R6 reachability",
     "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}))",
     "unit": "state",
     "kiosk": false
   },
   {
     "dashboard": "tnwks-network",
-    "tab": "Radio gateway",
-    "title": "Radio gateway packet loss",
-    "expr": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge\"})",
+    "tab": "Radio link",
+    "title": "LiteAP reachability",
+    "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1) and on () (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}))",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "title": "LiteBeam reachability",
+    "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1) and on () (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}))",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Radio link",
+    "title": "Radio link packet loss",
+    "expr": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge|radio\"})",
     "unit": "percentunit",
     "kiosk": false
   },
   {
     "dashboard": "tnwks-network",
-    "tab": "Radio gateway",
-    "title": "Radio gateway latency",
-    "expr": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge\"})",
+    "tab": "Radio link",
+    "title": "Radio link latency",
+    "expr": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge|radio\"})",
     "unit": "s",
     "kiosk": false
   },
   {
     "dashboard": "tnwks-network",
-    "tab": "Radio gateway",
+    "tab": "Radio link",
     "title": "VLAN 140 traffic",
     "expr": "sum by (direction) (label_replace(rate(mktxp_interface_rx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"from VLAN 140\", \"\", \"\") or label_replace(rate(mktxp_interface_tx_byte_total{name=\"bridge-lan-vlan140\"}[5m]), \"direction\", \"to VLAN 140\", \"\", \"\"))",
     "unit": "Bps",
@@ -697,7 +713,7 @@
   },
   {
     "dashboard": "tnwks-network",
-    "tab": "Radio gateway",
+    "tab": "Radio link",
     "title": "Radio network Internet traffic",
     "expr": "sum by (client, direction) (label_replace(wan:client_app_receive_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client_ip=\"10.10.140.140\"}, \"direction\", \"up\", \"\", \"\"))",
     "unit": "bps",

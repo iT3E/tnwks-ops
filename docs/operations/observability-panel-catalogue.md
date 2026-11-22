@@ -89,11 +89,13 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-network / Router / Routes by protocol | `mktxp_routes_protocol_count` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / Router / Firewall drop rules | `mktxp_firewall_filter_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / Router / Firmware upgrade | `mktxp_routerboard_firmware_upgrade_available` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
-| tnwks-network / Radio gateway / Radio gateway reachability | `smokeping:loss_ratio:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
-| tnwks-network / Radio gateway / Radio gateway packet loss | `smokeping:loss_ratio:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
-| tnwks-network / Radio gateway / Radio gateway latency | `smokeping:rtt_p90:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
-| tnwks-network / Radio gateway / VLAN 140 traffic | `mktxp_interface_rx_byte_total`<br>`mktxp_interface_tx_byte_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
-| tnwks-network / Radio gateway / Radio network Internet traffic | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Radio link / EP-R6 reachability | `smokeping:loss_ratio:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Radio link / LiteAP reachability | `smokeping:loss_ratio:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Radio link / LiteBeam reachability | `smokeping:loss_ratio:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Radio link / Radio link packet loss | `smokeping:loss_ratio:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Radio link / Radio link latency | `smokeping:rtt_p90:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Radio link / VLAN 140 traffic | `mktxp_interface_rx_byte_total`<br>`mktxp_interface_tx_byte_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Radio link / Radio network Internet traffic | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / History / Router BGP session resets | `mktxp_bgp_uptime` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / History / Cilium BGP session changes | `cilium_bgp_control_plane_session_state` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / History / Path hop changes | `cilium_bgp_control_plane_session_state`<br>`cilium_clustermesh_remote_cluster_readiness_status`<br>`cilium_kvstoremesh_remote_cluster_readiness_status`<br>`homelab_expected_site_info`<br>`homelab_peer_probe_success`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |

@@ -3314,7 +3314,7 @@
         "kind": "Panel",
         "spec": {
           "id": 27,
-          "title": "Radio gateway reachability",
+          "title": "EP-R6 reachability",
           "links": [
             {
               "title": "Runbook",
@@ -3414,14 +3414,14 @@
               }
             }
           },
-          "description": "Whether the EP-R6 (sce-ep01, 10.10.140.140), the gateway of the radio network 10.60.10.0/24, answers smokeping's pings: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioGatewayUnreachable fires after 4 minutes of that). Unknown while the router hop or SW03 lose pings too, as the probe's own path is at fault then, and when the EP-R6 isn't probed. Pings only: nothing reads the radios or a UISP controller. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Hop 1 of the radio link. Whether the EP-R6 (sce-ep01, 10.10.140.140), the gateway of the radio network 10.60.10.0/24, answers smokeping's pings: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioGatewayUnreachable fires after 4 minutes of that). Unknown while the router hop or SW03 lose pings too, as the probe's own path is at fault then, and when the EP-R6 isn't probed. Pings only: nothing reads the radios or a UISP controller. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-27": {
         "kind": "Panel",
         "spec": {
           "id": 28,
-          "title": "Radio gateway packet loss",
+          "title": "LiteAP reachability",
           "links": [
             {
               "title": "Runbook",
@@ -3441,7 +3441,221 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge\"})",
+                        "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1) and on () (max(smokeping:loss_ratio:rate1m{role=\"edge\",name=\"sce-ep01\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background_solid",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "1": {
+                          "text": "Reachable",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Losing pings",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Unreachable",
+                          "color": "#c4302b"
+                        },
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Hop 2 of the radio link. Whether the LiteAP radio (liteap-gps, 10.60.10.45), the AP end of the link beside the EP-R6, answers smokeping's pings: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioAPUnreachable fires after 4 minutes of that). Unknown while the EP-R6 in front of it, the router hop or SW03 lose pings, as the fault is in front of it then, and when the LiteAP isn't probed. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-28": {
+        "kind": "Panel",
+        "spec": {
+          "id": 29,
+          "title": "LiteBeam reachability",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "(((max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) < bool 0.1) + 2 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) >= bool 0.1) * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) <= bool 0.5) + 3 * (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}) > bool 0.5)) and on () (max(smokeping:loss_ratio:rate1m{role=~\"lan|switch\"}) < 0.1) and on () (max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"liteap-gps\"}) < 0.1)) or on () (0 * max(smokeping:loss_ratio:rate1m{role=\"radio\",name=\"litebeam-5ac\"}))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background_solid",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "1": {
+                          "text": "Reachable",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Losing pings",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Unreachable",
+                          "color": "#c4302b"
+                        },
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Hop 3 of the radio link. Whether the LiteBeam radio (litebeam-5ac, 10.60.10.43), the station end at the far end of the radio link, answers smokeping's pings over the air: Reachable under 10% lost over the last minute, Losing pings up to half, Unreachable over half (RadioStationUnreachable fires after 10 minutes of that: the link is down or the station is off). Unknown while the LiteAP in front of it, or any hop before that, loses pings, and when the LiteBeam isn't probed. The airCube behind it rejects pings, so it has no state here. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-29": {
+        "kind": "Panel",
+        "spec": {
+          "id": 30,
+          "title": "Radio link packet loss",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (name) (smokeping:loss_ratio:rate1m{role=~\"lan|edge|radio\"})",
                         "instant": false,
                         "legendFormat": "{{name}}",
                         "range": true
@@ -3494,14 +3708,14 @@
               }
             }
           },
-          "description": "Share of pings lost over each minute: the EP-R6 (sce-ep01) beside the router hop (sce-rtr01). Both rising together is the probe's path, not the gateway. Only site 1 probes it, so the site filter doesn't apply; no sce-ep01 line means the EP-R6 isn't probed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Share of pings lost over each minute at each hop: the router hop (sce-rtr01), the EP-R6 (sce-ep01), the LiteAP (liteap-gps) and the LiteBeam (litebeam-5ac). A fault at one hop rises there and at every hop behind it; all of them rising together with sce-rtr01 is the probe's path. Only site 1 probes it, so the site filter doesn't apply; a missing line means that hop isn't probed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-28": {
+      "panel-30": {
         "kind": "Panel",
         "spec": {
-          "id": 29,
-          "title": "Radio gateway latency",
+          "id": 31,
+          "title": "Radio link latency",
           "links": [
             {
               "title": "Runbook",
@@ -3521,7 +3735,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge\"})",
+                        "expr": "max by (name) (smokeping:rtt_p90:rate1m{role=~\"lan|edge|radio\"})",
                         "instant": false,
                         "legendFormat": "{{name}}",
                         "range": true
@@ -3573,13 +3787,13 @@
               }
             }
           },
-          "description": "p90 round trip over each minute to the EP-R6 and the router hop. A lost ping has no round trip, so an unreachable gateway is a gap here and 100% on packet loss. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "p90 round trip over each minute to each hop and the router hop. The LiteBeam's includes the air between the radios. A lost ping has no round trip, so an unreachable hop is a gap here and 100% on packet loss. Only site 1 probes it, so the site filter doesn't apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-29": {
+      "panel-31": {
         "kind": "Panel",
         "spec": {
-          "id": 30,
+          "id": 32,
           "title": "VLAN 140 traffic",
           "links": [
             {
@@ -3655,10 +3869,10 @@
           "description": "The router's counters on its VLAN 140 interface, where the EP-R6 is the only client. Nothing received for hours means nothing comes from the radio network, whatever the pings say. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-30": {
+      "panel-32": {
         "kind": "Panel",
         "spec": {
-          "id": 31,
+          "id": 33,
           "title": "Radio network Internet traffic",
           "links": [
             {
@@ -3741,10 +3955,10 @@
           "description": "The radio network's Internet traffic from flow export, down and up. The EP-R6 masquerades the network, so it is one device, named sce-ep01 from its DHCP lease. Click a line for its apps and destinations on WAN clients. A gap is a time the network sent nothing to the Internet, or flow export saw nothing (compare VLAN 140 traffic).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-31": {
+      "panel-33": {
         "kind": "Panel",
         "spec": {
-          "id": 32,
+          "id": 34,
           "title": "Router BGP session resets",
           "links": [
             {
@@ -3954,10 +4168,10 @@
           "description": "Times each of the router's BGP sessions restarted in the range: its uptime went back. A session that dropped and came back between scrapes still counts. Only site 1 observes the router.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-32": {
+      "panel-34": {
         "kind": "Panel",
         "spec": {
-          "id": 33,
+          "id": 35,
           "title": "Cilium BGP session changes",
           "links": [
             {
@@ -4167,10 +4381,10 @@
           "description": "State changes of each node's Cilium BGP session with its distro's FRR in the range. Sampled at each scrape, so a shorter flap can be missed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-33": {
+      "panel-35": {
         "kind": "Panel",
         "spec": {
-          "id": 34,
+          "id": 36,
           "title": "Path hop changes",
           "links": [
             {
@@ -4844,6 +5058,24 @@
                                     "name": "panel-26"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-27"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-28"
+                                  }
+                                }
                               }
                             ],
                             "maxColumnCount": 6,
@@ -4868,24 +5100,6 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-27"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-28"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
                                     "name": "panel-29"
                                   }
                                 }
@@ -4896,6 +5110,24 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-30"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-31"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-32"
                                   }
                                 }
                               }
@@ -4911,7 +5143,7 @@
                   ]
                 }
               },
-              "title": "Radio gateway"
+              "title": "Radio link"
             }
           },
           {
@@ -4935,25 +5167,25 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-31"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-32"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
                                     "name": "panel-33"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-34"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-35"
                                   }
                                 }
                               }
