@@ -29,7 +29,8 @@ It reads no SOPS file: a file with ".sops." in its name is skipped. It
 follows the resources of a kustomization.yaml, its patches that delete an
 object, and its patches that change the spec.path of a Flux Kustomization,
 which is what the trees of the clusters use; a feature it does not
-read stops it (UnreadKustomization). observability/tests/test_flux_admission.py
+read stops it (UnreadKustomization), and so does a child of the walk
+whose source is not this repository or whose path is not in it. observability/tests/test_flux_admission.py
 checks that the lists of the policy are the ones of git.
 
   python3 kubernetes/apps/flux-system/admission/classlist.py check
@@ -300,9 +301,37 @@ class Child:
     build: Build
 
 
+# The one source that the walk reads: this repository, as Flux fetches it.
+OWN_SOURCE = ("GitRepository", "flux-system", "flux-system")
+
+
+def own_folder(key: str, path: str) -> Path:
+    """The folder (or file) of a spec.path in this repository. A path that
+    is not in it stops the walk: a build of nothing would pass with no
+    object."""
+    where = (ROOT / path).resolve()
+    if not where.is_relative_to(ROOT.resolve()) or not where.exists():
+        raise UnreadKustomization(f"{key}: the path {path} is not in the repository")
+    return where
+
+
+def check_source(key: str, doc: dict) -> None:
+    """A child of another source stops the walk: its objects are in that
+    source, not in this repository, so the walk can not see them. The
+    namespace of a sourceRef is the one of the Kustomization by default, as
+    in Flux."""
+    ref = doc["spec"].get("sourceRef") or {}
+    namespace = ref.get("namespace", doc["metadata"].get("namespace", "flux-system"))
+    if (ref.get("kind"), ref.get("name"), namespace) != OWN_SOURCE:
+        raise UnreadKustomization(
+            f"{key}: the source {ref.get('kind')} {namespace}/{ref.get('name')} is not the GitRepository "
+            "flux-system/flux-system, so the walk can not read its objects")
+
+
 def walk(site: str) -> dict[str, Child]:
     """Each Kustomization of a site, by namespace/name, as Flux applies it
-    from the cluster entry (kubernetes/clusters/<site>)."""
+    from the cluster entry (kubernetes/clusters/<site>). Each one that it
+    reaches must build from this repository (check_source, own_folder)."""
     children: dict[str, Child] = {}
 
     def visit(path: str, parent: str) -> None:
@@ -311,15 +340,15 @@ def walk(site: str) -> dict[str, Child]:
             p = norm(d["spec"]["path"])
             if key in children:
                 continue
-            b = build(ROOT / p)
+            check_source(key, d)
+            b = build(own_folder(key, p))
             # The components of the Flux Kustomization, relative to its path.
             for component in d["spec"].get("components") or []:
-                sub = build(ROOT / p / component)
+                sub = build(own_folder(key, f"{p}/{component}"))
                 b.docs += sub.docs
                 b.files |= sub.files
             children[key] = Child(key, parent, p, d, b)
-            if d["spec"].get("sourceRef", {}).get("name") == "flux-system":
-                visit(p, key)
+            visit(p, key)
 
     visit(f"kubernetes/clusters/{site}", "flux-system/flux-system")
     return children

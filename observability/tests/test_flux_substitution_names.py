@@ -76,6 +76,15 @@ def test_a_text_that_is_not_yaml_shows_its_path_only():
     assert (lines, code) == (["site x.sops.yaml: did not parse as YAML"], 2)
 
 
+def test_a_text_nested_too_deep_shows_its_path_only():
+    # The parser stops with a RecursionError, not a YAMLError.
+    text = "stringData: {a: " + "[" * 5000 + MADE_UP + "]" * 5000 + "}"
+    with pytest.raises(check.Unparsed):
+        check.names(text)
+    lines, code = check.report([("site", "x.sops.yaml", set())], lambda path: text)
+    assert (lines, code) == (["site x.sops.yaml: did not parse as YAML"], 2)
+
+
 def test_the_script_and_the_ci_test_have_one_reader():
     # Both call classlist.flux_variables; neither has a pattern of its own.
     source = (ROOT / "kubernetes/apps/flux-system/admission/substitution_names.py").read_text()
