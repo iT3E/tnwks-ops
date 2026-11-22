@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.292.2 - 2026-11-22
+
+### Security
+
+* Flux: the admission policy flux-child-scope denies and audits. After a read of its audit counts on both sites, a request of a Flux child outside the "ask first" class that a rule refuses now fails the apply of that child, and its audit annotation keeps the name of the object
+
 ## v2.292.1 - 2026-11-22
 
 ### Fixed

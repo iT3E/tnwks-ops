@@ -1,3 +1,0 @@
-kind: Security
-body: 'Flux: the admission policy flux-child-scope denies and audits. After a read of its audit counts on both sites, a request of a Flux child outside the "ask first" class that a rule refuses now fails the apply of that child, and its audit annotation keeps the name of the object'
-time: 2026-11-21T20:10:00.000000000Z
