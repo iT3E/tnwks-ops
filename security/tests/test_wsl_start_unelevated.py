@@ -421,6 +421,8 @@ def test_the_write_test_fails_the_play_only_where_the_done_switch_is_on(tmp_path
                                    "wsl_host_check_write_test_fails_play": expression}
         want[f"real-{distro}"] = bool(host["wsl_start_unelevated"]) and (
             bool(host.get("wsl_move_done")) if host.get("wsl_move") else bool(host["wsl_start_unelevated_done"]))
+    # Both sites have the done switch of the move on: the write test can fail each distro play.
+    assert want["real-WSL-02-ubuntu"] is True and want["real-DESKTOP-HKE05KI-ubuntu"] is True
     out = ansible_render.render(tmp_path, hosts, list(want), {"fails": "wsl_host_check_write_test_fails_play | bool"})
     assert {name: values["fails"] for name, values in out.items()} == want
 

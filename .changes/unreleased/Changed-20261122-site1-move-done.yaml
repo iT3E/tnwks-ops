@@ -1,0 +1,3 @@
+kind: Changed
+body: 'windows: the done switch of the move of the distro on site 1: the account that owns the distro is the new account, the copies of the start tasks stay enabled, the play no longer registers the tasks of the present account, and the host check reads the moved disk file and its rules'
+time: 2026-11-22T00:30:00.000000000Z
