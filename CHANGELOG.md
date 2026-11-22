@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.291.1 - 2026-11-22
+
+### Fixed
+
+* flux: the walk of the admission lists stops at a Flux Kustomization whose source is not this repository, or whose path is not in it, so the lists can not miss the objects of another source
+
 ## v2.291.0 - 2026-11-22
 
 ### Changed
