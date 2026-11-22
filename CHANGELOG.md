@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.264.0 - 2026-11-22
+
+### Added
+
+* mikrotik: the router lets the desktop ping the LiteAP radio (10.60.10.45), the LiteBeam radio (10.60.10.43) and the airCube (10.60.10.46) behind the EP-R6: ICMP from the monitoring list to those three addresses only; their SSH and web UIs stay VPN-only
+
 ## v2.263.0 - 2026-11-22
 
 ### Added
