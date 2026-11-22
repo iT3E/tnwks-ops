@@ -1,3 +1,3 @@
 kind: Fixed
-body: 'Flux: the reduced substitution Secret cluster-secrets-apps builds on the cluster of kubernetes/clusters/wsl-02. Flux substitutes in strict mode, and that cluster has a template of its own with only the keys of its cluster-secrets. A test builds the template of each site in strict mode against the key names of the cluster-secrets of that site'
+body: 'Flux: the reduced substitution Secret cluster-secrets-apps builds on the cluster of kubernetes/clusters/wsl-02. Flux substitutes in strict mode, and that cluster has a template of its own with only the keys of its cluster-secrets. A test checks each variable of the template of each site against the key names of the cluster-secrets of that site, read with no value'
 time: 2026-11-22T08:45:00.000000000Z
