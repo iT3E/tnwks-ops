@@ -467,6 +467,49 @@ groups:
       description: The node container has a memory limit of 18 GiB. The scheduler does not see it, because the node
         reports the memory of the whole WSL VM. Find the largest pods of the node, and move or shrink one. The limit
         is memory_nodes of talos_clusters in the Ansible inventory.
+  - alert: WorkerContainerMemoryNearLimit
+    expr: max by (k8s_cluster, node) (node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node=~".+-worker-[0-9]+"})
+      > 0.9 * 13 * 1024^3
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.node }} is above 90% of the memory limit of its node container'
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}
+      description: 'The node container of a worker of homelab-wsl has a memory limit of 13 GiB (memory_workers of
+        talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see it,
+        because the node reports the memory of the whole WSL VM: the scheduler places pods against the memory of
+        the VM. This alert warns; it stops nothing. Find the largest pods of the node, and move or shrink one. docs/operations/observability-operations.md,
+        Room on site 1, has the steps.'
+  - alert: WorkerContainerMemoryNearLimit
+    expr: max by (k8s_cluster, node) (node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node=~".+-worker-[0-9]+"})
+      > 0.95 * 13 * 1024^3
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: '{{ $labels.node }} is above 95% of the memory limit of its node container'
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}
+      description: 'The node container of a worker of homelab-wsl has a memory limit of 13 GiB (memory_workers of
+        talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see it,
+        because the node reports the memory of the whole WSL VM: the scheduler places pods against the memory of
+        the VM. This alert warns; it stops nothing. At the limit, the kernel kills processes inside the node container,
+        BestEffort pods first, and the kubelet does not evict before. Move a large pod off the node now. docs/operations/observability-operations.md,
+        Room on site 1, has the steps.'
+  - alert: ControlPlaneContainerMemoryNearLimit
+    expr: max by (k8s_cluster, node) (node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node=~".+-controlplane-[0-9]+"})
+      > 0.98 * 4 * 1024^3
+    for: 15m
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.node }} is above 98% of the memory limit of its node container'
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}
+      description: 'The node container of the control plane of homelab-wsl has a memory limit of 4 GiB (memory_controlplanes
+        of talos_clusters in the Ansible inventory). It runs the API server and etcd. Its working set also counts
+        active file pages, such as the database file of etcd, which the kernel can take back. At 98% little is left
+        to take back: compare rssBytes in the summary of the kubelet, and find what grew. docs/operations/observability-operations.md,
+        Room on site 1, has the steps.'
   - alert: LokiSecurityIngestAbovePlan
     expr: sum by (k8s_cluster) (increase(loki_distributor_bytes_received_total{retention_hours="2160"}[1d])) > 2
       * 1.2e9

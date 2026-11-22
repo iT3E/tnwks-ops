@@ -248,6 +248,28 @@ patches:
                 value:
                   regex: __tmp_keep
                   action: labeldrop
+              # The kubelet's own figure of its node's memory (the working
+              # set of the node's root cgroup, which here is the node
+              # container), for WorkerContainerMemoryNearLimit: one series
+              # for each node, as homelab-wsl-02 has for
+              # NodeContainerMemoryNearLimit. cAdvisor's series of that
+              # cgroup are dropped by the chart's defaults, with every other
+              # cgroup that has no pod.
+              - op: add
+                path: /spec/values/kubelet/serviceMonitor/resource
+                value: true
+              - op: add
+                path: /spec/values/kubelet/serviceMonitor/resourcePath
+                value: /metrics/resource
+              - op: add
+                path: /spec/values/kubelet/serviceMonitor/resourceInterval
+                value: 1m
+              - op: add
+                path: /spec/values/kubelet/serviceMonitor/resourceMetricRelabelings
+                value:
+                  - sourceLabels: [__name__]
+                    regex: node_memory_working_set_bytes
+                    action: keep
   - patch: |-
       $patch: delete
       apiVersion: kustomize.toolkit.fluxcd.io/v1
