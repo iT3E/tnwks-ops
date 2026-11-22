@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.279.0 - 2026-11-22
+
+### Added
+
+* agents: the main agent runs the agent image 0.5.0 and loads the host approval plugin, with the approval form of the design (plugin cards to the approver only, the command rule and the deny list), and its values check stops the start on a fault of that form; no host tool yet
+
 ## v2.278.1 - 2026-11-22
 
 ### Security
