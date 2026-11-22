@@ -133,7 +133,7 @@ def test_the_reduced_secret_builds_in_strict_mode_with_the_keys_of_the_site(site
     # No empty default: a key that the site lacks stays out of its template.
     assert all(m.group(2) is None for m in VARIABLE.finditer(yaml.safe_dump(secret))), site
     # Each key is its own variable, so the Secret holds the values of its site and no other.
-    assert all(v == "${%s}" % k for k, v in secret["stringData"].items()), site
+    assert all(v == f"${{{k}}}" for k, v in secret["stringData"].items()), site
 
 
 @pytest.mark.parametrize("site", classlist.SITES)
