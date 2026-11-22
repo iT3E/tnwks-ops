@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.269.0 - 2026-11-22
+
+### Added
+
+* agents: the gateway probes of main and finance try the cluster, Flux and Terraform servers of main straight each day: only the gateway may reach them. A time out passes (a policy drop is silent); a refusal (no ready backend or a closed port), an answer and a name that does not resolve each fail. The probes use no key on a read route.
+
 ## v2.268.0 - 2026-11-22
 
 ### Added
