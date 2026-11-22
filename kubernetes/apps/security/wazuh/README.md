@@ -73,7 +73,7 @@ The patches of `security-wazuh-server`:
   of the node
   ([BootstrapChecks.java](https://github.com/opensearch-project/OpenSearch/blob/3.6.0/server/src/main/java/org/opensearch/bootstrap/BootstrapChecks.java#L201-L205),
   [the check](https://github.com/opensearch-project/OpenSearch/blob/3.6.0/server/src/main/java/org/opensearch/bootstrap/BootstrapChecks.java#L461-L470)).
-- The indexer heap at 1536 MiB, half of its memory line.
+- The indexer heap at 1536 MiB, under half of its memory line (see "Memory").
 - `plugins.content_manager.telemetry.enabled: false`: the daily ping of the
   update check service of the Content Manager is off
   ([settings](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/docs/ref/modules/content-manager/configuration.md)).
@@ -97,7 +97,7 @@ The lines of `../README.md`, "Memory":
 
 | Container | Request | Limit |
 | --- | --- | --- |
-| `wazuh-indexer` | 3 GiB | 3 GiB (heap 1536 MiB) |
+| `wazuh-indexer` | 4 GiB | 4 GiB (heap 1536 MiB) |
 | `wazuh-manager` | 1280 MiB | 1280 MiB |
 | `wazuh-dashboard` | 320 MiB | 320 MiB |
 | `wazuh-accounts` (`../wazuh-settings`, step 1, a Job) | 64 MiB | 128 MiB |
@@ -107,6 +107,32 @@ The init containers run before the main container of their pod, one at a
 time, each with a limit of 128 MiB or less. In Wazuh 5.0 the indexer
 container also runs the Wazuh engine (the image's entrypoint starts it), so
 the indexer line covers both.
+
+The limit of the indexer is 4 GiB, by the owner's decision for the budget
+of step 2 (`../README.md`, "Memory"); the heap stays at 1536 MiB. The heap
+is only one part of what the container uses:
+
+- OpenSearch recommends a heap of half of the memory of the system, not all
+  of it
+  ([important settings](https://github.com/opensearch-project/documentation-website/blob/d4a12efae197ed01306f752eb1406072ad18bb58/_install-and-configure/install-opensearch/index.md#L103-L105)).
+  A heap of 1536 MiB is under half of 4 GiB.
+- The entrypoint of the image starts the Wazuh engine as a process of its
+  own next to OpenSearch, outside the JVM and its heap
+  ([entrypoint.sh](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/build-scripts/docker/entrypoint.sh#L89-L92)).
+- The memory controller of the kernel counts the page cache of the files
+  that the container reads, as well as its anonymous memory, against the
+  limit of its cgroup
+  ([cgroup v2](https://github.com/torvalds/linux/blob/v6.12/Documentation/admin-guide/cgroup-v2.rst#L1205-L1210)).
+  Lucene reads its index files through that cache.
+
+So a higher limit gives room to the engine, to the memory of the JVM
+outside the heap and to the page cache, and a higher heap would take it
+back. The request equals the limit, as for the manager and the dashboard,
+so the scheduler reserves the whole line on worker 1.
+
+A change of a memory line of the indexer changes the pod template of its
+StatefulSet, so the StatefulSet controller replaces the pod `wazuh-indexer-0`
+once, on the same volume.
 
 ## The manager
 

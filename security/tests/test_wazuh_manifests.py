@@ -243,11 +243,14 @@ def test_the_memory_lines_are_those_of_the_readme():
         assert found[container]["requests"]["memory"] == found[container]["limits"]["memory"]
 
 
-def test_the_heap_is_half_of_the_indexer_line():
+def test_the_heap_is_under_half_of_the_indexer_line():
+    """OpenSearch recommends a heap of half of the memory of the system; the
+    engine and the page cache use the rest (wazuh/README.md, "Memory")."""
     (indexer,) = patches()[("StatefulSet", "wazuh-indexer")]["spec"]["template"]["spec"]["containers"]
     opts = {e["name"]: e.get("value") for e in indexer["env"]}["OPENSEARCH_JAVA_OPTS"]
     assert "-Xms1536m" in opts.split() and "-Xmx1536m" in opts.split()
-    assert 1536 * 2 == mib(indexer["resources"]["limits"]["memory"])
+    assert mib(indexer["resources"]["limits"]["memory"]) == 4096
+    assert 1536 * 2 <= mib(indexer["resources"]["limits"]["memory"])
     assert "heap of 1.5 GiB" in (SECURITY / "README.md").read_text()
 
 

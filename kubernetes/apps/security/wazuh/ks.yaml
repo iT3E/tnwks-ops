@@ -215,8 +215,8 @@ spec:
               containers:
                 - name: wazuh-indexer
                   resources:
-                    requests: {cpu: 250m, memory: 3Gi}
-                    limits: {cpu: null, memory: 3Gi}
+                    requests: {cpu: 250m, memory: 4Gi}
+                    limits: {cpu: null, memory: 4Gi}
                   env:
                     - name: OPENSEARCH_JAVA_OPTS
                       value: "-Xms1536m -Xmx1536m -Dlog4j2.formatMsgNoLookups=true"
