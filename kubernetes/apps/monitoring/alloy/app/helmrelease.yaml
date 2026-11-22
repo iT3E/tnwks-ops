@@ -62,7 +62,9 @@ spec:
           // (docs/apps/agent-platform.md). Each span goes through
           // drop_text first, so no prompt, model output, tool input or
           // output, or memory text reaches Tempo. The receiver has no
-          // ingress; agent pods reach it through their own egress policy.
+          // ingress; its network rule (networkpolicy.yaml) admits the agent
+          // pods, the sandbox supervisors of agents-workflows and the test
+          // span only, and each agent reaches it through its egress policy.
           // ---------------------------------------------------------------
           otelcol.receiver.otlp "agents" {
             http {

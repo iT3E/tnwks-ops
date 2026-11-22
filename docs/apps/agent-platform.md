@@ -1957,6 +1957,11 @@ Each label has the prefix `openclaw.` (in Prometheus `openclaw_`).
   there and nothing else, and refuses each other writer; the daily
   `prometheus-rule-check` proves that a reader can not write
   ([the network rule](../operations/observability-implementation.md#the-network-rule-of-prometheus)).
+- **The senders.** The network rule of Alloy admits OTLP from the agent
+  pods, the sandbox supervisors of `agents-workflows` and the daily test
+  span only, so no other pod can add series or false counts
+  ([the network rule of Alloy](../operations/observability-implementation.md#the-network-rule-of-alloy)).
+  An agent pod can still send false counts of its own.
 - **A restart of the agent pod resets the counters.** The series have no
   `instance` label, so `increase` and `rate` read across the restart.
 - **One agent at a time.** A change of `openclaw.json` restarts the pod of
