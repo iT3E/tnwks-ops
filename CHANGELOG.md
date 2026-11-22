@@ -3,6 +3,15 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.261.0 - 2026-11-22
+
+### Added
+
+* agents: the cluster server of main (task 6.19, the read step of M7b). The Kubernetes MCP server v0.1.3 (pinned by digest) in agents-main, read only, as its own service account with the role view in each namespace of this cluster but agents-finance and ai and the list of the namespaces, with Secrets and exposed-secret reports refused. The route main-cluster on the central MCP gateway takes the key of the main agent only and names eight reads, from the dump tools/cluster.json. Only the gateway and the kubelet reach the pod; it reaches the API server and DNS for its name only. Renovate waits 7 days and a person reviews each update. A test, observability/tests/test_main_read_servers.py, checks the files and runs the pinned gateway and server in containers.
+* agents: the Flux server of main (task 6.19, the read step of M7b). The Flux MCP server of the Flux Operator v0.63.0 (pinned by digest, unmodified) in agents-main, in its read-only mode, as its own service account with the read bindings of the cluster server, and with no DNS. The route main-flux on the central MCP gateway takes the key of the main agent only and names eight reads, from the dump tools/flux.json; the diff and get_flux_instance stay out. The reconcile is a later step.
+* agents: the Terraform server of main (task 6.19, the read step of M7b). The Terraform MCP server 1.4.1 of HashiCorp (pinned by digest) in agents-main with the registry toolset and no token, no account at the API server, and egress to the public registry only. The route main-terraform on the central MCP gateway takes the key of the main agent only and names the nine registry tools, from the dump tools/terraform.json.
+* agents: the read step of M7b goes live for the main agent (task 6.19): the cluster, Flux and Terraform servers. The config of the agent has one server entry for each read route, with the kept tools in its filter and each tool by its exact name in the sandbox allow list. The agent pod reaches the MCP gateway on its MCP port, and the gateway admits it. The hash of the key of the main agent (MCP_GATEWAY_KEY of agent-secret, the key of its vault route) on each read route comes from bin/main-mcp-key, which the lead runs before the push: it keeps the key, sets the hash, and prints names and ok only. A test fails while a read route has another hash than main-vault. The code host server follows in one more pull request.
+
 ## v2.260.3 - 2026-11-22
 
 ### Fixed

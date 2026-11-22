@@ -1,3 +1,0 @@
-kind: Added
-body: 'agents: the Flux server of main (task 6.19, the read step of M7b). The Flux MCP server of the Flux Operator v0.63.0 (pinned by digest, unmodified) in agents-main, in its read-only mode, as its own service account with the read bindings of the cluster server, and with no DNS. The route main-flux on the central MCP gateway takes the key of the main agent only and names eight reads, from the dump tools/flux.json; the diff and get_flux_instance stay out. The reconcile is a later step.'
-time: 2026-11-21T13:10:00.000000+00:00
