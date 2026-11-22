@@ -338,7 +338,9 @@ def probe_container(path: Path) -> dict:
 @pytest.mark.parametrize("probe", PROBES)
 def test_each_gateway_probe_tries_each_read_server_straight(probe):
     env = {e["name"]: e.get("value") for e in probe_container(PROBES[probe])["env"]}
-    assert env["GATEWAY_ONLY_SERVERS"].split(",") == [service(s) for s in SERVERS]
+    # The browser of main follows the read servers (test_main_browser.py).
+    assert env["GATEWAY_ONLY_SERVERS"].split(",") == [service(s) for s in SERVERS] + [
+        "playwright-mcp.ai.svc.cluster.local:8000"]
     # The probe's own policy lets the try out, so a drop comes from the
     # policy of the server.
     (policy,) = [d for d in docs(PROBES[probe]) if d["kind"] == "CiliumNetworkPolicy"]

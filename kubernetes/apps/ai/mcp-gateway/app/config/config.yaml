@@ -590,3 +590,80 @@ routes:
               policies:
                 http:
                   requestTimeout: 30s
+
+  # The browser of the main agent (Design Doc of effort 0003, section 4.2.6,
+  # "The browser, its rails"; docs/apps/playwright-mcp.md). The key of main,
+  # as its other routes. Deployed, not live for use: the config of the
+  # agent names no server at this route until its switch.
+  - name: main-browser
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-browser/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
+            metadata: {client: main, route: main-browser}
+      # A page can take long to load: 30 s, as for the read servers.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The core tools of the pinned release by exact name, from its dump
+      # (../../tools/browser.json), with five left out: browser_run_code_unsafe
+      # and browser_evaluate run code, browser_file_upload and browser_drop
+      # send a file of the server pod to a page, and browser_install (not in
+      # this release) installs a browser. A tool of a later release, or of a
+      # capability flag, is refused here until a PR names it.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "browser_click",
+                "browser_close",
+                "browser_console_messages",
+                "browser_drag",
+                "browser_emulate_media",
+                "browser_fill_form",
+                "browser_find",
+                "browser_handle_dialog",
+                "browser_hover",
+                "browser_navigate",
+                "browser_navigate_back",
+                "browser_network_request",
+                "browser_network_requests",
+                "browser_press_key",
+                "browser_resize",
+                "browser_select_option",
+                "browser_snapshot",
+                "browser_tabs",
+                "browser_take_screenshot",
+                "browser_type",
+                "browser_wait_for"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          # Stateful, unlike the other routes: the browser keeps a page for
+          # each session (--isolated, a context of its own for each client
+          # session), so the calls of one session must reach the same
+          # server session. A stateless route opens a new server session,
+          # and so a new empty page, for each call.
+          statefulMode: stateful
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: browser
+              mcp:
+                host: http://playwright-mcp.ai.svc.cluster.local:8000/mcp
+              policies:
+                http:
+                  requestTimeout: 30s

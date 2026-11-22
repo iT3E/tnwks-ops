@@ -101,7 +101,7 @@ spec:
                 # a refusal (no ready backend), an answer and a name that
                 # does not resolve fail.
                 - name: GATEWAY_ONLY_SERVERS
-                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080
+                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080,playwright-mcp.ai.svc.cluster.local:8000
               # PROBE_KEY, once the lead makes the Secret.
               envFrom:
                 - secretRef:
@@ -136,8 +136,8 @@ spec:
                 name: mcp-gateway-probe-config
 ---
 # The gateway probe may call the MCP gateway, and may try both vault servers
-# and the read servers of main straight: the policy of each server, not this
-# one, must stop that.
+# and the read servers and the browser of main straight: the policy of each
+# server, not this one, must stop that.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -188,4 +188,14 @@ spec:
       toPorts:
         - ports:
             - port: "8080"
+              protocol: TCP
+    # The browser of main, straight: its own policy must stop that.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: playwright-mcp
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8000"
               protocol: TCP

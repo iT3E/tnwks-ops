@@ -6,8 +6,9 @@ stays direct.
 - The proxy (Envoy, kubernetes/apps/ai/agents/main/fetch-proxy) takes a
   CONNECT to a host name on port 443 and nothing else, drops each address
   inside after its own DNS lookup, and logs the host, never a path.
-- Its network policy lets in the agent pod only and lets out port 443 of a
-  public address only: the same ranges, a second wall.
+- Its network policy lets in the agent pod and the browser of main only,
+  and lets out port 443 of a public address only: the same ranges, a
+  second wall.
 - The agent pod reaches the proxy, and no web site directly.
 - The env of the gateway sends web_fetch to the proxy, and NO_PROXY keeps
   each other call direct: the services of the cluster and the two host
@@ -252,7 +253,11 @@ def test_the_network_policy_lets_in_the_agent_and_out_port_443_of_a_public_addre
     sources = [r.get("fromEndpoints") or r.get("fromEntities") for r in spec["ingress"]]
     assert sources == [[{"matchLabels": {"io.kubernetes.pod.namespace": "agents-main",
                                           "app.kubernetes.io/name": "agent",
-                                          "io.cilium.k8s.policy.cluster": "${CLUSTER_NAME}"}}],
+                                          "io.cilium.k8s.policy.cluster": "${CLUSTER_NAME}"}},
+                        # The browser of main (test_main_browser.py).
+                        {"matchLabels": {"io.kubernetes.pod.namespace": "ai",
+                                         "app.kubernetes.io/name": "playwright-mcp",
+                                         "io.cilium.k8s.policy.cluster": "${CLUSTER_NAME}"}}],
                        ["host"]]
     for rule in spec["ingress"]:
         assert rule["toPorts"] == [{"ports": [{"port": "8080", "protocol": "TCP"}]}]

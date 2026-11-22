@@ -1,6 +1,7 @@
 ---
-# The fetch proxy. In: the agent pod of main only, and the kubelet for the
-# probes. Out: port 443 of an address outside the cluster that is not in a
+# The fetch proxy. In: the agent pod of main, the browser of main (the
+# Playwright MCP server in ai, docs/apps/playwright-mcp.md), and the kubelet
+# for the probes. Out: port 443 of an address outside the cluster that is not in a
 # private, shared, link-local, loopback or special range, and DNS (allow-dns
 # in ../../namespace.yaml). A CIDR rule never selects a pod or a node of the
 # cluster, and the except list blocks the rest of the home network and the
@@ -20,6 +21,12 @@ spec:
             io.kubernetes.pod.namespace: agents-main
             app.kubernetes.io/name: agent
             # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The browser of main: each page it loads comes through here, so the
+        # same walls hold, and the log of the proxy has its hosts too.
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            app.kubernetes.io/name: playwright-mcp
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

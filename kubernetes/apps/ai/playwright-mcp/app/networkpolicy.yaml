@@ -11,10 +11,10 @@
 # clusters are one Cilium Cluster Mesh, so each peer names this cluster: a
 # pod of the other cluster with the same labels does not match.
 #
-# The fetch proxy lets in the agent pod of main only, so the browser has no
-# way to a web site yet. The route of the gateway, the proxy flag of the
-# browser and the rule of the proxy for the browser come together in a later
-# step.
+# The route main-browser of the gateway, the proxy flag of the browser and
+# the rule of the fetch proxy for the browser come together. The browser is
+# deployed, not live for use, until the config of the main agent names the
+# route (docs/apps/playwright-mcp.md, "The switch").
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
