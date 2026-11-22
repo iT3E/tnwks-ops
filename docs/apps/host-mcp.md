@@ -213,24 +213,25 @@ take the new config at their next run. The agents have no tools while the
 gateway rolls, about 2 minutes.
 
 **After the merge,** first the order of the admission policy. This is the
-first new child of the class with the policy at Deny, and nothing orders
-the two parents: the list `classKustomizations` reaches the cluster with
-`flux-admission`, and the new child with `cluster-apps`. So reconcile
-`flux-admission` first
-(`flux -n flux-system reconcile kustomization flux-admission --with-source`),
-then read `cluster-apps` Ready at the commit of the merge. In the other
-order the policy refuses the new child, and `cluster-apps` fails its
-apply: Flux applies nothing of that revision to `cluster-apps` until the
-next reconcile of `flux-admission` (30 minutes at most), then goes on at
-its retry. Nothing is lost, `cluster-apps` is not Ready for that time, and
-a Flux event may alert. The way back is safe at Deny: the policy matches
-create and update only, so a prune is never refused.
+first new child of the class with the policy at Deny. Flux applies the
+lists (`flux-admission`) and the new child (`cluster-apps`) at the same new
+revision, and nothing orders the two. Read `flux-admission` and then
+`cluster-apps` Ready at the commit of the merge. If `cluster-apps` reports
+a refusal of `flux-child-scope` for `agents-main-host-mcp`, it applies at
+its next run, in 30 minutes at most (its interval, with no retry
+interval), and nothing is lost. In that time `cluster-apps` is not Ready,
+a Flux event may alert, and a host call gets an error of the gateway and
+runs nothing. The short cut, which is a write: when `flux-admission` is
+Ready at the commit of the merge,
+`flux -n flux-system reconcile kustomization cluster-apps`. The way back
+is safe at Deny: the policy matches create and update only, so a prune is
+never refused.
 
 Then, read only:
 
 | Read | Pass rule |
 | --- | --- |
-| `flux -n flux-system get kustomization flux-admission cluster-apps` | Both Ready, at the commit of the merge, `flux-admission` first |
+| `flux -n flux-system get kustomization flux-admission cluster-apps` | Both Ready at the commit of the merge |
 | `flux -n flux-system get kustomization agents-main-host-mcp` | Ready, at the commit of the merge |
 | `kubectl -n agents-main get deploy host-mcp` | 1 of 1 ready, the image with the digest of git |
 | `kubectl -n agents-main logs deploy/agent -c values-check` | `values-check result=ok` |
