@@ -17,7 +17,7 @@
 #   finance, and a straight connection to the vault server of finance
 #   fails (R6);
 # - a straight connection to each read server of main (cluster, Flux,
-#   Terraform) fails: only the gateway may reach them (the networkpolicy.yaml
+#   Terraform) times out: only the gateway may reach them (the networkpolicy.yaml
 #   of ../../cluster-mcp, ../../flux-mcp and ../../terraform-mcp). This pod
 #   is a pod of the agent's namespace that is not the gateway; the agent pod
 #   is another such pod, and the policy of each server names the gateway
@@ -94,8 +94,9 @@ spec:
                 - name: OTHER_VAULT_SERVER
                   value: vault-server.agents-finance.svc.cluster.local:8080
                 # The read servers of main, straight from this namespace:
-                # their own policies must stop that. A name that does not
-                # resolve fails.
+                # their own policies must drop that. Only a time out passes;
+                # a refusal (no ready backend), an answer and a name that
+                # does not resolve fail.
                 - name: GATEWAY_ONLY_SERVERS
                   value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080
               # PROBE_KEY, once the lead makes the Secret.

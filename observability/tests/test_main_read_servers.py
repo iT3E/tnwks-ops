@@ -7,7 +7,7 @@ The static tests read the files: each route names exactly the kept tools of
 the dump of the pinned image, takes the key of the main agent only, and sets
 no credential on its target; each pod is restricted and pinned; only the
 gateway reaches a server, no other policy lets a pod into it, and both
-gateway probes try each server straight each day and pass on a refusal
+gateway probes try each server straight each day and pass on a time out
 only; and the read account has the role view in each namespace of the
 repository but agents-finance and ai.
 
@@ -279,7 +279,9 @@ def test_the_gateway_reaches_the_server_by_its_name(server):
 
 
 # The reach, proven each day: both gateway probes (main and finance) try each
-# read server straight and need a refusal. The probe of finance is a pod of
+# read server straight and need a time out: a policy drop in this cluster is
+# silent, while a Service with no ready pod refuses at once, which proves
+# nothing. The probe of finance is a pod of
 # another namespace; the probe of main is a pod of the agent's namespace that
 # is not the gateway, as the agent pod is. The policy of the server names the
 # gateway only (above) and no other policy lets anything into the server
@@ -307,7 +309,7 @@ def probe_container(path: Path) -> dict:
 def test_each_gateway_probe_tries_each_read_server_straight(probe):
     env = {e["name"]: e.get("value") for e in probe_container(PROBES[probe])["env"]}
     assert env["GATEWAY_ONLY_SERVERS"].split(",") == [service(s) for s in SERVERS]
-    # The probe's own policy lets the try out, so a refusal comes from the
+    # The probe's own policy lets the try out, so a drop comes from the
     # policy of the server.
     (policy,) = [d for d in docs(PROBES[probe]) if d["kind"] == "CiliumNetworkPolicy"]
     out = [(p["io.kubernetes.pod.namespace"], p["app.kubernetes.io/name"], ports(r))
@@ -397,14 +399,15 @@ def load_checks(monkeypatch, servers: str):
 
 
 @pytest.mark.parametrize(("connect", "ok", "got"), [
-    ("refused", True, "blocked: ConnectionRefusedError"),
     ("timeout", True, "blocked: TimeoutError"),
+    ("refused", False, "refused: ConnectionRefusedError (no ready backend or a closed port: proves nothing)"),
     ("answer", False, "connected"),
     ("no name", False, "unresolved: gaierror"),
 ])
-def test_the_try_passes_on_a_refusal_only(monkeypatch, capsys, connect, ok, got):
-    """A refusal passes; an answer fails; a name that does not resolve fails
-    too, so a server that is gone does not pass as refused."""
+def test_the_try_passes_on_a_time_out_only(monkeypatch, capsys, connect, ok, got):
+    """A time out passes: a policy drop is silent. A refusal fails, since a
+    server that is down or rolling refuses at once; an answer fails; a name
+    that does not resolve fails, so a server that is gone does not pass."""
     checks = load_checks(monkeypatch, ",".join(service(s) for s in SERVERS))
 
     def getaddrinfo(host, port, *args, **kwargs):

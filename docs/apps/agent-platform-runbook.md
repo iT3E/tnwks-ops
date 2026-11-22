@@ -189,9 +189,11 @@ before the create, and fails a run that leaves its own record.
   wrong; fix it before the next run. Both probes also try the read servers
   of main straight (`cluster-mcp in agents-main, direct from a pod that is
   not the gateway`, and the same for `flux-mcp` and `terraform-mcp`).
-  `connected` there: the policy of that read server lets in more than the
-  gateway; fix it before the next run. `unresolved`: the Service of that
-  server is gone, so the check proves nothing; find out why.
+  Only `blocked: TimeoutError` passes there. `connected`: the policy of that
+  read server lets in more than the gateway; fix it before the next run.
+  `refused`: the Service had no ready pod (the server was down or rolling)
+  or the port is closed, so the check proved nothing; look at the server
+  pod. `unresolved`: the Service of that server is gone; find out why.
 
 ### WorkflowProvidersStale
 

@@ -1,3 +1,3 @@
 kind: Added
-body: 'agents: the gateway probes of main and finance try the cluster, Flux and Terraform servers of main straight each day and pass only on a refusal: only the gateway may reach them. A name that does not resolve fails the check. The probes use no key on a read route.'
+body: 'agents: the gateway probes of main and finance try the cluster, Flux and Terraform servers of main straight each day: only the gateway may reach them. A time out passes (a policy drop is silent); a refusal (no ready backend or a closed port), an answer and a name that does not resolve each fail. The probes use no key on a read route.'
 time: 2026-11-22T01:17:00.000000+00:00

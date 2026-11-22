@@ -671,9 +671,10 @@ def firefly_probe() -> None:
 # a straight connection is blocked (R6).
 # GATEWAY_ONLY_SERVERS are more MCP servers (host:port, separated by commas)
 # that only the gateway may reach: the read servers of main (Design Doc,
-# section 4.2.6). Each is tried straight, as the vault servers are. A name
-# that does not resolve fails its check: the refusal must come from the
-# network, not from a server that is gone.
+# section 4.2.6). Each is tried straight, as the vault servers are, and only
+# a time out passes: in this cluster a policy drop is silent, while a
+# Service with no ready pod refuses at once. A refusal, an answer and a name
+# that does not resolve each fail.
 MCP_GATEWAY_URL = os.environ.get("MCP_GATEWAY_URL", "")
 MCP_SERVER = os.environ.get("MCP_SERVER", "")
 GATEWAY_CONFIG = os.environ.get("GATEWAY_CONFIG", "")
@@ -893,14 +894,23 @@ def gateway_only(check: str, server: str) -> None:
            reach(host, int(port)))
 
 
-def reach(host: str, port: int) -> str:
-    """tcp() for a name that must resolve: a name that does not resolve is
-    not a refusal of the network."""
+def reach(host: str, port: int, timeout: float = 5) -> str:
+    """A straight try that only a drop of the network passes. A policy drop
+    in this cluster is silent (no answer to the connect: a time out). A
+    refusal is what a Service with no ready pod, or a closed port, gives at
+    once, so it proves nothing about the policy. A name that does not
+    resolve proves nothing either."""
     try:
         socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError as e:
         return f"unresolved: {type(e).__name__}"
-    return tcp(host, port)
+    try:
+        socket.create_connection((host, port), timeout=timeout).close()
+        return "connected"
+    except TimeoutError:
+        return "blocked: TimeoutError"
+    except OSError as e:
+        return f"refused: {type(e).__name__} (no ready backend or a closed port: proves nothing)"
 
 
 if __name__ == "__main__":

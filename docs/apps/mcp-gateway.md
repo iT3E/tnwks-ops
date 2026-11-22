@@ -372,9 +372,10 @@ agent does, with two keys of its own and none of the agent's:
    other.
 7. The read servers of main (`GATEWAY_ONLY_SERVERS`: `cluster-mcp`,
    `flux-mcp` and `terraform-mcp` in `agents-main`, port 8080): a straight
-   connection from its pod to each fails. No key is used. A name that does
-   not resolve fails the check, so a refusal comes from the network and not
-   from a server that is gone.
+   connection from its pod to each fails. No key is used. A time out passes:
+   a policy drop in this cluster is silent. A refusal fails, since a
+   Service with no ready pod refuses at once and so proves nothing; an
+   answer and a name that does not resolve fail too.
 
 **The probe of main** (`agents/main/checks/app/`, daily at 05:47) is the
 same probe for the route `main-vault`: items 5, 6 and 7, with its key
