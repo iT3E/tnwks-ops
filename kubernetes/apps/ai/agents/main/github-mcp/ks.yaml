@@ -16,7 +16,9 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  # Ready only when the server is. The pod needs the Secret github-mcp-token
+  # Ready when the proxy answers and the server container runs. No probe
+  # calls the MCP path: the daily gateway probe of each domain tries the
+  # server straight only. The pod needs the Secret github-mcp-token
   # (app/secret.sops.yaml) to start.
   wait: true
   interval: 30m
