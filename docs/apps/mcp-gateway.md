@@ -151,8 +151,10 @@ later, with its read credential):
   only, in lockdown mode, with no toolset but its 17 reads by name. In HTTP
   mode it takes its token from each request, so a proxy container in its
   pod (the pattern of the proxy of finance) sets the token on each request
-  and drops each mode header of a client; the server listens on the
-  loopback of the pod. Each of the 17 reads takes the owner and the
+  and drops each mode header and the query string of a client; the server
+  listens on the loopback of the pod. Only the gateway reaches the MCP
+  port of the proxy (8080). The kubelet probes a health port (8081) that
+  serves the health path only and never adds the token. Each of the 17 reads takes the owner and the
   repository, and a guardrail of the route (`mcpGuardrails`, on
   `tools/call`) refuses a call for any repository but the ops repository
   and sends nothing on: the rule of a route can not see the arguments of a
@@ -426,7 +428,7 @@ agent does, with two keys of its own and none of the agent's:
    Service with no ready pod refuses at once and so proves nothing; an
    answer and a name that does not resolve fail too.
 
-**The probe of main** (`agents/main/checks/app/`, daily at 05:47) is the
+**The probe of main** (`agents/main/checks/app/`, daily at 05:53) is the
 same probe for the route `main-vault`: items 5, 6 and 7, with its key
 `main-probe`, and no key with no tool. The read routes of main take the
 key of main only, so the probe calls none of them; item 7 tries their

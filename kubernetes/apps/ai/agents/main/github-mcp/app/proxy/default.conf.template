@@ -6,18 +6,34 @@
 # place of any credential of the client, and no mode header of a client:
 # the flags of the server set its mode. The MCP gateway drops those headers
 # too; this is the second layer.
+#
+# Port 8080 takes the MCP gateway only (networkpolicy.yaml) and serves /mcp.
+# Port 8081 serves the health path only, for the probes of the kubelet,
+# which come from the host: it never adds the token.
+server {
+    listen 8081;
+    server_tokens off;
+    access_log off;
+
+    location = /healthz {
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 404;
+    }
+}
+
 server {
     listen 8080;
     server_tokens off;
     access_log off;
     client_max_body_size 1m;
 
-    location = /healthz {
-        return 200 "ok\n";
-    }
-
     location = /mcp {
-        proxy_pass http://${GITHUB_MCP_UPSTREAM}/mcp;
+        # The path only: the "?" drops the query string of the client.
+        rewrite ^ /mcp? break;
+        proxy_pass http://${GITHUB_MCP_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         proxy_set_header Authorization "Bearer ${GITHUB_MCP_TOKEN}";

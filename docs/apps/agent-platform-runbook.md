@@ -2586,8 +2586,9 @@ only, until the token job of the App of the main agent writes the Secret
   or on the status of the route. The lab did not run with an expired
   token, so whether the gateway counts such a call as a 200 (an error
   inside the answer of the tool) or as an error status is not known.
-  Until the token job writes the Secret, the date above is the only
-  warning.
+- **The plan task:** before 2026-12-15, the token job of the App writes
+  the Secret, or a new stopgap of the owner replaces the token. An alert
+  on the expiry is not part of this step.
 
 **The rehearsal rows** of the design that the lab did not cover (section
 4.2.6, "Not tested"): the DNS rules of Cilium and the reach of each pod

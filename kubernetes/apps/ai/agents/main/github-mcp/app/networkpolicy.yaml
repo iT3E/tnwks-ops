@@ -1,9 +1,11 @@
 ---
 # The code host server of main. In: the MCP gateway only
 # (kubernetes/apps/ai/mcp-gateway), which checks the key of each client and
-# lets through only the tools of its route main-github, for one repository;
-# and the kubelet on the node, for the probes. Both reach the proxy port
-# only: the server listens on the loopback of the pod. Out: the API of the
+# lets through only the tools of its route main-github, for one repository,
+# on the MCP port of the proxy (8080), which adds the token; and the kubelet
+# on the node, for the probes, on the health port of the proxy (8081) only,
+# which serves no other path and never adds the token. The server listens
+# on the loopback of the pod. Out: the API of the
 # code host and its host of raw file content (get_file_contents), on 443,
 # and DNS for those two names only. The namespace's default deny holds the
 # rest (../../namespace.yaml).
@@ -30,7 +32,7 @@ spec:
         - host
       toPorts:
         - ports:
-            - port: "8080"
+            - port: "8081"
               protocol: TCP
   egress:
     - toFQDNs:

@@ -50,8 +50,10 @@ spec:
       # itself (docs/apps/agent-platform.md, "A failed Job").
       ttlSecondsAfterFinished: 93600
       # The worst case, in seconds: seven straight connections of 5 each
-      # (35), then eighteen MCP requests of 30 each (540). That is 575.
-      activeDeadlineSeconds: 600
+      # (35), then eighteen MCP requests of 30 each (540). That is 575. The
+      # deadline only stops a Job that hangs; 900 leaves room for more tries.
+      # The probe of main starts 16 minutes later, so the two never meet.
+      activeDeadlineSeconds: 900
       template:
         metadata:
           labels: *labels

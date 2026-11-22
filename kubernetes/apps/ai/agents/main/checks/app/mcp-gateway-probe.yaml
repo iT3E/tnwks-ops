@@ -36,8 +36,9 @@ metadata:
     app.kubernetes.io/name: platform-checks
     app.kubernetes.io/component: mcp-gateway-probe
 spec:
-  # Ten minutes after the probe of finance, so the two never meet.
-  schedule: "47 5 * * *"
+  # Sixteen minutes after the probe of finance, more than its deadline of
+  # 900 s, so the two never meet.
+  schedule: "53 5 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3
@@ -50,8 +51,9 @@ spec:
       # itself (docs/apps/agent-platform.md, "A failed Job").
       ttlSecondsAfterFinished: 93600
       # The worst case, in seconds: six straight connections of 5 each
-      # (30), then seven MCP requests of 30 each (210). That is 240.
-      activeDeadlineSeconds: 600
+      # (30), then seven MCP requests of 30 each (210). That is 240. The
+      # deadline only stops a Job that hangs; 900 leaves room for more tries.
+      activeDeadlineSeconds: 900
       template:
         metadata:
           labels: *labels

@@ -76,16 +76,20 @@ spec:
             - name: mcp
               containerPort: 8080
               protocol: TCP
+            # The health path only, for the kubelet: no token on this port.
+            - name: health
+              containerPort: 8081
+              protocol: TCP
           readinessProbe:
             httpGet:
               path: /healthz
-              port: mcp
+              port: health
             periodSeconds: 10
             timeoutSeconds: 2
           livenessProbe:
             httpGet:
               path: /healthz
-              port: mcp
+              port: health
             periodSeconds: 30
             timeoutSeconds: 2
           resources:
