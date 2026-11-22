@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.295.0 - 2026-11-22
+
+### Changed
+
+* ansible: the user of the host server of main is on for the two hosts of site 1 (host_mcp_agent_enabled in group_vars/site_wsl.yml); the owner applies it from the branch before the merge, and site 2 stays off
+
 ## v2.294.0 - 2026-11-22
 
 ### Changed
