@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.298.1 - 2026-11-22
+
+### Fixed
+
+* agents: the tests of the token job of the main agent build the markers of a fake key at run time, so the secret scan of main passes
+
 ## v2.298.0 - 2026-11-22
 
 ### Added
