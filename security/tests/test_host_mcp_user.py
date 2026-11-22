@@ -4,7 +4,7 @@ The roles windows_host_mcp_user and wsl_host_mcp_user make it, and windows_sshd 
 Match block of its own (Design Doc of effort 0003, section 4.2.6, "The host server"). These
 tests read the roles, the playbooks, the bootstrap task and the inventory: the switch is off
 until a site turns it on, the values are encrypted variables of the site, the key holds for
-the source address of the cluster only, the user is in no admin group, root or the
+the address from which the cluster connects only, the user is in no admin group, root or the
 Administrators own its startup files and its key file, and no run prints its name or key.
 """
 

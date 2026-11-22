@@ -166,7 +166,8 @@
     path: "{{ host_mcp_agent_windows_dir }}"
     items: reset
 
-# One key, for the source address of the cluster only. `restrict` turns off
+# One key, for the address from which the cluster connects only (the address
+# of the distro, docs/wsl/host-mcp-user.md "Limits"). `restrict` turns off
 # each forwarding, the terminal and the rc file of the user.
 - name: The key file of the host server
   ansible.windows.win_copy:

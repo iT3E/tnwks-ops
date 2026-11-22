@@ -3,8 +3,9 @@
 The host server of the main agent (`kubernetes/apps/ai/agents/main/host-mcp`)
 reads the state of the hosts of a site over SSH. It signs in as one local
 user, made for it on the Windows host and in the WSL distro. That user is in
-no admin group, its key holds for the source address of the cluster only,
-and it can not change its own startup files or its key file. So a read can
+no admin group, its key holds only for the address from which the cluster
+connects, and it can not change its key file or the startup files of its
+shell ([Limits](#limits) names the limits on Windows). So a read can
 not reach the profile of the owner, the age key or the secrets of the house.
 This page tells how Ansible makes that user, what a first apply changes,
 and the way back. The design is section 4.2.6, "The host server", of the
@@ -126,12 +127,23 @@ sign-in of the user is possible: `AllowUsers` does not name it.
 
 ## Limits
 
-- **The profile root.** On Windows the user owns the root of its profile,
-  as each user does. It could rename `Documents` and make a new one, or set
-  an environment value in its own registry hive. The role finds an item in
-  the startup folders and a change of their rules, and stops; it does not
-  prevent such a change between two runs. `-NoProfile` on each PowerShell
-  line keeps the profile scripts out of those reads.
+- **The source address on Windows is the distro.** The cluster connects
+  to the SSH server of Windows through the NAT of the distro. So the
+  address that Windows sees for the cluster is the address of the distro,
+  and the `from=` of the Windows key admits each process in the distro, not
+  the cluster alone. No narrower form exists on that path. There, the
+  private key in the Secret of the host server is the real control. In the
+  distro, `from=` names the node network of the cluster.
+- **The profile root and the registry hive on Windows.** The user owns the
+  root of its profile and its own registry hive, as each Windows user does.
+  It could rename `Documents` and make a new one, or set an environment
+  value in its hive (`HKCU\Environment`, for example `PATH` or
+  `PSModulePath`) that a later read runs. The role finds an item in the
+  startup folders and a change of their rules at its next run, and stops;
+  it does not prevent such a change. `-NoProfile` on each PowerShell line
+  keeps the profile scripts out of those reads. In the read step each such
+  change needs a write, which the gateway refuses or the owner approves;
+  a stronger form is a question for the write step.
 - **A WSL subnet change** changes the address that the SSH server of
   Windows sees. After one, the lead reads it again and updates
   `host_mcp_agent_source_windows`, as for the sshd bootstrap.

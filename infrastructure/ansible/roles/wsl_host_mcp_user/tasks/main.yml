@@ -102,7 +102,7 @@
   no_log: true
   when: host_mcp_agent_ready | bool
 
-# One key, for the source address of the cluster only. `restrict` turns off
+# One key, for the node network of the cluster only. `restrict` turns off
 # each forwarding, the terminal and the rc file of the user.
 - name: The key file of the host server
   ansible.builtin.copy:

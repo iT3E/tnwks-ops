@@ -10,7 +10,7 @@
 # holds no password, so only its key signs it in. root owns its home
 # (mode 0750, group of the user) and each file in it, so the user can not
 # write a startup file of its shell or a key file. Its key holds for the
-# source address of the cluster only, with no forwarding and no terminal.
+# node network of the cluster only, with no forwarding and no terminal.
 # Each run checks that the SSH server lets it in by key, that it has no
 # sudo rule, that it can not read the private paths below, and that its
 # home holds only what this role puts there.
