@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.301.1 - 2026-11-22
+
+### Fixed
+
+* mikrotik: the REST accept of the CI runner tunnel (rule 590) writes its source as the prefix 10.10.32.10/31, the same two addresses as the range before. RouterOS stores an IPv4 range that is exactly one prefix as that prefix, and the provider compares src_address as written, so the plan of the root is empty when nothing changes.
+
 ## v2.301.0 - 2026-11-22
 
 ### Added
