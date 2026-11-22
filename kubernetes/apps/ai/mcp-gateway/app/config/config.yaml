@@ -593,8 +593,9 @@ routes:
 
   # The browser of the main agent (Design Doc of effort 0003, section 4.2.6,
   # "The browser, its rails"; docs/apps/playwright-mcp.md). The key of main,
-  # as its other routes. Deployed, not live for use: the config of the
-  # agent names no server at this route until its switch.
+  # as its other routes, and the probe key of main for a list only.
+  # Deployed, not live for use: the config of the agent names no server at
+  # this route until its switch.
   - name: main-browser
     gateways: mcp
     matches:
@@ -610,6 +611,11 @@ routes:
         keys:
           - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
             metadata: {client: main, route: main-browser}
+          # The gateway probe of main (agents-main/checks): it opens a
+          # session and lists the tools, and calls none. The key of
+          # main-vault (PROBE_KEY of agents/main/checks/app).
+          - keyHash: "sha256:d6d0510b450b0fdd8d331a267d9b0a1f00709bc4a3661e2c7b4a82bd015a7456"
+            metadata: {client: main-probe, route: main-browser}
       # A page can take long to load: 30 s, as for the read servers.
       timeout:
         requestTimeout: 30s
@@ -647,7 +653,10 @@ routes:
                 "browser_take_screenshot",
                 "browser_type",
                 "browser_wait_for"
-              ] && apiKey.client == "main"
+              ] && (
+                apiKey.client == "main" ||
+                (apiKey.client == "main-probe" && mcp.methodName == "tools/list")
+              )
     backends:
       - mcp:
           # Stateful, unlike the other routes: the browser keeps a page for

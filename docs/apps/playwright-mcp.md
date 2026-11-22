@@ -132,8 +132,8 @@ no browser tool, or the entry with exactly the tools of the rule.
 
 | Row (Design Doc, section 4.2.6) | Before the switch | After the switch |
 | --- | --- | --- |
-| The route and the reach of the gateway to the browser | The lab of the tests (a fake browser). No probe: the route takes the key of main only | The owner asks the agent for its browser tools |
-| The browser tool rule: no `browser_run_code_unsafe`, `browser_evaluate`, `browser_file_upload`, `browser_drop` or `browser_install` | The tests read the rule against the dump, and the lab lists it through the gateway at its pin | The same question |
+| The route and the reach of the gateway to the browser | **The daily gateway probe of main** (item 8 of [the probe](mcp-gateway.md#the-probe)): a session opens through the gateway and the browser | The same |
+| The browser tool rule: no `browser_run_code_unsafe`, `browser_evaluate`, `browser_file_upload`, `browser_drop` or `browser_install` | **The daily gateway probe of main**: the list of the route equals the rule; the tests read the rule against the dump | The owner asks the agent for its browser tools |
 | Browser isolation: two sessions do not see the cookies of each other | The lab of the tests: two sessions through the gateway at its pin keep two pages (a fake browser, `--isolated` in the tests) | The owner's test: a page in one chat is not in the other |
 | The browser egress: a navigation to a cluster service, a house address and a host fails; a public HTTPS site loads | The lab of the fetch proxy refuses each request inside (`test_main_fetch_proxy.py`); the tests read the proxy flag and the policies. No probe drives the browser | The owner asks for a public page, a cluster service and plain HTTP; the fetch proxy log counts the refusals |
 | The prompt before a form | The tests read `promptTools`; the plugin lab of the agent image | The owner asks for a form; a card comes, and a no stops it |

@@ -1,10 +1,12 @@
 """The browser of the main agent (Design Doc of effort 0003, section 4.2.6,
 "The browser, its rails"; task 6.24; docs/apps/playwright-mcp.md).
 
-- The route main-browser of the central MCP gateway takes the key of main
-  only, sets no credential and names the core tools of the dump of the
+- The route main-browser of the central MCP gateway takes the key of main,
+  and the probe key of main for a list only. It sets no credential and names the core tools of the dump of the
   pinned image by exact name, with five left out. It is stateful: the
   calls of one session reach the same server session, and so the same page.
+- The daily gateway probe of main opens a session on the route and lists
+  its tools, and calls none.
 - The browser runs with the flags of the design, pinned by digest, and its
   pages go through the fetch proxy of main, whose policy lets it in.
 - The gateway reaches the browser by its name; both probes try it straight,
@@ -45,6 +47,7 @@ from test_main_read_servers import (
 from test_mcp_gateway import gateway_image, run
 
 ROOT = Path(__file__).resolve().parents[2]
+CHECKS = ROOT / "kubernetes/apps/ai/agents/checks/app/scripts/platform_checks.py"
 APP = ROOT / "kubernetes/apps/ai/playwright-mcp/app"
 RELEASE = APP / "helmrelease.yaml"
 AGENT_CONFIG = ROOT / "kubernetes/apps/ai/agents/main/agent/config/openclaw.json"
@@ -109,13 +112,21 @@ def test_the_rule_names_the_core_tools_of_the_dump_but_five():
     assert {n for n in NEVER if n != "browser_install"} <= set(names)
 
 
-def test_the_route_takes_the_main_key_only():
+def probe_hash() -> str:
+    (key,) = [k for k in route("main-vault")["policies"]["apiKey"]["keys"]
+              if k["metadata"]["client"] == "main-probe"]
+    return key["keyHash"]
+
+
+def test_the_route_takes_the_main_key_and_the_probe_key_for_a_list_only():
     r = route(ROUTE)
-    (key,) = r["policies"]["apiKey"]["keys"]
-    assert key == {"keyHash": main_hash(), "metadata": {"client": "main", "route": ROUTE}}
+    assert r["policies"]["apiKey"]["keys"] == [
+        {"keyHash": main_hash(), "metadata": {"client": "main", "route": ROUTE}},
+        {"keyHash": probe_hash(), "metadata": {"client": "main-probe", "route": ROUTE}}]
     assert r["policies"]["apiKey"]["mode"] == "strict"
     allow = " ".join(r["policies"]["mcpAuthorization"]["rules"][0]["allow"].split())
-    assert allow.endswith('] && apiKey.client == "main"')
+    assert allow.endswith('] && ( apiKey.client == "main" || '
+                          '(apiKey.client == "main-probe" && mcp.methodName == "tools/list") )')
 
 
 def test_the_route_is_stateful_and_sets_no_credential():
@@ -317,8 +328,10 @@ def lab():
     tool = docker()
     work = scratch()
     key = f"test-browser-{uuid.uuid4().hex}"
+    probe = f"test-browser-probe-{uuid.uuid4().hex}"
     (work / "config.yaml").write_text(CONFIG.read_text().replace(
-        main_hash(), "sha256:" + hashlib.sha256(key.encode()).hexdigest()))
+        main_hash(), "sha256:" + hashlib.sha256(key.encode()).hexdigest()).replace(
+        probe_hash(), "sha256:" + hashlib.sha256(probe.encode()).hexdigest()))
     (work / "config.yaml").chmod(0o644)
     tag = uuid.uuid4().hex[:8]
     net = f"browser-{tag}"
@@ -332,7 +345,7 @@ def lab():
              "--network-alias", "mcp-gateway.ai.svc.cluster.local", "--read-only", "--tmpfs", "/tmp",
              "--cap-drop", "ALL", "--user", "65532", "-v", f"{work}/config.yaml:/config/config.yaml:ro",
              gateway_image(), "-f", "/config/config.yaml"])
-        yield {"tool": tool, "net": net, "key": key, "gateway": names[0]}
+        yield {"tool": tool, "net": net, "key": key, "probe": probe, "gateway": names[0], "work": work}
     finally:
         for name in names:
             subprocess.run([tool, "container", "remove", "-f", name], capture_output=True, check=False)
@@ -369,6 +382,45 @@ def test_the_lab_route_keeps_a_page_for_each_session_and_the_rule(lab):
     for name in [*NEVER, "zz_made_up_tool_name"]:
         assert out[name] == "refused: gateway", name
     assert out["no key"] == 401 and out["other key"] == 401
+
+
+def run_probe(lab: dict, key: str | None) -> tuple[int, dict[str, str]]:
+    """The gateway probe of main, with its env of git for the browser route
+    only, and the config of the lab."""
+    env = {e["name"]: e.get("value") for e in probe_container(PROBES["main"])["env"]}
+    flags = ["-e", "OWN_NAMESPACE=agents-main", "-e", f"TRUST_DOMAIN_NAMESPACES={env['TRUST_DOMAIN_NAMESPACES']}",
+             "-e", "GATEWAY_CONFIG=/gateway/config.yaml",
+             "-e", f"BROWSER_GATEWAY_URL={env['BROWSER_GATEWAY_URL']}", "-e", f"BROWSER_ROUTE={env['BROWSER_ROUTE']}"]
+    if key is not None:
+        flags += ["-e", f"PROBE_KEY={key}"]
+    result = run([lab["tool"], "run", "--rm", "--network", lab["net"], "--read-only", "--cap-drop", "ALL",
+                  "--user", "65534", "-v", f"{CHECKS.parent}:/scripts:ro", "-v", f"{lab['work']}:/gateway:ro",
+                  *flags, PYTHON, "python3", "/scripts/platform_checks.py", "mcp-gateway"], check=False)
+    lines = [json.loads(line) for line in result.stdout.splitlines()]
+    return result.returncode, {line["target"]: line["got"] for line in lines if line["ok"]} | {
+        "failed": [line for line in lines if not line["ok"]]}
+
+
+def test_the_probe_of_main_lists_the_rule_and_calls_nothing(lab):
+    client(lab)
+    code, got = run_probe(lab, lab["probe"])
+    assert (code, got.pop("failed")) == (0, [])
+    assert got == {
+        "browser: no key: initialize": "refused: HTTP 401",
+        "browser: a key that is not in the config: initialize": "refused: HTTP 401",
+        f"browser: probe key: lists the {len(rule())} tools of the rule": "same",
+        "browser: probe key: a call (browser_snapshot), not the probe's": "refused: gateway"}
+    # The key of main on the probe's path: the rule holds for the client of
+    # the key, not for the caller.
+    code, got = run_probe(lab, lab["key"])
+    assert code == 1
+    assert [f["target"] for f in got["failed"]] == ["browser: probe key: a call (browser_snapshot), not the probe's"]
+
+
+def test_the_probe_of_main_skips_with_no_key(lab):
+    code, got = run_probe(lab, None)
+    assert (code, got.pop("failed")) == (0, [])
+    assert got["browser: probe key"] == "skipped: the key is pending"
 
 
 def test_the_lab_gateway_log_has_no_key_and_no_page(lab):

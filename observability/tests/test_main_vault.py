@@ -291,7 +291,9 @@ def vault_lab():
     text = CONFIG.read_text()
     (old,) = [k["keyHash"] for k in routes()["main-vault"]["policies"]["apiKey"]["keys"]
               if k["metadata"]["client"] == "main-probe"]
-    assert text.count(old) == 1
+    # The probe key is on main-vault and main-browser (test_main_browser.py):
+    # each copy changes.
+    assert text.count(old) == 2
     (work / "gateway/config.yaml").write_text(
         text.replace(old, "sha256:" + hashlib.sha256(key.encode()).hexdigest()))
     for path in (work / "gateway", work / "gateway/config.yaml"):
@@ -348,6 +350,9 @@ def vault_lab():
 
 def run_probe(lab: dict, key: str | None) -> tuple[int, dict[str, str]]:
     env = {k: v for k, v in probe_env(PROBE).items() if v is not None}
+    # The browser part of the probe runs in the lab of test_main_browser.py,
+    # with a browser behind the gateway.
+    env.pop("BROWSER_GATEWAY_URL")
     env["OWN_NAMESPACE"] = "agents-main"
     if key is not None:
         env["PROBE_KEY"] = key

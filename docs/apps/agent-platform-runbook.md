@@ -2753,8 +2753,9 @@ agent has no browser tool until [the switch](playwright-mcp.md#the-switch).
 | Read | Pass rule |
 | --- | --- |
 | `kubectl -n ai get deploy playwright-mcp` | 1 of 1 ready, the image with the digest of git |
-| `kubectl -n ai logs deploy/mcp-gateway --since=1h \| grep -c '"route":"default/main-browser"'` | 0 before the switch: no caller yet |
+| `kubectl -n ai logs deploy/mcp-gateway --since=24h \| grep '"route":"default/main-browser"' \| grep -c '"client":"main"'` | 0 before the switch: the agent does not call it yet |
 | The next run of `platform-check-mcp-gateway-probe` in `agents-main` and in `agents-finance` | The line `playwright-mcp in ai, direct from a pod that is not the gateway` with `"ok": true` |
+| The next run of `platform-check-mcp-gateway-probe` in `agents-main` | The four lines that start with `browser:` with `"ok": true`, among them `browser: probe key: lists the 21 tools of the rule` with `"got": "same"` |
 
 **The way back** is one revert of the squash commit. The switch, when it
 is in, is reverted first.

@@ -27,7 +27,9 @@ A CronJob in each agents-<name> namespace runs one of:
       MCP server and the proxy, and a tool off the rule is refused at the
       gateway. The key with no tool lists nothing and is refused. A pod that
       is not the gateway can not reach the MCP server, and can not reach
-      the servers of GATEWAY_ONLY_SERVERS (the read servers of main).
+      the servers of GATEWAY_ONLY_SERVERS (the read servers and the browser
+      of main). On the browser route of main, the probe key lists exactly
+      the tools of its rule in a session of its own, and calls none.
   platform_checks.py dns
       A pod with its own DNS rule, out of the namespace's rule for any name,
       resolves the names of DNS_ALLOWED and none of DNS_REFUSED (finance
@@ -685,6 +687,13 @@ OTHER_VAULT_GATEWAY_URL = os.environ.get("OTHER_VAULT_GATEWAY_URL", "")
 OTHER_VAULT_SERVER = os.environ.get("OTHER_VAULT_SERVER", "")
 GATEWAY_ONLY_SERVERS = [s.strip() for s in os.environ.get("GATEWAY_ONLY_SERVERS", "").split(",")
                         if s.strip()]
+# BROWSER_GATEWAY_URL is the browser route of main (Design Doc, section
+# 4.2.6, "The browser, its rails"; docs/apps/playwright-mcp.md), and
+# BROWSER_ROUTE its name in the config. The route is stateful, so the probe
+# opens a session (initialize), lists the tools in it and closes it. Its key
+# may list and call nothing: the probe never drives the browser.
+BROWSER_GATEWAY_URL = os.environ.get("BROWSER_GATEWAY_URL", "")
+BROWSER_ROUTE = os.environ.get("BROWSER_ROUTE", "main-browser")
 PENDING = "pending"
 SKIPPED = "skipped: the key is pending"
 
@@ -792,6 +801,8 @@ def mcp_gateway() -> None:
         other_vault(check, probe_key)
     for server in GATEWAY_ONLY_SERVERS:
         gateway_only(check, server)
+    if BROWSER_GATEWAY_URL:
+        browser(check, probe_key)
 
 
 def domain(check: str, probe_key: str, no_tools_key: str) -> None:
@@ -883,6 +894,84 @@ def other_vault(check: str, probe_key: str) -> None:
     else:
         report(check, "other vault: probe key: tools/list", "refused: HTTP 401",
                listed(probe_key, OTHER_VAULT_GATEWAY_URL))
+
+
+def session_request(key: str | None, body: dict, session: str | None = None,
+                    method: str = "POST") -> tuple[int, object, str | None]:
+    """One request to a stateful route: the status, the answer and the
+    session ID that the gateway gives."""
+    headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    if key is not None:
+        headers["Authorization"] = f"Bearer {key}"
+    if session:
+        headers["Mcp-Session-Id"] = session
+    request = urllib.request.Request(BROWSER_GATEWAY_URL, method=method, headers=headers,
+                                     data=json.dumps(body).encode() if body else None)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as r:
+            status, raw, new = r.status, r.read().decode(), r.headers.get("Mcp-Session-Id")
+    except urllib.error.HTTPError as e:
+        status, raw, new = e.code, e.read().decode(errors="replace"), None
+    events = [line[5:].strip() for line in raw.splitlines() if line.startswith("data:")]
+    try:
+        return status, json.loads(events[-1] if events else raw), new
+    except ValueError:
+        return status, raw[:200], new
+
+
+INITIALIZE = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+              "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                         "clientInfo": {"name": "platform-checks", "version": "1"}}}
+
+
+def browser(check: str, probe_key: str) -> None:
+    """The browser route of main: no key and a random key get a 401; the
+    probe key opens a session, sees exactly the tools of the rule through
+    the gateway and the browser, and a call of the most harmless tool is
+    refused at the gateway."""
+    for target, key in (("browser: no key: initialize", None),
+                        ("browser: a key that is not in the config: initialize", secrets.token_hex(32))):
+        try:
+            got = session_request(key, INITIALIZE)[0]
+            report(check, target, "refused: HTTP 401",
+                   "refused: HTTP 401" if got == 401 else f"other: HTTP {got}")
+        except OSError as e:
+            report(check, target, "refused: HTTP 401", f"failed: {type(e).__name__}")
+    if probe_key == PENDING:
+        report(check, "browser: probe key", SKIPPED, SKIPPED)
+        return
+    want = rule_tools(BROWSER_ROUTE)
+    session = None
+    try:
+        status, _, session = session_request(probe_key, INITIALIZE)
+        if status != 200 or not session:
+            report(check, "browser: probe key: a session", "opened", f"other: HTTP {status}")
+            return
+        session_request(probe_key, {"jsonrpc": "2.0", "method": "notifications/initialized"}, session)
+        status, body, _ = session_request(probe_key, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+                                          session)
+        try:
+            got = sorted(t["name"] for t in body["result"]["tools"]) if status == 200 else None
+        except (TypeError, KeyError):
+            got = None
+        report(check, f"browser: probe key: lists the {len(want)} tools of the rule", "same",
+               "same" if got == want else
+               f"differs: {'failed' if got is None else sorted(set(got) ^ set(want))[:10]}")
+        status, body, _ = session_request(probe_key, {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                                                      "params": {"name": "browser_snapshot", "arguments": {}}},
+                                          session)
+        error = body.get("error") if isinstance(body, dict) else None
+        report(check, "browser: probe key: a call (browser_snapshot), not the probe's", "refused: gateway",
+               "refused: gateway" if status == 400 and (error or {}).get("message") == "unknown resource"
+               else f"other: HTTP {status}")
+    except OSError as e:
+        report(check, "browser: probe key", "same", f"failed: {type(e).__name__}")
+    finally:
+        if session:
+            try:
+                session_request(probe_key, {}, session, method="DELETE")
+            except OSError:
+                pass
 
 
 def gateway_only(check: str, server: str) -> None:

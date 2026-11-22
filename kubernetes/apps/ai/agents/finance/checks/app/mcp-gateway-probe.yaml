@@ -49,8 +49,8 @@ spec:
       # a failure until a newer run ends, and KubeJobFailed then clears by
       # itself (docs/apps/agent-platform.md, "A failed Job").
       ttlSecondsAfterFinished: 93600
-      # The worst case, in seconds: seven straight connections of 5 each
-      # (35), then eighteen MCP requests of 30 each (540). That is 575. The
+      # The worst case, in seconds: eight straight connections of 5 each
+      # (40), then eighteen MCP requests of 30 each (540). That is 580. The
       # deadline only stops a Job that hangs; 900 leaves room for more tries.
       # The probe of main starts 16 minutes later, so the two never meet.
       activeDeadlineSeconds: 900
