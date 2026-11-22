@@ -81,6 +81,13 @@ them.
   its age key, `/root`, `/etc/shadow` and the ed25519 host key fails
   (`host_mcp_agent_private_paths_distro_extra` adds paths); the home holds
   only the items above, all owned by root.
+- **How it reads as the user.** Ansible connects as an admin that is not
+  root and becomes root. A task that became the user would need Ansible to
+  share its module files with it, which needs an ACL tool, and the role
+  does not need one. So each read runs as root and drops to the user inside the
+  command (`runuser -u <user> --`, no shell). First `id -un` through the
+  same drop must give the user, and a read of `/etc/passwd`, a control, must
+  pass: a drop that failed can not pass as "read none".
 
 ## The guard
 
