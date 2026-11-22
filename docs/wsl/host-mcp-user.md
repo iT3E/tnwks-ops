@@ -45,7 +45,7 @@ them.
   user may only read them, and they hold nothing. Each PowerShell line of
   the read list also runs with `-NoProfile`.
 - **Its key.** `C:\ProgramData\tnwks-host-mcp\authorized_keys` holds one
-  line, `from="<source address>",restrict <key>`. Only SYSTEM and the
+  line, `from="<source network>",restrict <key>`. Only SYSTEM and the
   Administrators change that folder. `restrict` turns off each forwarding
   and the terminal.
 - **The SSH server.** `AllowUsers` names the account after the admin
@@ -106,36 +106,57 @@ nothing. It runs before the user role on Windows, so in that state it stops
 the Windows roles after it, as any drift of sshd does today. A test runs the role of the distro in a container in each of these
 states (`security/tests/test_host_mcp_apply_guard.py`).
 
+## State
+
+| Item | State |
+| --- | --- |
+| The roles | In main, run by both playbooks where the switch of the site is on |
+| The values of site 1 | In the encrypted variables of its two hosts |
+| The switch of site 1 | On in `group_vars/site_wsl.yml`, in the pull request that the owner applies from before its merge |
+| Site 2 | Off: no value, no switch |
+
 ## A first apply
 
-The values come first: the lead reads the source addresses and makes the
-key pair, and writes them in the encrypted files of the two hosts. The
-switch of the site is a change of its own, in a pull request that the
-owner approves. CI only checks the two roles of the user and
-`windows_sshd` ([The guard](#the-guard)), so the change runs from a
-workstation before the merge, with `-e host_mcp_agent_apply=true` (after
-`--`, the task passes it to `ansible-playbook`). With `--check`, as in step
-1, the flag changes nothing: it shows the changes of the apply without a
-drift failure. From a checkout of that branch:
+The owner runs it from a checkout of the branch of the switch, on the
+workstation of site 1, **before** the merge. Each command is a task of
+`.taskfiles/WslHostTasks.yml`; what goes after `--` reaches
+`ansible-playbook` as it is, so `-e host_mcp_agent_apply=true` goes there.
+With `--check` (step 1) the flag changes nothing: it shows the changes of the
+apply without a drift failure.
 
 ```bash
-# 1. What the apply would change (changes nothing).
+# 1. What the apply would change, on both hosts of site 1; changes nothing.
 task wsl-host:windows-check -- --limit site_wsl --tags host-mcp -e host_mcp_agent_apply=true
 task wsl-host:distro-check -- --limit 'wsl_distros:&site_wsl' --tags host-mcp -e host_mcp_agent_apply=true
-task wsl-host:sshd-check   # DRIFT: AllowUsers ... and the user of the host server
-# 2. The account, its rights, profile, folders and key file.
+# 2. On Windows: the account, its rights, profile, startup folders and key file.
 task wsl-host:windows-apply -- --limit site_wsl --tags host-mcp -e host_mcp_agent_apply=true
-# 3. AllowUsers and the Match block (UAC prompt; sshd restarts).
+# 3. On Windows: AllowUsers and the Match block. One UAC prompt; sshd restarts once.
 task wsl-host:sshd
-# 4. The user of the distro.
+# 4. In the distro: the user, its home and its key file.
 task wsl-host:distro-apply -- --limit 'wsl_distros:&site_wsl' --tags host-mcp -e host_mcp_agent_apply=true
-# 5. Both checks show changed=0, and sshd shows no drift.
+# 5. No change left, without the flag as CI runs: sshd-check reports no
+#    drift (a second UAC prompt; it changes nothing), and the full check of
+#    site 1 shows changed=0.
 task wsl-host:sshd-check
 task wsl-host:check -- --limit site_wsl
 ```
 
-Then the merge: its CI apply finds nothing to change. Until step 3, no
-sign-in of the user is possible: `AllowUsers` does not name it.
+Step 1 lists the account, the folders and the key files as changes, and
+stops at no check. Steps 2 and 4 make them and end with the checks of
+"On the Windows host" and "In the distro"; a finding stops the run before
+it changes the item. Until step 3 no sign-in of the user is possible on
+Windows: `AllowUsers` does not name it. `task wsl-host:sshd` runs on the
+Windows host of this workstation only, which is the host of site 1.
+
+Then the merge: its CI apply finds nothing to change.
+
+**If the pull request merged before his run.** A push to `main` runs the CI
+apply of both playbooks on each site, with every tag
+([ansible.md](../operations/ansible.md)), and with no flag. On site 1 the
+two roles of the user and `windows_sshd` would find the user missing, fail
+at their drift checks, and change nothing ([The guard](#the-guard)). The
+apply and each nightly check of `main` would report that drift until his
+run. So the pull request stays a draft, and merges after his apply.
 
 ## The way back
 
@@ -151,16 +172,22 @@ sign-in of the user is possible: `AllowUsers` does not name it.
   its SID), of its value under `SpecialAccounts\UserList`, of its SID from
   the two deny rights, and of `C:\ProgramData\tnwks-host-mcp`. Nothing else
   on the hosts changes in the apply, so nothing else needs a way back.
+- **Before the merge:** the same, but `task wsl-host:sshd` runs from a
+  checkout of `main`, where the switch is off, and the draft pull request
+  is closed. Both key files are owned by root or the Administrators, so
+  each removal runs as an admin.
 
 ## Limits
 
-- **The source address on Windows is the distro.** The cluster connects
-  to the SSH server of Windows through the NAT of the distro. So the
-  address that Windows sees for the cluster is the address of the distro,
-  and the `from=` of the Windows key admits each process in the distro, not
-  the cluster alone. No narrower form exists on that path. There, the
+- **The source on Windows is the WSL network of the host.** The cluster
+  connects to the SSH server of Windows through the NAT of the distro, and
+  the address of the distro changes at a WSL restart. So the `from=` of the
+  Windows key names the WSL network of the host, in network form: it admits
+  the distro and the Windows host itself, and so each process on either,
+  not the cluster alone. No narrower form exists on that path. There, the
   private key in the Secret of the host server is the real control. In the
-  distro, `from=` names the node network of the cluster.
+  distro, `from=` names the Docker network of the nodes of the cluster, the
+  same `from` as the key of the runners.
 - **The profile root and the registry hive on Windows.** The user owns the
   root of its profile and its own registry hive, as each Windows user does.
   It could rename `Documents` and make a new one, or set an environment
@@ -171,9 +198,13 @@ sign-in of the user is possible: `AllowUsers` does not name it.
   keeps the profile scripts out of those reads. In the read step each such
   change needs a write, which the gateway refuses or the owner approves;
   a stronger form is a question for the write step.
-- **A WSL subnet change** changes the address that the SSH server of
-  Windows sees. After one, the lead reads it again and updates
-  `host_mcp_agent_source_windows`, as for the sshd bootstrap.
+- **A WSL subnet change** changes the WSL network of the host. After one,
+  the lead reads it again and updates `host_mcp_agent_source_windows`, as
+  for the sshd bootstrap.
+- **The first sign-in is proven later.** The first key sign-in of the user
+  is proven only when the host server pod runs, in a later pull request of
+  the cluster. If it fails, the host server has no reads, and no other
+  access changes.
 - **Site 2.** The host server reaches the hosts of site 1 only. The roles
   are ready for site 2, but its switch stays off until the design names
   the path from the cluster to those hosts.

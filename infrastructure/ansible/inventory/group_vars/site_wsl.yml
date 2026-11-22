@@ -6,3 +6,9 @@
 # tnwks-ansible-<CLUSTER_NAME>; a site can name another cluster's runner, so a
 # second WSL host can manage this one and the other way round.
 ci_runner: tnwks-ansible-homelab-wsl
+
+# The user of the host server of the main agent on both hosts of this site
+# (group_vars/all/host_mcp.yml, docs/wsl/host-mcp-user.md). Its values are in
+# the encrypted variables of the two hosts. The owner applies it from the
+# branch before the merge ("A first apply" of that page).
+host_mcp_agent_enabled: true
