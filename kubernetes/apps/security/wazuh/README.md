@@ -118,7 +118,7 @@ is only one part of what the container uses:
   A heap of 1536 MiB is under half of 4 GiB.
 - The entrypoint of the image starts the Wazuh engine as a process of its
   own next to OpenSearch, outside the JVM and its heap
-  ([entrypoint.sh](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/build-scripts/docker/entrypoint.sh#L89-L92)).
+  ([entrypoint.sh](https://github.com/wazuh/wazuh-docker/blob/v5.0.0-rc2/build-docker-images/wazuh-indexer/config/entrypoint.sh#L175-L182)).
 - The memory controller of the kernel counts the page cache of the files
   that the container reads, as well as its anonymous memory, against the
   limit of its cgroup
