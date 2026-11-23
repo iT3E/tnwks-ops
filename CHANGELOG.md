@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.302.0 - 2026-11-23
+
+### Added
+
+* mikrotik: the router answers wazuh-agents.internal.tnwks.us with the shared VIP of the Wazuh manager for the agents (10.10.95.201, homelab-wsl-02 only, TTL 5m), above the internal.tnwks.us wildcard. The name and the address are WAZUH_AGENTS_HOST and WAZUH_AGENTS_LB_ADDR of the cluster-settings of homelab-wsl-02, and a test checks that they match.
+
 ## v2.301.1 - 2026-11-22
 
 ### Fixed
