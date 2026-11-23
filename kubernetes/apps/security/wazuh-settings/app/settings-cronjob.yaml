@@ -27,7 +27,7 @@ spec:
       ttlSecondsAfterFinished: 86400
       # The wait for the login (300 seconds), the wait for ISM (1200 seconds)
       # and the calls around them.
-      activeDeadlineSeconds: 1800
+      activeDeadlineSeconds: 2100
       template:
         metadata:
           labels:

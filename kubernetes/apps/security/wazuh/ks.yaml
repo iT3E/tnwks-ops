@@ -55,7 +55,13 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  wait: false # no flux ks dependents
+  wait: false
+  # Accounts and settings need the restarted indexer's startup hook.
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: wazuh-indexer
+      namespace: security
   interval: 30m
   retryInterval: 1m
   timeout: 10m

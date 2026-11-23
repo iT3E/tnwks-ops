@@ -417,6 +417,32 @@ def results(argv) -> dict:
     return json.loads((folder / "wazuh-settings/indices.json").read_text())
 
 
+@pytest.mark.parametrize(("before", "after"), [("true", "false"), ("false", "true")])
+def test_step2_checks_the_notification_switch_after_taking_the_lock(tmp_path, monkeypatch, before, after):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    switch = tmp_path / "notifications-enabled"
+    switch.write_text(before + "\n")
+    argv += [f"--notifications-enabled={switch}", "--monitor-cluster=fixture"]
+    events = []
+    flock = settings_step.fcntl.flock
+
+    def acquire(fd, mode):
+        flock(fd, mode)
+        switch.write_text(after + "\n")
+        events.append("locked")
+
+    monkeypatch.setattr(settings_step.fcntl, "flock", acquire)
+    monkeypatch.setattr(settings_step.monitors, "wait_for_channel",
+                        lambda _, enabled, *_args: events.append(("checked", enabled)))
+    monkeypatch.setattr(settings_step.monitors, "apply",
+                        lambda _, cluster, enabled, *_args, **_kwargs: events.append(("applied", enabled)))
+    code, log = run2(fake, argv)
+    assert code == 0, log
+    assert events == ["locked", ("checked", after == "true"), ("applied", after == "true")]
+
+
 def test_step2_makes_the_policies_moves_the_indices_and_writes_the_counts(tmp_path):
     fake = FakeIndexer()
     fake.add_settings_user()
@@ -994,8 +1020,8 @@ def test_step2_waits_out_a_renewal_of_the_certificates():
                 if d and d.get("kind") == "Certificate"}
     assert renewals == {args["renew-before"]}
     # No move starts in the last margin before a renewal, and a run ends inside it.
-    assert float(args["margin"]) > spec["activeDeadlineSeconds"] >= float(args["wait"]) + float(
-        args["login-wait"])
+    waits = float(args["wait"]) + 2 * float(args["login-wait"])
+    assert float(args["margin"]) > spec["activeDeadlineSeconds"] > waits
 
 
 def test_step2_at_a_restart_of_the_indexer_starts_no_move(tmp_path):

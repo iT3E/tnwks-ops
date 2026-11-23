@@ -336,12 +336,6 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
                        "a lowercase and an uppercase letter, a digit and a symbol)")
         client = Indexer(args.indexer, args.user, password, send=send, ca_file=args.ca)
         wait_for_login(client, args.login_wait, out, sleep=sleep, clock=clock)
-        if args.notifications_enabled is not None:
-            switch = args.notifications_enabled.read_text().strip()
-            if switch not in {"true", "false"}:
-                raise Stop("invalid Wazuh notification setting")
-            enabled = switch == "true"
-            monitors.wait_for_channel(client, enabled, args.login_wait, sleep, clock)
         versions = apply_policies(client, build_policies(retention), out)
         apply_raw_events(client, retention, out)
         renewal = min(ends(args.indexer, args.ca)) - args.renew_before * 3600
@@ -358,6 +352,12 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
             lock_dir.mkdir(parents=True, exist_ok=True)
             with (lock_dir / ".monitors.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
+                # A daily run can span a rollout, including its retention wait.
+                switch = args.notifications_enabled.read_text().strip()
+                if switch not in {"true", "false"}:
+                    raise Stop("invalid Wazuh notification setting")
+                enabled = switch == "true"
+                monitors.wait_for_channel(client, enabled, args.login_wait, sleep, clock)
                 monitors.apply(
                     client, args.monitor_cluster, enabled, out,
                     report_count=lambda count: record_channel_count(results, count, int(now())),

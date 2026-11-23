@@ -15,14 +15,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wazuh-settings-git-4b988a66a9
+  name: wazuh-settings-git-5173a29574
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   backoffLimit: 0
   # The wait for the login (300 seconds), the wait for ISM (1200 seconds)
   # and the calls around them.
-  activeDeadlineSeconds: 1800
+  activeDeadlineSeconds: 2100
   template:
     metadata:
       labels:

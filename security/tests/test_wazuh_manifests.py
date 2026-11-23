@@ -373,6 +373,8 @@ def test_step2_runs_after_step1_completes():
     assert accounts["path"] == "./kubernetes/apps/security/wazuh-settings/accounts"
     assert accounts["wait"] is True and accounts["prune"] is True
     assert {d["name"] for d in accounts["dependsOn"]} == {"security-wazuh-server"}
+    assert server()["spec"]["healthChecks"] == [
+        {"apiVersion": "apps/v1", "kind": "StatefulSet", "name": "wazuh-indexer", "namespace": "security"}]
     assert settings["path"] == "./kubernetes/apps/security/wazuh-settings/app"
     assert {d["name"] for d in settings["dependsOn"]} == {
         "security-wazuh-server", "security-converter", "kube-prometheus-stack",
