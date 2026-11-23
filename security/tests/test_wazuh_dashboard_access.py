@@ -183,6 +183,29 @@ def test_manager_retries_when_daemons_are_starting_after_login(manager_rbac):
     assert manager.rules["tnwks-dashboard-reader"]["roles"] == [2]
 
 
+def test_manager_reauthenticates_if_deleting_a_rule_revokes_the_token(manager_rbac):
+    class RevokingManager(Manager):
+        token_number = 0
+
+        def request_json(self, method, path, auth, body=None):
+            if path == "/security/user/authenticate":
+                self.token_number += 1
+                return {"token": str(self.token_number)}
+            if auth != f"Bearer {self.token_number}":
+                raise manager_rbac.ManagerTokenExpired
+            reply = super().request_json(method, path, auth, body)
+            if method == "DELETE":
+                self.token_number += 1
+            return reply
+
+    manager = RevokingManager()
+    manager_rbac.reconcile_on_startup(manager, "fixture", True, True, clock=lambda: 0, sleep=lambda _: None)
+    waits = []
+    manager_rbac.reconcile_on_startup(manager, "fixture", True, False, clock=lambda: 0, sleep=waits.append)
+    assert waits == [5]
+    assert set(manager.rules) == {"tnwks-dashboard-reader"}
+
+
 @pytest.mark.parametrize("error", [1017, 1000])
 def test_only_manager_daemon_startup_is_a_retryable_api_error(manager_rbac, error):
     manager = manager_rbac.LocalManager.__new__(manager_rbac.LocalManager)

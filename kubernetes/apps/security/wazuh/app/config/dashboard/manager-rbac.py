@@ -19,6 +19,10 @@ class ManagerStarting(RuntimeError):
     """The API can accept a login before all manager daemons are ready."""
 
 
+class ManagerTokenExpired(RuntimeError):
+    """A rule change can revoke the manager API token during reconciliation."""
+
+
 class LocalManager(http.client.HTTPSConnection):
     def __init__(self):
         self.tls = ssl.create_default_context(cafile=CA)
@@ -36,6 +40,8 @@ class LocalManager(http.client.HTTPSConnection):
             raw = response.read()
         finally:
             self.close()
+        if response.status == 401:
+            raise ManagerTokenExpired("The manager API no longer accepts the token")
         if response.status == 500:
             try:
                 error = json.loads(raw)
@@ -98,7 +104,7 @@ def reconcile_on_startup(api, basic, enabled, admin_enabled, clock=time.monotoni
         else:
             try:
                 reconcile(api, "Bearer " + answer["token"], enabled, admin_enabled)
-            except (OSError, http.client.HTTPException, ManagerStarting):
+            except (OSError, http.client.HTTPException, ManagerStarting, ManagerTokenExpired):
                 pass
             else:
                 return
