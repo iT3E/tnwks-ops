@@ -383,7 +383,7 @@ them (`app/config/accounts.json`, pinned by
 | `.wazuh-settings` | `indices:data/write/index`, `indices:data/write/bulk[s]` |
 
 The image also maps every user to its reserved role `wazuh_ai_assistant`,
-which reads only the sessions of the AI assistant of that user
+which reads and writes only the sessions of the AI assistant of that user
 ([roles_mapping.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles_mapping.wazuh.yml#L23-L27),
 [roles.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles.wazuh.yml#L100-L115)).
 
