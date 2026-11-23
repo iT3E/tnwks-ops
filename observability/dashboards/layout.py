@@ -99,7 +99,7 @@ def resource(board: Board) -> dict:
     builder = (dashboard.Dashboard(board.title).description(board.question)
                .editable(False).tags(["tnwks", board.level, board.domain])
                .cursor_sync(model.DashboardCursorSync.CROSSHAIR)
-               .time_settings(dashboard.TimeSettings().timezone("browser").from_val("now-6h")
+               .time_settings(dashboard.TimeSettings().timezone("browser").from_val(board.time_from)
                               .to("now").auto_refresh("1m")
                               .auto_refresh_intervals(["1m", "5m", "15m", "30m", "1h"])
                               # The household reads now, not a range: no picker to wander into.

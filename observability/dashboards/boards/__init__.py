@@ -7,6 +7,7 @@ from . import (
     ai,
     alerts,
     apps,
+    cloud_cost,
     data,
     home,
     homelab,
@@ -25,7 +26,7 @@ from . import (
 )
 
 ORDER = (homelab, sites, data, network, internet, wan_clients, wifi, wifi_clients, kubernetes, apps, ai, home, hosts,
-         host, observability, security, alerts, house)
+         host, observability, cloud_cost, security, alerts, house)
 
 
 def catalogue() -> list[Board]:

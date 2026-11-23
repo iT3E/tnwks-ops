@@ -5,7 +5,8 @@
 # textfile directory, which the Ansible host drift check writes to. Today one
 # group per Terraform root with `drift = true` (job terraform_drift, label
 # root), from terraform.yaml's drift job; alerts in
-# kube-prometheus-stack/addons/alerts/terraform-drift.yaml.
+# kube-prometheus-stack/addons/alerts/terraform-drift.yaml. The AWS budget
+# snapshot is one group written by aws-budget-metrics.yaml on the same runner.
 #
 # Nothing on disk: Prometheus keeps what it scraped, and the alerts read the
 # last value within a window, so a restart loses nothing they need.
@@ -59,8 +60,7 @@ spec:
     # A push can't put anything else into Prometheus. The target's labels
     # win: a pushed job, namespace, k8s_cluster and the like arrive as
     # exported_<name> (the grouping key's job as exported_job). Then only the
-    # four drift gauges pushed under job terraform_drift are kept (not even
-    # the Pushgateway's own series), and of their labels only the target's,
+    # declared drift and budget gauges are kept, and of their labels only the target's,
     # root and exported_job; any other label a pusher sends is dropped.
     # pod and instance go too: they change
     # when the pod is replaced, and without them a root stays one series, so
@@ -75,6 +75,6 @@ spec:
         - action: keep
           sourceLabels: [__name__, exported_job, root]
           separator: ";"
-          regex: tnwks_terraform_drift_check_(timestamp_seconds|drifted|changed|failed);terraform_drift;[a-z0-9][a-z0-9_-]*
+          regex: (tnwks_terraform_drift_check_(timestamp_seconds|drifted|changed|failed);terraform_drift;[a-z0-9][a-z0-9_-]*|tnwks_aws_budget_(actual_usd|forecast_usd|limit_usd|collected_timestamp_seconds);aws_budget;)
         - action: labelkeep
           regex: __name__|job|namespace|service|endpoint|container|k8s_cluster|root|exported_job
