@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.307.0 - 2026-11-23
+
+### Added
+
+* Add Cognito sign-in to the internal Wazuh dashboard for its read-only group.
+
 ## v2.306.0 - 2026-11-23
 
 ### Added
