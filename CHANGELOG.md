@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.303.0 - 2026-11-23
+
+### Added
+
+* Test that generated and site-specific MikroTik DNS records have unique names.
+
+### Fixed
+
+* Retry Wazuh settings startup and distinguish recoverable ISM steps from stopped policies.
+
 ## v2.302.3 - 2026-11-23
 
 ### Fixed
