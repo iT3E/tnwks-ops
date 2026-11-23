@@ -21,7 +21,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wazuh-accounts-ab2162518b
+  name: wazuh-accounts-dcdc12fd3d
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:

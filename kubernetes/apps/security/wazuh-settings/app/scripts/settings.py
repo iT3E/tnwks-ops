@@ -322,11 +322,11 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
                         help="the renewBefore of the certificates of the server, as 720h")
     parser.add_argument("--margin", type=float, default=3600,
                         help="no move when a certificate renews within this many seconds")
-    parser.add_argument("--monitors", type=Path, help="findings monitor severity configuration")
+    parser.add_argument("--notifications-enabled", type=Path, help="the findings notification switch")
     parser.add_argument("--monitor-cluster", help="Alertmanager cluster label")
     args = parser.parse_args(argv)
-    if (args.monitors is None) != (args.monitor_cluster is None):
-        parser.error("--monitors and --monitor-cluster must be supplied together")
+    if (args.notifications_enabled is None) != (args.monitor_cluster is None):
+        parser.error("--notifications-enabled and --monitor-cluster must be supplied together")
     try:
         retention = json.loads(Path(args.retention).read_text())
         check_retention(retention)
@@ -336,6 +336,12 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
                        "a lowercase and an uppercase letter, a digit and a symbol)")
         client = Indexer(args.indexer, args.user, password, send=send, ca_file=args.ca)
         wait_for_login(client, args.login_wait, out, sleep=sleep, clock=clock)
+        if args.notifications_enabled is not None:
+            switch = args.notifications_enabled.read_text().strip()
+            if switch not in {"true", "false"}:
+                raise Stop("invalid Wazuh notification setting")
+            enabled = switch == "true"
+            monitors.wait_for_channel(client, enabled, args.login_wait, sleep, clock)
         versions = apply_policies(client, build_policies(retention), out)
         apply_raw_events(client, retention, out)
         renewal = min(ends(args.indexer, args.ca)) - args.renew_before * 3600
@@ -346,14 +352,14 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
         else:
             pending = move_indices(client, retention, versions, out, args.wait, sleep=sleep, clock=clock)
             moves = "pending" if pending else "applied"
-        if args.monitors is not None:
+        if args.notifications_enabled is not None:
             results = Path(args.results)
             lock_dir = results / SOURCE
             lock_dir.mkdir(parents=True, exist_ok=True)
             with (lock_dir / ".monitors.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
                 monitors.apply(
-                    client, args.monitor_cluster, json.loads(args.monitors.read_text()), out,
+                    client, args.monitor_cluster, enabled, out,
                     report_count=lambda count: record_channel_count(results, count, int(now())),
                 )
         streams = count_indices(client, retention)

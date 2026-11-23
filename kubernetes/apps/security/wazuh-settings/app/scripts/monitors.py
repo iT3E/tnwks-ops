@@ -1,7 +1,7 @@
-"""Reconcile findings monitors and their passive Alertmanager channel."""
+"""Reconcile findings monitors using the channel managed by the indexer."""
 import json
 
-from indexer import Stop, q
+from indexer import NoAnswer, Stop, q
 
 MONITORS = "/_plugins/_alerting/monitors"
 CONFIGS = "/_plugins/_notifications/configs"
@@ -113,27 +113,32 @@ def require_zero_channels(client, report_count):
         raise Stop(f"expected zero active response channels, found {count}")
 
 
-def apply(client, cluster, severities, log, url=ALERTMANAGER_URL, *, report_count=None):
-    if not isinstance(severities, list) or any(level not in LEVELS for level in severities):
-        raise Stop("invalid Wazuh findings severities")
-    if len(severities) != len(set(severities)):
-        raise Stop("duplicate Wazuh findings severity")
-    require_zero_channels(client, report_count)
-
-    existing = managed_monitors(client)
+def wait_for_channel(client, enabled, wait, sleep, clock):
+    deadline = clock() + wait
     path = f"{CONFIGS}/{q(CHANNEL_ID)}"
-    status, result = client.call("GET", path, ok=(200, 404))
-    configs = result["config_list"] if status == 200 else []
-    if configs and (len(configs) != 1 or configs[0]["config"]["name"] != CHANNEL_ID):
-        raise Stop("the Wazuh Alertmanager channel ID is already in use")
-    if severities:
-        desired = channel(url)
-        if not configs:
-            client.call("POST", CONFIGS, {"config_id": CHANNEL_ID, "config": desired})
-        elif not includes(configs[0]["config"], desired):
-            client.call("PUT", path, {"config": desired})
+    while True:
+        try:
+            status, data = client.call("GET", path, ok=(200, 404, 503))
+        except NoAnswer:
+            status = None
+        if status == 404 and not enabled:
+            return
+        if status == 200:
+            configs = data.get("config_list")
+            if not isinstance(configs, list) or len(configs) != 1 or not includes(configs[0], {"config": channel()}):
+                raise Stop("the managed Alertmanager channel differs from its declaration")
+            if enabled:
+                return
+        remaining = deadline - clock()
+        if remaining <= 0:
+            raise Stop("the indexer has not applied the Alertmanager channel setting")
+        sleep(min(5, remaining))
 
-    for level in severities:
+
+def apply(client, cluster, enabled, log, *, report_count=None):
+    require_zero_channels(client, report_count)
+    existing = managed_monitors(client)
+    for level in LEVELS if enabled else ():
         desired = monitor(level, cluster)
         current = existing.pop(desired["name"], None)
         if current is None:
@@ -142,9 +147,6 @@ def apply(client, cluster, severities, log, url=ALERTMANAGER_URL, *, report_coun
             client.call("PUT", f"{MONITORS}/{q(current[0])}", desired)
     for monitor_id, _ in existing.values():
         client.call("DELETE", f"{MONITORS}/{q(monitor_id)}")
-    if not severities and configs:
-        client.call("DELETE", path)
-
     require_zero_channels(client, report_count)
     log("active response channels: 0")
     return 0

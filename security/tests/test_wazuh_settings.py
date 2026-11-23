@@ -32,11 +32,11 @@ ACCOUNTS = ROOT / "kubernetes/apps/security/wazuh-settings/accounts"
 CONFIG = APP / "config"
 SCRIPTS = APP / "scripts"
 CERTIFICATES = ROOT / "kubernetes/apps/security/wazuh/app/certificates.yaml"
+NOTIFICATIONS_ENABLED = CERTIFICATES.parent / "config/notifications-enabled"
 # The files that the hash in the name of each Job covers, in this order.
 HASHED = {
     "wazuh-accounts": ["config/accounts.json", "scripts/indexer.py", "scripts/accounts.py"],
-    "wazuh-settings-git": ["config/retention.json", "config/monitors.json", "scripts/indexer.py",
-                           "scripts/settings.py", "scripts/monitors.py"],
+    "wazuh-settings-git": ["config/retention.json", "scripts/indexer.py", "scripts/settings.py", "scripts/monitors.py"],
 }
 # The ages of each policy of tnwks: (rollover, delete). A merge that lowers one
 # deletes the data older than the new age at the next run of ISM, with no way
@@ -925,9 +925,6 @@ def test_the_user_for_settings_has_no_security_api_and_reads_only_monitor_fields
         "cluster:admin/opendistro/alerting/monitor/write",
         "cluster:admin/opendistro/alerting/monitor/delete",
         "cluster:admin/opensearch/notifications/configs/get",
-        "cluster:admin/opensearch/notifications/configs/create",
-        "cluster:admin/opensearch/notifications/configs/update",
-        "cluster:admin/opensearch/notifications/configs/delete",
         "cluster:admin/opensearch/notifications/feature/publish",
         "indices:data/read/msearch",
     ]
@@ -944,7 +941,10 @@ def test_the_user_for_settings_has_no_security_api_and_reads_only_monitor_fields
 
 @pytest.mark.parametrize("prefix", sorted(HASHED))
 def test_the_name_of_each_job_carries_the_hash_of_its_files(prefix):
-    digest = hashlib.sha256(b"".join((APP / f).read_bytes() for f in HASHED[prefix])).hexdigest()[:10]
+    inputs = [APP / f for f in HASHED[prefix]]
+    if prefix == "wazuh-settings-git":
+        inputs.append(NOTIFICATIONS_ENABLED)
+    digest = hashlib.sha256(b"".join(p.read_bytes() for p in inputs)).hexdigest()[:10]
     want = f"{prefix}-{digest}"
     found = [d["metadata"]["name"] for name in ("accounts-job.yaml", "settings-job.yaml") for d in docs(name)
              if d["metadata"]["name"].startswith(prefix + "-")]

@@ -407,13 +407,15 @@ What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
 
 ## Findings notifications
 
-Step 2 reconciles two bucket monitors from the configured severity list.
+Step 2 reconciles two bucket monitors when `notifications-enabled` is true.
 Each searches the last five minutes of the findings streams, groups by
 rule ID, and sends only a new alert to site 2 Alertmanager. It sends the
 rule ID, severity and static text, with no finding body. The settings role
-can manage monitors and notification configurations. Its findings search
-uses field-level security and its monitored input runs with the role of
-the user that saved it. The pinned Wazuh Alerting implementation supplies
+can manage monitors, list channels, and publish to the configured webhook.
+The channel write operations use the indexer's existing local admin
+certificate in its startup hook. The findings search uses field-level
+security and the monitored input runs with the role of the user that saved
+it. The pinned Wazuh Alerting implementation supplies
 that user to the [bucket monitor runner](https://github.com/wazuh/wazuh-indexer-alerting/blob/v5.0.0-rc2/alerting/src/main/kotlin/org/opensearch/alerting/BucketLevelMonitorRunner.kt).
 
 The indexer advertises webhook notification configurations and sets the
@@ -422,15 +424,17 @@ the vendor's [destination deny list](https://github.com/wazuh/wazuh-indexer-noti
 with one exception for the internal Alertmanager Service. Cilium permits
 that path to the local Alertmanager pods on TCP 9093. The settings job
 checks that the count of active-response channels is zero before and
-after it reconciles the channel and monitors. It publishes the count and
+after it reconciles the monitors. It publishes the count and
 the time of the check to the converter. Prometheus alerts on a positive
 count and alerts separately when the sample is missing or stale.
 
-The account and settings Jobs run again when their inputs change. The
-indexer restarts when its startup settings change. Before reverting
-the change, set the monitor severity list to an empty array and let the
-settings Job remove its monitors and channel. Then revert the associated
-account, network, and startup settings.
+The initial configuration leaves notifications disabled. After approval,
+set `app/config/notifications-enabled` to `true` and update the settings
+Job name for the new input hash. The indexer restarts and creates the
+channel. The settings Job waits for the channel and then creates the
+monitors. Revert the activation change to restore the disabled setting
+and the previous Job name. The indexer removes the channel, then the
+settings Job removes the monitors.
 
 ## Retention
 

@@ -20,9 +20,6 @@
         "cluster:admin/opendistro/alerting/monitor/write",
         "cluster:admin/opendistro/alerting/monitor/delete",
         "cluster:admin/opensearch/notifications/configs/get",
-        "cluster:admin/opensearch/notifications/configs/create",
-        "cluster:admin/opensearch/notifications/configs/update",
-        "cluster:admin/opensearch/notifications/configs/delete",
         "cluster:admin/opensearch/notifications/feature/publish",
         "indices:data/read/msearch"
       ],

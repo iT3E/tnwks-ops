@@ -15,7 +15,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wazuh-settings-git-ed726ff067
+  name: wazuh-settings-git-4b988a66a9
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
@@ -51,7 +51,7 @@ spec:
             - --indexer=https://wazuh-indexer.security.svc.cluster.local:9200
             - --ca=/ca/ca.crt
             - --retention=/app/retention.json
-            - --monitors=/app/monitors.json
+            - --notifications-enabled=/notifications/notifications-enabled
             - --monitor-cluster=${CLUSTER_NAME}
             - --user=tnwks-settings
             - --secret=/secrets/settings
@@ -79,6 +79,9 @@ spec:
             - name: files
               mountPath: /app
               readOnly: true
+            - name: notifications
+              mountPath: /notifications
+              readOnly: true
             - name: ca
               mountPath: /ca
               readOnly: true
@@ -92,6 +95,12 @@ spec:
         - name: files
           configMap:
             name: wazuh-settings-files
+        - name: notifications
+          configMap:
+            name: wazuh-notifications
+            items:
+              - key: notifications-enabled
+                path: notifications-enabled
         # The certificate of the CA of the server, and not its key.
         - name: ca
           secret:

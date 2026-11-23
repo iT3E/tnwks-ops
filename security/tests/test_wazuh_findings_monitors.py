@@ -28,8 +28,26 @@ def test_an_active_response_channel_stops_reconciliation_before_writes(monitors)
 
     reported = []
     with pytest.raises(monitors.Stop, match="expected zero active response channels"):
-        monitors.apply(Indexer(), "fixture", ["high"], print, report_count=reported.append)
+        monitors.apply(Indexer(), "fixture", True, print, report_count=reported.append)
     assert reported == [1]
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_settings_wait_for_the_indexer_hook_to_reconcile_the_channel(monitors, enabled):
+    class Indexer:
+        def __init__(self):
+            present = (200, {"config_list": [{"config": monitors.channel()}]})
+            absent = (404, {})
+            self.responses = iter([absent, present] if enabled else [present, absent])
+
+        def call(self, method, path, ok):
+            assert method == "GET" and path.endswith(monitors.CHANNEL_ID)
+            assert ok == (200, 404, 503)
+            return next(self.responses)
+
+    waits = []
+    monitors.wait_for_channel(Indexer(), enabled, 30, waits.append, lambda: 0)
+    assert waits == [5]
 
 
 @pytest.mark.parametrize("level", ["high", "critical"])

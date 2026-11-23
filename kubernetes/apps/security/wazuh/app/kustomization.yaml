@@ -16,6 +16,10 @@ configMapGenerator:
   - name: wazuh-manager-config
     files:
       - ./config/wazuh-manager.conf
+  - name: wazuh-notifications
+    files:
+      - ./config/notifications-enabled
+      - ./config/indexer-notifications.sh
 generatorOptions:
   disableNameSuffixHash: true
   annotations:

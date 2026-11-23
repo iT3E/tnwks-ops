@@ -465,7 +465,7 @@ One file, `api-check/results.json`. Each run writes
 
 ### The count file of the Wazuh settings
 
-When findings notifications are configured, the settings job also writes
+The settings job for findings notifications also writes
 `wazuh-settings/channels.json`. The file holds the version, source, Unix
 time and number of active-response channel definitions. The converter
 serves the count as `homelab_security_wazuh_active_response_channels` and
