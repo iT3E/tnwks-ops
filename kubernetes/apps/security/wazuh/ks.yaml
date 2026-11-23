@@ -97,6 +97,7 @@ spec:
           name: wazuh-manager-master
           annotations:
             secret.reloader.stakater.com/reload: "wazuh-manager-remoted,wazuh-manager-apid,wazuh-manager-indexer-client,wazuh-ca"
+            configmap.reloader.stakater.com/reload: wazuh-dashboard-access
         spec:
           template:
             spec:
@@ -104,6 +105,9 @@ spec:
                 kubernetes.io/hostname: ${SECURITY_NODE}
               enableServiceLinks: false
               volumes:
+                - name: dashboard-access
+                  configMap:
+                    name: wazuh-dashboard-access
                 - name: wazuh-manager-certs-raw
                   secret: null
                   projected:
@@ -135,10 +139,27 @@ spec:
                     limits: {memory: 128Mi}
               containers:
                 - name: wazuh-manager
+                  lifecycle:
+                    postStart:
+                      exec:
+                        command:
+                          - /bin/bash
+                          - -ec
+                          - |
+                            WAZUH_MANAGER_API_PASSWORD="$(
+                              . /credentials-env.sh
+                              load_credentials
+                              printf '%s' "$WAZUH_MANAGER_API_PASSWORD"
+                            )"
+                            export WAZUH_MANAGER_API_PASSWORD
+                            exec /var/wazuh-manager/framework/python/bin/python3 /dashboard-access/manager-rbac.py
                   resources:
                     requests: {cpu: 100m, memory: 1280Mi}
                     limits: {cpu: null, memory: 1280Mi}
                   volumeMounts:
+                    - name: dashboard-access
+                      mountPath: /dashboard-access
+                      readOnly: true
                     - name: wazuh-config-mount
                       mountPath: /wazuh-config-mount/etc/wazuh-manager.conf
                       subPath: wazuh-manager.conf
@@ -180,7 +201,7 @@ spec:
           name: wazuh-indexer
           annotations:
             secret.reloader.stakater.com/reload: "wazuh-indexer-node,wazuh-indexer-admin,wazuh-ca"
-            configmap.reloader.stakater.com/reload: wazuh-notifications
+            configmap.reloader.stakater.com/reload: "wazuh-notifications,wazuh-dashboard-access"
         spec:
           replicas: 1
           template:
@@ -189,6 +210,9 @@ spec:
                 kubernetes.io/hostname: ${SECURITY_NODE}
               enableServiceLinks: false
               volumes:
+                - name: dashboard-access
+                  configMap:
+                    name: wazuh-dashboard-access
                 - name: notifications
                   configMap:
                     name: wazuh-notifications
@@ -228,10 +252,18 @@ spec:
                   lifecycle:
                     postStart:
                       exec:
-                        command: ["/bin/bash", "/notifications/indexer-notifications.sh"]
+                        command:
+                          - /bin/bash
+                          - -ec
+                          - |
+                            /bin/bash /notifications/indexer-notifications.sh
+                            exec /bin/bash /dashboard-access/indexer-auth.sh
                   volumeMounts:
                     - name: notifications
                       mountPath: /notifications
+                      readOnly: true
+                    - name: dashboard-access
+                      mountPath: /dashboard-access
                       readOnly: true
                   resources:
                     requests: {cpu: 250m, memory: 4Gi}
@@ -353,6 +385,34 @@ spec:
                     limits: {memory: 128Mi}
               containers:
                 - name: wazuh-dashboard
+                  args:
+                    - opensearch-dashboards
+                    - --opensearch_security.auth.type=jwt
+                    - '--opensearch.requestHeadersAllowlist=["Authorization","securitytenant"]'
+                    - --opensearch_security.cookie.secure=true
+                    - --opensearch_security.multitenancy.enabled=true
+                    - --opensearch_security.multitenancy.tenants.enable_private=false
+                    - '--opensearch_security.readonly_mode.roles=["tnwks-dashboard-reader"]'
+                    - --status.allowAnonymous=true
+                  startupProbe:
+                    exec: null
+                    tcpSocket:
+                      port: dashboard
+                  readinessProbe:
+                    exec:
+                      command:
+                        - /bin/sh
+                        - -ec
+                        - >-
+                          curl -fsS
+                          --cacert /usr/share/wazuh-dashboard/config/certs/indexer-ca.pem
+                          --resolve dashboard.security.svc.cluster.local:443:127.0.0.1
+                          https://dashboard.security.svc.cluster.local/api/status
+                          >/dev/null
+                  livenessProbe:
+                    exec: null
+                    tcpSocket:
+                      port: dashboard
                   resources:
                     requests: {cpu: 100m, memory: 320Mi}
                     limits: {cpu: null, memory: 320Mi}

@@ -11,11 +11,22 @@ resources:
   - ./certificates.yaml
   - ./networkpolicy.yaml
   - ./service-agents.yaml
+  - ./dashboard-access.yaml
 configMapGenerator:
   # Mounted by the patch of the manager in ../ks.yaml, by this name.
   - name: wazuh-manager-config
     files:
       - ./config/wazuh-manager.conf
+  - name: wazuh-dashboard-access
+    files:
+      - ./config/dashboard/indexer-oidc.yaml
+      - ./config/dashboard/indexer-auth.sh
+      - ./config/dashboard/manager-rbac.py
+    literals:
+      - enabled=true
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: enabled
   - name: wazuh-notifications
     files:
       - ./config/notifications-enabled

@@ -183,9 +183,10 @@ The vendor's `manager-egress-external.yaml` (any address on 443) is not
 applied. The manager and the dashboard have no route out of the cluster, so
 neither reaches an update service.
 
-No route reaches the dashboard: its Service is ClusterIP, there is no
-Ingress or HTTPRoute, and no network rule lets traffic in. How a person
-reaches it, and as which user, is a later change.
+The dashboard's ClusterIP Service receives HTTPS from the internal ingress
+controller under `wazuh-dashboard-ingress`. The indexer reaches the
+Cognito discovery and signing-key endpoints over HTTPS under
+`wazuh-indexer-cognito`. See "Dashboard sign-in" for the access rule.
 
 The agents reach the manager on a shared VIP (`app/service-agents.yaml`,
 `docs/wsl/multi-site.md`, "Shared VIPs"): `WAZUH_AGENTS_LB_ADDR`, an address
@@ -404,6 +405,34 @@ What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
   `accounts.json` no longer names.
 - It reads back what carries its mark, and fails when it is not what
   `accounts.json` says.
+
+## Dashboard sign-in
+
+The internal ingress uses the site's internal certificate and the shared
+Cognito login. Only the dedicated Wazuh reader group passes the auth
+subrequest. The ingress forwards the signed ID token to the dashboard.
+Wazuh verifies the issuer, signature and app audience. It uses Cognito's
+stable subject as the user and the reader group as the access decision.
+That group reads the configured event, finding and state indices and the
+global dashboard saved objects. Private dashboard tenants are disabled.
+The reserved assistant mapping lists the vendor's local accounts so Cognito
+users do not receive the assistant session permissions. Refresh your Cognito
+session after a group membership change. The manager's authorization context
+maps the group to its read-only role. The dashboard Service remains ClusterIP,
+and Cilium permits web ingress only from the local internal ingress controller.
+The local readiness check verifies the certificate and checks `/api/status`
+in JWT mode.
+
+The indexer uses its existing local admin certificate to apply the
+Cognito authentication domain over loopback. The manager uses its own
+local API to manage the one marked group mapping. Reverting a manifest
+alone does not remove persisted roles. To withdraw access, remove the
+Ingress and router record and verify that the route has closed. Then set
+`enabled=false` in the dashboard access ConfigMap generator. Let both
+services restart to remove the auth domain and the manager mapping and
+restore the vendor's assistant mapping.
+Restore the dashboard arguments and probes from the vendor overlay and
+remove the reader role and group.
 
 ## Findings notifications
 

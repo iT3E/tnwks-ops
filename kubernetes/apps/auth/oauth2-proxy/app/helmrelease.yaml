@@ -55,12 +55,15 @@ spec:
         # alone is ~1.5kB; storing access + id + refresh blows past the limit
         # and forces oauth2-proxy to split the cookie, which the auth-subrequest
         # path can't reassemble before its buffer fills (502 at /oauth2/auth).
-        # Grafana only consumes user-headers, so we skip the bearer bits.
+        # Grafana consumes only user headers. Wazuh opts in to the signed
+        # ID token on its auth subrequest.
         pass_access_token = false
         pass_authorization_header = false
         pass_user_headers = true
         set_xauthrequest = true
-        set_authorization_header = false
+        # Ingresses explicitly select which auth response headers to forward.
+        # Wazuh forwards the issuer-signed ID token for server-side role checks.
+        set_authorization_header = true
         skip_jwt_bearer_tokens = false
         # Server-side (Valkey) session store, not cookie. Cognito's
         # access+id+refresh tokens exceed the 4kB cookie limit, so the cookie

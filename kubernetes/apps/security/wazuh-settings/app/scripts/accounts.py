@@ -99,7 +99,8 @@ def wanted(accounts: dict) -> dict:
     for role in accounts["roles"]:
         names = [user for user, spec in accounts["users"].items() if role in spec["roles"]]
         mappings[role] = normal("rolesmapping", {"description": f"{MARK} the users of accounts.json with {role}",
-                                                 "users": names})
+                                                 "users": names,
+                                                 "backend_roles": accounts["roles"][role].get("backend_roles", [])})
     return {"roles": roles, "internalusers": users, "rolesmapping": mappings}
 
 

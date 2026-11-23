@@ -155,6 +155,19 @@ resource "aws_cognito_user_group" "agents" {
   precedence   = 20
 }
 
+resource "aws_cognito_user_group" "wazuh_readers" {
+  name         = "wazuh-readers"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  description  = "Read-only Wazuh dashboard access"
+  precedence   = 40
+}
+
+resource "aws_cognito_user_in_group" "admin_in_wazuh_readers" {
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  group_name   = aws_cognito_user_group.wazuh_readers.name
+  username     = aws_cognito_user.admin.username
+}
+
 # The speech transcripts (kubernetes/apps/production/transcriber): the ingress
 # lets in only this group (oauth2-proxy allowed_groups). Its own group rather
 # than admins, so a future admin doesn't get household conversations too.
