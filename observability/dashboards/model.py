@@ -69,6 +69,7 @@ class Board:
     # The board one level up, under Homelab (an L3 board's domain board). Its top
     # bar links up to it, and the parent's links down to this.
     parent: str = ""
+    time_from: str = "now-6h"
 
 
 def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,

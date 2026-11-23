@@ -1,0 +1,24 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: wazuh-notification-channels
+spec:
+  groups:
+    - name: wazuh.notification-channels
+      rules:
+        - alert: WazuhActiveResponseChannel
+          expr: homelab_security_wazuh_active_response_channels > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: Wazuh has an active-response notification channel
+        - alert: WazuhActiveResponseChannelCountStale
+          expr: >-
+            absent(homelab_security_wazuh_active_response_channels_timestamp_seconds)
+            or time() - homelab_security_wazuh_active_response_channels_timestamp_seconds > 26 * 3600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: The Wazuh notification channel count is missing or stale

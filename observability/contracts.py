@@ -47,6 +47,7 @@ PRODUCERS = {
     "openclaw_": "OpenTelemetry metrics of the personal agents, through the keep list of Alloy (agent_metrics) to the OTLP path of Prometheus",
     "apiserver_": "Kubernetes API server metrics (kept series only)",
     "plausible_": "Plausible exporter (its stats and health API)",
+    "tnwks_aws_budget_": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
     "ALERTS": "local Prometheus alert rules (current state)",
     "up": "Prometheus scrape status",
 }

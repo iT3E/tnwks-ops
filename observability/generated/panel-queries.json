@@ -2208,6 +2208,70 @@
     "kiosk": false
   },
   {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "title": "Month-to-date spend",
+    "expr": "(tnwks_aws_budget_actual_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "title": "Monthly budget",
+    "expr": "(tnwks_aws_budget_limit_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "title": "Budget used",
+    "expr": "(tnwks_aws_budget_actual_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month())))) / (tnwks_aws_budget_limit_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "title": "Budget remaining",
+    "expr": "(tnwks_aws_budget_limit_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month())))) - (tnwks_aws_budget_actual_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "title": "Projected month-end spend",
+    "expr": "(tnwks_aws_budget_forecast_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "title": "Last successful collection",
+    "expr": "tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} * 1000",
+    "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "title": "Month-to-date spend over time",
+    "expr": "(tnwks_aws_budget_actual_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "title": "Month-end forecast over time",
+    "expr": "(tnwks_aws_budget_forecast_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "kiosk": false
+  },
+  {
     "dashboard": "tnwks-security",
     "tab": "Safeguards",
     "title": "Safeguards in the registry",

@@ -3,6 +3,46 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.305.0 - 2026-11-23
+
+### Added
+
+* Stage the Wazuh endpoint roles, enrollment helper, and group settings for an approved rollout.
+
+## v2.304.0 - 2026-11-23
+
+### Added
+
+* Show consolidated AWS spend in Grafana and automate a provisioning restriction at the $50 monthly AWS budget.
+
+## v2.303.1 - 2026-11-23
+
+### Fixed
+
+* Document the MQTT and Wazuh agent service addresses in the shared VIP table.
+
+## v2.303.0 - 2026-11-23
+
+### Added
+
+* Test that generated and site-specific MikroTik DNS records have unique names.
+
+### Fixed
+
+* Retry Wazuh settings startup and distinguish recoverable ISM steps from stopped policies.
+
+## v2.302.3 - 2026-11-23
+
+### Fixed
+
+* Document the MikroTik Terraform CI plan and apply workflow.
+
+## v2.302.2 - 2026-11-23
+
+### Fixed
+
+* Describe the Wazuh AI assistant role’s own-session permissions.
+
 ## v2.302.1 - 2026-11-23
 
 ### Fixed

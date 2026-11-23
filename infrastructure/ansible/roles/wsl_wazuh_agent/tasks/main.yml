@@ -1,0 +1,49 @@
+---
+- name: Require approval for the selected WSL distro
+  ansible.builtin.assert:
+    that:
+      - wazuh_rollout_host | default('') == inventory_hostname
+      - ansible_play_hosts_all == [inventory_hostname]
+      - ansible_architecture == 'x86_64'
+      - ansible_os_family == 'Debian'
+      - wsl_wazuh_agent_group == 'wsl-distro'
+      - wazuh_agent_state | default('present') in ['present', 'absent']
+      - >-
+        wazuh_agent_state | default('present') == 'absent'
+        or wazuh_agent_name | default('') is match('^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$')
+    quiet: true
+
+- name: Check whether a Wazuh package is installed
+  ansible.builtin.command:
+    argv: [dpkg-query, --show, '--showformat=${Status}', wazuh-agent]
+  register: wsl_wazuh_package
+  changed_when: false
+  failed_when: wsl_wazuh_package.rc not in [0, 1]
+  check_mode: false
+
+- name: Check the WSL agent's verified package record
+  become: true
+  ansible.builtin.stat:
+    path: /var/ossec/etc/tnwks-package.sha256
+    checksum_algorithm: sha256
+  register: wsl_wazuh_package_record
+
+- name: Refuse an existing WSL agent without the current package record
+  ansible.builtin.assert:
+    that: >-
+      wsl_wazuh_package_record.stat.checksum | default('') ==
+      ((wsl_wazuh_agent_package_sha256 ~ '\n') | hash('sha256'))
+    fail_msg: An existing Wazuh installation needs a reviewed upgrade or recovery before running this role.
+    quiet: true
+  when: wsl_wazuh_package.rc == 0 and wsl_wazuh_package.stdout != 'deinstall ok config-files'
+
+- name: Remove the verified WSL agent
+  become: true
+  ansible.builtin.apt:
+    name: wazuh-agent
+    state: absent
+  when: wazuh_agent_state | default('present') == 'absent'
+
+- name: Install or verify the selected agent
+  ansible.builtin.include_tasks: present.yml
+  when: wazuh_agent_state | default('present') == 'present'

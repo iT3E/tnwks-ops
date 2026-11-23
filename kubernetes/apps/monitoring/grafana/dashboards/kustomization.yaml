@@ -138,6 +138,15 @@ configMapGenerator:
       kustomize.toolkit.fluxcd.io/substitute: disabled
     labels:
       grafana_dashboard: 'true'
+- name: grafana-tnwks-cloud-cost
+  files:
+  - tnwks-cloud-cost.json
+  options:
+    annotations:
+      grafana_folder: Observability
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
 - name: grafana-tnwks-security
   files:
   - tnwks-security.json

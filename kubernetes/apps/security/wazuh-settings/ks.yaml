@@ -39,6 +39,8 @@ spec:
     - name: security-wazuh-server
     # The claim security-results, where step 2 writes its counts.
     - name: security-converter
+    # The notification channel alert uses the PrometheusRule CRD.
+    - name: kube-prometheus-stack
     # Step 1: the user tnwks-settings and its rights, and the network rule.
     - name: security-wazuh-accounts
     - name: alertmanager

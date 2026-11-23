@@ -383,7 +383,7 @@ them (`app/config/accounts.json`, pinned by
 | `.wazuh-settings` | `indices:data/write/index`, `indices:data/write/bulk[s]` |
 
 The image also maps every user to its reserved role `wazuh_ai_assistant`,
-which reads only the sessions of the AI assistant of that user
+which reads and writes only the sessions of the AI assistant of that user
 ([roles_mapping.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles_mapping.wazuh.yml#L23-L27),
 [roles.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles.wazuh.yml#L100-L115)).
 
@@ -416,12 +416,15 @@ uses field-level security and its monitored input runs with the role of
 the user that saved it. The pinned Wazuh Alerting implementation supplies
 that user to the [bucket monitor runner](https://github.com/wazuh/wazuh-indexer-alerting/blob/v5.0.0-rc2/alerting/src/main/kotlin/org/opensearch/alerting/BucketLevelMonitorRunner.kt).
 
-The indexer accepts only webhook notification configurations. It keeps
+The indexer advertises webhook notification configurations and sets the
+active-response channel creation cap to zero. It keeps
 the vendor's [destination deny list](https://github.com/wazuh/wazuh-indexer-notifications/blob/v5.0.0-rc2/notifications/core/src/main/kotlin/org/opensearch/notifications/core/setting/PluginSettings.kt)
 with one exception for the internal Alertmanager Service. Cilium permits
 that path to the local Alertmanager pods on TCP 9093. The settings job
-checks that the count of active response channels is zero before and
-after it reconciles the channel and monitors.
+checks that the count of active-response channels is zero before and
+after it reconciles the channel and monitors. It publishes the count and
+the time of the check to the converter. Prometheus alerts on a positive
+count and alerts separately when the sample is missing or stale.
 
 The account and settings Jobs run again when their inputs change. The
 indexer restarts when its startup settings change. Before reverting

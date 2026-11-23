@@ -49,6 +49,8 @@ LAST_CYCLE = "homelab_security_converter_last_cycle_timestamp_seconds"
 QUERY_SUCCESS = "homelab_security_converter_stream_query_success"
 ACCEPTED_SKIPPED = "homelab_security_converter_accepted_skipped_entries"
 FILES_SKIPPED = "homelab_security_converter_files_skipped"
+WAZUH_ACTIVE_CHANNELS = "homelab_security_wazuh_active_response_channels"
+WAZUH_ACTIVE_CHANNELS_TIME = "homelab_security_wazuh_active_response_channels_timestamp_seconds"
 FINDINGS_PENDING = "homelab_security_converter_findings_pending"
 FINDINGS_SENT = "homelab_security_converter_findings_lines_sent_total"
 FINDINGS_REFUSED = "homelab_security_converter_findings_lines_refused_total"
@@ -482,6 +484,7 @@ class AcceptedList(Loop):
 # prowler/<provider>/<system>.<YYYYMMDDTHHMMSSZ>.ocsf.json (README, "The OCSF files").
 OCSF_NAME = re.compile(r"(?P<system>[^/]+)\.(?P<stamp>[0-9]{8}T[0-9]{6}Z)\.ocsf\.json")
 API_FILE = Path("api-check/results.json")
+WAZUH_CHANNEL_FILE = Path("wazuh-settings/channels.json")
 # A time of a result that is this far in the future is no result.
 CLOCK_SKEW_SECONDS = 300
 # The converter reads an OCSF file one item at a time, so its memory does not grow
@@ -623,6 +626,19 @@ def read_ocsf(file) -> dict[str, tuple[int, str]]:
 
 def number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def read_wazuh_channels(file) -> tuple[int, int]:
+    try:
+        payload = json.load(file)
+    except ValueError as error:
+        raise BadFile("the channel count is not JSON") from error
+    if not isinstance(payload, dict) or payload.get("version") != 1 or payload.get("source") != "wazuh-settings":
+        raise BadFile("the channel count is not a version 1 Wazuh settings result")
+    stamp, count = payload.get("time"), payload.get("active_channels")
+    if type(stamp) is not int or stamp <= 0 or type(count) is not int or count < 0:
+        raise BadFile("the Wazuh settings result has no valid channel count and time")
+    return stamp, count
 
 
 def api_results(payload: object, now: float) -> tuple[float, list[dict]]:
@@ -904,7 +920,7 @@ class ResultFiles(Loop):
         # path -> (size, modified, inode), and what the converter read: a result or BadFile.
         self.cache: dict[Path, tuple[tuple[int, int, int], object]] = {}
         self.noted: set[str] = set()
-        self.result: tuple[list, list, dict[str, int], float] | None = None
+        self.result: tuple[list, list, dict[str, int], float, tuple[int, int] | None] | None = None
 
     def note(self, text: str):
         """A log line one time, for a name that the converter does not read."""
@@ -1022,9 +1038,18 @@ class ResultFiles(Loop):
                     offers[("api-check", system)] = (
                         moment, moment, lambda entries=entries, system=system, moment=moment:
                         api_lines(entries, system, moment))
+        channels = self.root / WAZUH_CHANNEL_FILE
+        channel_count = None
+        if os.path.lexists(channels):
+            read.add(channels)
+            sample = self.read(channels, read_wazuh_channels, 4096)
+            if isinstance(sample, BadFile) or sample[0] > now + CLOCK_SKEW_SECONDS:
+                skipped["wazuh-settings"] = 1
+            else:
+                channel_count = sample
         self.cache = {path: value for path, value in self.cache.items() if path in read}
         with self.lock:
-            self.result = results, times, skipped, self.monotonic()
+            self.result = results, times, skipped, self.monotonic(), channel_count
         if self.findings is not None:
             try:
                 self.findings.send(offers)
@@ -1036,13 +1061,17 @@ class ResultFiles(Loop):
             result = self.result
         if result is None or not self.fresh(result[3], now):
             return
-        results, times, skipped, _ = result
+        results, times, skipped, _, channel_count = result
         for source, count in sorted(skipped.items()):
             metrics.add(FILES_SKIPPED, count, source=source)
         for source, system, moment in times:
             metrics.add(self.time_series, moment, source=source, system=system)
         for source, check, system, failed, level in results:
             metrics.add(self.result_series, failed, source=source, check=check, system=system, severity=level)
+        if channel_count is not None:
+            stamp, count = channel_count
+            metrics.add(WAZUH_ACTIVE_CHANNELS, count)
+            metrics.add(WAZUH_ACTIVE_CHANNELS_TIME, stamp)
         if self.findings is not None:
             self.findings.collect(metrics)
 

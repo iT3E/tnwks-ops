@@ -23,9 +23,11 @@ sops -d --extract '["key"]' path/to/secrets.sops.yaml
 sops --set '["key"] "value"' path/to/secrets.sops.yaml
 ```
 
-Encrypting a new file, `sops updatekeys` and `sops rotate` also need the KMS
-recipient. Inside the repo `bin/sops` (on PATH via `.envrc`) runs sops with the
-`tnwks-sops` AWS profile for that process only; set it up once with
+Encrypting a new file, `sops updatekeys` and a new data key
+(`sops --rotate --in-place <file>`) also need the KMS recipient. The flag
+form works with the pinned sops and with older ones that have no `rotate`
+subcommand. Inside the repo `bin/sops` (on PATH via `.envrc`) runs sops
+with the `tnwks-sops` AWS profile for that process only; set it up once with
 `task aws:ra-cert` and `task aws:ra-profile`
 ([`../../infrastructure/terraform/environments/prod/aws/rolesanywhere/README.md`](../../infrastructure/terraform/environments/prod/aws/rolesanywhere/README.md)).
 

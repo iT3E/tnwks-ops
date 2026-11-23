@@ -282,15 +282,13 @@ def certificate_ends(indexer_url: str, ca_file: str) -> list:
     return [ssl.cert_time_to_seconds(cert["notAfter"]) for cert in [served, *context.get_ca_certs()]]
 
 
-def write_results(results: Path, document: dict) -> Path:
-    """wazuh-settings/indices.json, through indices.json.tmp: one move, so no
-    reader sees half a file. Mode 0755 and 0644, so the converter (another
-    user) reads it."""
+def write_results(results: Path, document: dict, name="indices.json") -> Path:
+    """Publish complete result files atomically for the converter."""
     directory = results / SOURCE
     directory.mkdir(parents=True, exist_ok=True)
     directory.chmod(0o755)
-    final = directory / "indices.json"
-    partial = directory / "indices.json.tmp"
+    final = directory / name
+    partial = directory / f"{name}.tmp"
     partial.write_text(json.dumps(document, indent=1) + "\n", encoding="utf-8")
     partial.chmod(0o644)
     os.replace(partial, final)
@@ -302,6 +300,10 @@ def hours(value: str) -> int:
     if not match:
         raise argparse.ArgumentTypeError("hours, as 720h")
     return int(match.group(1))
+
+
+def record_channel_count(results: Path, count: int, stamp: int) -> None:
+    write_results(results, {"version": 1, "source": SOURCE, "time": stamp, "active_channels": count}, "channels.json")
 
 
 def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.time, ends=certificate_ends,
@@ -345,11 +347,15 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
             pending = move_indices(client, retention, versions, out, args.wait, sleep=sleep, clock=clock)
             moves = "pending" if pending else "applied"
         if args.monitors is not None:
-            lock_dir = Path(args.results) / SOURCE
+            results = Path(args.results)
+            lock_dir = results / SOURCE
             lock_dir.mkdir(parents=True, exist_ok=True)
             with (lock_dir / ".monitors.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
-                monitors.apply(client, args.monitor_cluster, json.loads(args.monitors.read_text()), out)
+                monitors.apply(
+                    client, args.monitor_cluster, json.loads(args.monitors.read_text()), out,
+                    report_count=lambda count: record_channel_count(results, count, int(now())),
+                )
         streams = count_indices(client, retention)
         document = {
             "version": 1, "source": SOURCE, "time": int(now()), "moves": moves,

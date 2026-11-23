@@ -11,6 +11,7 @@ resources:
   - ./secret-settings-user.sops.yaml
   - ./settings-job.yaml
   - ./settings-cronjob.yaml
+  - ./alerts.yaml
 configMapGenerator:
   # The files of step 2, which the hash in the name of its Job covers.
   # Tests: security/tests/test_wazuh_settings.py.

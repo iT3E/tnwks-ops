@@ -231,10 +231,16 @@ spec:
                       value: "false"
                     - name: plugins.content_manager.telemetry.enabled
                       value: "false"
-                    # Keep passive notifications only. Preserve the RC2
-                    # destination deny list except the site 2 webhook Service.
+                    # Advertise webhook channels and set the server's separate
+                    # create cap for active-response channels to zero. The
+                    # settings count needs to see channels from all roles.
                     - name: opensearch.notifications.core.allowed_config_types
                       value: webhook
+                    - name: plugins.notifications.max_active_responses
+                      value: "0"
+                    - name: opensearch.notifications.general.filter_by_backend_roles
+                      value: "false"
+                    # Preserve the RC2 destination deny list except the webhook Service.
                     - name: opensearch.notifications.core.http.host_deny_list
                       value: >-
                         127.0.0.0/8,

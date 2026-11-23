@@ -26,8 +26,10 @@ def test_an_active_response_channel_stops_reconciliation_before_writes(monitors)
             assert method == "GET" and "config_type=active_response" in path
             return 200, {"total_hits": 1, "total_hit_relation": "eq"}
 
+    reported = []
     with pytest.raises(monitors.Stop, match="expected zero active response channels"):
-        monitors.apply(Indexer(), "fixture", ["high"], print)
+        monitors.apply(Indexer(), "fixture", ["high"], print, report_count=reported.append)
+    assert reported == [1]
 
 
 @pytest.mark.parametrize("level", ["high", "critical"])
@@ -55,6 +57,8 @@ def test_indexer_webhook_exception_is_only_for_its_alertmanager_service():
     (container,) = yaml.safe_load(patch["patch"])["spec"]["template"]["spec"]["containers"]
     settings = {entry["name"]: entry.get("value") for entry in container["env"]}
     assert settings["opensearch.notifications.core.allowed_config_types"] == "webhook"
+    assert settings["plugins.notifications.max_active_responses"] == "0"
+    assert settings["opensearch.notifications.general.filter_by_backend_roles"] == "false"
     denied = [ip_network(cidr.strip()) for cidr in settings[
         "opensearch.notifications.core.http.host_deny_list"].split(",")]
     service = yaml.safe_load((ROOT / "kubernetes/clusters/wsl-02/apps/alertmanager"

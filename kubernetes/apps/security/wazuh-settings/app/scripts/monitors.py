@@ -105,14 +105,20 @@ def managed_monitors(client):
     return monitors
 
 
-def apply(client, cluster, severities, log, url=ALERTMANAGER_URL):
+def require_zero_channels(client, report_count):
+    count = active_channel_count(client)
+    if report_count is not None:
+        report_count(count)
+    if count:
+        raise Stop(f"expected zero active response channels, found {count}")
+
+
+def apply(client, cluster, severities, log, url=ALERTMANAGER_URL, *, report_count=None):
     if not isinstance(severities, list) or any(level not in LEVELS for level in severities):
         raise Stop("invalid Wazuh findings severities")
     if len(severities) != len(set(severities)):
         raise Stop("duplicate Wazuh findings severity")
-    count = active_channel_count(client)
-    if count:
-        raise Stop(f"expected zero active response channels, found {count}")
+    require_zero_channels(client, report_count)
 
     existing = managed_monitors(client)
     path = f"{CONFIGS}/{q(CHANNEL_ID)}"
@@ -139,8 +145,6 @@ def apply(client, cluster, severities, log, url=ALERTMANAGER_URL):
     if not severities and configs:
         client.call("DELETE", path)
 
-    count = active_channel_count(client)
-    if count:
-        raise Stop(f"expected zero active response channels, found {count}")
+    require_zero_channels(client, report_count)
     log("active response channels: 0")
-    return count
+    return 0
