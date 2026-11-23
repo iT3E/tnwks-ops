@@ -63,4 +63,4 @@ def test_indexer_webhook_exception_is_only_for_its_alertmanager_service():
     assert not any(allowed in subnet for subnet in denied)
     four = [subnet for subnet in denied if subnet.version == 4 and subnet.subnet_of(ip_network("10.0.0.0/8"))]
     assert sum(subnet.num_addresses for subnet in four) == ip_network("10.0.0.0/8").num_addresses - 1
-    assert len(set(four)) == len(four)
+    assert all(not first.overlaps(second) for i, first in enumerate(four) for second in four[i + 1:])
