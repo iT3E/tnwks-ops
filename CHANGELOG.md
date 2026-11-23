@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.302.2 - 2026-11-23
+
+### Fixed
+
+* Describe the Wazuh AI assistant role’s own-session permissions.
+
 ## v2.302.1 - 2026-11-23
 
 ### Fixed
