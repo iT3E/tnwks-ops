@@ -156,17 +156,6 @@ class FakeIndexer:
         if method == "DELETE":
             del store[name]
             return 200, {"status": "OK"}
-        if method == "PATCH" and kind == "rolesmapping" and name == "all_access":
-            groups = store[name]["backend_roles"]
-            for operation in body:
-                index = operation["path"].removeprefix("/backend_roles/")
-                if operation["op"] == "add":
-                    assert index == "-"
-                    groups.append(operation["value"])
-                else:
-                    assert operation["op"] == "remove"
-                    del groups[int(index)]
-            return 200, {"status": "OK"}
         return 400, None
 
     def ism(self, method, parts, path, body):
@@ -275,23 +264,30 @@ def test_step1_again_sets_only_the_hashes(tmp_path):
     assert "role tnwks-settings: unchanged" in lines and "role mapping tnwks-converter: unchanged" in lines
 
 
-def test_step1_reconciles_only_the_dashboard_group_in_the_admin_mapping(tmp_path):
+def test_step1_reconciles_the_dashboard_admin_role_and_leaves_the_shipped_mapping(tmp_path):
     fake = FakeIndexer()
     mapping = {"backend_roles": ["admin", "another-group"], "users": ["existing-user"], "reserved": False}
-    fake.store["rolesmapping"]["all_access"] = mapping
+    fake.store["rolesmapping"]["all_access"] = copy.deepcopy(mapping)
     switch = tmp_path / "admin-enabled"
     argv = [*step1_files(tmp_path / "step1"), f"--dashboard-admin={switch}"]
+    name = "tnwks-dashboard-admin"
 
     switch.write_text("true\n")
     assert run1(fake, argv)[0] == 0
-    assert mapping["backend_roles"] == ["admin", "another-group", "wazuh-admins"]
+    role = fake.store["roles"][name]
+    assert role["cluster_permissions"] == ["*"]
+    assert role["index_permissions"][0]["index_patterns"] == ["*"]
+    assert role["index_permissions"][0]["allowed_actions"] == ["*"]
+    assert fake.store["rolesmapping"][name]["backend_roles"] == ["wazuh-admins"]
     fake.writes.clear()
     assert run1(fake, argv)[0] == 0
-    assert all(write[0] != "PATCH" for write in fake.writes)
+    assert all(not write[1].endswith(name) for write in fake.writes)
 
     switch.write_text("false\n")
     assert run1(fake, argv)[0] == 0
-    assert mapping == {"backend_roles": ["admin", "another-group"], "users": ["existing-user"], "reserved": False}
+    assert name not in fake.store["roles"]
+    assert name not in fake.store["rolesmapping"]
+    assert fake.store["rolesmapping"]["all_access"] == mapping
 
 
 @pytest.mark.parametrize("kind", ["roles", "internalusers", "rolesmapping"])

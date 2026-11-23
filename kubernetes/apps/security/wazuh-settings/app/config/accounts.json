@@ -142,6 +142,35 @@
         }
       ]
     },
+    "tnwks-dashboard-admin": {
+      "description": "Administer Wazuh indices and dashboards for the dedicated Cognito administrator group.",
+      "backend_roles": [
+        "wazuh-admins"
+      ],
+      "cluster_permissions": [
+        "*"
+      ],
+      "index_permissions": [
+        {
+          "index_patterns": [
+            "*"
+          ],
+          "allowed_actions": [
+            "*"
+          ]
+        }
+      ],
+      "tenant_permissions": [
+        {
+          "tenant_patterns": [
+            "*"
+          ],
+          "allowed_actions": [
+            "kibana_all_write"
+          ]
+        }
+      ]
+    },
     "tnwks-dashboard-reader": {
       "description": "Read findings, events, endpoint state, threat intelligence, response history and dashboards for the Wazuh Cognito group.",
       "backend_roles": [

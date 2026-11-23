@@ -390,7 +390,7 @@ which reads and writes only the sessions of the AI assistant of that user
 
 What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
 
-- It owns the accounts that carry its mark: the attribute
+- It owns only what carries its mark: the attribute
   `tnwks_managed_by: wazuh-accounts` on a user, and a description that
   starts with `[wazuh-accounts]` on a role or a role mapping.
 - It never touches a resource that is reserved, hidden or static, a user of
@@ -405,8 +405,8 @@ What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
   `accounts.json` no longer names.
 - It reads back what carries its mark, and fails when it is not what
   `accounts.json` says.
-- It reconciles and verifies the Wazuh administrator group's entry in the
-  built-in `all_access` role mapping. It preserves the other entries.
+- It includes the marked indexer administrator role and group mapping when
+  the dashboard `admin-enabled` switch is on.
 
 ## Dashboard sign-in
 
@@ -424,8 +424,10 @@ The global tenant and indexer role enforce read-only access for readers. The
 keeps the Wazuh applications available to readers.
 The manager's authorization context maps the reader group to its read-only
 role. The owner is also the sole member of the dedicated Wazuh administrator
-group. That group maps to the indexer's `all_access` and the manager's
-`administrator` roles. Refresh your Cognito session after a membership
+group. That group maps to the indexer's `tnwks-dashboard-admin` role, which
+has the permissions of `all_access`, and the manager's `administrator` role.
+The indexer permits Security API access for its dedicated role and the
+shipped roles. Refresh your Cognito session after a membership
 change. The reserved assistant mapping still lists the vendor's local
 accounts. The dashboard Service remains ClusterIP,
 and Cilium permits web ingress only from the local internal ingress controller.
@@ -435,8 +437,9 @@ in JWT mode.
 The indexer uses its existing local admin certificate to apply the
 Cognito authentication domain over loopback. The manager uses its own
 local API to manage both group mappings. To revoke the admin grant, set
-`app/config/dashboard/admin-enabled` to `false` first. Wait for the new
-accounts Job and the manager restart to remove both admin mappings.
+`app/config/dashboard/admin-enabled` to `false` first and update the accounts
+Job name with the new input hash. Wait for the Job and the manager restart
+to remove both admin mappings.
 Then remove the Cognito admin group and membership. This keeps the reader
 access available during the rollback.
 

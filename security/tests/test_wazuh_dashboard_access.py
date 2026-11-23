@@ -90,6 +90,10 @@ def test_indexer_preserves_its_notifications_hook_when_enabling_dashboard_access
     config_maps = {v["name"]: v["configMap"]["name"] for v in pod["volumes"] if "configMap" in v}
     assert config_maps == {"notifications": "wazuh-notifications", "dashboard-access": "wazuh-dashboard-access"}
     (container,) = pod["containers"]
+    env = {item["name"]: item.get("value") for item in container["env"]}
+    assert env["plugins.security.restapi.roles_enabled"].split(",") == [
+        "all_access", "security_rest_api_access", "tnwks-dashboard-admin",
+    ]
     assert [(v["name"], v["mountPath"], v["readOnly"]) for v in container["volumeMounts"]] == [
         ("notifications", "/notifications", True),
         ("dashboard-access", "/dashboard-access", True),

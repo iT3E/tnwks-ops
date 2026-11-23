@@ -51,8 +51,7 @@ UPSTREAM_USERS = frozenset({"admin", "kibanaserver", "wazuh-manager"})
 # A bcrypt hash, the form of the internal users of the security plugin.
 BCRYPT = re.compile(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}")
 KINDS = {"roles": "role", "internalusers": "user", "rolesmapping": "role mapping"}
-ADMIN_GROUP = "wazuh-admins"
-ADMIN_MAPPING = "/_plugins/_security/api/rolesmapping/all_access"
+ADMIN_ROLE = "tnwks-dashboard-admin"
 
 
 def check_accounts(accounts: dict, own_user: str) -> None:
@@ -178,23 +177,6 @@ def apply(client: Indexer, accounts: dict, hashes: dict, own_user: str, log) -> 
     log("read back: the users, roles and role mappings with the mark are those of accounts.json")
 
 
-def reconcile_dashboard_admin(client: Indexer, enabled: bool, log) -> None:
-    _, response = client.call("GET", ADMIN_MAPPING)
-    groups = response["all_access"]["backend_roles"]
-    if enabled:
-        patch = [] if ADMIN_GROUP in groups else [{"op": "add", "path": "/backend_roles/-", "value": ADMIN_GROUP}]
-    else:
-        patch = [{"op": "remove", "path": f"/backend_roles/{position}"}
-                 for position in reversed(range(len(groups))) if groups[position] == ADMIN_GROUP]
-    if patch:
-        client.call("PATCH", ADMIN_MAPPING, patch)
-        _, response = client.call("GET", ADMIN_MAPPING)
-    actual = response["all_access"]["backend_roles"]
-    if (ADMIN_GROUP in actual) != enabled:
-        raise Stop("read back: the indexer administrator group mapping differs from its declaration")
-    log("Indexer administrator group mapping: " + ("enabled" if enabled else "disabled"))
-
-
 def wait_for_indexer(client: Indexer, wait: float, log, sleep=time.sleep, clock=time.monotonic) -> None:
     """Wait while the indexer gives no answer or answers 503 (the security
     plugin is not initialized yet). Any other answer ends the wait: 200 goes
@@ -233,13 +215,13 @@ def main(argv=None, send=None, out=print, sleep=time.sleep, clock=time.monotonic
         folder = Path(args.user)
         own_user = read_secret(folder / "username")
         accounts = json.loads(Path(args.accounts).read_text())
+        if args.dashboard_admin is None or args.dashboard_admin.read_text().strip() != "true":
+            accounts["roles"].pop(ADMIN_ROLE, None)
         check_accounts(accounts, own_user)
         hashes = read_hashes(Path(args.hashes), accounts["users"])
         client = Indexer(args.indexer, own_user, read_secret(folder / "password"), send=send, ca_file=args.ca)
         wait_for_indexer(client, args.login_wait, out, sleep=sleep, clock=clock)
         apply(client, accounts, hashes, own_user, out)
-        if args.dashboard_admin is not None:
-            reconcile_dashboard_admin(client, args.dashboard_admin.read_text().strip() == "true", out)
     except Stop as error:
         out(f"error: {error}")
         return 1

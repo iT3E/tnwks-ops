@@ -281,6 +281,8 @@ spec:
                       value: "false"
                     - name: plugins.content_manager.telemetry.enabled
                       value: "false"
+                    - name: plugins.security.restapi.roles_enabled
+                      value: "all_access,security_rest_api_access,tnwks-dashboard-admin"
                     # Advertise webhook channels and set the server's separate
                     # create cap for active-response channels to zero. The
                     # settings count needs to see channels from all roles.
