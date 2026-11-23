@@ -105,3 +105,19 @@ spec:
         - ports:
             - port: "9200"
               protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: wazuh-indexer-cognito
+spec:
+  endpointSelector:
+    matchLabels:
+      app: wazuh-indexer
+  egress:
+    - toFQDNs:
+        - matchPattern: "cognito-idp.*.amazonaws.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

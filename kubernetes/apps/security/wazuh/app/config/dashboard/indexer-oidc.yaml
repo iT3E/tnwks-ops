@@ -1,0 +1,17 @@
+# Merged as one top-level section of the indexer's packaged authc config.
+      tnwks_cognito:
+        description: "Cognito ID tokens passed by the internal dashboard ingress"
+        http_enabled: true
+        transport_enabled: false
+        order: 1
+        http_authenticator:
+          type: openid
+          challenge: false
+          config:
+            openid_connect_url: "${COGNITO_OIDC_ISSUER_URL}/.well-known/openid-configuration"
+            required_issuer: "${COGNITO_OIDC_ISSUER_URL}"
+            required_audience: "${OAUTH2_PROXY_CLIENT_ID}"
+            subject_key: sub
+            roles_key: "cognito:groups"
+        authentication_backend:
+          type: noop

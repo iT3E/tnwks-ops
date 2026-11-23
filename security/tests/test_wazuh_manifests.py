@@ -345,7 +345,10 @@ def test_no_rule_opens_a_route_to_any_address():
             for rule in d["spec"].get("egress") or []:
                 assert not set(rule) & {"toCIDR", "toCIDRSet", "toEntities"}, (path, d["metadata"]["name"])
                 for fqdn in rule.get("toFQDNs") or []:
-                    assert set(fqdn) == {"matchName"}, (path, fqdn)
+                    if d["metadata"]["name"] == "wazuh-indexer-cognito":
+                        assert fqdn == {"matchPattern": "cognito-idp.*.amazonaws.com"}
+                    else:
+                        assert set(fqdn) == {"matchName"}, (path, fqdn)
             for rule in d["spec"].get("ingress") or []:
                 if "fromEntities" in rule:
                     # Only the agents, on their one port, to the manager.
@@ -487,7 +490,7 @@ def test_the_manager_configuration():
     assert certs and all(re.fullmatch(r"/etc/wazuh-manager/certs/[a-z-]+\.pem", c) for c in certs)
     # The manager patch mounts the file where the image reads it.
     (manager,) = patches()[("StatefulSet", "wazuh-manager-master")]["spec"]["template"]["spec"]["containers"]
-    (mount,) = manager["volumeMounts"]
+    mount = next(m for m in manager["volumeMounts"] if m["name"] == "wazuh-config-mount")
     assert mount["mountPath"] == "/wazuh-config-mount/etc/wazuh-manager.conf"
 
 

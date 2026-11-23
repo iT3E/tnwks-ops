@@ -1,0 +1,3 @@
+kind: Added
+body: Add Cognito sign-in to the internal Wazuh dashboard for its read-only group.
+time: 2026-11-22T18:13:54.517827338-08:00

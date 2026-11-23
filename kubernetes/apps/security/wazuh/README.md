@@ -405,6 +405,26 @@ What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
 - It reads back what carries its mark, and fails when it is not what
   `accounts.json` says.
 
+## Dashboard sign-in
+
+The internal ingress uses the site's internal certificate and the shared
+Cognito login. Only the dedicated Wazuh reader group passes the auth
+subrequest. The ingress forwards the signed ID token to the dashboard.
+Wazuh verifies the issuer, signature and app audience. It uses Cognito's
+stable subject as the user and the reader group as the access decision.
+That group reads the configured event, finding and state indices and the
+read-only dashboard tenant. The manager's authorization context maps the
+group to its read-only role. The dashboard Service remains ClusterIP, and
+Cilium permits web ingress only from the local internal ingress controller.
+
+The indexer uses its existing local admin certificate to apply the
+Cognito authentication domain over loopback. The manager uses its own
+local API to manage the one marked group mapping. Reverting a manifest
+alone does not remove persisted roles. To withdraw access, remove the
+Ingress and router record, set `enabled=false` in the dashboard access
+ConfigMap generator, and let both services restart to remove the auth
+domain and the manager mapping. Then remove the reader role and group.
+
 ## Retention
 
 The shipped ISM policies of the streams roll over only at 20 GB for each

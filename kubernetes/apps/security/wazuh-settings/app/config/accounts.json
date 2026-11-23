@@ -121,6 +121,40 @@
           ]
         }
       ]
+    },
+    "tnwks-dashboard-reader": {
+      "description": "Read findings, events and dashboards for the Wazuh Cognito group.",
+      "backend_roles": [
+        "wazuh-readers"
+      ],
+      "cluster_permissions": [
+        "cluster_composite_ops_ro"
+      ],
+      "index_permissions": [
+        {
+          "index_patterns": [
+            "wazuh-findings-v5-*",
+            ".ds-wazuh-findings-v5-*",
+            "wazuh-events-v5-*",
+            ".ds-wazuh-events-v5-*",
+            "wazuh-states-sca",
+            "wazuh-states-vulnerabilities"
+          ],
+          "allowed_actions": [
+            "read"
+          ]
+        }
+      ],
+      "tenant_permissions": [
+        {
+          "tenant_patterns": [
+            "global_tenant"
+          ],
+          "allowed_actions": [
+            "kibana_all_read"
+          ]
+        }
+      ]
     }
   },
   "users": {
