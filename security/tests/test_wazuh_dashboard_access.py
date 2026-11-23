@@ -56,6 +56,31 @@ def test_jwt_dashboard_has_an_authenticated_ingress_and_a_local_readiness_check(
         assert dashboard[probe] == {"exec": None, "tcpSocket": {"port": "dashboard"}}
 
 
+def test_indexer_preserves_its_notifications_hook_when_enabling_dashboard_access():
+    server = next(doc for doc in yaml.safe_load_all((WAZUH.parent / "ks.yaml").read_text())
+                  if doc["metadata"]["name"] == "security-wazuh-server")
+    patch = next(p["patch"] for p in server["spec"]["patches"] if p["target"]["name"] == "wazuh-indexer")
+    indexer = yaml.safe_load(patch)
+    annotations = indexer["metadata"]["annotations"]
+    assert set(annotations["configmap.reloader.stakater.com/reload"].split(",")) == {
+        "wazuh-notifications", "wazuh-dashboard-access",
+    }
+    pod = indexer["spec"]["template"]["spec"]
+    config_maps = {v["name"]: v["configMap"]["name"] for v in pod["volumes"] if "configMap" in v}
+    assert config_maps == {"notifications": "wazuh-notifications", "dashboard-access": "wazuh-dashboard-access"}
+    (container,) = pod["containers"]
+    assert [(v["name"], v["mountPath"], v["readOnly"]) for v in container["volumeMounts"]] == [
+        ("notifications", "/notifications", True),
+        ("dashboard-access", "/dashboard-access", True),
+    ]
+    shell, options, command = container["lifecycle"]["postStart"]["exec"]["command"]
+    assert (shell, options) == ("/bin/bash", "-ec")
+    assert command.splitlines() == [
+        "/bin/bash /notifications/indexer-notifications.sh",
+        "exec /bin/bash /dashboard-access/indexer-auth.sh",
+    ]
+
+
 class Manager:
     def __init__(self):
         self.rule = None

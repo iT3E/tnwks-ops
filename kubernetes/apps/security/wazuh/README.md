@@ -285,7 +285,7 @@ this repository from `../wazuh-settings/app/config/accounts.json`:
 
 | User | Role | For |
 | --- | --- | --- |
-| `tnwks-settings` | `tnwks-settings`: the five ISM actions that step 2 calls ([`policy/get`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/getpolicy/GetPolicyAction.kt#L13), [`policy/write`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/indexpolicy/IndexPolicyAction.kt#L13), [`managedindex/add`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/addpolicy/AddPolicyAction.kt#L14), [`managedindex/change`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/changepolicy/ChangePolicyAction.kt#L14), [`managedindex/explain`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/explain/ExplainAction.kt#L13), each under `cluster:admin/opendistro/ism/`), and the ISM index actions on the patterns of the four streams of "Retention". `policy/write` lets the user write a policy under any ID: the role can not limit the ID, so step 2 refuses to write a shipped ID. Also the raw events setting, with a write of the settings document in `.wazuh-settings` (the Setup plugin indexes it with the rights of the caller, which OpenSearch runs as a bulk request: the cluster action `indices:data/write/bulk`, and `indices:data/write/index` and `indices:data/write/bulk[s]` on that index, [SettingsIndex.java](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/plugins/setup/src/main/java/com/wazuh/setup/index/SettingsIndex.java#L106-L113)), and the index stats of the two streams that hold no document. Also what ISM calls with this role for the policies of tnwks (see below): the index stats and the rollover on the names of the four streams, and the index stats and the delete on their backing indices. No Security API, and no read of a document | Step 2 |
+| `tnwks-settings` | `tnwks-settings`: the five ISM actions that step 2 calls ([`policy/get`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/getpolicy/GetPolicyAction.kt#L13), [`policy/write`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/indexpolicy/IndexPolicyAction.kt#L13), [`managedindex/add`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/addpolicy/AddPolicyAction.kt#L14), [`managedindex/change`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/changepolicy/ChangePolicyAction.kt#L14), [`managedindex/explain`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/explain/ExplainAction.kt#L13), each under `cluster:admin/opendistro/ism/`), and the ISM index actions on the patterns of the four streams of "Retention". `policy/write` lets the user write a policy under any ID: the role can not limit the ID, so step 2 refuses to write a shipped ID. Also the raw events setting, with a write of the settings document in `.wazuh-settings` (the Setup plugin indexes it with the rights of the caller, which OpenSearch runs as a bulk request: the cluster action `indices:data/write/bulk`, and `indices:data/write/index` and `indices:data/write/bulk[s]` on that index, [SettingsIndex.java](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/plugins/setup/src/main/java/com/wazuh/setup/index/SettingsIndex.java#L106-L113)), and the index stats of the two streams that hold no document. Also what ISM calls with this role for the policies of tnwks (see below): the index stats and the rollover on the names of the four streams, and the index stats and the delete on their backing indices. The findings monitors can search only the timestamp, rule ID and severity. See Findings notifications for the named cluster permissions. No Security API | Step 2 |
 | `tnwks-converter` | `tnwks-converter`: a read of the index names of "Contract", with field-level security on the agent snapshots, and the index stats (the size) of each index of Wazuh | The converter |
 
 Step 1 runs only when its files change: `accounts.json`, `indexer.py` and
@@ -434,6 +434,37 @@ restore the vendor's assistant mapping.
 Restore the dashboard arguments and probes from the vendor overlay and
 remove the reader role and group.
 
+## Findings notifications
+
+Step 2 reconciles two bucket monitors when `notifications-enabled` is true.
+Each searches the last five minutes of the findings streams, groups by
+rule ID, and sends only a new alert to site 2 Alertmanager. It sends the
+rule ID, severity and static text, with no finding body. The settings role
+can manage monitors, list channels, and publish to the configured webhook.
+The channel write operations use the indexer's existing local admin
+certificate in its startup hook. The findings search uses field-level
+security and the monitored input runs with the role of the user that saved
+it. The pinned Wazuh Alerting implementation supplies
+that user to the [bucket monitor runner](https://github.com/wazuh/wazuh-indexer-alerting/blob/v5.0.0-rc2/alerting/src/main/kotlin/org/opensearch/alerting/BucketLevelMonitorRunner.kt).
+
+The indexer advertises webhook notification configurations and sets the
+active-response channel creation cap to zero. It keeps
+the vendor's [destination deny list](https://github.com/wazuh/wazuh-indexer-notifications/blob/v5.0.0-rc2/notifications/core/src/main/kotlin/org/opensearch/notifications/core/setting/PluginSettings.kt)
+with one exception for the internal Alertmanager Service. Cilium permits
+that path to the local Alertmanager pods on TCP 9093. The settings job
+checks that the count of active-response channels is zero before and
+after it reconciles the monitors. It publishes the count and
+the time of the check to the converter. Prometheus alerts on a positive
+count and alerts separately when the sample is missing or stale.
+
+The initial configuration leaves notifications disabled. After approval,
+set `app/config/notifications-enabled` to `true` and update the settings
+Job name for the new input hash. The indexer restarts and creates the
+channel. The settings Job waits for the channel and then creates the
+monitors. Revert the activation change to restore the disabled setting
+and the previous Job name. The indexer removes the channel, then the
+settings Job removes the monitors.
+
 ## Retention
 
 The shipped ISM policies of the streams roll over only at 20 GB for each
@@ -578,7 +609,7 @@ next daily run moves it again, up to about one day later.
 Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
 `tnwks-settings` at each merge that changes its files (the Job
 `wazuh-settings-git-<hash>`, named as the Job of step 1 from
-`retention.json`, `indexer.py` and `settings.py`) and once a day (the CronJob
+the ordered ConfigMap inputs) and once a day (the CronJob
 `wazuh-settings`, at 08:22 UTC). Both run one pod. In this order, it:
 
 1. waits up to 300 seconds for login, including while the indexer gives no

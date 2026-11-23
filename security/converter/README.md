@@ -465,6 +465,13 @@ One file, `api-check/results.json`. Each run writes
 
 ### The count file of the Wazuh settings
 
+The settings job for findings notifications also writes
+`wazuh-settings/channels.json`. The file holds the version, source, Unix
+time and number of active-response channel definitions. The converter
+serves the count as `homelab_security_wazuh_active_response_channels` and
+the time as `homelab_security_wazuh_active_response_channels_timestamp_seconds`.
+The alert uses the count and checks separately for a missing or stale sample.
+
 One file, `wazuh-settings/indices.json`, from step 2 of the settings of the
 Wazuh indexer (`kubernetes/apps/security/wazuh/README.md`, "Retention"). Each
 run writes `wazuh-settings/indices.json.tmp` and moves it to that name. The

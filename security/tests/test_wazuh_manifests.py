@@ -376,9 +376,12 @@ def test_step2_runs_after_step1_completes():
     assert accounts["path"] == "./kubernetes/apps/security/wazuh-settings/accounts"
     assert accounts["wait"] is True and accounts["prune"] is True
     assert {d["name"] for d in accounts["dependsOn"]} == {"security-wazuh-server"}
+    assert server()["spec"]["healthChecks"] == [
+        {"apiVersion": "apps/v1", "kind": "StatefulSet", "name": "wazuh-indexer", "namespace": "security"}]
     assert settings["path"] == "./kubernetes/apps/security/wazuh-settings/app"
     assert {d["name"] for d in settings["dependsOn"]} == {
-        "security-wazuh-server", "security-converter", "security-wazuh-accounts"}
+        "security-wazuh-server", "security-converter", "kube-prometheus-stack",
+        "security-wazuh-accounts", "alertmanager"}
     (job,) = docs(SETTINGS / "accounts/accounts-job.yaml")
     # The timeout of the health check is more than the deadline of the Job.
     seconds = int(accounts["timeout"].rstrip("m")) * 60
@@ -387,7 +390,8 @@ def test_step2_runs_after_step1_completes():
     step2 = yaml.safe_load((SETTINGS / "app/kustomization.yaml").read_text())
     # The Secrets: test_no_secret_is_in_git.
     assert [r for r in step1["resources"] if "sops" not in r] == ["./networkpolicy.yaml", "./accounts-job.yaml"]
-    assert [r for r in step2["resources"] if "sops" not in r] == ["./settings-job.yaml", "./settings-cronjob.yaml"]
+    assert [r for r in step2["resources"] if "sops" not in r] == [
+        "./settings-job.yaml", "./settings-cronjob.yaml", "./alerts.yaml"]
     assert [g["name"] for g in step1["configMapGenerator"]] == ["wazuh-accounts-files"]
     assert [g["name"] for g in step2["configMapGenerator"]] == ["wazuh-settings-files"]
 

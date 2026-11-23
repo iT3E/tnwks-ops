@@ -27,6 +27,10 @@ configMapGenerator:
     options:
       annotations:
         kustomize.toolkit.fluxcd.io/substitute: enabled
+  - name: wazuh-notifications
+    files:
+      - ./config/notifications-enabled
+      - ./config/indexer-notifications.sh
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
