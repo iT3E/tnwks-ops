@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.302.1 - 2026-11-23
+
+### Fixed
+
+* agents: the token job of the code host App sends the headers of the code host only to the code host. The write of the token Secret sends Accept and Content-Type application/json, as the API server serves them; before, it sent the media type of the code host and the API server answered 406, so no run stored its token. The fake API server of the tests now refuses an Accept that it can not serve and any header of the code host.
+
 ## v2.302.0 - 2026-11-23
 
 ### Added
