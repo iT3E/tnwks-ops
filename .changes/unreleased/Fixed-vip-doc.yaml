@@ -1,0 +1,3 @@
+kind: Fixed
+body: Document the MQTT and Wazuh agent service addresses in the shared VIP table.
+time: 2026-11-22T17:38:33.858616798-08:00

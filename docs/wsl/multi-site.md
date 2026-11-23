@@ -460,18 +460,20 @@ and it can't carry traffic before Stage B (below).
 
 ## Shared VIPs (live since 2026-11-06)
 
-Two addresses from `10.10.95.0/24`, held by both clusters (Cilium LB IPAM, pool
-`shared-vip`) and announced over BGP by every node. The router splits the pool
-into halves, each preferred by one site (local preference 100, the other 50),
-so a VIP lands on the site that runs its apps and moves to the other one within
-the BGP hold time (9 s; a clean FRR stop moves it at once):
+Cilium LB IPAM allocates service addresses from `10.10.95.0/24` (pool
+`shared-vip`). The sites announce them over BGP. The router splits the pool
+into halves, each preferred by one site (local preference 100, the other 50).
+When both sites announce a VIP, it moves to the other site within the BGP hold
+time (9 s, or immediately after a clean FRR stop):
 
 | VIP | Preferred | Names (router site records, `dns-sites.tf`) |
 | --- | --- | --- |
 | `10.10.95.10` | homelab-wsl | `hass`, `firefly`, `grafana`, `grafana-embed`, `mealie-embed` |
+| `10.10.95.11` | homelab-wsl | `mqtt` (Mosquitto) |
 | `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `unifi` |
+| `10.10.95.201` | homelab-wsl-02 only | `wazuh-agents` (TCP 1517) |
 
-Both are the internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
+The `.10` and `.200` addresses serve internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
 `-vip-wsl-02`, `externalTrafficPolicy: Cluster`). Either site's ingress serves
 an app deployed on both sites, because the app's Service is global over Cluster
 Mesh (`service.cilium.io/global: "true"`, `affinity: local`) and its Ingress goes
@@ -479,11 +481,12 @@ through the Service (`nginx.ingress.kubernetes.io/service-upstream: "true"`;
 ingress-nginx otherwise uses EndpointSlices, which have no remote backends).
 Measured: failover 0 failed requests, failback 5.6 s.
 
-To put an app on a VIP: deploy it on both sites (at 0 on the standby), make the
+For an internal ingress app on both sites, deploy it at 0 on the standby, make the
 Service global, add `service-upstream` to its internal Ingress, use
 `${OAUTH2_PROXY_URL:=…}` for an oauth2-proxy `auth-url` (homelab-wsl-02 has
 none of its own), then a site record for its name on the VIP of the site that
-runs it. Apps on one site only stay on the `*.internal` wildcard (the desktop).
+runs it. A site-specific Service can have its own VIP and DNS record. Only
+the site that announces that VIP can serve it.
 
 Clients that may reach the VIPs: VLAN 910, the admin VPN, the mobile VPN
 (VIPs only). A client behind a site (its pods, the WSL host) reaches that
