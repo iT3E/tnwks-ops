@@ -3,7 +3,8 @@
 # ../app/config/accounts.json (../app/scripts/accounts.py,
 # ../../wazuh/README.md, "Accounts"). It runs only when its files change,
 # never each day: the name carries the first 10 hex digits of the sha256 of
-# config/accounts.json, scripts/indexer.py and scripts/accounts.py of ../app,
+# config/accounts.json, scripts/indexer.py and scripts/accounts.py of ../app
+# and ../../wazuh/app/config/dashboard/admin-enabled,
 # one after another, so a change of one of them makes a new Job, Flux runs
 # it, and prune removes the old one.
 # security/tests/test_wazuh_settings.py checks the name, and names the right
@@ -21,7 +22,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wazuh-accounts-eda3d2f1ae
+  name: wazuh-accounts-e4019a2087
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
@@ -57,6 +58,7 @@ spec:
             - --accounts=/app/accounts.json
             - --user=/secrets/user
             - --hashes=/secrets/hashes
+            - --dashboard-admin=/app/admin-enabled
             - --login-wait=300
           env:
             - name: PYTHONDONTWRITEBYTECODE

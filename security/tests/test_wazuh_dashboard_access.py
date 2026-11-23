@@ -104,24 +104,32 @@ def test_indexer_preserves_its_notifications_hook_when_enabling_dashboard_access
 
 class Manager:
     def __init__(self):
-        self.rule = None
+        self.rules = {}
         self.mutations = []
 
     def request_json(self, method, path, auth, body=None):
         route = urlsplit(path)
+        query = parse_qs(route.query)
         if method == "GET":
-            records = [{"id": 2, "name": "readonly"}] if route.path.endswith("/roles") else (
-                [self.rule] if self.rule else []
-            )
+            name = query["q"][0].removeprefix("name=")
+            if route.path.endswith("/roles"):
+                role_id = {"administrator": 1, "readonly": 2}[name]
+                records = [{"id": role_id, "name": name}]
+            else:
+                records = [self.rules[name]] if name in self.rules else []
             return {"affected_items": records, "total_affected_items": len(records)}
         self.mutations.append((method, path))
         if method == "DELETE":
-            self.rule = None
+            rule_id = int(query["rule_ids"][0])
+            name = next(name for name, rule in self.rules.items() if rule["id"] == rule_id)
+            del self.rules[name]
         elif route.path == "/security/rules":
-            self.rule = {"id": 101, "name": body["name"], "rule": body["rule"], "roles": []}
-        elif route.path == "/security/roles/2/rules":
-            assert parse_qs(route.query) == {"rule_ids": ["101"]}
-            self.rule["roles"] = [2]
+            rule_id = max((rule["id"] for rule in self.rules.values()), default=100) + 1
+            self.rules[body["name"]] = {"id": rule_id, **body, "roles": []}
+        elif route.path in ("/security/roles/1/rules", "/security/roles/2/rules"):
+            rule_id = int(query["rule_ids"][0])
+            rule = next(rule for rule in self.rules.values() if rule["id"] == rule_id)
+            rule["roles"] = [int(route.path.split("/")[3])]
         else:
             raise AssertionError(path)
         return {}
@@ -129,21 +137,26 @@ class Manager:
 
 def test_the_manager_rule_is_idempotent_and_rolls_back(manager_rbac):
     manager = Manager()
-    manager_rbac.reconcile(manager, "fixture", enabled=True)
-    assert manager.rule["rule"] == {"FIND": {"backend_roles": "wazuh-readers"}}
-    assert len(manager.mutations) == 2
-    manager_rbac.reconcile(manager, "fixture", enabled=True)
-    assert len(manager.mutations) == 2
-    manager_rbac.reconcile(manager, "fixture", enabled=False)
-    assert manager.rule is None
-    assert manager.mutations[-1] == ("DELETE", "/security/rules?rule_ids=101")
+    manager_rbac.reconcile(manager, "fixture", enabled=True, admin_enabled=True)
+    reader = manager.rules["tnwks-dashboard-reader"]
+    admin = manager.rules["tnwks-dashboard-admin"]
+    assert (reader["rule"], reader["roles"]) == ({"FIND": {"backend_roles": "wazuh-readers"}}, [2])
+    assert (admin["rule"], admin["roles"]) == ({"FIND": {"backend_roles": "wazuh-admins"}}, [1])
+    assert len(manager.mutations) == 4
+    manager_rbac.reconcile(manager, "fixture", enabled=True, admin_enabled=True)
+    assert len(manager.mutations) == 4
+    manager_rbac.reconcile(manager, "fixture", enabled=True, admin_enabled=False)
+    assert manager.rules == {"tnwks-dashboard-reader": reader}
+    manager_rbac.reconcile(manager, "fixture", enabled=False, admin_enabled=True)
+    assert manager.rules == {}
 
 
 def test_manager_rule_with_another_role_is_refused(manager_rbac):
     manager = Manager()
-    manager.rule = {"id": 101, "name": manager_rbac.RULE, "rule": manager_rbac.CONDITION, "roles": [1]}
-    with pytest.raises(RuntimeError, match="read-only declaration"):
-        manager_rbac.reconcile(manager, "fixture", enabled=True)
+    name = "tnwks-dashboard-admin"
+    manager.rules[name] = {"id": 101, "name": name, "rule": {"FIND": {"backend_roles": "admins"}}, "roles": [1]}
+    with pytest.raises(RuntimeError, match="administrator declaration"):
+        manager_rbac.reconcile(manager, "fixture", enabled=True, admin_enabled=True)
     assert manager.mutations == []
 
 
@@ -161,9 +174,9 @@ def test_manager_retries_when_daemons_are_starting_after_login(manager_rbac):
 
     manager = StartingManager()
     waits = []
-    manager_rbac.reconcile_on_startup(manager, "fixture", True, clock=lambda: 0, sleep=waits.append)
+    manager_rbac.reconcile_on_startup(manager, "fixture", True, False, clock=lambda: 0, sleep=waits.append)
     assert waits == [5]
-    assert manager.rule["roles"] == [2]
+    assert manager.rules["tnwks-dashboard-reader"]["roles"] == [2]
 
 
 @pytest.mark.parametrize("error", [1017, 1000])

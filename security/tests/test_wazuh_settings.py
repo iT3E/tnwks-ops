@@ -33,6 +33,7 @@ CONFIG = APP / "config"
 SCRIPTS = APP / "scripts"
 CERTIFICATES = ROOT / "kubernetes/apps/security/wazuh/app/certificates.yaml"
 NOTIFICATIONS_ENABLED = CERTIFICATES.parent / "config/notifications-enabled"
+ADMIN_ENABLED = CERTIFICATES.parent / "config/dashboard/admin-enabled"
 # The files that the hash in the name of each Job covers, in this order.
 HASHED = {
     "wazuh-accounts": ["config/accounts.json", "scripts/indexer.py", "scripts/accounts.py"],
@@ -155,6 +156,17 @@ class FakeIndexer:
         if method == "DELETE":
             del store[name]
             return 200, {"status": "OK"}
+        if method == "PATCH" and kind == "rolesmapping" and name == "all_access":
+            groups = store[name]["backend_roles"]
+            for operation in body:
+                index = operation["path"].removeprefix("/backend_roles/")
+                if operation["op"] == "add":
+                    assert index == "-"
+                    groups.append(operation["value"])
+                else:
+                    assert operation["op"] == "remove"
+                    del groups[int(index)]
+            return 200, {"status": "OK"}
         return 400, None
 
     def ism(self, method, parts, path, body):
@@ -261,6 +273,25 @@ def test_step1_again_sets_only_the_hashes(tmp_path):
     assert fake.writes == [("PUT", "/_plugins/_security/api/internalusers/tnwks-settings"),
                            ("PUT", "/_plugins/_security/api/internalusers/tnwks-converter")]
     assert "role tnwks-settings: unchanged" in lines and "role mapping tnwks-converter: unchanged" in lines
+
+
+def test_step1_reconciles_only_the_dashboard_group_in_the_admin_mapping(tmp_path):
+    fake = FakeIndexer()
+    mapping = {"backend_roles": ["admin", "another-group"], "users": ["existing-user"], "reserved": False}
+    fake.store["rolesmapping"]["all_access"] = mapping
+    switch = tmp_path / "admin-enabled"
+    argv = [*step1_files(tmp_path / "step1"), f"--dashboard-admin={switch}"]
+
+    switch.write_text("true\n")
+    assert run1(fake, argv)[0] == 0
+    assert mapping["backend_roles"] == ["admin", "another-group", "wazuh-admins"]
+    fake.writes.clear()
+    assert run1(fake, argv)[0] == 0
+    assert all(write[0] != "PATCH" for write in fake.writes)
+
+    switch.write_text("false\n")
+    assert run1(fake, argv)[0] == 0
+    assert mapping == {"backend_roles": ["admin", "another-group"], "users": ["existing-user"], "reserved": False}
 
 
 @pytest.mark.parametrize("kind", ["roles", "internalusers", "rolesmapping"])
@@ -970,6 +1001,8 @@ def test_the_name_of_each_job_carries_the_hash_of_its_files(prefix):
     inputs = [APP / f for f in HASHED[prefix]]
     if prefix == "wazuh-settings-git":
         inputs.append(NOTIFICATIONS_ENABLED)
+    else:
+        inputs.append(ADMIN_ENABLED)
     digest = hashlib.sha256(b"".join(p.read_bytes() for p in inputs)).hexdigest()[:10]
     want = f"{prefix}-{digest}"
     found = [d["metadata"]["name"] for name in ("accounts-job.yaml", "settings-job.yaml") for d in docs(name)
@@ -979,7 +1012,10 @@ def test_the_name_of_each_job_carries_the_hash_of_its_files(prefix):
                            "wazuh-settings-git": (APP, "wazuh-settings-files", "./")}[prefix]
     kustomization = yaml.safe_load((folder / "kustomization.yaml").read_text())
     generated = {g["name"]: g["files"] for g in kustomization["configMapGenerator"]}
-    assert generated == {files: [base + f for f in HASHED[prefix]]}
+    expected_files = [base + f for f in HASHED[prefix]]
+    if prefix == "wazuh-accounts":
+        expected_files.append("../../wazuh/app/config/dashboard/admin-enabled")
+    assert generated == {files: expected_files}
 
 
 def test_the_jobs_of_git_stay_and_the_job_of_step2_is_the_pod_of_the_cronjob():
