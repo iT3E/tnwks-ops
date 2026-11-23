@@ -52,7 +52,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from indexer import Indexer, Stop, password_ok, q, read_secret, tls_context
+from indexer import Indexer, NoAnswer, Stop, password_ok, q, read_secret, tls_context
 
 # The policy IDs that the Setup plugin writes again at each election of a
 # cluster manager (plugins/setup/src/main/resources/policies/ at v5.0.0-rc2).
@@ -116,16 +116,28 @@ def build_policies(cfg: dict) -> dict:
 def wait_for_login(client: Indexer, wait: float, log, sleep=time.sleep, clock=time.monotonic) -> None:
     end = clock() + wait
     while True:
-        status, _ = client.call("GET", "/_plugins/_security/authinfo", ok=None)
-        if status == 200:
-            return
-        if status != 401:
-            raise Stop(f"GET /_plugins/_security/authinfo as {client.user}: HTTP {status}")
-        if clock() >= end:
-            raise Stop(f"{client.user} can not log in: step 1 has not made it, or its hash in "
-                       "wazuh-accounts-hashes is not the one of the password in wazuh-settings-user")
-        log(f"{client.user} can not log in yet: waits for step 1")
-        sleep(15)
+        try:
+            status, _ = client.call("GET", "/_plugins/_security/authinfo", ok=None)
+        except NoAnswer as error:
+            status, reason = None, str(error)
+        else:
+            if status == 200:
+                return
+            if status not in (401, 503):
+                raise Stop(f"GET /_plugins/_security/authinfo as {client.user}: HTTP {status}")
+            reason = f"HTTP {status}"
+
+        remaining = end - clock()
+        if status == 401:
+            if remaining <= 0:
+                raise Stop(f"{client.user} can not log in: step 1 has not made it, or its hash in "
+                           "wazuh-accounts-hashes is not the one of the password in wazuh-settings-user")
+            log(f"{client.user} can not log in yet: waits for step 1")
+        else:
+            if remaining <= 0:
+                raise Stop(f"the indexer is not ready after {int(wait)} seconds: {reason}")
+            log(f"the indexer is not ready yet ({reason}): waits")
+        sleep(min(15, remaining))
 
 
 def _comparable(policy: dict) -> dict:
@@ -163,14 +175,17 @@ def apply_raw_events(client: Indexer, cfg: dict, log) -> None:
 
 
 def step_failed(info: dict) -> bool:
-    """A managed index whose policy stopped at a failed step, as the ISM explain
-    API shows it (index-management 3.6.0.0, ManagedIndexMetaData.toXContent):
-    the status of its step is failed (ISM may still retry the action), its
-    action failed (the retries of the action are used up), or the policy
-    failed (retry_info). ISM itself counts the last two as failed
-    (ManagedIndexMetaData.isFailed)."""
+    """Count a stopped policy or exhausted action as failed.
+
+    A failed step is retryable when ISM explicitly reports that both the
+    action and the policy have not failed. Missing retry state fails closed.
+    """
     step, action, retry = (info.get(key) or {} for key in ("step", "action", "retry_info"))
-    return step.get("step_status") == "failed" or action.get("failed") is True or retry.get("failed") is True
+    if action.get("failed") is True or retry.get("failed") is True:
+        return True
+    if step.get("step_status") != "failed":
+        return False
+    return action.get("failed") is not False or retry.get("failed") is not False
 
 
 def explain(client: Indexer, patterns) -> dict:

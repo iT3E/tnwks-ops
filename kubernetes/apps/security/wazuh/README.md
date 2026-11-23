@@ -552,7 +552,8 @@ Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
 `retention.json`, `indexer.py` and `settings.py`) and once a day (the CronJob
 `wazuh-settings`, at 08:22 UTC). Both run one pod. In this order, it:
 
-1. waits up to 300 seconds until `tnwks-settings` can log in;
+1. waits up to 300 seconds for login, including while the indexer gives no
+   answer or returns HTTP 503 during startup;
 2. writes each policy of tnwks that is missing or differs, and never a
    shipped policy ID;
 3. sets `engine.index_raw_events`. The tag documents no read of the setting,
@@ -571,10 +572,10 @@ Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
    events and active responses streams, from the index stats. It writes
    them to `wazuh-settings/indices.json` on the volume of results
    (`security/converter/README.md`, "The count file of the Wazuh settings").
-   An index counts as failed when explain shows its step at `failed` (ISM
-   may still retry the action), its action failed (the retries of the
-   action are used up), or its policy failed (`retry_info`): ISM counts the
-   last two as failed itself
+   An index counts as failed when ISM reports an exhausted action or failed
+   policy (`retry_info`). A failed step is retryable only when explain
+   explicitly reports both the action and policy as not failed. A failed
+   step with missing retry state still fails the check
    ([ManagedIndexMetaData.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/spi/src/main/kotlin/org.opensearch.indexmanagement.spi/indexstatemanagement/model/ManagedIndexMetaData.kt#L93-L137)).
 
 A run fails at the first error, and, after it writes the counts, when a
