@@ -460,8 +460,8 @@ and it can't carry traffic before Stage B (below).
 
 ## Shared VIPs (live since 2026-11-06)
 
-Two addresses from `10.10.95.0/24`, held by both clusters (Cilium LB IPAM, pool
-`shared-vip`) and announced over BGP by every node. The router splits the pool
+Cilium LB IPAM allocates service addresses from `10.10.95.0/24` (pool
+`shared-vip`). The sites announce them over BGP. The router splits the pool
 into halves, each preferred by one site (local preference 100, the other 50),
 so a VIP lands on the site that runs its apps and moves to the other one within
 the BGP hold time (9 s; a clean FRR stop moves it at once):
@@ -469,9 +469,11 @@ the BGP hold time (9 s; a clean FRR stop moves it at once):
 | VIP | Preferred | Names (router site records, `dns-sites.tf`) |
 | --- | --- | --- |
 | `10.10.95.10` | homelab-wsl | `hass`, `firefly`, `grafana`, `grafana-embed`, `mealie-embed` |
+| `10.10.95.11` | homelab-wsl | `mqtt` (Mosquitto) |
 | `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `unifi` |
+| `10.10.95.201` | homelab-wsl-02 only | `wazuh-agents` (TCP 1517) |
 
-Both are the internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
+The `.10` and `.200` addresses serve internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
 `-vip-wsl-02`, `externalTrafficPolicy: Cluster`). Either site's ingress serves
 an app deployed on both sites, because the app's Service is global over Cluster
 Mesh (`service.cilium.io/global: "true"`, `affinity: local`) and its Ingress goes
