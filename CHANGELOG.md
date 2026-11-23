@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.308.0 - 2026-11-23
+
+### Changed
+
+* Grant the Wazuh administrator group access through Cognito.
+
 ## v2.307.2 - 2026-11-23
 
 ### Fixed
