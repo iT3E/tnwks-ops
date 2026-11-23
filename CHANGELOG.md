@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.307.1 - 2026-11-23
+
+### Fixed
+
+* Keep the Wazuh applications available in the read-only dashboard tenant.
+
 ## v2.307.0 - 2026-11-23
 
 ### Added
