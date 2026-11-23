@@ -394,6 +394,12 @@ TOKEN = "ghs_" + "T" * 36
 MARKER = "a-body-the-job-never-prints"
 
 
+# The media types of an answer of the API server (Kubernetes API concepts,
+# "Alternate representations of resources").
+KUBE_MEDIA = {"application/json", "application/yaml", "application/vnd.kubernetes.protobuf", "application/*",
+              "*/*"}
+
+
 class Fake:
     """The API of the code host and the API server, in one server."""
 
@@ -449,6 +455,17 @@ class Fake:
                 for key, code in fake.status.items():
                     if key in path:
                         return self.answer(code, {"message": MARKER})
+                if path.startswith("/api/"):
+                    # As the real API server: 406 for an Accept that it can
+                    # not serve, and 415 for a body that is not JSON. It
+                    # gets no header of the code host either.
+                    accept = {a.split(";")[0].strip() for a in self.headers.get("Accept", "*/*").split(",")}
+                    if not accept & KUBE_MEDIA:
+                        return self.answer(406, {"message": MARKER})
+                    if method == "PUT" and self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                        return self.answer(415, {"message": MARKER})
+                    if any(k.lower().startswith("x-github") for k in self.headers):
+                        return self.answer(400, {"message": MARKER})
                 if path == f"/repos/{REPOSITORY}/installation" and method == "GET":
                     if not fake.check_jwt(auth):
                         return self.answer(401, {"message": MARKER})
@@ -524,6 +541,13 @@ def test_the_job_writes_a_narrow_token_into_the_one_secret(job):
     assert "resourceVersion" not in body["metadata"]
     assert body["metadata"]["annotations"]["kustomize.toolkit.fluxcd.io/ssa"] == "IfNotPresent"
     assert body["data"] == {"GITHUB_MCP_TOKEN": base64.b64encode(TOKEN.encode()).decode()}
+    # Each API gets its own headers only.
+    (put,) = [headers for method, _, headers, _ in fake.calls if method == "PUT"]
+    assert put["Accept"] == "application/json" and put["Content-Type"] == "application/json"
+    assert not [k for k in put if k.lower().startswith("x-github")]
+    for method, path, headers, _ in fake.calls:
+        if not path.startswith("/api/"):
+            assert headers["Accept"] == "application/vnd.github+json", (method, path)
     # A PUT replaces the labels: the body keeps the owner labels of Flux, so
     # a prune of the Kustomization still removes the Secret.
     (ks,) = docs(FOLDER / "ks.yaml")
