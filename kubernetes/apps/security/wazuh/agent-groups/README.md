@@ -37,8 +37,13 @@ Both configurations disable active response.
    interrupted enrollment, inspect the manager's registration before
    minting a replacement token.
 
-To roll back a deployed agent, the operator stops and removes the package
-and removes its registered identity using the approved removal procedure.
+Before it starts a service, the rollout play verifies that its local
+configuration disables active response and all three remote-command options.
+
+To roll back an approved endpoint, run the same one-host play with
+`wazuh_agent_state=absent`. This removes the verified package without a
+token. Remove its registered identity through the approved manager
+procedure after the package is gone.
 The dedicated playbook allows the rollout of subsequent endpoints to stop
 without changes to the standing host workflows.
 

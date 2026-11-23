@@ -5,12 +5,15 @@
       - wazuh_rollout_host | default('') == inventory_hostname
       - ansible_play_hosts_all == [inventory_hostname]
       - windows_wazuh_agent_group == 'windows-host'
-      - wazuh_agent_name | default('') is match('^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$')
+      - wazuh_agent_state | default('present') in ['present', 'absent']
+      - >-
+        wazuh_agent_state | default('present') == 'absent'
+        or wazuh_agent_name | default('') is match('^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$')
     quiet: true
 
 - name: Read the Windows agent service state
   ansible.windows.win_service_info:
-    name: Wazuh
+    name: WazuhSvc
   register: windows_wazuh_service
 
 - name: Check the Windows agent's verified package record
@@ -26,91 +29,15 @@
       ((windows_wazuh_agent_package_sha256 ~ '\n') | hash('sha256'))
     fail_msg: An existing Wazuh installation needs a reviewed upgrade or recovery before running this role.
     quiet: true
-  when: windows_wazuh_service.exists
+  when: windows_wazuh_service.exists or windows_wazuh_package_record.stat.exists
 
-- name: Check whether the Windows agent has enrolled
-  ansible.windows.win_stat:
-    path: '{{ windows_wazuh_agent_dir }}\client.keys'
-    get_checksum: false
-  register: windows_wazuh_keys
+- name: Remove the verified Windows agent
+  ansible.windows.win_package:
+    product_id: "{2DADA9B4-C6FF-4B30-82B4-1E0154289EA2}"
+    provider: msi
+    state: absent
+  when: wazuh_agent_state | default('present') == 'absent'
 
-- name: Require the operator's token file for first enrollment
-  ansible.builtin.assert:
-    that: wazuh_agent_token_file | default('') | length > 0
-    quiet: true
-  when:
-    - not ansible_check_mode
-    - windows_wazuh_keys.stat.size | default(0) == 0
-
-- name: Install and enroll the Windows agent
-  when:
-    - not ansible_check_mode
-    - windows_wazuh_keys.stat.size | default(0) == 0
-  block:
-    - name: Protect the installer and token staging directory
-      tnwks_win_dir_acl:
-        path: 'C:\Windows\Temp\tnwks-wazuh-agent'
-        readers: none
-        items: reset
-
-    - name: Download and check the pinned Wazuh MSI
-      ansible.windows.win_get_url:
-        url: "{{ windows_wazuh_agent_package_url }}"
-        checksum: "{{ windows_wazuh_agent_package_sha256 }}"
-        checksum_algorithm: sha256
-        dest: 'C:\Windows\Temp\tnwks-wazuh-agent\wazuh-agent.msi'
-
-    - name: Install the verified MSI
-      ansible.windows.win_package:
-        path: 'C:\Windows\Temp\tnwks-wazuh-agent\wazuh-agent.msi'
-        state: present
-      when: not windows_wazuh_service.exists
-
-    - name: Record the verified package on the Windows host
-      ansible.windows.win_copy:
-        content: "{{ windows_wazuh_agent_package_sha256 }}\n"
-        dest: '{{ windows_wazuh_agent_dir }}\tnwks-package.sha256'
-      when: not windows_wazuh_service.exists
-
-    - name: Configure agent identity before enrollment
-      ansible.windows.win_template:
-        src: ossec.conf.j2
-        dest: '{{ windows_wazuh_agent_dir }}\ossec.conf'
-
-    - name: Disable remotely configured commands
-      ansible.windows.win_copy:
-        dest: '{{ windows_wazuh_agent_dir }}\local_internal_options.conf'
-        content: |
-          logcollector.remote_commands=0
-          wazuh_command.remote_commands=0
-          sca.remote_commands=0
-
-    - name: Copy the one-use token into the protected staging directory
-      ansible.windows.win_copy:
-        src: "{{ wazuh_agent_token_file }}"
-        dest: 'C:\Windows\Temp\tnwks-wazuh-agent\enrollment.token'
-      no_log: true
-      diff: false
-
-    - name: Enroll the Windows agent with the protected token file
-      ansible.windows.win_command:
-        argv:
-          - '{{ windows_wazuh_agent_dir }}\wazuh-agent-auth.exe'
-          - --token-file
-          - 'C:\Windows\Temp\tnwks-wazuh-agent\enrollment.token'
-        chdir: "{{ windows_wazuh_agent_dir }}"
-      changed_when: true
-      no_log: true
-
-  always:
-    - name: Remove the Windows installer and token
-      ansible.windows.win_file:
-        path: 'C:\Windows\Temp\tnwks-wazuh-agent'
-        state: absent
-
-- name: Enable and start the enrolled Windows agent
-  ansible.windows.win_service:
-    name: Wazuh
-    start_mode: auto
-    state: started
-  when: not ansible_check_mode or windows_wazuh_service.exists
+- name: Install or verify the selected agent
+  ansible.builtin.include_tasks: present.yml
+  when: wazuh_agent_state | default('present') == 'present'
