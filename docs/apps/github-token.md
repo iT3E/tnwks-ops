@@ -8,12 +8,12 @@ key of the App stays in the pod of this job. The code host server, the
 gateway and the agent never hold it (R2). In the read step the token has
 read rights only; the write step widens one env var of the CronJob.
 
-**Not listed yet.** The manifests are in git, and
-`kubernetes/apps/ai/agents/main/kustomization.yaml` lists `./github-token/ks.yaml`
-only with the key: the owner runs [the key step](#the-key), and the same
-pull request lists the folder. Until a later step of task 6.20, the code
-host server still reads the stopgap token of the owner, and nothing reads
-the token of this job.
+**Listed with the key.** `kubernetes/apps/ai/agents/main/kustomization.yaml`
+lists `./github-token/ks.yaml` only with the key: the owner runs
+[the key step](#the-key), and the same pull request lists the folder.
+The proxy of the code host server reads the token of this job
+([mcp-gateway.md](mcp-gateway.md), "The read servers of main"), and its
+Kustomization depends on the one of this job.
 
 Manifests: `kubernetes/apps/ai/agents/main/github-token/`.
 
@@ -136,11 +136,12 @@ Then, read only:
   settings of the App, or suspends the installation. Each token that the
   job made then stops working within one hour at most, and the next run
   fails.
-- **Take the job out:** remove the line `./github-token/ks.yaml`, its row
-  of `AI_SCHEDULES` in `observability/inventory.py` (then
-  `observability/generate.py` and `classlist.py write`), and the two rules
-  `MainGithubTokenStale` and `MainGithubAppDrift` with their rule tests:
-  the stale rule fires when the CronJob is gone. Flux prunes the CronJob,
+- **Take the job out:** first the code host server, which needs its
+  token; then the line `./github-token/ks.yaml`, its row of `AI_SCHEDULES`
+  in `observability/inventory.py` (then `observability/generate.py` and
+  `classlist.py write`), and the two rules `MainGithubTokenStale` and
+  `MainGithubAppDrift` with their rule tests: the stale rule fires when the
+  CronJob is gone. Flux prunes the CronJob,
   the account and the two Secrets.
 
 ## Tests

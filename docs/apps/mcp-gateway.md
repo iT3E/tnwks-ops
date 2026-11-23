@@ -164,16 +164,18 @@ later, with its read credential):
   call in agentgateway 1.7.0. The pod reaches the API of the code host and
   its host of raw file content only. `tools/github.json` is the dump.
 
-  **The token is a stopgap of the owner (D143).** The pod reads the
-  Secret `github-mcp-token` in `agents-main`, key `GITHUB_MCP_TOKEN`
-  (`github-mcp/app/secret.sops.yaml`, in the kustomization of the app).
-  By the owner's choice it holds a read-only token for this repository
-  only, until the token job of the App of the main agent writes the
-  Secret: the design puts an installation token of the App there, renewed
-  by that job. This token expires on 2026-12-22; the runbook says what
-  fails then ([agent-platform-runbook.md](agent-platform-runbook.md), "The
-  code host server of main"). Reloader starts the pod again when the
-  Secret changes.
+  **The token is an installation token of the App of main.** The pod
+  reads the Secret `github-mcp-app-token` in `agents-main`, key
+  `GITHUB_MCP_TOKEN`, which the token job of the App writes each 30
+  minutes, for the ops repository only and with the permissions of the
+  design ([github-token.md](github-token.md)). Each token lives one hour
+  at most. Reloader starts the pod again when the Secret changes, so a
+  token in use is at most about 35 minutes old. The Kustomization of the
+  server depends on the one of the token job. The stopgap token of the
+  owner (D143) is gone from the repository. It stays the way back until
+  the lead reads one good call through the token of the App: a revert of
+  the switch brings back its encrypted Secret and the env var. Then the
+  owner revokes it at the code host.
 
   **Deployed, not live for use.** After the merge the pod runs and the
   route takes the key of main, so the agent can call the 17 reads. The

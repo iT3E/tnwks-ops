@@ -3,7 +3,8 @@
 # The code host server of main (Design Doc, section 4.2.6): the GitHub MCP
 # server, read only, behind the central MCP gateway
 # (kubernetes/apps/ai/mcp-gateway, route main-github). Its credential is the
-# Secret github-mcp-token, in its own pod only.
+# Secret github-mcp-app-token of the token job (../github-token), in its own
+# pod only.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -16,10 +17,13 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
+  # The token job makes the Secret of the token.
+  dependsOn:
+    - name: agents-main-github-token
   # Ready when the proxy answers and the server container runs. No probe
   # calls the MCP path: the daily gateway probe of each domain tries the
-  # server straight only. The pod needs the Secret github-mcp-token
-  # (app/secret.sops.yaml) to start.
+  # server straight only. The pod needs the Secret github-mcp-app-token
+  # (../github-token/app/secret-token.yaml) to start.
   wait: true
   interval: 30m
   retryInterval: 1m

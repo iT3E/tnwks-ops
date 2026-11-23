@@ -745,7 +745,7 @@ def test_the_key_secret_holds_ciphertext_only_with_the_recipients_of_the_namespa
     assert secret["sops"]["encrypted_regex"] == "^(data|stringData)$"
     def recipients(path):
         return sorted(a["recipient"] for a in docs(path)[0]["sops"]["age"])
-    other = MAIN / "github-mcp/app/secret.sops.yaml"
+    other = MAIN / "agent/app/secret.sops.yaml"
     assert recipients(KEY_SECRET) == recipients(other)
 
 

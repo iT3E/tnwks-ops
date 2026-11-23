@@ -7,7 +7,9 @@
 #
 # In HTTP mode the server takes its token from each request. So the proxy
 # container of this pod sets it (proxy/default.conf.template), from the
-# Secret github-mcp-token, which no other pod mounts (R2). The server
+# Secret github-mcp-app-token, which the token job of the App of main writes
+# each 30 minutes (../../github-token, docs/apps/github-token.md) and no
+# other pod mounts (R2). The server
 # listens on the loopback of the pod only, so each request passes the
 # proxy. The central MCP gateway is the one client of the proxy
 # (networkpolicy.yaml), and it refuses each tool that its route
@@ -19,7 +21,8 @@ metadata:
   labels:
     app.kubernetes.io/name: github-mcp
   annotations:
-    # A new token starts the pod again.
+    # A new token starts the pod again: each 30 minutes, so a token in use
+    # is at most about 35 minutes old (Design Doc, section 4.2.6).
     reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
@@ -64,13 +67,14 @@ spec:
             # The entrypoint fills only these names into the template.
             - name: NGINX_ENVSUBST_FILTER
               value: ^GITHUB_MCP_
-            # The read token of the code host: a stopgap of the owner until
-            # the token job (secret.sops.yaml; docs/apps/mcp-gateway.md,
-            # "The read servers of main").
+            # The installation token of the App of main, for the ops
+            # repository only, which lives one hour at most. The token job
+            # writes it (../../github-token); its account updates this one
+            # Secret only.
             - name: GITHUB_MCP_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: github-mcp-token
+                  name: github-mcp-app-token
                   key: GITHUB_MCP_TOKEN
           ports:
             - name: mcp
