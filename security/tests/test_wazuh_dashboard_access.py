@@ -49,7 +49,9 @@ def test_jwt_dashboard_has_an_authenticated_ingress_and_a_local_readiness_check(
     patch = next(p["patch"] for p in server["spec"]["patches"] if p["target"]["name"] == "wazuh-dashboard")
     (dashboard,) = yaml.safe_load(patch)["spec"]["template"]["spec"]["containers"]
     assert "--opensearch_security.auth.type=jwt" in dashboard["args"]
+    assert "--opensearch_security.multitenancy.enabled=true" in dashboard["args"]
     assert "--opensearch_security.multitenancy.tenants.enable_private=false" in dashboard["args"]
+    assert not any(arg.startswith("--opensearch_security.readonly_mode.roles") for arg in dashboard["args"])
     assert "--status.allowAnonymous=true" in dashboard["args"]
     readiness = dashboard["readinessProbe"]["exec"]["command"][-1]
     assert "--cacert " in readiness and "127.0.0.1" in readiness and "/api/status" in readiness

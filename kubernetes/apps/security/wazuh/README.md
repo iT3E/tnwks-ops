@@ -415,6 +415,9 @@ Wazuh verifies the issuer, signature and app audience. It uses Cognito's
 stable subject as the user and the reader group as the access decision.
 That group reads the configured event, finding and state indices and the
 global dashboard saved objects. Private dashboard tenants are disabled.
+The global tenant and indexer role enforce read-only access. The
+[tenant-based mode](https://github.com/wazuh/wazuh-dashboard/blob/v5.0.0-rc2/docs/capabilities/read_only_mode.md)
+keeps the Wazuh applications available to readers.
 The reserved assistant mapping lists the vendor's local accounts so Cognito
 users do not receive the assistant session permissions. Refresh your Cognito
 session after a group membership change. The manager's authorization context

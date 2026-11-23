@@ -392,7 +392,6 @@ spec:
                     - --opensearch_security.cookie.secure=true
                     - --opensearch_security.multitenancy.enabled=true
                     - --opensearch_security.multitenancy.tenants.enable_private=false
-                    - '--opensearch_security.readonly_mode.roles=["tnwks-dashboard-reader"]'
                     - --status.allowAnonymous=true
                   startupProbe:
                     exec: null
