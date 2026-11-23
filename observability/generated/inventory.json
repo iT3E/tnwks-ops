@@ -597,6 +597,11 @@
       "name": "unifi",
       "host": "unifi.internal.tnwks.us",
       "vip": "10.10.95.200"
+    },
+    {
+      "name": "wazuh",
+      "host": "wazuh.internal.tnwks.us",
+      "vip": "10.10.95.200"
     }
   ],
   "ai": {
