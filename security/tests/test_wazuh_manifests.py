@@ -170,6 +170,26 @@ def test_only_homelab_wsl_02_lists_the_server_and_its_settings():
         assert listed == (both if site == "wsl-02" else []), listing
 
 
+def test_the_site_record_of_the_agents_is_that_of_the_cluster_settings():
+    """The router answers the name of the agents with their VIP
+    (dns-sites.tf, as the other site records): match_subdomain, so it sits
+    above the internal.tnwks.us wildcard (modules/mikrotik/dns.tf)."""
+    settings = yaml.safe_load((ROOT / "kubernetes/clusters/wsl-02/cluster-settings.yaml").read_text())["data"]
+    text = (ROOT / "infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf").read_text()
+    block = re.search(r"^\s*vip_wazuh_agents = \{(.*?)^\s*\}", text, re.MULTILINE | re.DOTALL)
+    assert block, "no record vip_wazuh_agents"
+    record = dict(re.findall(r'^\s*(\w+)\s*=\s*"?([^"\n]*)"?\s*$', block[1], re.MULTILINE))
+    assert record == {
+        "name": settings["WAZUH_AGENTS_HOST"],
+        "address": settings["WAZUH_AGENTS_LB_ADDR"],
+        "type": "A",
+        "ttl": "5m",
+        "match_subdomain": "true",
+        "comment": "shared VIP (homelab-wsl-02 only): wazuh agents, 1517",
+    }
+    assert text.count(settings["WAZUH_AGENTS_HOST"]) == 1
+
+
 def test_the_agents_reach_a_shared_vip_of_site_2():
     """The Service of the agents is in the shared VIP pool and the BGP
     advertisement (docs/wsl/multi-site.md, "Shared VIPs"), on a free address
