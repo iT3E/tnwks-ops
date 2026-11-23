@@ -56,6 +56,8 @@ spec:
                 - --indexer=https://wazuh-indexer.security.svc.cluster.local:9200
                 - --ca=/ca/ca.crt
                 - --retention=/app/retention.json
+                - --monitors=/app/monitors.json
+                - --monitor-cluster=${CLUSTER_NAME}
                 - --user=tnwks-settings
                 - --secret=/secrets/settings
                 - --results=/results

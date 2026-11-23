@@ -42,6 +42,7 @@ security/tests/test_wazuh_settings.py.
 """
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -52,6 +53,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
+import monitors
 from indexer import Indexer, NoAnswer, Stop, password_ok, q, read_secret, tls_context
 
 # The policy IDs that the Setup plugin writes again at each election of a
@@ -318,7 +320,11 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
                         help="the renewBefore of the certificates of the server, as 720h")
     parser.add_argument("--margin", type=float, default=3600,
                         help="no move when a certificate renews within this many seconds")
+    parser.add_argument("--monitors", type=Path, help="findings monitor severity configuration")
+    parser.add_argument("--monitor-cluster", help="Alertmanager cluster label")
     args = parser.parse_args(argv)
+    if (args.monitors is None) != (args.monitor_cluster is None):
+        parser.error("--monitors and --monitor-cluster must be supplied together")
     try:
         retention = json.loads(Path(args.retention).read_text())
         check_retention(retention)
@@ -338,6 +344,12 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
         else:
             pending = move_indices(client, retention, versions, out, args.wait, sleep=sleep, clock=clock)
             moves = "pending" if pending else "applied"
+        if args.monitors is not None:
+            lock_dir = Path(args.results) / SOURCE
+            lock_dir.mkdir(parents=True, exist_ok=True)
+            with (lock_dir / ".monitors.lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                monitors.apply(client, args.monitor_cluster, json.loads(args.monitors.read_text()), out)
         streams = count_indices(client, retention)
         document = {
             "version": 1, "source": SOURCE, "time": int(now()), "moves": moves,

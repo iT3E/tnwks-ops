@@ -41,6 +41,7 @@ spec:
     - name: security-converter
     # Step 1: the user tnwks-settings and its rights, and the network rule.
     - name: security-wazuh-accounts
+    - name: alertmanager
   path: ./kubernetes/apps/security/wazuh-settings/app
   prune: true
   sourceRef:

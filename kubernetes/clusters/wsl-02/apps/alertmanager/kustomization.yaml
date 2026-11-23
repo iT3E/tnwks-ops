@@ -9,6 +9,7 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - ./secrets.sops.yaml
+  - ./wazuh-webhook-service.yaml
   - ../../../../apps/monitoring/alertmanager/app/helmrelease.yaml
 configMapGenerator:
   - name: alertmanager-configmap

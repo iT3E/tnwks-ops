@@ -231,6 +231,57 @@ spec:
                       value: "false"
                     - name: plugins.content_manager.telemetry.enabled
                       value: "false"
+                    # Keep passive notifications only. Preserve the RC2
+                    # destination deny list except the site 2 webhook Service.
+                    - name: opensearch.notifications.core.allowed_config_types
+                      value: webhook
+                    - name: opensearch.notifications.core.http.host_deny_list
+                      value: >-
+                        127.0.0.0/8,
+                        169.254.0.0/16,
+                        10.0.0.0/11,
+                        10.32.0.0/13,
+                        10.40.0.0/14,
+                        10.44.0.0/16,
+                        10.45.0.0/27,
+                        10.45.0.32/29,
+                        10.45.0.40/31,
+                        10.45.0.43/32,
+                        10.45.0.44/30,
+                        10.45.0.48/28,
+                        10.45.0.64/26,
+                        10.45.0.128/25,
+                        10.45.1.0/24,
+                        10.45.2.0/23,
+                        10.45.4.0/22,
+                        10.45.8.0/21,
+                        10.45.16.0/20,
+                        10.45.32.0/19,
+                        10.45.64.0/18,
+                        10.45.128.0/17,
+                        10.46.0.0/15,
+                        10.48.0.0/12,
+                        10.64.0.0/10,
+                        10.128.0.0/9,
+                        172.16.0.0/12,
+                        192.168.0.0/16,
+                        0.0.0.0/8,
+                        100.64.0.0/10,
+                        192.0.0.0/24,
+                        192.0.2.0/24,
+                        198.18.0.0/15,
+                        192.88.99.0/24,
+                        198.51.100.0/24,
+                        203.0.113.0/24,
+                        224.0.0.0/4,
+                        240.0.0.0/4,
+                        255.255.255.255/32,
+                        ::1/128,
+                        fe80::/10,
+                        fc00::/7,
+                        ::/128,
+                        2001:db8::/32,
+                        ff00::/8
           volumeClaimTemplates:
             - metadata:
                 name: wazuh-indexer

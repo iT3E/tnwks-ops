@@ -35,7 +35,8 @@ CERTIFICATES = ROOT / "kubernetes/apps/security/wazuh/app/certificates.yaml"
 # The files that the hash in the name of each Job covers, in this order.
 HASHED = {
     "wazuh-accounts": ["config/accounts.json", "scripts/indexer.py", "scripts/accounts.py"],
-    "wazuh-settings-git": ["config/retention.json", "scripts/indexer.py", "scripts/settings.py"],
+    "wazuh-settings-git": ["config/retention.json", "config/monitors.json", "scripts/indexer.py",
+                           "scripts/settings.py", "scripts/monitors.py"],
 }
 # The ages of each policy of tnwks: (rollover, delete). A merge that lowers one
 # deletes the data older than the new age at the next run of ISM, with no way
@@ -852,6 +853,9 @@ def test_the_index_permissions_of_each_role_are_pinned():
          "allowed_actions": ["indices:monitor/stats"]},
         {"index_patterns": [".wazuh-settings"],
          "allowed_actions": ["indices:data/write/index", "indices:data/write/bulk[s]"]},
+        {"index_patterns": ["wazuh-findings-v5-*", ".ds-wazuh-findings-v5-*"],
+         "fls": ["@timestamp", "wazuh.rule.id", "wazuh.rule.level"],
+         "allowed_actions": ["indices:data/read/search*"]},
     ]
     assert roles["tnwks-converter"]["index_permissions"] == [
         {"index_patterns": ["wazuh-states-sca", "wazuh-states-vulnerabilities", ".wazuh-cti-consumers"],
@@ -903,7 +907,7 @@ def test_the_user_for_settings_may_manage_each_stream_and_its_backing_indices(st
         assert matched(pattern.rstrip("*") + "x"), pattern
 
 
-def test_the_user_for_settings_has_no_security_api_and_reads_no_document():
+def test_the_user_for_settings_has_no_security_api_and_reads_only_monitor_fields():
     role = accounts()["roles"]["tnwks-settings"]
     assert "restapi" not in json.dumps(role) and "security" not in json.dumps(role["cluster_permissions"])
     # The five ISM actions that the script calls, by their names in
@@ -917,6 +921,15 @@ def test_the_user_for_settings_has_no_security_api_and_reads_no_document():
         "cluster:admin/opendistro/ism/managedindex/explain",
         "cluster:admin/setup/settings/update",
         "indices:data/write/bulk",
+        "cluster:admin/opendistro/alerting/monitor/search",
+        "cluster:admin/opendistro/alerting/monitor/write",
+        "cluster:admin/opendistro/alerting/monitor/delete",
+        "cluster:admin/opensearch/notifications/configs/get",
+        "cluster:admin/opensearch/notifications/configs/create",
+        "cluster:admin/opensearch/notifications/configs/update",
+        "cluster:admin/opensearch/notifications/configs/delete",
+        "cluster:admin/opensearch/notifications/feature/publish",
+        "indices:data/read/msearch",
     ]
     for permission in role["index_permissions"]:
         assert "read" not in permission["allowed_actions"]
@@ -925,7 +938,7 @@ def test_the_user_for_settings_has_no_security_api_and_reads_no_document():
             # the caller (wazuh-indexer-plugins v5.0.0-rc2, SettingsIndex.java),
             # which OpenSearch runs as a bulk request.
             assert permission["allowed_actions"] == ["indices:data/write/index", "indices:data/write/bulk[s]"]
-        else:
+        elif not permission.get("fls"):
             assert not [a for a in permission["allowed_actions"] if a.startswith("indices:data")]
 
 

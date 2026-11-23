@@ -17,8 +17,10 @@ configMapGenerator:
   - name: wazuh-settings-files
     files:
       - ./config/retention.json
+      - ./config/monitors.json
       - ./scripts/indexer.py
       - ./scripts/settings.py
+      - ./scripts/monitors.py
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
