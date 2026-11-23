@@ -384,7 +384,7 @@ them (`app/config/accounts.json`, pinned by
 | `.wazuh-settings` | `indices:data/write/index`, `indices:data/write/bulk[s]` |
 
 The image also maps every user to its reserved role `wazuh_ai_assistant`,
-which reads only the sessions of the AI assistant of that user
+which reads and writes only the sessions of the AI assistant of that user
 ([roles_mapping.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles_mapping.wazuh.yml#L23-L27),
 [roles.wazuh.yml](https://github.com/wazuh/wazuh-indexer/blob/v5.0.0-rc2/distribution/src/config/security/roles.wazuh.yml#L100-L115)).
 
@@ -414,10 +414,14 @@ subrequest. The ingress forwards the signed ID token to the dashboard.
 Wazuh verifies the issuer, signature and app audience. It uses Cognito's
 stable subject as the user and the reader group as the access decision.
 That group reads the configured event, finding and state indices and the
-read-only dashboard tenant. Refresh your Cognito session after a group
-membership change. The manager's authorization context maps the
-group to its read-only role. The dashboard Service remains ClusterIP, and
-Cilium permits web ingress only from the local internal ingress controller.
+global dashboard saved objects. Private dashboard tenants are disabled.
+The reserved assistant mapping lists the vendor's local accounts so Cognito
+users do not receive the assistant session permissions. Refresh your Cognito
+session after a group membership change. The manager's authorization context
+maps the group to its read-only role. The dashboard Service remains ClusterIP,
+and Cilium permits web ingress only from the local internal ingress controller.
+The local readiness check verifies the certificate and checks `/api/status`
+in JWT mode.
 
 The indexer uses its existing local admin certificate to apply the
 Cognito authentication domain over loopback. The manager uses its own
@@ -425,7 +429,9 @@ local API to manage the one marked group mapping. Reverting a manifest
 alone does not remove persisted roles. To withdraw access, remove the
 Ingress and router record, set `enabled=false` in the dashboard access
 ConfigMap generator, and let both services restart to remove the auth
-domain and the manager mapping. Then remove the reader role and group.
+domain and the manager mapping and restore the vendor's assistant mapping.
+Restore the dashboard arguments and probes from the vendor overlay and
+remove the reader role and group.
 
 ## Retention
 
@@ -574,7 +580,8 @@ Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
 `retention.json`, `indexer.py` and `settings.py`) and once a day (the CronJob
 `wazuh-settings`, at 08:22 UTC). Both run one pod. In this order, it:
 
-1. waits up to 300 seconds until `tnwks-settings` can log in;
+1. waits up to 300 seconds for login, including while the indexer gives no
+   answer or returns HTTP 503 during startup;
 2. writes each policy of tnwks that is missing or differs, and never a
    shipped policy ID;
 3. sets `engine.index_raw_events`. The tag documents no read of the setting,
@@ -593,10 +600,10 @@ Step 2 (`../wazuh-settings/app/scripts/settings.py`) runs as
    events and active responses streams, from the index stats. It writes
    them to `wazuh-settings/indices.json` on the volume of results
    (`security/converter/README.md`, "The count file of the Wazuh settings").
-   An index counts as failed when explain shows its step at `failed` (ISM
-   may still retry the action), its action failed (the retries of the
-   action are used up), or its policy failed (`retry_info`): ISM counts the
-   last two as failed itself
+   An index counts as failed when ISM reports an exhausted action or failed
+   policy (`retry_info`). A failed step is retryable only when explain
+   explicitly reports both the action and policy as not failed. A failed
+   step with missing retry state still fails the check
    ([ManagedIndexMetaData.kt](https://github.com/opensearch-project/index-management/blob/3.6.0.0/spi/src/main/kotlin/org.opensearch.indexmanagement.spi/indexstatemanagement/model/ManagedIndexMetaData.kt#L93-L137)).
 
 A run fails at the first error, and, after it writes the counts, when a

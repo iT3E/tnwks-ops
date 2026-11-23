@@ -1,8 +1,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## BACKEND
-## Terraform Cloud remote backend. Like the Cloudflare root module, this one is
-## NOT wired into CI: RouterOS is only reachable from inside the LAN, so plans
-## and applies run locally via `task terraform:mikrotik:{plan,apply}`.
+## Terraform Cloud stores state. The self-hosted runner plans pull requests
+## and applies on merge to main. Local tasks are for break-glass use.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 terraform {

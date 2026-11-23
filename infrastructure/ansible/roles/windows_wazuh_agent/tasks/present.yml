@@ -1,0 +1,110 @@
+---
+- name: Check whether the Windows agent has enrolled
+  ansible.windows.win_stat:
+    path: '{{ windows_wazuh_agent_dir }}\client.keys'
+    get_checksum: false
+  register: windows_wazuh_keys
+
+- name: Require the operator's token file for first enrollment
+  ansible.builtin.assert:
+    that: wazuh_agent_token_file | default('') | length > 0
+    quiet: true
+  when:
+    - not ansible_check_mode
+    - windows_wazuh_keys.stat.size | default(0) == 0
+
+- name: Install and enroll the Windows agent
+  when:
+    - not ansible_check_mode
+    - windows_wazuh_keys.stat.size | default(0) == 0
+  block:
+    - name: Protect the installer and token staging directory
+      tnwks_win_dir_acl:
+        path: 'C:\Windows\Temp\tnwks-wazuh-agent'
+        readers: none
+        items: reset
+
+    - name: Download and check the pinned Wazuh MSI
+      ansible.windows.win_get_url:
+        url: "{{ windows_wazuh_agent_package_url }}"
+        checksum: "{{ windows_wazuh_agent_package_sha256 }}"
+        checksum_algorithm: sha256
+        dest: 'C:\Windows\Temp\tnwks-wazuh-agent\wazuh-agent.msi'
+
+    - name: Install the verified MSI
+      ansible.windows.win_package:
+        path: 'C:\Windows\Temp\tnwks-wazuh-agent\wazuh-agent.msi'
+        state: present
+      when: not windows_wazuh_service.exists
+
+    - name: Record the verified package on the Windows host
+      ansible.windows.win_copy:
+        content: "{{ windows_wazuh_agent_package_sha256 }}\n"
+        dest: '{{ windows_wazuh_agent_dir }}\tnwks-package.sha256'
+      when: not windows_wazuh_service.exists
+
+    - name: Configure agent identity before enrollment
+      ansible.windows.win_template:
+        src: ossec.conf.j2
+        dest: '{{ windows_wazuh_agent_dir }}\ossec.conf'
+
+    - name: Disable remotely configured commands
+      ansible.windows.win_copy:
+        dest: '{{ windows_wazuh_agent_dir }}\local_internal_options.conf'
+        content: |
+          logcollector.remote_commands=0
+          wazuh_command.remote_commands=0
+          sca.remote_commands=0
+
+    - name: Copy the one-use token into the protected staging directory
+      ansible.windows.win_copy:
+        src: "{{ wazuh_agent_token_file }}"
+        dest: 'C:\Windows\Temp\tnwks-wazuh-agent\enrollment.token'
+      no_log: true
+      diff: false
+
+    - name: Enroll the Windows agent with the protected token file
+      ansible.windows.win_command:
+        argv:
+          - '{{ windows_wazuh_agent_dir }}\wazuh-agent-auth.exe'
+          - --token-file
+          - 'C:\Windows\Temp\tnwks-wazuh-agent\enrollment.token'
+        chdir: "{{ windows_wazuh_agent_dir }}"
+      changed_when: true
+      no_log: true
+
+  always:
+    - name: Remove the Windows installer and token
+      ansible.windows.win_file:
+        path: 'C:\Windows\Temp\tnwks-wazuh-agent'
+        state: absent
+
+- name: Verify the Windows agent disables response and remote commands
+  ansible.windows.win_powershell:
+    error_action: stop
+    parameters:
+      AgentDir: "{{ windows_wazuh_agent_dir }}"
+    script: |
+      param([string]$AgentDir)
+      $Ansible.Changed = $false
+      [xml]$config = Get-Content -Raw -LiteralPath (Join-Path $AgentDir 'ossec.conf')
+      $disabled = $config.SelectNodes('/ossec_config/active-response/disabled')
+      if ($disabled.Count -ne 1 -or $disabled[0].InnerText.Trim() -cne 'yes') {
+          throw 'Wazuh active response must be disabled'
+      }
+      $options = Get-Content -LiteralPath (Join-Path $AgentDir 'local_internal_options.conf')
+      foreach ($option in 'logcollector.remote_commands', 'wazuh_command.remote_commands', 'sca.remote_commands') {
+          $settings = @($options | Where-Object { $_ -match ('^\s*' + [regex]::Escape($option) + '\s*=') })
+          if ($settings.Count -ne 1 -or ($settings[0] -split '=', 2)[1].Trim() -cne '0') {
+              throw "Wazuh remote commands must be disabled: $option"
+          }
+      }
+  check_mode: false
+  when: not ansible_check_mode or windows_wazuh_service.exists
+
+- name: Enable and start the enrolled Windows agent
+  ansible.windows.win_service:
+    name: WazuhSvc
+    start_mode: auto
+    state: started
+  when: not ansible_check_mode or windows_wazuh_service.exists

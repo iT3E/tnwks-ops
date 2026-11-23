@@ -32,10 +32,28 @@ def test_internal_ingress_requires_the_same_group_as_the_indexer():
     assert group == role["backend_roles"] == ["wazuh-readers"]
     assert annotations["nginx.ingress.kubernetes.io/auth-response-headers"] == "Authorization"
     assert all(p["allowed_actions"] == ["read"] for p in role["index_permissions"])
+    assert ".kibana" in {index for p in role["index_permissions"] for index in p["index_patterns"]}
+    assert role["tenant_permissions"] == [
+        {"tenant_patterns": ["global_tenant"], "allowed_actions": ["kibana_all_read"]}
+    ]
     (rule,) = policy["spec"]["ingress"]
     (source,) = rule["fromEndpoints"]
     assert source["matchLabels"]["k8s:app.kubernetes.io/instance"] == "ingress-nginx-internal"
     assert source["matchLabels"]["io.cilium.k8s.policy.cluster"] == "${CLUSTER_NAME}"
+
+
+def test_jwt_dashboard_has_an_authenticated_ingress_and_a_local_readiness_check():
+    server = next(doc for doc in yaml.safe_load_all((WAZUH.parent / "ks.yaml").read_text())
+                  if doc["metadata"]["name"] == "security-wazuh-server")
+    patch = next(p["patch"] for p in server["spec"]["patches"] if p["target"]["name"] == "wazuh-dashboard")
+    (dashboard,) = yaml.safe_load(patch)["spec"]["template"]["spec"]["containers"]
+    assert "--opensearch_security.auth.type=jwt" in dashboard["args"]
+    assert "--opensearch_security.multitenancy.tenants.enable_private=false" in dashboard["args"]
+    assert "--status.allowAnonymous=true" in dashboard["args"]
+    readiness = dashboard["readinessProbe"]["exec"]["command"][-1]
+    assert "--cacert " in readiness and "127.0.0.1" in readiness and "/api/status" in readiness
+    for probe in ("startupProbe", "livenessProbe"):
+        assert dashboard[probe] == {"exec": None, "tcpSocket": {"port": "dashboard"}}
 
 
 class Manager:

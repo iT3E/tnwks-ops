@@ -459,6 +459,29 @@ def test_step2_again_writes_only_the_setting(tmp_path):
     assert fake.writes == [("PUT", "/_plugins/_setup/settings")]
 
 
+def test_step2_waits_through_a_restart(tmp_path):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    fake.handle = not_ready(fake, [None, 503, None])
+    code, lines = run2(fake, step2_files(tmp_path))
+    assert code == 0, lines
+    assert sum("the indexer is not ready yet" in line for line in lines) == 3
+
+
+@pytest.mark.parametrize("answer", [None, 503, 403])
+def test_step2_stops_without_writes_when_login_never_succeeds(tmp_path, answer):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    fake.handle = not_ready(fake, [answer] * 8)
+    code, lines = run2(fake, step2_files(tmp_path) + ["--login-wait=21"])
+    assert code == 1
+    assert fake.writes == []
+    if answer == 403:
+        assert len(lines) == 1 and lines[-1].endswith("HTTP 403")
+    else:
+        assert "not ready after 21 seconds" in lines[-1]
+
+
 def test_step2_waits_for_step1_to_make_its_user(tmp_path):
     fake = FakeIndexer()
     original, calls = fake.handle, []
@@ -513,10 +536,11 @@ FAILED_STEPS = {
     "action": {"action": {"name": "rollover", "failed": True, "consumed_retries": 3},
                "retry_info": {"failed": False, "consumed_retries": 0}},
     "policy": {"retry_info": {"failed": True, "consumed_retries": 0}},
+    "missing_retry_state": {"step": {"step_status": "failed"}},
 }
 
 
-@pytest.mark.parametrize("form", sorted(FAILED_STEPS))
+@pytest.mark.parametrize("form", ("action", "policy", "missing_retry_state"))
 def test_step2_counts_an_index_at_a_failed_step_and_fails(tmp_path, form):
     """ISM runs each step of a policy of tnwks with the roles of the user that
     wrote and moved it. A step that the role does not allow fails, the index
@@ -535,6 +559,16 @@ def test_step2_counts_an_index_at_a_failed_step_and_fails(tmp_path, form):
     assert found["streams"]["events"]["failed"] == 1
     assert found["streams"]["metrics"]["failed"] == 0
     assert lines[-1].startswith("error: ISM stopped at a failed step on indices of events:")
+
+
+def test_step2_does_not_count_a_step_that_ism_will_retry(tmp_path):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    fake.failed[".ds-wazuh-events-v5-system-000001"] = FAILED_STEPS["step"]
+    code, lines = run2(fake, argv)
+    assert code == 0, lines
+    assert results(argv)["failed"] == 0
 
 
 def test_step2_counts_no_failure_for_a_step_that_waits_or_completed(tmp_path):

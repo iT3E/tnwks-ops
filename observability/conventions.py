@@ -11,6 +11,7 @@ RUNBOOKS = {
     "home": "docs/apps/home-assistant.md",
     "hosts": "docs/operations/grafana-resource-budget.md",
     "observability": "docs/operations/observability-implementation.md",
+    "cloud-cost": "docs/operations/aws-cost.md",
     "wifi": "docs/network/unifi.md",
     "security": "security/README.md",
     "ai": "docs/apps/agent-platform-runbook.md",

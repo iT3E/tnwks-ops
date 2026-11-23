@@ -138,7 +138,8 @@
             "wazuh-events-v5-*",
             ".ds-wazuh-events-v5-*",
             "wazuh-states-sca",
-            "wazuh-states-vulnerabilities"
+            "wazuh-states-vulnerabilities",
+            ".kibana"
           ],
           "allowed_actions": [
             "read"

@@ -1,0 +1,23 @@
+---
+- name: Check that exactly one agent target is selected
+  hosts: windows_hosts:wsl_distros
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Require a limit to one approved host
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all == [inventory_hostname]
+          - wazuh_rollout_host | default('') == inventory_hostname
+        quiet: true
+
+- name: Prepare the approved Windows agent
+  hosts: windows_hosts
+  gather_facts: false
+  roles:
+    - windows_wazuh_agent
+
+- name: Prepare the approved WSL agent
+  hosts: wsl_distros
+  roles:
+    - wsl_wazuh_agent

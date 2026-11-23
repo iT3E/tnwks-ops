@@ -316,6 +316,29 @@ spec:
                     - --opensearch_security.auth.type=jwt
                     - '--opensearch.requestHeadersAllowlist=["Authorization","securitytenant"]'
                     - --opensearch_security.cookie.secure=true
+                    - --opensearch_security.multitenancy.enabled=true
+                    - --opensearch_security.multitenancy.tenants.enable_private=false
+                    - '--opensearch_security.readonly_mode.roles=["tnwks-dashboard-reader"]'
+                    - --status.allowAnonymous=true
+                  startupProbe:
+                    exec: null
+                    tcpSocket:
+                      port: dashboard
+                  readinessProbe:
+                    exec:
+                      command:
+                        - /bin/sh
+                        - -ec
+                        - >-
+                          curl -fsS
+                          --cacert /usr/share/wazuh-dashboard/config/certs/indexer-ca.pem
+                          --resolve dashboard.security.svc.cluster.local:443:127.0.0.1
+                          https://dashboard.security.svc.cluster.local/api/status
+                          >/dev/null
+                  livenessProbe:
+                    exec: null
+                    tcpSocket:
+                      port: dashboard
                   resources:
                     requests: {cpu: 100m, memory: 320Mi}
                     limits: {cpu: null, memory: 320Mi}

@@ -1,0 +1,5 @@
+---
+windows_wazuh_agent_dir: 'C:\Program Files (x86)\ossec-agent'
+windows_wazuh_agent_package_url: https://packages-staging.xdrsiem.wazuh.info/pre-release/5.x/windows/wazuh-agent-5.0.0-rc2.msi
+windows_wazuh_agent_package_sha256: 93e6f1386e1d66a8cc30d17ae0c496c0d400df4d1ddd7edbe3806c46c04e559a
+windows_wazuh_agent_group: windows-host

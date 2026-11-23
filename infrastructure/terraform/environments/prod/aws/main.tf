@@ -1,7 +1,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## MAIN
 ## Cognito, SES and the supporting IAM for the prod account, and the AWS parts
-## of the security platform across both accounts of the organization.
+## of the security platform across both accounts, plus consolidated billing.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 module "aws" {
@@ -88,4 +88,16 @@ module "security" {
   rolesanywhere_trust_anchor_arn   = module.aws.rolesanywhere_trust_anchor_arn
   rolesanywhere_audit_common_names = ["homelab-wsl-02-security-audit"]
   rolesanywhere_trail_common_names = ["homelab-wsl-02-security-trail"]
+}
+
+module "billing" {
+  source = "../../../modules/aws/billing"
+
+  providers = {
+    aws = aws.management
+  }
+
+  monthly_budget_usd = 50
+  subscriber_email   = data.sops_file.secrets.data["admin_email"]
+  prod_account_id    = data.aws_caller_identity.current.account_id
 }
