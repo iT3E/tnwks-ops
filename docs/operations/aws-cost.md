@@ -25,8 +25,10 @@ At 100% actual spend, AWS Budgets attaches a service control policy to the
 production member account. The policy denies selected operations that
 provision or start capacity, including EC2, RDS, EKS, ECS, and new S3
 buckets. AWS Budgets owns the attachment and resets the action at the next
-budget period. The Terraform plan checks that the organization has the
-service control policy type enabled before creating the policy.
+budget period. Terraform imports the existing organization and enables
+the service control policy type first. AWS attaches its default
+`FullAWSAccess` policy when the policy type is enabled. The budget
+action owns the attachment of the restrictive policy in prod.
 
 AWS updates budget data up to three times daily, typically 8–12 hours
 apart. Charges can exceed $50 before the action runs. Existing resources,

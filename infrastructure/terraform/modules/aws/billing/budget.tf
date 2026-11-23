@@ -1,7 +1,5 @@
 data "aws_caller_identity" "management" {}
 
-data "aws_organizations_organization" "current" {}
-
 # An unfiltered budget in the management account measures consolidated spend.
 resource "aws_budgets_budget" "monthly" {
   account_id   = data.aws_caller_identity.management.account_id
@@ -69,12 +67,7 @@ resource "aws_organizations_policy" "restrict_provisioning" {
     }]
   })
 
-  lifecycle {
-    precondition {
-      condition     = contains(data.aws_organizations_organization.current.enabled_policy_types, "SERVICE_CONTROL_POLICY")
-      error_message = "AWS Organizations must have the service control policy type enabled for the budget action."
-    }
-  }
+  depends_on = [aws_organizations_organization.current]
 }
 
 resource "aws_iam_role" "budget_action" {
@@ -104,7 +97,7 @@ resource "aws_iam_role_policy" "budget_action" {
         Action = ["organizations:AttachPolicy", "organizations:DetachPolicy"]
         Resource = [
           aws_organizations_policy.restrict_provisioning.arn,
-          "arn:aws:organizations::${data.aws_caller_identity.management.account_id}:account/${data.aws_organizations_organization.current.id}/${var.prod_account_id}",
+          "arn:aws:organizations::${data.aws_caller_identity.management.account_id}:account/${aws_organizations_organization.current.id}/${var.prod_account_id}",
         ]
       },
       {
