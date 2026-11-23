@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.307.2 - 2026-11-23
+
+### Fixed
+
+* Load Wazuh reader views for file integrity, endpoint inventory, threat intelligence, and response history.
+
 ## v2.307.1 - 2026-11-23
 
 ### Fixed
