@@ -22,6 +22,7 @@ configMapGenerator:
       - ./config/dashboard/indexer-oidc.yaml
       - ./config/dashboard/indexer-auth.sh
       - ./config/dashboard/manager-rbac.py
+      - ./config/dashboard/admin-enabled
     literals:
       - enabled=true
     options:

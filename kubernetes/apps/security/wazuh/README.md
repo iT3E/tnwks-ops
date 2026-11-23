@@ -288,14 +288,14 @@ this repository from `../wazuh-settings/app/config/accounts.json`:
 | `tnwks-settings` | `tnwks-settings`: the five ISM actions that step 2 calls ([`policy/get`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/getpolicy/GetPolicyAction.kt#L13), [`policy/write`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/indexpolicy/IndexPolicyAction.kt#L13), [`managedindex/add`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/addpolicy/AddPolicyAction.kt#L14), [`managedindex/change`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/changepolicy/ChangePolicyAction.kt#L14), [`managedindex/explain`](https://github.com/opensearch-project/index-management/blob/3.6.0.0/src/main/kotlin/org/opensearch/indexmanagement/indexstatemanagement/transport/action/explain/ExplainAction.kt#L13), each under `cluster:admin/opendistro/ism/`), and the ISM index actions on the patterns of the four streams of "Retention". `policy/write` lets the user write a policy under any ID: the role can not limit the ID, so step 2 refuses to write a shipped ID. Also the raw events setting, with a write of the settings document in `.wazuh-settings` (the Setup plugin indexes it with the rights of the caller, which OpenSearch runs as a bulk request: the cluster action `indices:data/write/bulk`, and `indices:data/write/index` and `indices:data/write/bulk[s]` on that index, [SettingsIndex.java](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/plugins/setup/src/main/java/com/wazuh/setup/index/SettingsIndex.java#L106-L113)), and the index stats of the two streams that hold no document. Also what ISM calls with this role for the policies of tnwks (see below): the index stats and the rollover on the names of the four streams, and the index stats and the delete on their backing indices. The findings monitors can search only the timestamp, rule ID and severity. See Findings notifications for the named cluster permissions. No Security API | Step 2 |
 | `tnwks-converter` | `tnwks-converter`: a read of the index names of "Contract", with field-level security on the agent snapshots, and the index stats (the size) of each index of Wazuh | The converter |
 
-Step 1 runs only when its files change: `accounts.json`, `indexer.py` and
-`accounts.py`. The name of its Job carries the first 10 hex digits of the
-sha256 of the three files, one after another, so a change makes a new Job,
+Step 1 runs when `accounts.json`, `indexer.py`, `accounts.py` or the
+dashboard `admin-enabled` switch changes. The name of its Job carries the
+first 10 hex digits of the sha256 of those files, in that order, so a change makes a new Job,
 Flux runs it once, and prune removes the old one. It does not run each day.
 `security/tests/test_wazuh_settings.py` fails when the name does not match
 the files, and names the right one. To run it again with the same files,
 for example after a failure, delete the Job: Flux makes it again. So step 1
-runs when `accounts.json`, its script or a hash changes: a change of a file
+runs when an input file or a hash changes: a change of a file
 gives the Job a new name, and at a change of a hash only (in
 `wazuh-accounts-hashes`) the owner deletes the Job.
 
@@ -405,6 +405,8 @@ What step 1 does (`../wazuh-settings/app/scripts/accounts.py`):
   `accounts.json` no longer names.
 - It reads back what carries its mark, and fails when it is not what
   `accounts.json` says.
+- It includes the marked indexer administrator role and group mapping when
+  the dashboard `admin-enabled` switch is on.
 
 ## Dashboard sign-in
 
@@ -417,24 +419,34 @@ That group reads the configured events, findings, configuration assessment,
 vulnerabilities, file and registry integrity, endpoint inventory, threat
 enrichments, active response history, and global dashboard saved objects.
 Private dashboard tenants are disabled.
-The global tenant and indexer role enforce read-only access. The
+The global tenant and indexer role enforce read-only access for readers. The
 [tenant-based mode](https://github.com/wazuh/wazuh-dashboard/blob/v5.0.0-rc2/docs/capabilities/read_only_mode.md)
 keeps the Wazuh applications available to readers.
-The reserved assistant mapping lists the vendor's local accounts so Cognito
-users do not receive the assistant session permissions. Refresh your Cognito
-session after a group membership change. The manager's authorization context
-maps the group to its read-only role. The dashboard Service remains ClusterIP,
+The manager's authorization context maps the reader group to its read-only
+role. The owner is also the sole member of the dedicated Wazuh administrator
+group. That group maps to the indexer's `tnwks-dashboard-admin` role, which
+has the permissions of `all_access`, and the manager's `administrator` role.
+The indexer permits Security API access for its dedicated role and the
+shipped roles. Refresh your Cognito session after a membership
+change. The reserved assistant mapping still lists the vendor's local
+accounts. The dashboard Service remains ClusterIP,
 and Cilium permits web ingress only from the local internal ingress controller.
 The local readiness check verifies the certificate and checks `/api/status`
 in JWT mode.
 
 The indexer uses its existing local admin certificate to apply the
 Cognito authentication domain over loopback. The manager uses its own
-local API to manage the one marked group mapping. Reverting a manifest
-alone does not remove persisted roles. To withdraw access, remove the
+local API to manage both group mappings. To revoke the admin grant, set
+`app/config/dashboard/admin-enabled` to `false` first and update the accounts
+Job name with the new input hash. Wait for the Job and the manager restart
+to remove both admin mappings.
+Then remove the Cognito admin group and membership. This keeps the reader
+access available during the rollback.
+
+To withdraw all dashboard access, revoke the admin grant, then remove the
 Ingress and router record and verify that the route has closed. Then set
 `enabled=false` in the dashboard access ConfigMap generator. Let both
-services restart to remove the auth domain and the manager mapping and
+services restart to remove the auth domain and the manager's reader mapping and
 restore the vendor's assistant mapping.
 Restore the dashboard arguments and probes from the vendor overlay and
 remove the reader role and group.

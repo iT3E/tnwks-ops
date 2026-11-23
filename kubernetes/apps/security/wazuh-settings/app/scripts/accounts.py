@@ -51,6 +51,7 @@ UPSTREAM_USERS = frozenset({"admin", "kibanaserver", "wazuh-manager"})
 # A bcrypt hash, the form of the internal users of the security plugin.
 BCRYPT = re.compile(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}")
 KINDS = {"roles": "role", "internalusers": "user", "rolesmapping": "role mapping"}
+ADMIN_ROLE = "tnwks-dashboard-admin"
 
 
 def check_accounts(accounts: dict, own_user: str) -> None:
@@ -207,12 +208,15 @@ def main(argv=None, send=None, out=print, sleep=time.sleep, clock=time.monotonic
                         help="the folder of the Secret wazuh-accounts-user: the files username and password")
     parser.add_argument("--hashes", required=True,
                         help="the folder of the Secret wazuh-accounts-hashes: one file for each user")
+    parser.add_argument("--dashboard-admin", type=Path, help="the Wazuh dashboard admin switch")
     parser.add_argument("--login-wait", type=float, default=300, help="seconds to wait for the indexer")
     args = parser.parse_args(argv)
     try:
         folder = Path(args.user)
         own_user = read_secret(folder / "username")
         accounts = json.loads(Path(args.accounts).read_text())
+        if args.dashboard_admin is None or args.dashboard_admin.read_text().strip() != "true":
+            accounts["roles"].pop(ADMIN_ROLE, None)
         check_accounts(accounts, own_user)
         hashes = read_hashes(Path(args.hashes), accounts["users"])
         client = Indexer(args.indexer, own_user, read_secret(folder / "password"), send=send, ca_file=args.ca)

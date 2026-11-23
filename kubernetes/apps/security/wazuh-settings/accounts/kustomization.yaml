@@ -24,6 +24,7 @@ configMapGenerator:
       - ../app/config/accounts.json
       - ../app/scripts/indexer.py
       - ../app/scripts/accounts.py
+      - ../../wazuh/app/config/dashboard/admin-enabled
 generatorOptions:
   disableNameSuffixHash: true
   annotations:

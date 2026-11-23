@@ -10,13 +10,17 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 HOST = "wazuh-api.security.svc.cluster.local"
-RULE = "tnwks-dashboard-reader"
-CONDITION = {"FIND": {"backend_roles": "wazuh-readers"}}
+READER = ("tnwks-dashboard-reader", "wazuh-readers", "readonly")
+ADMIN = ("tnwks-dashboard-admin", "wazuh-admins", "administrator")
 CA = "/etc/wazuh-manager/certs/root-ca.pem"
 
 
 class ManagerStarting(RuntimeError):
     """The API can accept a login before all manager daemons are ready."""
+
+
+class ManagerTokenExpired(RuntimeError):
+    """A rule change can revoke the manager API token during reconciliation."""
 
 
 class LocalManager(http.client.HTTPSConnection):
@@ -36,6 +40,8 @@ class LocalManager(http.client.HTTPSConnection):
             raw = response.read()
         finally:
             self.close()
+        if response.status == 401:
+            raise ManagerTokenExpired("The manager API no longer accepts the token")
         if response.status == 500:
             try:
                 error = json.loads(raw)
@@ -59,30 +65,36 @@ def select(api, path, name, auth):
     return items[0] if items else None
 
 
-def reconcile(api, auth, enabled):
-    mapping = select(api, "/security/rules", RULE, auth)
+def reconcile_mapping(api, auth, enabled, rule_name, group, role_name):
+    mapping = select(api, "/security/rules", rule_name, auth)
     if not enabled:
         if mapping is not None:
             api.request_json("DELETE", "/security/rules?rule_ids=" + str(mapping["id"]), auth)
         return
 
-    role = select(api, "/security/roles", "readonly", auth)
+    role = select(api, "/security/roles", role_name, auth)
     if role is None:
-        raise RuntimeError("the manager's read-only role is unavailable")
+        raise RuntimeError(f"the manager's {role_name} role is unavailable")
 
+    condition = {"FIND": {"backend_roles": group}}
     if mapping is None:
-        api.request_json("POST", "/security/rules", auth, {"name": RULE, "rule": CONDITION})
-        mapping = select(api, "/security/rules", RULE, auth)
+        api.request_json("POST", "/security/rules", auth, {"name": rule_name, "rule": condition})
+        mapping = select(api, "/security/rules", rule_name, auth)
 
-    if mapping is None or mapping["rule"] != CONDITION or set(mapping["roles"]) - {role["id"]}:
-        raise RuntimeError("the dashboard mapping does not match its read-only declaration")
+    if mapping is None or mapping["rule"] != condition or set(mapping["roles"]) - {role["id"]}:
+        raise RuntimeError(f"the dashboard mapping does not match its {role_name} declaration")
 
     if role["id"] not in mapping["roles"]:
         query = urlencode({"rule_ids": mapping["id"]})
         api.request_json("POST", f"/security/roles/{role['id']}/rules?{query}", auth)
 
 
-def reconcile_on_startup(api, basic, enabled, clock=time.monotonic, sleep=time.sleep):
+def reconcile(api, auth, enabled, admin_enabled):
+    reconcile_mapping(api, auth, enabled and admin_enabled, *ADMIN)
+    reconcile_mapping(api, auth, enabled, *READER)
+
+
+def reconcile_on_startup(api, basic, enabled, admin_enabled, clock=time.monotonic, sleep=time.sleep):
     deadline = clock() + 300
     while True:
         try:
@@ -91,8 +103,8 @@ def reconcile_on_startup(api, basic, enabled, clock=time.monotonic, sleep=time.s
             pass
         else:
             try:
-                reconcile(api, "Bearer " + answer["token"], enabled)
-            except (OSError, http.client.HTTPException, ManagerStarting):
+                reconcile(api, "Bearer " + answer["token"], enabled, admin_enabled)
+            except (OSError, http.client.HTTPException, ManagerStarting, ManagerTokenExpired):
                 pass
             else:
                 return
@@ -104,9 +116,10 @@ def reconcile_on_startup(api, basic, enabled, clock=time.monotonic, sleep=time.s
 
 def main():
     enabled = Path("/dashboard-access/enabled").read_text().strip() == "true"
+    admin_enabled = Path("/dashboard-access/admin-enabled").read_text().strip() == "true"
     password = os.environ.pop("WAZUH_MANAGER_API_PASSWORD")
     basic = base64.b64encode(f"wazuh:{password}".encode()).decode()
-    reconcile_on_startup(LocalManager(), basic, enabled)
+    reconcile_on_startup(LocalManager(), basic, enabled, admin_enabled)
 
 
 if __name__ == "__main__":
