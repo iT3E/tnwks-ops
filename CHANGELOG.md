@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.303.1 - 2026-11-23
+
+### Fixed
+
+* Document the MQTT and Wazuh agent service addresses in the shared VIP table.
+
 ## v2.303.0 - 2026-11-23
 
 ### Added
