@@ -88,10 +88,15 @@ def jwt(app_id: str, key_file: str, now: int) -> str:
     return f"{head}.{body}.{b64url(done.stdout)}"
 
 
+# The headers of each API, and only to that API: the API server answers 406
+# to an Accept that it can not serve.
+CODE_HOST = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+KUBERNETES = {"Accept": "application/json"}
+
+
 def call(url: str, auth: str, method: str = "GET", body: dict | None = None,
-         context: ssl.SSLContext | None = None, step: str = "") -> dict:
-    headers = {"Authorization": auth, "Accept": "application/vnd.github+json",
-               "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "tnwks-github-token"}
+         context: ssl.SSLContext | None = None, step: str = "", api: dict = CODE_HOST) -> dict:
+    headers = {"Authorization": auth, "User-Agent": "tnwks-github-token", **api}
     data = None
     if body is not None:
         data = json.dumps(body).encode()
@@ -212,7 +217,7 @@ def write(value: str, name: str, key: str, until: int) -> None:
         "data": {key: base64.b64encode(value.encode()).decode()},
     }
     url = f"{scheme}://{host}:{port}/api/v1/namespaces/{namespace}/secrets/{name}"
-    call(url, f"Bearer {bearer}", "PUT", body, context=context, step="secret")
+    call(url, f"Bearer {bearer}", "PUT", body, context=context, step="secret", api=KUBERNETES)
 
 
 def main() -> int:
