@@ -13,6 +13,7 @@ spec:
             severity: critical
           annotations:
             summary: Wazuh has an active-response notification channel
+            dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster }}
         - alert: WazuhActiveResponseChannelCountStale
           expr: >-
             absent(homelab_security_wazuh_active_response_channels_timestamp_seconds)
@@ -22,3 +23,4 @@ spec:
             severity: warning
           annotations:
             summary: The Wazuh notification channel count is missing or stale
+            dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster }}
