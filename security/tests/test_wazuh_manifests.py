@@ -375,7 +375,7 @@ def test_step2_runs_after_step1_completes():
     assert {d["name"] for d in accounts["dependsOn"]} == {"security-wazuh-server"}
     assert settings["path"] == "./kubernetes/apps/security/wazuh-settings/app"
     assert {d["name"] for d in settings["dependsOn"]} == {
-        "security-wazuh-server", "security-converter", "security-wazuh-accounts"}
+        "security-wazuh-server", "security-converter", "security-wazuh-accounts", "alertmanager"}
     (job,) = docs(SETTINGS / "accounts/accounts-job.yaml")
     # The timeout of the health check is more than the deadline of the Job.
     seconds = int(accounts["timeout"].rstrip("m")) * 60
