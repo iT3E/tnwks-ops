@@ -34,7 +34,7 @@ def board() -> Board:
                   "Budget less recorded spend. A negative amount means the budget has been exceeded.", "stat"),
                 p("Projected month-end spend", FORECAST, "currencyUSD",
                   "AWS Budgets' month-end forecast. AWS may need more history before publishing it.",
-                  "stat", empty="Forecast unavailable"),
+                  "stat", empty="Unknown — forecast unavailable"),
                 p("Last successful collection", f"{COLLECTED} * 1000", "dateTimeAsIso",
                   "The runner reads AWS every four hours. Current cost panels require a snapshot from this UTC month "
                   "less than 14 hours old. AWS billing figures can lag behind that read.", "stat"),
@@ -43,7 +43,7 @@ def board() -> Board:
                   "Gaps indicate missing or stale snapshots."),
                 p("Month-end forecast over time", FORECAST, "currencyUSD",
                   "AWS's projected full-month spend at each observation.",
-                  empty="Forecast unavailable"),
+                  empty="Unknown — forecast unavailable"),
             ],
         },
         "Observability", sections=True, time_from="now-30d",

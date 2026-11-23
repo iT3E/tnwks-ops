@@ -426,7 +426,7 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "noValue": "Forecast unavailable"
+                  "noValue": "Unknown — forecast unavailable"
                 },
                 "overrides": []
               }
@@ -657,7 +657,7 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "currencyUSD",
-                  "noValue": "Forecast unavailable",
+                  "noValue": "Unknown — forecast unavailable",
                   "custom": {
                     "lineWidth": 1,
                     "showPoints": "never"

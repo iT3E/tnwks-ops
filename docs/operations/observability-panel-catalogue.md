@@ -286,10 +286,10 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-cloud-cost / AWS / Monthly budget | `tnwks_aws_budget_collected_timestamp_seconds`<br>`tnwks_aws_budget_limit_usd` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/aws-cost.md) |
 | tnwks-cloud-cost / AWS / Budget used | `tnwks_aws_budget_actual_usd`<br>`tnwks_aws_budget_collected_timestamp_seconds`<br>`tnwks_aws_budget_limit_usd` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/aws-cost.md) |
 | tnwks-cloud-cost / AWS / Budget remaining | `tnwks_aws_budget_actual_usd`<br>`tnwks_aws_budget_collected_timestamp_seconds`<br>`tnwks_aws_budget_limit_usd` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/aws-cost.md) |
-| tnwks-cloud-cost / AWS / Projected month-end spend | `tnwks_aws_budget_collected_timestamp_seconds`<br>`tnwks_aws_budget_forecast_usd` | 180s | Forecast unavailable | [Runbook](../../docs/operations/aws-cost.md) |
+| tnwks-cloud-cost / AWS / Projected month-end spend | `tnwks_aws_budget_collected_timestamp_seconds`<br>`tnwks_aws_budget_forecast_usd` | 180s | Unknown — forecast unavailable | [Runbook](../../docs/operations/aws-cost.md) |
 | tnwks-cloud-cost / AWS / Last successful collection | `tnwks_aws_budget_collected_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/aws-cost.md) |
 | tnwks-cloud-cost / AWS / Month-to-date spend over time | `tnwks_aws_budget_actual_usd`<br>`tnwks_aws_budget_collected_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/aws-cost.md) |
-| tnwks-cloud-cost / AWS / Month-end forecast over time | `tnwks_aws_budget_collected_timestamp_seconds`<br>`tnwks_aws_budget_forecast_usd` | 180s | Forecast unavailable | [Runbook](../../docs/operations/aws-cost.md) |
+| tnwks-cloud-cost / AWS / Month-end forecast over time | `tnwks_aws_budget_collected_timestamp_seconds`<br>`tnwks_aws_budget_forecast_usd` | 180s | Unknown — forecast unavailable | [Runbook](../../docs/operations/aws-cost.md) |
 | tnwks-security / Safeguards / Safeguards in the registry | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
 | tnwks-security / Safeguards / With a result | `homelab:security_safeguard_has_result` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
 | tnwks-security / Safeguards / Passing | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
