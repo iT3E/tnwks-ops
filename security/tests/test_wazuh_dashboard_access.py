@@ -32,8 +32,6 @@ def test_internal_ingress_requires_the_same_group_as_the_indexer():
     role = json.loads(ROLES.read_text())["roles"]["tnwks-dashboard-reader"]
     assert group == role["backend_roles"] == ["wazuh-readers"]
     assert annotations["nginx.ingress.kubernetes.io/auth-response-headers"] == "Authorization"
-    assert all(p["allowed_actions"] == ["read"] for p in role["index_permissions"])
-    assert ".kibana" in {index for p in role["index_permissions"] for index in p["index_patterns"]}
     assert role["tenant_permissions"] == [
         {"tenant_patterns": ["global_tenant"], "allowed_actions": ["kibana_all_read"]}
     ]
@@ -41,6 +39,26 @@ def test_internal_ingress_requires_the_same_group_as_the_indexer():
     (source,) = rule["fromEndpoints"]
     assert source["matchLabels"]["k8s:app.kubernetes.io/instance"] == "ingress-nginx-internal"
     assert source["matchLabels"]["io.cilium.k8s.policy.cluster"] == "${CLUSTER_NAME}"
+
+
+def test_dashboard_reader_has_only_the_declared_index_reads():
+    role = json.loads(ROLES.read_text())["roles"]["tnwks-dashboard-reader"]
+    assert role["cluster_permissions"] == ["cluster_composite_ops_ro"]
+    assert all(permission["allowed_actions"] == ["read"] for permission in role["index_permissions"])
+    assert {index for permission in role["index_permissions"] for index in permission["index_patterns"]} == {
+        "wazuh-findings-v5-*",
+        ".ds-wazuh-findings-v5-*",
+        "wazuh-events-v5-*",
+        ".ds-wazuh-events-v5-*",
+        "wazuh-states-sca",
+        "wazuh-states-vulnerabilities",
+        "wazuh-states-fim-*",
+        "wazuh-states-inventory-*",
+        "wazuh-threatintel-enrichments-*",
+        "wazuh-active-responses",
+        ".ds-wazuh-active-responses-*",
+        ".kibana",
+    }
 
 
 def test_jwt_dashboard_has_an_authenticated_ingress_and_a_local_readiness_check():
