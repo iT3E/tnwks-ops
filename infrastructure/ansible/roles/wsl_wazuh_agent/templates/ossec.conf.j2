@@ -1,0 +1,14 @@
+<ossec_config>
+  <agent>
+    <enrollment>
+      <agent_name>{{ wazuh_agent_name }}</agent_name>
+      <groups>{{ wsl_wazuh_agent_group }}</groups>
+    </enrollment>
+    <ssl>
+      <verification_mode>full</verification_mode>
+    </ssl>
+  </agent>
+  <active-response>
+    <disabled>yes</disabled>
+  </active-response>
+</ossec_config>
