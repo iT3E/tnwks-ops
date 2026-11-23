@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -124,3 +125,35 @@ def test_manager_rule_with_another_role_is_refused(manager_rbac):
     with pytest.raises(RuntimeError, match="read-only declaration"):
         manager_rbac.reconcile(manager, "fixture", enabled=True)
     assert manager.mutations == []
+
+
+def test_manager_retries_when_daemons_are_starting_after_login(manager_rbac):
+    class StartingManager(Manager):
+        attempts = 0
+
+        def request_json(self, method, path, auth, body=None):
+            if path == "/security/user/authenticate":
+                return {"token": "fixture-token"}
+            if method == "GET" and self.attempts == 0:
+                self.attempts += 1
+                raise manager_rbac.ManagerStarting("fixture daemon is starting")
+            return super().request_json(method, path, auth, body)
+
+    manager = StartingManager()
+    waits = []
+    manager_rbac.reconcile_on_startup(manager, "fixture", True, clock=lambda: 0, sleep=waits.append)
+    assert waits == [5]
+    assert manager.rule["roles"] == [2]
+
+
+@pytest.mark.parametrize("error", [1017, 1000])
+def test_only_manager_daemon_startup_is_a_retryable_api_error(manager_rbac, error):
+    manager = manager_rbac.LocalManager.__new__(manager_rbac.LocalManager)
+    manager.request = lambda *_: None
+    manager.close = lambda: None
+    manager.getresponse = lambda: SimpleNamespace(
+        status=500, read=lambda: json.dumps({"error": error}).encode(),
+    )
+    with pytest.raises(RuntimeError) as exc:
+        manager.request_json("GET", "/security/rules", "fixture")
+    assert isinstance(exc.value, manager_rbac.ManagerStarting) == (error == 1017)

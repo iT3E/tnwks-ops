@@ -15,6 +15,10 @@ CONDITION = {"FIND": {"backend_roles": "wazuh-readers"}}
 CA = "/etc/wazuh-manager/certs/root-ca.pem"
 
 
+class ManagerStarting(RuntimeError):
+    """The API can accept a login before all manager daemons are ready."""
+
+
 class LocalManager(http.client.HTTPSConnection):
     def __init__(self):
         self.tls = ssl.create_default_context(cafile=CA)
@@ -32,6 +36,13 @@ class LocalManager(http.client.HTTPSConnection):
             raw = response.read()
         finally:
             self.close()
+        if response.status == 500:
+            try:
+                error = json.loads(raw)
+            except ValueError:
+                error = None
+            if isinstance(error, dict) and error.get("error") == 1017:
+                raise ManagerStarting("Manager daemons are not ready")
         if response.status != 200:
             raise RuntimeError(f"{method} {path} returned HTTP {response.status}")
         result = json.loads(raw)
@@ -71,21 +82,31 @@ def reconcile(api, auth, enabled):
         api.request_json("POST", f"/security/roles/{role['id']}/rules?{query}", auth)
 
 
+def reconcile_on_startup(api, basic, enabled, clock=time.monotonic, sleep=time.sleep):
+    deadline = clock() + 300
+    while True:
+        try:
+            answer = api.request_json("POST", "/security/user/authenticate", "Basic " + basic)
+        except (OSError, http.client.HTTPException, RuntimeError):
+            pass
+        else:
+            try:
+                reconcile(api, "Bearer " + answer["token"], enabled)
+            except (OSError, http.client.HTTPException, ManagerStarting):
+                pass
+            else:
+                return
+        remaining = deadline - clock()
+        if remaining <= 0:
+            raise SystemExit("Manager API reconciliation did not become ready")
+        sleep(min(5, remaining))
+
+
 def main():
     enabled = Path("/dashboard-access/enabled").read_text().strip() == "true"
     password = os.environ.pop("WAZUH_MANAGER_API_PASSWORD")
     basic = base64.b64encode(f"wazuh:{password}".encode()).decode()
-    api = LocalManager()
-    deadline = time.monotonic() + 300
-    while True:
-        try:
-            answer = api.request_json("POST", "/security/user/authenticate", "Basic " + basic)
-            break
-        except (OSError, http.client.HTTPException, RuntimeError):
-            if time.monotonic() >= deadline:
-                raise SystemExit("Manager API authentication did not become ready") from None
-            time.sleep(5)
-    reconcile(api, "Bearer " + answer["token"], enabled)
+    reconcile_on_startup(LocalManager(), basic, enabled)
 
 
 if __name__ == "__main__":
