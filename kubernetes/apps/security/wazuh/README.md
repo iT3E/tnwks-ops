@@ -183,9 +183,10 @@ The vendor's `manager-egress-external.yaml` (any address on 443) is not
 applied. The manager and the dashboard have no route out of the cluster, so
 neither reaches an update service.
 
-No route reaches the dashboard: its Service is ClusterIP, there is no
-Ingress or HTTPRoute, and no network rule lets traffic in. How a person
-reaches it, and as which user, is a later change.
+The dashboard's ClusterIP Service receives HTTPS from the internal ingress
+controller under `wazuh-dashboard-ingress`. The indexer reaches the
+Cognito discovery and signing-key endpoints over HTTPS under
+`wazuh-indexer-cognito`. See "Dashboard sign-in" for the access rule.
 
 The agents reach the manager on a shared VIP (`app/service-agents.yaml`,
 `docs/wsl/multi-site.md`, "Shared VIPs"): `WAZUH_AGENTS_LB_ADDR`, an address
@@ -413,7 +414,8 @@ subrequest. The ingress forwards the signed ID token to the dashboard.
 Wazuh verifies the issuer, signature and app audience. It uses Cognito's
 stable subject as the user and the reader group as the access decision.
 That group reads the configured event, finding and state indices and the
-read-only dashboard tenant. The manager's authorization context maps the
+read-only dashboard tenant. Refresh your Cognito session after a group
+membership change. The manager's authorization context maps the
 group to its read-only role. The dashboard Service remains ClusterIP, and
 Cilium permits web ingress only from the local internal ingress controller.
 
