@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.304.0 - 2026-11-23
+
+### Added
+
+* Show consolidated AWS spend in Grafana and automate a provisioning restriction at the $50 monthly AWS budget.
+
 ## v2.303.1 - 2026-11-23
 
 ### Fixed
