@@ -8725,6 +8725,260 @@
     "owner": "homelab operator"
   },
   {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "panel": "Month-to-date spend",
+    "query": "(tnwks_aws_budget_actual_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "query_mode": "instant",
+    "inputs": [
+      "tnwks_aws_budget_actual_usd",
+      "tnwks_aws_budget_collected_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "tnwks_aws_budget_actual_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_collected_timestamp_seconds",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/aws-cost.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "panel": "Monthly budget",
+    "query": "(tnwks_aws_budget_limit_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "query_mode": "instant",
+    "inputs": [
+      "tnwks_aws_budget_collected_timestamp_seconds",
+      "tnwks_aws_budget_limit_usd"
+    ],
+    "sources": [
+      {
+        "metric": "tnwks_aws_budget_collected_timestamp_seconds",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_limit_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/aws-cost.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "panel": "Budget used",
+    "query": "(tnwks_aws_budget_actual_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month())))) / (tnwks_aws_budget_limit_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "tnwks_aws_budget_actual_usd",
+      "tnwks_aws_budget_collected_timestamp_seconds",
+      "tnwks_aws_budget_limit_usd"
+    ],
+    "sources": [
+      {
+        "metric": "tnwks_aws_budget_actual_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_collected_timestamp_seconds",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_limit_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/aws-cost.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "panel": "Budget remaining",
+    "query": "(tnwks_aws_budget_limit_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month())))) - (tnwks_aws_budget_actual_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "query_mode": "instant",
+    "inputs": [
+      "tnwks_aws_budget_actual_usd",
+      "tnwks_aws_budget_collected_timestamp_seconds",
+      "tnwks_aws_budget_limit_usd"
+    ],
+    "sources": [
+      {
+        "metric": "tnwks_aws_budget_actual_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_collected_timestamp_seconds",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_limit_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/aws-cost.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "panel": "Projected month-end spend",
+    "query": "(tnwks_aws_budget_forecast_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "query_mode": "instant",
+    "inputs": [
+      "tnwks_aws_budget_collected_timestamp_seconds",
+      "tnwks_aws_budget_forecast_usd"
+    ],
+    "sources": [
+      {
+        "metric": "tnwks_aws_budget_collected_timestamp_seconds",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_forecast_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 forecast unavailable",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/aws-cost.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "panel": "Last successful collection",
+    "query": "tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} * 1000",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "tnwks_aws_budget_collected_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "tnwks_aws_budget_collected_timestamp_seconds",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/aws-cost.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "panel": "Month-to-date spend over time",
+    "query": "(tnwks_aws_budget_actual_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "query_mode": "range",
+    "inputs": [
+      "tnwks_aws_budget_actual_usd",
+      "tnwks_aws_budget_collected_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "tnwks_aws_budget_actual_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_collected_timestamp_seconds",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/aws-cost.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-cloud-cost",
+    "tab": "AWS",
+    "panel": "Month-end forecast over time",
+    "query": "(tnwks_aws_budget_forecast_usd{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} and ((time() - tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"} < 50400) and (month(tnwks_aws_budget_collected_timestamp_seconds{k8s_cluster=~\"$cluster\",exported_job=\"aws_budget\"}) == scalar(month()))))",
+    "unit": "currencyUSD",
+    "query_mode": "range",
+    "inputs": [
+      "tnwks_aws_budget_collected_timestamp_seconds",
+      "tnwks_aws_budget_forecast_usd"
+    ],
+    "sources": [
+      {
+        "metric": "tnwks_aws_budget_collected_timestamp_seconds",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      },
+      {
+        "metric": "tnwks_aws_budget_forecast_usd",
+        "producer": "AWS Budgets snapshot (aws-budget-metrics workflow and Pushgateway)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 forecast unavailable",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/aws-cost.md",
+    "owner": "homelab operator"
+  },
+  {
     "dashboard": "tnwks-security",
     "tab": "Safeguards",
     "panel": "Safeguards in the registry",

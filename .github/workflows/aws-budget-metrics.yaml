@@ -1,0 +1,40 @@
+---
+name: AWS budget metrics
+
+on:
+  schedule:
+    - cron: "23 */4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: aws-budget-metrics
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'iT3E/tnwks-ops' && github.ref == 'refs/heads/main'
+    runs-on: tnwks-ops-homelab-wsl
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Assume the budget reader role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::654654220436:role/tnwks-grafana-budget-reader
+          allowed-account-ids: "654654220436"
+          role-duration-seconds: 900
+          unset-current-credentials: true
+      - name: Publish the budget snapshot
+        env:
+          BUDGET_ACCOUNT_ID: "654654220436"
+          BUDGET_NAME: tnwks-monthly-aws
+          PUSHGATEWAY_URL: http://pushgateway.monitoring.svc.cluster.local:9091
+        run: python3 -I .github/scripts/aws-budget-metrics.py
