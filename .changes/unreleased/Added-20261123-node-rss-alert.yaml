@@ -1,0 +1,3 @@
+kind: Added
+body: 'homelab-wsl: NodeContainerRssNearLimit warns when the resident memory of a node container, which the kernel can not take back, stays past 85% of its limit for 15 minutes (13 GiB for a worker, 4 GiB for the control plane); site 1 now keeps the cAdvisor series of the resident memory of the root cgroup of each node'
+time: 2026-11-23T03:40:00.000000000+00:00

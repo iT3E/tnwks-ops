@@ -90,9 +90,11 @@ WSL-02, which has that cluster's kubeconfig
   bytes of its 90-day streams in a day, before compression.
   `WslDriveSpaceLow`: the drive under the WSL disk of WSL-02 has less than
   100 GB free (evaluated by site 1, which scrapes both Windows hosts).
-- **Room on site 1:** two alerts of the group `homelab.capacity`
-  (`observability/rules.py`) on the kubelet's `node_memory_working_set_bytes`
-  of each node container of homelab-wsl, scraped on that site. Each node
+- **Room on site 1:** three alerts of the group `homelab.capacity`
+  (`observability/rules.py`) on the memory of each node container of
+  homelab-wsl, scraped on that site: the kubelet's
+  `node_memory_working_set_bytes`, and cAdvisor's `container_memory_rss` of
+  the root cgroup of the node (`id="/"`). Each node
   container has a Docker memory limit: 13 GiB for a worker
   (`memory_workers` of `talos_clusters` in the Ansible inventory) and 4 GiB
   for the control plane (`memory_controlplanes`).
@@ -105,6 +107,8 @@ WSL-02, which has that cluster's kubeconfig
     back the warning of the other worker: read both nodes (step 1).
   - `ControlPlaneContainerMemoryNearLimit` (warning): the control plane
     past 98% for 15 minutes.
+  - `NodeContainerRssNearLimit` (warning): the resident memory of a node
+    past 85% of the limit of its role for 15 minutes.
 
   What the numbers mean:
   - The kubelet does not see these limits. It reports the memory of the
@@ -127,16 +131,24 @@ WSL-02, which has that cluster's kubeconfig
     90% while the anonymous memory is far lower, and the rule waits for 98%:
     there the kernel has almost nothing left to take back. At the time of
     this change the control plane was past 90% and under 98%, so the rule is
-    quiet. No series in Prometheus separates the file pages: the chart drops
-    cAdvisor's series of the node's own cgroup. Read the summary of the
-    kubelet (step 1): `rssBytes` is the anonymous memory, which the kernel
-    can not take back, and the working set less `rssBytes` is mostly file
-    pages.
-  - Open task: bring the RSS of the node's own cgroup
-    (`container_memory_rss` with `id="/"`) into Prometheus on site 1, by one
-    narrow relabel of the kubelet's cAdvisor scrape that keeps that series
-    from the chart's drop, and alert on it, for example past 85% of the
-    limit.
+    quiet. The working set less the resident memory is mostly file pages.
+  - The resident memory is the anonymous memory of the node container,
+    which the kernel can not take back (the nodes have no swap). It is
+    `rssBytes` in the summary of the kubelet (step 1), and the series
+    `container_memory_rss{id="/"}` of cAdvisor gives the same figure. The
+    chart drops each cAdvisor series of a cgroup with no pod, so the scrape
+    of site 1 (`kubernetes/clusters/wsl/apps/kustomization.yaml`) replaces
+    the chart's cAdvisor relabel list with a copy of it that spares that one
+    series of each node. The other series of the scrape do not change, and
+    no rule or board of the chart reads a cAdvisor series with an empty
+    `container` or `image`. A new chart version can change its default
+    list: compare it with the copy at each upgrade
+    (`observability/tests/test_node_container_memory.py` names the version
+    of the copy).
+  - `NodeContainerRssNearLimit` fires when a node has little left that the
+    kernel can take back. At the time of this change the resident memory
+    was about 74% of the limit of the control plane and 53% and 63% of the
+    workers, so the rule is quiet.
 
   Steps, read only first:
   1. The memory of each node:
