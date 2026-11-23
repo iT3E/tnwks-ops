@@ -99,6 +99,7 @@
           - --token-file
           - 'C:\Windows\Temp\tnwks-wazuh-agent\enrollment.token'
         chdir: "{{ windows_wazuh_agent_dir }}"
+      changed_when: true
       no_log: true
 
   always:

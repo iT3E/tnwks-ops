@@ -114,6 +114,7 @@
           - /var/ossec/bin/wazuh-agent-auth
           - --token-file
           - "{{ wsl_wazuh_stage.path }}/enrollment.token"
+      changed_when: true
       no_log: true
 
   always:
