@@ -1,0 +1,3 @@
+kind: Fixed
+body: Load Wazuh reader views for file integrity, endpoint inventory, threat intelligence, and response history.
+time: 2026-11-23T13:56:01.421022583-08:00
