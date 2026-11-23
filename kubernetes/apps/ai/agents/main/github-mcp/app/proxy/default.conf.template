@@ -3,13 +3,18 @@
 # the config to /etc/nginx/conf.d, an emptyDir in memory.
 #
 # Each request to the server gets the token of the pod as its bearer, in
-# place of any credential of the client, and no mode header of a client:
-# the flags of the server set its mode. The MCP gateway drops those headers
-# too; this is the second layer.
+# place of any credential of the client: token.js reads it from the mounted
+# Secret at each request, so a new token needs no restart, and with no
+# token the proxy answers 503 and sends nothing on. Each request also loses
+# the mode headers of a client: the flags of the server set its mode. The
+# MCP gateway drops those headers too; this is the second layer.
 #
 # Port 8080 takes the MCP gateway only (networkpolicy.yaml) and serves /mcp.
 # Port 8081 serves the health path only, for the probes of the kubelet,
 # which come from the host: it never adds the token.
+js_import token from /etc/nginx/templates/token.js;
+js_set $github_mcp_token token.read;
+
 server {
     listen 8081;
     server_tokens off;
@@ -31,12 +36,16 @@ server {
     client_max_body_size 1m;
 
     location = /mcp {
+        # Before the rewrite: its "break" ends the checks of this phase.
+        if ($github_mcp_token = "") {
+            return 503 "no token\n";
+        }
         # The path only: the "?" drops the query string of the client.
         rewrite ^ /mcp? break;
         proxy_pass http://${GITHUB_MCP_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Connection "";
-        proxy_set_header Authorization "Bearer ${GITHUB_MCP_TOKEN}";
+        proxy_set_header Authorization "Bearer $github_mcp_token";
         # An empty value removes the header.
         proxy_set_header Cookie "";
         proxy_set_header X-MCP-Readonly "";

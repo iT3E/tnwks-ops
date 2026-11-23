@@ -13,7 +13,9 @@ configMapGenerator:
   - name: github-mcp-proxy
     files:
       - default.conf.template=./proxy/default.conf.template
+      - token.js=./proxy/token.js
     options:
       annotations:
-        # ${GITHUB_MCP_TOKEN} is for the entrypoint of the proxy, not Flux.
+        # ${GITHUB_MCP_UPSTREAM} is for the entrypoint of the proxy, and
+        # $github_mcp_token for nginx, not Flux.
         kustomize.toolkit.fluxcd.io/substitute: disabled

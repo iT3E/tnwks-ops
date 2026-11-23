@@ -169,8 +169,18 @@ later, with its read credential):
   `GITHUB_MCP_TOKEN`, which the token job of the App writes each 30
   minutes, for the ops repository only and with the permissions of the
   design ([github-token.md](github-token.md)). Each token lives one hour
-  at most. Reloader starts the pod again when the Secret changes, so a
-  token in use is at most about 35 minutes old. The Kustomization of the
+  at most. The proxy mounts the Secret as a volume and reads the file at
+  each request (`proxy/token.js`, with the njs module of the proxy image),
+  so a new token needs no restart. The kubelet updates the files of a
+  Secret volume when the Secret changes, within its sync period and the
+  delay of its cache (a watch by default); a `subPath` mount and an env var
+  are never updated
+  ([Kubernetes docs, Secrets, "Using Secrets as files from a Pod"](https://kubernetes.io/docs/concepts/configuration/secret/#using-secrets-as-files-from-a-pod)).
+  So a token in use is at most about 30 minutes old, plus that delay, and
+  the pod does not restart for a new token. With no token, the
+  placeholder `pending` or a value with a space, the proxy answers 503,
+  sends nothing on, and logs one line `github-mcp-proxy token=<missing,
+  pending or bad>`, never the value. The Kustomization of the
   server depends on the one of the token job. The stopgap token of the
   owner (D143) is gone from the repository. It stays the way back until
   the lead reads one good call through the token of the App: a revert of
