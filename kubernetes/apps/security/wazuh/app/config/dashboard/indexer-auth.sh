@@ -7,7 +7,8 @@ desired=$(mktemp)
 trap 'rm -f "$desired"' EXIT
 
 # Preserve the packaged settings and Basic authentication used by the services.
-if [ "$(cat /dashboard-access/enabled)" = true ]; then
+enabled=$(cat /dashboard-access/enabled)
+if [ "$enabled" = true ]; then
     assistant_users='["admin","kibanaserver","wazuh-manager"]'
     awk '
     /^      multitenancy_enabled: false$/ {
@@ -49,12 +50,24 @@ until security_api --output /dev/null "$api/securityconfig" 2>/dev/null; do
     sleep 5
 done
 
-# Patch only the vendor's assistant mapping. The alternate mapping confines
-# assistant session writes to the vendor's existing local identities.
-security_api --output /dev/null --request PATCH --header 'Content-Type: application/json' \
-    --data "[{\"op\":\"replace\",\"path\":\"/users\",\"value\":$assistant_users}]" \
-    "$api/rolesmapping/wazuh_ai_assistant"
+apply_assistant_mapping() {
+    security_api --output /dev/null --request PATCH --header 'Content-Type: application/json' \
+        --data "[{\"op\":\"replace\",\"path\":\"/users\",\"value\":$assistant_users}]" \
+        "$api/rolesmapping/wazuh_ai_assistant"
+}
 
-OPENSEARCH_JAVA_HOME=$PWD/jdk bash plugins/opensearch-security/tools/securityadmin.sh \
-    -h 127.0.0.1 -p 9200 -icl -nhnv -cacert "$certs/root-ca.pem" \
-    -cert "$certs/admin.pem" -key "$certs/admin-key.pem" -f "$desired" -t config
+apply_auth_config() {
+    OPENSEARCH_JAVA_HOME=$PWD/jdk bash plugins/opensearch-security/tools/securityadmin.sh \
+        -h 127.0.0.1 -p 9200 -icl -nhnv -cacert "$certs/root-ca.pem" \
+        -cert "$certs/admin.pem" -key "$certs/admin-key.pem" -f "$desired" -t config
+}
+
+# Limit assistant permissions before admitting Cognito. When withdrawing
+# access, remove the authentication domain before restoring the mapping.
+if [ "$enabled" = true ]; then
+    apply_assistant_mapping
+    apply_auth_config
+else
+    apply_auth_config
+    apply_assistant_mapping
+fi

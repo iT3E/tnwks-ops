@@ -427,9 +427,10 @@ The indexer uses its existing local admin certificate to apply the
 Cognito authentication domain over loopback. The manager uses its own
 local API to manage the one marked group mapping. Reverting a manifest
 alone does not remove persisted roles. To withdraw access, remove the
-Ingress and router record, set `enabled=false` in the dashboard access
-ConfigMap generator, and let both services restart to remove the auth
-domain and the manager mapping and restore the vendor's assistant mapping.
+Ingress and router record and verify that the route has closed. Then set
+`enabled=false` in the dashboard access ConfigMap generator. Let both
+services restart to remove the auth domain and the manager mapping and
+restore the vendor's assistant mapping.
 Restore the dashboard arguments and probes from the vendor overlay and
 remove the reader role and group.
 
