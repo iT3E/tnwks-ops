@@ -32,10 +32,11 @@ ACCOUNTS = ROOT / "kubernetes/apps/security/wazuh-settings/accounts"
 CONFIG = APP / "config"
 SCRIPTS = APP / "scripts"
 CERTIFICATES = ROOT / "kubernetes/apps/security/wazuh/app/certificates.yaml"
+NOTIFICATIONS_ENABLED = CERTIFICATES.parent / "config/notifications-enabled"
 # The files that the hash in the name of each Job covers, in this order.
 HASHED = {
     "wazuh-accounts": ["config/accounts.json", "scripts/indexer.py", "scripts/accounts.py"],
-    "wazuh-settings-git": ["config/retention.json", "scripts/indexer.py", "scripts/settings.py"],
+    "wazuh-settings-git": ["config/retention.json", "scripts/indexer.py", "scripts/settings.py", "scripts/monitors.py"],
 }
 # The ages of each policy of tnwks: (rollover, delete). A merge that lowers one
 # deletes the data older than the new age at the next run of ISM, with no way
@@ -414,6 +415,32 @@ def run2(fake, argv, cert_end=NOW + 60 * DAY):
 def results(argv) -> dict:
     folder = Path(argv[3].split("=", 1)[1])
     return json.loads((folder / "wazuh-settings/indices.json").read_text())
+
+
+@pytest.mark.parametrize(("before", "after"), [("true", "false"), ("false", "true")])
+def test_step2_checks_the_notification_switch_after_taking_the_lock(tmp_path, monkeypatch, before, after):
+    fake = FakeIndexer()
+    fake.add_settings_user()
+    argv = step2_files(tmp_path)
+    switch = tmp_path / "notifications-enabled"
+    switch.write_text(before + "\n")
+    argv += [f"--notifications-enabled={switch}", "--monitor-cluster=fixture"]
+    events = []
+    flock = settings_step.fcntl.flock
+
+    def acquire(fd, mode):
+        flock(fd, mode)
+        switch.write_text(after + "\n")
+        events.append("locked")
+
+    monkeypatch.setattr(settings_step.fcntl, "flock", acquire)
+    monkeypatch.setattr(settings_step.monitors, "wait_for_channel",
+                        lambda _, enabled, *_args: events.append(("checked", enabled)))
+    monkeypatch.setattr(settings_step.monitors, "apply",
+                        lambda _, cluster, enabled, *_args, **_kwargs: events.append(("applied", enabled)))
+    code, log = run2(fake, argv)
+    assert code == 0, log
+    assert events == ["locked", ("checked", after == "true"), ("applied", after == "true")]
 
 
 def test_step2_makes_the_policies_moves_the_indices_and_writes_the_counts(tmp_path):
@@ -852,6 +879,9 @@ def test_the_index_permissions_of_each_role_are_pinned():
          "allowed_actions": ["indices:monitor/stats"]},
         {"index_patterns": [".wazuh-settings"],
          "allowed_actions": ["indices:data/write/index", "indices:data/write/bulk[s]"]},
+        {"index_patterns": ["wazuh-findings-v5-*", ".ds-wazuh-findings-v5-*"],
+         "fls": ["@timestamp", "wazuh.rule.id", "wazuh.rule.level"],
+         "allowed_actions": ["indices:data/read/search*"]},
     ]
     assert roles["tnwks-converter"]["index_permissions"] == [
         {"index_patterns": ["wazuh-states-sca", "wazuh-states-vulnerabilities", ".wazuh-cti-consumers"],
@@ -903,7 +933,7 @@ def test_the_user_for_settings_may_manage_each_stream_and_its_backing_indices(st
         assert matched(pattern.rstrip("*") + "x"), pattern
 
 
-def test_the_user_for_settings_has_no_security_api_and_reads_no_document():
+def test_the_user_for_settings_has_no_security_api_and_reads_only_monitor_fields():
     role = accounts()["roles"]["tnwks-settings"]
     assert "restapi" not in json.dumps(role) and "security" not in json.dumps(role["cluster_permissions"])
     # The five ISM actions that the script calls, by their names in
@@ -917,6 +947,12 @@ def test_the_user_for_settings_has_no_security_api_and_reads_no_document():
         "cluster:admin/opendistro/ism/managedindex/explain",
         "cluster:admin/setup/settings/update",
         "indices:data/write/bulk",
+        "cluster:admin/opendistro/alerting/monitor/search",
+        "cluster:admin/opendistro/alerting/monitor/write",
+        "cluster:admin/opendistro/alerting/monitor/delete",
+        "cluster:admin/opensearch/notifications/configs/get",
+        "cluster:admin/opensearch/notifications/feature/publish",
+        "indices:data/read/msearch",
     ]
     for permission in role["index_permissions"]:
         assert "read" not in permission["allowed_actions"]
@@ -925,13 +961,16 @@ def test_the_user_for_settings_has_no_security_api_and_reads_no_document():
             # the caller (wazuh-indexer-plugins v5.0.0-rc2, SettingsIndex.java),
             # which OpenSearch runs as a bulk request.
             assert permission["allowed_actions"] == ["indices:data/write/index", "indices:data/write/bulk[s]"]
-        else:
+        elif not permission.get("fls"):
             assert not [a for a in permission["allowed_actions"] if a.startswith("indices:data")]
 
 
 @pytest.mark.parametrize("prefix", sorted(HASHED))
 def test_the_name_of_each_job_carries_the_hash_of_its_files(prefix):
-    digest = hashlib.sha256(b"".join((APP / f).read_bytes() for f in HASHED[prefix])).hexdigest()[:10]
+    inputs = [APP / f for f in HASHED[prefix]]
+    if prefix == "wazuh-settings-git":
+        inputs.append(NOTIFICATIONS_ENABLED)
+    digest = hashlib.sha256(b"".join(p.read_bytes() for p in inputs)).hexdigest()[:10]
     want = f"{prefix}-{digest}"
     found = [d["metadata"]["name"] for name in ("accounts-job.yaml", "settings-job.yaml") for d in docs(name)
              if d["metadata"]["name"].startswith(prefix + "-")]
@@ -981,8 +1020,8 @@ def test_step2_waits_out_a_renewal_of_the_certificates():
                 if d and d.get("kind") == "Certificate"}
     assert renewals == {args["renew-before"]}
     # No move starts in the last margin before a renewal, and a run ends inside it.
-    assert float(args["margin"]) > spec["activeDeadlineSeconds"] >= float(args["wait"]) + float(
-        args["login-wait"])
+    waits = float(args["wait"]) + 2 * float(args["login-wait"])
+    assert float(args["margin"]) > spec["activeDeadlineSeconds"] > waits
 
 
 def test_step2_at_a_restart_of_the_indexer_starts_no_move(tmp_path):

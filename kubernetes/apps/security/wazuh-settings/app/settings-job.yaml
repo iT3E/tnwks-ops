@@ -1,9 +1,8 @@
 ---
 # Step 2 of the settings of the Wazuh indexer, at each merge that changes its
 # files (scripts/settings.py, ../../wazuh/README.md, "Retention"). The name
-# carries the first 10 hex digits of the sha256 of config/retention.json,
-# scripts/indexer.py and scripts/settings.py, one after another, so a change
-# of one of them makes a new Job, Flux runs it, and prune removes the old one.
+# carries the first 10 hex digits of the SHA-256 of the ConfigMap input files
+# in generator order. A change creates a new Job and Flux prunes the old one.
 # security/tests/test_wazuh_settings.py checks the name, and names the right
 # one when it differs. The CronJob of settings-cronjob.yaml runs the same pod
 # once a day.
@@ -16,14 +15,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wazuh-settings-git-719fffc68a
+  name: wazuh-settings-git-5173a29574
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   backoffLimit: 0
   # The wait for the login (300 seconds), the wait for ISM (1200 seconds)
   # and the calls around them.
-  activeDeadlineSeconds: 1800
+  activeDeadlineSeconds: 2100
   template:
     metadata:
       labels:
@@ -52,6 +51,8 @@ spec:
             - --indexer=https://wazuh-indexer.security.svc.cluster.local:9200
             - --ca=/ca/ca.crt
             - --retention=/app/retention.json
+            - --notifications-enabled=/notifications/notifications-enabled
+            - --monitor-cluster=${CLUSTER_NAME}
             - --user=tnwks-settings
             - --secret=/secrets/settings
             - --results=/results
@@ -78,6 +79,9 @@ spec:
             - name: files
               mountPath: /app
               readOnly: true
+            - name: notifications
+              mountPath: /notifications
+              readOnly: true
             - name: ca
               mountPath: /ca
               readOnly: true
@@ -91,6 +95,12 @@ spec:
         - name: files
           configMap:
             name: wazuh-settings-files
+        - name: notifications
+          configMap:
+            name: wazuh-notifications
+            items:
+              - key: notifications-enabled
+                path: notifications-enabled
         # The certificate of the CA of the server, and not its key.
         - name: ca
           secret:

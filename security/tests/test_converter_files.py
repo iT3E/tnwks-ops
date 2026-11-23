@@ -168,6 +168,17 @@ def test_with_no_volume_and_no_file_nothing_is_served(tmp_path):
     assert skipped(part) == {"prowler": 0, "api-check": 0}
 
 
+@pytest.mark.parametrize("count", [0, 2, -1, True, None])
+def test_wazuh_channel_count_and_its_time_are_served_only_for_a_valid_result(tmp_path, count):
+    document = {"version": 1, "source": "wazuh-settings", "time": NOW - 30, "active_channels": count}
+    write(tmp_path, converter.WAZUH_CHANNEL_FILE, json.dumps(document))
+    part = files_for(tmp_path)
+    part.cycle()
+    valid = type(count) is int and count >= 0
+    assert served(part, converter.WAZUH_ACTIVE_CHANNELS) == ({(): count} if valid else {})
+    assert served(part, converter.WAZUH_ACTIVE_CHANNELS_TIME) == ({(): NOW - 30} if valid else {})
+
+
 BAD = {
     "half written": prowler_text(RECORDS)[:-40],
     "empty": "",

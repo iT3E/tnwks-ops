@@ -42,6 +42,7 @@ security/tests/test_wazuh_settings.py.
 """
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -52,6 +53,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
+import monitors
 from indexer import Indexer, NoAnswer, Stop, password_ok, q, read_secret, tls_context
 
 # The policy IDs that the Setup plugin writes again at each election of a
@@ -280,15 +282,13 @@ def certificate_ends(indexer_url: str, ca_file: str) -> list:
     return [ssl.cert_time_to_seconds(cert["notAfter"]) for cert in [served, *context.get_ca_certs()]]
 
 
-def write_results(results: Path, document: dict) -> Path:
-    """wazuh-settings/indices.json, through indices.json.tmp: one move, so no
-    reader sees half a file. Mode 0755 and 0644, so the converter (another
-    user) reads it."""
+def write_results(results: Path, document: dict, name="indices.json") -> Path:
+    """Publish complete result files atomically for the converter."""
     directory = results / SOURCE
     directory.mkdir(parents=True, exist_ok=True)
     directory.chmod(0o755)
-    final = directory / "indices.json"
-    partial = directory / "indices.json.tmp"
+    final = directory / name
+    partial = directory / f"{name}.tmp"
     partial.write_text(json.dumps(document, indent=1) + "\n", encoding="utf-8")
     partial.chmod(0o644)
     os.replace(partial, final)
@@ -300,6 +300,10 @@ def hours(value: str) -> int:
     if not match:
         raise argparse.ArgumentTypeError("hours, as 720h")
     return int(match.group(1))
+
+
+def record_channel_count(results: Path, count: int, stamp: int) -> None:
+    write_results(results, {"version": 1, "source": SOURCE, "time": stamp, "active_channels": count}, "channels.json")
 
 
 def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.time, ends=certificate_ends,
@@ -318,7 +322,11 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
                         help="the renewBefore of the certificates of the server, as 720h")
     parser.add_argument("--margin", type=float, default=3600,
                         help="no move when a certificate renews within this many seconds")
+    parser.add_argument("--notifications-enabled", type=Path, help="the findings notification switch")
+    parser.add_argument("--monitor-cluster", help="Alertmanager cluster label")
     args = parser.parse_args(argv)
+    if (args.notifications_enabled is None) != (args.monitor_cluster is None):
+        parser.error("--notifications-enabled and --monitor-cluster must be supplied together")
     try:
         retention = json.loads(Path(args.retention).read_text())
         check_retention(retention)
@@ -338,6 +346,22 @@ def main(argv=None, send=None, sleep=time.sleep, clock=time.monotonic, now=time.
         else:
             pending = move_indices(client, retention, versions, out, args.wait, sleep=sleep, clock=clock)
             moves = "pending" if pending else "applied"
+        if args.notifications_enabled is not None:
+            results = Path(args.results)
+            lock_dir = results / SOURCE
+            lock_dir.mkdir(parents=True, exist_ok=True)
+            with (lock_dir / ".monitors.lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                # A daily run can span a rollout, including its retention wait.
+                switch = args.notifications_enabled.read_text().strip()
+                if switch not in {"true", "false"}:
+                    raise Stop("invalid Wazuh notification setting")
+                enabled = switch == "true"
+                monitors.wait_for_channel(client, enabled, args.login_wait, sleep, clock)
+                monitors.apply(
+                    client, args.monitor_cluster, enabled, out,
+                    report_count=lambda count: record_channel_count(results, count, int(now())),
+                )
         streams = count_indices(client, retention)
         document = {
             "version": 1, "source": SOURCE, "time": int(now()), "moves": moves,
