@@ -1,3 +1,0 @@
-kind: Fixed
-body: Seed the manager endpoint in the pinned Wazuh agent templates before token enrollment.
-time: 2026-11-23T18:54:21.621193096-08:00

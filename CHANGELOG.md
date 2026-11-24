@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.308.2 - 2026-11-24
+
+### Fixed
+
+* Seed the manager endpoint in the pinned Wazuh agent templates before token enrollment.
+
 ## v2.308.1 - 2026-11-24
 
 ### Fixed
