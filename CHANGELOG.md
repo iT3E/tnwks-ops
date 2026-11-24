@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.311.0 - 2026-11-24
+
+### Added
+
+* Enable Wazuh findings notifications through site 2 Alertmanager.
+
 ## v2.310.0 - 2026-11-24
 
 ### Added
