@@ -44,7 +44,7 @@ metadata:
   labels:
     pyrra.dev/k8s_cluster: "${CLUSTER_NAME}"
 spec:
-  description: Every name on the shared VIPs works from this site as a client uses it; one failing name counts against it.
+  description: Every shared VIP name assigned to this site works as a client uses it.
   target: "99"
   window: 14d
   indicator:

@@ -390,6 +390,7 @@ spec:
                   args:
                     - opensearch-dashboards
                     - --opensearch_security.auth.type=jwt
+                    - "--opensearch_security.auth.logout_url=https://auth.${SECRET_DOMAIN}/logout?client_id=${OAUTH2_PROXY_CLIENT_ID}&logout_uri=https%3A%2F%2Foauth2.${INTERNAL_DOMAIN}%2Foauth2%2Fsign_out"
                     - '--opensearch.requestHeadersAllowlist=["Authorization","securitytenant"]'
                     - --opensearch_security.cookie.secure=true
                     - --opensearch_security.multitenancy.enabled=true

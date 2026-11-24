@@ -604,7 +604,7 @@ digest that changes on any upstream publish, so it isn't recorded as an event.
 
 ## Ingress and shared-VIP evidence
 
-Each site's collector uses every name on the shared VIPs (`dns-sites.tf`) as a
+Each site's collector uses its assigned names on the shared VIPs (`dns-sites.tf`) as a
 client would: the router's DNS answer must be that name's VIP (A only; the
 router answers AAAA with NXDOMAIN, which musl treats as no such name), TLS must
 verify against the system CAs, and a `GET /` must be routed: any answer but the
@@ -612,11 +612,12 @@ default backend's 404 or a 5xx (an app's own 400, or a sign-in's 302 or 401,
 still proves the path). `homelab:ingress_state` is per site and name, with the DNS
 match, HTTP status and certificate expiry beside it. Each site's internal
 ingress adds an `X-Homelab-Site` header naming itself, read into
-`homelab_ingress_served_by_info`.
+`homelab_ingress_served_by_info`. The inventory probes Wazuh only on
+`homelab-wsl-02`, where its ingress runs.
 
 A pod, like the WSL host, reaches its own site's ingress for either VIP (each
 distro prefers its own cluster's announcement), so these probes show each
-site's readiness to serve every name, not the LAN client's route. That route is
+site's readiness to serve its assigned names, not the LAN client's route. That route is
 `homelab:shared_vip_route`: the preferred site while it carries routes, else
 the other. A site carries routes while its router session is up and it sends the
 router at least one prefix: with a site's nodes down, its distro's FRR keeps the

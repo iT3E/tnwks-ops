@@ -32,6 +32,9 @@ def test_internal_ingress_requires_the_same_group_as_the_indexer():
     role = json.loads(ROLES.read_text())["roles"]["tnwks-dashboard-reader"]
     assert group == role["backend_roles"] == ["wazuh-readers"]
     assert annotations["nginx.ingress.kubernetes.io/auth-response-headers"] == "Authorization"
+    logout = annotations["nginx.ingress.kubernetes.io/server-snippet"]
+    assert "location = /auth/logout {" in logout and "if ($request_method != POST)" in logout
+    assert "return 204;" in logout
     assert role["tenant_permissions"] == [
         {"tenant_patterns": ["global_tenant"], "allowed_actions": ["kibana_all_read"]}
     ]
@@ -67,6 +70,12 @@ def test_jwt_dashboard_has_an_authenticated_ingress_and_a_local_readiness_check(
     patch = next(p["patch"] for p in server["spec"]["patches"] if p["target"]["name"] == "wazuh-dashboard")
     (dashboard,) = yaml.safe_load(patch)["spec"]["template"]["spec"]["containers"]
     assert "--opensearch_security.auth.type=jwt" in dashboard["args"]
+    (logout_arg,) = [arg for arg in dashboard["args"] if arg.startswith("--opensearch_security.auth.logout_url=")]
+    logout = urlsplit(logout_arg.split("=", 1)[1])
+    assert (logout.scheme, logout.netloc, logout.path) == ("https", "auth.${SECRET_DOMAIN}", "/logout")
+    assert parse_qs(logout.query) == {
+        "client_id": ["${OAUTH2_PROXY_CLIENT_ID}"], "logout_uri": ["https://oauth2.${INTERNAL_DOMAIN}/oauth2/sign_out"],
+    }
     assert "--opensearch_security.multitenancy.enabled=true" in dashboard["args"]
     assert "--opensearch_security.multitenancy.tenants.enable_private=false" in dashboard["args"]
     assert not any(arg.startswith("--opensearch_security.readonly_mode.roles") for arg in dashboard["args"])

@@ -143,6 +143,20 @@ def test_content_probe_only_where_the_app_runs(small_inventory, monkeypatch):
     assert 'probe_success{app="test",k8s_cluster="one",observability_target="service",observer_cluster="one"} 1' in out
 
 
+def test_ingress_expectations_use_the_declared_site_scope(small_inventory):
+    small_inventory["ingress"] = [
+        {"name": "shared", "vip": "192.0.2.1"},
+        {"name": "local", "vip": "192.0.2.1", "clusters": ["two"]},
+    ]
+    collector = Collector(FakeApi(), small_inventory, "one", clock=lambda: 1000)
+    assert [item["name"] for item in collector.ingress_for("one")] == ["shared"]
+    assert [item["name"] for item in collector.ingress_for("two")] == ["shared", "local"]
+    expected = [line for line in collector.collect().decode().splitlines()
+                if line.startswith("homelab_expected_ingress_info{")]
+    assert any('k8s_cluster="two",name="local"' in line for line in expected)
+    assert all('k8s_cluster="one",name="local"' not in line for line in expected)
+
+
 def test_recovery_prerequisites_from_evidence_only(small_inventory, monkeypatch):
     import collector
     now = 2_000_000_000

@@ -97,6 +97,10 @@ class Collector:
                 for app in self.inventory["apps"] for cluster in app["clusters"]
                 for db in app.get("databases", [])]
 
+    def ingress_for(self, cluster):
+        return [name for name in self.inventory.get("ingress", [])
+                if "clusters" not in name or cluster in name["clusters"]]
+
     def collect(self) -> bytes:
         with self.lock:
             return self._collect()
@@ -122,8 +126,8 @@ class Collector:
                 # This exporter cannot certify a database fence or an application restore
                 # from a Ready workload. Unsupported evidence is deliberately absent.
 
-        for name in self.inventory.get("ingress", []):
-            for site in self.inventory["sites"]:
+        for site in self.inventory["sites"]:
+            for name in self.ingress_for(site["cluster"]):
                 metrics.add("homelab_expected_ingress_info", 1, k8s_cluster=site["cluster"],
                             name=name["name"], vip=name["vip"], observer_cluster=self.cluster)
 
@@ -762,7 +766,7 @@ def main():
                         peers.add("homelab_archive_oldest_sample_timestamp_seconds", site["oldest"], **scope)
                         peers.add("homelab_archive_blocks", site["blocks"], **scope)
                         peers.add("homelab_archive_bytes", site["bytes"], **scope)
-                names = inventory.get("ingress", [])
+                names = collector.ingress_for(args.cluster)
                 with ThreadPoolExecutor(max_workers=8) as pool:
                     results = list(pool.map(lambda n: ingress_probe(n["host"], n["vip"]), names))
                 for name, result in zip(names, results):

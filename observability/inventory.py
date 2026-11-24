@@ -199,6 +199,8 @@ PROBES = {
 
 
 SITE_RECORDS = ROOT / "infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf"
+# Entries here are probed only at the sites that run the service.
+INGRESS_CLUSTERS = {"wazuh": ["homelab-wsl-02"]}
 
 
 def shared_vips():
@@ -212,6 +214,9 @@ def shared_vips():
     names = [{"name": host.split(".")[0], "host": host, "vip": vips[local]["address"]}
              for host, local in re.findall(
                  r'name\s*=\s*"([^"]+)"\s*\n\s*address\s*=\s*local\.(vip_wsl(?:_02)?)\b', text)]
+    for name in names:
+        if name["name"] in INGRESS_CLUSTERS:
+            name["clusters"] = INGRESS_CLUSTERS[name["name"]]
     assert {n["vip"] for n in names} == {v["address"] for v in vips.values()}, "a shared VIP has no names"
     return list(vips.values()), sorted(names, key=lambda n: n["name"])
 
@@ -247,6 +252,7 @@ def inventory():
             url, expect = PROBES[name]
             apps[-1]["probe"] = {"url": url, "expect": expect}
     vips, ingress = shared_vips()
+    assert all(set(name.get("clusters", ())) <= {site["cluster"] for site in sites} for name in ingress)
     return {"version": 1, "sites": sites, "apps": apps, "databases": databases(sites), "objectives": OBJECTIVES,
             "other_databases": OTHER_DATABASES,
             "vips": vips, "ingress": ingress, "ai": ai_inventory(sites)}
