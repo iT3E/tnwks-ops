@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.310.0 - 2026-11-24
+
+### Added
+
+* Enroll the site 2 Windows and WSL Wazuh agents through the Ansible Hosts workflow.
+
 ## v2.309.0 - 2026-11-24
 
 ### Added
