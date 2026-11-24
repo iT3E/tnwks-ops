@@ -71,6 +71,12 @@
     # windows_host_check).
     - role: wsl_host_check
       tags: [host-check]
+    - role: wsl_wazuh_agent
+      vars:
+        wazuh_rollout_host: "{{ inventory_hostname }}"
+        wazuh_agent_name: "{{ wsl_wazuh_rollout_name }}"
+      when: wsl_wazuh_rollout_name is defined
+      tags: [wazuh-agent]
     # The local user of the host server of the main agent, where the site
     # turns it on (docs/wsl/host-mcp-user.md). Last: without the flag of the
     # owner it checks only, and a difference fails the host for the rest of

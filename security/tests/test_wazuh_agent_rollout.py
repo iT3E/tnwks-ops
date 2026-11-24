@@ -10,40 +10,53 @@ ROOT = Path(__file__).resolve().parents[2]
 ANSIBLE = ROOT / "infrastructure/ansible"
 GROUPS = ROOT / "kubernetes/apps/security/wazuh/agent-groups"
 AGENT_ROLES = {"windows_wazuh_agent", "wsl_wazuh_agent"}
-STANDING = {"windows-host.yml", "wsl-distro.yml"}
+STANDING = {
+    "windows-host.yml": ("windows_hosts", "windows_wazuh_agent", "windows_wazuh_rollout_name"),
+    "wsl-distro.yml": ("wsl_distros", "wsl_wazuh_agent", "wsl_wazuh_rollout_name"),
+}
+OPT_INS = {
+    "inventory/host_vars/DESKTOP-HKE05KI/main.yml": {"windows_wazuh_rollout_name": "windows-site1"},
+    "inventory/host_vars/WSL-02/main.yml": {"windows_wazuh_rollout_name": "windows-site2"},
+    "inventory/host_vars/WSL-02-ubuntu/main.yml": {"wsl_wazuh_rollout_name": "wsl-site2"},
+}
 
 
-def test_hosts_workflow_reaches_only_the_approved_windows_agent():
+def test_hosts_workflow_reaches_only_approved_endpoints():
     workflow = (ROOT / ".github/workflows/ansible-hosts.yaml").read_text()
     assert all(f"playbooks/{play}" in workflow for play in STANDING)
     assert "wazuh-agents.yml" not in workflow
     for path in [*ANSIBLE.glob("playbooks/*.yml"), *ANSIBLE.glob("roles/**/*.yml")]:
-        if path.name in {"wazuh-agents.yml", "windows-host.yml"} or AGENT_ROLES.intersection(path.parts):
+        if path.name in {"wazuh-agents.yml", *STANDING} or AGENT_ROLES.intersection(path.parts):
             continue
         text = path.read_text()
         assert "wazuh-agents.yml" not in text, path
         assert all(role not in text for role in AGENT_ROLES), path
-    windows_playbook = (ANSIBLE / "playbooks/windows-host.yml").read_text()
-    assert windows_playbook.count("windows_wazuh_agent") == 1
-    assert "wsl_wazuh_agent" not in windows_playbook
-    assert "wazuh-agents.yml" not in windows_playbook
-    plays = yaml.safe_load(windows_playbook)
-    (windows_play,) = [play for play in plays if play["hosts"] == "windows_hosts"]
-    (agent,) = [role for role in windows_play["roles"] if role["role"] == "windows_wazuh_agent"]
-    assert agent["when"] == "windows_wazuh_rollout_name is defined"
-    assert agent["vars"] == {
-        "wazuh_rollout_host": "{{ inventory_hostname }}",
-        "wazuh_agent_name": "{{ windows_wazuh_rollout_name }}",
-    }
+    for playbook, (group, role, flag) in STANDING.items():
+        text = (ANSIBLE / "playbooks" / playbook).read_text()
+        assert text.count(role) == 1
+        assert all(other not in text for other in AGENT_ROLES - {role})
+        assert "wazuh-agents.yml" not in text
+        (play,) = [play for play in yaml.safe_load(text) if play["hosts"] == group]
+        (agent,) = [entry for entry in play["roles"] if entry["role"] == role]
+        assert agent["when"] == f"{flag} is defined"
+        assert agent["vars"] == {
+            "wazuh_rollout_host": "{{ inventory_hostname }}",
+            "wazuh_agent_name": "{{ " + flag + " }}",
+        }
+        assert any(
+            "ansible_play_hosts_all == [inventory_hostname]" in task["ansible.builtin.assert"]["that"]
+            for task in role_tasks(role, "main.yml") if "ansible.builtin.assert" in task
+        )
+
     opt_ins = {}
+    flags = {flag for _, _, flag in STANDING.values()}
     for path in ANSIBLE.glob("inventory/**/*.yml"):
         if not path.name.endswith(".sops.yml"):
             variables = yaml.safe_load(path.read_text()) or {}
-            if "windows_wazuh_rollout_name" in variables:
-                opt_ins[path.relative_to(ANSIBLE).as_posix()] = variables["windows_wazuh_rollout_name"]
-    assert opt_ins == {"inventory/host_vars/DESKTOP-HKE05KI/main.yml": "windows-site1"}
-    windows = role_tasks("windows_wazuh_agent", "main.yml")
-    assert "ansible_play_hosts_all == [inventory_hostname]" in windows[0]["ansible.builtin.assert"]["that"]
+            enabled = {flag: variables[flag] for flag in flags if flag in variables}
+            if enabled:
+                opt_ins[path.relative_to(ANSIBLE).as_posix()] = enabled
+    assert opt_ins == OPT_INS
     plays = yaml.safe_load((ANSIBLE / "playbooks/wazuh-agents.yml").read_text())
     assert plays[0]["any_errors_fatal"]
     assert {role for play in plays for role in play.get("roles", [])} == AGENT_ROLES
@@ -94,6 +107,12 @@ def test_wsl_role_verifies_configuration_before_starting(tmp_path):
     main = role_tasks("wsl_wazuh_agent", "main.yml")
     present = role_tasks("wsl_wazuh_agent", "present.yml")
     assert any(t.get("ansible.builtin.apt") == {"name": "wazuh-agent", "state": "absent"} for t in main)
+    assert "ansible.builtin.setup" in main[0]
+    (enrollment,) = [t for t in present if "block" in t]
+    assert "not ansible_check_mode" in enrollment["when"]
+    (token_copy,) = [t for t in enrollment["block"] if t.get("no_log") and "ansible.builtin.copy" in t]
+    assert token_copy["diff"] is False
+    assert token_copy["ansible.builtin.copy"]["mode"] == "0600"
     verification = present[-2]["ansible.builtin.command"]["argv"][-1]
     script = verification.replace('Path("/var/ossec/etc")', f"Path({str(tmp_path)!r})")
     assert script != verification

@@ -15,6 +15,10 @@ windows_desktop_user: >-
 # windows_lan_bridge). Re-pin it here and in known_hosts if WSL ever picks
 # another subnet.
 ansible_host: 172.25.16.1
+
+# Approved Wazuh rollout through this site's Ansible Hosts apply.
+windows_wazuh_rollout_name: windows-site2
+
 # Replaces group_vars/all/connection.yml for this host: the same pinned host
 # keys, plus the jump. The jump logs in with the distro's key, as the user
 # of the distro (wsl_distro_user of WSL-02-ubuntu, from the same value: a
