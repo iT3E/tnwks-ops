@@ -1,5 +1,8 @@
 <ossec_config>
   <agent>
+    <manager>
+      <endpoint>MANAGER_IP</endpoint>
+    </manager>
     <enrollment>
       <agent_name>{{ wazuh_agent_name }}</agent_name>
       <groups>{{ wsl_wazuh_agent_group }}</groups>

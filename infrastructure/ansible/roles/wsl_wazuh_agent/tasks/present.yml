@@ -100,7 +100,11 @@
         from xml.etree import ElementTree
 
         config_dir = Path("/var/ossec/etc")
-        disabled = ElementTree.parse(config_dir / "ossec.conf").findall("active-response/disabled")
+        config = ElementTree.parse(config_dir / "ossec.conf")
+        endpoints = config.findall("agent/manager/endpoint")
+        if len(endpoints) != 1 or (endpoints[0].text or "").strip() in ("", "MANAGER_IP"):
+            raise SystemExit("Wazuh enrollment must configure the manager endpoint")
+        disabled = config.findall("active-response/disabled")
         if len(disabled) != 1 or (disabled[0].text or "").strip() != "yes":
             raise SystemExit("Wazuh active response must be disabled")
 

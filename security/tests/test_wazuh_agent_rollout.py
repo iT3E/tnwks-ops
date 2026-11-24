@@ -40,6 +40,13 @@ def role_tasks(role, name):
     return yaml.safe_load((ANSIBLE / "roles" / role / "tasks" / name).read_text())
 
 
+def test_both_agent_templates_leave_an_endpoint_for_rc2_token_enrollment():
+    for role in AGENT_ROLES:
+        template = ANSIBLE / "roles" / role / "templates/ossec.conf.j2"
+        config = ElementTree.parse(template)
+        assert config.findtext("agent/manager/endpoint") == "MANAGER_IP"
+
+
 def test_windows_role_uses_the_rc2_service_and_can_remove_the_exact_package():
     main = role_tasks("windows_wazuh_agent", "main.yml")
     present = role_tasks("windows_wazuh_agent", "present.yml")
@@ -68,10 +75,15 @@ def test_wsl_role_verifies_configuration_before_starting(tmp_path):
     assert present[-1]["ansible.builtin.systemd_service"]["state"] == "started"
     config = tmp_path / "ossec.conf"
     options = tmp_path / "local_internal_options.conf"
-    disabled = "<ossec_config><active-response><disabled>yes</disabled></active-response></ossec_config>"
+    disabled = (
+        "<ossec_config><agent><manager><endpoint>manager.test:1517</endpoint></manager></agent>"
+        "<active-response><disabled>yes</disabled></active-response></ossec_config>"
+    )
     safe = "logcollector.remote_commands=0\nwazuh_command.remote_commands=0\nsca.remote_commands=0\n"
     for xml, flags, expected in [
         (disabled, safe, 0),
+        (disabled.replace("manager.test:1517", "MANAGER_IP"), safe, 1),
+        (disabled.replace("<endpoint>manager.test:1517</endpoint>", ""), safe, 1),
         (disabled.replace("yes", "no"), safe, 1),
         (disabled, safe.replace("remote_commands=0", "remote_commands=1", 1), 1),
         (disabled, safe + "sca.remote_commands=0\n", 1),
