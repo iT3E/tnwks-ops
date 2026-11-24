@@ -161,6 +161,12 @@
     # each host (security/README.md, the source host-check).
     - role: windows_host_check
       tags: [host-check]
+    - role: windows_wazuh_agent
+      vars:
+        wazuh_rollout_host: "{{ inventory_hostname }}"
+        wazuh_agent_name: "{{ windows_wazuh_rollout_name }}"
+      when: windows_wazuh_rollout_name is defined
+      tags: [wazuh-agent]
     # Check-only by default (an sshd_config rewrite restarts sshd under the
     # session). Like host-settings, near the end: a failed assertion stops
     # nothing else.

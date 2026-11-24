@@ -12,6 +12,9 @@ windows_desktop_user: >-
 # kubernetes/clusters/wsl/cluster-settings.yaml.
 ansible_host: 172.26.80.1
 
+# Approved Wazuh rollout through this site's Ansible Hosts apply.
+windows_wazuh_rollout_name: windows-site1
+
 # homelab-wsl-02's Prometheus scrapes the security series of this host's
 # windows_exporter over the LAN (from WSL-02's address, where its pods'
 # traffic leaves), so the host check of this host and its distro has a

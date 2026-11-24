@@ -5,10 +5,14 @@
     get_checksum: false
   register: windows_wazuh_keys
 
-- name: Require the operator's token file for first enrollment
+- name: Require exactly one protected token source for first enrollment
   ansible.builtin.assert:
-    that: wazuh_agent_token_file | default('') | length > 0
+    that: >-
+      (wazuh_agent_token_file | default('') | length > 0) !=
+      (windows_wazuh_agent_enrollment_token | default('') | length > 0)
+    fail_msg: First enrollment requires either a controller token file or a SOPS host token.
     quiet: true
+  no_log: true
   when:
     - not ansible_check_mode
     - windows_wazuh_keys.stat.size | default(0) == 0
@@ -31,11 +35,36 @@
         checksum_algorithm: sha256
         dest: 'C:\Windows\Temp\tnwks-wazuh-agent\wazuh-agent.msi'
 
-    - name: Install the verified MSI
+    - name: Generate the transform that holds Wazuh service startup
+      ansible.windows.win_powershell:
+        error_action: stop
+        parameters:
+          PackagePath: 'C:\Windows\Temp\tnwks-wazuh-agent\wazuh-agent.msi'
+          TransformPath: 'C:\Windows\Temp\tnwks-wazuh-agent\service-disabled.mst'
+        script: "{{ lookup('ansible.builtin.file', 'hold-service-start.ps1') }}"
+      when: not windows_wazuh_service.exists
+
+    - name: Install the verified MSI with service startup held
       ansible.windows.win_package:
         path: 'C:\Windows\Temp\tnwks-wazuh-agent\wazuh-agent.msi'
+        arguments:
+          - 'TRANSFORMS=C:\Windows\Temp\tnwks-wazuh-agent\service-disabled.mst'
+          - TRANSFORMSSECURE=1
         state: present
       when: not windows_wazuh_service.exists
+
+    - name: Check that the new Windows service is stopped and disabled
+      ansible.windows.win_service_info:
+        name: WazuhSvc
+      register: windows_wazuh_held_service
+
+    - name: Verify the Windows installation held service startup
+      ansible.builtin.assert:
+        that:
+          - windows_wazuh_held_service.services | length == 1
+          - windows_wazuh_held_service.services[0].state == 'stopped'
+          - windows_wazuh_held_service.services[0].start_mode == 'disabled'
+        quiet: true
 
     - name: Record the verified package on the Windows host
       ansible.windows.win_copy:
@@ -58,7 +87,8 @@
 
     - name: Copy the one-use token into the protected staging directory
       ansible.windows.win_copy:
-        src: "{{ wazuh_agent_token_file }}"
+        src: "{{ wazuh_agent_token_file | default(omit, true) }}"
+        content: "{{ windows_wazuh_agent_enrollment_token | default(omit, true) }}"
         dest: 'C:\Windows\Temp\tnwks-wazuh-agent\enrollment.token'
       no_log: true
       diff: false
