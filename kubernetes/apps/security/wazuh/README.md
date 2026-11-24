@@ -434,6 +434,10 @@ and Cilium permits web ingress only from the local internal ingress controller.
 The local readiness check verifies the certificate and checks `/api/status`
 in JWT mode.
 
+The dashboard ingress routes the logout button's request to the JWT logout
+handler and expires the manager session cookies. The browser then signs out
+through Cognito and the shared OAuth2 proxy.
+
 The indexer uses its existing local admin certificate to apply the
 Cognito authentication domain over loopback. The manager uses its own
 local API to manage both group mappings. To revoke the admin grant, set

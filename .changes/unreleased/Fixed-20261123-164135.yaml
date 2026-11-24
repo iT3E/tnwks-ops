@@ -1,0 +1,3 @@
+kind: Fixed
+body: Connect Wazuh dashboard logout to Cognito and probe its ingress on the hosting site.
+time: 2026-11-23T16:41:35.183479529-08:00

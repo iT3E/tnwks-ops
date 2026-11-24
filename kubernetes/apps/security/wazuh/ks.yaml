@@ -362,6 +362,7 @@ spec:
           name: wazuh-dashboard
           annotations:
             secret.reloader.stakater.com/reload: "wazuh-dashboard,wazuh-ca"
+            configmap.reloader.stakater.com/reload: wazuh-dashboard-logout
         spec:
           template:
             spec:
@@ -390,11 +391,19 @@ spec:
                   args:
                     - opensearch-dashboards
                     - --opensearch_security.auth.type=jwt
+                    - --opensearch_security.auth.logout_url
+                    - $(WAZUH_DASHBOARD_LOGOUT_URL)
                     - '--opensearch.requestHeadersAllowlist=["Authorization","securitytenant"]'
                     - --opensearch_security.cookie.secure=true
                     - --opensearch_security.multitenancy.enabled=true
                     - --opensearch_security.multitenancy.tenants.enable_private=false
                     - --status.allowAnonymous=true
+                  env:
+                    - name: WAZUH_DASHBOARD_LOGOUT_URL
+                      valueFrom:
+                        configMapKeyRef:
+                          name: wazuh-dashboard-logout
+                          key: url
                   startupProbe:
                     exec: null
                     tcpSocket:
