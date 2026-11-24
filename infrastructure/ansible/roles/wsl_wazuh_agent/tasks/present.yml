@@ -6,10 +6,14 @@
     get_checksum: false
   register: wsl_wazuh_keys
 
-- name: Require the operator's token file for first enrollment
+- name: Require exactly one protected token source for first enrollment
   ansible.builtin.assert:
-    that: wazuh_agent_token_file | default('') | length > 0
+    that: >-
+      (wazuh_agent_token_file | default('') | length > 0) !=
+      (wsl_wazuh_agent_enrollment_token | default('') | length > 0)
+    fail_msg: First enrollment requires either a controller token file or a SOPS host token.
     quiet: true
+  no_log: true
   when:
     - not ansible_check_mode
     - wsl_wazuh_keys.stat.size | default(0) == 0
@@ -66,7 +70,8 @@
 
     - name: Copy the one-use token into the protected staging directory
       ansible.builtin.copy:
-        src: "{{ wazuh_agent_token_file }}"
+        src: "{{ wazuh_agent_token_file | default(omit, true) }}"
+        content: "{{ wsl_wazuh_agent_enrollment_token | default(omit, true) }}"
         dest: "{{ wsl_wazuh_stage.path }}/enrollment.token"
         owner: root
         mode: "0600"
@@ -116,7 +121,7 @@
                 raise SystemExit(f"Wazuh remote commands must be disabled: {option}")
   changed_when: false
   check_mode: false
-  when: not ansible_check_mode or wsl_wazuh_keys.stat.exists
+  when: not ansible_check_mode or wsl_wazuh_keys.stat.size | default(0) > 0
 
 - name: Enable and start the enrolled WSL agent
   become: true
@@ -124,4 +129,4 @@
     name: wazuh-agent
     enabled: true
     state: started
-  when: not ansible_check_mode or wsl_wazuh_keys.stat.exists
+  when: not ansible_check_mode or wsl_wazuh_keys.stat.size | default(0) > 0

@@ -1,11 +1,16 @@
 ---
+- name: Gather WSL agent platform facts
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', architecture, os_family]
+  when: ansible_facts.architecture is not defined or ansible_facts.os_family is not defined
+
 - name: Require approval for the selected WSL distro
   ansible.builtin.assert:
     that:
       - wazuh_rollout_host | default('') == inventory_hostname
       - ansible_play_hosts_all == [inventory_hostname]
-      - ansible_architecture == 'x86_64'
-      - ansible_os_family == 'Debian'
+      - ansible_facts.architecture == 'x86_64'
+      - ansible_facts.os_family == 'Debian'
       - wsl_wazuh_agent_group == 'wsl-distro'
       - wazuh_agent_state | default('present') in ['present', 'absent']
       - >-

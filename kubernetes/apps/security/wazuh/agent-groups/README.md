@@ -1,8 +1,9 @@
 # Wazuh agent rollout
 
-The Ansible Hosts workflow manages the Windows agent on hosts that set
-`windows_wazuh_rollout_name` in their inventory host variables. The role
-requires a play limited to one Windows host. The operator playbook also
+The Ansible Hosts workflow manages agents on hosts that set
+`windows_wazuh_rollout_name` or `wsl_wazuh_rollout_name` in their inventory
+host variables. Each role requires a play limited to one endpoint of its
+type. The operator playbook also
 requires a one-host limit and an explicit matching `wazuh_rollout_host`.
 
 The Windows and amd64 Debian packages match the
@@ -27,9 +28,10 @@ Both configurations disable active response.
    directory as its token output. The script prompts for the manager API
    account's password, publishes the group configuration from this checkout,
    and requests a one-use token valid for one hour.
-3. For an approved Windows GitOps rollout, put the agent alias in the
+3. For an approved GitOps rollout, put the agent alias in the
    host's inventory and the one-use token in its SOPS host variables as
-   `windows_wazuh_agent_enrollment_token`. The PR check inspects the host.
+   `windows_wazuh_agent_enrollment_token` or
+   `wsl_wazuh_agent_enrollment_token`. The PR check inspects the host.
    The apply after merge consumes the token on first enrollment.
    For a rollout using `infrastructure/ansible/playbooks/wazuh-agents.yml`,
    pass the token file's absolute path as `wazuh_agent_token_file`, the
