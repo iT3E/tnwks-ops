@@ -34,7 +34,10 @@ def test_internal_ingress_requires_the_same_group_as_the_indexer():
     assert annotations["nginx.ingress.kubernetes.io/auth-response-headers"] == "Authorization"
     logout = annotations["nginx.ingress.kubernetes.io/server-snippet"]
     assert "location = /auth/logout {" in logout and "if ($request_method != POST)" in logout
-    assert "return 204;" in logout
+    assert "rewrite ^ /api/v1/auth/logout last;" in logout
+    cookies = annotations["nginx.ingress.kubernetes.io/configuration-snippet"]
+    assert '$request_uri = "/auth/logout"' in cookies
+    assert all(f"{name}=; Path=/; Max-Age=0;" in cookies for name in ("wz-token", "wz-user", "wz-api"))
     assert role["tenant_permissions"] == [
         {"tenant_patterns": ["global_tenant"], "allowed_actions": ["kibana_all_read"]}
     ]
@@ -70,11 +73,11 @@ def test_jwt_dashboard_has_an_authenticated_ingress_and_a_local_readiness_check(
     patch = next(p["patch"] for p in server["spec"]["patches"] if p["target"]["name"] == "wazuh-dashboard")
     (dashboard,) = yaml.safe_load(patch)["spec"]["template"]["spec"]["containers"]
     assert "--opensearch_security.auth.type=jwt" in dashboard["args"]
-    (logout_arg,) = [arg for arg in dashboard["args"] if arg.startswith("--opensearch_security.auth.logout_url=")]
-    logout = urlsplit(logout_arg.split("=", 1)[1])
-    assert (logout.scheme, logout.netloc, logout.path) == ("https", "auth.${SECRET_DOMAIN}", "/logout")
-    assert parse_qs(logout.query) == {
-        "client_id": ["${OAUTH2_PROXY_CLIENT_ID}"], "logout_uri": ["https://oauth2.${INTERNAL_DOMAIN}/oauth2/sign_out"],
+    logout_index = dashboard["args"].index("--opensearch_security.auth.logout_url")
+    assert dashboard["args"][logout_index + 1] == "$(WAZUH_DASHBOARD_LOGOUT_URL)"
+    env = {item["name"]: item["valueFrom"] for item in dashboard["env"]}
+    assert env["WAZUH_DASHBOARD_LOGOUT_URL"] == {
+        "configMapKeyRef": {"name": "wazuh-dashboard-logout", "key": "url"}
     }
     assert "--opensearch_security.multitenancy.enabled=true" in dashboard["args"]
     assert "--opensearch_security.multitenancy.tenants.enable_private=false" in dashboard["args"]
@@ -84,6 +87,20 @@ def test_jwt_dashboard_has_an_authenticated_ingress_and_a_local_readiness_check(
     assert "--cacert " in readiness and "127.0.0.1" in readiness and "/api/status" in readiness
     for probe in ("startupProbe", "livenessProbe"):
         assert dashboard[probe] == {"exec": None, "tcpSocket": {"port": "dashboard"}}
+
+
+def test_dashboard_logout_uses_the_registered_cognito_callback():
+    app = yaml.safe_load((WAZUH / "kustomization.yaml").read_text())
+    (config,) = [item for item in app["configMapGenerator"] if item["name"] == "wazuh-dashboard-logout"]
+    assert config["options"]["annotations"]["kustomize.toolkit.fluxcd.io/substitute"] == "enabled"
+    (value,) = config["literals"]
+    key, url = value.split("=", 1)
+    assert key == "url"
+    logout = urlsplit(url)
+    assert (logout.scheme, logout.netloc, logout.path) == ("https", "auth.${SECRET_DOMAIN}", "/logout")
+    assert parse_qs(logout.query) == {
+        "client_id": ["${OAUTH2_PROXY_CLIENT_ID}"], "logout_uri": ["https://oauth2.${INTERNAL_DOMAIN}/oauth2/sign_out"],
+    }
 
 
 def test_indexer_preserves_its_notifications_hook_when_enabling_dashboard_access():

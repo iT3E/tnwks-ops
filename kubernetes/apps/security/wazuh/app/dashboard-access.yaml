@@ -10,13 +10,19 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: HTTPS
     nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
     nginx.ingress.kubernetes.io/server-snippet: |
-      # RC2's JWT logout button posts here before following auth.logout_url.
-      # The shared session ends at Cognito and oauth2-proxy.
+      # The RC2 button uses the basic-auth path for its JWT logout request.
       location = /auth/logout {
         if ($request_method != POST) {
           return 405;
         }
-        return 204;
+        rewrite ^ /api/v1/auth/logout last;
+      }
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      # The JWT handler clears its own cookies. Clear the manager session too.
+      if ($request_uri = "/auth/logout") {
+        add_header Set-Cookie "wz-token=; Path=/; Max-Age=0; HttpOnly; Secure" always;
+        add_header Set-Cookie "wz-user=; Path=/; Max-Age=0; HttpOnly; Secure" always;
+        add_header Set-Cookie "wz-api=; Path=/; Max-Age=0; HttpOnly; Secure" always;
       }
 spec:
   ingressClassName: nginx-internal

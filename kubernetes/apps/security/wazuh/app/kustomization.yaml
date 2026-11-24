@@ -32,6 +32,12 @@ configMapGenerator:
     files:
       - ./config/notifications-enabled
       - ./config/indexer-notifications.sh
+  - name: wazuh-dashboard-logout
+    literals:
+      - "url=https://auth.${SECRET_DOMAIN}/logout?client_id=${OAUTH2_PROXY_CLIENT_ID}&logout_uri=https%3A%2F%2Foauth2.${INTERNAL_DOMAIN}%2Foauth2%2Fsign_out"
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: enabled
 generatorOptions:
   disableNameSuffixHash: true
   annotations:

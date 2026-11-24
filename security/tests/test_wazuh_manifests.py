@@ -524,14 +524,8 @@ def render(out: Path) -> list[dict]:
     """Build the server as Flux does: server/, with the target namespace, the
     images and the patches of ks.yaml, and the values of the cluster-settings
     that the parent substitutes in ks.yaml."""
-    values = {
-        "SECURITY_NODE": "node",
-        "STORAGE_CLASS_DEFAULT": "local-path",
-        "SECRET_DOMAIN": "test.example",
-        "INTERNAL_DOMAIN": "internal.test.example",
-        "OAUTH2_PROXY_CLIENT_ID": "fixture-client",
-    }
-    text = re.sub(r"\$\{([A-Z][A-Z0-9_]*)\}", lambda m: values[m.group(1)], (APP / "ks.yaml").read_text())
+    values = {"SECURITY_NODE": "node", "STORAGE_CLASS_DEFAULT": "local-path"}
+    text = re.sub(r"\$\{([A-Z_]+)\}", lambda m: values[m.group(1)], (APP / "ks.yaml").read_text())
     (spec,) = [d["spec"] for d in yaml.safe_load_all(text) if d and d["metadata"]["name"] == "security-wazuh-server"]
     shutil.copytree(SERVER, out / "server")
     body = {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
