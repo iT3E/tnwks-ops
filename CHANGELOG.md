@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.308.1 - 2026-11-24
+
+### Fixed
+
+* Connect Wazuh dashboard logout to Cognito and probe its ingress on the hosting site.
+
 ## v2.308.0 - 2026-11-23
 
 ### Changed
