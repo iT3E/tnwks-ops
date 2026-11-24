@@ -36,7 +36,7 @@ def test_internal_ingress_requires_the_same_group_as_the_indexer():
     assert "location = /auth/logout {" in logout and "if ($request_method != POST)" in logout
     assert "rewrite ^ /api/v1/auth/logout last;" in logout
     cookies = annotations["nginx.ingress.kubernetes.io/configuration-snippet"]
-    assert '$request_uri = "/auth/logout"' in cookies
+    assert '$request_uri ~ "^/auth/logout([?]|$)"' in cookies
     assert all(f"{name}=; Path=/; Max-Age=0;" in cookies for name in ("wz-token", "wz-user", "wz-api"))
     assert role["tenant_permissions"] == [
         {"tenant_patterns": ["global_tenant"], "allowed_actions": ["kibana_all_read"]}

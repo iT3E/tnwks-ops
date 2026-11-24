@@ -19,7 +19,7 @@ metadata:
       }
     nginx.ingress.kubernetes.io/configuration-snippet: |
       # The JWT handler clears its own cookies. Clear the manager session too.
-      if ($request_uri = "/auth/logout") {
+      if ($request_uri ~ "^/auth/logout([?]|$)") {
         add_header Set-Cookie "wz-token=; Path=/; Max-Age=0; HttpOnly; Secure" always;
         add_header Set-Cookie "wz-user=; Path=/; Max-Age=0; HttpOnly; Secure" always;
         add_header Set-Cookie "wz-api=; Path=/; Max-Age=0; HttpOnly; Secure" always;
