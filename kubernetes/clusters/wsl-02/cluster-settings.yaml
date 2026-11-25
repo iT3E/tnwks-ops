@@ -89,6 +89,11 @@ data:
   # The node of the security platform's pods (kubernetes/apps/security/README.md):
   # worker 1, the node container with the 22 GiB limit.
   SECURITY_NODE: "homelab-wsl-02-worker-1"
+  # Valheim runs on the worker with the 22 GiB container limit. Its routed
+  # VIP is in this site's half of the Cilium BGP pool. Only VLAN 910 can join.
+  VALHEIM_NODE: "homelab-wsl-02-worker-1"
+  VALHEIM_LB_ADDR: "10.10.95.202"
+  VALHEIM_CLIENT_CIDR: "10.10.91.0/24"
   # The Service of the Wazuh agents (kubernetes/apps/security/wazuh/app/service-agents.yaml):
   # a shared VIP in the half of 10.10.95.0/24 that the router prefers on this site
   # (docs/wsl/multi-site.md, "Shared VIPs"), and the name the agents dial, in the
