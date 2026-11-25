@@ -80,7 +80,10 @@ locals {
   # --- Firewall --------------------------------------------------------------------------------------------------------
   site_address_lists = merge(
     { for zone, s in local.wsl_sites : replace(zone, "-", "_") => { nodes = s.node_subnet, pods = s.pod_cidr } },
-    { wsl_shared_vips = { pool = local.site_vip_pool } },
+    {
+      wsl_shared_vips      = { pool = local.site_vip_pool }
+      wsl_app_ingress_vips = local.wsl_app_ingress_vips
+    },
   )
 
   # Clients -> each site, to its nodes and pods and to the shared VIPs; site <-> site for Cluster Mesh (nodes and pods
@@ -120,6 +123,18 @@ locals {
       }
     },
     {
+      for i, zone in sort(keys(local.wsl_sites)) :
+      format("%03d-unifi-mgmt-%s", 280 + 10 * i, zone) => {
+        from    = "unifi-mgmt-900"
+        to      = zone
+        comment = "APs -> active UniFi controller VIP"
+        rules = [
+          { comment = "UniFi inform", dst_address = local.unifi_inform_vip, protocol = "tcp", dst_port = "8080" },
+          { comment = "UniFi STUN", dst_address = local.unifi_inform_vip, protocol = "udp", dst_port = "3478" },
+        ]
+      }
+    },
+    {
       "300-wsl-site1-wsl-site2" = {
         from    = "wsl-site1"
         to      = "wsl-site2"
@@ -128,6 +143,12 @@ locals {
           comment          = "Cluster Mesh: homelab-wsl nodes and pods to homelab-wsl-02's"
           src_address_list = "wsl_site1"
           dst_address_list = "wsl_site2"
+          }, {
+          comment          = "App HTTPS on the serving site"
+          src_address_list = "wsl_site1"
+          dst_address_list = "wsl_app_ingress_vips"
+          protocol         = "tcp"
+          dst_port         = "443"
         }]
       }
       "310-wsl-site2-wsl-site1" = {
@@ -138,6 +159,12 @@ locals {
           comment          = "Cluster Mesh: homelab-wsl-02 nodes and pods to homelab-wsl's"
           src_address_list = "wsl_site2"
           dst_address_list = "wsl_site1"
+          }, {
+          comment          = "App HTTPS on the serving site"
+          src_address_list = "wsl_site2"
+          dst_address_list = "wsl_app_ingress_vips"
+          protocol         = "tcp"
+          dst_port         = "443"
         }]
       }
     },

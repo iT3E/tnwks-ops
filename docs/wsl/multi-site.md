@@ -470,9 +470,11 @@ time (9 s, or immediately after a clean FRR stop):
 | --- | --- | --- |
 | `10.10.95.10` | homelab-wsl | `hass`, `firefly`, `grafana`, `grafana-embed`, `mealie-embed` |
 | `10.10.95.11` | homelab-wsl | `mqtt` (Mosquitto) |
-| `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `unifi` |
+| `10.10.95.12–17` | homelab-wsl today | `oauth2`, `frigate`, `zwave`, `obsidian-couchdb`, `blackbox-exporter`, `hajimari` (in that order) |
+| `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `unifi`, `prowlarr`, `radarr`, `sonarr` |
 | `10.10.95.201` | homelab-wsl-02 only | `wazuh-agents` (TCP 1517) |
 | `10.10.95.202` | homelab-wsl-02 only | `valheim` (UDP 2456–2457) |
+| `10.10.95.203` | active UniFi controller | `unifi` for AP inform and STUN (VLAN 900) |
 
 The `.10` and `.200` addresses serve internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
 `-vip-wsl-02`, `externalTrafficPolicy: Cluster`). Either site's ingress serves
@@ -486,8 +488,12 @@ For an internal ingress app on both sites, deploy it at 0 on the standby, make t
 Service global, add `service-upstream` to its internal Ingress, use
 `${OAUTH2_PROXY_URL:=…}` for an oauth2-proxy `auth-url` (homelab-wsl-02 has
 none of its own), then a site record for its name on the VIP of the site that
-runs it. A site-specific Service can have its own VIP and DNS record. Only
-the site that announces that VIP can serve it.
+runs it. A single-site app can use a dedicated VIP that the serving site
+advertises. Move its `*-ingress-vip` Kustomization alongside the app and its
+state. For `oauth2`, the Valkey session store is part of that placement.
+Direct services such as Valheim and UniFi inform have their own VIPs.
+The site-local Prometheus, Alertmanager, and Pyrra instances retain separate
+operator access ([observability operations](../operations/observability-operations.md#access-per-site)).
 
 Clients that may reach the VIPs: VLAN 910, the admin VPN, the mobile VPN
 (VIPs only). A client behind a site (its pods, the WSL host) reaches that
