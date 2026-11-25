@@ -57,6 +57,9 @@ spec:
     service:
       app:
         controller: prowlarr
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: *port
@@ -71,7 +74,9 @@ spec:
           - path: /config
     ingress:
       internal:
-        className: nginx
+        className: nginx-internal
+        annotations:
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &internalHost "prowlarr.${INTERNAL_DOMAIN}"
             paths:

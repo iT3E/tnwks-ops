@@ -21,8 +21,8 @@ resources:
   - ../../../../apps/networking/ingress-nginx-internal/ks.yaml
   # The internal ingress on the shared VIPs 10.10.95.10 and .200 (BGP).
   - ../../../../apps/networking/ingress-nginx-internal/shared-vip-ks.yaml
+  - ./app-vips.yaml
   - ../../../../apps/networking/k8s-gateway/ks.yaml
-  # UniFi controller: WSL-only. The router's `unifi` record and the AP firewall
-  # rules point at this desktop (10.10.91.142), and a second controller on
-  # MS-01 would split the APs. See docs/network/unifi.md.
+  # UniFi has one active controller across the WSL sites.
   - ../../../../apps/networking/unifi/ks.yaml
+  - ../../../../apps/networking/unifi/inform-vip-ks.yaml

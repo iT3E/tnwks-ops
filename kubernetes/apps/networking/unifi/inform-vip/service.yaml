@@ -1,0 +1,30 @@
+---
+# The `unifi` router record uses this VIP. Only the node with the active
+# controller advertises it, and the original AP address reaches UniFi.
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-inform-vip
+  namespace: networking
+  labels:
+    tnwks.us/shared-vip: "true"
+  annotations:
+    lbipam.cilium.io/ips: "10.10.95.203"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: io.cilium/bgp-control-plane
+  externalTrafficPolicy: Local
+  allocateLoadBalancerNodePorts: false
+  loadBalancerSourceRanges:
+    - 10.10.90.0/24
+  selector:
+    app.kubernetes.io/component: unifi
+    app.kubernetes.io/instance: unifi
+    app.kubernetes.io/name: unifi
+  ports:
+    - name: inform
+      port: 8080
+      protocol: TCP
+    - name: stun
+      port: 3478
+      protocol: UDP

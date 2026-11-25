@@ -58,6 +58,9 @@ spec:
     service:
       app:
         controller: radarr
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: *port
@@ -76,8 +79,9 @@ spec:
           - path: /data/media
     ingress:
       internal:
-        className: nginx
+        className: nginx-internal
         annotations:
+          nginx.ingress.kubernetes.io/service-upstream: "true"
           nginx.ingress.kubernetes.io/configuration-snippet: |
             proxy_set_header Accept-Encoding "";
             sub_filter_once on;

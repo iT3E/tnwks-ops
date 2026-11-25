@@ -1,0 +1,138 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: oauth2-ingress-vip
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: oauth2-proxy
+    - name: cilium-bgp
+    - name: ingress-nginx-internal
+  path: ./kubernetes/apps/networking/ingress-nginx-internal/app-vip
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substitute:
+      APP_INGRESS_VIP_NAME: oauth2-ingress-vip
+      APP_INGRESS_VIP_IP: "10.10.95.12"
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: frigate-ingress-vip
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: frigate
+    - name: cilium-bgp
+    - name: ingress-nginx-internal
+  path: ./kubernetes/apps/networking/ingress-nginx-internal/app-vip
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substitute:
+      APP_INGRESS_VIP_NAME: frigate-ingress-vip
+      APP_INGRESS_VIP_IP: "10.10.95.13"
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: zwave-ingress-vip
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: zwave-js-ui
+    - name: cilium-bgp
+    - name: ingress-nginx-internal
+  path: ./kubernetes/apps/networking/ingress-nginx-internal/app-vip
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substitute:
+      APP_INGRESS_VIP_NAME: zwave-ingress-vip
+      APP_INGRESS_VIP_IP: "10.10.95.14"
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: obsidian-couchdb-ingress-vip
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: obsidian-couchdb
+    - name: cilium-bgp
+    - name: ingress-nginx-internal
+  path: ./kubernetes/apps/networking/ingress-nginx-internal/app-vip
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substitute:
+      APP_INGRESS_VIP_NAME: obsidian-couchdb-ingress-vip
+      APP_INGRESS_VIP_IP: "10.10.95.15"
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: blackbox-exporter-ingress-vip
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: blackbox-exporter
+    - name: cilium-bgp
+    - name: ingress-nginx-internal
+  path: ./kubernetes/apps/networking/ingress-nginx-internal/app-vip
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substitute:
+      APP_INGRESS_VIP_NAME: blackbox-exporter-ingress-vip
+      APP_INGRESS_VIP_IP: "10.10.95.16"
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: hajimari-ingress-vip
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: hajimari
+    - name: cilium-bgp
+    - name: ingress-nginx-internal
+  path: ./kubernetes/apps/networking/ingress-nginx-internal/app-vip
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substitute:
+      APP_INGRESS_VIP_NAME: hajimari-ingress-vip
+      APP_INGRESS_VIP_IP: "10.10.95.17"
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

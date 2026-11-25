@@ -1,0 +1,27 @@
+---
+# Install this frontend through the site's Kustomization for the app.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_INGRESS_VIP_NAME}
+  namespace: networking
+  labels:
+    tnwks.us/shared-vip: "true"
+  annotations:
+    lbipam.cilium.io/ips: "${APP_INGRESS_VIP_IP}"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: io.cilium/bgp-control-plane
+  allocateLoadBalancerNodePorts: false
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx-internal
+    app.kubernetes.io/name: ingress-nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    - name: https
+      port: 443
+      targetPort: https
