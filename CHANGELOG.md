@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.313.0 - 2026-11-25
+
+### Changed
+
+* Point internal app names and UniFi AP inform at their routed service VIPs.
+
 ## v2.312.2 - 2026-11-25
 
 ### Fixed
