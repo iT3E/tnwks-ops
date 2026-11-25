@@ -1,7 +1,7 @@
 ---
 # kopiur policies of the apps deployed on homelab-wsl-02: the shared files,
 # so both sites write the same identities (each to its own repository).
-# Schedules are suspended here while homelab-wsl runs the app.
+# Per-site suspend flags select which cluster backs up each shared app.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -25,3 +25,4 @@ resources:
   - ../../../../apps/kopiur-system/kopiur/policies/wizarr.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/jellyfin.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/plausible-clickhouse.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/valheim.yaml

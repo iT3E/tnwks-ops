@@ -1,0 +1,49 @@
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: valheim
+  namespace: selfhosted
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  copyMethod: Direct
+  credentialProjection:
+    enabled: true
+  mover:
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+  files:
+    # Kopia sorts policy rules before applying them. Leading spaces sort the
+    # exclusions before the exceptions and are trimmed by the matcher.
+    ignoreRules:
+      - " /*"
+      - " /config/*"
+      - " /config/backups/*"
+      - "!/config"
+      - "!/config/backups"
+      - "!/config/backups/worlds-*.zip"
+  retention:
+    keepLatest: 3
+    keepHourly: 24
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
+  sources:
+    - pvc:
+        name: valheim-data
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: valheim
+  namespace: selfhosted
+spec:
+  policyRef:
+    name: valheim
+  schedule:
+    # Valheim's container produces the world ZIP at :05.
+    cron: "20 * * * *"
+    runOnCreate: true
