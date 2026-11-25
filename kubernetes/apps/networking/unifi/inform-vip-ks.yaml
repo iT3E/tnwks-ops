@@ -1,0 +1,18 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: unifi-inform-vip
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: cilium-bgp
+    - name: unifi
+  path: ./kubernetes/apps/networking/unifi/inform-vip
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
