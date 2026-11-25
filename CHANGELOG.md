@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.312.2 - 2026-11-25
+
+### Fixed
+
+* Prepare portable ingress VIPs, restore internal media and Hajimari routes, and add a routed UniFi AP inform address.
+
 ## v2.312.1 - 2026-11-25
 
 ### Fixed

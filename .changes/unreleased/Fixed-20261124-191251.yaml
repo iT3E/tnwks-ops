@@ -1,3 +1,0 @@
-kind: Fixed
-body: Prepare portable ingress VIPs, restore internal media and Hajimari routes, and add a routed UniFi AP inform address.
-time: 2026-11-24T19:12:51.019640977-08:00
