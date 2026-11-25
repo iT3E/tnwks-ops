@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.314.0 - 2026-11-25
+
+### Added
+
+* Expose the main OpenClaw Control UI on the internal domain with Cognito sign-in.
+
 ## v2.313.0 - 2026-11-25
 
 ### Changed
