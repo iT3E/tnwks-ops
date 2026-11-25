@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.315.0 - 2026-11-25
+
+### Added
+
+* Back up Valheim world archives hourly to the encrypted offsite S3 repository from homelab-wsl-02.
+
 ## v2.314.0 - 2026-11-25
 
 ### Added
