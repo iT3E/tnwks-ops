@@ -1,0 +1,28 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valheim
+  labels:
+    tnwks.us/shared-vip: "true"
+  annotations:
+    lbipam.cilium.io/ips: "${VALHEIM_LB_ADDR}"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: io.cilium/bgp-control-plane
+  allocateLoadBalancerNodePorts: false
+  # BGP announces this from the node with a ready endpoint and preserves
+  # the client address for the ingress policy.
+  externalTrafficPolicy: Local
+  loadBalancerSourceRanges:
+    - "${VALHEIM_CLIENT_CIDR}"
+  selector:
+    app.kubernetes.io/name: valheim
+    app.kubernetes.io/instance: valheim
+  ports:
+    - name: game
+      port: 2456
+      protocol: UDP
+    - name: query
+      port: 2457
+      protocol: UDP

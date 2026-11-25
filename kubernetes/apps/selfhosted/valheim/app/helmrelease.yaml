@@ -1,0 +1,84 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: valheim
+  namespace: selfhosted
+spec:
+  interval: 30m
+  # SteamCMD downloads the server on the first start.
+  timeout: 20m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      interval: 30m
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  values:
+    controllers:
+      valheim:
+        strategy: Recreate
+        pod:
+          automountServiceAccountToken: false
+          terminationGracePeriodSeconds: 120
+          nodeSelector:
+            kubernetes.io/hostname: ${VALHEIM_NODE}
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+        containers:
+          app:
+            image:
+              repository: ghcr.io/community-valheim-tools/valheim-server
+              tag: 1.4.1@sha256:f34d67ba8023e343b10ffda0144759a8c8d986f276510460315a01051bed8a6d
+            env:
+              TZ: ${TIMEZONE}
+              SERVER_NAME: Valheim
+              WORLD_NAME: Valheim
+              SERVER_PUBLIC: "false"
+              CROSSPLAY: "false"
+              PUID: "1000"
+              PGID: "1000"
+              BACKUPS_MAX_COUNT: "12"
+              SERVER_PASS:
+                valueFrom:
+                  secretKeyRef:
+                    name: valheim-secret
+                    key: SERVER_PASS
+            securityContext:
+              allowPrivilegeEscalation: false
+            probes:
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  # The private Steam server binds its query socket (2457)
+                  # after loading the world.
+                  exec:
+                    command:
+                      - awk
+                      - '$2 ~ /:0999$/ { ready = 1 } END { exit !ready }'
+                      - /proc/net/udp
+                      - /proc/net/udp6
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: "1"
+                memory: 4Gi
+              limits:
+                memory: 6Gi
+    persistence:
+      data:
+        type: persistentVolumeClaim
+        storageClass: ${STORAGE_CLASS_DEFAULT}
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        retain: true
+        globalMounts:
+          - path: /config
+            subPath: config
+          - path: /opt/valheim
+            subPath: server
