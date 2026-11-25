@@ -20,11 +20,9 @@ spec:
     # exclusions before the exceptions and are trimmed by the matcher.
     ignoreRules:
       - " /*"
-      - " /config/*"
-      - " /config/backups/*"
-      - "!/config"
-      - "!/config/backups"
-      - "!/config/backups/worlds-*.zip"
+      - " /offsite/*"
+      - "!/offsite"
+      - "!/offsite/worlds-*.zip"
   retention:
     keepLatest: 3
     keepHourly: 24

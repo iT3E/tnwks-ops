@@ -1,0 +1,83 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: valheim-stage-archives
+spec:
+  schedule: "10 * * * *"
+  timeZone: "${TIMEZONE}"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 240
+      backoffLimit: 1
+      template:
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: ${VALHEIM_NODE}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: stage
+              image: ghcr.io/community-valheim-tools/valheim-server:1.4.1@sha256:f34d67ba8023e343b10ffda0144759a8c8d986f276510460315a01051bed8a6d
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  set -- /valheim-config/backups/worlds-*.zip
+                  if [ ! -s "$1" ]; then
+                    echo 'No Valheim archives found' >&2
+                    exit 1
+                  fi
+
+                  target=/volume/offsite
+                  mkdir -p "$target"
+                  temp=$(mktemp "$target/.staging-XXXXXX")
+                  trap 'rm -f "$temp"' EXIT
+                  for archive in "$@"; do
+                    output=$target/$(basename "$archive")
+                    if ! cmp -s "$archive" "$output"; then
+                      cp -p "$archive" "$temp"
+                      unzip -tqq "$temp"
+                      mv -f "$temp" "$output"
+                    fi
+                  done
+
+                  for archive in "$target"/worlds-*.zip; do
+                    [ -e "/valheim-config/backups/$(basename "$archive")" ] || rm -f "$archive"
+                  done
+                  echo "Staged $# Valheim archives"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                # Match the live server's mount. On Talos-in-Docker the kubelet
+                # resolves this subPath in its own filesystem.
+                - name: data
+                  mountPath: /valheim-config
+                  subPath: config
+                  readOnly: true
+                # A root mount binds the actual local-path volume for Kopiur.
+                - name: data
+                  mountPath: /volume
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: valheim-data
