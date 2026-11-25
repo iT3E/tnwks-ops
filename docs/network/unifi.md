@@ -9,7 +9,7 @@ and its configuration (site settings, the WLAN, each AP) is Terraform in
 | --- | --- |
 | Controller UI | `https://unifi.internal.tnwks.us`: Cognito login (oauth2-proxy), then the controller's local login (`admin_username` in SOPS) |
 | Controller API | `https://10.5.0.206:8443` (VIP, desktop only) for local Terraform; `unifi.networking.svc.cluster.local:8443` for CI and unpoller |
-| Inform URL the APs use | `http://unifi:8080/inform` (router record `unifi` -> `10.10.91.112`, WSL-02, since 2026-11-06) |
+| Inform URL the APs use | `http://unifi:8080/inform` (router record `unifi` -> `10.10.95.203`, advertised by the active controller's site) |
 | Configuration | `environments/prod/unifi` + `modules/unifi`: planned on the PR and applied on merge by `terraform.yaml` (root `unifi`) on the self-hosted runner ([`ci.md`](ci.md)). State in TFC workspace `tnwks-unifi-prod`. `task unifi:*` for bootstrap and break-glass |
 | Secrets | `environments/prod/unifi/secrets.sops.yaml`: controller logins, device SSH, SSID, passphrase, AP MACs |
 | Metrics | `monitoring/unpoller` (local controller user `unifipoller`); AP pings in `monitoring/smokeping-prober` (role `ap`); SW03 AP ports via `monitoring/snmp-exporter` |
@@ -105,11 +105,10 @@ vault):
 
 ```
 AP (VLAN 900)
-  -> DNS "unifi" on the router -> 10.10.91.142 (the Windows desktop)
-  -> router firewall: unifi-mgmt-900 -> unifi_controller, tcp/udp 8080, 3478, 6789
-  -> Windows netsh portproxy 0.0.0.0:8080 -> <wsl-ip>:18080  (firewall: from 10.10.90.0/24 only)
-  -> socat tnwks-lan-bridge@unifi-inform -> LoadBalancer VIP 10.5.0.206:8080
-  -> networking/unifi-inform Service -> the controller pod
+  -> router DNS "unifi" -> 10.10.95.203
+  -> router firewall admits TCP 8080 and UDP 3478 from VLAN 900
+  -> site tunnel chosen by BGP
+  -> networking/unifi-inform-vip Service -> the ready controller pod
 ```
 
 - **It runs on homelab-wsl-02 since 2026-11-06**, moved with
@@ -123,31 +122,22 @@ AP (VLAN 900)
   deploy it, the standby at `UNIFI_REPLICAS: "0"`, with unpoller following
   it. `bin/site-failover switchover unifi --to <site>` stops it, copies both
   PVCs (`config` and the MongoDB data, owners kept) and starts it on the other
-  site. The router's `unifi` record then names that site's Windows host
-  (10.10.91.142 or 10.10.91.112); both are in the `unifi_controller` address
-  list, and both hosts bridge 8080 (homelab-wsl-02: `UNIFI_LB_ADDR`
-  10.6.0.206). Until the record moves, the APs show as disconnected but keep
-  serving clients. The API on the VIP is only reachable from the host of the
-  site that runs it.
+  site. Cilium announces `10.10.95.203` once the controller is ready, and
+  the router sends AP traffic there. The APs keep serving clients during
+  the controller's switchover. The separate API VIP belongs to `UNIFI_LB_ADDR`.
 - **Discovery is just DNS.** A factory-reset UniFi device takes a DHCP lease
   and then sends its inform to `http://unifi:8080/inform`. The router's static
-  record `unifi` (generated into `environments/prod/mikrotik/locals.tf` from the
-  old bind zone) answers with the desktop's address. No DHCP option 43 or
-  L2 discovery is needed.
+  record `unifi` in `environments/prod/mikrotik/dns-sites.tf` answers with the
+  shared VIP. The APs discover the controller by DNS alone.
 - **Port 18080 on WSL:** Docker on this host already holds `0.0.0.0:8080`
   (Scriberr), so socat listens on 18080 and the Windows portproxy maps LAN 8080
   to it (`wsl_port` in `lan_bridge_tcp_ports`, role `windows_lan_bridge`). Windows' own
   `wslrelay` holds `127.0.0.1:8080` for that container; a wildcard bind on
   8080 next to it was tested and works.
 - **Override Inform Host:** the controller tells adopted devices where to
-  inform next. Left alone it would hand out its pod IP, which the APs can't
-  reach. The bootstrap below sets it to the hostname `unifi`, so the router
-  record stays the one place that says where the controller lives.
-- **STUN (udp/3478) is not relayed.** The Windows UDP relay
-  (`Start-TnwksUdpRelay.ps1`) forwards one way and STUN needs replies. Without
-  it the controller logs "STUN communication failed" and pushes settings on the
-  next inform (about every 10 seconds) instead of immediately. Adoption,
-  provisioning and statistics all work over 8080.
+  inform next. The bootstrap below sets it to `unifi`, so the APs keep the
+  same inform address across switchovers.
+- **STUN (UDP 3478)** reaches the controller through the same routed VIP.
 - **The UI** goes through the internal ingress like any `*.internal.tnwks.us`
   app, behind oauth2-proxy (forward auth, any `tnwks-auth` user). The UniFi
   Network Application has no OIDC or SAML login of its own (its only SSO is a
@@ -232,7 +222,7 @@ and 6-9.
 - **Never resetting an AP again:** every AP has the device SSH credentials
   from SOPS (password and the desktop's key, checked on all three on
   2026-11-01) and informs to the hostname `unifi`. So:
-  - Controller moves: change the router's `unifi` record; nothing on the APs.
+  - Controller moves: the VIP follows the ready controller pod.
   - Controller database lost: restore a `.unf` (keeps the APs' keys, nothing
     to re-adopt), or SSH in and `set-default` to factory-reset an AP
     remotely, then let Terraform adopt it.

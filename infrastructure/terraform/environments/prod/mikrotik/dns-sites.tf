@@ -13,6 +13,18 @@ locals {
   vip_wsl    = "10.10.95.10"  # homelab-wsl first
   vip_wsl_02 = "10.10.95.200" # homelab-wsl-02 first
 
+  # Frontends deployed alongside the single-site web apps (app-vips.yaml in
+  # the cluster overlay). Their DNS names survive moving the frontends.
+  wsl_app_ingress_vips = {
+    oauth2            = "10.10.95.12"
+    frigate           = "10.10.95.13"
+    zwave             = "10.10.95.14"
+    obsidian-couchdb  = "10.10.95.15"
+    blackbox-exporter = "10.10.95.16"
+    hajimari          = "10.10.95.17"
+  }
+  unifi_inform_vip = "10.10.95.203"
+
   # Fencing leases (docs/wsl/multi-site.md, "Fencing"): per warm app, the site
   # fenced from writing it, or "none". Set it to the dead site BEFORE an
   # unplanned promote (bin/site-failover --promote refuses otherwise), and
@@ -25,7 +37,7 @@ locals {
     grafana        = "none"
   }
 
-  site_dns_records = {
+  site_fixed_dns_records = {
     vip_hass = {
       name            = "hass.internal.tnwks.us"
       address         = local.vip_wsl
@@ -165,5 +177,28 @@ locals {
       match_subdomain = true
       comment         = "shared VIP (homelab-wsl-02 only): Valheim, UDP 2456-2457"
     }
+    # Override the generated record while keeping its resource identity.
+    unifi = {
+      name    = "unifi"
+      address = local.unifi_inform_vip
+      type    = "A"
+      ttl     = "5m"
+      comment = "shared VIP for UniFi AP inform and STUN"
+    }
   }
+
+  site_dns_records = merge(local.site_fixed_dns_records, {
+    for app, vip in merge(local.wsl_app_ingress_vips, {
+      prowlarr = local.vip_wsl_02
+      radarr   = local.vip_wsl_02
+      sonarr   = local.vip_wsl_02
+      }) : "vip_${replace(app, "-", "_")}" => {
+      name            = "${app}.internal.tnwks.us"
+      address         = vip
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "internal ingress VIP for ${app}"
+    }
+  })
 }
