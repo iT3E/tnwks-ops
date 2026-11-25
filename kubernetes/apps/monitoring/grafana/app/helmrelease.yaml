@@ -44,7 +44,7 @@ spec:
     # moves both in one PR (observability/validate_grafana.py checks they match).
     image:
       repository: grafana/grafana
-      tag: 13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
+      tag: 13.3.2@sha256:81556409ba48b2b922e0adb69a2511337d8ba7578f11962eefa6149a2d815101
     # Which site runs it (docs/wsl/multi-site.md, "Switching an app"). A warm
     # app: homelab-wsl at 1, homelab-wsl-02 at 0 with a replica of grafana-pg.
     replicas: ${GRAFANA_REPLICAS:=1}
