@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.312.1 - 2026-11-25
+
+### Fixed
+
+* Resolve valheim.internal.tnwks.us to the private Valheim service on homelab-wsl-02.
+
 ## v2.312.0 - 2026-11-25
 
 ### Added
