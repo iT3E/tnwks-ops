@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.315.1 - 2026-11-25
+
+### Fixed
+
+* Stage Valheim world archives from the server mount onto the PVC read by Kopiur on WSL-02.
+
 ## v2.315.0 - 2026-11-25
 
 ### Added
