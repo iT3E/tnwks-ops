@@ -152,8 +152,7 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
         "https://openshell.agents-main.svc.cluster.local:8080"
     assert "policy" not in c["plugins"]["entries"]["openshell"]["config"]
     assert c["diagnostics"]["otel"]["serviceName"] == "openclaw-agents-main"
-    # Every other setting is the one of finance.
-    for key in ("gateway", "update", "telemetry", "acp", "session"):
+    for key in ("update", "telemetry", "acp", "session"):
         assert c[key] == f[key], key
     # The command rule of the host approval plugin comes on top
     # (test_main_host_approval.py).
@@ -181,7 +180,7 @@ def test_the_network_policy_is_the_pilots_in_agents_main_the_fetch_proxy_and_the
     assert rule(main, "mcp-gateway") == rule(finance, "mcp-gateway")
     main["spec"]["egress"].remove(rule(main, "fetch-proxy"))
     main["spec"]["egress"].remove(rule(main, "mcp-gateway"))
-    text = json.dumps(main["spec"]).replace("agents-main", "agents-pilot")
+    text = json.dumps({k: v for k, v in main["spec"].items() if k != "ingress"}).replace("agents-main", "agents-pilot")
     assert json.loads(text) == pilot["spec"]
     # Not the vault server straight: the gateway stands between.
     assert "vault-server" not in json.dumps(main)
@@ -232,7 +231,40 @@ def test_the_secrets_of_the_owner_hold_each_value_the_pod_names():
             keys = keys | {"MCP_HOST_KEY"}
         assert set(d["stringData"]) == keys
     named = set(re.findall(r"\$\{([A-Z0-9_]+)\}", CONFIG.read_text()))
-    assert named <= SECRETS["secret.sops.yaml"][1] | SECRETS["secret-search.sops.yaml"][1]
+    settings = yaml.safe_load((APP / "kustomization.yaml").read_text())["configMapGenerator"]
+    (ui_settings,) = [g for g in settings if g["name"] == "agent-ui-settings"]
+    ui_keys = {literal.split("=", 1)[0] for literal in ui_settings["literals"]}
+    assert named <= SECRETS["secret.sops.yaml"][1] | SECRETS["secret-search.sops.yaml"][1] | ui_keys
+
+
+def test_control_ui_uses_the_authenticated_internal_ingress():
+    gateway = json.loads(CONFIG.read_text())["gateway"]
+    service = doc(APP / "service.yaml")["spec"]
+    ingress = doc(APP / "ingress.yaml")
+    annotations = ingress["metadata"]["annotations"]
+    spec = ingress["spec"]
+    (rule,) = spec["rules"]
+    (route,) = rule["http"]["paths"]
+    assert {"service.yaml", "ingress.yaml"} <= listed()
+    assert spec["ingressClassName"] == "nginx-internal"
+    assert spec["tls"] == [{"hosts": [rule["host"]]}]
+    assert annotations["nginx.ingress.kubernetes.io/auth-url"].endswith("/oauth2/auth?allowed_groups=admins")
+    assert annotations["nginx.ingress.kubernetes.io/auth-response-headers"].lower() == gateway["auth"]["trustedProxy"]["userHeader"]
+    assert gateway["auth"]["mode"] == "trusted-proxy" and gateway["controlUi"]["enabled"]
+    assert not gateway["auth"]["trustedProxy"].get("allowLoopback")
+    assert route["path"] == "/" and route["backend"]["service"] == {"name": "agent", "port": {"name": "gateway"}}
+    assert service.get("type", "ClusterIP") == "ClusterIP" and not service.get("externalIPs")
+    assert service["ports"] == [{"name": "gateway", "port": gateway["port"], "targetPort": "gateway"}]
+    assert doc(APP / "networkpolicy.yaml")["spec"]["ingress"] == [{
+        "fromEndpoints": [{"matchLabels": {
+            "io.kubernetes.pod.namespace": "networking",
+            "io.cilium.k8s.policy.cluster": "${CLUSTER_NAME}",
+            "app.kubernetes.io/name": "ingress-nginx",
+            "app.kubernetes.io/instance": "ingress-nginx-internal",
+            "app.kubernetes.io/component": "controller",
+        }}],
+        "toPorts": [{"ports": [{"port": str(gateway["port"]), "protocol": "TCP"}]}],
+    }]
 
 
 def test_the_model_gateway_has_the_embeddings_of_main_on_the_host_model():

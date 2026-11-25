@@ -1,10 +1,18 @@
 {
   "gateway": {
     "mode": "local",
-    "bind": "loopback",
+    "bind": "lan",
     "port": 18789,
-    "auth": {"mode": "token"},
-    "controlUi": {"enabled": false}
+    "trustedProxies": ["${OPENCLAW_INGRESS_CIDR}"],
+    "auth": {
+      "mode": "trusted-proxy",
+      "trustedProxy": {
+        "userHeader": "x-auth-request-email",
+        "requiredHeaders": ["x-forwarded-proto", "x-forwarded-host"],
+        "deviceAutoApprove": {"enabled": true}
+      }
+    },
+    "controlUi": {"enabled": true, "allowedOrigins": ["${OPENCLAW_UI_ORIGIN}"]}
   },
   "update": {"checkOnStart": false},
   "telemetry": {"enabled": false},

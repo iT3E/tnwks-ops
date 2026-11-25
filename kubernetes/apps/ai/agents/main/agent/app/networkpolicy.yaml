@@ -1,7 +1,6 @@
 ---
-# The agent pod. No pod comes in: the gateway of the product listens on
-# loopback, the probes run in the pod, and default-deny (../../namespace.yaml)
-# denies ingress. Out, it reaches the model gateway, the sandbox gateway of
+# The agent pod accepts UI traffic from the internal ingress controller.
+# Out, it reaches the model gateway, the sandbox gateway of
 # this trust domain, the trace collector, the fetch proxy of this trust
 # domain and two host names, the Telegram Bot API and the Brave Search API
 # (and DNS, through allow-dns). Nothing else: no model vendor, no update or
@@ -19,6 +18,18 @@ spec:
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: agent
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: networking
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/instance: ingress-nginx-internal
+            app.kubernetes.io/component: controller
+      toPorts:
+        - ports:
+            - port: "18789"
+              protocol: TCP
   egress:
     # The model gateway (LiteLLM), with the key of this trust domain.
     - toEndpoints:

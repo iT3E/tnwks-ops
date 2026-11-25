@@ -1509,6 +1509,19 @@ example `firefly__get_summary`) answers, the MCP gateway logs it with
    through `update_transaction` with its `transaction_journal_id`, one
    split at a time.
 
+## Main agent Control UI
+
+Open [openclaw.internal.tnwks.us](https://openclaw.internal.tnwks.us) from
+the LAN. Sign in with a Cognito account in the `admins` group. The internal
+ingress uses the existing oauth2-proxy session and passes the verified email
+to OpenClaw on HTTP requests and WebSocket upgrades. OpenClaw automatically
+pairs the browser for its standard operator scopes, including chat. The
+gateway password is for CLI access from inside the pod.
+
+The wildcard DNS record and TLS certificate already cover this hostname.
+The gateway Service is a ClusterIP. Cilium only admits connections to its
+gateway port from the local `ingress-nginx-internal` controller pods.
+
 ## Web fetch of the main agent
 
 The main agent fetches web pages with the `web_fetch` tool of the product,

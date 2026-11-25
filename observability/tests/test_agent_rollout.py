@@ -135,9 +135,9 @@ def test_the_official_plugins_step_runs_with_the_debug_flag_and_no_secret(agent)
     step = init(pod, "official-plugins")
     env = {e["name"]: e for e in step["env"]}
     assert env.pop("OPENCLAW_DEBUG") == {"name": "OPENCLAW_DEBUG", "value": "1"}
-    # Otherwise the env of the gateway, as the archive step has it.
+    # The archive step has the same base environment.
     assert list(env.values()) == init(pod, "archive")["env"]
-    assert "envFrom" not in step
+    assert step.get("envFrom", []) == ([{"configMapRef": {"name": "agent-ui-settings"}}] if agent == "main" else [])
     assert all("valueFrom" not in e for e in step["env"])
     names = [c["name"] for c in pod["initContainers"]]
     assert names.index("official-plugins") < names.index("doctor")

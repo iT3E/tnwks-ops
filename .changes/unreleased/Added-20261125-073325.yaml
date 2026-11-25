@@ -1,0 +1,3 @@
+kind: Added
+body: Expose the main OpenClaw Control UI on the internal domain with Cognito sign-in.
+time: 2026-11-25T07:33:25.747228423-08:00

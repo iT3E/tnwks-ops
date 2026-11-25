@@ -216,19 +216,11 @@ spec:
           image: *image
           imagePullPolicy: IfNotPresent
           command: ["sh", "/scripts/archive-state.sh"]
-          env: &env
-            # A change from the vault server comes from another NFS client,
-            # so the share gives no file event: the watch of the index polls
-            # (Design Doc of effort 0003, section 4.2.5). The other users of
-            # this list watch no file.
+          env:
             - name: CHOKIDAR_USEPOLLING
               value: "1"
-            # The state directory of the product (with the workspace in it),
-            # on the volume. The archives are next to it, outside it.
             - name: OPENCLAW_STATE_DIR
               value: /home/node/data/state
-            # The config from git, a read-only file. The product treats it as
-            # managed outside: no command or repair writes to it.
             - name: OPENCLAW_CONFIG_PATH
               value: /home/node/config/openclaw.json
             - name: OPENCLAW_CONFIG_READONLY
@@ -322,6 +314,10 @@ spec:
               value: "1"
             - name: OPENCLAW_DEBUG
               value: "1"
+          envFrom:
+            - &uiSettings
+              configMapRef:
+                name: agent-ui-settings
           securityContext: *containerSecurity
           resources:
             requests:
@@ -365,13 +361,21 @@ spec:
               value: "1"
             - name: OPENCLAW_OFFLINE
               value: "1"
+            # Trusted-proxy mode rejects a configured token. Keep the same
+            # credential for pod-local CLI access as a gateway password.
+            - &clearGatewayToken
+              name: OPENCLAW_GATEWAY_TOKEN
+              value: ""
+            - &localGatewayPassword
+              name: OPENCLAW_GATEWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: OPENCLAW_GATEWAY_TOKEN
           envFrom: &secrets
-            # OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY, TELEGRAM_BOT_TOKEN,
-            # TELEGRAM_ALLOW_FROM, MCP_GATEWAY_KEY
-            # (docs/apps/agent-platform-runbook.md, "The cutover of the main
-            # agent").
             - secretRef:
                 name: agent-secret
+            - *uiSettings
           securityContext: *containerSecurity
           resources:
             requests:
@@ -430,6 +434,8 @@ spec:
                 secretKeyRef:
                   name: agent-secret
                   key: LITELLM_API_KEY
+          envFrom:
+            - *uiSettings
           securityContext: *containerSecurity
           resources:
             requests:
@@ -455,15 +461,34 @@ spec:
             - name: user-config
               mountPath: /home/node/.config
       containers:
-        # The gateway of the product, on loopback only: no pod comes in. It
-        # reaches the channels, the model gateway and the sandbox gateway.
+        # The internal ingress serves the gateway's Control UI through OAuth.
         - name: agent
           image: *image
           imagePullPolicy: IfNotPresent
-          env: *env
+          # Poll the vault's NFS share to pick up updates from other clients.
+          env: &gatewayEnv
+            - name: CHOKIDAR_USEPOLLING
+              value: "1"
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            - *clearGatewayToken
+            - *localGatewayPassword
           envFrom:
             - secretRef:
                 name: agent-secret
+            - *uiSettings
             # BRAVE_API_KEY (the key of main, not a key of another trust
             # domain), for the web search of the gateway. This container only: not the init
             # containers, not the backup container, and no sandbox
@@ -540,7 +565,7 @@ spec:
               chmod 0700 "$d"
               cp /home/node/config/openclaw.json /home/node/config/telegram-groups.json "$d/"
               OPENCLAW_CONFIG_PATH="$d/openclaw.json" exec sh /scripts/daily-backup.sh
-          env: *env
+          env: *gatewayEnv
           envFrom: *secrets
           resources:
             requests:
