@@ -58,6 +58,8 @@ resources:
   # Step 3a, replicas 1 since step 5.
   - ./networkpolicy.yaml
   - ./deployment.yaml
+  - ./service.yaml
+  - ./ingress.yaml
   # Step 4.
   - ./secret.sops.yaml
   - ./secret-search.sops.yaml
@@ -84,6 +86,12 @@ configMapGenerator:
     options:
       annotations:
         kustomize.toolkit.fluxcd.io/substitute: disabled
+  - name: agent-ui-settings
+    literals:
+      - OPENCLAW_UI_ORIGIN=https://openclaw.${INTERNAL_DOMAIN}
+      # Controller pod IPs can change. The NetworkPolicy limits this range
+      # to the internal ingress controller's pod identity.
+      - OPENCLAW_INGRESS_CIDR=${CLUSTER_CIDR}
   # The env of the gateway for web fetch (docs/apps/agent-platform.md, "Web
   # fetch of the main agent"). web_fetch sends each fetch as a CONNECT to
   # the fetch proxy of this trust domain (../../fetch-proxy), as
