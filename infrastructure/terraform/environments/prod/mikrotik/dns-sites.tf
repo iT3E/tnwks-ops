@@ -1,10 +1,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
-## Names served by homelab-wsl-02 (apps moved there, docs/wsl/multi-site.md). Each is more specific than the
-## internal.tnwks.us wildcard (match_subdomain, 10.10.91.142 = homelab-wsl; locals.tf, generated) and points at
-## WSL-02, whose LAN bridge forwards 80/443 to homelab-wsl-02's ingress-nginx-internal. match_subdomain = true on
-## purpose: RouterOS checks those entries before plain names, so a plain record under the wildcard never answers
-## (modules/mikrotik/dns.tf puts the most specific first). Hand-written: locals.tf is generated from the VyOS
-## config. Short TTL, so a name moves back quickly.
+## Site DNS records for internal ingress and services with their own BGP VIPs (docs/wsl/multi-site.md).
+## RouterOS checks match_subdomain records before plain names. The module orders the most specific names first,
+## so these entries override the internal.tnwks.us wildcard in locals.tf. The short TTL helps during switchovers.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 locals {
@@ -159,6 +156,14 @@ locals {
       ttl             = "5m"
       match_subdomain = true
       comment         = "shared VIP (homelab-wsl-02 only): wazuh agents, 1517"
+    }
+    vip_valheim = {
+      name            = "valheim.internal.tnwks.us"
+      address         = "10.10.95.202" # VALHEIM_LB_ADDR in kubernetes/clusters/wsl-02/cluster-settings.yaml
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "shared VIP (homelab-wsl-02 only): Valheim, UDP 2456-2457"
     }
   }
 }
