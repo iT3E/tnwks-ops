@@ -81,7 +81,7 @@ backup (2026-11-07 01:00 UTC) and WAL stay under `cnpg/homelab-wsl/`.
 | changedetection | `production/config-changedetection-0` | Watch list and history |
 | Firefly III | `production/firefly-upload` | Transaction attachments (none yet). The ledger is in Postgres; the Passport keypair and `APP_KEY` are in git (SOPS) |
 | Transcriber | `production/transcriber-audio` | Clip audio (~7 MB per hour of speech, kept 90 days). Transcripts are in Postgres; the models download again. Runs on homelab-wsl-02, so its snapshots are in that site's repository (`kopiur-homelab-wsl-02/`) |
-| Valheim | `selfhosted/valheim-data` | World ZIP archives under `config/backups/`. Snapshots run on homelab-wsl-02 every hour at :20 after Valheim's :05 backup. Kopia keeps 24 hourly, 7 daily, 4 weekly and 6 monthly snapshots |
+| Valheim | `selfhosted/valheim-data` | World ZIP archives staged in `offsite/` at :10 from Valheim's :05 backup. Snapshots run on homelab-wsl-02 every hour at :20. Kopia keeps 24 hourly, 7 daily, 4 weekly and 6 monthly snapshots |
 | finance-sync | `production/finance-sync-state` | The rollback copy, on homelab-wsl only: the state the jobs feeding Firefly kept as files until 2026-11-02. It now lives in Postgres (`finance-sync-pg`), so failover and the standby restore don't copy this PVC (`docs/apps/finance-sync.md`) |
 
 The mover must run as the app's user (`mover.securityContext`): kopia fails
@@ -470,9 +470,10 @@ On a rebuilt cluster, the PVCs are new and empty: do the same once the app has
 created its PVC.
 
 For Valheim, restore to a scratch PVC and extract the desired ZIP from
-`config/backups/`. The snapshot contains the archives only. Mirroring it to the
-live PVC with `enableFileDeletion: true` would delete the live world and server
-files.
+`offsite/`. The `valheim-stage-archives` job reads the live backup directory
+through the same `config` subPath as the game and copies the ZIPs to the PVC
+root, where Kopiur can read them. The kubelet resolves `subPath` in its own
+filesystem on these [Talos-in-Docker workers](../../talos/wsl/README.md).
 
 The volumes of the agent platform restore from the repository `agents`, by
 the steps in `docs/apps/agent-platform-runbook.md` ("Restore the state of an

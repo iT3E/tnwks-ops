@@ -3,6 +3,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: selfhosted
 resources:
+  - archive-staging.yaml
   - helmrelease.yaml
   - networkpolicy.yaml
   - secret.sops.yaml
