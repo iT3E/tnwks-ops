@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.312.0 - 2026-11-25
+
+### Added
+
+* Host a private Valheim dedicated server on homelab-wsl-02 for the internal client network.
+
 ## v2.311.0 - 2026-11-24
 
 ### Added
