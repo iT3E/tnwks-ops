@@ -472,6 +472,7 @@ time (9 s, or immediately after a clean FRR stop):
 | `10.10.95.11` | homelab-wsl | `mqtt` (Mosquitto) |
 | `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `unifi` |
 | `10.10.95.201` | homelab-wsl-02 only | `wazuh-agents` (TCP 1517) |
+| `10.10.95.202` | homelab-wsl-02 only | `valheim` (UDP 2456–2457) |
 
 The `.10` and `.200` addresses serve internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
 `-vip-wsl-02`, `externalTrafficPolicy: Cluster`). Either site's ingress serves
