@@ -223,6 +223,8 @@ CLASS_H = h_labels(NAMES["classHR"])
 SUBST = {"substituteFrom": [{"kind": "ConfigMap", "name": "cluster-settings"},
                             {"kind": "Secret", "name": "cluster-secrets-apps"}]}
 APP_PATH = "./kubernetes/apps/production/new-app/app"
+CLASS_KEY = {"provider": "sops", "secretRef": {"name": "sops-age-class"}}
+APPS_KEY = {"provider": "sops", "secretRef": {"name": "sops-age-apps"}}
 
 
 def privileged_cases():
@@ -346,6 +348,16 @@ def cases():
          kustomization("new-app", APP_PATH, PARENT, postBuild={"substituteFrom": [{"kind": "Secret", "name": "flux-system"}]})),
         ("kustomization-spec", "substitution from the full cluster-secrets", KUSTOMIZE, "deny",
          kustomization("new-app", APP_PATH, PARENT, postBuild={"substituteFrom": [{"kind": "Secret", "name": "cluster-secrets"}]})),
+        # The lockdown (docs/operations/flux-lockdown.md): a child outside
+        # the class may not run as the controller, or decrypt with the class
+        # key, which the controller reads as itself whatever the account of
+        # the child.
+        ("kustomization-spec", "the account of the controller", KUSTOMIZE, "deny",
+         kustomization("new-app", APP_PATH, PARENT, postBuild=SUBST, serviceAccountName="kustomize-controller")),
+        ("kustomization-spec", "the Secret of the class key", KUSTOMIZE, "deny",
+         kustomization("new-app", APP_PATH, PARENT, postBuild=SUBST, decryption=CLASS_KEY)),
+        ("kustomization-spec", "the Secret of the apps key", KUSTOMIZE, "allow",
+         kustomization("new-app", APP_PATH, PARENT, postBuild=SUBST, decryption=APPS_KEY)),
         ("kustomization-spec", "a Kustomization of an app", KUSTOMIZE, "allow",
          kustomization("new-app", APP_PATH, PARENT, postBuild=SUBST,
                        decryption={"provider": "sops", "secretRef": {"name": "sops-age"}})),
@@ -356,10 +368,19 @@ def cases():
          kustomization(NAMES["classK"].split("/")[1], APP_PATH, PARENT)),
         ("kustomization-class", "a name of the class from the right parent", KUSTOMIZE, "allow",
          kustomization(second.split("/")[1], "./kubernetes/apps/security/new", k_labels("flux-system/cluster-apps-wsl-02"))),
+        ("kustomization-class", "a name of the class, as the controller, with the Secret of the class key", KUSTOMIZE,
+         "allow", kustomization(second.split("/")[1], "./kubernetes/apps/security/new",
+                                k_labels("flux-system/cluster-apps-wsl-02"), serviceAccountName="kustomize-controller",
+                                decryption=CLASS_KEY)),
+        ("kustomization-class", "the parent of the apps from the root, as the controller, with the class key", KUSTOMIZE,
+         "allow", kustomization("cluster-apps", "./kubernetes/clusters/wsl/apps", k_labels("flux-system/flux-system"),
+                                serviceAccountName="kustomize-controller", decryption=CLASS_KEY)),
         # helmrelease-class
         ("helmrelease-class", "a name of the class in a shared namespace, from a child outside the class", KUSTOMIZE, "deny",
          helmrelease(shared, OUT_K)),
         ("helmrelease-class", "the same from a child of the class", KUSTOMIZE, "allow", helmrelease(shared, CLASS_K)),
+        ("helmrelease-class", "a HelmRelease of the class with an account of its namespace", KUSTOMIZE, "allow",
+         helmrelease(NAMES["classHR"], CLASS_K, serviceAccountName="flux-apply")),
         # parent-objects
         ("parent-objects", "a new object from the parent that reads the aggregators", KUSTOMIZE, "deny",
          obj("NetworkPolicy", "allow-all", "agents-main", PARENT, spec={

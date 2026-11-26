@@ -40,7 +40,10 @@
 # For each request of the controllers:
 # - kustomization-spec: a Kustomization outside the class has a path in the
 #   form a/b/c that is not in a class path and holds none (so not the root),
-#   no service account, no kubeconfig, no commonMetadata key of Flux, and
+#   no service account, no kubeconfig, no commonMetadata key of Flux, no
+#   decryption with the Secret of the class key (sops-age-class: the
+#   controller reads a decryption Secret as itself, so an account of the
+#   child does not hold it back; docs/operations/flux-lockdown.md), and
 #   substitutes from cluster-settings, site-overrides and the reduced
 #   Secret cluster-secrets-apps only;
 # - kustomization-class: a Kustomization of the class comes from one of its
@@ -614,6 +617,7 @@ spec:
           !has(object.spec.serviceAccountName) && !has(object.spec.kubeConfig) &&
           !object.spec.?commonMetadata.?labels.orValue({}).exists(k, k.contains('toolkit.fluxcd.io')) &&
           !object.spec.?commonMetadata.?annotations.orValue({}).exists(k, k.contains('toolkit.fluxcd.io')) &&
+          object.spec.?decryption.?secretRef.?name.orValue('') != 'sops-age-class' &&
           object.spec.?postBuild.?substituteFrom.orValue([]).all(s,
             [s.kind, s.name] in [
               ['ConfigMap', 'cluster-settings'], ['ConfigMap', 'site-overrides'], ['Secret', 'cluster-secrets-apps']
@@ -621,7 +625,8 @@ spec:
       messageExpression: >-
         'flux-child-scope/kustomization-spec: ' + variables.what +
         ' is outside the class: its path must be in the form a/b/c, not in or above a path of the class,' +
-        ' with no service account, kubeconfig or commonMetadata key of Flux, and substitution from' +
+        ' with no service account, kubeconfig, commonMetadata key of Flux or decryption with sops-age-class,' +
+        ' and substitution from' +
         ' cluster-settings, site-overrides and cluster-secrets-apps only'
       reason: Forbidden
     - expression: >-

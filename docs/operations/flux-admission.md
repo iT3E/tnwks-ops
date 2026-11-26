@@ -5,7 +5,8 @@ The admission policy `flux-child-scope` limits what a Flux child outside the
 (`kustomize-controller` and `helm-controller`) are bound to `cluster-admin`,
 so without it each manifest in the repository applies with full rights. The
 policy is the first step of the far-side control of the class. The Flux
-lockdown (a service account for each child) is a later step.
+lockdown (a service account for each child, and a key for the class) is the
+next step: [`flux-lockdown.md`](flux-lockdown.md).
 
 - The policy: [`kubernetes/apps/flux-system/admission/app/policy.yaml`](../../kubernetes/apps/flux-system/admission/app/policy.yaml).
 - Its lists: [`classlist.py`](../../kubernetes/apps/flux-system/admission/classlist.py) writes them from git.
@@ -94,7 +95,7 @@ For each request of the two controllers:
 
 | Rule | What it checks |
 | --- | --- |
-| `kustomization-spec` | A Kustomization outside the class has a path in the form `a/b/c`, not in a class path and not above one (so not the root). It has no service account, no kubeconfig and no `commonMetadata` key of Flux. It substitutes from `cluster-settings`, `site-overrides` and the reduced Secret `cluster-secrets-apps` only |
+| `kustomization-spec` | A Kustomization outside the class has a path in the form `a/b/c`, not in a class path and not above one (so not the root). It has no service account, no kubeconfig, no `commonMetadata` key of Flux and no decryption with the Secret of the class key `sops-age-class` ([`flux-lockdown.md`](flux-lockdown.md)). It substitutes from `cluster-settings`, `site-overrides` and the reduced Secret `cluster-secrets-apps` only |
 | `kustomization-class` | A Kustomization of the class comes from one of its parents in git, with a path of the class |
 | `helmrelease-class` | A HelmRelease of the class comes from a Kustomization of the class |
 | `parent-objects` | A parent of the apps applies Kustomizations and the objects of its build in git only |
@@ -414,8 +415,9 @@ An agent never suspends or resumes a Kustomization.
   namespaces (their Secrets, service accounts and egress) stays open. So
   does a Service with `externalIPs`, or an Ingress or a certificate that
   claims a host name of the class, from a namespace outside it.
-- **Fields for a later step.** `kustomization-spec` does not yet refuse
-  `spec.decryption` or a `spec.components` entry with `..`, and
+- **Fields for a later step.** `kustomization-spec` refuses only the
+  Secret of the class key in `spec.decryption`, not yet another Secret or
+  a `spec.components` entry with `..`, and
   `helmrelease-spec` does not yet refuse `install.createNamespace` (a new
   empty namespace with no owner label). Owner label holds each Flux object
   of a pull request of the App until then.
