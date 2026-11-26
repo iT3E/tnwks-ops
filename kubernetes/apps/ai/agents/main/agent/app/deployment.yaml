@@ -111,7 +111,7 @@ spec:
         # Init:CrashLoopBackOff, not ready, and AgentPlatformWorkloadNotReady
         # fires after 10 minutes.
         - name: values-check
-          image: &image ghcr.io/it3e/tnwks-agent-image:0.5.0@sha256:8839bc84d4286df7627c31f48e3a3e8efdb86bce3b0e152ec96118835d4660be
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.5.2@sha256:769ac72c4b7892ca23513312db6520014f89242a4833562b208960c1d6224727
           imagePullPolicy: IfNotPresent
           command:
             - sh

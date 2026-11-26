@@ -59,7 +59,9 @@ def test_the_image_has_the_plugin():
     images = {c["image"] for c in MAIN["initContainers"] + MAIN["containers"]}
     assert len(images) == 1
     (image,) = images
-    assert re.fullmatch(r"ghcr\.io/it3e/tnwks-agent-image:0\.5\.0@sha256:[0-9a-f]{64}", image)
+    # 0.5.2: the browser form tools take the requester check of the host
+    # tools, so they run only in the direct chat of the approver (D188).
+    assert re.fullmatch(r"ghcr\.io/it3e/tnwks-agent-image:0\.5\.2@sha256:[0-9a-f]{64}", image)
     for name in ("restore-job.yaml", "state-inbox.yaml"):
         assert image in (APP / name).read_text(), name
 
