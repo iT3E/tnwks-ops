@@ -103,7 +103,9 @@ def test_no_other_pod_of_main_has_the_dns_label():
     only (test_main_host_server.py), the read servers, each with a DNS rule
     of its own for the names it needs (test_main_read_servers.py), and the
     token job of the App, with a DNS rule for the API of the code host only
-    (test_main_github_token.py), may carry it."""
+    (test_main_github_token.py), and the sign-in check of the Control UI,
+    with a DNS rule for its two Services only (test_main_ui_proxy.py), may
+    carry it."""
     holders = []
     for path in MAIN.rglob("*.yaml"):
         if path.name.endswith(".sops.yaml"):
@@ -113,7 +115,8 @@ def test_no_other_pod_of_main_has_the_dns_label():
             template = spec.get("template") or spec.get("jobTemplate", {}).get("spec", {}).get("template") or {}
             if "agents.home.arpa/dns" in template.get("metadata", {}).get("labels", {}):
                 holders.append(str(path.relative_to(MAIN)))
-    assert sorted(holders) == ["cluster-mcp/app/deployment.yaml", "flux-mcp/app/deployment.yaml",
+    assert sorted(holders) == ["agent/app/ui-proxy/ui-proxy.yaml",
+                               "cluster-mcp/app/deployment.yaml", "flux-mcp/app/deployment.yaml",
                                "github-mcp/app/deployment.yaml", "github-token/app/cronjob.yaml",
                                "host-mcp/app/deployment.yaml",
                                "terraform-mcp/app/deployment.yaml", "vault-server/app/deployment.yaml"]

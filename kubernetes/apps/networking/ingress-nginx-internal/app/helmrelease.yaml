@@ -33,6 +33,10 @@ spec:
           value: "${TIMEZONE}"
       extraArgs:
         default-ssl-certificate: "networking/internal-tnwks-us-production-tls"
+        # No Service of type ExternalName as a backend: an Ingress then
+        # reaches only Services with pods of the cluster. No app here uses
+        # one (task 6.57: 0 on each site).
+        disable-svc-external-name: "true"
       service:
         annotations:
         loadBalancerIP: "${INGRESS_INTERNAL_ADDR}"

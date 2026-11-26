@@ -711,6 +711,16 @@
       },
       {
         "trust_domain": "main",
+        "part": "Control UI sign-in check",
+        "namespace": "agents-main",
+        "kind": "deployment",
+        "workload": "ui-proxy",
+        "clusters": [
+          "homelab-wsl"
+        ]
+      },
+      {
+        "trust_domain": "main",
         "part": "Cluster MCP server",
         "namespace": "agents-main",
         "kind": "deployment",

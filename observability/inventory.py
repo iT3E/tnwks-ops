@@ -81,6 +81,9 @@ AI_PARTS = [
        "workload": "vault-server"} for domain in ("main", "finance")],
     {"trust_domain": "main", "part": "Fetch proxy", "namespace": "agents-main", "kind": "deployment",
      "workload": "fetch-proxy"},
+    # The sign-in check in front of the Control UI of main (task 6.57).
+    {"trust_domain": "main", "part": "Control UI sign-in check", "namespace": "agents-main", "kind": "deployment",
+     "workload": "ui-proxy"},
     {"trust_domain": "main", "part": "Cluster MCP server", "namespace": "agents-main", "kind": "deployment",
      "workload": "cluster-mcp"},
     {"trust_domain": "main", "part": "Flux MCP server", "namespace": "agents-main", "kind": "deployment",

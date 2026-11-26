@@ -1,0 +1,202 @@
+---
+# The sign-in check in front of the Control UI of main: an nginx pod, the
+# only pod that the network policy of the agent admits to the gateway port.
+# The Ingress of the UI (../ingress.yaml) sends each request here, and this
+# pod sends it on to the gateway only after the sign-in server says yes for
+# the cookie of the client (default.conf.template). It sets the
+# user header that the gateway trusts from that answer, and drops each
+# identity header of the client. So the gateway trusts a header that only
+# this pod can set, whatever route reaches it. It holds no credential.
+#
+# It must be a pod of its own, not a container of the agent pod: the
+# trusted proxy mode of the gateway refuses a proxy on loopback or on an
+# address of the gateway itself.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui-proxy
+  labels:
+    app.kubernetes.io/name: ui-proxy
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ui-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ui-proxy
+        # Its own DNS rule, for the two names that it resolves only (its
+        # policy below), and not the namespace's rule for any name
+        # (../../../namespace.yaml).
+        agents.home.arpa/dns: own-rule
+    spec:
+      # A name with a dot is looked up as it is first, with no search
+      # domain: the DNS rule allows the full names only.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      # No account at the API server: nginx never calls it.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The user of the image.
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: proxy
+          # The nginx image of the other proxies of the agents.
+          image: docker.io/nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: ui-proxy-settings
+          env:
+            # The entrypoint fills only these names into the template.
+            - name: NGINX_ENVSUBST_FILTER
+              value: ^UI_PROXY_
+          ports:
+            - name: ui
+              containerPort: 8080
+              protocol: TCP
+            # The health path only, for the kubelet.
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 30
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: template
+              mountPath: /etc/nginx/templates
+              readOnly: true
+            # The rendered config: in memory only.
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/nginx
+      volumes:
+        - name: template
+          configMap:
+            name: ui-proxy
+        - name: conf
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui-proxy
+  labels:
+    app.kubernetes.io/name: ui-proxy
+spec:
+  selector:
+    app.kubernetes.io/name: ui-proxy
+  ports:
+    - name: ui
+      port: 8080
+      targetPort: ui
+      protocol: TCP
+---
+# The sign-in check of the Control UI. In: the internal ingress controller
+# on the UI port (8080), and the kubelet on the node on the health port
+# (8081) only. Out: the sign-in server and the gateway port of the agent,
+# and DNS for those two names only. The namespace's default deny holds the
+# rest (../../../namespace.yaml).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ui-proxy
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: ui-proxy
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: networking
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/instance: ingress-nginx-internal
+            app.kubernetes.io/component: controller
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+  egress:
+    # The sign-in server, the one that the Ingress of the UI asks.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: auth
+            app.kubernetes.io/name: oauth2-proxy
+            app.kubernetes.io/instance: oauth2-proxy
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "4180"
+              protocol: TCP
+    # The gateway port of the agent.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: agent
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "18789"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: oauth2-proxy.auth.svc.cluster.local
+              - matchName: agent.agents-main.svc.cluster.local
