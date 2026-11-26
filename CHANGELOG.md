@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.319.3 - 2026-11-26
+
+### Fixed
+
+* Pin the operator of the main Control UI to one user named in the Secret of the pod, and write out the four default scopes of a new browser device.
+
 ## v2.319.2 - 2026-11-26
 
 ### Fixed
