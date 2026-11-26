@@ -82,9 +82,6 @@ spec:
         className: nginx-internal
         annotations:
           nginx.ingress.kubernetes.io/service-upstream: "true"
-          nginx.ingress.kubernetes.io/configuration-snippet: |
-            proxy_set_header Accept-Encoding "";
-            sub_filter_once on;
         hosts:
           - host: &internalHost "radarr.${INTERNAL_DOMAIN}"
             paths:

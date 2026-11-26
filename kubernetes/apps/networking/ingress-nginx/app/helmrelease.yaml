@@ -67,9 +67,9 @@ spec:
         # moves CNI (homelab-wsl, Flannel -> Cilium); empty elsewhere.
         proxy-real-ip-cidr: "${CLUSTER_CIDR}${CLUSTER_CIDR_EXTRA:=}"
         # ingress-nginx 1.9+ disables snippet annotations by default after
-        # CVE-2024-7646. We use server-snippet on ombi/sonarr/radarr for
-        # legacy hostname redirects; flip this back on rather than rip
-        # them out. Re-evaluate when those apps are reworked.
+        # CVE-2024-7646. Ombi uses a server-snippet for a legacy hostname
+        # redirect; flip this back on rather than rip it out. Re-evaluate
+        # when that app is reworked.
         allow-snippet-annotations: "true"
         annotations-risk-level: "Critical"
       metrics:
