@@ -441,6 +441,19 @@ The dashboard ingress routes the logout button's request to the JWT logout
 handler and expires the manager session cookies. The browser then signs out
 through Cognito and the shared OAuth2 proxy.
 
+The startup hook of the indexer runs two steps: `app/config/indexer-notifications.sh`
+reconciles the notifications channel, then `app/config/dashboard/indexer-auth.sh`
+applies the authentication configuration. A failed hook makes the kubelet
+restart the container, so the hook retries until its deadline. Both steps
+share one deadline, 300 seconds from the start of the hook, the same time as
+the startup probe of the container (10 s x 30). Each step waits for a yellow
+cluster before it writes. It sends a request again while the indexer gives
+no answer or a server error, and it runs `securityadmin.sh` again while it
+fails. A conflict, a refused request or a channel ID in use by another object
+stops the hook at once. Each wait, retry and failure writes one line with
+the UTC time and the HTTP status or exit code to the log of the container,
+so `kubectl logs` shows why a hook failed.
+
 The indexer uses its existing local admin certificate to apply the
 Cognito authentication domain over loopback. The manager uses its own
 local API to manage both group mappings. To revoke the admin grant, set
