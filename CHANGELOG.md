@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.322.0 - 2026-11-26
+
+### Changed
+
+* The admission policy flux-child-scope also covers the release fields of a HelmRelease: the rule helmrelease-spec refuses spec.releaseName, spec.targetNamespace and spec.storageNamespace on a HelmRelease outside the class (docs/operations/flux-admission.md)
+
 ## v2.321.0 - 2026-11-26
 
 ### Added
