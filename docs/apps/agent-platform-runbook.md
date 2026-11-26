@@ -2785,20 +2785,21 @@ client, never the arguments or the result.
 
 It is deployed, not live for use, until its live rows pass
 ([mcp-gateway.md](mcp-gateway.md), "The read servers of main"). Its
-token is a stopgap of the owner: a read-only token for this repository
-only, until the token job of the App of the main agent writes the Secret
-`github-mcp-token`.
+token is an installation token of the App of the main agent, which the
+token job writes into the Secret `github-mcp-app-token` each 30 minutes
+([github-token.md](github-token.md)).
 
-- **The token expires on 2026-12-22.** Then the pod stays up and ready
-  (its health check does not use the token), and each call of the agent
-  gets a 401 from the code host: the agent sees a failed read.
-- **The gap:** no probe uses the token, and no alert fires on its expiry
-  or on the status of the route. The lab did not run with an expired
-  token, so whether the gateway counts such a call as a 200 (an error
-  inside the answer of the tool) or as an error status is not known.
-- **The plan task:** before 2026-12-15, the token job of the App writes
-  the Secret, or a new stopgap of the owner replaces the token. An alert
-  on the expiry is not part of this step.
+- **When the job of the App fails,** `AgentPlatformCronJobFailed` fires, and
+  `MainGithubTokenStale` after one missed run. The
+  token in the Secret stays valid for at least 30 minutes after the last
+  good run, and then each call of the agent gets a 401 from the code host:
+  the agent sees a failed read. The pod stays up and ready (its health
+  check does not use the token). Run the job by hand
+  ([github-token.md](github-token.md), "A run") after the fix.
+- **The gap:** no probe uses the token, and no alert fires on the status
+  of the route. The lab did not run with an expired token, so whether the
+  gateway counts such a call as a 200 (an error inside the answer of the
+  tool) or as an error status is not known.
 
 **The rehearsal rows** of the design that the lab did not cover (section
 4.2.6, "Not tested"): the DNS rules of Cilium and the reach of each pod

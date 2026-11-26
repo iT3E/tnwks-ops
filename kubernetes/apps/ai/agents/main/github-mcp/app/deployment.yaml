@@ -7,7 +7,10 @@
 #
 # In HTTP mode the server takes its token from each request. So the proxy
 # container of this pod sets it (proxy/default.conf.template), from the
-# Secret github-mcp-token, which no other pod mounts (R2). The server
+# Secret github-mcp-app-token, which the token job of the App of main writes
+# each 30 minutes (../../github-token, docs/apps/github-token.md) and no
+# other pod mounts (R2). The proxy reads the mounted Secret at each request
+# (proxy/token.js), so a new token needs no restart. The server
 # listens on the loopback of the pod only, so each request passes the
 # proxy. The central MCP gateway is the one client of the proxy
 # (networkpolicy.yaml), and it refuses each tool that its route
@@ -18,9 +21,6 @@ metadata:
   name: github-mcp
   labels:
     app.kubernetes.io/name: github-mcp
-  annotations:
-    # A new token starts the pod again.
-    reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
   revisionHistoryLimit: 3
@@ -57,6 +57,9 @@ spec:
         - name: proxy
           image: docker.io/nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
           imagePullPolicy: IfNotPresent
+          # The command of the image, with the njs module of the image for
+          # proxy/token.js (-g sets main directives).
+          args: ["nginx", "-g", "daemon off; load_module modules/ngx_http_js_module.so;"]
           env:
             # The server, on the loopback of the pod.
             - name: GITHUB_MCP_UPSTREAM
@@ -64,14 +67,6 @@ spec:
             # The entrypoint fills only these names into the template.
             - name: NGINX_ENVSUBST_FILTER
               value: ^GITHUB_MCP_
-            # The read token of the code host: a stopgap of the owner until
-            # the token job (secret.sops.yaml; docs/apps/mcp-gateway.md,
-            # "The read servers of main").
-            - name: GITHUB_MCP_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: github-mcp-token
-                  key: GITHUB_MCP_TOKEN
           ports:
             - name: mcp
               containerPort: 8080
@@ -107,13 +102,21 @@ spec:
             - name: template
               mountPath: /etc/nginx/templates
               readOnly: true
-            # The rendered config, with the token: in memory only.
+            # The rendered config: in memory only.
             - name: conf
               mountPath: /etc/nginx/conf.d
             - name: tmp
               mountPath: /tmp
             - name: cache
               mountPath: /var/cache/nginx
+            # The installation token of the App of main, for the ops
+            # repository only, which lives one hour at most. The token job
+            # writes it (../../github-token); its account updates this one
+            # Secret only. A whole volume and no subPath: the kubelet updates
+            # only that form when the Secret changes.
+            - name: token
+              mountPath: /var/run/github-mcp-app-token
+              readOnly: true
         - name: server
           # v2.2.0 of 2026-11-16, MIT, the newest release on 2026-11-21. The
           # digest is the one of the image index. The image runs as root
@@ -160,6 +163,14 @@ spec:
         - name: cache
           emptyDir:
             sizeLimit: 64Mi
+        - name: token
+          secret:
+            secretName: github-mcp-app-token
+            items:
+              - key: GITHUB_MCP_TOKEN
+                path: GITHUB_MCP_TOKEN
+            # Read by the group of the proxy (fsGroup) only.
+            defaultMode: 0440
         - name: server-tmp
           emptyDir:
             sizeLimit: 64Mi

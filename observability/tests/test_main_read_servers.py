@@ -20,6 +20,7 @@ without it the test is skipped, except in CI, where it fails.
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import time
 import tomllib
@@ -544,7 +545,8 @@ def test_the_terraform_server_has_the_registry_only_and_no_token():
 
 def test_the_code_host_server_reads_only_with_the_token_of_its_proxy():
     """The token is in the proxy container only, from the Secret
-    github-mcp-token; the server listens on the loopback, so each request
+    github-mcp-app-token of the token job; the server listens on the
+    loopback, so each request
     passes the proxy, which sets the token and drops each mode header."""
     args = container("github")["args"]
     assert args[0] == "http"
@@ -556,7 +558,12 @@ def test_the_code_host_server_reads_only_with_the_token_of_its_proxy():
     proxy = container("github", "proxy")
     env = {e["name"]: e for e in proxy["env"]}
     assert env["GITHUB_MCP_UPSTREAM"]["value"] == "127.0.0.1:8082"
-    assert env["GITHUB_MCP_TOKEN"]["valueFrom"] == {"secretKeyRef": {"name": "github-mcp-token", "key": "GITHUB_MCP_TOKEN"}}
+    # The token comes from the mounted Secret at each request
+    # (test_main_github_proxy_token.py), never from an env var.
+    assert not [e for e in proxy["env"] if "valueFrom" in e or e["name"] == "GITHUB_MCP_TOKEN"]
+    assert {"name": "token", "secret": {"secretName": "github-mcp-app-token", "defaultMode": 0o440,
+                                        "items": [{"key": "GITHUB_MCP_TOKEN", "path": "GITHUB_MCP_TOKEN"}]}} in \
+        pod("github")["spec"]["volumes"]
     assert [(p["name"], p["containerPort"]) for p in proxy["ports"]] == [("mcp", 8080), ("health", 8081)]
     for probe in ("readinessProbe", "livenessProbe"):
         assert proxy[probe]["httpGet"] == {"path": "/healthz", "port": "health"}
@@ -564,34 +571,40 @@ def test_the_code_host_server_reads_only_with_the_token_of_its_proxy():
     health, mcp = template.split("server {")[1:]
     # The health port serves the health path only and never the token.
     assert "listen 8081;" in health and "location = /healthz {" in health
-    assert "proxy_pass" not in health and "GITHUB_MCP_TOKEN" not in health
+    assert "proxy_pass" not in health and "github_mcp_token" not in health
     assert "listen 8080;" in mcp and "/healthz" not in mcp
     # The query string of a client stops at the proxy.
     assert "rewrite ^ /mcp? break;" in mcp and "proxy_pass http://${GITHUB_MCP_UPSTREAM};" in mcp
-    assert 'proxy_set_header Authorization "Bearer ${GITHUB_MCP_TOKEN}";' in template
+    assert 'proxy_set_header Authorization "Bearer $github_mcp_token";' in template
     for header in ("Readonly", "Toolsets", "Tools", "Exclude-Tools", "Features", "Insiders", "Lockdown"):
         assert f'proxy_set_header X-MCP-{header} "";' in template
     assert "location = /mcp {" in template and "location / {\n        return 404;" in template
     spec = pod("github")["spec"]
     assert spec["automountServiceAccountToken"] is False
-    # No other pod of the repository names the Secret.
+    # No other pod of the repository reads the Secret, by an env var, a
+    # volume or a projection. The token job writes it through the API.
+    reads = re.compile(r'"(?:name|secretName)": "github-mcp-app-token"')
     for doc in manifests("Deployment", "StatefulSet", "CronJob", "Job", "DaemonSet", "Pod"):
         if doc["__path"] != MAIN / "github-mcp/app/deployment.yaml":
-            assert "github-mcp-token" not in json.dumps({k: v for k, v in doc.items() if k != "__path"}), doc["__path"]
+            assert not reads.search(json.dumps({k: v for k, v in doc.items() if k != "__path"})), doc["__path"]
 
 
-def test_the_code_host_token_is_an_encrypted_secret_of_the_app():
-    """The stopgap token of the owner (D143) is the Secret of the app, in its
-    kustomization, encrypted: its key name only, never a value in clear."""
+def test_the_code_host_server_has_no_stopgap_and_waits_for_the_token_job():
+    """The write step does not start on the stopgap token of the owner
+    (D143): no Secret of the app, and no file of the repository names it.
+    The server waits for the token job, which makes the Secret of its
+    token, and the token job is listed with it."""
     app = yaml.safe_load((MAIN / "github-mcp/app/kustomization.yaml").read_text())
-    assert "./secret.sops.yaml" in app["resources"]
-    (secret,) = docs(MAIN / "github-mcp/app/secret.sops.yaml")
-    assert secret["kind"] == "Secret"
-    assert secret["metadata"] == {"name": "github-mcp-token", "namespace": "agents-main"}
-    values = secret.get("stringData") or secret.get("data")
-    assert set(values) == {"GITHUB_MCP_TOKEN"}
-    assert all(str(v).startswith("ENC[") for v in values.values())
-    assert "sops" in secret
+    assert app["resources"] == ["./deployment.yaml", "./networkpolicy.yaml"]
+    assert not (MAIN / "github-mcp/app/secret.sops.yaml").exists()
+    for path in (ROOT / "kubernetes").rglob("*.yaml"):
+        assert not re.search(r"\bgithub-mcp-token\b", path.read_text()), path
+    (ks,) = docs(MAIN / "github-mcp/ks.yaml")
+    assert ks["spec"]["dependsOn"] == [{"name": "agents-main-github-token"}]
+    resources = yaml.safe_load((MAIN / "kustomization.yaml").read_text())["resources"]
+    # The token job is listed only with its key (test_main_github_token.py),
+    # so this branch merges after the commit of the key.
+    assert "./github-token/ks.yaml" in resources and "./github-mcp/ks.yaml" in resources
 
 
 def test_the_code_host_route_takes_the_ops_repository_only():
@@ -773,18 +786,25 @@ def start_terraform_server(tool: str, work: Path, net: str, name: str) -> None:
          container("terraform")["image"], *container("terraform")["args"]])
 
 
-def start_github_proxy(tool: str, net: str, name: str, alias: str, upstream: str) -> None:
-    """The proxy of the code host server, with the template of the repo and
-    a token that is no token."""
+def start_github_proxy(tool: str, work: Path, net: str, name: str, alias: str, upstream: str) -> None:
+    """The proxy of the code host server, with the args and the files of the
+    repo and a token that is no token in the place of its Secret volume."""
     proxy = container("github", "proxy")
     env = {e["name"]: e.get("value") for e in proxy["env"]}
+    token = work / "github-token"
+    if not token.exists():
+        token.mkdir()
+        (token / "GITHUB_MCP_TOKEN").write_text(FAKE_CODE_HOST_TOKEN)
+        (token / "GITHUB_MCP_TOKEN").chmod(0o644)
+        token.chmod(0o755)
+    (place,) = [m["mountPath"] for m in proxy["volumeMounts"] if m["name"] == "token"]
     run([tool, "run", "-d", "--name", name, "--network", net, "--network-alias", alias,
          "--read-only", "--tmpfs", "/tmp:uid=101,gid=101", "--tmpfs", "/etc/nginx/conf.d:uid=101,gid=101",
          "--tmpfs", "/var/cache/nginx:uid=101,gid=101", "--cap-drop", "ALL", "--user", "101",
          "-e", f"GITHUB_MCP_UPSTREAM={upstream}",
          "-e", f"NGINX_ENVSUBST_FILTER={env['NGINX_ENVSUBST_FILTER']}",
-         "-e", f"GITHUB_MCP_TOKEN={FAKE_CODE_HOST_TOKEN}",
-         "-v", f"{MAIN / 'github-mcp/app/proxy'}:/etc/nginx/templates:ro", proxy["image"]])
+         "-v", f"{MAIN / 'github-mcp/app/proxy'}:/etc/nginx/templates:ro",
+         "-v", f"{token}:{place}:ro", proxy["image"], *proxy["args"]])
 
 
 # What the proxy sends on: the path and whether a bearer came with it.
@@ -816,7 +836,7 @@ def start_github_server(tool: str, work: Path, net: str, name: str) -> None:
     run([tool, "run", "-d", "--name", name, "--network", net, "--network-alias", "github-server",
          "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL", "--user", "65532",
          container("github")["image"], *args])
-    start_github_proxy(tool, net, name + "-proxy", "github-upstream", "github-server:8082")
+    start_github_proxy(tool, work, net, name + "-proxy", "github-upstream", "github-server:8082")
 
 
 STARTERS = {"cluster": start_cluster_server, "flux": start_flux_server, "terraform": start_terraform_server,
@@ -862,7 +882,7 @@ def lab():
                      "--network-alias", "proxy-seen", "-v", f"{work}/proxy_seen.py:/proxy_seen.py:ro",
                      "-v", f"{work}/rec:/rec", PYTHON, "python3", "-I", "/proxy_seen.py"])
                 names["proxy-check"] = f"readsrv-proxy-check-{tag}"
-                start_github_proxy(tool, back, names["proxy-check"], "proxy-check", "proxy-seen:8082")
+                start_github_proxy(tool, work, back, names["proxy-check"], "proxy-check", "proxy-seen:8082")
             names[server + "-recorder"] = f"readsrv-{server}-rec-{tag}"
             upstream = spec.get("upstream", f"http://{server}-upstream:{spec['port']}")
             run([tool, "run", "-d", "--name", names[server + "-recorder"], "--network", back,

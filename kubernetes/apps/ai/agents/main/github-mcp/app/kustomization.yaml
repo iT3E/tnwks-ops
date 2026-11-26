@@ -7,16 +7,15 @@ kind: Kustomization
 resources:
   - ./deployment.yaml
   - ./networkpolicy.yaml
-  # The Secret github-mcp-token (GITHUB_MCP_TOKEN): a stopgap of the owner,
-  # a read-only token for this repository only, until the token job of the
-  # App of the main agent writes it (docs/apps/mcp-gateway.md, "The read
-  # servers of main"). Flux decrypts it (the decryption of cluster-apps).
-  - ./secret.sops.yaml
+  # No Secret here: the token is the Secret github-mcp-app-token of the
+  # token job of the App of main (../../github-token).
 configMapGenerator:
   - name: github-mcp-proxy
     files:
       - default.conf.template=./proxy/default.conf.template
+      - token.js=./proxy/token.js
     options:
       annotations:
-        # ${GITHUB_MCP_TOKEN} is for the entrypoint of the proxy, not Flux.
+        # ${GITHUB_MCP_UPSTREAM} is for the entrypoint of the proxy, and
+        # $github_mcp_token for nginx, not Flux.
         kustomize.toolkit.fluxcd.io/substitute: disabled

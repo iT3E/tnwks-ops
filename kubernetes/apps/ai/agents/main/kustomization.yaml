@@ -33,7 +33,8 @@ resources:
   - ./cluster-mcp/ks.yaml
   - ./flux-mcp/ks.yaml
   - ./terraform-mcp/ks.yaml
-  # Not ready until the Secret github-mcp-token exists (github-mcp/ks.yaml).
+  # After the token job of the App of main, which makes the Secret of its
+  # token (github-mcp/ks.yaml, dependsOn).
   - ./github-mcp/ks.yaml
   # The host server of main (host-mcp/ks.yaml), behind the central MCP
   # gateway (route main-host), with the host approval plugin of the agent as
