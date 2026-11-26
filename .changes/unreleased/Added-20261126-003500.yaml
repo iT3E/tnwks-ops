@@ -1,0 +1,3 @@
+kind: Added
+body: "New windows_parental_controls role for the kids' accounts on WSL-02: standard users, Chrome and Edge forced to a filtering DNS-over-HTTPS resolver with SafeSearch and YouTube Restricted Mode in their own hive, and no shutting down the cluster host from them"
+time: 2026-11-26T00:35:00-08:00

@@ -161,6 +161,12 @@
     # each host (security/README.md, the source host-check).
     - role: windows_host_check
       tags: [host-check]
+    # The kids' desktop accounts (docs/wsl/parental-controls.md): standard
+    # users, browser filtering in their own hive, no shut down of the host.
+    # Skipped where parental_accounts is empty.
+    - role: windows_parental_controls
+      when: parental_accounts | default([]) | length > 0
+      tags: [parental-controls]
     - role: windows_wazuh_agent
       vars:
         wazuh_rollout_host: "{{ inventory_hostname }}"

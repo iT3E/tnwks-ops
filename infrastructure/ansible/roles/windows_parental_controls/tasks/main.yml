@@ -1,0 +1,155 @@
+---
+# Each task that names an account carries no_log: the Actions logs of the
+# repo are public, and the names are encrypted host variables.
+
+- name: The names of the kids' accounts are set and in their form
+  ansible.builtin.assert:
+    that:
+      - parental_accounts | select('match', '^[A-Za-z0-9._ -]{1,20}$') | list | length == parental_accounts | length
+      - (ansible_user | lower) not in (parental_accounts | map('lower') | list)
+      - (windows_desktop_user | lower) not in (parental_accounts | map('lower') | list)
+      - parental_doh_template is match('^https://[^\s{}]+$')
+    fail_msg: >-
+      parental_accounts holds local account names (20 characters at most: letters, digits, '.', '_', '-', space) and names neither the
+      admin account nor the account that owns the distro; parental_doh_template is one https URL.
+      Nothing is changed.
+    quiet: true
+  no_log: true
+
+# Users only. Administrators membership is removed; any other group stops
+# the run (an admin looks first). An account not made yet is skipped.
+- name: The kids' accounts are standard users
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ item }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Name)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
+      if (-not $user) { return @{ state = 'no-account' } }
+      $sid = $user.SID.Value
+      function Test-Member([string]$GroupSid) {
+          $g = [ADSI]("WinNT://./" + (Get-LocalGroup -SID $GroupSid).Name + ",group")
+          foreach ($m in @($g.Invoke('Members'))) {
+              $bytes = $m.GetType().InvokeMember('objectSid', 'GetProperty', $null, $m, $null)
+              if ((New-Object Security.Principal.SecurityIdentifier($bytes, 0)).Value -eq $sid) { return $true }
+          }
+          $false
+      }
+      $todo = @()
+      $other = @(Get-LocalGroup | Where-Object { $_.SID.Value -notin 'S-1-5-32-544', 'S-1-5-32-545' } |
+              Where-Object { Test-Member $_.SID.Value } | ForEach-Object { $_.SID.Value })
+      if ($other) { throw "A kids' account is a member of $($other -join ', '). Nothing is changed." }
+      if (Test-Member 'S-1-5-32-544') {
+          $todo += 'remove from Administrators'
+          if ($PSCmdlet.ShouldProcess($Name, 'remove from Administrators')) { Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member $user }
+      }
+      if (-not (Test-Member 'S-1-5-32-545')) {
+          $todo += 'add to Users'
+          if ($PSCmdlet.ShouldProcess($Name, 'add to Users')) { Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $user }
+      }
+      $Ansible.Changed = [bool]$todo
+      @{ state = 'ok'; todo = $todo }
+  loop: "{{ parental_accounts }}"
+  loop_control:
+    index_var: parental_index
+    label: "account {{ parental_index }}"
+  register: parental_groups
+  no_log: true
+
+# The values in the account's own hive: HKEY_USERS\<SID> while the account
+# is signed in, else its NTUSER.DAT loaded for the run and unloaded after.
+- name: Browser and Start menu policies of the kids' accounts
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ item }}"
+      Values: "{{ parental_hkcu_values }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Name, [object[]]$Values)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $user = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
+      if (-not $user) { return @{ state = 'no-account' } }
+      $sid = $user.SID.Value
+      $key = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid"
+      $profilePath = (Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue).ProfileImagePath
+      if (-not $profilePath) { return @{ state = 'no-profile' } }
+      $hku = [Microsoft.Win32.Registry]::Users
+      $mount = $null
+      $probe = $hku.OpenSubKey($sid)
+      if ($probe) { $probe.Dispose(); $base = $sid }
+      else {
+          $mount = 'tnwks-parental'
+          $out = & reg.exe load "HKU\$mount" (Join-Path $profilePath 'NTUSER.DAT') 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "reg load of the account's hive failed: $out" }
+          $base = $mount
+      }
+      $todo = @()
+      try {
+          foreach ($v in $Values) {
+              $sub = "$base\$($v.path)"
+              $kind = [Microsoft.Win32.RegistryValueKind]$v.type
+              $want = if ($kind -eq 'DWord') { [int]$v.data } else { [string]$v.data }
+              $have = $null; $haveKind = $null
+              $k = $hku.OpenSubKey($sub)
+              if ($k) {
+                  try {
+                      if ($k.GetValueNames() -contains $v.name) {
+                          $have = $k.GetValue($v.name, $null, 'DoNotExpandEnvironmentNames')
+                          $haveKind = $k.GetValueKind($v.name)
+                      }
+                  } finally { $k.Dispose() }
+              }
+              if ($haveKind -eq $kind -and $have -eq $want) { continue }
+              # Names only: a value can be the private resolver URL.
+              $todo += "$($v.path)\$($v.name)"
+              if ($PSCmdlet.ShouldProcess($sub, "set $($v.name)")) {
+                  $w = $hku.CreateSubKey($sub)
+                  try { $w.SetValue($v.name, $want, $kind) } finally { $w.Dispose() }
+              }
+          }
+      } finally {
+          if ($mount) {
+              [GC]::Collect(); [GC]::WaitForPendingFinalizers()
+              $out = & reg.exe unload "HKU\$mount" 2>&1
+              if ($LASTEXITCODE -ne 0) { throw "reg unload of the account's hive failed: $out" }
+          }
+      }
+      $Ansible.Changed = [bool]$todo
+      @{ state = 'ok'; signed_in = (-not $mount); todo = $todo }
+  loop: "{{ parental_accounts }}"
+  loop_control:
+    index_var: parental_index
+    label: "account {{ parental_index }}"
+  register: parental_policies
+  no_log: true
+
+- name: Shut down and restart for Administrators and Backup Operators only
+  ansible.windows.win_user_right:
+    name: SeShutdownPrivilege
+    users: "{{ parental_shutdown_holders }}"
+    action: set
+
+- name: No power button on the sign-in screen
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: shutdownwithoutlogon
+    data: 0
+    type: dword
+
+# What each run did, with no names: index, state and the values it set.
+- name: State of the kids' accounts
+  ansible.builtin.debug:
+    msg: >-
+      account {{ idx }}: {{ groups_r.output | default([{}]) | last | default({}) }}
+      {{ policies_r.output | default([{}]) | last | default({}) }}
+  loop: "{{ range(parental_accounts | length) | list }}"
+  loop_control:
+    loop_var: idx
+    label: "account {{ idx }}"
+  vars:
+    groups_r: "{{ parental_groups.results[idx] }}"
+    policies_r: "{{ parental_policies.results[idx] }}"

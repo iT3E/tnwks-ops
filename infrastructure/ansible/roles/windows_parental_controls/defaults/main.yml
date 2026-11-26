@@ -1,0 +1,131 @@
+---
+# windows_parental_controls: the kids' desktop accounts on a Windows host that
+# also runs a cluster (docs/wsl/parental-controls.md). The router sees one
+# address for the kids' browsing and for the cluster, so the filtering lives
+# in the accounts, not on the network.
+#
+# The accounts themselves are made by hand in Settings > Accounts > Family
+# (Microsoft Family Safety: screen time, game age ratings). This role finds
+# them by name and keeps, on each run:
+#
+#   - the account a member of Users and of no admin group (it is removed from
+#     Administrators; any other group stops the run with no change),
+#   - browser policies in the account's own registry hive (HKCU of that user
+#     only, so no other account's browser changes): Chrome and Edge resolve
+#     through a filtering DNS-over-HTTPS resolver with no fallback, SafeSearch
+#     and YouTube Restricted Mode forced, no incognito/InPrivate, no guest
+#     mode or new profiles, no extensions. HKCU\Software\Policies is read-only
+#     for the user, so she can not undo them,
+#   - no shut down, restart or sleep from the account (Start menu policy in
+#     the hive), and host-wide: SeShutdownPrivilege for Administrators and
+#     Backup Operators only (not Users), and no power button on the sign-in
+#     screen. Every non-admin account loses Shut down and Restart with it.
+#
+# The names are encrypted host variables (host_vars/<host>/secrets.sops.yml).
+# An empty list skips the role (playbooks/windows-host.yml). An account that
+# does not exist yet, or has never signed in (no profile), is reported and
+# left for the next run.
+parental_accounts: []
+
+# The DNS-over-HTTPS resolver of the kids' browsers. Cloudflare for Families
+# (malware and adult content) needs no account. A NextDNS profile
+# (https://dns.nextdns.io/<id>) adds per-site blocks, schedules and a query
+# log: set its URL as parental_doh_template in the host's secrets.sops.yml
+# (the profile ID lets anyone use the profile's quota and fill its log).
+parental_doh_template: https://family.cloudflare-dns.com/dns-query
+
+# 1 moderate, 2 strict.
+parental_youtube_restrict: 2
+
+# Policies under the account's HKCU: path (below HKCU), name, type (String or
+# DWord), data. Chrome first: it is the browser on the host. Edge gets the
+# same, so switching browsers changes nothing.
+parental_hkcu_values:
+  # Chrome (chromeenterprise.google/policies)
+  - path: 'Software\Policies\Google\Chrome'
+    name: DnsOverHttpsMode
+    type: String
+    data: secure
+  - path: 'Software\Policies\Google\Chrome'
+    name: DnsOverHttpsTemplates
+    type: String
+    data: "{{ parental_doh_template }}"
+  - path: 'Software\Policies\Google\Chrome'
+    name: BuiltInDnsClientEnabled
+    type: DWord
+    data: 1
+  - path: 'Software\Policies\Google\Chrome'
+    name: IncognitoModeAvailability
+    type: DWord
+    data: 1
+  - path: 'Software\Policies\Google\Chrome'
+    name: BrowserGuestModeEnabled
+    type: DWord
+    data: 0
+  - path: 'Software\Policies\Google\Chrome'
+    name: BrowserAddPersonEnabled
+    type: DWord
+    data: 0
+  - path: 'Software\Policies\Google\Chrome'
+    name: ForceGoogleSafeSearch
+    type: DWord
+    data: 1
+  - path: 'Software\Policies\Google\Chrome'
+    name: ForceYouTubeRestrict
+    type: DWord
+    data: "{{ parental_youtube_restrict }}"
+  - path: 'Software\Policies\Google\Chrome\ExtensionInstallBlocklist'
+    name: "1"
+    type: String
+    data: "*"
+  # Edge (learn.microsoft.com/deployedge/microsoft-edge-policies)
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: DnsOverHttpsMode
+    type: String
+    data: secure
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: DnsOverHttpsTemplates
+    type: String
+    data: "{{ parental_doh_template }}"
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: BuiltInDnsClientEnabled
+    type: DWord
+    data: 1
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: InPrivateModeAvailability
+    type: DWord
+    data: 1
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: BrowserGuestModeEnabled
+    type: DWord
+    data: 0
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: BrowserAddProfileEnabled
+    type: DWord
+    data: 0
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: ForceBingSafeSearch
+    type: DWord
+    data: 2
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: ForceGoogleSafeSearch
+    type: DWord
+    data: 1
+  - path: 'Software\Policies\Microsoft\Edge'
+    name: ForceYouTubeRestrict
+    type: DWord
+    data: "{{ parental_youtube_restrict }}"
+  # Shut down, Restart, Sleep and Hibernate gone from Start, Ctrl+Alt+Del and
+  # Alt+F4 (sign out stays).
+  - path: 'Software\Policies\Microsoft\Edge\ExtensionInstallBlocklist'
+    name: "1"
+    type: String
+    data: "*"
+  - path: 'Software\Microsoft\Windows\CurrentVersion\Policies\Explorer'
+    name: NoClose
+    type: DWord
+    data: 1
+
+# SeShutdownPrivilege, set exactly: Administrators, Backup Operators (the
+# Windows default without Users).
+parental_shutdown_holders: [S-1-5-32-544, S-1-5-32-551]

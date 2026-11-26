@@ -125,3 +125,9 @@ host_settings_disabled_adapters: []
 # limit of 22 GiB (talos_clusters.wsl-02.memory_nodes), and the node limits
 # add to 39 GiB.
 wsl_memory: 45GB
+
+# The kids use this host as a desktop. Their accounts (parental_accounts) and
+# a NextDNS resolver URL (parental_doh_template), when there is one, are in
+# secrets.sops.yml next to this file (role windows_parental_controls,
+# docs/wsl/parental-controls.md). Until the first account is made there, the
+# role is skipped.
