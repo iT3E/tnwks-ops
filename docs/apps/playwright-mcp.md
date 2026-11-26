@@ -112,7 +112,10 @@ send a form, a drag can drop an element on a target that sends, a key can
 be Enter, a type can submit, a select can send a form on change, and a
 dialog can be a confirm. The plugin matches the full tool name, and a call of one of them
 waits for the card in the direct chat of the approver; a no or no answer
-in 10 minutes refuses it. The tools that read a page (`browser_navigate`,
+in 10 minutes refuses it. Since agent image 0.5.2 these tools run only in
+a turn of the approver on his channel, with the same requester check as
+the host tools: a turn of the Control UI, of a group or of a job is
+refused before a card. The tools that read a page (`browser_navigate`,
 `browser_snapshot`, `browser_find`, the network reads) and the tools that
 move in the page (`browser_hover`, `browser_tabs`) do not ask. A page can still send data on a load or a hover, as any public page
 can; the egress goes to public sites through the fetch proxy only.
