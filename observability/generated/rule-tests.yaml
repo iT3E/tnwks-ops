@@ -1730,6 +1730,197 @@ tests:
   - alertname: ControlPlaneContainerMemoryNearLimit
     eval_time: 20m
     exp_alerts: []
+- name: the nodes of site 1 at today's shares do not alert on resident memory, though the working set is high
+  interval: 1m
+  input_series:
+  - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-controlplane-1"}
+    values: 3994319585+0x30
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 3178275799+0x40
+  - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-1"}
+    values: 12004433592+0x30
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 7398081167+0x40
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-2",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 8793945538+0x40
+  alert_rule_test:
+  - alertname: NodeContainerRssNearLimit
+    eval_time: 30m
+    exp_alerts: []
+- name: a node of site 1 past 85% of its limit in resident memory warns after 15 minutes, each role against its
+    own limit
+  interval: 1m
+  input_series:
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 3865470566+0x40
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-2",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 12283606466+0x40
+  alert_rule_test:
+  - alertname: NodeContainerRssNearLimit
+    eval_time: 14m
+    exp_alerts: []
+  - alertname: NodeContainerRssNearLimit
+    eval_time: 16m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        node: lab-controlplane-1
+      exp_annotations:
+        summary: lab-controlplane-1 has more than 85% of the memory limit of its node container in resident memory
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: 'The resident memory of the node container is past 85% of its limit (13 GiB for a worker, 4
+          GiB for the control plane: memory_workers and memory_controlplanes of talos_clusters in the Ansible inventory).
+          It is a floor of the memory that the kernel can not take back: at the limit, the kernel kills processes
+          inside the node container, and neither the scheduler nor the kubelet sees that limit. Find what grew.
+          docs/operations/observability-operations.md, Room on site 1, has the steps.'
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        node: lab-worker-2
+      exp_annotations:
+        summary: lab-worker-2 has more than 85% of the memory limit of its node container in resident memory
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: 'The resident memory of the node container is past 85% of its limit (13 GiB for a worker, 4
+          GiB for the control plane: memory_workers and memory_controlplanes of talos_clusters in the Ansible inventory).
+          It is a floor of the memory that the kernel can not take back: at the limit, the kernel kills processes
+          inside the node container, and neither the scheduler nor the kubelet sees that limit. Find what grew.
+          docs/operations/observability-operations.md, Room on site 1, has the steps.'
+- name: a worker under 85% of its own limit, a cgroup that is not the root, site 2 and 84% do not alert
+  interval: 1m
+  input_series:
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 3865470566+0x40
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-2",id="/kubepods.slice",container="",image="",name="",namespace="",pod=""}
+    values: 13421772800+0x40
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 3607772528+0x40
+  - series: container_memory_rss{k8s_cluster="homelab-wsl-02",job="kubelet",metrics_path="/metrics/cadvisor",node="other-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 13421772800+0x40
+  alert_rule_test:
+  - alertname: NodeContainerRssNearLimit
+    eval_time: 30m
+    exp_alerts: []
+- name: the guard of the resident memory alert is quiet while it reads each node of site 1, and on site 2
+  interval: 1m
+  input_series:
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-controlplane-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-2"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-2",node="lab-worker-1"}
+    values: 1+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-2",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl-02",job="kube-state-metrics",instance="ksm-1",node="other-controlplane-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl-02",job="kube-state-metrics",instance="ksm-1",node="other-worker-1"}
+    values: 1+0x80
+  alert_rule_test:
+  - alertname: NodeContainerRssMissing
+    eval_time: 70m
+    exp_alerts: []
+- name: the guard warns after an hour when a node of site 1 has a name outside the form
+  interval: 1m
+  input_series:
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-controlplane-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-node-3"}
+    values: 1+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-node-3",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  alert_rule_test:
+  - alertname: NodeContainerRssMissing
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: NodeContainerRssMissing
+    eval_time: 61m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+      exp_annotations:
+        summary: NodeContainerRssNearLimit reads fewer nodes of homelab-wsl than the cluster has
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: For at least an hour, a node of the cluster has no series of the resident memory of its root
+          cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of the
+          kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in Docker
+          (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the series.
+          docs/operations/observability-operations.md, Room on site 1, has the steps.
+- name: the guard warns after an hour when a node of site 1 has no root series
+  interval: 1m
+  input_series:
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-controlplane-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-2"}
+    values: 1+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-2",id="/kubepods.slice",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  alert_rule_test:
+  - alertname: NodeContainerRssMissing
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: NodeContainerRssMissing
+    eval_time: 61m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+      exp_annotations:
+        summary: NodeContainerRssNearLimit reads fewer nodes of homelab-wsl than the cluster has
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: For at least an hour, a node of the cluster has no series of the resident memory of its root
+          cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of the
+          kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in Docker
+          (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the series.
+          docs/operations/observability-operations.md, Room on site 1, has the steps.
+- name: the guard warns after an hour when site 1 has no root series at all
+  interval: 1m
+  input_series:
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-controlplane-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-2"}
+    values: 1+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl-02",job="kubelet",metrics_path="/metrics/cadvisor",node="other-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  alert_rule_test:
+  - alertname: NodeContainerRssMissing
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: NodeContainerRssMissing
+    eval_time: 61m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+      exp_annotations:
+        summary: NodeContainerRssNearLimit reads fewer nodes of homelab-wsl than the cluster has
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: For at least an hour, a node of the cluster has no series of the resident memory of its root
+          cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of the
+          kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in Docker
+          (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the series.
+          docs/operations/observability-operations.md, Room on site 1, has the steps.
 - name: the 90-day streams above twice their plan alert, whatever the other streams take in
   interval: 1m
   input_series:

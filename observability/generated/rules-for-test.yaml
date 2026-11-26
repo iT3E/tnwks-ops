@@ -526,6 +526,36 @@ groups:
         active file pages, such as the database file of etcd, which the kernel can take back. At 98% little is left
         to take back: compare rssBytes in the summary of the kubelet, and find what grew. docs/operations/observability-operations.md,
         Room on site 1, has the steps.'
+  - alert: NodeContainerRssNearLimit
+    expr: (max by (k8s_cluster, node) (container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",id="/",node=~".+-worker-[0-9]+"})
+      > 0.85 * 13 * 1024^3) or (max by (k8s_cluster, node) (container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",id="/",node=~".+-controlplane-[0-9]+"})
+      > 0.85 * 4 * 1024^3)
+    for: 15m
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.node }} has more than 85% of the memory limit of its node container in resident memory'
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}
+      description: 'The resident memory of the node container is past 85% of its limit (13 GiB for a worker, 4 GiB
+        for the control plane: memory_workers and memory_controlplanes of talos_clusters in the Ansible inventory).
+        It is a floor of the memory that the kernel can not take back: at the limit, the kernel kills processes
+        inside the node container, and neither the scheduler nor the kubelet sees that limit. Find what grew. docs/operations/observability-operations.md,
+        Room on site 1, has the steps.'
+  - alert: NodeContainerRssMissing
+    expr: count by (k8s_cluster) (max by (k8s_cluster, node) (kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics"}))
+      > (count by (k8s_cluster) (max by (k8s_cluster, node) (container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",id="/",node=~".+-(worker|controlplane)-[0-9]+"}))
+      or 0 * count by (k8s_cluster) (max by (k8s_cluster, node) (kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics"})))
+    for: 1h
+    labels:
+      severity: warning
+    annotations:
+      summary: NodeContainerRssNearLimit reads fewer nodes of {{ $labels.k8s_cluster }} than the cluster has
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}
+      description: For at least an hour, a node of the cluster has no series of the resident memory of its root
+        cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of the kubelet
+        scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in Docker (a name
+        that ends in worker or controlplane and an index), or the kubelet changed a label of the series. docs/operations/observability-operations.md,
+        Room on site 1, has the steps.
   - alert: LokiSecurityIngestAbovePlan
     expr: sum by (k8s_cluster) (increase(loki_distributor_bytes_received_total{retention_hours="2160"}[1d])) > 2
       * 1.2e9

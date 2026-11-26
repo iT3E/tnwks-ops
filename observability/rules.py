@@ -530,6 +530,12 @@ CAPACITY_DRIVE_FLOOR_GB = 100
 SITE1_CLUSTER = "homelab-wsl"
 SITE1_WORKER_LIMIT_GIB = 13
 SITE1_CONTROLPLANE_LIMIT_GIB = 4
+# NodeContainerRssNearLimit: the share of the limit and the wait.
+SITE1_RSS_SHARE = 0.85
+SITE1_RSS_FOR = "15m"
+# NodeContainerRssMissing: how long that alert reads fewer nodes than the
+# cluster has before the guard warns.
+SITE1_RSS_MISSING_FOR = "1h"
 
 
 # The section of each alert of the security platform in its runbook. A plain
@@ -555,6 +561,20 @@ def capacity_alerts():
         -worker-<n> or -controlplane-<n>."""
         return (f'max by (k8s_cluster, node) (node_memory_working_set_bytes{{k8s_cluster="{SITE1_CLUSTER}",node=~".+-{role}-[0-9]+"}})'
                 f' > {share} * {limit_gib} * 1024^3')
+
+    def site1_root_rss(role):
+        """cAdvisor's resident memory of the root cgroup (the node container)
+        of the nodes of homelab-wsl whose role matches, one series per node."""
+        return (f'max by (k8s_cluster, node) (container_memory_rss{{k8s_cluster="{SITE1_CLUSTER}",job="kubelet",'
+                f'metrics_path="/metrics/cadvisor",id="/",node=~".+-{role}-[0-9]+"}})')
+
+    def site1_rss(role, limit_gib):
+        """The resident memory of the nodes of homelab-wsl of one role past
+        SITE1_RSS_SHARE of their limit."""
+        return f'({site1_root_rss(role)} > {SITE1_RSS_SHARE} * {limit_gib} * 1024^3)'
+
+    site1_nodes = (f'count by (k8s_cluster) (max by (k8s_cluster, node) '
+                   f'(kube_node_info{{k8s_cluster="{SITE1_CLUSTER}",job="kube-state-metrics"}}))')
 
     steps = " docs/operations/observability-operations.md, Room on site 1, has the steps."
     worker_limit = (f"The node container of a worker of {SITE1_CLUSTER} has a memory limit of {SITE1_WORKER_LIMIT_GIB} GiB"
@@ -611,6 +631,42 @@ def capacity_alerts():
                                          " active file pages, such as the database file of etcd, which the kernel can take back."
                                          " At 98% little is left to take back: compare rssBytes in the summary of the kubelet,"
                                          " and find what grew." + steps)}},
+        # The resident memory of the root cgroup of each node of homelab-wsl:
+        # the anonymous memory, which the kernel can not take back (the nodes
+        # have no swap). It leaves out tmpfs, shared memory and kernel memory,
+        # so it is a floor of what the kernel can not take back. A working set
+        # past its threshold can be file pages; this one can not. cAdvisor's series of that cgroup, kept by a
+        # relabel of the scrape of site 1 (kubernetes/clusters/wsl/apps).
+        {"alert": "NodeContainerRssNearLimit",
+         "expr": f"{site1_rss('worker', SITE1_WORKER_LIMIT_GIB)} or {site1_rss('controlplane', SITE1_CONTROLPLANE_LIMIT_GIB)}",
+         "for": SITE1_RSS_FOR, "labels": {"severity": "warning"},
+         "annotations": {"summary": ("{{ $labels.node }} has more than " + f"{SITE1_RSS_SHARE:.0%}"
+                                     " of the memory limit of its node container in resident memory"),
+                         "dashboard_url": board("tnwks-kubernetes"),
+                         "description": (f"The resident memory of the node container is past {SITE1_RSS_SHARE:.0%} of its limit"
+                                         f" ({SITE1_WORKER_LIMIT_GIB} GiB for a worker, {SITE1_CONTROLPLANE_LIMIT_GIB} GiB for the"
+                                         " control plane: memory_workers and memory_controlplanes of talos_clusters in the Ansible"
+                                         " inventory). It is a floor of the memory that the kernel can not take back: at the limit, the kernel"
+                                         " kills processes inside the node container, and neither the scheduler nor the kubelet"
+                                         " sees that limit. Find what grew." + steps)}},
+        # The guard of NodeContainerRssNearLimit: that alert is silent for a
+        # node whose series it can not read. The count of the nodes that it
+        # reads (the role match included) against the count of the nodes of
+        # the cluster in kube-state-metrics. With no root series at all, the
+        # count on the right is 0, from the `or`.
+        {"alert": "NodeContainerRssMissing",
+         "expr": (f"{site1_nodes} > (count by (k8s_cluster) ({site1_root_rss('(worker|controlplane)')})"
+                  f" or 0 * {site1_nodes})"),
+         "for": SITE1_RSS_MISSING_FOR, "labels": {"severity": "warning"},
+         "annotations": {"summary": ("NodeContainerRssNearLimit reads fewer nodes of {{ $labels.k8s_cluster }}"
+                                     " than the cluster has"),
+                         "dashboard_url": board("tnwks-kubernetes"),
+                         "description": ("For at least an hour, a node of the cluster has no series of the resident memory"
+                                         " of its root cgroup that NodeContainerRssNearLimit can read, so that alert can"
+                                         " not fire for it. The relabel of the kubelet scrape of site 1 no longer keeps the"
+                                         " series, a node has a name outside the form of Talos in Docker (a name that"
+                                         " ends in worker or controlplane and an index), or the kubelet changed a label of"
+                                         " the series." + steps)}},
         {"alert": "LokiSecurityIngestAbovePlan",
          "expr": ('sum by (k8s_cluster) (increase(loki_distributor_bytes_received_total'
                   f'{{retention_hours="{SECURITY_RETENTION_HOURS}"}}[1d])) > 2 * {SECURITY_INGEST_PLAN_GB}e9'),
@@ -2356,6 +2412,21 @@ def capacity_fixtures():
         return {"series": f'node_memory_working_set_bytes{{k8s_cluster="{SITE1_CLUSTER}",node="{name}"}}',
                 "values": f"{value}+0x30"}
 
+    def site1_rss(name, value, cgroup="/", cluster=SITE1_CLUSTER, minutes=40):
+        """cAdvisor's resident memory of a cgroup, with the labels of the root
+        cgroup as the kubelet of site 1 gives them."""
+        return {"series": (f'container_memory_rss{{k8s_cluster="{cluster}",job="kubelet",metrics_path="/metrics/cadvisor",'
+                           f'node="{name}",id="{cgroup}",container="",image="",name="",namespace="",pod=""}}'),
+                "values": f"{value}+0x{minutes}"}
+
+    def node_info(name, cluster=SITE1_CLUSTER, instance="ksm-1"):
+        """kube-state-metrics' series of a node."""
+        return {"series": f'kube_node_info{{k8s_cluster="{cluster}",job="kube-state-metrics",instance="{instance}",node="{name}"}}',
+                "values": "1+0x80"}
+
+    site1_names = ["lab-controlplane-1", "lab-worker-1", "lab-worker-2"]
+    rss = int(gib)
+
     def loki(retention_hours, per_minute):
         return {"series": (f'loki_distributor_bytes_received_total{{k8s_cluster="{site}",tenant="fake",'
                            f'retention_hours="{retention_hours}"}}'),
@@ -2434,6 +2505,98 @@ def capacity_fixtures():
          ],
          "alert_rule_test": [
              {"alertname": "ControlPlaneContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
+         ]},
+        # NodeContainerRssNearLimit. The healthy case is the shares of site 1
+        # at the time of this change: the working set of the control plane at
+        # 93% of its limit and of the workers near 85%, their resident memory
+        # at about 74%, 53% and 63%.
+        {"name": "the nodes of site 1 at today's shares do not alert on resident memory, though the working set is high",
+         "interval": "1m",
+         "input_series": [
+             site1_node("lab-controlplane-1", int(0.93 * SITE1_CONTROLPLANE_LIMIT_GIB * gib)),
+             site1_rss("lab-controlplane-1", int(0.74 * SITE1_CONTROLPLANE_LIMIT_GIB * gib)),
+             site1_node("lab-worker-1", int(0.86 * SITE1_WORKER_LIMIT_GIB * gib)),
+             site1_rss("lab-worker-1", int(0.53 * SITE1_WORKER_LIMIT_GIB * gib)),
+             site1_rss("lab-worker-2", int(0.63 * SITE1_WORKER_LIMIT_GIB * gib)),
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerRssNearLimit", "eval_time": "30m", "exp_alerts": []},
+         ]},
+        {"name": "a node of site 1 past 85% of its limit in resident memory warns after 15 minutes, each role against its own limit",
+         "interval": "1m",
+         "input_series": [
+             site1_rss("lab-controlplane-1", int(0.90 * SITE1_CONTROLPLANE_LIMIT_GIB * gib)),
+             site1_rss("lab-worker-2", int(0.88 * SITE1_WORKER_LIMIT_GIB * gib)),
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerRssNearLimit", "eval_time": "14m", "exp_alerts": []},
+             {"alertname": "NodeContainerRssNearLimit", "eval_time": "16m", "exp_alerts": [
+                 expected("NodeContainerRssNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-controlplane-1"),
+                 expected("NodeContainerRssNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-2")]},
+         ]},
+        # The edges: a worker at 3.6 GiB is past 85% of the limit of the
+        # control plane but not of its own; a cgroup of a pod or another cgroup
+        # than the root is not the node container; a node of site 2 has no
+        # limit here; a share just under 85% does not alert.
+        {"name": "a worker under 85% of its own limit, a cgroup that is not the root, site 2 and 84% do not alert",
+         "interval": "1m",
+         "input_series": [
+             site1_rss("lab-worker-1", int(3.6 * gib)),
+             site1_rss("lab-worker-2", int(12.5 * gib), cgroup="/kubepods.slice"),
+             site1_rss("lab-controlplane-1", int(0.84 * SITE1_CONTROLPLANE_LIMIT_GIB * gib)),
+             site1_rss("other-worker-1", int(12.5 * gib), cluster=site),
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerRssNearLimit", "eval_time": "30m", "exp_alerts": []},
+         ]},
+        # NodeContainerRssMissing. Quiet: each node of site 1 has its root
+        # series; a second series of a node in kube-state-metrics (two pods of
+        # it in a rollout) is still one node; site 2 has nodes and no such
+        # series, and the rule asks for site 1 only.
+        {"name": "the guard of the resident memory alert is quiet while it reads each node of site 1, and on site 2",
+         "interval": "1m",
+         "input_series": [
+             *[node_info(name) for name in site1_names],
+             node_info("lab-worker-1", instance="ksm-2"),
+             *[site1_rss(name, rss, minutes=80) for name in site1_names],
+             *[node_info(name, cluster=site) for name in ["other-controlplane-1", "other-worker-1"]],
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerRssMissing", "eval_time": "70m", "exp_alerts": []},
+         ]},
+        # A node of site 1 with a name outside the form: it has its root
+        # series, but the alert can not read it.
+        {"name": "the guard warns after an hour when a node of site 1 has a name outside the form",
+         "interval": "1m",
+         "input_series": [
+             *[node_info(name) for name in ["lab-controlplane-1", "lab-worker-1", "lab-node-3"]],
+             *[site1_rss(name, rss, minutes=80) for name in ["lab-controlplane-1", "lab-worker-1", "lab-node-3"]],
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerRssMissing", "eval_time": "59m", "exp_alerts": []},
+             {"alertname": "NodeContainerRssMissing", "eval_time": "61m", "exp_alerts": [
+                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER)]},
+         ]},
+        # A node of site 1 with the series of a cgroup that is not the root,
+        # and none of the root.
+        {"name": "the guard warns after an hour when a node of site 1 has no root series",
+         "interval": "1m",
+         "input_series": [
+             *[node_info(name) for name in site1_names],
+             site1_rss("lab-controlplane-1", rss, minutes=80),
+             site1_rss("lab-worker-1", rss, minutes=80),
+             site1_rss("lab-worker-2", rss, cgroup="/kubepods.slice", minutes=80),
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerRssMissing", "eval_time": "59m", "exp_alerts": []},
+             {"alertname": "NodeContainerRssMissing", "eval_time": "61m", "exp_alerts": [
+                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER)]},
+         ]},
+        # The relabel lost: no root series of site 1 at all, while site 2's
+        # root series stay (they do not count for site 1).
+        {"name": "the guard warns after an hour when site 1 has no root series at all",
+         "interval": "1m",
+         "input_series": [
+             *[node_info(name) for name in site1_names],
+             site1_rss("other-worker-1", rss, cluster=site, minutes=80),
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerRssMissing", "eval_time": "59m", "exp_alerts": []},
+             {"alertname": "NodeContainerRssMissing", "eval_time": "61m", "exp_alerts": [
+                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER)]},
          ]},
         # 2 MB a minute is 2.88 GB a day, past twice the plan of 1.2 GB. The
         # streams with the default retention take in ten times that and don't count.
