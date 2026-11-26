@@ -1,0 +1,3 @@
+kind: Changed
+body: 'The admission policy flux-child-scope also covers the release fields of a HelmRelease: the rule helmrelease-spec refuses spec.releaseName, spec.targetNamespace and spec.storageNamespace on a HelmRelease outside the class (docs/operations/flux-admission.md)'
+time: 2026-11-26T22:00:00.000000000+00:00

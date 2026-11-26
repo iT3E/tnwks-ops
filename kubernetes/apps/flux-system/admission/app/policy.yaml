@@ -24,7 +24,7 @@
 # - rbac: make or change a Role or a RoleBinding;
 # - flux-kinds: make a Flux Kustomization or an ImageUpdateAutomation;
 # - helmrelease-spec: give a HelmRelease a service account, a kubeconfig, a
-#   target or storage namespace of the class, or the post render strategy
+#   release name, a target or storage namespace, or the post render strategy
 #   "nohooks" (hooks with no owner labels);
 # - privileged-pod: make a pod spec with privileged, a host path, the host
 #   network, PID or IPC namespace, a host port or an added capability, in
@@ -594,12 +594,12 @@ spec:
     - expression: >-
         !variables.outside || !variables.isHelmRelease || (
           !has(object.spec.serviceAccountName) && !has(object.spec.kubeConfig) &&
-          !(object.spec.?targetNamespace.orValue('') in variables.classNamespaces) &&
-          !(object.spec.?storageNamespace.orValue('') in variables.classNamespaces) &&
+          !has(object.spec.releaseName) && !has(object.spec.targetNamespace) &&
+          !has(object.spec.storageNamespace) &&
           object.spec.?postRenderStrategy.orValue('') != 'nohooks')
       messageExpression: >-
         'flux-child-scope/helmrelease-spec: ' + variables.child + ' is outside the class, so ' + variables.what +
-        ' may have no service account, kubeconfig, target or storage namespace of the class, or post render strategy nohooks'
+        ' may have no service account, kubeconfig, release name, target or storage namespace, or post render strategy nohooks'
       reason: Forbidden
     - expression: "!variables.outside || !variables.privileged"
       messageExpression: >-
