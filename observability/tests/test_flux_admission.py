@@ -10,6 +10,7 @@ on a throwaway API server (admission/tests/run.sh), with Docker.
 """
 
 import ast
+import importlib.machinery
 import importlib.util
 import os
 import re
@@ -231,6 +232,27 @@ def test_no_child_outside_the_class_applies_a_secret_that_helm_or_an_account_use
     assert not found, found
     policy = (ROOT / "kubernetes/apps/flux-system/admission/app/policy.yaml").read_text()
     assert all(f"'{t}'" in policy for t in HELM_AND_TOKEN_TYPES)
+
+
+def test_the_live_check_sends_the_count_of_its_doc():
+    """bin/flux-admission-check sends one object for each rule that it
+    controls, and the doc gives the count that the read must rise by."""
+    loader = importlib.machinery.SourceFileLoader("flux_admission_check", str(ROOT / "bin/flux-admission-check"))
+    spec = importlib.util.spec_from_loader("flux_admission_check", loader)
+    check = importlib.util.module_from_spec(spec)
+    loader.exec_module(check)
+    sent = check.objects("flux-system/cluster-apps")
+    assert len({what for what, _, _ in sent}) == len(sent)
+    owners = {check.KUSTOMIZE: check.OUTSIDE, check.HELM: check.HELM_OUTSIDE}
+    for what, user, doc in sent:
+        if doc["kind"] != "Kustomization":
+            assert doc["metadata"]["labels"] == owners[user], what
+    kinds = {(doc["kind"], doc.get("type")) for _, _, doc in sent}
+    assert {("Secret", "helm.sh/release.v1"), ("Secret", "kubernetes.io/service-account-token")} <= kinds
+    assert any(doc["kind"] == "HelmRelease" and "releaseName" in doc["spec"] for _, _, doc in sent)
+    text = (ROOT / "docs/operations/flux-admission.md").read_text()
+    assert f"It sends {len(sent)} test objects" in text
+    assert f"at least {len(sent)} each" in re.sub(r"\s+", " ", text)
 
 
 # The release fields that helmrelease-spec refuses outside the class.
