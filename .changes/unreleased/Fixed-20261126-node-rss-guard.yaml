@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'homelab-wsl: NodeContainerRssMissing now fires for each node that NodeContainerRssNearLimit can not read, by node name, so a series of a name that kube-state-metrics no longer has can not hide a node; the chart fetch test fails on an error answer of the registry also off CI, and skips off CI only on a network error'
+time: 2026-11-26T18:20:00.000000000+00:00

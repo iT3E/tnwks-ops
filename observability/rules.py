@@ -533,8 +533,8 @@ SITE1_CONTROLPLANE_LIMIT_GIB = 4
 # NodeContainerRssNearLimit: the share of the limit and the wait.
 SITE1_RSS_SHARE = 0.85
 SITE1_RSS_FOR = "15m"
-# NodeContainerRssMissing: how long that alert reads fewer nodes than the
-# cluster has before the guard warns.
+# NodeContainerRssMissing: how long that alert can not read a node of the
+# cluster before the guard warns.
 SITE1_RSS_MISSING_FOR = "1h"
 
 
@@ -573,8 +573,10 @@ def capacity_alerts():
         SITE1_RSS_SHARE of their limit."""
         return f'({site1_root_rss(role)} > {SITE1_RSS_SHARE} * {limit_gib} * 1024^3)'
 
-    site1_nodes = (f'count by (k8s_cluster) (max by (k8s_cluster, node) '
-                   f'(kube_node_info{{k8s_cluster="{SITE1_CLUSTER}",job="kube-state-metrics"}}))')
+    # The nodes of homelab-wsl in kube-state-metrics, one series per node: two
+    # pods of it in a rollout give two series of a node.
+    site1_nodes = (f'max by (k8s_cluster, node) '
+                   f'(kube_node_info{{k8s_cluster="{SITE1_CLUSTER}",job="kube-state-metrics"}})')
 
     steps = " docs/operations/observability-operations.md, Room on site 1, has the steps."
     worker_limit = (f"The node container of a worker of {SITE1_CLUSTER} has a memory limit of {SITE1_WORKER_LIMIT_GIB} GiB"
@@ -650,18 +652,18 @@ def capacity_alerts():
                                          " kills processes inside the node container, and neither the scheduler nor the kubelet"
                                          " sees that limit. Find what grew." + steps)}},
         # The guard of NodeContainerRssNearLimit: that alert is silent for a
-        # node whose series it can not read. The count of the nodes that it
-        # reads (the role match included) against the count of the nodes of
-        # the cluster in kube-state-metrics. With no root series at all, the
-        # count on the right is 0, from the `or`.
+        # node whose series it can not read. Each node of the cluster in
+        # kube-state-metrics that has no series that the alert reads (the
+        # role match included), by its name: a series of a name that
+        # kube-state-metrics no longer has can not hide a node. With no root
+        # series at all, `unless` keeps each node, so each one fires.
         {"alert": "NodeContainerRssMissing",
-         "expr": (f"{site1_nodes} > (count by (k8s_cluster) ({site1_root_rss('(worker|controlplane)')})"
-                  f" or 0 * {site1_nodes})"),
+         "expr": f"{site1_nodes} unless on (k8s_cluster, node) {site1_root_rss('(worker|controlplane)')}",
          "for": SITE1_RSS_MISSING_FOR, "labels": {"severity": "warning"},
-         "annotations": {"summary": ("NodeContainerRssNearLimit reads fewer nodes of {{ $labels.k8s_cluster }}"
-                                     " than the cluster has"),
+         "annotations": {"summary": ("NodeContainerRssNearLimit can not read the resident memory of {{ $labels.node }}"
+                                     " of {{ $labels.k8s_cluster }}"),
                          "dashboard_url": board("tnwks-kubernetes"),
-                         "description": ("For at least an hour, a node of the cluster has no series of the resident memory"
+                         "description": ("For at least an hour, this node of the cluster has no series of the resident memory"
                                          " of its root cgroup that NodeContainerRssNearLimit can read, so that alert can"
                                          " not fire for it. The relabel of the kubelet scrape of site 1 no longer keeps the"
                                          " series, a node has a name outside the form of Talos in Docker (a name that"
@@ -2561,20 +2563,22 @@ def capacity_fixtures():
              {"alertname": "NodeContainerRssMissing", "eval_time": "70m", "exp_alerts": []},
          ]},
         # A node of site 1 with a name outside the form: it has its root
-        # series, but the alert can not read it.
-        {"name": "the guard warns after an hour when a node of site 1 has a name outside the form",
+        # series, but the alert can not read it. Its second series in
+        # kube-state-metrics gives one alert, not two.
+        {"name": "the guard warns after an hour for a node of site 1 with a name outside the form, once",
          "interval": "1m",
          "input_series": [
              *[node_info(name) for name in ["lab-controlplane-1", "lab-worker-1", "lab-node-3"]],
+             node_info("lab-node-3", instance="ksm-2"),
              *[site1_rss(name, rss, minutes=80) for name in ["lab-controlplane-1", "lab-worker-1", "lab-node-3"]],
          ], "alert_rule_test": [
              {"alertname": "NodeContainerRssMissing", "eval_time": "59m", "exp_alerts": []},
              {"alertname": "NodeContainerRssMissing", "eval_time": "61m", "exp_alerts": [
-                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER)]},
+                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER, node="lab-node-3")]},
          ]},
         # A node of site 1 with the series of a cgroup that is not the root,
         # and none of the root.
-        {"name": "the guard warns after an hour when a node of site 1 has no root series",
+        {"name": "the guard warns after an hour for a node of site 1 with no root series",
          "interval": "1m",
          "input_series": [
              *[node_info(name) for name in site1_names],
@@ -2584,11 +2588,27 @@ def capacity_fixtures():
          ], "alert_rule_test": [
              {"alertname": "NodeContainerRssMissing", "eval_time": "59m", "exp_alerts": []},
              {"alertname": "NodeContainerRssMissing", "eval_time": "61m", "exp_alerts": [
-                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER)]},
+                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER, node="lab-worker-2")]},
+         ]},
+        # A stale name: the root series of a node that kube-state-metrics no
+        # longer has stays, and a node of the cluster has none. The counts
+        # are equal (3 and 3), so a count would hide that node; the guard
+        # names it.
+        {"name": "the guard warns after an hour for a node of site 1 with no root series, though a stale name has one",
+         "interval": "1m",
+         "input_series": [
+             *[node_info(name) for name in site1_names],
+             site1_rss("lab-controlplane-1", rss, minutes=80),
+             site1_rss("lab-worker-1", rss, minutes=80),
+             site1_rss("lab-worker-3", rss, minutes=80),
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerRssMissing", "eval_time": "59m", "exp_alerts": []},
+             {"alertname": "NodeContainerRssMissing", "eval_time": "61m", "exp_alerts": [
+                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER, node="lab-worker-2")]},
          ]},
         # The relabel lost: no root series of site 1 at all, while site 2's
-        # root series stay (they do not count for site 1).
-        {"name": "the guard warns after an hour when site 1 has no root series at all",
+        # root series stay (they do not count for site 1). Each node fires.
+        {"name": "the guard warns after an hour for each node when site 1 has no root series at all",
          "interval": "1m",
          "input_series": [
              *[node_info(name) for name in site1_names],
@@ -2596,7 +2616,7 @@ def capacity_fixtures():
          ], "alert_rule_test": [
              {"alertname": "NodeContainerRssMissing", "eval_time": "59m", "exp_alerts": []},
              {"alertname": "NodeContainerRssMissing", "eval_time": "61m", "exp_alerts": [
-                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER)]},
+                 expected("NodeContainerRssMissing", k8s_cluster=SITE1_CLUSTER, node=name) for name in site1_names]},
          ]},
         # 2 MB a minute is 2.88 GB a day, past twice the plan of 1.2 GB. The
         # streams with the default retention take in ten times that and don't count.

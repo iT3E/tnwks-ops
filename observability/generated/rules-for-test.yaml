@@ -542,16 +542,16 @@ groups:
         inside the node container, and neither the scheduler nor the kubelet sees that limit. Find what grew. docs/operations/observability-operations.md,
         Room on site 1, has the steps.'
   - alert: NodeContainerRssMissing
-    expr: count by (k8s_cluster) (max by (k8s_cluster, node) (kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics"}))
-      > (count by (k8s_cluster) (max by (k8s_cluster, node) (container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",id="/",node=~".+-(worker|controlplane)-[0-9]+"}))
-      or 0 * count by (k8s_cluster) (max by (k8s_cluster, node) (kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics"})))
+    expr: max by (k8s_cluster, node) (kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics"}) unless
+      on (k8s_cluster, node) max by (k8s_cluster, node) (container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",id="/",node=~".+-(worker|controlplane)-[0-9]+"})
     for: 1h
     labels:
       severity: warning
     annotations:
-      summary: NodeContainerRssNearLimit reads fewer nodes of {{ $labels.k8s_cluster }} than the cluster has
+      summary: NodeContainerRssNearLimit can not read the resident memory of {{ $labels.node }} of {{ $labels.k8s_cluster
+        }}
       dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}
-      description: For at least an hour, a node of the cluster has no series of the resident memory of its root
+      description: For at least an hour, this node of the cluster has no series of the resident memory of its root
         cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of the kubelet
         scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in Docker (a name
         that ends in worker or controlplane and an index), or the kubelet changed a label of the series. docs/operations/observability-operations.md,

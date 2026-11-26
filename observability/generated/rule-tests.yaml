@@ -1826,7 +1826,7 @@ tests:
   - alertname: NodeContainerRssMissing
     eval_time: 70m
     exp_alerts: []
-- name: the guard warns after an hour when a node of site 1 has a name outside the form
+- name: the guard warns after an hour for a node of site 1 with a name outside the form, once
   interval: 1m
   input_series:
   - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-controlplane-1"}
@@ -1834,6 +1834,8 @@ tests:
   - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-1"}
     values: 1+0x80
   - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-node-3"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-2",node="lab-node-3"}
     values: 1+0x80
   - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
     values: 1073741824+0x80
@@ -1851,15 +1853,16 @@ tests:
     - exp_labels:
         severity: warning
         k8s_cluster: homelab-wsl
+        node: lab-node-3
       exp_annotations:
-        summary: NodeContainerRssNearLimit reads fewer nodes of homelab-wsl than the cluster has
+        summary: NodeContainerRssNearLimit can not read the resident memory of lab-node-3 of homelab-wsl
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: For at least an hour, a node of the cluster has no series of the resident memory of its root
-          cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of the
-          kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in Docker
-          (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the series.
-          docs/operations/observability-operations.md, Room on site 1, has the steps.
-- name: the guard warns after an hour when a node of site 1 has no root series
+        description: For at least an hour, this node of the cluster has no series of the resident memory of its
+          root cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of
+          the kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in
+          Docker (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the
+          series. docs/operations/observability-operations.md, Room on site 1, has the steps.
+- name: the guard warns after an hour for a node of site 1 with no root series
   interval: 1m
   input_series:
   - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-controlplane-1"}
@@ -1884,15 +1887,50 @@ tests:
     - exp_labels:
         severity: warning
         k8s_cluster: homelab-wsl
+        node: lab-worker-2
       exp_annotations:
-        summary: NodeContainerRssNearLimit reads fewer nodes of homelab-wsl than the cluster has
+        summary: NodeContainerRssNearLimit can not read the resident memory of lab-worker-2 of homelab-wsl
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: For at least an hour, a node of the cluster has no series of the resident memory of its root
-          cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of the
-          kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in Docker
-          (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the series.
-          docs/operations/observability-operations.md, Room on site 1, has the steps.
-- name: the guard warns after an hour when site 1 has no root series at all
+        description: For at least an hour, this node of the cluster has no series of the resident memory of its
+          root cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of
+          the kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in
+          Docker (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the
+          series. docs/operations/observability-operations.md, Room on site 1, has the steps.
+- name: the guard warns after an hour for a node of site 1 with no root series, though a stale name has one
+  interval: 1m
+  input_series:
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-controlplane-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-1"}
+    values: 1+0x80
+  - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-worker-2"}
+    values: 1+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-3",id="/",container="",image="",name="",namespace="",pod=""}
+    values: 1073741824+0x80
+  alert_rule_test:
+  - alertname: NodeContainerRssMissing
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: NodeContainerRssMissing
+    eval_time: 61m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        node: lab-worker-2
+      exp_annotations:
+        summary: NodeContainerRssNearLimit can not read the resident memory of lab-worker-2 of homelab-wsl
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: For at least an hour, this node of the cluster has no series of the resident memory of its
+          root cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of
+          the kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in
+          Docker (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the
+          series. docs/operations/observability-operations.md, Room on site 1, has the steps.
+- name: the guard warns after an hour for each node when site 1 has no root series at all
   interval: 1m
   input_series:
   - series: kube_node_info{k8s_cluster="homelab-wsl",job="kube-state-metrics",instance="ksm-1",node="lab-controlplane-1"}
@@ -1913,14 +1951,39 @@ tests:
     - exp_labels:
         severity: warning
         k8s_cluster: homelab-wsl
+        node: lab-controlplane-1
       exp_annotations:
-        summary: NodeContainerRssNearLimit reads fewer nodes of homelab-wsl than the cluster has
+        summary: NodeContainerRssNearLimit can not read the resident memory of lab-controlplane-1 of homelab-wsl
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: For at least an hour, a node of the cluster has no series of the resident memory of its root
-          cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of the
-          kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in Docker
-          (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the series.
-          docs/operations/observability-operations.md, Room on site 1, has the steps.
+        description: For at least an hour, this node of the cluster has no series of the resident memory of its
+          root cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of
+          the kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in
+          Docker (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the
+          series. docs/operations/observability-operations.md, Room on site 1, has the steps.
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        node: lab-worker-1
+      exp_annotations:
+        summary: NodeContainerRssNearLimit can not read the resident memory of lab-worker-1 of homelab-wsl
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: For at least an hour, this node of the cluster has no series of the resident memory of its
+          root cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of
+          the kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in
+          Docker (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the
+          series. docs/operations/observability-operations.md, Room on site 1, has the steps.
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        node: lab-worker-2
+      exp_annotations:
+        summary: NodeContainerRssNearLimit can not read the resident memory of lab-worker-2 of homelab-wsl
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: For at least an hour, this node of the cluster has no series of the resident memory of its
+          root cgroup that NodeContainerRssNearLimit can read, so that alert can not fire for it. The relabel of
+          the kubelet scrape of site 1 no longer keeps the series, a node has a name outside the form of Talos in
+          Docker (a name that ends in worker or controlplane and an index), or the kubelet changed a label of the
+          series. docs/operations/observability-operations.md, Room on site 1, has the steps.
 - name: the 90-day streams above twice their plan alert, whatever the other streams take in
   interval: 1m
   input_series:
