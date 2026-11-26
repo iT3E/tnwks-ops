@@ -7,8 +7,8 @@ Run by the owner, by hand, with a kubeconfig that may impersonate
 (docs/operations/flux-admission.md, "The live check"). For each test object
 of the design it sends a server-side dry run as the service account of the
 Flux controller that would apply it (kustomize-controller, and
-helm-controller for one pod), with the owner labels of a child outside the
-class (or of the parent of the apps, for a Kustomization). The API server
+helm-controller for one pod and one Secret), with the owner labels of a
+child outside the class (or of the parent of the apps, for a Kustomization). The API server
 runs its admission on a dry run and stores nothing. Each object adds to the
 count of refused checks of the site, so the run is also the positive control
 of the read of that count (docs/operations/flux-admission.md).
@@ -70,6 +70,22 @@ def objects(parent: str) -> list[tuple[str, str, dict]]:
             "metadata": {"name": "flux-admission-check", "namespace": "flux-system", "labels": labels(parent)},
             "spec": {"interval": "30m", "path": "./kubernetes/apps/ai", "prune": True,
                      "sourceRef": {"kind": "GitRepository", "name": "flux-system"}}}),
+        ("the storage of a Helm release from a HelmRelease", HELM, {
+            "apiVersion": "v1", "kind": "Secret", "type": "helm.sh/release.v1",
+            "metadata": {"name": "sh.helm.release.v1.flux-admission-check.v1", "namespace": "production",
+                         "labels": HELM_OUTSIDE},
+            "stringData": {"release": "flux-admission-check"}}),
+        ("the token of an account", KUSTOMIZE, {
+            "apiVersion": "v1", "kind": "Secret", "type": "kubernetes.io/service-account-token",
+            "metadata": {"name": "flux-admission-check", "namespace": "production", "labels": OUTSIDE,
+                         "annotations": {"kubernetes.io/service-account.name": "default"}}}),
+        ("a HelmRelease with a release name", KUSTOMIZE, {
+            "apiVersion": "helm.toolkit.fluxcd.io/v2", "kind": "HelmRelease",
+            "metadata": {"name": "flux-admission-check", "namespace": "production", "labels": OUTSIDE},
+            "spec": {"interval": "30m", "releaseName": "flux-admission-check",
+                     "chart": {"spec": {"chart": "app-template", "version": "4.0.0",
+                                        "sourceRef": {"kind": "HelmRepository", "name": "bjw-s",
+                                                      "namespace": "flux-system"}}}}}),
     ] + privileged
 
 
