@@ -252,16 +252,16 @@ def test_control_ui_uses_the_authenticated_internal_ingress():
     assert annotations["nginx.ingress.kubernetes.io/auth-response-headers"].lower() == gateway["auth"]["trustedProxy"]["userHeader"]
     assert gateway["auth"]["mode"] == "trusted-proxy" and gateway["controlUi"]["enabled"]
     assert not gateway["auth"]["trustedProxy"].get("allowLoopback")
-    assert route["path"] == "/" and route["backend"]["service"] == {"name": "agent", "port": {"name": "gateway"}}
+    # The route goes through the sign-in check in agents-main
+    # (test_main_ui_proxy.py), the one pod that reaches the gateway port.
+    assert route["path"] == "/" and route["backend"]["service"] == {"name": "ui-proxy", "port": {"name": "ui"}}
     assert service.get("type", "ClusterIP") == "ClusterIP" and not service.get("externalIPs")
     assert service["ports"] == [{"name": "gateway", "port": gateway["port"], "targetPort": "gateway"}]
     assert doc(APP / "networkpolicy.yaml")["spec"]["ingress"] == [{
         "fromEndpoints": [{"matchLabels": {
-            "io.kubernetes.pod.namespace": "networking",
+            "io.kubernetes.pod.namespace": "agents-main",
             "io.cilium.k8s.policy.cluster": "${CLUSTER_NAME}",
-            "app.kubernetes.io/name": "ingress-nginx",
-            "app.kubernetes.io/instance": "ingress-nginx-internal",
-            "app.kubernetes.io/component": "controller",
+            "app.kubernetes.io/name": "ui-proxy",
         }}],
         "toPorts": [{"ports": [{"port": str(gateway["port"]), "protocol": "TCP"}]}],
     }]

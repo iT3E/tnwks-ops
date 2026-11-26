@@ -60,6 +60,10 @@ resources:
   - ./deployment.yaml
   - ./service.yaml
   - ./ingress.yaml
+  # The sign-in check in front of the Control UI (task 6.57): the only pod
+  # that reaches the gateway port. In the same apply as the Ingress that
+  # points at it, with its own ConfigMaps (./ui-proxy/kustomization.yaml).
+  - ./ui-proxy
   # Step 4.
   - ./secret.sops.yaml
   - ./secret-search.sops.yaml
@@ -89,8 +93,11 @@ configMapGenerator:
   - name: agent-ui-settings
     literals:
       - OPENCLAW_UI_ORIGIN=https://openclaw.${INTERNAL_DOMAIN}
-      # Controller pod IPs can change. The NetworkPolicy limits this range
-      # to the internal ingress controller's pod identity.
+      # The trusted proxies of the gateway: the pod range, as the address of
+      # a pod changes (Cilium's cluster pool gives no fixed address). The
+      # network policy of the agent limits this range to the pod identity of
+      # the sign-in check (ui-proxy/), the one pod that reaches the
+      # gateway port.
       - OPENCLAW_INGRESS_CIDR=${CLUSTER_CIDR}
   # The env of the gateway for web fetch (docs/apps/agent-platform.md, "Web
   # fetch of the main agent"). web_fetch sends each fetch as a CONNECT to

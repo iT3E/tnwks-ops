@@ -1513,9 +1513,9 @@ example `firefly__get_summary`) answers, the MCP gateway logs it with
 
 Open [openclaw.internal.tnwks.us](https://openclaw.internal.tnwks.us) from
 the LAN. Sign in with a Cognito account in the `admins` group. The internal
-ingress uses the existing oauth2-proxy session and passes the verified email
-to OpenClaw on HTTP requests and WebSocket upgrades. The gateway admits one
-user. Its `allowUsers` takes the value of the key `OPENCLAW_UI_ALLOW_USER`
+ingress uses the existing oauth2-proxy session, and the sign-in check (below)
+passes the verified email to OpenClaw on HTTP requests and WebSocket
+upgrades. The gateway admits one user. Its `allowUsers` takes the value of the key `OPENCLAW_UI_ALLOW_USER`
 of the Secret of the pod, so the email is not in git. At the pinned release
 the gateway trims the email that the ingress sends and compares it with
 that value as written, case included. With the key missing, the list keeps
@@ -1527,8 +1527,48 @@ config: chat, and no admin scope. The gateway password is for CLI access
 from inside the pod.
 
 The wildcard DNS record and TLS certificate already cover this hostname.
-The gateway Service is a ClusterIP. Cilium only admits connections to its
-gateway port from the local `ingress-nginx-internal` controller pods.
+The gateway Service is a ClusterIP.
+
+**The sign-in check in front of the gateway** (task 6.57,
+`main/agent/app/ui-proxy/`). The gateway trusts the user header of its
+trusted proxies, so one pod sets that header, and no client can:
+
+- The Ingress sends each request to the pod `ui-proxy` in
+  `agents-main`, an nginx of the image of the other proxies of the agents.
+  Its own sign-in check stays, so a browser with no session still goes to
+  the sign-in page.
+- The proxy asks the sign-in server again for each request, the WebSocket
+  upgrade too, with the cookie of the client (`auth_request`). It asks the
+  same URL and group as the Ingress (`ui-proxy-settings` in
+  `main/agent/app/ui-proxy/kustomization.yaml`; a test holds the two
+  equal). A 401 or a 403 of the sign-in server ends the request.
+- It sets the user header from the answer of the sign-in server only, and
+  sets each other identity header empty, so no identity header of the
+  client reaches the gateway (`main/agent/app/ui-proxy/default.conf.template`).
+  An answer with no email sends no user header, so the gateway gets no
+  user for the request.
+- The gateway compares that email with its one user (`allowUsers`, above).
+  So a request needs a session in the group from the sign-in server, and
+  then the one email of the Secret.
+- Cilium admits only this pod to the gateway port
+  (`main/agent/app/networkpolicy.yaml`). The proxy takes connections from
+  the internal ingress controller only, and reaches only the sign-in server
+  and the gateway port. So any route of any Ingress ends at the proxy, and
+  still needs a valid session of the owner.
+- It must be a pod of its own: the trusted proxy mode of the gateway
+  refuses a proxy on loopback or on an address of the gateway itself. The
+  trusted proxies of the gateway are the pod range, because Cilium's
+  cluster pool gives a pod no fixed address. The network policy narrows
+  that range to the one pod.
+- It holds no credential, and a change of its config rolls the proxy pod
+  only, not the agent pod.
+- The internal ingress controller takes no Service of type ExternalName as
+  a backend (`disable-svc-external-name`).
+
+Checks: `observability/tests/test_main_ui_proxy.py` (the pieces in git, and
+a lab of the pinned image between a fake sign-in server and a fake
+gateway). If the UI answers 502 or 503, read the pod: `kubectl -n
+agents-main get pod -l app.kubernetes.io/name=ui-proxy` and its logs.
 
 ## Web fetch of the main agent
 

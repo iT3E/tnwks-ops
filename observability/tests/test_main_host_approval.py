@@ -125,7 +125,8 @@ def test_the_host_key_is_in_agent_secret_once_the_server_is_listed():
     the key in the plugin entry only."""
     (route,) = [r for r in yaml.safe_load(GATEWAY_CONFIG.read_text())["routes"] if r["name"] == HOST_ROUTE]
     ((key,),) = [route["policies"]["apiKey"]["keys"]]
-    holders = sorted(p.name for p in APP.iterdir() if KEY_ENV in p.read_text())
+    # Each file below the folder, the folder of the sign-in check too.
+    holders = sorted(str(p.relative_to(APP)) for p in APP.rglob("*") if p.is_file() and KEY_ENV in p.read_text())
     stored = holders == ["secret.sops.yaml"]
     if host_listed():
         assert stored, f"the key is not stored yet: host-mcp-store.py gateway-key ({holders})"

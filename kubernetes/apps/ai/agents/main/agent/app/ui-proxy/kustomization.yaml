@@ -1,0 +1,25 @@
+---
+# The sign-in check in front of the Control UI of main (./ui-proxy.yaml). A
+# part of the folder of the agent, so the Ingress (../ingress.yaml) and the
+# pod that it points at arrive in one apply. Its ConfigMaps are its own: the
+# nginx config, and its two addresses. The check URL is the auth URL of the
+# Ingress, with the same Flux variable and default, and the same group
+# (observability/tests/test_main_ui_proxy.py holds the two equal). Each name
+# gets a hash, so a change rolls the proxy pod only, never the agent pod.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./ui-proxy.yaml
+configMapGenerator:
+  - name: ui-proxy
+    files:
+      - default.conf.template=./default.conf.template
+    options:
+      annotations:
+        # Each ${NAME} in the template is for the entrypoint of the image,
+        # which fills it from an env var of the container, not for Flux.
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+  - name: ui-proxy-settings
+    literals:
+      - UI_PROXY_AUTH_URL=${OAUTH2_PROXY_URL:=http://oauth2-proxy.auth.svc.cluster.local:80}/oauth2/auth?allowed_groups=admins
+      - UI_PROXY_UPSTREAM=agent.agents-main.svc.cluster.local:18789

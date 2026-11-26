@@ -1,0 +1,86 @@
+# The sign-in check in front of the Control UI of main (./ui-proxy.yaml).
+# Each request, the WebSocket upgrade too, asks the sign-in server with the
+# cookie of the client, as the Ingress does (the same URL and group). The
+# gateway gets the user header from that answer only: every identity header
+# of the client is dropped. An answer with no email sends no user header,
+# so the gateway gets no user for it. The entrypoint of the image
+# fills only the names that start with UI_PROXY_ (NGINX_ENVSUBST_FILTER);
+# each other $name is nginx's own.
+map $http_upgrade $ui_proxy_connection {
+    default upgrade;
+    ""      close;
+}
+
+server {
+    listen 8080;
+    server_tokens off;
+    # The same limit as the internal ingress controller (proxy-body-size).
+    client_max_body_size 100m;
+
+    # The check: a subrequest to the sign-in server. It needs a 2xx; a 401
+    # or a 403 ends the request with that status.
+    location = /_ui_proxy_auth {
+        internal;
+        proxy_pass ${UI_PROXY_AUTH_URL};
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Upgrade "";
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header X-Original-Method $request_method;
+    }
+
+    location / {
+        auth_request /_ui_proxy_auth;
+        auth_request_set $ui_proxy_email $upstream_http_x_auth_request_email;
+
+        proxy_pass http://${UI_PROXY_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $ui_proxy_connection;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # The user header, from the answer of the sign-in server only. An
+        # empty value sends no header. A header that proxy_set_header names
+        # is never the one of the client.
+        proxy_set_header X-Auth-Request-Email $ui_proxy_email;
+        # The other identity headers of the sign-in server and of other
+        # proxies: each one empty, so the client's never passes.
+        proxy_set_header X-Auth-Request-User "";
+        proxy_set_header X-Auth-Request-Groups "";
+        proxy_set_header X-Auth-Request-Preferred-Username "";
+        proxy_set_header X-Auth-Request-Access-Token "";
+        proxy_set_header X-Forwarded-User "";
+        proxy_set_header X-Forwarded-Email "";
+        proxy_set_header X-Forwarded-Groups "";
+        proxy_set_header X-Forwarded-Preferred-Username "";
+        proxy_set_header X-Forwarded-Access-Token "";
+        proxy_set_header Remote-User "";
+        proxy_set_header X-Remote-User "";
+        proxy_set_header X-User "";
+        proxy_set_header X-Email "";
+
+        # The same buffers and long timeouts as the Ingress, for the
+        # WebSocket of the UI.
+        proxy_buffer_size 16k;
+        proxy_buffers 8 16k;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+
+# The health path, for the kubelet only (the policy in ./ui-proxy.yaml): no
+# check and no upstream.
+server {
+    listen 8081;
+    server_tokens off;
+    access_log off;
+
+    location = /healthz {
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 404;
+    }
+}
