@@ -12,25 +12,37 @@ response=$(mktemp)
 trap 'rm -f "$desired" "$response"' EXIT
 
 # One line with the UTC time, to the log of the container and to stderr. No line
-# holds a credential, a certificate or a response body.
+# holds a credential, a certificate or a response body. The hook runs as root,
+# but the entrypoint drops PID 1 to the service user, and root can not open
+# the stderr of another user's process without CAP_SYS_PTRACE. So if the write
+# as root fails, the line is written as the service user. That stderr is a
+# pipe that the runtime made as root, so the writer keeps only
+# CAP_DAC_OVERRIDE to open it.
 log() {
     local line
     line="$(date -u +%Y-%m-%dT%H:%M:%SZ) wazuh-indexer start hook, auth: $*"
-    { printf '%s\n' "$line" >> /proc/1/fd/2; } 2>/dev/null || true
+    { printf '%s\n' "$line" >> /proc/1/fd/2; } 2>/dev/null \
+        || printf '%s\n' "$line" | setpriv --reuid=wazuh-indexer --regid=wazuh-indexer --init-groups \
+            --inh-caps=-all,+dac_override --ambient-caps=+dac_override \
+            /bin/sh -c 'cat >> /proc/1/fd/2' 2>/dev/null \
+        || true
     printf '%s\n' "$line" >&2
 }
 
 # Step 1 (../indexer-notifications.sh) starts the clock of the hook and writes
-# its deadline, so this step does not start it again. Run alone, this step has
-# 300 seconds.
-deadline=$(( $(date +%s) + 300 ))
+# its deadline, so this step does not start it again. This step takes that
+# deadline only if it is a time in the next 300 seconds. Run alone, or with a
+# file that is not such a time, this step has 300 seconds.
+now=$(date +%s)
+deadline=$(( now + 300 ))
 if [ -f /tmp/wazuh-indexer-hook-deadline ]; then
-    deadline=$(cat /tmp/wazuh-indexer-hook-deadline)
+    written=$(cat /tmp/wazuh-indexer-hook-deadline)
     rm -f /tmp/wazuh-indexer-hook-deadline
-fi
-if ! [[ $deadline =~ ^[0-9]+$ ]]; then
-    log "failed, the deadline of the hook is not a number"
-    exit 1
+    if [[ $written =~ ^[1-9][0-9]*$ ]] && (( now < written && written <= deadline )); then
+        deadline=$written
+    else
+        log "the deadline of step 1 is not in the next 300 s, so this step has 300 s"
+    fi
 fi
 
 # Preserve the packaged settings and Basic authentication used by the services.

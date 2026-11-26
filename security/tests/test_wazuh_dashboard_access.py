@@ -252,8 +252,8 @@ def test_only_manager_daemon_startup_is_a_retryable_api_error(manager_rbac, erro
 
 # The start hook of the indexer runs indexer-notifications.sh, then
 # indexer-auth.sh. These tests run both scripts with stubs for curl, sleep, the
-# clock (date +%s) and securityadmin.sh, and with their paths moved under
-# tmp_path. Only sleep moves the clock. No stub calls gh.
+# clock (date +%s), setpriv and securityadmin.sh, and with their paths and
+# TMPDIR moved under tmp_path. Only sleep moves the clock. No stub calls gh.
 STUB = r'''
 import json
 import os
@@ -316,6 +316,11 @@ class Hook:
         (root / "stub.py").write_text(STUB)
         stub = f'#!/bin/bash\nexec {sys.executable} "$STUB_ROOT/stub.py"'
         self.tool(root / "bin/curl", f'{stub} curl "$@"')
+        # The service user can write to the log of the container: this stub
+        # keeps its arguments and writes what it reads to service-user.log.
+        self.tool(root / "bin/setpriv", "#!/bin/bash\nprintf '%s\\037' \"$@\" >> \"$STUB_ROOT/setpriv.calls\"\n"
+                  'echo >> "$STUB_ROOT/setpriv.calls"\ncat >> "$STUB_ROOT/service-user.log"')
+        (root / "tmp").mkdir()
         clock = '"$STUB_ROOT/clock"'
         self.tool(root / "bin/sleep", f"#!/bin/bash\necho $(( $(cat {clock}) + $1 )) > {clock}")
         date = shutil.which("date")
@@ -353,7 +358,8 @@ class Hook:
         (self.root / "notifications/notifications-enabled").write_text(value + "\n")
         (self.root / "dashboard-access/enabled").write_text(value)
         (self.root / "answers.json").write_text(json.dumps(self.answers))
-        env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}", "STUB_ROOT": str(self.root)}
+        env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}",
+               "STUB_ROOT": str(self.root), "TMPDIR": str(self.root / "tmp")}
         return subprocess.run(["bash", str(self.root / f"{name}.sh")], env=env, capture_output=True,
                               text=True, timeout=120, check=False)
 
@@ -372,7 +378,10 @@ class Hook:
 
     @property
     def log(self):
-        lines = (self.root / "container.log").read_text().splitlines()
+        return self.read_log("container.log")
+
+    def read_log(self, name: str):
+        lines = (self.root / name).read_text().splitlines()
         assert lines and all(re.match(LOG_LINE, line) for line in lines)
         return "\n".join(lines)
 
@@ -500,3 +509,67 @@ def test_a_refused_mapping_stays_a_hard_error_and_admits_no_auth_domain(hook):
     assert result.returncode == 1
     assert hook.writes == [("PATCH", MAPPING)]
     assert "assistant mapping: failed (HTTP 403)" in hook.log
+
+
+def test_each_log_line_is_written_as_root_while_root_may_open_the_log(hook):
+    hook.answers[f"GET {CHANNEL}"] = [[500, ""], [404, ""]]
+    hook.answers["POST /_plugins/_notifications/configs"] = [[200, "{}"]]
+    assert hook.run("notifications", enabled=True).returncode == 0
+    assert "channel check: try again in 5 s (HTTP 500)" in hook.log
+    assert not (hook.root / "setpriv.calls").exists()
+
+
+@pytest.mark.parametrize("name", ["notifications", "auth"])
+def test_each_log_line_is_written_as_the_service_user_when_root_may_not_open_the_log(hook, name):
+    # PID 1 runs as the service user, so a write of root to its stderr fails.
+    (hook.root / "container.log").mkdir()
+    hook.answers[f"GET {CHANNEL}"] = [[500, ""], [404, ""]]
+    hook.answers["POST /_plugins/_notifications/configs"] = [[200, "{}"]]
+    hook.answers[f"PATCH {MAPPING}"] = [[500, ""], [200, "{}"]]
+    hook.answers["securityadmin"] = [[0, ""]]
+    result = hook.run(name, enabled=True)
+    assert result.returncode == 0, result.stderr
+    log = hook.read_log("service-user.log")
+    assert "try again in 5 s (HTTP 500)" in log
+    calls = (hook.root / "setpriv.calls").read_text().splitlines()
+    assert len(calls) == len(log.splitlines())
+    assert {tuple(call.split("\x1f")[:-1]) for call in calls} == {(
+        "--reuid=wazuh-indexer", "--regid=wazuh-indexer", "--init-groups",
+        "--inh-caps=-all,+dac_override", "--ambient-caps=+dac_override",
+        "/bin/sh", "-c", f"cat >> {hook.root}/container.log",
+    )}
+    assert log in result.stderr.replace("\r", "")
+
+
+@pytest.mark.parametrize("written", [str(START - 10), str(START + 10_000), "0", "not-a-time"])
+def test_the_auth_step_takes_300_seconds_for_a_deadline_that_is_not_in_the_next_300(hook, written):
+    (hook.root / "deadline").write_text(written + "\n")
+    hook.answers["securityadmin"] = [[1, ""]]
+    hook.answers[f"PATCH {MAPPING}"] = [[200, "{}"]]
+    result = hook.run("auth", enabled=False)
+    assert result.returncode == 1
+    assert "the deadline of step 1 is not in the next 300 s, so this step has 300 s" in hook.log
+    assert "no time is left before the deadline" in hook.log
+    assert START + 295 < hook.clock <= START + 300
+    assert not (hook.root / "deadline").exists()
+
+
+def test_a_create_that_gets_a_409_after_a_retry_checks_the_channel_again_and_updates_it(hook):
+    # The first POST made the channel but gave no answer.
+    hook.answers[f"GET {CHANNEL}"] = [[404, ""], [200, OWN_CHANNEL]]
+    hook.answers["POST /_plugins/_notifications/configs"] = [[0, ""], [409, "{}"]]
+    hook.answers[f"PUT {CHANNEL}"] = [[200, "{}"]]
+    result = hook.run("notifications", enabled=True)
+    assert result.returncode == 0, result.stderr
+    assert hook.writes == [("POST", "/_plugins/_notifications/configs")] * 2 + [("PUT", CHANNEL)]
+    assert "channel create: HTTP 409 after a retry, so check the channel again" in hook.log
+    assert "channel update: done (HTTP 200)" in hook.log
+
+
+def test_a_409_after_a_retry_on_a_channel_of_another_object_stays_a_hard_error(hook):
+    hook.answers[f"GET {CHANNEL}"] = [[404, ""], [200, OWN_CHANNEL.replace('"webhook"', '"slack"')]]
+    hook.answers["POST /_plugins/_notifications/configs"] = [[503, ""], [409, "{}"]]
+    result = hook.run("notifications", enabled=True)
+    assert result.returncode == 1
+    assert hook.writes == [("POST", "/_plugins/_notifications/configs")] * 2
+    assert "already in use" in hook.log

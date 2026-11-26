@@ -13,11 +13,20 @@ deadline=$(( $(date +%s) + 300 ))
 echo "$deadline" > /tmp/wazuh-indexer-hook-deadline
 
 # One line with the UTC time, to the log of the container and to stderr. No line
-# holds a credential, a certificate or a response body.
+# holds a credential, a certificate or a response body. The hook runs as root,
+# but the entrypoint drops PID 1 to the service user, and root can not open
+# the stderr of another user's process without CAP_SYS_PTRACE. So if the write
+# as root fails, the line is written as the service user. That stderr is a
+# pipe that the runtime made as root, so the writer keeps only
+# CAP_DAC_OVERRIDE to open it.
 log() {
     local line
     line="$(date -u +%Y-%m-%dT%H:%M:%SZ) wazuh-indexer start hook, notifications: $*"
-    { printf '%s\n' "$line" >> /proc/1/fd/2; } 2>/dev/null || true
+    { printf '%s\n' "$line" >> /proc/1/fd/2; } 2>/dev/null \
+        || printf '%s\n' "$line" | setpriv --reuid=wazuh-indexer --regid=wazuh-indexer --init-groups \
+            --inh-caps=-all,+dac_override --ambient-caps=+dac_override \
+            /bin/sh -c 'cat >> /proc/1/fd/2' 2>/dev/null \
+        || true
     printf '%s\n' "$line" >&2
 }
 
@@ -68,11 +77,14 @@ send() {
     fi
 }
 
-# Send a request until it gets an answer that is not a server error.
+# Send a request until it gets an answer that is not a server error. $tries
+# counts the tries.
 request() {
     local what=$1
     shift
+    tries=0
     while true; do
+        tries=$(( tries + 1 ))
         send "$@"
         case "$status" in
             000|5??) pause "$what" "$detail" ;;
@@ -97,19 +109,23 @@ wait_for() {
 wait_for "cluster health" "$health"
 log "cluster health: yellow or green (HTTP 200)"
 
-request "channel check" "$configs/$channel"
-case "$status" in
-    200|404) ;;
-    *) log "channel check: failed ($detail)"; exit 1 ;;
-esac
-
-# This ID is managed here. Refuse to change a differently named or typed object.
-if [ "$status" = 200 ]; then
-    if ! grep -Fq "\"name\":\"$channel\"" "$response" || ! grep -Fq '"config_type":"webhook"' "$response"; then
-        log "channel check: failed, the Alertmanager channel ID is already in use"
-        exit 1
+# Read the channel: $status is 200 or 404. This ID is managed here. Refuse to
+# change a differently named or typed object.
+check_channel() {
+    request "channel check" "$configs/$channel"
+    case "$status" in
+        200|404) ;;
+        *) log "channel check: failed ($detail)"; exit 1 ;;
+    esac
+    if [ "$status" = 200 ]; then
+        if ! grep -Fq "\"name\":\"$channel\"" "$response" || ! grep -Fq '"config_type":"webhook"' "$response"; then
+            log "channel check: failed, the Alertmanager channel ID is already in use"
+            exit 1
+        fi
     fi
-fi
+}
+
+check_channel
 
 if [ "$enabled" = false ]; then
     if [ "$status" = 200 ]; then
@@ -127,6 +143,17 @@ config='{"name":"tnwks-wazuh-alertmanager","description":"tnwks Wazuh findings",
 if [ "$status" = 404 ]; then
     what="channel create"
     request "$what" --json "{\"config_id\":\"$channel\",\"config\":$config}" "$configs"
+    # A try that got no answer or a server error can still have made the
+    # channel. Only then is a 409 on a later try read as this channel: check it
+    # again and update it. A 409 on the first try stays an error.
+    if [ "$status" = 409 ] && (( tries > 1 )); then
+        log "channel create: HTTP 409 after a retry, so check the channel again"
+        check_channel
+        if [ "$status" = 200 ]; then
+            what="channel update"
+            request "$what" --request PUT --json "{\"config\":$config}" "$configs/$channel"
+        fi
+    fi
 else
     what="channel update"
     request "$what" --request PUT --json "{\"config\":$config}" "$configs/$channel"
