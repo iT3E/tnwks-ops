@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.319.0 - 2026-11-26
+
+### Added
+
+* Flux lockdown, step 0: the admission policy flux-child-scope refuses a Kustomization outside the class that decrypts with the Secret of the class key (sops-age-class); a throwaway API server runs the kustomize-controller of git to show which account applies, that the controller reads the decryption Secret as itself, and that a missing account fails and prunes nothing, with and without --default-service-account; CI tests check that each encrypted file holds the public key of the Secret that decrypts it, and gate the class account and the flag of the later steps (docs/operations/flux-lockdown.md)
+
 ## v2.318.0 - 2026-11-26
 
 ### Changed
