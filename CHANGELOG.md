@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.320.0 - 2026-11-26
+
+### Changed
+
+* The admission policy flux-child-scope also covers the Secrets that Helm and service accounts use: a child outside the class may not apply a Secret of type helm.sh/release.v1 or kubernetes.io/service-account-token (the rule secret-types); the storage that helm-controller writes for a release stays its own work (docs/operations/flux-admission.md)
+
 ## v2.319.3 - 2026-11-26
 
 ### Fixed
