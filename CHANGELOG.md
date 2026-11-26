@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.316.2 - 2026-11-26
+
+### Fixed
+
+* homelab-wsl: NodeContainerRssMissing now fires for each node that NodeContainerRssNearLimit can not read, by node name, so a series of a name that kube-state-metrics no longer has can not hide a node; the chart fetch test fails on an error answer of the registry also off CI, and skips off CI only on a network error
+
 ## v2.316.1 - 2026-11-26
 
 ### Fixed
