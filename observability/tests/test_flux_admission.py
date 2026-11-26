@@ -242,14 +242,21 @@ def test_the_live_check_sends_the_count_of_its_doc():
     check = importlib.util.module_from_spec(spec)
     loader.exec_module(check)
     sent = check.objects("flux-system/cluster-apps")
-    assert len({what for what, _, _ in sent}) == len(sent)
+    assert len({what for what, _, _, _ in sent}) == len(sent)
     owners = {check.KUSTOMIZE: check.OUTSIDE, check.HELM: check.HELM_OUTSIDE}
-    for what, user, doc in sent:
-        if doc["kind"] != "Kustomization":
+    # Each object names rules of the policy, by the prefix of their messages.
+    rules = set(re.findall(r"'flux-child-scope/([a-z-]+): '", (ADMISSION / "app/policy.yaml").read_text()))
+    for what, user, doc, want in sent:
+        assert want and want <= rules, what
+        if doc["kind"] == "Kustomization":
+            assert doc["metadata"]["labels"] == check.labels("flux-system/cluster-apps"), what
+        else:
             assert doc["metadata"]["labels"] == owners[user], what
-    kinds = {(doc["kind"], doc.get("type")) for _, _, doc in sent}
+    kinds = {(doc["kind"], doc.get("type")) for _, _, doc, _ in sent}
     assert {("Secret", "helm.sh/release.v1"), ("Secret", "kubernetes.io/service-account-token")} <= kinds
-    assert any(doc["kind"] == "HelmRelease" and "releaseName" in doc["spec"] for _, _, doc in sent)
+    assert any(doc["kind"] == "HelmRelease" and "releaseName" in doc["spec"] for _, _, doc, _ in sent)
+    assert any(doc["kind"] == "Kustomization" and doc["spec"].get("decryption", {}).get("secretRef") ==
+               {"name": "sops-age-class"} for _, _, doc, _ in sent)
     text = (ROOT / "docs/operations/flux-admission.md").read_text()
     assert f"It sends {len(sent)} test objects" in text
     assert f"at least {len(sent)} each" in re.sub(r"\s+", " ", text)
