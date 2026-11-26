@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.323.0 - 2026-11-26
+
+### Changed
+
+* bin/flux-admission-check also sends a Secret of type helm.sh/release.v1, a Secret of type kubernetes.io/service-account-token and a HelmRelease with a release name, so the live check covers the rules secret-types and helmrelease-spec; the count of the read rises by at least 10 (docs/operations/flux-admission.md)
+
 ## v2.322.1 - 2026-11-26
 
 ### Fixed
