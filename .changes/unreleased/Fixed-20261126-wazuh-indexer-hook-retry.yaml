@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'security: the start hook of the Wazuh indexer waits for a yellow cluster, then retries each request and each run of securityadmin.sh after no answer, a server error or a failed run, until one deadline of 300 seconds for both of its steps; a conflict or a channel ID in use by another object still stops it. Each wait, retry and failure writes one line with the UTC time and the HTTP status or exit code to the log of the container. A transient error at start no longer fails the hook, so the kubelet no longer restarts the container for it'
-time: 2026-11-26T20:00:00.000000000Z

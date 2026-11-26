@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.319.2 - 2026-11-26
+
+### Fixed
+
+* security: the start hook of the Wazuh indexer waits for a yellow cluster, then retries each request and each run of securityadmin.sh after no answer, a server error or a failed run, until one deadline of 300 seconds for both of its steps; a conflict or a channel ID in use by another object still stops it. Each wait, retry and failure writes one line with the UTC time and the HTTP status or exit code to the log of the container. A transient error at start no longer fails the hook, so the kubelet no longer restarts the container for it
+
 ## v2.319.1 - 2026-11-26
 
 ### Fixed
