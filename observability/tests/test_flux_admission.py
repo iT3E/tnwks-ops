@@ -207,6 +207,32 @@ def test_no_child_outside_the_class_applies_an_object_of_an_operator_of_the_clas
     assert all(f"'{g}'" in policy for g in OPERATOR_GROUPS)
 
 
+# The Secret types of the rule secret-types: the storage of a Helm release
+# and the token of a service account.
+HELM_AND_TOKEN_TYPES = ("helm.sh/release.v1", "kubernetes.io/service-account-token")
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_no_child_outside_the_class_applies_a_secret_that_helm_or_an_account_uses(site):
+    """The rule secret-types refuses these Secrets from a child outside the
+    class, so no build of such a child in git holds one. It reads the type of
+    each SOPS file too: SOPS leaves the type in the clear and this reads no
+    value."""
+    found = {}
+    for child in classlist.walk(site).values():
+        if classlist.is_class_path(child.path):
+            continue
+        docs = list(child.build.docs)
+        for path in child.build.encrypted:
+            docs += classlist.load(ROOT / path)
+        for doc in docs:
+            if doc.get("kind") == "Secret" and classlist.api_group(doc) == "" and doc.get("type") in HELM_AND_TOKEN_TYPES:
+                found.setdefault(child.key, set()).add(doc["type"])
+    assert not found, found
+    policy = (ROOT / "kubernetes/apps/flux-system/admission/app/policy.yaml").read_text()
+    assert all(f"'{t}'" in policy for t in HELM_AND_TOKEN_TYPES)
+
+
 # The Kustomization of the reduced substitution Secret, and its template on
 # each site (docs/operations/flux-admission.md, "Substitution").
 SUBSTITUTION_CHILD = "flux-system/flux-substitution"

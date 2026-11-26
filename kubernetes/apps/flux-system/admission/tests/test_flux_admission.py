@@ -396,12 +396,39 @@ def cases():
          {"update": dict(TAKEN, metadata=dict(TAKEN["metadata"], labels=OUT_K))}),
         ("takeover", "a change of it by its own child", KUSTOMIZE, "allow",
          {"update": dict(TAKEN, data={"a": "c"})}),
+        # secret-types: the Secrets that Helm and service accounts use
+        ("secret-types", "the storage of a Helm release", KUSTOMIZE, "deny",
+         obj("Secret", "sh.helm.release.v1.frigate.v9", "production", OUT_K,
+             type="helm.sh/release.v1", stringData={"release": "x"})),
+        ("secret-types", "the storage of a Helm release from a chart outside the class", HELM, "deny",
+         obj("Secret", "sh.helm.release.v1.other.v1", "production", OUT_H,
+             type="helm.sh/release.v1", stringData={"release": "x"})),
+        ("secret-types", "a token of an account", KUSTOMIZE, "deny",
+         obj("Secret", "token", "production", OUT_K, type="kubernetes.io/service-account-token",
+             metadata={"name": "token", "namespace": "production", "labels": OUT_K,
+                       "annotations": {"kubernetes.io/service-account.name": "default"}})),
+        ("secret-types", "a token of an account from a chart outside the class", HELM, "deny",
+         obj("Secret", "token", "production", OUT_H, type="kubernetes.io/service-account-token",
+             metadata={"name": "token", "namespace": "production", "labels": OUT_H,
+                       "annotations": {"kubernetes.io/service-account.name": "default"}})),
+        ("secret-types", "a plain Secret in its own namespace", KUSTOMIZE, "allow",
+         obj("Secret", "plain", "production", OUT_K, type="Opaque", stringData={"a": "b"})),
+        ("secret-types", "a token of an account from a child of the class", KUSTOMIZE, "allow",
+         obj("Secret", "token", "production", CLASS_K, type="kubernetes.io/service-account-token",
+             metadata={"name": "token", "namespace": "production", "labels": CLASS_K,
+                       "annotations": {"kubernetes.io/service-account.name": "default"}})),
+        ("secret-types", "the storage of a Helm release from a person", None, "allow",
+         obj("Secret", "sh.helm.release.v1.person.v1", "production", OUT_K,
+             type="helm.sh/release.v1", stringData={"release": "x"})),
         # the work of the controllers
         ("work", "an event of the helm controller in kube-system", HELM, "allow",
          obj("Event", "e.1", "kube-system", None, involvedObject={"kind": "HelmRelease", "name": "x", "namespace": "kube-system"},
              reason="Test", message="m", type="Normal")),
         ("work", "a lease of the kustomize controller in flux-system", KUSTOMIZE, "allow",
          obj("Lease", "kustomize-controller-leader-election", "flux-system", None, spec={})),
+        ("work", "the release storage of a HelmRelease outside the class, by the helm controller", HELM, "allow",
+         obj("Secret", "sh.helm.release.v1.mealie.v3", "production", {"owner": "helm", "name": "mealie"},
+             type="helm.sh/release.v1", stringData={"release": "x"})),
         ("work", "the release storage of the helm controller in kube-system", HELM, "allow",
          obj("Secret", "sh.helm.release.v1.cilium.v2", "kube-system", {"owner": "helm", "name": "cilium"},
              type="helm.sh/release.v1", stringData={"release": "x"})),
@@ -607,7 +634,7 @@ class FluxAdmission(unittest.TestCase):
 
     def test_7_each_rule_can_fail(self):
         rules = sorted({c[0] for c in cases() if c[3] == "deny"})
-        self.assertEqual(len(rules), 12)
+        self.assertEqual(len(rules), 13)
         try:
             for rule in rules:
                 apply_policy(GIT_ACTIONS)
