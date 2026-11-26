@@ -382,15 +382,16 @@ class H(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0", 8080), H).serve_forever()
 '''
 
-# A server that drops each new connection on ports 8080 and 8000, as a policy drop of
-# Cilium does (a time out). It listens with a queue of one and never
+# A server that drops each new connection on ports 8080, 8000 and 3000, as a
+# policy drop of Cilium does (a time out). It listens with a queue of one and never
 # accepts; its own connection fills the queue, and the kernel then drops
 # each SYN that comes.
 DROPPER = r'''
 import socket, time
 held = []
-# The port of the read servers of main, and the port of its browser.
-for port in (8080, 8000):
+# The port of the read servers of main, the port of its browser, and the
+# port of the MCP server of finance.
+for port in (8080, 8000, 3000):
     server = socket.socket()
     server.bind(("0.0.0.0", port))
     server.listen(0)
@@ -511,6 +512,14 @@ def lab():
                    for x in ("--network-alias", s.rsplit(":", 1)[0])]
         run([tool, "run", "-d", "--name", names["dropper"], "--network", front, *aliases,
              "--read-only", "--cap-drop", "ALL", "--user", "65534", python, "python3", "-I", "-c", DROPPER])
+        # The probe's straight try to the MCP server of finance reaches the
+        # dropper too, by a hosts line of the probe container only: the same
+        # name is the one that the gateway calls on the back network, and
+        # that one must stay the recorder. Without it, the name does not
+        # resolve on the front network, and the try proves nothing.
+        dropper = run([tool, "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+                       names["dropper"]]).stdout.strip()
+        assert re.fullmatch(r"[0-9.]+", dropper), dropper
         # The fake app has the name of the proxy, as the MCP server calls it.
         run([tool, "run", "-d", "--name", names["app"], "--network", back,
              "--network-alias", "firefly-proxy.agents-finance.svc.cluster.local",
@@ -539,7 +548,7 @@ def lab():
         run([tool, "start", names["gateway"]])
         wait_ready(tool, front, python)
         yield {"tool": tool, "work": work, "keys": keys, "front": front, "back": back,
-               "names": names, "python": python}
+               "names": names, "python": python, "dropper": dropper}
     finally:
         for name in names.values():
             subprocess.run([tool, "container", "remove", "-f", name], capture_output=True, check=False)
@@ -553,8 +562,9 @@ def probe_python() -> str:
 
 
 def on_front(tool: str, front: str, python: str, *args: str, env: dict | None = None,
-             check: bool = True) -> subprocess.CompletedProcess:
+             check: bool = True, hosts: dict | None = None) -> subprocess.CompletedProcess:
     flags = [x for k, v in (env or {}).items() for x in ("-e", f"{k}={v}")]
+    flags += [x for name, address in (hosts or {}).items() for x in ("--add-host", f"{name}:{address}")]
     return run([tool, "run", "--rm", "--network", front, "--read-only", "--cap-drop", "ALL",
                 "--user", "65534", "-v", f"{CHECKS.parent}:/scripts:ro",
                 "-v", f"{CONFIG.parent}:/gateway:ro", *flags, python, *args], check=check)
@@ -579,6 +589,11 @@ def wait_ready(tool: str, front: str, python: str) -> None:
             "    time.sleep(1)\n")
     on_front(tool, front, python, "python3", "-I", "-c", code)
     time.sleep(3)  # the MCP server starts in a few seconds
+
+
+def probe_hosts(lab: dict) -> dict:
+    """The name of the MCP server of finance, for the probe container only."""
+    return {probe_env()["MCP_SERVER"].rsplit(":", 1)[0]: lab["dropper"]}
 
 
 def probe_env_for(lab: dict, probe_key: str, no_tools_key: str) -> dict:
@@ -621,12 +636,12 @@ def test_the_probe_passes_and_the_app_sees_only_its_read(lab):
     result = on_front(lab["tool"], lab["front"], lab["python"],
                       "python3", "/scripts/platform_checks.py", "mcp-gateway",
                       env=probe_env_for(lab, lab["keys"]["finance-probe"], lab["keys"]["no-tools"]),
-                      check=False)
+                      check=False, hosts=probe_hosts(lab))
     lines = [json.loads(line) for line in result.stdout.splitlines()]
     assert result.returncode == 0, result.stdout + result.stderr
     assert all(line["ok"] for line in lines)
     got = {line["target"]: line["got"] for line in lines}
-    assert got["MCP server, direct from a pod that is not the gateway"].startswith("blocked")
+    assert got["MCP server, direct from a pod that is not the gateway"] == "blocked: TimeoutError"
     assert got["no key: tools/list"] == "refused: HTTP 401"
     assert got["a key that is not in the config: tools/list"] == "refused: HTTP 401"
     assert got["probe key: lists the 73 tools of the rule"] == "same"
@@ -646,7 +661,7 @@ def test_the_probe_passes_and_the_app_sees_only_its_read(lab):
 def test_the_probe_skips_and_passes_with_pending_keys(lab):
     result = on_front(lab["tool"], lab["front"], lab["python"],
                       "python3", "/scripts/platform_checks.py", "mcp-gateway",
-                      env=probe_env_for(lab, "pending", "pending"), check=False)
+                      env=probe_env_for(lab, "pending", "pending"), check=False, hosts=probe_hosts(lab))
     assert result.returncode == 0, result.stdout + result.stderr
     got = {json.loads(line)["target"]: json.loads(line)["got"] for line in result.stdout.splitlines()}
     assert got["probe key"] == got["key with no tool"] == "skipped: the key is pending"

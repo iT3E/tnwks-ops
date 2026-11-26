@@ -84,14 +84,6 @@ def report(check: str, target: str, expected: str, got: str) -> None:
                       "expected": expected, "got": got, "ok": ok}), flush=True)
 
 
-def tcp(host: str, port: int, timeout: float = 5) -> str:
-    try:
-        socket.create_connection((host, port), timeout=timeout).close()
-        return "connected"
-    except OSError as e:
-        return f"blocked: {type(e).__name__}"
-
-
 def cli(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
     return subprocess.run([CLI, *args], capture_output=True, text=True, timeout=timeout,
                           check=False)
@@ -117,10 +109,13 @@ def setup_cli() -> None:
 
 
 def isolation() -> None:
+    # The gateway of another trust domain passes on a time out only (reach):
+    # a refusal or a name that does not resolve proves nothing about the
+    # network policy.
     for namespace in DOMAINS:
         expected = "connected" if namespace == OWN else "blocked"
         report("isolation", f"{gateway(namespace)}:{PORT}", expected,
-               tcp(gateway(namespace), PORT))
+               reach(gateway(namespace), PORT))
     setup_cli()
     result = cli("sandbox", "list")
     report("isolation", "own gateway, with the client certificate", "ok",
@@ -809,7 +804,7 @@ def domain(check: str, probe_key: str, no_tools_key: str) -> None:
     """The route of the domain and its MCP server."""
     host, port = MCP_SERVER.rsplit(":", 1)
     report(check, "MCP server, direct from a pod that is not the gateway", "blocked",
-           tcp(host, int(port)))
+           reach(host, int(port)))
     report(check, "no key: tools/list", "refused: HTTP 401", listed(None))
     report(check, "a key that is not in the config: tools/list", "refused: HTTP 401",
            listed(secrets.token_hex(32)))
