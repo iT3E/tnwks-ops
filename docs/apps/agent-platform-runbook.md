@@ -180,7 +180,8 @@ before the create, and fails a run that leaves its own record.
   values step ends it. The checks with no key and with an unknown key, and
   the straight connection to the MCP server, always run. A
   `connected` for the straight connection: the policy of the MCP server
-  lets in more than the gateway; fix it before the next run.
+  lets in more than the gateway; fix it before the next run. Only
+  `blocked: TimeoutError` passes there, as at the servers below.
   `agents-main` has the same probe for its vault route only, with the key
   `main-probe` (no Secret yet, so its key checks print `skipped`). In each
   namespace, `other vault server` with `connected`, or `other vault: probe
@@ -332,7 +333,12 @@ of a sandbox has no DNS egress (`25f1bb2b`).
 
 **Fix.** A failed isolation check is a finding, not a fault of the check:
 read which rule let a request through before you change the check. Fix the
-policy or the check in git.
+policy or the check in git. At the gateway of another trust domain only
+`blocked: TimeoutError` passes, since a policy drop is silent. `connected`:
+that gateway's policy lets this domain in. `refused`: that gateway had no
+ready pod or its port is closed, so the run proved nothing; look at the
+gateway pod. `unresolved`: the Service of that gateway is gone; find out
+why.
 
 ### AgentRunSandboxTooOld
 

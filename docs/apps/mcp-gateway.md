@@ -414,7 +414,8 @@ fault:
 05:37, `platform_checks.py mcp-gateway`) calls the route of finance as the
 agent does, with two keys of its own and none of the agent's:
 
-1. A straight connection from its pod to the MCP server fails.
+1. A straight connection from its pod to the MCP server fails, by a time
+   out only (the rule of item 7).
 2. No key, and a random key that is not in the config: a 401 each.
 3. The probe key lists exactly the tools of the rule of finance (it reads
    the list from the same config file); its `get_about` reaches the app
