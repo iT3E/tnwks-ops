@@ -151,11 +151,11 @@ def test_the_resident_memory_alert_reads_the_root_cgroup_of_each_role_of_site_1(
     assert rule["labels"] == {"severity": "warning"}
 
 
-def test_the_guard_counts_the_series_that_the_resident_memory_alert_reads():
-    """The guard counts the root series with the selector of the alert, the
-    roles of both forms of the alert in one match, against the nodes of site 1
-    in kube-state-metrics: a change of one selector and not of the other
-    fails here."""
+def test_the_guard_reads_each_node_with_the_selector_of_the_resident_memory_alert():
+    """The guard takes the nodes of site 1 in kube-state-metrics, one series
+    each, unless the alert reads a root series of the same node: the selector
+    of the alert, the roles of both of its forms in one match. A change of
+    one selector and not of the other fails here."""
     alerts = rules.capacity_alerts()
     (alert,) = [r for r in alerts if r["alert"] == "NodeContainerRssNearLimit"]
     (guard,) = [r for r in alerts if r["alert"] == "NodeContainerRssMissing"]
@@ -165,7 +165,9 @@ def test_the_guard_counts_the_series_that_the_resident_memory_alert_reads():
     assert len(alert_selectors) == 1 and alert_selectors == guard_selectors, (alert_selectors, guard_selectors)
     assert sorted(match[1] for match in selector.finditer(alert["expr"])) == ["controlplane", "worker"]
     assert [match[1] for match in selector.finditer(guard["expr"])] == ["(worker|controlplane)"]
-    assert guard["expr"].count(f'kube_node_info{{k8s_cluster="{rules.SITE1_CLUSTER}",job="kube-state-metrics"}}') == 2
+    nodes = f'max by (k8s_cluster, node) (kube_node_info{{k8s_cluster="{rules.SITE1_CLUSTER}",job="kube-state-metrics"}})'
+    assert guard["expr"].startswith(f"{nodes} unless on (k8s_cluster, node) max by (k8s_cluster, node) (container_memory_rss{{")
+    assert guard["expr"].count("kube_node_info") == 1 and "count" not in guard["expr"]
     assert guard["for"] == rules.SITE1_RSS_MISSING_FOR
     assert guard["labels"] == {"severity": "warning"}
 
@@ -253,18 +255,56 @@ def fetch_oci_chart(release):
     return data
 
 
+# A network error: no route, no name, a refused or reset connection, or a
+# time out (a stall in a read raises TimeoutError, which is no URLError).
+NETWORK_ERRORS = (urllib.error.URLError, TimeoutError, ConnectionError)
+
+
+def fetch_or_skip(release):
+    """The chart of the HelmRelease. An answer of the registry that is an
+    error (a version that does not exist, say) fails everywhere. A network
+    error fails in CI and skips on a workstation with no network."""
+    try:
+        return fetch_oci_chart(release)
+    except urllib.error.HTTPError as error:
+        pytest.fail(f"the registry refused the chart: {error}")
+    except NETWORK_ERRORS as error:
+        if os.environ.get("CI"):
+            pytest.fail(f"the chart could not be fetched: {error}")
+        pytest.skip(f"no network for the chart: {error}")
+
+
+@pytest.mark.parametrize("ci", ["1", None])
+@pytest.mark.parametrize(("error", "outcome"), [
+    (urllib.error.HTTPError("https://registry.invalid/v2", 404, "Not Found", {}, None), "fail"),
+    (urllib.error.URLError("no route"), "skip"),
+    (TimeoutError("The read operation timed out"), "skip"),
+    (ConnectionResetError("reset"), "skip"),
+])
+def test_the_chart_fetch_fails_on_an_error_of_the_registry_and_skips_on_no_network_off_ci(monkeypatch, ci, error, outcome):
+    def refuse(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse)
+    if ci:
+        monkeypatch.setenv("CI", ci)
+    else:
+        monkeypatch.delenv("CI", raising=False)
+    expected = pytest.fail.Exception if ci or outcome == "fail" else pytest.skip.Exception
+    # Catch both outcomes, so a skip where a failure is due fails here and
+    # does not end the test as skipped.
+    with pytest.raises((pytest.fail.Exception, pytest.skip.Exception)) as caught:
+        fetch_or_skip(yaml.safe_load(HELMRELEASE.read_text()))
+    assert caught.type is expected, (caught.type, expected)
+
+
 def test_the_copy_is_the_list_of_the_chart_that_the_helmrelease_installs():
     """A bump of the chart with the same default list stays green; a bump
     that changes it fails until the copy (here and in the patch of site 1)
     follows. It needs the network: it fails in CI without it, and skips on
     a workstation with none."""
     release = yaml.safe_load(HELMRELEASE.read_text())
-    try:
-        data = fetch_oci_chart(release)
-    except urllib.error.URLError as error:
-        if os.environ.get("CI"):
-            pytest.fail(f"the chart could not be fetched: {error}")
-        pytest.skip(f"no network for the chart: {error}")
+    data = fetch_or_skip(release)
     name = release["spec"]["chart"]["spec"]["chart"]
     with tarfile.open(fileobj=io.BytesIO(data)) as archive:
         meta = yaml.safe_load(archive.extractfile(f"{name}/Chart.yaml"))

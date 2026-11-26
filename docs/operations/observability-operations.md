@@ -110,8 +110,9 @@ WSL-02, which has that cluster's kubeconfig
   - `NodeContainerRssNearLimit` (warning): the resident memory of a node
     past 85% of the limit of its role for 15 minutes.
   - `NodeContainerRssMissing` (warning): for an hour,
-    `NodeContainerRssNearLimit` reads fewer nodes than kube-state-metrics
-    counts on site 1 (`kube_node_info`), so it can not fire for a node.
+    `NodeContainerRssNearLimit` can not read a node of site 1 that
+    kube-state-metrics has (`kube_node_info`), so it can not fire for that
+    node. The alert names the node.
 
   What the numbers mean:
   - The kubelet does not see these limits. It reports the memory of the
@@ -158,8 +159,11 @@ WSL-02, which has that cluster's kubeconfig
   - `NodeContainerRssMissing` makes a silent gap loud: a node whose root
     series the rule can not read gets no alert. The causes are a relabel
     that no longer keeps the series, a node with a name outside the form
-    of Talos in Docker, or a label of the kubelet that changed. Compare
-    `container_memory_rss{id="/"}` of site 1 with the nodes.
+    of Talos in Docker, or a label of the kubelet that changed. The guard
+    compares by node name, so a series of a name that kube-state-metrics no
+    longer has can not hide a node. When no root series is left at all,
+    each node fires. Compare `container_memory_rss{id="/"}` of site 1 with
+    the nodes.
   - `NodeContainerRssNearLimit` fires when a node has little left that the
     kernel can take back. At the time of this change the resident memory
     was about 74% of the limit of the control plane and 53% and 63% of the
