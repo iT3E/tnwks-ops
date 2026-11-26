@@ -13,12 +13,15 @@ runs its admission on a dry run and stores nothing. Each object adds to the
 count of refused checks of the site, so the run is also the positive control
 of the read of that count (docs/operations/flux-admission.md).
 
-- With the binding in Deny, each object must be refused by flux-child-scope.
-- With the binding in Audit and Warn, each object must pass with a warning
-  of flux-child-scope.
+Each object names the rules of flux-child-scope that it must fail.
 
-It prints one line for each object and exits 1 when an object is neither
-refused nor warned. The parent of the apps is cluster-apps on site 1 and
+- With the binding in Deny, each object must be refused by one of its
+  rules. The API server names one failed rule in a refusal.
+- With the binding in Audit and Warn, each object must pass with a warning
+  of each of its rules, and of no other rule.
+
+It prints one line for each object, with the rules that it failed, and exits
+1 when an object passes, fails for another reason, or fails another rule. The parent of the apps is cluster-apps on site 1 and
 cluster-apps-wsl-02 on site 2. The two test objects of decryption (a SOPS
 file of another folder, by a relative path and by a link) are content of git:
 Owner label holds them, and this check can not send them.
@@ -28,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 
@@ -42,8 +46,9 @@ def labels(key: str) -> dict:
     return {"kustomize.toolkit.fluxcd.io/name": name, "kustomize.toolkit.fluxcd.io/namespace": namespace}
 
 
-def objects(parent: str) -> list[tuple[str, str, dict]]:
-    """Each test object as (what, the controller that sends it, the object)."""
+def objects(parent: str) -> list[tuple[str, str, dict, set[str]]]:
+    """Each test object as (what, the controller that sends it, the object,
+    the rules that it must fail)."""
     privileged = []
     for namespace, user, owner in (("home-automation", KUSTOMIZE, OUTSIDE), ("media", KUSTOMIZE, OUTSIDE),
                                    ("production", KUSTOMIZE, OUTSIDE), ("production", HELM, HELM_OUTSIDE)):
@@ -54,51 +59,71 @@ def objects(parent: str) -> list[tuple[str, str, dict]]:
             "spec": {"selector": {"matchLabels": {"app": "flux-admission-check"}},
                      "template": {"metadata": {"labels": {"app": "flux-admission-check"}},
                                   "spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1",
-                                                           "securityContext": {"privileged": True}}]}}}}))
+                                                           "securityContext": {"privileged": True}}]}}}},
+                           {"privileged-pod"}))
     return [
         ("cluster RBAC", KUSTOMIZE, {
             "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
             "metadata": {"name": "flux-admission-check", "labels": OUTSIDE},
             "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "view"},
-            "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": "production"}]}),
+            "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": "production"}]},
+         {"cluster-object", "rbac"}),
         ("an object in ai", KUSTOMIZE, {
             "apiVersion": "v1", "kind": "ConfigMap",
             "metadata": {"name": "flux-admission-check", "namespace": "ai", "labels": OUTSIDE},
-            "data": {"check": "true"}}),
+            "data": {"check": "true"}},
+         {"class-namespace"}),
         ("a Kustomization with a class path", KUSTOMIZE, {
             "apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
             "metadata": {"name": "flux-admission-check", "namespace": "flux-system", "labels": labels(parent)},
             "spec": {"interval": "30m", "path": "./kubernetes/apps/ai", "prune": True,
-                     "sourceRef": {"kind": "GitRepository", "name": "flux-system"}}}),
+                     "sourceRef": {"kind": "GitRepository", "name": "flux-system"}}},
+         {"kustomization-spec"}),
+        # A path outside the class, so only the decryption fails.
+        ("a Kustomization with the class key", KUSTOMIZE, {
+            "apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+            "metadata": {"name": "flux-admission-check", "namespace": "flux-system", "labels": labels(parent)},
+            "spec": {"interval": "30m", "path": "./kubernetes/apps/production/mealie/app", "prune": True,
+                     "sourceRef": {"kind": "GitRepository", "name": "flux-system"},
+                     "decryption": {"provider": "sops", "secretRef": {"name": "sops-age-class"}}}},
+         {"kustomization-spec"}),
         ("the storage of a Helm release from a HelmRelease", HELM, {
             "apiVersion": "v1", "kind": "Secret", "type": "helm.sh/release.v1",
             "metadata": {"name": "sh.helm.release.v1.flux-admission-check.v1", "namespace": "production",
                          "labels": HELM_OUTSIDE},
-            "stringData": {"release": "flux-admission-check"}}),
+            "stringData": {"release": "flux-admission-check"}},
+         {"secret-types"}),
         ("the token of an account", KUSTOMIZE, {
             "apiVersion": "v1", "kind": "Secret", "type": "kubernetes.io/service-account-token",
             "metadata": {"name": "flux-admission-check", "namespace": "production", "labels": OUTSIDE,
-                         "annotations": {"kubernetes.io/service-account.name": "default"}}}),
+                         "annotations": {"kubernetes.io/service-account.name": "default"}}},
+         {"secret-types"}),
         ("a HelmRelease with a release name", KUSTOMIZE, {
             "apiVersion": "helm.toolkit.fluxcd.io/v2", "kind": "HelmRelease",
             "metadata": {"name": "flux-admission-check", "namespace": "production", "labels": OUTSIDE},
             "spec": {"interval": "30m", "releaseName": "flux-admission-check",
                      "chart": {"spec": {"chart": "app-template", "version": "4.0.0",
                                         "sourceRef": {"kind": "HelmRepository", "name": "bjw-s",
-                                                      "namespace": "flux-system"}}}}}),
+                                                      "namespace": "flux-system"}}}}},
+         {"helmrelease-spec"}),
     ] + privileged
 
 
-def send(doc: dict, user: str, context: str | None) -> tuple[str, str]:
+def send(doc: dict, user: str, context: str | None, want: set[str]) -> tuple[str, set[str], str]:
+    """The verdict, the rules that the object failed, and the last line of
+    kubectl."""
     command = ["kubectl", "create", "--dry-run=server", f"--as={user}", "-o", "name", "-f", "-"]
     if context:
         command[1:1] = ["--context", context]
     result = subprocess.run(command, input=json.dumps(doc), capture_output=True, text=True, timeout=60, check=False)
     output = result.stdout + result.stderr
-    marker = "flux-child-scope/"
+    failed = set(re.findall(r"flux-child-scope/([a-z-]+):", output))
+    last = (output.strip().splitlines() or [""])[-1][:200]
+    if not failed:
+        return ("error" if result.returncode != 0 else "passed"), failed, last
     if result.returncode != 0:
-        return ("refused" if marker in output else "error"), output.strip().splitlines()[-1][:300]
-    return ("warned" if marker in output else "passed"), output.strip().splitlines()[0][:300]
+        return ("refused" if failed <= want else "wrong"), failed, last
+    return ("warned" if failed == want else "wrong"), failed, last
 
 
 def main() -> int:
@@ -108,11 +133,14 @@ def main() -> int:
     args = parser.parse_args()
     bad = 0
     sent = objects(args.parent)
-    for what, user, doc in sent:
-        verdict, detail = send(doc, user, args.context)
-        print(f"{verdict:8} {what}: {detail}")
-        bad += verdict not in ("refused", "warned")
-    print("each test object is refused or warned" if not bad else f"{bad} test objects passed or failed for another reason")
+    for what, user, doc, want in sent:
+        verdict, failed, last = send(doc, user, args.context, want)
+        print(f"{verdict:8} {what}: {', '.join(sorted(failed)) or '-'}")
+        if verdict not in ("refused", "warned"):
+            bad += 1
+            print(f"         want {', '.join(sorted(want))}; kubectl: {last}")
+    print("each test object fails its rules" if not bad else
+          f"{bad} test objects passed, failed another rule or failed for another reason")
     # Each refused or warned object adds at least one to the count of the
     # site (one for each rule it fails): the positive control of the read.
     print(f"apiserver_validating_admission_policy_check_total{{policy=\"flux-child-scope\"}} rises by at least "

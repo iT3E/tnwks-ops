@@ -313,10 +313,10 @@ expected result, and it proves nothing alone. Read it in three steps:
    ```
 
 2. **The positive control.** The owner runs the live check (below) on each
-   site. It sends 10 test objects as the two controllers, and each one fails
+   site. It sends 11 test objects as the two controllers, and each one fails
    at least one rule. After two scrapes, the query above shows a series with
-   "audit" of at least 10 for each `cluster` (with `Deny` and `Audit`: "deny"
-   and "audit", at least 10 each). That proves that the policy evaluates the
+   "audit" of at least 11 for each `cluster` (with `Deny` and `Audit`: "deny"
+   and "audit", at least 11 each). That proves that the policy evaluates the
    requests of the controllers on that site and that the series reaches
    Thanos. With no series after the run, the read is void: find the break
    first.
@@ -341,15 +341,23 @@ or when the Prometheus of the site did not scrape. So also check that:
 `bin/flux-admission-check` sends each test object of the design as a server
 side dry run, as the service account of `kustomize-controller`, with the
 owner labels of a child outside the class: cluster RBAC, an object in `ai`,
-a Kustomization with a class path, a Secret of type
-`kubernetes.io/service-account-token` and a HelmRelease with a release name
-in `production`, and a privileged pod in `home-automation`, `media` and
-`production`. It sends a privileged pod and a Secret of type
+a Secret of type `kubernetes.io/service-account-token` and a HelmRelease
+with a release name in `production`, and a privileged pod in
+`home-automation`, `media` and `production`. It sends two Kustomizations
+outside the class with the owner labels of the parent of the apps: one with
+a class path, and one with a path outside the class and the decryption
+Secret `sops-age-class`. It sends a privileged pod and a Secret of type
 `helm.sh/release.v1` in `production` as `helm-controller`, with the owner
-labels of a HelmRelease outside the class. Each object adds to the count of the site, so the run is the positive
-control of the read (above). The API server stores nothing. With `Audit` and
-`Warn` each object passes with a warning. With `Deny` and `Audit` each one
-is refused.
+labels of a HelmRelease outside the class. Each object adds to the count of
+the site, so the run is the positive control of the read (above). The API
+server stores nothing.
+
+Each object names the rules that it must fail, and each line of the output
+names the rules that it failed. With `Deny` and `Audit` each object is
+refused by one of its rules (the API server names one failed rule in a
+refusal). With `Audit` and `Warn` each object passes with a warning of each
+of its rules and of no other. Any other result (a pass, another rule, or an
+error) makes the check exit 1, with the rules that the object must fail.
 The owner runs it with a kubeconfig that may impersonate:
 
 ```bash
