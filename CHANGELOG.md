@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.316.1 - 2026-11-26
+
+### Fixed
+
+* agents: the straight tries of the isolation check to the gateways of the other trust domains, and of the gateway probe of finance to its MCP server, pass only on a time out, as the tries to the read servers and the vault servers do; a refusal, an answer or a name that does not resolve fails
+
 ## v2.316.0 - 2026-11-26
 
 ### Added
