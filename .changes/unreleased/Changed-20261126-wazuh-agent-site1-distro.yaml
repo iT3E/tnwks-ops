@@ -1,0 +1,3 @@
+kind: Changed
+body: Manage the Wazuh agent of the site 1 WSL distro through the Ansible Hosts workflow.
+time: 2026-11-26T16:00:00.000000000-08:00

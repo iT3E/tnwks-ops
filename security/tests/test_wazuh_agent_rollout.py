@@ -16,6 +16,7 @@ STANDING = {
 }
 OPT_INS = {
     "inventory/host_vars/DESKTOP-HKE05KI/main.yml": {"windows_wazuh_rollout_name": "windows-site1"},
+    "inventory/host_vars/DESKTOP-HKE05KI-ubuntu/main.yml": {"wsl_wazuh_rollout_name": "wsl-site1"},
     "inventory/host_vars/WSL-02/main.yml": {"windows_wazuh_rollout_name": "windows-site2"},
     "inventory/host_vars/WSL-02-ubuntu/main.yml": {"wsl_wazuh_rollout_name": "wsl-site2"},
 }

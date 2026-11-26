@@ -11,6 +11,9 @@ wsl_distro_windows_host: DESKTOP-HKE05KI
 # Docker network, from the runner pods (host key in inventory/known_hosts).
 wsl_distro_ssh_host: 10.5.0.1
 
+# Approved Wazuh rollout through this site's Ansible Hosts apply.
+wsl_wazuh_rollout_name: wsl-site1
+
 # Site routing (role wsl_site_routing, docs/wsl/multi-site.md): wg-site1, its
 # site tunnel to sce-rtr01, FRR peering with the router over it, and the
 # forwarding and connmark rules. The router side, and where its public key
