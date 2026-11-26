@@ -3,7 +3,8 @@
 The test runs in a plain Python image with no YAML parser, so this step, in
 the Python of the repository (observability), writes:
 
-- policy.json: the policy and its binding (../app/policy.yaml);
+- policy.json: the policies and their bindings (../app/policy.yaml and
+  ../app/pods.yaml);
 - crds.json: the CRDs of the Flux objects that the test makes, from the
   Flux install of the clusters;
 - kustomizations.json and helmreleases.json: each Flux Kustomization and
@@ -79,7 +80,8 @@ def settings_of(site: str) -> dict:
 
 
 def main(out: Path) -> None:
-    policy = [d for d in yaml.safe_load_all((HERE.parent / "app/policy.yaml").read_text()) if d]
+    policy = [d for name in ("policy.yaml", "pods.yaml")
+              for d in yaml.safe_load_all((HERE.parent / "app" / name).read_text()) if d]
     components = ROOT / "kubernetes/clusters/wsl/flux-system/gotk-components.yaml"
     crds = [d for d in yaml.safe_load_all(components.read_text())
             if d and d.get("kind") == "CustomResourceDefinition" and d["metadata"]["name"] in CRDS]

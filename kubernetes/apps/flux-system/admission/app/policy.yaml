@@ -6,7 +6,15 @@
 # (classPaths), or a HelmRelease that such a child applies. Each other child
 # is outside the class.
 #
-# The policy matches the requests of the two controllers only. It knows the
+# The policy matches the requests of the two controllers and of the accounts
+# of the children outside the class (docs/operations/flux-lockdown.md):
+# system:serviceaccount:flux-system:flux-child-<name> is the account of the
+# Kustomization flux-system/<name>, and
+# system:serviceaccount:<namespace>:flux-release-<name> the account of the
+# HelmRelease <namespace>/<name>. A request of such an account is a request
+# of that child, outside the class, whatever the labels of its object.
+#
+# For a request of a controller, the policy knows the
 # child of an object by the owner labels that the controller sets last:
 # kustomize.toolkit.fluxcd.io/name and /namespace (after commonMetadata, so
 # the rule kustomization-spec refuses those keys there), and
@@ -23,9 +31,10 @@
 #   namespace of the chart source is its own work;
 # - rbac: make or change a Role or a RoleBinding;
 # - flux-kinds: make a Flux Kustomization or an ImageUpdateAutomation;
-# - helmrelease-spec: give a HelmRelease a service account, a kubeconfig, a
-#   release name, a target or storage namespace, or the post render strategy
-#   "nohooks" (hooks with no owner labels);
+# - helmrelease-spec: give a HelmRelease a service account other than its
+#   own (flux-release-<its name>), a kubeconfig, a release name, a target or
+#   storage namespace, or the post render strategy "nohooks" (hooks with no
+#   owner labels);
 # - privileged-pod: make a pod spec with privileged, a host path, the host
 #   network, PID or IPC namespace, a host port or an added capability, in
 #   any namespace;
@@ -40,24 +49,30 @@
 #   accounts use: helm.sh/release.v1 (the storage of a Helm release) and
 #   kubernetes.io/service-account-token (the token of an account). Helm
 #   writes its storage as the controller with no owner label of a child, so
-#   that work passes.
+#   that work passes. The account of a HelmRelease writes the storage of its
+#   own release (in its namespace, with its name, and a Secret name of
+#   sh.helm.release.v1.<its name>.v and digits only, so not the storage of
+#   a release whose name holds a dot after its own), so that passes too.
 #
 # For each request of the controllers:
 # - kustomization-spec: a Kustomization outside the class has a path in the
 #   form a/b/c that is not in a class path and holds none (so not the root),
-#   no service account, no kubeconfig, no commonMetadata key of Flux, no
+#   no service account but its own (flux-child-<its name>, in flux-system),
+#   no kubeconfig, no commonMetadata key of Flux, no
 #   decryption with the Secret of the class key (sops-age-class: the
 #   controller reads a decryption Secret as itself, so an account of the
 #   child does not hold it back; docs/operations/flux-lockdown.md), and
 #   substitutes from cluster-settings, site-overrides and the reduced
 #   Secret cluster-secrets-apps only;
 # - kustomization-class: a Kustomization of the class comes from one of its
-#   parents in git, with a path of the class;
+#   parents in git, as kustomize-controller, with a path of the class;
 # - helmrelease-class: a HelmRelease of the class comes from a Kustomization
-#   of the class;
+#   of the class, as kustomize-controller;
 # - parent-objects: a parent of the class whose build reads files outside
 #   the class (the aggregators of kubernetes/apps) applies Kustomizations and
 #   the objects of its build in git only.
+# The pods of the accounts of the children are the policy flux-child-pods
+# (pods.yaml).
 # An update by a controller that keeps the spec of a Kustomization or a
 # HelmRelease (a finalizer, an annotation) passes the last three.
 #
@@ -97,12 +112,14 @@ spec:
         resources: ["*"]
         scope: "*"
   matchConditions:
-    - name: a-flux-controller-that-applies
+    - name: a-flux-controller-or-child-account-that-applies
       expression: >-
         request.userInfo.username in [
           'system:serviceaccount:flux-system:kustomize-controller',
           'system:serviceaccount:flux-system:helm-controller'
-        ]
+        ] ||
+        request.userInfo.username.startsWith('system:serviceaccount:flux-system:flux-child-') ||
+        request.userInfo.username.matches('^system:serviceaccount:[^:]+:flux-release-[^:]+$')
   variables:
     # BEGIN classlist.py: written by classlist.py write, do not edit by hand.
     - name: classKustomizations
@@ -465,32 +482,64 @@ spec:
       expression: variables.ns == '' || (request.kind.group == '' && request.kind.kind == 'Namespace')
     - name: objNs
       expression: "variables.clusterScoped ? '' : variables.ns"
+    - name: user
+      expression: request.userInfo.username
+    - name: kController
+      expression: variables.user == 'system:serviceaccount:flux-system:kustomize-controller'
+    - name: hController
+      expression: variables.user == 'system:serviceaccount:flux-system:helm-controller'
+    # The account of a child outside the class: flux-child-<name> in
+    # flux-system for the Kustomization flux-system/<name>, and
+    # flux-release-<name> in <namespace> for the HelmRelease
+    # <namespace>/<name>.
+    - name: userParts
+      expression: variables.user.split(':')
+    - name: childAccount
+      expression: >-
+        !variables.kController && !variables.hController &&
+        variables.user.startsWith('system:serviceaccount:flux-system:flux-child-')
+    - name: releaseAccount
+      expression: >-
+        !variables.kController && !variables.hController && !variables.childAccount &&
+        variables.user.matches('^system:serviceaccount:[^:]+:flux-release-[^:]+$')
+    - name: account
+      expression: variables.childAccount || variables.releaseAccount
+    - name: accountChild
+      expression: >-
+        variables.childAccount
+          ? 'flux-system/' + variables.userParts[3].substring(11)
+          : variables.releaseAccount ? variables.userParts[2] + '/' + variables.userParts[3].substring(13) : ''
+    # A request of kustomize-controller or of the account of a Kustomization.
     - name: kustomize
-      expression: request.userInfo.username == 'system:serviceaccount:flux-system:kustomize-controller'
+      expression: variables.kController || variables.childAccount
     - name: labels
       expression: object.metadata.?labels.orValue({})
     - name: kOwner
       expression: >-
+        variables.childAccount ? variables.accountChild :
         variables.labels[?'kustomize.toolkit.fluxcd.io/namespace'].orValue('') + '/' +
         variables.labels[?'kustomize.toolkit.fluxcd.io/name'].orValue('')
     - name: hOwner
       expression: >-
+        variables.releaseAccount ? variables.accountChild :
         variables.labels[?'helm.toolkit.fluxcd.io/namespace'].orValue('') + '/' +
         variables.labels[?'helm.toolkit.fluxcd.io/name'].orValue('')
     # An object that a child applies carries the owner label of the
-    # controller that applies it.
+    # controller that applies it. Each request of a child account is one.
     - name: applied
       expression: >-
-        variables.kustomize
+        variables.account ||
+        (variables.kustomize
           ? 'kustomize.toolkit.fluxcd.io/name' in variables.labels
-          : 'helm.toolkit.fluxcd.io/name' in variables.labels
+          : 'helm.toolkit.fluxcd.io/name' in variables.labels)
     - name: child
       expression: "variables.kustomize ? 'Kustomization ' + variables.kOwner : 'HelmRelease ' + variables.hOwner"
+    # A child account is outside the class, whatever its name.
     - name: inClass
       expression: >-
-        variables.kustomize
+        !variables.account && (variables.kustomize
           ? variables.kOwner in variables.classKustomizations
-          : variables.hOwner in variables.classHelmReleases
+          : variables.hOwner in variables.classHelmReleases)
     - name: outside
       expression: variables.applied && !variables.inClass
     - name: group
@@ -576,7 +625,7 @@ spec:
       reason: Forbidden
     - expression: >-
         !variables.outside || variables.clusterScoped || !(variables.ns in variables.classNamespaces) ||
-        (!variables.kustomize && variables.group == 'source.toolkit.fluxcd.io' && variables.kind == 'HelmChart')
+        (variables.hController && variables.group == 'source.toolkit.fluxcd.io' && variables.kind == 'HelmChart')
       messageExpression: >-
         'flux-child-scope/class-namespace: ' + variables.child +
         ' is outside the class and may not apply ' + variables.what + ' in a namespace of the class'
@@ -593,13 +642,16 @@ spec:
       reason: Forbidden
     - expression: >-
         !variables.outside || !variables.isHelmRelease || (
-          !has(object.spec.serviceAccountName) && !has(object.spec.kubeConfig) &&
+          object.spec.?serviceAccountName.orValue('flux-release-' + object.metadata.name) ==
+            'flux-release-' + object.metadata.name &&
+          !has(object.spec.kubeConfig) &&
           !has(object.spec.releaseName) && !has(object.spec.targetNamespace) &&
           !has(object.spec.storageNamespace) &&
           object.spec.?postRenderStrategy.orValue('') != 'nohooks')
       messageExpression: >-
         'flux-child-scope/helmrelease-spec: ' + variables.child + ' is outside the class, so ' + variables.what +
-        ' may have no service account, kubeconfig, release name, target or storage namespace, or post render strategy nohooks'
+        ' may have no service account but flux-release-' + object.metadata.name +
+        ', no kubeconfig, release name, target or storage namespace, or post render strategy nohooks'
       reason: Forbidden
     - expression: "!variables.outside || !variables.privileged"
       messageExpression: >-
@@ -618,7 +670,14 @@ spec:
       reason: Forbidden
     - expression: >-
         !variables.outside || !(variables.group == '' && variables.kind == 'Secret' &&
-          object.?type.orValue('') in ['helm.sh/release.v1', 'kubernetes.io/service-account-token'])
+          object.?type.orValue('') in ['helm.sh/release.v1', 'kubernetes.io/service-account-token']) || (
+          variables.releaseAccount && object.?type.orValue('') == 'helm.sh/release.v1' &&
+          variables.objNs == variables.userParts[2] &&
+          variables.labels[?'owner'].orValue('') == 'helm' &&
+          variables.labels[?'name'].orValue('') == variables.userParts[3].substring(13) &&
+          object.metadata.?name.orValue('').startsWith('sh.helm.release.v1.' + variables.userParts[3].substring(13) + '.v') &&
+          object.metadata.name.substring(size('sh.helm.release.v1.' + variables.userParts[3].substring(13) + '.v'))
+            .matches('^[0-9]+$'))
       messageExpression: >-
         'flux-child-scope/secret-types: ' + variables.child + ' is outside the class and may not apply ' +
         variables.what + ' of type ' + object.?type.orValue('') + ', a type that Helm or a service account uses'
@@ -626,7 +685,9 @@ spec:
     - expression: >-
         !variables.isKustomization || variables.self in variables.classKustomizations || variables.sameSpec || (
           variables.pathForm && !variables.pathInClass && !variables.pathHoldsClass &&
-          !has(object.spec.serviceAccountName) && !has(object.spec.kubeConfig) &&
+          (!has(object.spec.serviceAccountName) ||
+            (variables.objNs == 'flux-system' && object.spec.serviceAccountName == 'flux-child-' + object.metadata.name)) &&
+          !has(object.spec.kubeConfig) &&
           !object.spec.?commonMetadata.?labels.orValue({}).exists(k, k.contains('toolkit.fluxcd.io')) &&
           !object.spec.?commonMetadata.?annotations.orValue({}).exists(k, k.contains('toolkit.fluxcd.io')) &&
           object.spec.?decryption.?secretRef.?name.orValue('') != 'sops-age-class' &&
@@ -637,13 +698,14 @@ spec:
       messageExpression: >-
         'flux-child-scope/kustomization-spec: ' + variables.what +
         ' is outside the class: its path must be in the form a/b/c, not in or above a path of the class,' +
-        ' with no service account, kubeconfig, commonMetadata key of Flux or decryption with sops-age-class,' +
+        ' with no service account but its own (flux-child-<name> in flux-system),' +
+        ' no kubeconfig, commonMetadata key of Flux or decryption with sops-age-class,' +
         ' and substitution from' +
         ' cluster-settings, site-overrides and cluster-secrets-apps only'
       reason: Forbidden
     - expression: >-
         !variables.isKustomization || !(variables.self in variables.classKustomizations) || variables.sameSpec || (
-          variables.kustomize && variables.applied &&
+          variables.kController && variables.applied &&
           variables.kOwner in variables.classKustomizations[variables.self] &&
           variables.pathForm && variables.pathInClass)
       messageExpression: >-
@@ -652,13 +714,13 @@ spec:
       reason: Forbidden
     - expression: >-
         !variables.isHelmRelease || !(variables.self in variables.classHelmReleases) || variables.sameSpec || (
-          variables.kustomize && variables.applied && variables.kOwner in variables.classKustomizations)
+          variables.kController && variables.applied && variables.kOwner in variables.classKustomizations)
       messageExpression: >-
         'flux-child-scope/helmrelease-class: ' + variables.what +
         ' is in the class, so a Kustomization of the class must apply it, not ' + variables.child
       reason: Forbidden
     - expression: >-
-        !(variables.kustomize && variables.applied && variables.kOwner in variables.parentObjects) ||
+        !(variables.kController && variables.applied && variables.kOwner in variables.parentObjects) ||
         variables.isKustomization ||
         (variables.kind + '/' + variables.objNs + '/' + object.metadata.?name.orValue('')) in variables.parentObjects[variables.kOwner]
       messageExpression: >-

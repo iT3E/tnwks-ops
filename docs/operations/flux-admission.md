@@ -8,7 +8,9 @@ policy is the first step of the far-side control of the class. The Flux
 lockdown (a service account for each child, and a key for the class) is the
 next step: [`flux-lockdown.md`](flux-lockdown.md).
 
-- The policy: [`kubernetes/apps/flux-system/admission/app/policy.yaml`](../../kubernetes/apps/flux-system/admission/app/policy.yaml).
+- The policy: [`kubernetes/apps/flux-system/admission/app/policy.yaml`](../../kubernetes/apps/flux-system/admission/app/policy.yaml),
+  and the pods of the accounts of the children:
+  [`pods.yaml`](../../kubernetes/apps/flux-system/admission/app/pods.yaml) (below).
 - Its lists: [`classlist.py`](../../kubernetes/apps/flux-system/admission/classlist.py) writes them from git.
 - Its tests: [`tests/run.sh`](../../kubernetes/apps/flux-system/admission/tests/run.sh) on a throwaway API server, and
   [`observability/tests/test_flux_admission.py`](../../observability/tests/test_flux_admission.py) in CI.
@@ -78,6 +80,19 @@ repository; to trust another source is a change of the design.
 
 ## The rules
 
+The policy matches the requests of the two controllers and of the accounts
+of the children outside the class ([`flux-lockdown.md`](flux-lockdown.md)):
+
+- `system:serviceaccount:flux-system:flux-child-<name>` is the account of
+  the Kustomization `flux-system/<name>`;
+- `system:serviceaccount:<namespace>:flux-release-<name>` is the account of
+  the HelmRelease `<namespace>/<name>`.
+
+For a request of a controller, the child of an object is the one that its
+owner labels name. A request of such an account is a request of its child,
+outside the class, whatever the name of the account and the labels of the
+object.
+
 A child outside the class may not:
 
 | Rule | What it refuses |
@@ -86,23 +101,31 @@ A child outside the class may not:
 | `class-namespace` | an object in a namespace of the class. The HelmChart that the helm controller makes beside its chart source is its own work |
 | `rbac` | a Role or a RoleBinding |
 | `flux-kinds` | a Flux Kustomization or an ImageUpdateAutomation |
-| `helmrelease-spec` | a HelmRelease with a service account, a kubeconfig, a release name, a target or storage namespace, or the post render strategy `nohooks` |
+| `helmrelease-spec` | a HelmRelease with a service account other than its own (`flux-release-<its name>`), a kubeconfig, a release name, a target or storage namespace, or the post render strategy `nohooks` |
 | `privileged-pod` | a pod spec with `privileged`, a host path, the host network, PID or IPC namespace, a host port or an added capability, in any namespace |
 | `operator-pods` | an object from which an operator makes a pod of its own template: a runner set (`actions.github.com`), a sandbox (`agents.x-k8s.io`, `extensions.agents.x-k8s.io`), and each object of the database operator and of its backup plugin (`postgresql.cnpg.io`, `barmancloud.cnpg.io`): a cluster, a pooler, a backup, a scheduled backup, an object store. The database folders are in the class (above), so no child outside it needs one |
 | `takeover` | a change of an object whose owner labels name a child of the class |
-| `secret-types` | a Secret of a type that Helm or a service account uses: `helm.sh/release.v1` (the storage of a Helm release) and `kubernetes.io/service-account-token` (the token of an account). Helm writes its own storage as the controller, with no owner label of a child, so that work passes |
+| `secret-types` | a Secret of a type that Helm or a service account uses: `helm.sh/release.v1` (the storage of a Helm release) and `kubernetes.io/service-account-token` (the token of an account). Helm writes its own storage as the controller, with no owner label of a child, so that work passes. The account of a HelmRelease may write the storage of its own release: in its namespace, with its name |
 
-For each request of the two controllers:
+For each request that the policy matches:
 
 | Rule | What it checks |
 | --- | --- |
-| `kustomization-spec` | A Kustomization outside the class has a path in the form `a/b/c`, not in a class path and not above one (so not the root). It has no service account, no kubeconfig, no `commonMetadata` key of Flux and no decryption with the Secret of the class key `sops-age-class` ([`flux-lockdown.md`](flux-lockdown.md)). It substitutes from `cluster-settings`, `site-overrides` and the reduced Secret `cluster-secrets-apps` only |
-| `kustomization-class` | A Kustomization of the class comes from one of its parents in git, with a path of the class |
-| `helmrelease-class` | A HelmRelease of the class comes from a Kustomization of the class |
+| `kustomization-spec` | A Kustomization outside the class has a path in the form `a/b/c`, not in a class path and not above one (so not the root). It has no service account but its own (`flux-child-<its name>`, in `flux-system`), no kubeconfig, no `commonMetadata` key of Flux and no decryption with the Secret of the class key `sops-age-class` ([`flux-lockdown.md`](flux-lockdown.md)). It substitutes from `cluster-settings`, `site-overrides` and the reduced Secret `cluster-secrets-apps` only |
+| `kustomization-class` | A Kustomization of the class comes from one of its parents in git, as `kustomize-controller`, with a path of the class |
+| `helmrelease-class` | A HelmRelease of the class comes from a Kustomization of the class, as `kustomize-controller` |
 | `parent-objects` | A parent of the apps applies Kustomizations and the objects of its build in git only |
 
 An update of a controller that keeps the spec of a Kustomization or a
 HelmRelease (a finalizer, an annotation) passes the last three rules.
+
+The policy `flux-child-pods` matches the pods of each user, with no match
+on the user, as the multi-tenancy example of Flux does for its account
+(`fluxcd/flux2-multi-tenancy`, "Flux service account restriction"):
+
+| Rule | What it refuses |
+| --- | --- |
+| `pod-account` | a pod that runs as `flux-child-*` or `flux-release-*` (`serviceAccountName`, or the old field `serviceAccount`) |
 
 ## Substitution
 

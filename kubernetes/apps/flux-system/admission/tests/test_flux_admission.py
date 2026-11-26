@@ -16,6 +16,12 @@ object is made, except the few that the cases of an update need.
    Warn, the action of the break-glass path, lets it pass with a warning.
 4. Each rule switched off in turn: at least one of its own cases passes, so
    each case can fail.
+
+The accounts of the children outside the class (flux-child-<name> in
+flux-system, flux-release-<name> in the namespace of a HelmRelease) are
+bound to cluster-admin here, so that the policy, not RBAC, is what refuses
+their requests. The policy flux-child-pods (../app/pods.yaml) is applied
+with flux-child-scope.
 """
 
 import copy
@@ -445,7 +451,114 @@ def cases():
         ("work", "the release storage of the helm controller in kube-system", HELM, "allow",
          obj("Secret", "sh.helm.release.v1.cilium.v2", "kube-system", {"owner": "helm", "name": "cilium"},
              type="helm.sh/release.v1", stringData={"release": "x"})),
-    ] + privileged_cases() + operator_cases()
+    ] + privileged_cases() + operator_cases() + account_cases()
+
+
+# The accounts of the children outside the class, as the API server names
+# them: the Kustomization flux-system/mealie and the HelmRelease
+# production/mealie, another Kustomization, and an account with the name of
+# a Kustomization of the class (no such account is made: it is still
+# outside the class).
+CHILD = "system:serviceaccount:flux-system:flux-child-" + NAMES["outsideK"].split("/")[1]
+RELEASE = "system:serviceaccount:{}:flux-release-{}".format(*NAMES["outsideHR"].split("/"))
+CLASS_NAMED = "system:serviceaccount:flux-system:flux-child-" + NAMES["classK"].split("/")[1]
+ACCOUNTS = (CHILD, RELEASE, CLASS_NAMED)
+
+
+def storage(name, namespace, release):
+    """A Secret of the storage of a Helm release, as Helm writes it."""
+    return obj("Secret", f"sh.helm.release.v1.{name}.v1", namespace,
+               {"owner": "helm", "name": release, "status": "deployed", "version": "1"},
+               type="helm.sh/release.v1", stringData={"release": "x"})
+
+
+def account_cases():
+    """The requests of the accounts of the children: each is a request of
+    a child outside the class, whatever the labels of its object."""
+    own_hr = NAMES["outsideHR"].split("/")[1]
+    namespace = NAMES["outsideHR"].split("/")[0]
+    shared_ns, shared_name = NAMES["sharedClassHR"].split("/")
+    plain = obj("ConfigMap", "plain", namespace, None, data={"a": "b"})
+    token = obj("Secret", "token", namespace, None, type="kubernetes.io/service-account-token",
+                metadata={"name": "token", "namespace": namespace,
+                          "annotations": {"kubernetes.io/service-account.name": "default"}})
+    cases = []
+    for user, by in ((CHILD, "the account of a Kustomization"), (RELEASE, "the account of a HelmRelease")):
+        cases += [
+            ("cluster-object", f"a ClusterRole from {by}", user, "deny", obj("ClusterRole", "r", None, None, rules=[])),
+            ("class-namespace", f"an object in ai from {by}", user, "deny",
+             obj("ConfigMap", "c", "ai", None, data={"a": "b"})),
+            ("rbac", f"a Role from {by}", user, "deny", obj("Role", "r", namespace, None, rules=[])),
+            ("flux-kinds", f"a Kustomization from {by}", user, "deny", kustomization("nested", APP_PATH, None)),
+            ("privileged-pod", f"a privileged pod from {by}", user, "deny",
+             workload("Deployment", "p", namespace, None, pod_spec(container(privileged=True)))),
+            ("operator-pods", f"a Sandbox from {by}", user, "deny",
+             obj("Sandbox", "s", namespace, None, spec={"podTemplate": {"spec": pod_spec()}})),
+            ("takeover", f"a change of an object of a child of the class from {by}", user, "deny",
+             {"update": dict(TAKEN, data={"a": "d"})}),
+            ("secret-types", f"a token of an account from {by}", user, "deny", token),
+            ("secret-types", f"a plain object from {by}", user, "allow", plain),
+            ("privileged-pod", f"a plain pod from {by}", user, "allow",
+             workload("Deployment", "p", namespace, None, pod_spec())),
+        ]
+    cases += [
+        # The labels of an object do not make the request of an account one of the class.
+        ("class-namespace", "an object in ai with the labels of the class, from an account with a class name",
+         CLASS_NAMED, "deny", obj("ConfigMap", "c", "ai", CLASS_K, data={"a": "b"})),
+        ("helmrelease-class", "a HelmRelease of the class from an account with a class name", CLASS_NAMED, "deny",
+         helmrelease(NAMES["sharedClassHR"], CLASS_K)),
+        ("helmrelease-class", "a HelmRelease of the class from kustomize-controller", KUSTOMIZE, "allow",
+         helmrelease(NAMES["sharedClassHR"], CLASS_K)),
+        # The storage of a Helm release: only the account of a HelmRelease,
+        # for its own release, in its own namespace.
+        ("secret-types", "the storage of its own release from the account of a HelmRelease", RELEASE, "allow",
+         storage(own_hr, namespace, own_hr)),
+        ("secret-types", "the storage of another release from the account of a HelmRelease", RELEASE, "deny",
+         storage("other", namespace, "other")),
+        ("secret-types", "the storage of a release of the class from the account of a HelmRelease", RELEASE, "deny",
+         storage(shared_name, shared_ns, shared_name)),
+        ("secret-types", "the storage of its release in another namespace from its account", RELEASE, "deny",
+         storage(own_hr, "media", own_hr)),
+        ("secret-types", "the storage of its release with the name of another one, from its account", RELEASE,
+         "deny", dict(storage(own_hr, namespace, own_hr), metadata=dict(
+             storage(own_hr, namespace, own_hr)["metadata"], name="sh.helm.release.v1.other.v1"))),
+        ("secret-types", "the storage of a release with a dot after its name, from its account", RELEASE,
+         "deny", dict(storage(own_hr, namespace, own_hr), metadata=dict(
+             storage(own_hr, namespace, own_hr)["metadata"], name=f"sh.helm.release.v1.{own_hr}.vbar.v1"))),
+        ("secret-types", "the storage of its release with no version, from its account", RELEASE,
+         "deny", dict(storage(own_hr, namespace, own_hr), metadata=dict(
+             storage(own_hr, namespace, own_hr)["metadata"], name=f"sh.helm.release.v1.{own_hr}.v"))),
+        ("secret-types", "the storage of its release at version 12, from its account", RELEASE,
+         "allow", dict(storage(own_hr, namespace, own_hr), metadata=dict(
+             storage(own_hr, namespace, own_hr)["metadata"], name=f"sh.helm.release.v1.{own_hr}.v12"))),
+        ("secret-types", "the storage of a release from the account of a Kustomization", CHILD, "deny",
+         storage(own_hr, namespace, own_hr)),
+        # The own account of a child, and no other.
+        ("helmrelease-spec", "its own account, from the account of a Kustomization", CHILD, "allow",
+         helmrelease(NAMES["outsideHR"], None, serviceAccountName=f"flux-release-{own_hr}")),
+        ("helmrelease-spec", "its own account, from kustomize-controller", KUSTOMIZE, "allow",
+         helmrelease(NAMES["outsideHR"], OUT_K, serviceAccountName=f"flux-release-{own_hr}")),
+        ("helmrelease-spec", "the account of another HelmRelease", KUSTOMIZE, "deny",
+         helmrelease(NAMES["outsideHR"], OUT_K, serviceAccountName="flux-release-other")),
+        ("helmrelease-spec", "the account of another HelmRelease, from the account of a Kustomization", CHILD,
+         "deny", helmrelease(NAMES["outsideHR"], None, serviceAccountName="flux-release-other")),
+        ("kustomization-spec", "its own account", KUSTOMIZE, "allow",
+         kustomization("new-app", APP_PATH, PARENT, serviceAccountName="flux-child-new-app")),
+        ("kustomization-spec", "the account of another child", KUSTOMIZE, "deny",
+         kustomization("new-app", APP_PATH, PARENT, serviceAccountName=CHILD.rsplit(":", 1)[1])),
+        ("kustomization-spec", "the account of a HelmRelease", KUSTOMIZE, "deny",
+         kustomization("new-app", APP_PATH, PARENT, serviceAccountName="flux-release-new-app")),
+        # No pod of any user runs as such an account (flux-child-pods).
+        ("pod-account", "a pod of a person as the account of a Kustomization", None, "deny",
+         obj("Pod", "p", namespace, None, spec=pod_spec(serviceAccountName=CHILD.rsplit(":", 1)[1]))),
+        ("pod-account", "a pod of the class as the account of a HelmRelease", KUSTOMIZE, "deny",
+         obj("Pod", "p", namespace, CLASS_K, spec=pod_spec(serviceAccountName=RELEASE.rsplit(":", 1)[1]))),
+        ("pod-account", "a pod with the old field of the account", None, "deny",
+         obj("Pod", "p", namespace, None, spec=pod_spec(serviceAccount=RELEASE.rsplit(":", 1)[1]))),
+        ("pod-account", "a pod of a person as another account", None, "allow",
+         obj("Pod", "p", namespace, None, spec=pod_spec(serviceAccountName="app"))),
+    ]
+    return cases
 
 
 def operator_cases():
@@ -481,20 +594,32 @@ def operator_cases():
     return cases
 
 
-def apply_policy(actions, drop=None, mutate=None):
+def apply_policy(actions, drop=None, mutate=None, match=None):
     """Applies the policy of git, less the validation of the rule drop, and
     its binding with these actions. A mutant (old, new) changes the text of
-    one expression."""
-    for doc in POLICY:
-        doc = copy.deepcopy(doc)
-        if doc["kind"] == "ValidatingAdmissionPolicy" and drop:
-            kept = [v for v in doc["spec"]["validations"] if f"flux-child-scope/{drop}:" not in v["messageExpression"]]
-            assert len(kept) == len(doc["spec"]["validations"]) - 1, drop
-            doc["spec"]["validations"] = kept
-        if doc["kind"] == "ValidatingAdmissionPolicy" and mutate:
-            hits = [v for v in doc["spec"]["validations"] if mutate[0] in v["expression"]]
-            assert len(hits) == 1, mutate
-            hits[0]["expression"] = hits[0]["expression"].replace(mutate[0], mutate[1])
+    one expression; match replaces the expression of the match of
+    flux-child-scope."""
+    docs = copy.deepcopy(POLICY)
+    policies = [d for d in docs if d["kind"] == "ValidatingAdmissionPolicy"]
+    if drop:
+        for doc in policies:
+            doc["spec"]["validations"] = [v for v in doc["spec"]["validations"]
+                                          if f"/{drop}: " not in v["messageExpression"]]
+        dropped = sum(len(d["spec"]["validations"]) for d in POLICY if d["kind"] == "ValidatingAdmissionPolicy") - \
+            sum(len(d["spec"]["validations"]) for d in policies)
+        assert dropped == 1, drop
+        for doc in policies:
+            # A policy needs one validation: one that holds for each request.
+            doc["spec"]["validations"] = doc["spec"]["validations"] or [{"expression": "true"}]
+    if mutate:
+        hits = [v for d in policies for v in d["spec"]["validations"] if mutate[0] in v["expression"]]
+        assert len(hits) == 1, mutate
+        hits[0]["expression"] = hits[0]["expression"].replace(mutate[0], mutate[1])
+    if match:
+        (scope,) = [d for d in policies if d["metadata"]["name"] == "flux-child-scope"]
+        (condition,) = scope["spec"]["matchConditions"]
+        condition["expression"] = match
+    for doc in docs:
         if doc["kind"] == "ValidatingAdmissionPolicyBinding":
             doc["spec"]["validationActions"] = actions
         status, _, _ = call("PATCH", f"{ADMISSION}/{KINDS[doc['kind']][0]}/{doc['metadata']['name']}?fieldManager=test&force=true",
@@ -516,9 +641,13 @@ def send(case):
     return create(doc, user)
 
 
+# The prefixes of the messages of the two policies.
+MARKERS = ("flux-child-scope/", "flux-child-pods/")
+
+
 def refused(result):
     status, body, _ = result
-    return status == 403 and "flux-child-scope/" in body.get("message", "")
+    return status == 403 and any(m in body.get("message", "") for m in MARKERS)
 
 
 def outcome(case):
@@ -558,6 +687,15 @@ class FluxAdmission(unittest.TestCase):
                 roleRef={"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "cluster-admin"},
                 subjects=[{"kind": "ServiceAccount", "name": name, "namespace": "flux-system"}]), dry=False)
             assert status in (201, 409), (name, status)
+        # The accounts of the children: bound to cluster-admin here, so the
+        # policy is what refuses their requests (on the clusters, the role
+        # flux-child limits them first).
+        for user in ACCOUNTS:
+            name = "account-" + user.rsplit(":", 1)[1]
+            status, _, _ = create(obj("ClusterRoleBinding", name,
+                roleRef={"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "cluster-admin"},
+                subjects=[{"apiGroup": "rbac.authorization.k8s.io", "kind": "User", "name": user}]), dry=False)
+            assert status in (201, 409), (name, status)
         status, _, _ = create(TAKEN, dry=False)
         assert status in (201, 409), status
         apply_policy(GIT_ACTIONS)
@@ -570,12 +708,13 @@ class FluxAdmission(unittest.TestCase):
             raise
 
     def test_1_type_check(self):
-        status, body, _ = call("GET", f"{ADMISSION}/validatingadmissionpolicies/flux-child-scope")
-        self.assertEqual(status, 200)
-        wait_for("a type check", lambda: "typeChecking" in call(
-            "GET", f"{ADMISSION}/validatingadmissionpolicies/flux-child-scope")[1].get("status", {}))
-        status, body, _ = call("GET", f"{ADMISSION}/validatingadmissionpolicies/flux-child-scope")
-        self.assertEqual(body["status"]["typeChecking"].get("expressionWarnings", []), [])
+        for name in ("flux-child-scope", "flux-child-pods"):
+            status, body, _ = call("GET", f"{ADMISSION}/validatingadmissionpolicies/{name}")
+            self.assertEqual(status, 200)
+            wait_for(f"a type check of {name}", lambda n=name: "typeChecking" in call(
+                "GET", f"{ADMISSION}/validatingadmissionpolicies/{n}")[1].get("status", {}))
+            status, body, _ = call("GET", f"{ADMISSION}/validatingadmissionpolicies/{name}")
+            self.assertEqual(body["status"]["typeChecking"].get("expressionWarnings", []), [], name)
 
     def test_2_each_case(self):
         failures = []
@@ -645,14 +784,14 @@ class FluxAdmission(unittest.TestCase):
             wait_for("audit and warn", lambda: send(deny)[0] in (200, 201))
             for case in cases():
                 status, _, warnings = send(case)
-                warned = any("flux-child-scope/" in w for w in warnings)
+                warned = any(m in w for w in warnings for m in MARKERS)
                 self.assertEqual((status in (200, 201), warned), (True, case[3] == "deny"), case[:2])
         finally:
             apply_policy(GIT_ACTIONS)
 
     def test_7_each_rule_can_fail(self):
         rules = sorted({c[0] for c in cases() if c[3] == "deny"})
-        self.assertEqual(len(rules), 13)
+        self.assertEqual(len(rules), 14)
         try:
             for rule in rules:
                 apply_policy(GIT_ACTIONS)
@@ -724,6 +863,27 @@ class FluxAdmission(unittest.TestCase):
                 wait_for(f"{field} in force", lambda c=case: refused(send(c)), 30)
                 apply_policy(GIT_ACTIONS, mutate=(f"!has(object.spec.{field})", "true"))
                 wait_for(f"{field} off", lambda c=case: not refused(send(c)), 30)
+        finally:
+            apply_policy(GIT_ACTIONS)
+
+    def test_10_the_accounts_of_the_children(self):
+        # A mutant whose match has the two controllers only: each refusal of
+        # a request of an account goes, so the match is what refuses them.
+        # A mutant with no own release storage: that case is refused, so the
+        # exception is what lets helm-controller write it as the account.
+        controllers = ("request.userInfo.username in ['system:serviceaccount:flux-system:kustomize-controller', "
+                       "'system:serviceaccount:flux-system:helm-controller']")
+        accounts = [c for c in cases() if c[2] in ACCOUNTS and c[3] == "deny" and c[0] != "pod-account"]
+        self.assertGreater(len(accounts), 20)
+        own = next(c for c in cases() if c[1].startswith("the storage of its own release"))
+        try:
+            apply_policy(GIT_ACTIONS, match=controllers)
+            wait_for("the match of the controllers only", lambda: not refused(send(accounts[0])), 30)
+            self.assertEqual([c[:2] for c in accounts if refused(send(c))], [])
+            apply_policy(GIT_ACTIONS, mutate=("variables.releaseAccount && object.?type", "false && object.?type"))
+            wait_for("no own release storage", lambda: refused(send(own)), 30)
+            apply_policy(GIT_ACTIONS)
+            wait_for("the policy of git", lambda: not refused(send(own)) and refused(send(accounts[0])), 30)
         finally:
             apply_policy(GIT_ACTIONS)
 

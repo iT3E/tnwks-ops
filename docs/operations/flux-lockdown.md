@@ -68,6 +68,26 @@ so the rule changes nothing at its merge. The cases of the harness:
   with `kustomize-controller` and `sops-age-class`, pass;
 - a HelmRelease of the class with an account of its namespace passes.
 
+The policy also matches the accounts of the children outside the class
+(step 2c0, before any child names one):
+
+- `flux-system/flux-child-<name>`, the account of the Kustomization
+  `flux-system/<name>`, and `<namespace>/flux-release-<name>`, the account
+  of the HelmRelease `<namespace>/<name>`. Each request of such an account
+  is a request of that child, outside the class, so each rule of the
+  children outside the class applies to it.
+- A Kustomization outside the class may name only its own account, and a
+  HelmRelease outside the class only its own.
+- The account of a HelmRelease may write the storage of its own release,
+  in its own namespace: the Secret `sh.helm.release.v1.<its name>.v<n>`,
+  where `<n>` is digits only. No account of a child writes a token Secret.
+  Token requests, exec and eviction are subresources, which the policy does
+  not match: RBAC holds them, and the role of the accounts grants none.
+- No pod of any user runs as such an account (the policy
+  `flux-child-pods`).
+- No Kustomization or HelmRelease of the class, and no pod spec of git,
+  names such an account (a CI test).
+
 ## The tests of git
 
 `observability/tests/test_flux_lockdown.py` reads each Kustomization and
