@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.324.0 - 2026-11-26
+
+### Changed
+
+* bin/flux-admission-check also sends a Kustomization outside the class with the decryption Secret sops-age-class, names the rules that each test object must fail, prints the rules that it failed, and exits 1 when an object fails another rule; the count of the read rises by at least 11 (docs/operations/flux-admission.md)
+
 ## v2.323.0 - 2026-11-26
 
 ### Changed
