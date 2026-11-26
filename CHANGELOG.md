@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.319.1 - 2026-11-26
+
+### Fixed
+
+* radarr, sonarr: drop unused ingress annotations, left from a theme that was removed in 2023; nothing else of either app changes
+
 ## v2.319.0 - 2026-11-26
 
 ### Added
