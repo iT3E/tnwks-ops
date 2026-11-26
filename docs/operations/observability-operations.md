@@ -90,7 +90,7 @@ WSL-02, which has that cluster's kubeconfig
   bytes of its 90-day streams in a day, before compression.
   `WslDriveSpaceLow`: the drive under the WSL disk of WSL-02 has less than
   100 GB free (evaluated by site 1, which scrapes both Windows hosts).
-- **Room on site 1:** three alerts of the group `homelab.capacity`
+- **Room on site 1:** four alerts of the group `homelab.capacity`
   (`observability/rules.py`) on the memory of each node container of
   homelab-wsl, scraped on that site: the kubelet's
   `node_memory_working_set_bytes`, and cAdvisor's `container_memory_rss` of
@@ -109,6 +109,9 @@ WSL-02, which has that cluster's kubeconfig
     past 98% for 15 minutes.
   - `NodeContainerRssNearLimit` (warning): the resident memory of a node
     past 85% of the limit of its role for 15 minutes.
+  - `NodeContainerRssMissing` (warning): for an hour,
+    `NodeContainerRssNearLimit` reads fewer nodes than kube-state-metrics
+    counts on site 1 (`kube_node_info`), so it can not fire for a node.
 
   What the numbers mean:
   - The kubelet does not see these limits. It reports the memory of the
@@ -135,16 +138,28 @@ WSL-02, which has that cluster's kubeconfig
   - The resident memory is the anonymous memory of the node container,
     which the kernel can not take back (the nodes have no swap). It is
     `rssBytes` in the summary of the kubelet (step 1), and the series
-    `container_memory_rss{id="/"}` of cAdvisor gives the same figure. The
+    `container_memory_rss{id="/"}` of cAdvisor gives the same figure. It
+    leaves out tmpfs, shared memory and kernel memory, which also count
+    against the limit and which the kernel can not take back either. So the
+    resident memory is a floor of what the kernel can not take back, not
+    all of it. The
     chart drops each cAdvisor series of a cgroup with no pod, so the scrape
     of site 1 (`kubernetes/clusters/wsl/apps/kustomization.yaml`) replaces
     the chart's cAdvisor relabel list with a copy of it that spares that one
     series of each node. The other series of the scrape do not change, and
     no rule or board of the chart reads a cAdvisor series with an empty
     `container` or `image`. A new chart version can change its default
-    list: compare it with the copy at each upgrade
-    (`observability/tests/test_node_container_memory.py` names the version
-    of the copy).
+    list. `observability/tests/test_node_container_memory.py` fetches the
+    chart version that the HelmRelease names, checks it against the digest
+    in its registry, and compares its default list with the copy. So a
+    chart bump that changes the list fails that test: copy the new list to
+    the test and to the patch of site 1, with the change that spares the
+    one series.
+  - `NodeContainerRssMissing` makes a silent gap loud: a node whose root
+    series the rule can not read gets no alert. The causes are a relabel
+    that no longer keeps the series, a node with a name outside the form
+    of Talos in Docker, or a label of the kubelet that changed. Compare
+    `container_memory_rss{id="/"}` of site 1 with the nodes.
   - `NodeContainerRssNearLimit` fires when a node has little left that the
     kernel can take back. At the time of this change the resident memory
     was about 74% of the limit of the control plane and 53% and 63% of the

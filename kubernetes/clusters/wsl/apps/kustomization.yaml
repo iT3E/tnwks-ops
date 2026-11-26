@@ -271,14 +271,17 @@ patches:
                     regex: node_memory_working_set_bytes
                     action: keep
               # The resident memory of the same root cgroup, for
-              # NodeContainerRssNearLimit: what the kernel can not take
-              # back. The list is the chart's default
+              # NodeContainerRssNearLimit: a floor of what the kernel can
+              # not take back. The list is the chart's default
               # (cAdvisorMetricRelabelings of kube-prometheus-stack 93.2.2)
               # but for its last rule, which drops each cgroup with no pod:
               # it now spares container_memory_rss of the root cgroup
               # (id "/"), one series for each node.
-              # observability/tests/test_node_container_memory.py holds the
-              # list to the chart's and runs it in Prometheus.
+              # observability/tests/test_node_container_memory.py fetches
+              # the chart version that the HelmRelease names, holds this
+              # list to that chart's default list, and runs it in
+              # Prometheus. A chart bump that changes the default list
+              # fails that test until this copy follows.
               - op: add
                 path: /spec/values/kubelet/serviceMonitor/cAdvisorMetricRelabelings
                 value:
