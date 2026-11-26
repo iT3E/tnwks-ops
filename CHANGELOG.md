@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.318.0 - 2026-11-26
+
+### Changed
+
+* agents: the code host server of main reads the installation token of the App of main, which the token job writes each 30 minutes, and waits for that job; the stopgap token of the owner is gone from the repository. The proxy of the server reads the token from the mounted Secret at each request, so a new token needs no restart, and with no token or the placeholder it answers 503 and sends nothing on
+
 ## v2.317.0 - 2026-11-26
 
 ### Changed

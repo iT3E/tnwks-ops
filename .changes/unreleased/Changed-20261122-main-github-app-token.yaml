@@ -1,3 +1,0 @@
-kind: Changed
-body: 'agents: the code host server of main reads the installation token of the App of main, which the token job writes each 30 minutes, and waits for that job; the stopgap token of the owner is gone from the repository. The proxy of the server reads the token from the mounted Secret at each request, so a new token needs no restart, and with no token or the placeholder it answers 503 and sends nothing on'
-time: 2026-11-22T13:00:00.000000000Z
