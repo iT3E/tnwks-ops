@@ -35,7 +35,7 @@ CONFIG = AGENTS / "main/agent/config/openclaw.json"
 GATEWAY_CONFIG = ROOT / "kubernetes/apps/ai/mcp-gateway/app/config/config.yaml"
 SECRETS = {
     "secret.sops.yaml": ("agent-secret", {"OPENCLAW_GATEWAY_TOKEN", "LITELLM_API_KEY", "TELEGRAM_BOT_TOKEN",
-                                          "TELEGRAM_ALLOW_FROM", "MCP_GATEWAY_KEY"}),
+                                          "TELEGRAM_ALLOW_FROM", "MCP_GATEWAY_KEY", "OPENCLAW_UI_ALLOW_USER"}),
     "secret-search.sops.yaml": ("agent-search-secret", {"BRAVE_API_KEY"}),
     "secret-telegram-groups.sops.yaml": ("agent-telegram-groups", {"telegram-groups.json"}),
 }
@@ -267,6 +267,40 @@ def test_control_ui_uses_the_authenticated_internal_ingress():
     }]
 
 
+def test_the_gateway_block_is_the_one_built_for_the_control_ui():
+    """The whole gateway block, as built for the Control UI, so no change of
+    it passes unseen. The auth admits one user, the value of a key of
+    agent-secret (test_main_control_ui_user.py proves the match on the
+    gateway). A new browser device is approved with the four default
+    operator scopes of the release, written out so a new release can not
+    widen them: chat, and no admin scope."""
+    gateway = json.loads(CONFIG.read_text())["gateway"]
+    proxy = gateway["auth"]["trustedProxy"]
+    assert proxy["allowUsers"] == ["${OPENCLAW_UI_ALLOW_USER}"]
+    assert "OPENCLAW_UI_ALLOW_USER" in SECRETS["secret.sops.yaml"][1]
+    (agent,) = [c for c in MAIN["containers"] if c["name"] == "agent"]
+    assert {"secretRef": {"name": "agent-secret"}} in agent["envFrom"]
+    scopes = proxy["deviceAutoApprove"]["scopes"]
+    assert scopes == ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    assert not any("admin" in s for s in scopes)
+    assert gateway == {
+        "mode": "local",
+        "bind": "lan",
+        "port": 18789,
+        "trustedProxies": ["${OPENCLAW_INGRESS_CIDR}"],
+        "auth": {
+            "mode": "trusted-proxy",
+            "trustedProxy": {
+                "userHeader": "x-auth-request-email",
+                "requiredHeaders": ["x-forwarded-proto", "x-forwarded-host"],
+                "allowUsers": ["${OPENCLAW_UI_ALLOW_USER}"],
+                "deviceAutoApprove": {"enabled": True, "scopes": scopes},
+            },
+        },
+        "controlUi": {"enabled": True, "allowedOrigins": ["${OPENCLAW_UI_ORIGIN}"]},
+    }
+
+
 def test_the_model_gateway_has_the_embeddings_of_main_on_the_host_model():
     text = (ROOT / "kubernetes/apps/ai/litellm/app/configmap.yaml").read_text()
     config = yaml.safe_load(yaml.safe_load(text)["data"]["config.yaml"])
@@ -280,6 +314,7 @@ def test_the_model_gateway_has_the_embeddings_of_main_on_the_host_model():
 VALUES = sorted(SECRETS["secret.sops.yaml"][1] | SECRETS["secret-search.sops.yaml"][1])
 VALUE = "a-real-looking-value"
 APPROVER = "1000000001"  # a test chat ID, not a real one
+OPERATOR = "operator@example.invalid"  # a test email, not a real one
 GROUP = '{"-1000000000001": {"requireMention": false}}'
 
 
@@ -299,9 +334,10 @@ def with_hash(client, key):
 
 def good() -> dict[str, str]:
     """Each value set; TELEGRAM_ALLOW_FROM is one chat ID, the approver of
-    the host approval plugin."""
+    the host approval plugin, and OPENCLAW_UI_ALLOW_USER one email."""
     env = dict.fromkeys(VALUES, VALUE)
     env["TELEGRAM_ALLOW_FROM"] = APPROVER
+    env["OPENCLAW_UI_ALLOW_USER"] = OPERATOR
     return env
 
 
@@ -398,6 +434,20 @@ def test_the_values_check_refuses_a_placeholder(value, reason):
     code, out = run_values(env)
     assert code != 0
     assert out == f"values-check result=failed key=TELEGRAM_BOT_TOKEN reason={reason}"
+
+
+@pytest.mark.parametrize("value", ["", "pending", "operator", "operator@example.invalid\n",
+                                   " operator@example.invalid", "a@b@example.invalid", "@example.invalid"])
+def test_the_values_check_refuses_a_user_that_is_not_one_email(value):
+    """The gateway compares the user of the Control UI with the header as
+    written, so a space or a line end from an edit locks the owner out."""
+    env = good()
+    env["OPENCLAW_UI_ALLOW_USER"] = value
+    code, out = run_values(env)
+    assert code != 0
+    reason = {"": "empty", "pending": "placeholder"}.get(value, "form")
+    assert out == f"values-check result=failed key=OPENCLAW_UI_ALLOW_USER reason={reason}"
+    assert "example.invalid" not in out
 
 
 @pytest.mark.parametrize(("group", "reason"), [

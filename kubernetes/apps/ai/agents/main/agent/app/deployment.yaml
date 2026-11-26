@@ -96,7 +96,10 @@ spec:
         # file, mounted here), or while the file of the Telegram group is not
         # one group: a JSON object with one key, a negative chat id. It also
         # stops the start while TELEGRAM_ALLOW_FROM is not one chat ID (it
-        # is the approver of the host approval plugin), or while the config
+        # is the approver of the host approval plugin), while
+        # OPENCLAW_UI_ALLOW_USER is not one email with no space (the one user
+        # of the Control UI; the gateway compares it as written), or while
+        # the config
         # does not hold the approval form that the plugin checks at its
         # load (key=host-approval). With a fault of that form the plugin
         # refuses each tool call of the agent, the vault and the read routes
@@ -115,7 +118,7 @@ spec:
             - -c
             - |
               set -eu
-              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM MCP_GATEWAY_KEY BRAVE_API_KEY; do
+              for k in OPENCLAW_GATEWAY_TOKEN LITELLM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_ALLOW_FROM MCP_GATEWAY_KEY BRAVE_API_KEY OPENCLAW_UI_ALLOW_USER; do
                 v=$(printenv "$k" || true)
                 if [ -z "$v" ]; then echo "values-check result=failed key=$k reason=empty"; exit 1; fi
                 if [ "$v" = pending ]; then echo "values-check result=failed key=$k reason=placeholder"; exit 1; fi
@@ -132,6 +135,11 @@ spec:
               fi
               case "$TELEGRAM_ALLOW_FROM" in
                 *[!0-9]*) echo "values-check result=failed key=TELEGRAM_ALLOW_FROM reason=form"; exit 1 ;;
+              esac
+              case "$OPENCLAW_UI_ALLOW_USER" in
+                *[[:space:]]* | *@*@* | @* | *@) echo "values-check result=failed key=OPENCLAW_UI_ALLOW_USER reason=form"; exit 1 ;;
+                *@*) ;;
+                *) echo "values-check result=failed key=OPENCLAW_UI_ALLOW_USER reason=form"; exit 1 ;;
               esac
               # No dollar sign before a brace here: Flux substitutes that form
               # in this file. \x24 and \x7b are those two characters.

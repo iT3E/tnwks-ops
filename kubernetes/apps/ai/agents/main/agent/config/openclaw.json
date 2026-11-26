@@ -9,7 +9,11 @@
       "trustedProxy": {
         "userHeader": "x-auth-request-email",
         "requiredHeaders": ["x-forwarded-proto", "x-forwarded-host"],
-        "deviceAutoApprove": {"enabled": true}
+        "allowUsers": ["${OPENCLAW_UI_ALLOW_USER}"],
+        "deviceAutoApprove": {
+          "enabled": true,
+          "scopes": ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+        }
       }
     },
     "controlUi": {"enabled": true, "allowedOrigins": ["${OPENCLAW_UI_ORIGIN}"]}

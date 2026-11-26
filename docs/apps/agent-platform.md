@@ -691,7 +691,7 @@ keys in the secret. Then link the number (below).
 
 | Part | What it is |
 | --- | --- |
-| `agent` (Deployment) | The gateway of the product, on loopback port 18789, `Recreate`, on the second worker, memory request 2 GiB and limit 4 GiB |
+| `agent` (Deployment) | The gateway of the product, on loopback port 18789 (main binds the pod network for its Control UI: [Main agent Control UI](#main-agent-control-ui)), `Recreate`, on the second worker, memory request 2 GiB and limit 4 GiB |
 | `agent-config` (ConfigMap) | `openclaw.json`, a read-only file in the pod at `/home/node/config/` (`OPENCLAW_CONFIG_PATH`, with `OPENCLAW_CONFIG_READONLY=1`). Its name has a hash of its content (`agent-config-<hash>`), so a change of the file starts the pod again. Applied with no `${VAR}` substitution ([A start of the agent pod](#a-start-of-the-agent-pod)) |
 | `agent-state` (PVC, 10 GiB) | Mounted at `/home/node/data`: `state/` (the state of the product, `OPENCLAW_STATE_DIR`, with the workspace in `state/workspace/`) and `archives/` |
 | `signal-daemon` (Deployment and Service) | signal-cli, native build, as an HTTP daemon on port 8080, in multi-account mode |
@@ -1514,9 +1514,17 @@ example `firefly__get_summary`) answers, the MCP gateway logs it with
 Open [openclaw.internal.tnwks.us](https://openclaw.internal.tnwks.us) from
 the LAN. Sign in with a Cognito account in the `admins` group. The internal
 ingress uses the existing oauth2-proxy session and passes the verified email
-to OpenClaw on HTTP requests and WebSocket upgrades. OpenClaw automatically
-pairs the browser for its standard operator scopes, including chat. The
-gateway password is for CLI access from inside the pod.
+to OpenClaw on HTTP requests and WebSocket upgrades. The gateway admits one
+user. Its `allowUsers` takes the value of the key `OPENCLAW_UI_ALLOW_USER`
+of the Secret of the pod, so the email is not in git. At the pinned release
+the gateway trims the email that the ingress sends and compares it with
+that value as written, case included. With the key missing, the list keeps
+the placeholder text and the gateway admits no user. The values check stops
+the start first, on an empty value or one that is not one email with no
+space. OpenClaw automatically pairs a new browser with the four default
+operator scopes (read, write, approvals and questions), written out in the
+config: chat, and no admin scope. The gateway password is for CLI access
+from inside the pod.
 
 The wildcard DNS record and TLS certificate already cover this hostname.
 The gateway Service is a ClusterIP. Cilium only admits connections to its

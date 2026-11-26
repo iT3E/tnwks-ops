@@ -36,6 +36,7 @@ GROUP = '{"-1000000000001": {"requireMention": false}}'
 FAKE = {
     "OPENCLAW_GATEWAY_PASSWORD": "lab", "LITELLM_API_KEY": "lab", "BRAVE_API_KEY": "lab",
     "OPENCLAW_UI_ORIGIN": "https://openclaw.example.invalid", "OPENCLAW_INGRESS_CIDR": "192.0.2.0/24",
+    "OPENCLAW_UI_ALLOW_USER": "operator@example.invalid",
     "TELEGRAM_BOT_TOKEN": "123456:lab-not-a-real-token", "TELEGRAM_ALLOW_FROM": "123456",
 }
 

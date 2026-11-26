@@ -1,0 +1,3 @@
+kind: Fixed
+body: Pin the operator of the main Control UI to one user named in the Secret of the pod, and write out the four default scopes of a new browser device.
+time: 2026-11-26T12:00:00.000000000-08:00
