@@ -1,3 +1,0 @@
-kind: Added
-body: 'agents-main: a sign-in check in front of the Control UI of main, the one pod that reaches its gateway port; it asks the sign-in server for each request and sets the user of the request from its answer only; the internal ingress controller takes no Service of type ExternalName as a backend'
-time: 2026-11-26T20:30:00.000000000+00:00

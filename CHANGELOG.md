@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.321.0 - 2026-11-26
+
+### Added
+
+* agents-main: a sign-in check in front of the Control UI of main, the one pod that reaches its gateway port; it asks the sign-in server for each request and sets the user of the request from its answer only; the internal ingress controller takes no Service of type ExternalName as a backend
+
 ## v2.320.0 - 2026-11-26
 
 ### Changed
