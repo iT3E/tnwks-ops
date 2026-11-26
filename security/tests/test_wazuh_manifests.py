@@ -293,7 +293,7 @@ def test_the_heap_is_under_half_of_the_indexer_line():
     (indexer,) = patches()[("StatefulSet", "wazuh-indexer")]["spec"]["template"]["spec"]["containers"]
     opts = {e["name"]: e.get("value") for e in indexer["env"]}["OPENSEARCH_JAVA_OPTS"]
     assert "-Xms1536m" in opts.split() and "-Xmx1536m" in opts.split()
-    assert mib(indexer["resources"]["limits"]["memory"]) == 4096
+    assert mib(indexer["resources"]["limits"]["memory"]) == 5120
     assert 1536 * 2 <= mib(indexer["resources"]["limits"]["memory"])
     assert "heap of 1.5 GiB" in (SECURITY / "README.md").read_text()
 

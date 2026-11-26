@@ -266,8 +266,8 @@ spec:
                       mountPath: /dashboard-access
                       readOnly: true
                   resources:
-                    requests: {cpu: 250m, memory: 4Gi}
-                    limits: {cpu: null, memory: 4Gi}
+                    requests: {cpu: 250m, memory: 5Gi}
+                    limits: {cpu: null, memory: 5Gi}
                   env:
                     - name: OPENSEARCH_JAVA_OPTS
                       value: "-Xms1536m -Xmx1536m -Dlog4j2.formatMsgNoLookups=true"
