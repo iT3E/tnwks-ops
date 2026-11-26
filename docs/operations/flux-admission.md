@@ -90,6 +90,7 @@ A child outside the class may not:
 | `privileged-pod` | a pod spec with `privileged`, a host path, the host network, PID or IPC namespace, a host port or an added capability, in any namespace |
 | `operator-pods` | an object from which an operator makes a pod of its own template: a runner set (`actions.github.com`), a sandbox (`agents.x-k8s.io`, `extensions.agents.x-k8s.io`), and each object of the database operator and of its backup plugin (`postgresql.cnpg.io`, `barmancloud.cnpg.io`): a cluster, a pooler, a backup, a scheduled backup, an object store. The database folders are in the class (above), so no child outside it needs one |
 | `takeover` | a change of an object whose owner labels name a child of the class |
+| `secret-types` | a Secret of a type that Helm or a service account uses: `helm.sh/release.v1` (the storage of a Helm release) and `kubernetes.io/service-account-token` (the token of an account). Helm writes its own storage as the controller, with no owner label of a child, so that work passes |
 
 For each request of the two controllers:
 

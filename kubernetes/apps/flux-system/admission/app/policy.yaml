@@ -35,7 +35,12 @@
 #   database operator and its backup plugin (postgresql.cnpg.io,
 #   barmancloud.cnpg.io). The database folders of the apps are in the class
 #   (D149), so no child outside it needs one;
-# - takeover: change an object whose owner labels name a child of the class.
+# - takeover: change an object whose owner labels name a child of the class;
+# - secret-types: make or change a Secret of the types that Helm and service
+#   accounts use: helm.sh/release.v1 (the storage of a Helm release) and
+#   kubernetes.io/service-account-token (the token of an account). Helm
+#   writes its storage as the controller with no owner label of a child, so
+#   that work passes.
 #
 # For each request of the controllers:
 # - kustomization-spec: a Kustomization outside the class has a path in the
@@ -610,6 +615,13 @@ spec:
       messageExpression: >-
         'flux-child-scope/takeover: ' + variables.child + ' is outside the class and may not change ' +
         variables.what + ', which a child of the class applies'
+      reason: Forbidden
+    - expression: >-
+        !variables.outside || !(variables.group == '' && variables.kind == 'Secret' &&
+          object.?type.orValue('') in ['helm.sh/release.v1', 'kubernetes.io/service-account-token'])
+      messageExpression: >-
+        'flux-child-scope/secret-types: ' + variables.child + ' is outside the class and may not apply ' +
+        variables.what + ' of type ' + object.?type.orValue('') + ', a type that Helm or a service account uses'
       reason: Forbidden
     - expression: >-
         !variables.isKustomization || variables.self in variables.classKustomizations || variables.sameSpec || (
