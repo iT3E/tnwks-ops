@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.322.1 - 2026-11-26
+
+### Fixed
+
+* Run the main agent on agent image 0.5.2, where the browser form tools run only in the direct chat of the approver.
+
 ## v2.322.0 - 2026-11-26
 
 ### Changed
