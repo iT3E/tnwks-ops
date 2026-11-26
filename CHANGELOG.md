@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.316.0 - 2026-11-26
+
+### Added
+
+* homelab-wsl: NodeContainerRssNearLimit warns when the resident memory of a node container, a floor of what the kernel can not take back, stays past 85% of its limit for 15 minutes (13 GiB for a worker, 4 GiB for the control plane); NodeContainerRssMissing warns when that alert reads fewer nodes than the cluster has for an hour; site 1 now keeps the cAdvisor series of the resident memory of the root cgroup of each node
+
 ## v2.315.1 - 2026-11-25
 
 ### Fixed
