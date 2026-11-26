@@ -233,6 +233,28 @@ def test_no_child_outside_the_class_applies_a_secret_that_helm_or_an_account_use
     assert all(f"'{t}'" in policy for t in HELM_AND_TOKEN_TYPES)
 
 
+# The release fields that helmrelease-spec refuses outside the class.
+RELEASE_FIELDS = ("releaseName", "targetNamespace", "storageNamespace")
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_no_helmrelease_outside_the_class_sets_a_release_field(site):
+    """helmrelease-spec refuses these fields from a child outside the class,
+    so no HelmRelease that such a child builds in git sets one."""
+    found = {}
+    for child in classlist.walk(site).values():
+        if classlist.is_class_path(child.path):
+            continue
+        for doc in child.build.docs:
+            if classlist.is_kind(doc, classlist.HELM_GROUP, "HelmRelease"):
+                hit = set(doc.get("spec") or {}) & set(RELEASE_FIELDS)
+                if hit:
+                    found.setdefault(child.key, set()).update(hit)
+    assert not found, found
+    policy = (ROOT / "kubernetes/apps/flux-system/admission/app/policy.yaml").read_text()
+    assert all(f"!has(object.spec.{f})" in policy for f in RELEASE_FIELDS)
+
+
 # The Kustomization of the reduced substitution Secret, and its template on
 # each site (docs/operations/flux-admission.md, "Substitution").
 SUBSTITUTION_CHILD = "flux-system/flux-substitution"

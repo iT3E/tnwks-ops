@@ -323,6 +323,19 @@ def cases():
          helmrelease(NAMES["outsideHR"], OUT_K, targetNamespace="ai")),
         ("helmrelease-spec", "a storage namespace of the class", KUSTOMIZE, "deny",
          helmrelease(NAMES["outsideHR"], OUT_K, storageNamespace="kube-system")),
+        ("helmrelease-spec", "a release name", KUSTOMIZE, "deny",
+         helmrelease(NAMES["outsideHR"], OUT_K, releaseName="frigate")),
+        ("helmrelease-spec", "a target namespace outside the class", KUSTOMIZE, "deny",
+         helmrelease(NAMES["outsideHR"], OUT_K, targetNamespace="production")),
+        ("helmrelease-spec", "a storage namespace outside the class", KUSTOMIZE, "deny",
+         helmrelease(NAMES["outsideHR"], OUT_K, storageNamespace="production")),
+        ("helmrelease-spec", "a release name from a HelmRelease outside the class", HELM, "deny",
+         helmrelease(NAMES["outsideHR"], OUT_H, releaseName="frigate")),
+        ("helmrelease-spec", "a release name of a child of the class", KUSTOMIZE, "allow",
+         helmrelease(NAMES["classHR"], CLASS_K, releaseName="frigate")),
+        ("helmrelease-spec", "release fields from a person", None, "allow",
+         helmrelease(NAMES["outsideHR"], OUT_K, releaseName="frigate", targetNamespace="production",
+                     storageNamespace="production")),
         ("helmrelease-spec", "hooks with no owner labels", KUSTOMIZE, "deny",
          helmrelease(NAMES["outsideHR"], OUT_K, postRenderStrategy="nohooks")),
         ("helmrelease-spec", "a plain HelmRelease", KUSTOMIZE, "allow", helmrelease(NAMES["outsideHR"], OUT_K)),
@@ -468,15 +481,20 @@ def operator_cases():
     return cases
 
 
-def apply_policy(actions, drop=None):
+def apply_policy(actions, drop=None, mutate=None):
     """Applies the policy of git, less the validation of the rule drop, and
-    its binding with these actions."""
+    its binding with these actions. A mutant (old, new) changes the text of
+    one expression."""
     for doc in POLICY:
         doc = copy.deepcopy(doc)
         if doc["kind"] == "ValidatingAdmissionPolicy" and drop:
             kept = [v for v in doc["spec"]["validations"] if f"flux-child-scope/{drop}:" not in v["messageExpression"]]
             assert len(kept) == len(doc["spec"]["validations"]) - 1, drop
             doc["spec"]["validations"] = kept
+        if doc["kind"] == "ValidatingAdmissionPolicy" and mutate:
+            hits = [v for v in doc["spec"]["validations"] if mutate[0] in v["expression"]]
+            assert len(hits) == 1, mutate
+            hits[0]["expression"] = hits[0]["expression"].replace(mutate[0], mutate[1])
         if doc["kind"] == "ValidatingAdmissionPolicyBinding":
             doc["spec"]["validationActions"] = actions
         status, _, _ = call("PATCH", f"{ADMISSION}/{KINDS[doc['kind']][0]}/{doc['metadata']['name']}?fieldManager=test&force=true",
@@ -692,6 +710,22 @@ class FluxAdmission(unittest.TestCase):
             self.assertTrue(rise["deny"] == rise["audit"] >= 1, rise)
         finally:
             apply_policy(["Deny"])
+
+    def test_9_each_release_field_can_fail(self):
+        # A mutant of helmrelease-spec without the check of one release
+        # field lets the case of that field pass, so each check is what
+        # refuses its case.
+        fields = {"releaseName": "a release name", "targetNamespace": "a target namespace outside the class",
+                  "storageNamespace": "a storage namespace outside the class"}
+        try:
+            for field, what in fields.items():
+                case = next(c for c in cases() if c[0] == "helmrelease-spec" and c[1] == what)
+                apply_policy(GIT_ACTIONS)
+                wait_for(f"{field} in force", lambda c=case: refused(send(c)), 30)
+                apply_policy(GIT_ACTIONS, mutate=(f"!has(object.spec.{field})", "true"))
+                wait_for(f"{field} off", lambda c=case: not refused(send(c)), 30)
+        finally:
+            apply_policy(GIT_ACTIONS)
 
 
 if __name__ == "__main__":
