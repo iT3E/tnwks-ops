@@ -3,10 +3,14 @@ A CronJob in each agents-<name> namespace runs one of:
 
   platform_checks.py isolation
       This trust domain reaches its own sandbox gateway and no other one,
-      and its client certificate works there.
+      and its client certificate works there. It can not reach the gateway
+      of an agent that binds the pod network (AGENT_GATEWAYS): only the
+      sign-in check in front of the Control UI may.
   platform_checks.py probe
       A sandbox of this trust domain reaches nothing that no sandbox policy
-      names, and holds no service account token. Its two pods (workload and
+      names, the gateways of AGENT_GATEWAYS included, and holds no service
+      account token. Each straight connect must meet the sandbox's own
+      refusal. Its two pods (workload and
       supervisor) run, and each is printed with its node. The run removes a
       sandbox of its own name that an earlier run left, and fails when its
       own sandbox is still there at its end.
@@ -69,6 +73,16 @@ MODEL_GATEWAY = os.environ.get("MODEL_GATEWAY", "litellm-app.ai.svc.cluster.loca
 # The cluster DNS Service. The sandbox workload gets no DNS egress: its names
 # resolve through its supervisor, by the sandbox policy.
 KUBE_DNS = os.environ.get("KUBE_DNS", "kube-dns.kube-system.svc.cluster.local")
+# The gateways of the agents that bind the pod network (host:port, separated
+# by spaces): only the sign-in check in front of the Control UI may reach
+# one (main/agent/app/networkpolicy.yaml). A static test holds this list to
+# the config of each agent.
+AGENT_GATEWAYS = os.environ.get("AGENT_GATEWAYS", "").split()
+# The sandbox's own refusal of a connect that its policy does not name: the
+# workload gets EPERM at once. A time out is a drop of the network, and a
+# refusal of a closed port is an answer from the other end: neither is the
+# sandbox's own refusal, so a straight row that reads one fails.
+SANDBOX_REFUSAL = "blocked: PermissionError"
 failures = 0
 
 
@@ -76,9 +90,11 @@ def gateway(namespace: str) -> str:
     return f"openshell.{namespace}.svc.cluster.local"
 
 
-def report(check: str, target: str, expected: str, got: str) -> None:
+def report(check: str, target: str, expected: str, got: str, exact: bool = False) -> None:
+    """A row passes when its value starts with `expected`, or with `exact`
+    when it is `expected` and nothing more."""
     global failures
-    ok = got.startswith(expected)
+    ok = got == expected if exact else got.startswith(expected)
     failures += not ok
     print(json.dumps({"check": check, "domain": OWN, "target": target,
                       "expected": expected, "got": got, "ok": ok}), flush=True)
@@ -116,6 +132,11 @@ def isolation() -> None:
         expected = "connected" if namespace == OWN else "blocked"
         report("isolation", f"{gateway(namespace)}:{PORT}", expected,
                reach(gateway(namespace), PORT))
+    # The same rule for the gateway of each agent: this pod is not the
+    # sign-in check, and its own policy lets it try the port.
+    for target in AGENT_GATEWAYS:
+        host, port = target.rsplit(":", 1)
+        report("isolation", f"agent gateway {target}", "blocked", reach(host, int(port)))
     setup_cli()
     result = cli("sandbox", "list")
     report("isolation", "own gateway, with the client certificate", "ok",
@@ -174,6 +195,10 @@ out = {
     "model gateway, through the sandbox proxy": http("http://MODEL_GATEWAY:4000/health/liveliness"),
     "service account token": "present" if os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token") else "blocked: absent",
 }
+# The gateway of each agent: [name of the row, address, port, URL].
+for name, ip, port, url in AGENT_TARGETS:
+    out[name + ", direct"] = tcp(ip, port)
+    out[name + ", through the sandbox proxy"] = http(url)
 print("PROBE " + json.dumps(out))
 '''
 
@@ -353,6 +378,26 @@ def cleanup() -> None:
         report("probe", "sandbox removed", "gone", f"left: {type(e).__name__}: {e}")
 
 
+def agent_targets() -> list:
+    """The rows of the gateways of the agents in the sandbox, with each
+    address: the sandbox resolves no names."""
+    rows = []
+    for target in AGENT_GATEWAYS:
+        host, port = target.rsplit(":", 1)
+        rows.append([f"agent gateway {target}", socket.gethostbyname(host), int(port),
+                     f"http://{target}/"])
+    return rows
+
+
+def probe_expected(target: str) -> tuple[str, bool]:
+    """A straight connect of the sandbox passes on its own refusal only. The
+    other rows (through the sandbox proxy, the DNS query over UDP, the token)
+    pass on any value that starts with "blocked"."""
+    if target.endswith(", direct") or target == "cluster DNS, direct over TCP":
+        return SANDBOX_REFUSAL, True
+    return "blocked", False
+
+
 def run_probe() -> None:
     """Create the sandbox, run the probe in it and check its pods."""
     created = cli("sandbox", "create", "--name", SANDBOX, "--from", PROBE_IMAGE,
@@ -365,12 +410,14 @@ def run_probe() -> None:
     code = (PROBE.replace("KUBE_DNS_IP", socket.gethostbyname(KUBE_DNS))
             .replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
             .replace("MODEL_GATEWAY", MODEL_GATEWAY)
-            .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN))))
+            .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN)))
+            .replace("AGENT_TARGETS", json.dumps(agent_targets())))
     results = exec_probe("probe", code)
     if results is None:
         return
     for target, got in results.items():
-        report("probe", target, "blocked", got)
+        expected, exact = probe_expected(target)
+        report("probe", target, expected, got, exact)
     # Before cleanup() deletes the sandbox.
     report_pods()
 
@@ -556,12 +603,30 @@ def run_firefly_probe() -> None:
     if results is None:
         return
     for target, got in results.items():
-        # A write must meet the proxy; a read off the list may meet the
-        # policy first (a path outside /api/v1, a path trick).
-        expected = ("reached" if target.startswith("allowed") else
-                    "blocked" if target.endswith(("direct", "supervisor")) else
-                    "refused: proxy" if target in writes else "refused")
-        report("firefly-probe", f"sandbox: {target}", expected, got)
+        expected, exact = firefly_expected(target, writes)
+        report("firefly-probe", f"sandbox: {target}", expected, got, exact)
+
+
+# The write port through the supervisor: the supervisor takes the connection,
+# and the network policy drops its own connect to the write port, so the
+# read of the answer times out (urllib raises that TimeoutError as it is).
+# An HTTP answer, an error code too, means that something answered, and a
+# URLError that the connection to the supervisor failed: each fails.
+SUPERVISOR_DROP = "blocked: TimeoutError"
+
+
+def firefly_expected(target: str, writes: set) -> tuple[str, bool]:
+    """A write must meet the proxy; a read off the list may meet the policy
+    first (a path outside /api/v1, a path trick). The straight row to the
+    proxy passes on the sandbox's own refusal only, and the row through the
+    supervisor on its time out only."""
+    if target.startswith("allowed"):
+        return "reached", False
+    if target == "proxy address, direct":
+        return SANDBOX_REFUSAL, True
+    if target == "write port of the proxy, through the supervisor":
+        return SUPERVISOR_DROP, True
+    return ("refused: proxy" if target in writes else "refused"), False
 
 
 def direct(base: str, method: str, path: str, body: bytes | None = None,
