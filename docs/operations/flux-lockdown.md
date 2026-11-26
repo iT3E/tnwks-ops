@@ -8,8 +8,9 @@ key. Two controls close them:
 - **Accounts.** The flag `--default-service-account` of the Flux
   controllers. The root and each Kustomization of the class run as
   `kustomize-controller`. Each child outside the class runs as an account
-  of its own with `admin` in its own namespace, and each HelmRelease
-  outside the class as an account in its own namespace.
+  of its own with the role `flux-child` in the namespaces where it applies
+  objects, and each HelmRelease outside the class as an account in its own
+  namespace with that role (below).
 - **Keys.** The class decrypts with a class key (Secret `sops-age-class`),
   the files outside the class with an apps key (Secret `sops-age-apps`).
 
@@ -40,6 +41,8 @@ shows the user that the controller applies as.
 | A Kustomization that names an account of its own | It applies as that account | The policy matches the two controllers by user name, so it does not see that account. Before 2c, the policy must match the accounts of the children, and its rule `kustomization-spec` must allow an account of the child |
 | Which identity reads the decryption Secret | The controller, as itself. A child account with no right on Secrets of `flux-system` builds with `sops-age-apps` and with `sops-age-class`, and a missing Secret reads "not found", not "forbidden" | An account outside the class needs no `get` on the apps Secret. An account does not hold the class key back, so the policy refuses `sops-age-class` in a Kustomization outside the class (below) |
 | A Kustomization that comes to name a missing account | Its apply fails ("forbidden"), its inventory stays, and no object is pruned. A delete of it removes no object | A missing account in 2c or 2e stalls one child and keeps its running objects. Do not delete such a child to fix it: its objects stay with no owner |
+| A Kustomization whose account has only the role `flux-child` of git | It applies an object of each kind of the role (12 objects). A Role or a Pod fails its apply ("cannot create") | The role is enough for the builds outside the class, and it grants no more than its kinds |
+| The same account with `wait: true`, on a Deployment and a StatefulSet | It is Ready. With the role less its reads of ReplicaSets and Pods, the wait fails ("replicasets.apps is forbidden") | Both controllers read the ReplicaSets and Pods of a workload as the account when they wait for its health, so the role must read them |
 | The flag `--default-service-account=default`, after a restart | A Kustomization with no account applies as `flux-system/default`. One that applied before the flag and names no account fails and prunes nothing. The ones that name an account apply as before | 2e merges only when each object of the site names an account (the test below) |
 
 Two reads of the source of the controllers of git add to this:
@@ -88,6 +91,37 @@ The policy also matches the accounts of the children outside the class
 - No Kustomization or HelmRelease of the class, and no pod spec of git,
   names such an account (a CI test).
 
+## The accounts
+
+Step 2a adds the accounts and their role, site by site, site 2 first. No
+child names one until step 2c.
+
+- The role `flux-child`
+  ([`accounts/role/clusterrole.yaml`](../../kubernetes/apps/flux-system/accounts/role/clusterrole.yaml))
+  holds the kinds that the children outside the class apply: ConfigMaps,
+  Secrets, Services, volume claims, Deployments, StatefulSets, CronJobs,
+  Ingresses, network policies, the rules and monitors of Prometheus, and
+  HelmReleases. It reads ReplicaSets and Pods, because both controllers
+  read them as the account when they wait for the health of a Deployment
+  or a StatefulSet. It has no pod writes, no impersonation, no service
+  account tokens, no RBAC and no other Flux kind.
+- For each Kustomization outside the class, the account
+  `flux-system/flux-child-<name>`, with a RoleBinding to `flux-child` in
+  each namespace where its build applies objects, its SOPS files too (SOPS
+  leaves the namespace of their metadata in the clear).
+- For each HelmRelease outside the class, the account
+  `<namespace>/flux-release-<name>`, with a RoleBinding to `flux-child`
+  there.
+- No account mounts a token, and the account `default` of `flux-system`
+  gets no binding.
+
+[`lockdown/accounts.py`](../../kubernetes/apps/flux-system/lockdown/accounts.py)
+writes `kubernetes/apps/flux-system/accounts/<site>/accounts.yaml` from git
+for each site in its `SITES`. Run
+`python3 kubernetes/apps/flux-system/lockdown/accounts.py write` after a
+change of the children outside the class. The Kustomization
+`flux-accounts` of the site (`accounts/ks-<site>.yaml`) applies them.
+
 ## The tests of git
 
 `observability/tests/test_flux_lockdown.py` reads each Kustomization and
@@ -103,6 +137,9 @@ its parent, and for the root the patches of
 | The class account | Once the root of a site names `kustomize-controller`, `cluster-apps` and each Kustomization of the class do too. No child outside the class names an account of the controllers | 2b |
 | The flag | A controller of a site has `--default-service-account` only when each Kustomization (kustomize-controller) or each HelmRelease (helm-controller) of the site names an account. Each account that an object names is a ServiceAccount of git in the namespace of the object | 2a, 2c, 2e |
 | The flags that stay off | No `--sops-age-secret`, `--default-decryption-service-account` or `--no-cross-namespace-refs` | all |
+| The accounts | `accounts.yaml` of each site is what `accounts.py` writes: an account for each child outside the class, with its bindings. No token is mounted | 2a |
+| The role | `flux-child` has the kinds of the builds outside the class and of the charts of their HelmReleases, and nothing else | 2a |
+| The default account | No binding of git names `flux-system/default`, and `flux-child` is bound to the accounts of the children only | 2a, 2e |
 | No other patch | No patch of a `kustomization.yaml` sets the account or the decryption of a Flux object where `lockdown.py` does not read it | all |
 
 The map holds the public keys only: git never holds a private key, and the

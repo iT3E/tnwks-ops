@@ -14,7 +14,11 @@ git the way Flux applies it (lockdown.py) and check:
   --default-service-account only when each Kustomization (for
   kustomize-controller) or each HelmRelease (for helm-controller) of that
   site names an account, and each account that an object names is in git;
-- the flags that stay off.
+- the flags that stay off;
+- the accounts of the children outside the class (2a): written from git by
+  accounts.py, each with its bindings, the role flux-child with the kinds
+  of the builds outside the class and no more, and no binding of the
+  account default of flux-system.
 
 The last test runs the controller of git on a throwaway API server
 (lockdown/tests/run.sh), with Docker: who reads the decryption Secret, who
@@ -34,6 +38,7 @@ LOCKDOWN = ROOT / "kubernetes/apps/flux-system/lockdown"
 sys.path.insert(0, str(ROOT / "kubernetes/apps/flux-system/admission"))
 sys.path.insert(0, str(LOCKDOWN))
 
+import accounts
 import classlist
 import lockdown
 
@@ -277,6 +282,192 @@ def test_the_class_key_is_for_the_class_only():
     for site in SITES:
         for key, spec, _, in_class in lockdown.kustomizations(site):
             assert in_class or secret_of(spec) != CLASS_KEY, (site, key)
+
+
+ROLE = ROOT / "kubernetes/apps/flux-system/accounts/role/clusterrole.yaml"
+# The kinds that the charts of the HelmReleases outside the class apply: the
+# chart output is not in git. A get read of site 1 on 2026-11-26 (the kinds
+# of the objects with the owner labels of such a HelmRelease) found these,
+# and Endpoints, EndpointSlices (from the Services) and HelmCharts (which
+# helm-controller makes as itself) beside them.
+CHART_KINDS = {("apps", "Deployment"), ("apps", "StatefulSet"), ("batch", "CronJob"), ("", "PersistentVolumeClaim"),
+               ("", "Service"), ("monitoring.coreos.com", "ServiceMonitor"), ("networking.k8s.io", "Ingress"),
+               ("", "Secret")}
+# The plural of each kind of a build outside the class, for the role.
+PLURALS = {"ConfigMap": "configmaps", "Secret": "secrets", "Service": "services",
+           "PersistentVolumeClaim": "persistentvolumeclaims", "Deployment": "deployments",
+           "StatefulSet": "statefulsets", "CronJob": "cronjobs", "Ingress": "ingresses",
+           "NetworkPolicy": "networkpolicies", "PrometheusRule": "prometheusrules",
+           "ServiceMonitor": "servicemonitors", "HelmRelease": "helmreleases"}
+
+
+def role_rules():
+    (role,) = [d for d in yaml.safe_load_all(ROLE.read_text()) if d]
+    assert (role["kind"], role["metadata"]["name"]) == ("ClusterRole", accounts.ROLE)
+    assert "aggregationRule" not in role and not role["metadata"].get("labels")
+    return role["rules"]
+
+
+# The kinds that the status readers of kstatus (fluxcd/cli-utils v1.4.0,
+# createStatusReaders) list when a controller waits for the health of a
+# kind: a Deployment through its ReplicaSets and their Pods, a StatefulSet
+# through its Pods. Both controllers wait with the client of the account.
+# Every other kind they read on its own, with get.
+WAIT_READS = {("apps", "deployments"): {("apps", "replicasets"), ("", "pods")},
+              ("apps", "statefulsets"): {("", "pods")}}
+READ = {"get", "list", "watch"}
+
+
+def test_the_role_of_the_children_holds_no_more_than_their_kinds():
+    """No pod writes, no impersonation, no service account token, no RBAC,
+    no Flux kind but HelmRelease, no wildcard and no subresource; ReplicaSets
+    and Pods with reads only."""
+    allowed = {("", r) for r in ("configmaps", "secrets", "services", "persistentvolumeclaims")} | {
+        ("apps", "deployments"), ("apps", "statefulsets"), ("batch", "cronjobs"),
+        ("networking.k8s.io", "ingresses"), ("networking.k8s.io", "networkpolicies"),
+        ("monitoring.coreos.com", "prometheusrules"), ("monitoring.coreos.com", "servicemonitors"),
+        ("helm.toolkit.fluxcd.io", "helmreleases")}
+    read_only = set().union(*WAIT_READS.values())
+    verbs = READ | {"create", "update", "patch", "delete"}
+    for rule in role_rules():
+        assert set(rule) == {"apiGroups", "resources", "verbs"}, rule
+        assert set(rule["verbs"]) <= verbs, rule
+        for group in rule["apiGroups"]:
+            for resource in rule["resources"]:
+                if (group, resource) in read_only:
+                    assert set(rule["verbs"]) <= READ, (group, resource, rule["verbs"])
+                else:
+                    assert (group, resource) in allowed, (group, resource)
+
+
+def test_the_role_of_the_children_reads_what_the_wait_reads():
+    """A child that waits for a Deployment or a StatefulSet reads their
+    ReplicaSets and Pods as its account; without get, list and watch on
+    them the wait fails "forbidden"."""
+    granted = {}
+    for rule in role_rules():
+        for group in rule["apiGroups"]:
+            for resource in rule["resources"]:
+                granted.setdefault((group, resource), set()).update(rule["verbs"])
+    for kind, reads in WAIT_READS.items():
+        if kind in granted:
+            for read in reads:
+                assert READ <= granted.get(read, set()), (kind, read)
+
+
+@pytest.mark.parametrize("site", SITES)
+def test_the_role_of_the_children_holds_each_kind_that_they_apply(site):
+    """Each kind that a build outside the class applies, and each kind of
+    the charts of its HelmReleases, is in the role; a new kind fails here
+    until the role has it."""
+    granted = {(g, r) for rule in role_rules() for g in rule["apiGroups"] for r in rule["resources"]}
+    kinds = set(CHART_KINDS)
+    for child in classlist.walk(site).values():
+        if not classlist.is_class_path(child.path):
+            kinds |= {(classlist.api_group(d), d["kind"]) for d in child.build.docs}
+            if child.build.encrypted:
+                kinds.add(("", "Secret"))
+    missing = sorted((g, k) for g, k in kinds if (g, PLURALS.get(k, k)) not in granted)
+    assert not missing, missing
+
+
+@pytest.mark.parametrize("site", accounts.SITES)
+def test_the_accounts_of_the_children_are_written_from_git(site):
+    """accounts.py write has run: each Kustomization outside the class has
+    flux-child-<name> in flux-system with a RoleBinding in each namespace
+    of its objects, and each HelmRelease outside the class flux-release-<name>
+    in its namespace with a RoleBinding there."""
+    path = accounts.path_of(site)
+    assert path.read_text() == accounts.render(site), "run kubernetes/apps/flux-system/lockdown/accounts.py write"
+    docs = [d for d in yaml.safe_load_all(path.read_text()) if d]
+    made = {f"{d['metadata']['namespace']}/{d['metadata']['name']}" for d in docs if d["kind"] == "ServiceAccount"}
+    bound = {(d["metadata"]["namespace"], s["namespace"], s["name"]) for d in docs if d["kind"] == "RoleBinding"
+             for s in d["subjects"]}
+    kustomizations, helmreleases = accounts.children(site)
+    assert kustomizations and helmreleases
+    for name, namespaces in kustomizations.items():
+        assert f"flux-system/flux-child-{name}" in made, name
+        assert all((n, "flux-system", f"flux-child-{name}") in bound for n in namespaces), name
+    for key in helmreleases:
+        namespace, name = key.split("/")
+        assert f"{namespace}/flux-release-{name}" in made and (namespace, namespace, f"flux-release-{name}") in bound
+    for d in docs:
+        if d["kind"] == "RoleBinding":
+            assert d["roleRef"] == {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole",
+                                    "name": accounts.ROLE}, d["metadata"]
+            assert [s["name"].startswith(("flux-child-", "flux-release-")) for s in d["subjects"]] == [True]
+        else:
+            assert d["kind"] == "ServiceAccount" and d["automountServiceAccountToken"] is False, d["metadata"]
+    # The site lists them, as a child of the class.
+    listing = (ROOT / f"kubernetes/clusters/{site}/apps/kustomization.yaml").read_text()
+    assert f"- ../../../apps/flux-system/accounts/ks-{site}.yaml" in listing
+    assert classlist.is_class_path(f"kubernetes/apps/flux-system/accounts/{site}")
+
+
+def test_a_child_gets_a_binding_where_only_a_sops_file_of_it_applies(tmp_path):
+    """A namespace where a child applies only a SOPS file gets a binding:
+    the namespace of the metadata of the file (SOPS leaves it in the clear),
+    or the one of the outermost kustomization.yaml that sets one."""
+    def write(path, doc):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(doc))
+
+    def kustomization(folder, resources, namespace=None):
+        doc = {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": resources}
+        if namespace:
+            doc["namespace"] = namespace
+        write(folder / "kustomization.yaml", doc)
+
+    def secret(path, namespace):
+        # A placeholder in the form of an encrypted file: no key, no value.
+        write(path, {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": "s", "namespace": namespace},
+                     "stringData": {"a": "ENC[placeholder]"}, "sops": {"encrypted_regex": "^(data|stringData)$"}})
+
+    app = tmp_path / "app"
+    kustomization(app, ["configmap.yaml", "secret.sops.yaml", "nested"])
+    write(app / "configmap.yaml", {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "c", "namespace": "one"}})
+    secret(app / "secret.sops.yaml", "two")
+    kustomization(app / "nested", ["secret.sops.yaml"], namespace="three")
+    secret(app / "nested/secret.sops.yaml", "four")
+    assert accounts.encrypted_namespaces(app) == {"two", "three"}
+    # An outer namespace wins over each inner one.
+    kustomization(tmp_path / "outer", ["../app"], namespace="five")
+    assert accounts.encrypted_namespaces(tmp_path / "outer") == {"five"}
+    # With the namespaces of the build, the child is bound in each.
+    doc = {"metadata": {"name": "x", "namespace": "flux-system"}, "spec": {"path": str(app)}}
+    configmap = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "c", "namespace": "one"}}
+    child = classlist.Child("flux-system/x", "flux-system/flux-system", str(app), doc,
+                            classlist.Build(docs=[configmap], encrypted={"app/secret.sops.yaml"}))
+    assert accounts.namespaces_of(child) == ["one", "three", "two"]
+    # A target namespace takes each object there.
+    doc["spec"]["targetNamespace"] = "six"
+    assert accounts.namespaces_of(child) == ["six"]
+
+
+@pytest.mark.parametrize("site", SITES)
+def test_the_default_account_of_flux_system_gets_no_binding(site):
+    """Under the flag (2e) a Kustomization with no account runs as
+    flux-system/default, which must have no right: no binding of git names
+    it, and the role of the children is bound to their accounts only."""
+    entry = classlist.build(ROOT / f"kubernetes/clusters/{site}")
+    builds = [(entry.docs, None)] + [(c.build.docs, c) for c in classlist.walk(site).values()]
+    wrong = []
+    for docs, child in builds:
+        for d in docs:
+            if d.get("kind") not in ("RoleBinding", "ClusterRoleBinding"):
+                continue
+            namespace = (classlist.namespace_of(d, child) if child else d["metadata"].get("namespace")) or ""
+            for s in d.get("subjects") or []:
+                subject = f"{s.get('namespace', namespace)}/{s.get('name')}"
+                if s.get("kind") == "ServiceAccount" and subject == "flux-system/default":
+                    wrong.append(f"{d['kind']} {d['metadata']['name']} binds flux-system/default")
+                if s.get("kind") == "Group" and s.get("name") in ("system:serviceaccounts",
+                                                                  "system:serviceaccounts:flux-system"):
+                    wrong.append(f"{d['kind']} {d['metadata']['name']} binds the accounts of {s['name']}")
+            if (d.get("roleRef") or {}).get("name") == accounts.ROLE and \
+                    not all(s.get("name", "").startswith(("flux-child-", "flux-release-")) for s in d["subjects"]):
+                wrong.append(f"{d['kind']} {d['metadata']['name']} binds {accounts.ROLE} to another account")
+    assert not wrong, "\n".join(wrong)
 
 
 def test_the_controller_on_a_throwaway_api_server():

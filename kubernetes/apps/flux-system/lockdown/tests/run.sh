@@ -10,9 +10,11 @@
 # the artifact of the GitRepository flux-system, and kustomize-controller
 # (the image and the arguments of git) with a client certificate of the
 # account flux-system/kustomize-controller, bound to cluster-admin as on the
-# clusters, and kube-controller-manager with the one controller that fills
-# the aggregated roles (admin, which the children get). It runs test_flux_lockdown.py in a plain Python image on that
-# network, in three steps: Setup; NoFlag, with the arguments of git; and
+# clusters, and kube-controller-manager with the controller that fills the
+# aggregated roles (admin, which the children get) and the controllers of
+# Deployments, ReplicaSets and StatefulSets (so a wait on health ends). It
+# runs test_flux_lockdown.py in a plain Python image on that network, in
+# three steps: Setup; NoFlag, with the arguments of git; and
 # Flag, after a restart of the controller with --default-service-account.
 #
 # Nothing touches a real cluster: no kubeconfig of the workstation goes into
@@ -135,12 +137,14 @@ docker run -d --name "${id}-apiserver" --network "${id}" --network-alias apiserv
   --service-cluster-ip-range=10.96.0.0/16 --disable-admission-plugins=ServiceAccount >/dev/null
 
 # The aggregated roles: admin is empty until this controller fills it. The
+# workload controllers set the status of a Deployment or a StatefulSet with
+# no replicas, which a wait reads; with no node, no pod runs. The
 # controller manager stops when it starts before the API server is ready:
 # Docker restarts it.
 docker run -d --name "${id}-controllers" --network "${id}" --restart on-failure:30 \
   -v "${pki}:/pki:ro" "registry.k8s.io/kube-controller-manager:${version}" \
   kube-controller-manager --kubeconfig=/pki/controllers.kubeconfig \
-  --controllers=clusterrole-aggregation --use-service-account-credentials=true \
+  --controllers=clusterrole-aggregation,deployment,replicaset,statefulset --use-service-account-credentials=true \
   --service-account-private-key-file=/pki/sa.key --root-ca-file=/pki/ca.crt \
   --leader-elect=false >/dev/null
 

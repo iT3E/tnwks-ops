@@ -1,0 +1,43 @@
+---
+# The role of the accounts of the Flux children outside the class
+# (docs/operations/flux-lockdown.md, step 2a). Each account gets it by a
+# RoleBinding in each namespace where its child applies objects, so it
+# holds in those namespaces only. It lists the kinds that the children
+# outside the class apply (the builds of git, and the charts of their
+# HelmReleases on the clusters), and no more: no pod writes, no
+# impersonation, no service account tokens, no RBAC and no Flux kind but
+# HelmRelease. It reads ReplicaSets and Pods, and writes neither: both
+# controllers read them as the account when they wait for the health of a
+# Deployment or a StatefulSet (the status readers of kstatus).
+# observability/tests/test_flux_lockdown.py holds both: a kind that a build
+# outside the class applies and that this role lacks fails it, and so does
+# a read that the wait needs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: flux-child
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "services", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheusrules", "servicemonitors"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["helm.toolkit.fluxcd.io"]
+    resources: ["helmreleases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

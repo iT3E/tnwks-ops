@@ -1,0 +1,9 @@
+---
+# The accounts of the Flux children outside the class of homelab-wsl-02
+# (docs/operations/flux-lockdown.md, step 2a). accounts.yaml is written by
+# kubernetes/apps/flux-system/lockdown/accounts.py.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../role
+  - ./accounts.yaml
