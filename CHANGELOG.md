@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.325.2 - 2026-11-27
+
+### Fixed
+
+* The checks of the agent platform try the gateway port of the main agent from each trust domain and from each sandbox, and a straight row of a sandbox, and the row through the supervisor in the probe of the finance app, now pass on one value only.
+
 ## v2.325.1 - 2026-11-27
 
 ### Fixed

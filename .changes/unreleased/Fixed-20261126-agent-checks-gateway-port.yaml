@@ -1,3 +1,0 @@
-kind: Fixed
-body: The checks of the agent platform try the gateway port of the main agent from each trust domain and from each sandbox, and a straight row of a sandbox, and the row through the supervisor in the probe of the finance app, now pass on one value only.
-time: 2026-11-26T16:30:00.000000000-08:00
