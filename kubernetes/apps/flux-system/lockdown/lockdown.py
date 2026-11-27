@@ -33,18 +33,22 @@ ROOT = classlist.ROOT
 # Kustomization of a site builds holds the key of the Secret that the
 # Kustomization names. A Secret holds the private key; git holds only the
 # public one, which is also a recipient in .sops.yaml. Phase 1 of the
-# lockdown adds the class key (sops-age-class) and the apps key
+# lockdown added the class key (sops-age-class) and the apps key
 # (sops-age-apps) of each site; phase 3 removes sops-age.
 KEYS = {
     "wsl": {
-        # The key of homelab-wsl, by the order of the recipients of the
-        # comment of .sops.yaml.
-        "sops-age": "age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7",
+        # The key of homelab-wsl: the public key of its key file, which the
+        # owner read with age-keygen -y (step 0 of phase 1).
+        "sops-age": "age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx",
+        "sops-age-class": "age1lpt37nvkct4l296q7wtueg79msn5x2ul0pcwaclzx2slyv2pnecs4nm6g6",
+        "sops-age-apps": "age184eetlfw0vdmxy9ydz532rnar54qt9f39l8xy0jx6w7pp4qksecqqexgpm",
     },
     "wsl-02": {
         # ~/.config/sops/age/homelab-wsl-02.txt (the rule of
         # kubernetes/clusters/wsl-02 in .sops.yaml).
         "sops-age": "age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53",
+        "sops-age-class": "age1g7c0eg586wlen6s0dgprcvtahx0cqq3zl35xdg64vdr8wpg0n3cqcgp967",
+        "sops-age-apps": "age1whse4sy99860h8kne626effqnrmsjny7vshpql60ealvwh7mh5vqv7ukhx",
     },
 }
 AGE_PUBLIC_KEY = re.compile(r"^age1[02-9ac-hj-np-z]{58}$")

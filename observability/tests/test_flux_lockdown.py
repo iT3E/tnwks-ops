@@ -22,6 +22,7 @@ applies, and what a missing account does.
 """
 
 import os
+import re
 import subprocess
 import sys
 
@@ -38,6 +39,7 @@ import lockdown
 
 SITES = classlist.SITES
 CLASS_KEY = "sops-age-class"
+APPS_KEY = "sops-age-apps"
 
 
 def account(spec):
@@ -87,6 +89,56 @@ def test_the_keys_of_the_map_are_public_keys_and_recipients_of_the_rules():
         for secret, key in keys.items():
             assert lockdown.AGE_PUBLIC_KEY.fullmatch(key), (site, secret)
             assert key in recipients, (site, secret)
+
+
+def first_rule(path, rules):
+    """The rule of .sops.yaml that sops takes for a path: the first one
+    whose path_regex matches it."""
+    return next((r for r in rules if re.search(r["path_regex"], path)), None)
+
+
+def test_the_rules_of_sops_give_the_class_and_the_apps_their_own_keys():
+    """Each encrypted file under kubernetes/ gets, from its rule of
+    .sops.yaml, the class key of each site that builds it in the class, or
+    the apps key of each site that builds it outside; never an apps key on
+    a file of the class, and never a class key on a file outside it. A new
+    file in a folder of the class (CLASS_PATHS) or of a child outside it
+    gets the same, so the rules follow the class."""
+    rules = [r for r in yaml.safe_load((ROOT / ".sops.yaml").read_text())["creation_rules"]
+             if "kubernetes/" in r["path_regex"]]
+    for r in rules:
+        # sops reads the rules with the regexp of Go: no lookaround.
+        assert "(?" not in r["path_regex"], r["path_regex"]
+    class_keys = {site: lockdown.KEYS[site][CLASS_KEY] for site in SITES}
+    apps_keys = {site: lockdown.KEYS[site][APPS_KEY] for site in SITES}
+    sides = {}
+    for site in SITES:
+        for _, _, files, in_class in lockdown.kustomizations(site):
+            for f in files:
+                sides.setdefault(f, set()).add((site, in_class))
+        for child in classlist.walk(site).values():
+            sides.setdefault(f"{classlist.norm(child.path)}/new.sops.yaml", set()).add(
+                (site, classlist.is_class_path(child.path)))
+    for path in classlist.CLASS_PATHS:
+        sides.setdefault(f"{path}new.sops.yaml", set())
+    for f in sorted(ROOT.glob("kubernetes/**/*.sops.y*ml")):
+        sides.setdefault(f.relative_to(ROOT).as_posix(), set())
+    wrong = []
+    for path, side in sorted(sides.items()):
+        rule = first_rule(path, rules)
+        keys = {k.strip() for k in (rule or {}).get("age", "").split(",")}
+        in_class = all(c for _, c in side) if side else classlist.is_class_path(path)
+        if side and len({c for _, c in side}) > 1:
+            wrong.append(f"{path}: built both in the class and outside it")
+        own, other = (class_keys, apps_keys) if in_class else (apps_keys, class_keys)
+        for site, _ in side:
+            if own[site] not in keys:
+                wrong.append(f"{path}: its rule lacks the {CLASS_KEY if in_class else APPS_KEY} key of {site}")
+        if not side and not keys & set(own.values()):
+            wrong.append(f"{path}: its rule has no {CLASS_KEY if in_class else APPS_KEY} key")
+        if keys & set(other.values()):
+            wrong.append(f"{path}: its rule has the {APPS_KEY if in_class else CLASS_KEY} key")
+    assert not wrong, "\n".join(wrong)
 
 
 @pytest.mark.parametrize("site", SITES)
