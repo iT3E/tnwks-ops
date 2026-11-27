@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.336.1 - 2026-11-27
+
+### Fixed
+
+* WorkerContainerMemoryNearLimit on homelab-wsl warns past 98% for 15m and is critical past 99% for 2m (was 90%/5m and 95%/2m): a worker's working set counts file cache that grows into the limit, so the old thresholds fired with half the memory reclaimable.
+
 ## v2.336.0 - 2026-11-27
 
 ### Changed
