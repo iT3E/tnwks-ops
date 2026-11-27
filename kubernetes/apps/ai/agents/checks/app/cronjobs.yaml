@@ -93,6 +93,11 @@ spec:
                       fieldPath: metadata.namespace
                 - name: TRUST_DOMAIN_NAMESPACES
                   value: agents-main agents-finance agents-workflows agents-pilot
+                # The gateway of each agent that binds the pod network: only
+                # the sign-in check of its Control UI may reach it (a test
+                # holds the list to the agent configs).
+                - name: AGENT_GATEWAYS
+                  value: agent.agents-main.svc.cluster.local:18789
                 - name: HOME
                   value: /tmp/home
                 - name: XDG_CONFIG_HOME
@@ -230,6 +235,11 @@ spec:
                       fieldPath: metadata.namespace
                 - name: TRUST_DOMAIN_NAMESPACES
                   value: agents-main agents-finance agents-workflows agents-pilot
+                # The gateway of each agent that binds the pod network: only
+                # the sign-in check of its Control UI may reach it (a test
+                # holds the list to the agent configs).
+                - name: AGENT_GATEWAYS
+                  value: agent.agents-main.svc.cluster.local:18789
                 - name: HOME
                   value: /tmp/home
                 - name: XDG_CONFIG_HOME

@@ -433,7 +433,8 @@ def test_the_changed_rows_on_real_sockets(tmp_path):
         hosts = {gw.format("agents-own"): ip["answer"], gw.format("agents-drop"): ip["drop"],
                  gw.format("agents-refuse"): ip["refuse"], gw.format("agents-answer"): ip["answer"],
                  "server-drop.test": ip["drop"], "server-refuse.test": ip["refuse"],
-                 "server-answer.test": ip["answer"]}
+                 "server-answer.test": ip["answer"], "agent-drop.test": ip["drop"],
+                 "agent-refuse.test": ip["refuse"], "agent-answer.test": ip["answer"]}
         # Each port in its state before the run: the answer accepts, the
         # dropper's full queue makes a connect time out, and the empty
         # container refuses.
@@ -443,6 +444,8 @@ def test_the_changed_rows_on_real_sockets(tmp_path):
                     "--user", "65534", *[x for n, a in hosts.items() for x in ("--add-host", f"{n}:{a}")],
                     "-e", "OWN_NAMESPACE=agents-own",
                     "-e", "TRUST_DOMAIN_NAMESPACES=agents-own agents-drop agents-refuse agents-answer agents-none",
+                    "-e", "AGENT_GATEWAYS=agent-drop.test:8080 agent-refuse.test:8080 agent-answer.test:8080"
+                          " agent-none.test:8080",
                     "-v", f"{SCRIPT.parent}:/scripts:ro", image, "python3", "-I", "-c", DRIVER,
                     "server-drop.test", "server-refuse.test", "server-answer.test", "server-none.test")
         lines = [json.loads(line) for line in result.stdout.splitlines()]
@@ -459,7 +462,451 @@ def test_the_changed_rows_on_real_sockets(tmp_path):
         "agents-answer": (False, "connected"),
         "agents-none": (False, "unresolved: gaierror"),
     }
+    agents = {line["target"]: (line["ok"], line["got"].split(" (")[0])
+              for line in lines if line["target"].startswith("agent gateway ")}
+    assert agents == {
+        "agent gateway agent-drop.test:8080": (True, "blocked: TimeoutError"),
+        "agent gateway agent-refuse.test:8080": (False, "refused: ConnectionRefusedError"),
+        "agent gateway agent-answer.test:8080": (False, "connected"),
+        "agent gateway agent-none.test:8080": (False, "unresolved: gaierror"),
+    }
     server = [(line["ok"], line["got"].split(" (")[0]) for line in lines
               if line["target"] == "MCP server, direct from a pod that is not the gateway"]
     assert server == [(True, "blocked: TimeoutError"), (False, "refused: ConnectionRefusedError"),
                       (False, "connected"), (False, "unresolved: gaierror")]
+
+
+# The gateway of an agent that binds the pod network: only the sign-in check
+# of its Control UI may reach it. The isolation check tries it from the
+# check pod with the time out rule, and the probe from its sandbox.
+AGENT_GATEWAY = "agent.agents-main.svc.cluster.local:18789"
+AGENT_ROW = f"agent gateway {AGENT_GATEWAY}"
+
+
+@pytest.mark.parametrize(("outcome", "ok", "got"), OUTCOMES)
+def test_the_isolation_row_of_an_agent_gateway_passes_on_a_time_out_only(checks, monkeypatch, capsys,
+                                                                        outcome, ok, got):
+    fake_sockets(checks, monkeypatch, outcome, own=checks.gateway("agents-finance"))
+    monkeypatch.setattr(checks, "AGENT_GATEWAYS", [AGENT_GATEWAY])
+    monkeypatch.setattr(checks, "cli", lambda *a, **k: done())
+    checks.isolation()
+    lines = {line["target"]: line for line in map(json.loads, capsys.readouterr().out.splitlines())}
+    row = lines[AGENT_ROW]
+    assert (row["expected"], row["ok"], row["got"]) == ("blocked", ok, got)
+    # The other gateway of the fixture meets the same outcome.
+    assert checks.failures == (0 if ok else 2)
+
+
+# The sandbox code runs in this process, with fake sockets: each straight
+# connect meets one outcome, and each call through urllib another. Its PROBE
+# line goes back through the fake CLI, so the rules of the script read what
+# the code makes of each outcome.
+def connect_outcome(outcome):
+    def create_connection(address, timeout=None):
+        if outcome == "connected":
+            class Answer:
+                def close(self):
+                    pass
+
+                def settimeout(self, _):
+                    pass
+
+                def sendall(self, _):
+                    pass
+
+                def recv(self, _):
+                    return b""
+
+            return Answer()
+        raise outcome
+
+    return create_connection
+
+
+def urlopen_outcome(outcome, only=None):
+    """urlopen meets `outcome` (an exception, or an HTTP status) for a URL
+    that starts with `only` (each URL with no `only`); any other URL gets a
+    refusal of the proxy."""
+    import email.message
+    import io
+
+    def urlopen(request, timeout=None):
+        url = request if isinstance(request, str) else request.full_url
+        if only is not None and not url.startswith(only):
+            headers = email.message.Message()
+            headers["X-Firefly-Proxy"] = "refused"
+            raise urllib.error.HTTPError(url, 403, "Forbidden", headers, io.BytesIO(b"{}"))
+        if isinstance(outcome, int):
+            raise urllib.error.HTTPError(url, outcome, "error", email.message.Message(), io.BytesIO(b"{}"))
+        raise outcome
+
+    return urlopen
+
+
+class Datagram:
+    """A UDP socket whose send meets the sandbox's own refusal."""
+
+    def __init__(self, *args):
+        pass
+
+    def settimeout(self, _):
+        pass
+
+    def sendto(self, *args):
+        raise PermissionError(1, "Operation not permitted")
+
+    def close(self):
+        pass
+
+
+def in_process(cluster):
+    """The fake CLI, but a sandbox exec runs its code here, as a module of
+    its own."""
+    import contextlib
+    import io
+    import tempfile
+
+    def cli(*args, timeout=120):
+        if args[:2] == ("sandbox", "exec"):
+            out = io.StringIO()
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "sandbox_code.py"
+                path.write_text(args[-1])
+                spec = importlib.util.spec_from_file_location("sandbox_code", path)
+                with contextlib.redirect_stdout(out):
+                    spec.loader.exec_module(importlib.util.module_from_spec(spec))
+            cluster.calls.append(("cli", "sandbox", "exec"))
+            return done(0, out.getvalue())
+        return cluster.cli(*args, timeout=timeout)
+
+    return cli
+
+
+# The straight rows of the probe: only the sandbox's own refusal passes.
+STRAIGHT = ["Kubernetes API, direct", "internet, direct", "own sandbox gateway, direct",
+            "model gateway, direct", "metadata address, direct", "cluster DNS, direct over TCP",
+            f"{AGENT_ROW}, direct"]
+CONNECT = [
+    (PermissionError(1, "Operation not permitted"), True, "blocked: PermissionError"),
+    (TimeoutError("timed out"), False, "blocked: TimeoutError"),
+    (ConnectionRefusedError(111, "Connection refused"), False, "blocked: ConnectionRefusedError"),
+    (OSError(101, "Network is unreachable"), False, "blocked: OSError"),
+    ("connected", False, None),
+]
+
+
+@pytest.mark.parametrize(("outcome", "ok", "got"), CONNECT, ids=["refusal", "timeout", "refused", "unreachable",
+                                                                 "connected"])
+def test_each_straight_row_of_the_probe_passes_on_the_sandboxs_own_refusal_only(checks, monkeypatch, capsys,
+                                                                                outcome, ok, got):
+    monkeypatch.setattr(checks, "AGENT_GATEWAYS", [AGENT_GATEWAY])
+    monkeypatch.setattr(checks.socket, "create_connection", connect_outcome(outcome))
+    monkeypatch.setattr(checks.socket, "socket", Datagram)
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen_outcome(urllib.error.URLError("refused")))
+    cluster = Cluster()
+    monkeypatch.setattr(checks, "cli", in_process(cluster))
+    monkeypatch.setattr(checks, "kube", cluster.kube)
+    checks.probe()
+    lines = {line["target"]: line for line in map(json.loads, capsys.readouterr().out.splitlines())
+             if "target" in line}
+    for target in STRAIGHT:
+        row = lines[target]
+        assert row["expected"] == "blocked: PermissionError", target
+        assert row["ok"] is ok, (target, row["got"])
+        if got is not None:
+            assert row["got"] == got, target
+    # The rows through the sandbox proxy, the DNS query over UDP and the
+    # token keep the rule that any blocked value passes.
+    for target in ("internet, through the sandbox proxy", f"{AGENT_ROW}, through the sandbox proxy",
+                   "cluster DNS, direct over UDP", "service account token"):
+        assert (lines[target]["expected"], lines[target]["ok"]) == ("blocked", True), target
+    assert checks.failures == (0 if ok else len(STRAIGHT))
+
+
+@pytest.mark.parametrize(("status", "ok"), [(urllib.error.URLError("refused"), True), (403, True), (200, False)],
+                         ids=["no answer", "policy", "answer"])
+def test_the_probe_tries_the_agent_gateway_through_the_sandbox_proxy(checks, monkeypatch, capsys, status, ok):
+    monkeypatch.setattr(checks, "AGENT_GATEWAYS", [AGENT_GATEWAY])
+    monkeypatch.setattr(checks.socket, "create_connection", connect_outcome(PermissionError(1, "x")))
+    monkeypatch.setattr(checks.socket, "socket", Datagram)
+    if status == 200:
+        class Answer:
+            status = 200
+
+        monkeypatch.setattr(urllib.request, "urlopen", lambda request, timeout=None: Answer())
+    else:
+        monkeypatch.setattr(urllib.request, "urlopen", urlopen_outcome(status))
+    cluster = Cluster()
+    monkeypatch.setattr(checks, "cli", in_process(cluster))
+    monkeypatch.setattr(checks, "kube", cluster.kube)
+    checks.probe()
+    lines = {line["target"]: line for line in map(json.loads, capsys.readouterr().out.splitlines())
+             if "target" in line}
+    assert lines[f"{AGENT_ROW}, through the sandbox proxy"]["ok"] is ok
+
+
+# The two rows of the probe of the finance app with a rule of their own: the
+# straight row to the proxy passes on the sandbox's own refusal only, and the
+# row to the write port through the supervisor on its time out only.
+WRITE = "http://firefly-proxy.agents-finance.svc.cluster.local:8080"
+READ = "http://firefly-proxy.agents-finance.svc.cluster.local:8081"
+SUPERVISOR = [
+    (TimeoutError("timed out"), True, "blocked: TimeoutError"),
+    (403, False, "blocked: HTTP 403 "),
+    (502, False, "blocked: HTTP 502 "),
+    (urllib.error.URLError(TimeoutError("timed out")), False, "blocked: URLError"),
+    (urllib.error.URLError(ConnectionRefusedError(111, "refused")), False, "blocked: URLError"),
+    (PermissionError(1, "Operation not permitted"), False, "blocked: PermissionError"),
+]
+
+
+def firefly_run(checks, monkeypatch, capsys, tmp_path, connect, write):
+    policy = tmp_path / "sandbox-policy.yaml"
+    policy.write_text("network_policies:\n  finance_app:\n    endpoints:\n      - rules:\n          "
+                      + checks.AGENT_RULE + "\n")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(checks, "SANDBOX_POLICY", str(policy))
+    monkeypatch.setattr(checks, "APP_PROXY", READ)
+    monkeypatch.setattr(checks, "APP_PROXY_WRITE", WRITE)
+    monkeypatch.setattr(checks.socket, "create_connection", connect_outcome(connect))
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen_outcome(write, only=WRITE))
+    monkeypatch.setattr(checks, "cli", in_process(Cluster()))
+    checks.run_firefly_probe()
+    return {line["target"]: line for line in map(json.loads, capsys.readouterr().out.splitlines())
+            if "target" in line}
+
+
+@pytest.mark.parametrize(("outcome", "ok", "got"), CONNECT, ids=["refusal", "timeout", "refused", "unreachable",
+                                                                 "connected"])
+def test_the_straight_row_to_the_proxy_of_the_finance_app_passes_on_the_sandboxs_own_refusal_only(
+        checks, monkeypatch, capsys, tmp_path, outcome, ok, got):
+    lines = firefly_run(checks, monkeypatch, capsys, tmp_path, outcome, TimeoutError("timed out"))
+    row = lines["sandbox: proxy address, direct"]
+    assert (row["expected"], row["ok"]) == ("blocked: PermissionError", ok)
+    assert row["got"] == (got or "connected")
+    assert lines["sandbox: write port of the proxy, through the supervisor"]["ok"]
+
+
+@pytest.mark.parametrize(("outcome", "ok", "got"), SUPERVISOR,
+                         ids=["timeout", "403", "502", "connect timeout", "connect refused", "refusal"])
+def test_the_row_to_the_write_port_through_the_supervisor_passes_on_its_time_out_only(
+        checks, monkeypatch, capsys, tmp_path, outcome, ok, got):
+    lines = firefly_run(checks, monkeypatch, capsys, tmp_path, PermissionError(1, "x"), outcome)
+    row = lines["sandbox: write port of the proxy, through the supervisor"]
+    assert (row["expected"], row["ok"], row["got"]) == ("blocked: TimeoutError", ok, got)
+    assert lines["sandbox: proxy address, direct"]["ok"]
+
+
+def test_the_list_of_agent_gateways_names_each_gateway_on_the_pod_network():
+    """Each agent whose gateway binds the pod network is in AGENT_GATEWAYS of
+    both CronJobs, and the check pods may try its port, so a time out there
+    comes from the agent's policy. An agent on loopback has no Service and is
+    not listed."""
+    configs = sorted(ROOT.glob("kubernetes/apps/ai/agents/*/agent/config/openclaw.json"))
+    assert len(configs) >= 3
+    want = []
+    for config in configs:
+        gateway = json.loads(config.read_text())["gateway"]
+        # Each config names its bind, so the test does not rest on a default.
+        assert gateway["bind"] in ("loopback", "lan"), config
+        if gateway["bind"] == "loopback":
+            continue
+        namespace = f"agents-{config.parents[2].name}"
+        services = [d for f in sorted((config.parents[1] / "app").rglob("*.yaml"))
+                    for d in yaml.safe_load_all(f.read_text())
+                    if d and d.get("kind") == "Service"
+                    and any(p["port"] == gateway["port"] for p in d["spec"]["ports"])]
+        (service,) = services
+        want.append((f"{service['metadata']['name']}.{namespace}.svc.cluster.local:{gateway['port']}",
+                     namespace, service["spec"]["selector"], str(gateway["port"])))
+    assert want, "no agent binds the pod network: the list and its egress rule can go"
+    crons = [d for d in yaml.safe_load_all((SCRIPT.parents[1] / "cronjobs.yaml").read_text()) if d]
+    for cron in crons:
+        (container,) = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"]
+        env = {e["name"]: e.get("value") for e in container["env"]}
+        assert sorted(env["AGENT_GATEWAYS"].split()) == sorted(w[0] for w in want), cron["metadata"]["name"]
+    (policy,) = [d for d in yaml.safe_load_all((SCRIPT.parents[1] / "networkpolicy.yaml").read_text()) if d]
+    rules = [(r["toEndpoints"][0]["matchLabels"], r["toPorts"][0]["ports"][0]["port"])
+             for r in policy["spec"]["egress"] if "toEndpoints" in r and len(r["toEndpoints"]) == 1
+             and "matchLabels" in r["toEndpoints"][0] and "matchExpressions" not in r["toEndpoints"][0]]
+    for _, namespace, selector, port in want:
+        labels = {"io.kubernetes.pod.namespace": namespace, "io.cilium.k8s.policy.cluster": "${CLUSTER_NAME}",
+                  **selector}
+        assert (labels, port) in rules, (namespace, port)
+
+
+# The new rules on real sockets, in the pinned image of the checks. The
+# sandbox's own refusal is a seccomp profile that answers each connect with
+# EPERM, as the workload of a sandbox gets it; with no profile, the same
+# rows meet a container that drops each new SYN (a time out) and one with no
+# port open (a refusal), and both fail. The write port through the
+# supervisor is a server that takes the connection and never answers (the
+# time out that passes), one that answers 403, and the refusal.
+LAB_DROPPER = r'''
+import socket, time
+held = []
+for port in (443, 4000, 8080, 18789):
+    server = socket.socket()
+    server.bind(("0.0.0.0", port))
+    server.listen(0)
+    held.append(server)
+    for _ in range(2):
+        c = socket.socket()
+        c.setblocking(False)
+        c.connect_ex(("127.0.0.1", port))
+        held.append(c)
+time.sleep(3600)
+'''
+
+# Port 8081 takes each connection and never answers; port 8082 answers 403.
+LAB_SERVERS = r'''
+import socket, threading, time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+held = []
+def hold():
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("0.0.0.0", 8081))
+    s.listen(16)
+    while True:
+        held.append(s.accept()[0])
+class Deny(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(403)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+    def log_message(self, *args):
+        pass
+threading.Thread(target=hold, daemon=True).start()
+threading.Thread(target=ThreadingHTTPServer(("0.0.0.0", 8082), Deny).serve_forever, daemon=True).start()
+time.sleep(3600)
+'''
+
+LAB_READY = r'''
+import socket, sys, time
+drop, servers, refuse = sys.argv[1:4]
+want = [((drop, 18789), "timeout"), ((drop, 8080), "timeout"), ((servers, 8081), "connected"),
+        ((servers, 8082), "connected"), ((refuse, 8080), "refused")]
+def state(address):
+    try:
+        socket.create_connection(address, timeout=1).close()
+        return "connected"
+    except TimeoutError:
+        return "timeout"
+    except ConnectionRefusedError:
+        return "refused"
+    except OSError as e:
+        return type(e).__name__
+end = time.monotonic() + 60
+while True:
+    got = [state(a) for a, _ in want]
+    if got == [w for _, w in want]:
+        break
+    if time.monotonic() > end:
+        raise SystemExit("lab not ready: %s" % got)
+    time.sleep(0.5)
+'''
+
+# Runs the probe and the probe of the finance app with a CLI whose sandbox
+# exec runs the code here, as a child process, on real sockets.
+LAB_DRIVER = r'''
+import importlib.util, json, os, subprocess, sys
+spec = importlib.util.spec_from_file_location("platform_checks", "/scripts/platform_checks.py")
+checks = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(checks)
+def cli(*args, timeout=120):
+    if args[:2] == ("sandbox", "exec"):
+        return subprocess.run(["python3", "-I", "-c", args[-1]], capture_output=True, text=True,
+                              timeout=timeout, check=False)
+    return subprocess.CompletedProcess([], 0, stdout="", stderr="")
+checks.cli = cli
+checks.report_pods = lambda: None
+checks.run_probe()
+os.makedirs(os.environ["HOME"], exist_ok=True)
+policy = os.path.join(os.environ["HOME"], "sandbox-policy.yaml")
+with open(policy, "w") as f:
+    f.write("network_policies:\n  finance_app:\n    endpoints:\n      - rules:\n          "
+            + checks.AGENT_RULE + "\n")
+checks.SANDBOX_POLICY = policy
+checks.APP_PROXY = "http://app-refuse.test:8080"
+for write in sys.argv[1:]:
+    checks.APP_PROXY_WRITE = write
+    print(json.dumps({"write": write}), flush=True)
+    checks.run_firefly_probe()
+'''
+
+# Each connect gets EPERM; every other call is allowed.
+REFUSE_CONNECT = {"defaultAction": "SCMP_ACT_ALLOW",
+                  "syscalls": [{"names": ["connect"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1}]}
+
+
+def test_the_sandbox_rows_on_real_sockets(tmp_path):
+    tool = docker()
+    image = checks_image()
+    tag = tmp_path.name[-8:].replace("_", "x").lower()
+    net = f"pcheck-{tag}"
+    names = {k: f"pcheck-{k}-{tag}" for k in ("drop", "servers", "refuse")}
+    profile = tmp_path / "refuse-connect.json"
+    profile.write_text(json.dumps(REFUSE_CONNECT))
+
+    def sh(*args, check=True):
+        result = subprocess.run([tool, *args], capture_output=True, text=True, timeout=600, check=False)
+        assert not check or result.returncode == 0, result.stdout + result.stderr
+        return result
+
+    try:
+        sh("network", "create", "--internal", net)
+        common = ["run", "-d", "--network", net, "--read-only", "--cap-drop", "ALL", "--user", "65534"]
+        sh(*common, "--name", names["drop"], image, "python3", "-I", "-c", LAB_DROPPER)
+        sh(*common, "--name", names["servers"], image, "python3", "-I", "-c", LAB_SERVERS)
+        sh(*common, "--name", names["refuse"], image, "python3", "-I", "-c", "import time; time.sleep(3600)")
+        ip = {k: sh("inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", v).stdout.strip()
+              for k, v in names.items()}
+        sh("run", "--rm", "--network", net, "--read-only", "--cap-drop", "ALL", "--user", "65534", image,
+           "python3", "-I", "-c", LAB_READY, ip["drop"], ip["servers"], ip["refuse"])
+        hosts = {"openshell.agents-own.svc.cluster.local": ip["drop"], "litellm.test": ip["drop"],
+                 "dns.test": ip["refuse"], "agent.agents-main.svc.cluster.local": ip["drop"],
+                 "app-refuse.test": ip["refuse"], "supervisor-holds.test": ip["servers"],
+                 "supervisor-denies.test": ip["servers"], "supervisor-refuses.test": ip["refuse"]}
+
+        def driver(*security, writes):
+            result = sh("run", "--rm", "--network", net, "--read-only", "--cap-drop", "ALL", "--user", "65534",
+                        "--tmpfs", "/tmp", *security,
+                        *[x for n, a in hosts.items() for x in ("--add-host", f"{n}:{a}")],
+                        "-e", "OWN_NAMESPACE=agents-own", "-e", "TRUST_DOMAIN_NAMESPACES=agents-own",
+                        "-e", "MODEL_GATEWAY=litellm.test", "-e", "KUBE_DNS=dns.test",
+                        "-e", f"KUBERNETES_SERVICE_HOST={ip['drop']}", "-e", "HOME=/tmp/home",
+                        "-e", f"AGENT_GATEWAYS={AGENT_GATEWAY}",
+                        "-v", f"{SCRIPT.parent}:/scripts:ro", image, "python3", "-I", "-c", LAB_DRIVER, *writes)
+            write, rows = None, {}
+            for line in map(json.loads, result.stdout.splitlines()):
+                if "write" in line:
+                    write = line["write"]
+                elif "target" in line:
+                    rows[(write, line["target"])] = (line["ok"], line["got"])
+            return rows
+
+        sandbox = driver("--security-opt", f"seccomp={profile}", writes=["http://supervisor-holds.test:8081"])
+        plain = driver(writes=["http://supervisor-holds.test:8081", "http://supervisor-denies.test:8082",
+                               "http://supervisor-refuses.test:8080"])
+    finally:
+        for name in names.values():
+            subprocess.run([tool, "container", "remove", "-f", name], capture_output=True, check=False)
+        subprocess.run([tool, "network", "remove", net], capture_output=True, check=False)
+    # The probe: with the sandbox's own refusal each straight row passes, and
+    # with a drop or a refusal of the network each one fails.
+    for target in STRAIGHT:
+        assert sandbox[(None, target)] == (True, "blocked: PermissionError"), target
+        ok, got = plain[(None, target)]
+        assert not ok and got != "blocked: PermissionError", (target, got)
+    assert plain[(None, f"{AGENT_ROW}, direct")] == (False, "blocked: TimeoutError")
+    # The probe of the finance app.
+    holds, denies, refuses = ("http://supervisor-holds.test:8081", "http://supervisor-denies.test:8082",
+                              "http://supervisor-refuses.test:8080")
+    direct, supervisor = "sandbox: proxy address, direct", "sandbox: write port of the proxy, through the supervisor"
+    assert sandbox[(holds, direct)] == (True, "blocked: PermissionError")
+    assert sandbox[(holds, supervisor)] == (False, "blocked: URLError")
+    assert plain[(holds, direct)] == (False, "blocked: ConnectionRefusedError")
+    assert plain[(holds, supervisor)] == (True, "blocked: TimeoutError")
+    assert plain[(denies, supervisor)] == (False, "blocked: HTTP 403 ")
+    assert plain[(refuses, supervisor)] == (False, "blocked: URLError")

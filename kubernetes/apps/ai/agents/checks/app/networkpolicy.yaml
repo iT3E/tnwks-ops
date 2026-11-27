@@ -1,7 +1,8 @@
 ---
 # The check pods may try the sandbox gateway of every trust domain, so that
 # the isolation check tests each gateway's own policy: only the gateway of
-# this namespace may answer. They also fetch the OpenShell CLI release and
+# this namespace may answer, and the gateway of each agent that binds the
+# pod network, which none may reach. They also fetch the OpenShell CLI release and
 # read the pods of this namespace. Nothing calls them.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -30,6 +31,18 @@ spec:
             - port: "8080"
               protocol: TCP
     # The CLI release (GitHub redirects downloads to its asset host).
+    # The gateway of each agent of AGENT_GATEWAYS (./cronjobs.yaml): the
+    # check pods may try it, so that the isolation check tests the agent's
+    # own policy, not this one.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: agent
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "18789"
+              protocol: TCP
     - toFQDNs:
         - matchName: github.com
         - matchName: release-assets.githubusercontent.com
