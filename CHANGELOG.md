@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.326.0 - 2026-11-27
+
+### Added
+
+* The admission policy flux-child-scope also matches the accounts of the Flux children outside the class (flux-child-<name> in flux-system and flux-release-<name> in the namespace of a HelmRelease): each child may name only its own account, the account of a HelmRelease writes the storage of its own release, and the new policy flux-child-pods keeps each pod off these accounts (docs/operations/flux-admission.md)
+
 ## v2.325.2 - 2026-11-27
 
 ### Fixed
