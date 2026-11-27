@@ -202,8 +202,11 @@ PROBES = {
 
 
 SITE_RECORDS = ROOT / "infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf"
-# Entries here are probed only at the sites that run the service.
-INGRESS_CLUSTERS = {"wazuh": ["homelab-wsl-02"]}
+# Entries here are probed only at the sites that run the service: a client
+# of a site reaches the ingress of its own site, so the other site answers
+# 404 (tests/test_internal_dns_records.py holds this map to the Ingresses of
+# each site). The Control UI of the main agent runs on homelab-wsl only.
+INGRESS_CLUSTERS = {"wazuh": ["homelab-wsl-02"], "openclaw": ["homelab-wsl"]}
 
 
 def shared_vips():

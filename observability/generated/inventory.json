@@ -584,6 +584,14 @@
       "vip": "10.10.95.10"
     },
     {
+      "name": "openclaw",
+      "host": "openclaw.internal.tnwks.us",
+      "vip": "10.10.95.10",
+      "clusters": [
+        "homelab-wsl"
+      ]
+    },
+    {
       "name": "qbittorrent",
       "host": "qbittorrent.internal.tnwks.us",
       "vip": "10.10.95.200"

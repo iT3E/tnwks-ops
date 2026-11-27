@@ -468,7 +468,7 @@ time (9 s, or immediately after a clean FRR stop):
 
 | VIP | Preferred | Names (router site records, `dns-sites.tf`) |
 | --- | --- | --- |
-| `10.10.95.10` | homelab-wsl | `hass`, `firefly`, `grafana`, `grafana-embed`, `mealie-embed` |
+| `10.10.95.10` | homelab-wsl | `hass`, `firefly`, `grafana`, `grafana-embed`, `mealie-embed`, `openclaw` (the Control UI of the main agent, site 1 only) |
 | `10.10.95.11` | homelab-wsl | `mqtt` (Mosquitto) |
 | `10.10.95.12–17` | homelab-wsl today | `oauth2`, `frigate`, `zwave`, `obsidian-couchdb`, `blackbox-exporter`, `hajimari` (in that order) |
 | `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `unifi`, `prowlarr`, `radarr`, `sonarr` |
@@ -488,7 +488,10 @@ For an internal ingress app on both sites, deploy it at 0 on the standby, make t
 Service global, add `service-upstream` to its internal Ingress, use
 `${OAUTH2_PROXY_URL:=…}` for an oauth2-proxy `auth-url` (homelab-wsl-02 has
 none of its own), then a site record for its name on the VIP of the site that
-runs it. A single-site app can use a dedicated VIP that the serving site
+runs it. `observability/tests/test_internal_dns_records.py` holds each host
+of an internal Ingress of homelab-wsl to a record in `dns-sites.tf`, except the
+site-local UIs that reach it through the wildcard on purpose (below). A
+single-site app can use a dedicated VIP that the serving site
 advertises. Move its `*-ingress-vip` Kustomization alongside the app and its
 state. For `oauth2`, the Valkey session store is part of that placement.
 Direct services such as Valheim and UniFi inform have their own VIPs.
