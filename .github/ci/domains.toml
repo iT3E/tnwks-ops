@@ -59,6 +59,9 @@ paths = [
   "infrastructure/ansible/roles/wsl_host_mcp_user/**",
   "infrastructure/ansible/roles/windows_sshd/**",
   "infrastructure/ansible/inventory/group_vars/all/host_mcp.yml",
+  # The map of the Wazuh agents: security/tests/test_converter_wazuh.py holds the
+  # rollout names of the host variables to wazuh_agent in the registry.
+  "infrastructure/ansible/inventory/host_vars/**",
   ".github/workflows/observability.yaml",
 ]
 

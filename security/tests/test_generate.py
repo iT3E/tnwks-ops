@@ -106,7 +106,7 @@ def test_the_registry_holds_no_result(registry):
         assert set(line) <= {"id", "title", "ig", "function", "nist_800_53", "attack", "checks"}
         for entries in line["checks"].values():
             assert all(set(entry) == {"source", "check"} for entry in entries)
-    assert all(set(system) <= {"name", "type", "site", "domain", "sources", "behind_site"}
+    assert all(set(system) <= {"name", "type", "site", "domain", "sources", "behind_site", "wazuh_agent"}
                for system in registry["systems"])
 
 

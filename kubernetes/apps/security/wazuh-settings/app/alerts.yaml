@@ -24,3 +24,34 @@ spec:
           annotations:
             summary: The Wazuh notification channel count is missing or stale
             dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster }}
+---
+# The count of indices that are not on their policy of tnwks, from the count
+# file of step 2, which the converter serves (security/converter/README.md,
+# "The count file of the Wazuh settings"). The design of effort 0004 asks for
+# an alert above zero: the age of the data of such an index is not the age of
+# git (../../wazuh/README.md, "Retention").
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: wazuh-retention
+spec:
+  groups:
+    - name: wazuh.retention
+      rules:
+        - alert: WazuhIndicesOffPolicy
+          expr: sum(homelab_security_wazuh_indices_off_policy) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: An index of a Wazuh stream is not on its retention policy
+            dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster }}
+        - alert: WazuhIndicesCountStale
+          expr: >-
+            absent(homelab_security_wazuh_indices_timestamp_seconds)
+            or time() - homelab_security_wazuh_indices_timestamp_seconds > 26 * 3600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: The Wazuh count of indices off their retention policy is missing or stale
+            dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster }}

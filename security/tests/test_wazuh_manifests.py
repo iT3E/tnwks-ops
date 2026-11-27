@@ -436,18 +436,22 @@ def test_no_secret_is_in_git():
             assert header["kind"] == "Secret" and header["metadata"]["namespace"] == "security", name
 
 
-def test_the_reader_secret_of_the_converter_waits_for_its_workstream():
+def test_the_reader_secret_of_the_converter_is_listed_by_the_converter_only():
     """The password of tnwks-converter, made with its hash in
-    wazuh-accounts-hashes, is a SOPS file of the converter that no
-    kustomization lists yet: the change of the converter that reads the
-    indexer lists it (README.md, "Contract")."""
+    wazuh-accounts-hashes, is a SOPS file of the converter, and the
+    kustomization of the converter lists it, the one place that does
+    (README.md, "Contract"; security/converter/README.md, "The Wazuh source")."""
     converter = SECURITY / "converter/app"
     assert sorted(p.name for p in converter.glob("*.sops.yaml")) == ["secret-wazuh-converter-reader.sops.yaml"]
     header = sops_header(converter / "secret-wazuh-converter-reader.sops.yaml")
     assert (header["kind"], header["metadata"]["name"], header["metadata"]["namespace"]) == (
         "Secret", "wazuh-converter-reader", "security")
     resources = yaml.safe_load((converter / "kustomization.yaml").read_text())["resources"]
-    assert not [r for r in resources if "sops" in r]
+    assert [r for r in resources if "sops" in r] == ["./secret-wazuh-converter-reader.sops.yaml"]
+    others = [path for path in (SECURITY.parent).rglob("kustomization.yaml")
+              if path != converter / "kustomization.yaml"
+              and "secret-wazuh-converter-reader" in path.read_text()]
+    assert others == []
 
 
 def test_flux_substitutes_nothing_in_the_hashes():

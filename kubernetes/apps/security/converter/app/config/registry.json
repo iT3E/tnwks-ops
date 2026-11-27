@@ -41,5 +41,11 @@
     "github": [
       "iT3E"
     ]
+  },
+  "wazuh_agents": {
+    "windows-site1": "DESKTOP-HKE05KI",
+    "windows-site2": "WSL-02",
+    "wsl-site1": "DESKTOP-HKE05KI-ubuntu",
+    "wsl-site2": "WSL-02-ubuntu"
   }
 }

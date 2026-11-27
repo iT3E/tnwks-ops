@@ -15,15 +15,23 @@ Each 5 minutes one loop runs each part, and a fault of one part does not stop th
   each check, and the time of the result. A file that it can not read gives no result
   and no time for its system, so the rule for a late result fires. Each finding that
   fails in the newest file of a system is one line of the security stream `findings`
-  in the same Loki: a part of its OCSF record, with no data of the resource.
+  in the same Loki: a part of its OCSF record, with no data of the resource. It also
+  reads the two count files of the settings of the Wazuh indexer.
+- The Wazuh source asks the Wazuh indexer, as a read-only user, for the result of each
+  SCA check of each agent, the count of vulnerabilities of each agent, the time of the
+  last report of each agent, and the size of each index. It asks for counts only
+  (aggregations, and the index stats), and no document. A read that fails gives no
+  result and no time for any agent, so the rule for a late result fires.
 
 The converter sends GET requests to Loki, and POST requests to its push API for the stream
-`findings` only. It never writes to the volume of results, and it keeps no state on a disk.
+`findings` only. It sends POST requests to the search API of the indexer, which read and
+never write. It never writes to the volume of results, and it keeps no state on a disk.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import calendar
 import datetime
 import http.client
@@ -32,6 +40,7 @@ import json
 import logging
 import os
 import re
+import ssl
 import stat
 import threading
 import time
@@ -55,6 +64,20 @@ FINDINGS_PENDING = "homelab_security_converter_findings_pending"
 FINDINGS_SENT = "homelab_security_converter_findings_lines_sent_total"
 FINDINGS_REFUSED = "homelab_security_converter_findings_lines_refused_total"
 ACCEPTED_READ = "homelab_security_converter_accepted_list_read"
+# The count file of step 2 of the settings of the Wazuh indexer (README, "The count file
+# of the Wazuh settings"): the indices of the four streams of tnwks, by stream.
+WAZUH_INDICES = "homelab_security_wazuh_indices"
+WAZUH_INDICES_OFF_POLICY = "homelab_security_wazuh_indices_off_policy"
+WAZUH_INDICES_NO_POLICY = "homelab_security_wazuh_indices_no_policy"
+WAZUH_INDICES_FAILED = "homelab_security_wazuh_indices_failed"
+WAZUH_STREAM_DOCUMENTS = "homelab_security_wazuh_stream_documents"
+WAZUH_INDICES_TIME = "homelab_security_wazuh_indices_timestamp_seconds"
+# The Wazuh source (README, "The Wazuh source").
+WAZUH_QUERY_SUCCESS = "homelab_security_converter_wazuh_query_success"
+WAZUH_UNMAPPED = "homelab_security_converter_wazuh_unmapped_agents"
+WAZUH_SCA_OTHER = "homelab_security_converter_wazuh_sca_other_results"
+WAZUH_VULNERABILITIES = "homelab_security_wazuh_vulnerabilities"
+WAZUH_INDEX_SIZE = "homelab_security_wazuh_index_size_bytes"
 
 INTERVAL_SECONDS = 300
 # The converter looks back three times the `late_after` of a stream, and one hour at
@@ -485,6 +508,13 @@ class AcceptedList(Loop):
 OCSF_NAME = re.compile(r"(?P<system>[^/]+)\.(?P<stamp>[0-9]{8}T[0-9]{6}Z)\.ocsf\.json")
 API_FILE = Path("api-check/results.json")
 WAZUH_CHANNEL_FILE = Path("wazuh-settings/channels.json")
+WAZUH_INDICES_FILE = Path("wazuh-settings/indices.json")
+MAX_WAZUH_SETTINGS_BYTES = 64 * 1024
+# The four counts of each stream in the count file, and the form of a name of a stream.
+INDEX_COUNTS = ("indices", "off_policy", "no_policy", "failed")
+STREAM_NAME = re.compile(r"[a-z0-9][a-z0-9.-]{0,63}")
+MAX_STREAMS = 64
+MOVES = ("applied", "pending", "skipped")
 # A time of a result that is this far in the future is no result.
 CLOCK_SKEW_SECONDS = 300
 # The converter reads an OCSF file one item at a time, so its memory does not grow
@@ -639,6 +669,46 @@ def read_wazuh_channels(file) -> tuple[int, int]:
     if type(stamp) is not int or stamp <= 0 or type(count) is not int or count < 0:
         raise BadFile("the Wazuh settings result has no valid channel count and time")
     return stamp, count
+
+
+def whole(value: object) -> bool:
+    """A whole number of 0 or more: not a bool, and not a float."""
+    return type(value) is int and value >= 0
+
+
+def read_wazuh_indices(file) -> tuple[int, dict[str, dict[str, int]], dict[str, int]]:
+    """The time, the four counts of each stream, and the documents of each stream that
+    must hold none, from the count file of step 2 (README, "The count file of the Wazuh
+    settings"). BadFile for each other form, and when a total is not the sum of its
+    streams."""
+    raw = file.read(MAX_WAZUH_SETTINGS_BYTES + 1)
+    if len(raw) > MAX_WAZUH_SETTINGS_BYTES:
+        raise BadFile("the count file is larger than the limit")
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        raise BadFile("the count file is not JSON") from None
+    if not isinstance(payload, dict) or payload.get("version") != 1 or payload.get("source") != "wazuh-settings":
+        raise BadFile("the count file is not a version 1 Wazuh settings result")
+    stamp, streams, documents = payload.get("time"), payload.get("streams"), payload.get("documents")
+    if type(stamp) is not int or stamp <= 0:
+        raise BadFile("the count file has no time")
+    if payload.get("moves") not in MOVES:
+        raise BadFile("the count file has no state of the moves")
+    for name, counts in (("streams", streams), ("documents", documents)):
+        if not isinstance(counts, dict) or len(counts) > MAX_STREAMS \
+                or not all(isinstance(key, str) and STREAM_NAME.fullmatch(key) for key in counts):
+            raise BadFile(f"the {name} of the count file are not in the form")
+    for counts in streams.values():
+        if not isinstance(counts, dict) or set(counts) != set(INDEX_COUNTS) \
+                or not all(whole(value) for value in counts.values()):
+            raise BadFile("a stream of the count file does not have the four counts")
+    if not all(whole(value) for value in documents.values()):
+        raise BadFile("a document count of the count file is not a whole number")
+    for count in INDEX_COUNTS:
+        if payload.get(count) != sum(counts[count] for counts in streams.values()) or not whole(payload.get(count)):
+            raise BadFile(f"the total {count} of the count file is not the sum of its streams")
+    return stamp, streams, documents
 
 
 def api_results(payload: object, now: float) -> tuple[float, list[dict]]:
@@ -1044,12 +1114,21 @@ class ResultFiles(Loop):
             read.add(channels)
             sample = self.read(channels, read_wazuh_channels, 4096)
             if isinstance(sample, BadFile) or sample[0] > now + CLOCK_SKEW_SECONDS:
-                skipped["wazuh-settings"] = 1
+                skipped["wazuh-settings"] = skipped.get("wazuh-settings", 0) + 1
             else:
                 channel_count = sample
+        indices = self.root / WAZUH_INDICES_FILE
+        index_counts = None
+        if os.path.lexists(indices):
+            read.add(indices)
+            sample = self.read(indices, read_wazuh_indices, MAX_WAZUH_SETTINGS_BYTES)
+            if isinstance(sample, BadFile) or sample[0] > now + CLOCK_SKEW_SECONDS:
+                skipped["wazuh-settings"] = skipped.get("wazuh-settings", 0) + 1
+            else:
+                index_counts = sample
         self.cache = {path: value for path, value in self.cache.items() if path in read}
         with self.lock:
-            self.result = results, times, skipped, self.monotonic(), channel_count
+            self.result = results, times, skipped, self.monotonic(), channel_count, index_counts
         if self.findings is not None:
             try:
                 self.findings.send(offers)
@@ -1061,7 +1140,7 @@ class ResultFiles(Loop):
             result = self.result
         if result is None or not self.fresh(result[3], now):
             return
-        results, times, skipped, _, channel_count = result
+        results, times, skipped, _, channel_count, index_counts = result
         for source, count in sorted(skipped.items()):
             metrics.add(FILES_SKIPPED, count, source=source)
         for source, system, moment in times:
@@ -1072,8 +1151,422 @@ class ResultFiles(Loop):
             stamp, count = channel_count
             metrics.add(WAZUH_ACTIVE_CHANNELS, count)
             metrics.add(WAZUH_ACTIVE_CHANNELS_TIME, stamp)
+        if index_counts is not None:
+            stamp, streams, documents = index_counts
+            for series, count in ((WAZUH_INDICES, "indices"), (WAZUH_INDICES_OFF_POLICY, "off_policy"),
+                                  (WAZUH_INDICES_NO_POLICY, "no_policy"), (WAZUH_INDICES_FAILED, "failed")):
+                for stream, counts in sorted(streams.items()):
+                    metrics.add(series, counts[count], stream=stream)
+            for stream, count in sorted(documents.items()):
+                metrics.add(WAZUH_STREAM_DOCUMENTS, count, data_stream=stream)
+            metrics.add(WAZUH_INDICES_TIME, stamp)
         if self.findings is not None:
             self.findings.collect(metrics)
+
+
+# --- The Wazuh source -------------------------------------------------------------------
+
+WAZUH_SOURCE = "wazuh"
+# The index names of the contract of the server (kubernetes/apps/security/wazuh/README.md,
+# "Contract"), and the field names of v5.0.0-rc2 (README, "The Wazuh source").
+AGENTS_INDEX = "wazuh-metrics-agents"
+SCA_INDEX = "wazuh-states-sca"
+VULNERABILITIES_INDEX = "wazuh-states-vulnerabilities"
+SIZE_PATTERNS = "wazuh-*,.ds-wazuh-*,.wazuh-*"
+VULNERABILITIES_CHECK = "vulnerabilities"
+# The manager writes one snapshot of each agent each 600 seconds. An agent with no
+# snapshot in the last hour is no agent of the manager now.
+AGENTS_WINDOW = "now-1h"
+# Agent 000 is the manager itself: it has no system of the registry.
+MANAGER_AGENT = "000"
+# The SCA module of the agent writes "Passed", "Failed" and "Not applicable", and
+# never indexes "Not run". A check with no "Passed" and no "Failed" has no result. A
+# document with another value is counted apart (WAZUH_SCA_OTHER), so a change of the
+# values upstream shows, and its check has no result.
+SCA_PASSED, SCA_FAILED, SCA_NOT_APPLICABLE = "Passed", "Failed", "Not applicable"
+# The bounds of a read: the buckets of one page of a composite aggregation, the pages,
+# the buckets of one read, the agents, the checks of one agent, the indices of the size
+# read, and the seconds of the whole read of one cycle.
+PAGE_SIZE = 1000
+MAX_PAGES = 100
+MAX_BUCKETS = 50_000
+MAX_AGENTS = 1_000
+MAX_INDICES = 5_000
+WAZUH_DEADLINE_SECONDS = 120
+MAX_PASSWORD_BYTES = 4096
+# The form of an agent ID and of an index name, before either reaches a label.
+AGENT_ID = re.compile(r"[0-9]{1,16}")
+INDEX_NAME = re.compile(r"[a-z0-9._-][a-z0-9._+-]{0,254}")
+
+
+class IndexerError(Exception):
+    """The indexer gave an error, an answer that does not fit the query, or no answer.
+    The text says the kind of the fault, and never holds an answer of the indexer."""
+
+
+class Indexer:
+    """The read path to the Wazuh indexer, as one read-only user: a search with an
+    aggregation and no document (size 0), and the index stats. Basic authentication,
+    HTTPS checked with the CA of the server, no proxy and no redirect."""
+
+    def __init__(self, url: str, user: str, password_file: Path, ca_file: Path | None = None,
+                 timeout: float = TIMEOUT_SECONDS):
+        scheme = urllib.parse.urlsplit(url).scheme
+        if scheme not in ("http", "https"):
+            raise ValueError("the address of the indexer must start with http:// or https://")
+        self.url, self.user, self.password_file, self.timeout = url.rstrip("/"), user, Path(password_file), timeout
+        self.ca_file = ca_file
+        self._opener = None
+
+    def context(self) -> ssl.SSLContext:
+        """A client context that checks the certificate and the name of the indexer, with
+        TLS 1.2 or later. IndexerError when the CA file can not be read: then the Wazuh
+        source has no result, and the other parts of the converter go on."""
+        try:
+            context = ssl.create_default_context(cafile=str(self.ca_file) if self.ca_file else None)
+        except (OSError, ssl.SSLError) as error:
+            raise IndexerError(f"the CA file can not be read: {type(error).__name__}") from None
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        return context
+
+    def opener(self):
+        """No proxy of the environment, and no redirect to a second host. Made at the
+        first request that can read the CA file."""
+        if self._opener is None:
+            self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect,
+                                                       urllib.request.HTTPSHandler(context=self.context()))
+        return self._opener
+
+    def password(self) -> str:
+        """The password, from the file of its Secret, at each request: a new password
+        counts from the next cycle. Its text never reaches a log."""
+        try:
+            with self.password_file.open("rb") as file:
+                raw = file.read(MAX_PASSWORD_BYTES + 1)
+        except OSError as error:
+            raise IndexerError(f"the password can not be read: {type(error).__name__}") from None
+        value = raw.decode("utf-8", "replace").strip()
+        if not value or len(raw) > MAX_PASSWORD_BYTES:
+            raise IndexerError("the password file is empty or larger than the limit")
+        return value
+
+    def call(self, method: str, path: str, body: dict | None = None) -> dict:
+        token = base64.b64encode(f"{self.user}:{self.password()}".encode()).decode()
+        data = None if body is None else json.dumps(body, separators=(",", ":")).encode()
+        request = urllib.request.Request(f"{self.url}{path}", data=data, method=method, headers={
+            "Authorization": f"Basic {token}", "Accept": "application/json", "Content-Type": "application/json"})
+        opener = self.opener()
+        try:
+            with opener.open(request, timeout=self.timeout) as response:
+                raw = response.read(MAX_ANSWER_BYTES + 1)
+        except (OSError, http.client.HTTPException) as error:
+            # Only the kind of the error and the status: the text of an answer never
+            # reaches a log.
+            status = getattr(error, "code", None)
+            getattr(error, "close", lambda: None)()
+            raise IndexerError(f"{type(error).__name__}{f' {status}' if status else ''}") from None
+        if len(raw) > MAX_ANSWER_BYTES:
+            raise IndexerError("the answer is larger than the limit")
+        try:
+            payload = json.loads(raw)
+        except ValueError:
+            raise IndexerError("the answer is not JSON") from None
+        if not isinstance(payload, dict):
+            raise IndexerError("the answer is not a JSON object")
+        return payload
+
+    def composite(self, index: str, sources: list[dict], query: dict, aggs: dict | None = None,
+                  in_time=lambda: None):
+        """Each bucket of a composite aggregation over `index`, page by page, with one
+        page in memory at a time. A search that timed out or that a shard failed, a
+        bucket that does not have the form, and a read above the bounds raise
+        IndexerError, and the caller then drops what it counted of the read. `in_time`
+        raises IndexerError when the read is past its deadline."""
+        count, after = 0, None
+        for _ in range(MAX_PAGES):
+            composite = {"size": PAGE_SIZE, "sources": sources} | ({"after": after} if after else {})
+            body = {"size": 0, "track_total_hits": False, "query": query,
+                    "aggs": {"items": {"composite": composite} | ({"aggs": aggs} if aggs else {})}}
+            page, after = composite_page(self.call("POST", f"/{urllib.parse.quote(index)}/_search", body),
+                                         [next(iter(source)) for source in sources])
+            in_time()
+            count += len(page)
+            if count > MAX_BUCKETS:
+                raise IndexerError("the read has more buckets than the limit")
+            yield from page
+            if len(page) < PAGE_SIZE:
+                return
+            if after is None:
+                raise IndexerError("a full page has no key of the next page")
+        raise IndexerError("the read has more pages than the limit")
+
+    def sizes(self) -> dict[str, int]:
+        """{index: bytes} of each index of Wazuh, from the index stats: the store size of
+        the primaries and the replicas. The stats show no content. A stats answer in
+        which a shard failed is no size: its sizes are not whole."""
+        query = urllib.parse.urlencode({"level": "indices", "expand_wildcards": "open,hidden"})
+        payload = self.call("GET", f"/{SIZE_PATTERNS}/_stats/store?{query}")
+        shards = payload.get("_shards")
+        if not isinstance(shards, dict) or shards.get("failed") != 0:
+            raise IndexerError("a shard of the index stats failed")
+        indices = payload.get("indices")
+        if not isinstance(indices, dict) or len(indices) > MAX_INDICES:
+            raise IndexerError("the index stats have no indices, or more than the limit")
+        sizes = {}
+        for name, stats in indices.items():
+            size = stats.get("total", {}).get("store", {}).get("size_in_bytes") if isinstance(stats, dict) else None
+            if not INDEX_NAME.fullmatch(name) or not whole(size):
+                raise IndexerError("an index of the index stats does not have the form")
+            sizes[name] = size
+        return sizes
+
+
+def composite_page(payload: dict, names: list[str]) -> tuple[list[dict], dict | None]:
+    """The buckets of one page of the composite aggregation `items`, and the key of the
+    next page. IndexerError for a search that is not whole, a page with more than
+    PAGE_SIZE buckets, or a bucket whose key does not name each source."""
+    shards = payload.get("_shards")
+    if payload.get("timed_out") is not False or not isinstance(shards, dict) or shards.get("failed") != 0:
+        raise IndexerError("the search timed out, or a shard failed")
+    try:
+        items = payload["aggregations"]["items"]
+        buckets, after = items["buckets"], items.get("after_key")
+    except (KeyError, TypeError):
+        raise IndexerError("the answer has no composite aggregation") from None
+    if not isinstance(buckets, list) or not (after is None or isinstance(after, dict)):
+        raise IndexerError("the buckets of the answer are not a list")
+    if len(buckets) > PAGE_SIZE:
+        raise IndexerError("a page has more buckets than the size the converter asked for")
+    for bucket in buckets:
+        key = bucket.get("key") if isinstance(bucket, dict) else None
+        if not isinstance(key, dict) or set(key) != set(names) or not whole(bucket.get("doc_count")):
+            raise IndexerError("a bucket of the answer does not have the form")
+        if not all(value is None or isinstance(value, str) for value in key.values()):
+            raise IndexerError("a key of a bucket is not a text")
+    return buckets, after
+
+
+def agent_list(buckets, now: float) -> dict[str, tuple[str, float | None]]:
+    """{agent ID: (name, time of the last report)} from the buckets of the agent
+    snapshots. An agent with no name, or with two names in the window, is left out. A
+    time in the future is no time."""
+    agents = {}
+    for bucket in buckets:
+        agent = bucket["key"]["agent"]
+        names = bucket.get("name", {}).get("buckets") if isinstance(bucket.get("name"), dict) else None
+        seen = bucket.get("last_seen", {}).get("value") if isinstance(bucket.get("last_seen"), dict) else None
+        if not isinstance(agent, str) or not AGENT_ID.fullmatch(agent):
+            raise IndexerError("an agent ID of the agent list does not have the form")
+        if not isinstance(names, list) or len(names) != 1 or not isinstance(names[0].get("key"), str):
+            logger.warning("agent %s has no name or two names in the agent list: no result", agent)
+            continue
+        moment = seen / 1000 if number(seen) and seen > 0 else None
+        if moment is not None and moment > now + CLOCK_SKEW_SECONDS:
+            moment = None
+        agents[agent] = names[0]["key"], moment
+    if len(agents) > MAX_AGENTS:
+        raise IndexerError("the agent list has more agents than the limit")
+    return agents
+
+
+def sca_results(buckets) -> tuple[dict[tuple[str, str], int], int]:
+    """{(agent ID, check): checks that fail} from the buckets of the SCA state, and the
+    count of the documents whose result is not one of the three values of the release.
+    A check with "Passed" or "Failed" has a result: the number of its documents with
+    "Failed", which is 1 for one policy. A check ID that is not a check ID makes the
+    read fail: leaving one check out could make a line pass."""
+    results: dict[tuple[str, str], int] = {}
+    other = 0
+    for bucket in buckets:
+        agent, check, result = bucket["key"]["agent"], bucket["key"]["check"], bucket["key"]["result"]
+        if result not in (SCA_PASSED, SCA_FAILED):
+            if result != SCA_NOT_APPLICABLE:
+                other += bucket["doc_count"]
+            continue
+        if not isinstance(check, str) or not CHECK_ID.fullmatch(check) or not isinstance(agent, str):
+            raise IndexerError("a check of the SCA state is not a check ID")
+        key = agent, check
+        results[key] = results.get(key, 0) + (bucket["doc_count"] if result == SCA_FAILED else 0)
+    return results, other
+
+
+def vulnerability_counts(buckets) -> dict[str, dict[str, int]]:
+    """{agent ID: {severity: count}} from the buckets of the vulnerability state. Each
+    document is one vulnerability of one package. The severity is in lower case, and a
+    value that is not one of the list ("-" for none) is `unknown`."""
+    counts: dict[str, dict[str, int]] = {}
+    for bucket in buckets:
+        agent = bucket["key"]["agent"]
+        if not isinstance(agent, str):
+            continue
+        level = severity(bucket["key"]["severity"])
+        by_level = counts.setdefault(agent, {})
+        by_level[level] = by_level.get(level, 0) + bucket["doc_count"]
+    return counts
+
+
+# The severities of SecurityFindingNew (observability/rules.py, SECURITY_FINDING_SEVERITY).
+FINDING_LEVELS = ("high", "critical")
+
+
+def vulnerabilities_value(levels: dict[str, int], top: str) -> int:
+    """The value of the `vulnerabilities` line of an agent whose highest severity is
+    `top`: the count at that severity, and at high or critical the count at both. The
+    rule of a new finding takes the line under any severity of the two, and fires when
+    its value is above each value of the day before: a new low leaves the value as it
+    was, and a new high or a new critical raises it, also when the label goes from high
+    to critical. The count of each severity is in WAZUH_VULNERABILITIES."""
+    if top in FINDING_LEVELS:
+        return sum(levels.get(level, 0) for level in FINDING_LEVELS)
+    return levels[top]
+
+
+class WazuhSource(Loop):
+    """The results of the source `wazuh` from the Wazuh indexer (README, "The Wazuh
+    source"): the result of each SCA check of each agent, the vulnerabilities of each
+    agent, and the time of the last report of each agent, for each agent whose name the
+    registry maps to a system. And the size of each index of Wazuh.
+
+    The three reads of the results go together: when one fails, the source serves no
+    result and no time for any agent in that cycle, so the rule for a late result fires.
+    The size read is apart, and its fault leaves the results as they are."""
+
+    name = "wazuh"
+
+    def __init__(self, indexer: Indexer, registry: dict, interval: float = INTERVAL_SECONDS,
+                 clock=time.time, monotonic=time.monotonic):
+        super().__init__(interval, clock, monotonic)
+        self.indexer = indexer
+        self.result_series = registry["series"]["result"]
+        self.time_series = registry["series"]["last_result"]
+        self.agents_of = dict(registry.get("wazuh_agents", {}))
+        self.noted: set[str] = set()
+        # (results, times, vulnerabilities, unmapped, other SCA results, sizes, success of
+        # each query, read at)
+        self.result: tuple | None = None
+
+    def note(self, text: str):
+        if text not in self.noted:
+            self.noted.add(text)
+            logger.info(text)
+
+    def clear(self):
+        with self.lock:
+            self.result = None
+
+    def systems(self, agents: dict[str, tuple[str, float | None]]) -> tuple[dict[str, str], int]:
+        """{agent ID: system} for each agent whose name the registry maps, and the count
+        of the other agents. Two agents with one system give that system no result."""
+        found: dict[str, str] = {}
+        unmapped = 0
+        for agent, (agent_name, _) in sorted(agents.items()):
+            if agent == MANAGER_AGENT:
+                continue
+            system = self.agents_of.get(agent_name)
+            if system is None:
+                unmapped += 1
+                self.note(f"agent {agent} has a name that the registry does not map to a system: no result")
+                continue
+            found[agent] = system
+        twice = {system for system in found.values() if list(found.values()).count(system) > 1}
+        for system in sorted(twice):
+            logger.warning("two agents have the name of the system %s: no result for it", system)
+        return {agent: system for agent, system in found.items() if system not in twice}, unmapped
+
+    def read_results(self, now: float, deadline: float):
+        """The result series, the times and the vulnerabilities by severity, of each
+        agent that maps to a system. IndexerError when one read fails."""
+        def in_time():
+            if self.monotonic() > deadline:
+                raise IndexerError("the reads took longer than the deadline")
+
+        agents = agent_list(self.indexer.composite(
+            AGENTS_INDEX, [{"agent": {"terms": {"field": "wazuh.agent.id"}}}],
+            {"range": {"@timestamp": {"gte": AGENTS_WINDOW}}},
+            {"name": {"terms": {"field": "wazuh.agent.name", "size": 2}},
+             "last_seen": {"max": {"field": "wazuh.agent.last_seen"}}}, in_time), now)
+        systems, unmapped = self.systems(agents)
+        sca, sca_other = sca_results(self.indexer.composite(
+            SCA_INDEX, [{"agent": {"terms": {"field": "wazuh.agent.id"}}},
+                        {"check": {"terms": {"field": "check.id"}}},
+                        {"result": {"terms": {"field": "check.result"}}}],
+            {"match_all": {}}, in_time=in_time))
+        vulnerabilities = vulnerability_counts(self.indexer.composite(
+            VULNERABILITIES_INDEX, [{"agent": {"terms": {"field": "wazuh.agent.id"}}},
+                                    {"severity": {"terms": {"field": "vulnerability.severity",
+                                                            "missing_bucket": True}}}],
+            {"match_all": {}}, in_time=in_time))
+        results: list[tuple[str, str, int, str]] = []
+        times: list[tuple[str, float]] = []
+        by_severity: list[tuple[str, str, int]] = []
+        for agent, system in sorted(systems.items(), key=lambda item: item[1]):
+            moment = agents[agent][1]
+            if moment is None:
+                # An agent with no time of a report has no result: the rule reads it as late.
+                continue
+            times.append((system, moment))
+            checks = sorted((check, failed) for (owner, check), failed in sca.items() if owner == agent)
+            if len(checks) > MAX_CHECKS:
+                raise IndexerError("an agent has more SCA checks than the limit")
+            results += [(check, system, failed, "unknown") for check, failed in checks]
+            levels = vulnerabilities.get(agent, {})
+            if levels:
+                top = max(levels, key=SEVERITIES.index)
+                results.append((VULNERABILITIES_CHECK, system, vulnerabilities_value(levels, top), top))
+            # An agent with no document of the vulnerability state has no line: 0 would
+            # read as a pass for an agent that the manager has not scanned.
+            by_severity += [(system, level, count) for level, count in sorted(levels.items())]
+        if sca_other:
+            self.note("the SCA state has results that are not Passed, Failed or Not applicable: "
+                      "their checks have no result")
+        return results, times, by_severity, unmapped, sca_other
+
+    def step(self):
+        now = self.clock()
+        deadline = self.monotonic() + WAZUH_DEADLINE_SECONDS
+        success = {}
+        try:
+            results, times, by_severity, unmapped, sca_other = self.read_results(now, deadline)
+            success["results"] = 1
+        except IndexerError as error:
+            logger.warning("no result of Wazuh in this cycle: %s", error)
+            results, times, by_severity, unmapped, sca_other, success["results"] = [], [], [], None, None, 0
+        except Exception as error:  # noqa: BLE001 - a fault here must not keep an old result
+            logger.error("the read of the results of Wazuh failed: %s", type(error).__name__)
+            results, times, by_severity, unmapped, sca_other, success["results"] = [], [], [], None, None, 0
+        try:
+            sizes = self.indexer.sizes()
+            success["index-stats"] = 1
+        except IndexerError as error:
+            logger.warning("no size of the indices of Wazuh in this cycle: %s", error)
+            sizes, success["index-stats"] = {}, 0
+        except Exception as error:  # noqa: BLE001 - the results are served all the same
+            logger.error("the read of the index stats of Wazuh failed: %s", type(error).__name__)
+            sizes, success["index-stats"] = {}, 0
+        with self.lock:
+            self.result = results, times, by_severity, unmapped, sca_other, sizes, success, self.monotonic()
+
+    def collect(self, metrics: Metrics, now: float):
+        with self.lock:
+            result = self.result
+        if result is None or not self.fresh(result[-1], now):
+            return
+        results, times, by_severity, unmapped, sca_other, sizes, success, _ = result
+        for query, value in sorted(success.items()):
+            metrics.add(WAZUH_QUERY_SUCCESS, value, query=query)
+        if unmapped is not None:
+            metrics.add(WAZUH_UNMAPPED, unmapped)
+        if sca_other is not None:
+            metrics.add(WAZUH_SCA_OTHER, sca_other)
+        for system, moment in times:
+            metrics.add(self.time_series, float(moment), source=WAZUH_SOURCE, system=system)
+        for check, system, failed, level in results:
+            metrics.add(self.result_series, failed, source=WAZUH_SOURCE, check=check, system=system,
+                        severity=level)
+        for system, level, count in by_severity:
+            metrics.add(WAZUH_VULNERABILITIES, count, system=system, severity=level)
+        for index, size in sorted(sizes.items()):
+            metrics.add(WAZUH_INDEX_SIZE, size, index=index)
 
 
 # --- The service ------------------------------------------------------------------------
@@ -1134,6 +1627,13 @@ def main():
     parser.add_argument("--results", default="/results",
                         help="the root of the volume of results, read-only")
     parser.add_argument("--loki", default=os.environ.get("LOKI_URL"), help="the address of Loki")
+    parser.add_argument("--wazuh", default=os.environ.get("WAZUH_INDEXER_URL"),
+                        help="the address of the Wazuh indexer. With none, the Wazuh source does not run")
+    parser.add_argument("--wazuh-user", default="tnwks-converter", help="the read-only user of the indexer")
+    parser.add_argument("--wazuh-password", default="/wazuh/password",
+                        help="the file of the password of that user, from its Secret")
+    parser.add_argument("--wazuh-ca", default="/wazuh-ca/ca.crt",
+                        help="the CA certificate of the Wazuh server, which checks the indexer")
     parser.add_argument("--port", type=int, default=9877)
     parser.add_argument("--interval", type=float, default=INTERVAL_SECONDS,
                         help="the seconds between two cycles")
@@ -1146,7 +1646,12 @@ def main():
     streams = StreamSource(json.loads(Path(args.streams).read_text()), loki, interval=args.interval)
     accepted = AcceptedList(Path(args.accepted), registry, interval=args.interval)
     files = ResultFiles(Path(args.results), registry, Findings(loki), interval=args.interval)
-    converter = Converter([streams, accepted, files], interval=args.interval)
+    parts: list[Loop] = [streams, accepted, files]
+    if args.wazuh:
+        indexer = Indexer(args.wazuh, args.wazuh_user, Path(args.wazuh_password), Path(args.wazuh_ca))
+        parts.append(WazuhSource(indexer, registry, interval=args.interval))
+        logger.info("the Wazuh source asks %s as %s", args.wazuh, args.wazuh_user)
+    converter = Converter(parts, interval=args.interval)
     logger.info("the converter asks %s each %d seconds for %d streams, and reads the list of accepted findings"
                 " and the files of results in %s", args.loki, args.interval, len(streams.entries), args.results)
     threading.Thread(target=converter.run, args=(threading.Event(),), daemon=True, name="converter").start()
