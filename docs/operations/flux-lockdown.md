@@ -150,6 +150,56 @@ names the account, each Kustomization of the class does too.
 Site 2 has it first. Site 1 follows with the same three places in
 `kubernetes/clusters/wsl/`.
 
+## The own accounts
+
+Step 2c, site by site: each child outside the class names its own account
+of 2a, so it applies as that account, with the role `flux-child` in its
+own namespaces.
+
+- Each Kustomization outside the class: `spec.serviceAccountName:
+  flux-child-<name>`.
+- Each HelmRelease of its build: `spec.serviceAccountName:
+  flux-release-<name>`, by a patch of that Kustomization (`spec.patches`).
+  helm-controller then installs and upgrades the release as that account,
+  and writes the release storage as it (the policy allows its own storage
+  only).
+
+The ks.yaml and HelmRelease files of the apps are shared by both sites, so
+the accounts go in the files of the site: a patch of the parent of the apps
+for each child (`kubernetes/clusters/<site>/apps.yaml`, between the markers
+of `accounts.py`). `accounts.py write` writes those patches for each site
+in its `NAMED`, and `accounts.py check` fails until they are written.
+`lockdown.py` reads them, as Flux applies them.
+
+A patch of the parent sets the whole `spec.patches` list of the child (a
+strategic merge of a list replaces it). So `accounts.py` reads each child
+as the build of its parent makes it, with the patches of its site, and
+writes the patches that the child has first, unchanged, then the account
+patches. On site 2 that keeps the wait patch of the media apps
+(`install.disableWait` and `upgrade.disableWait` for sonarr, radarr,
+prowlarr and recyclarr). The wait patch stays in one place, the
+kustomization.yaml of the apps of the site, and `accounts.py check` fails
+when the two differ.
+
+The proofs:
+
+- the controller harness applies the patches that `accounts.py` writes: each
+  child names its own account and applies as it, with the role of git, and
+  its HelmRelease names its own account and keeps the patch that its site
+  gave it before;
+- the admission harness sends each Kustomization and HelmRelease of git as
+  the user that it applies as, and each other object of each child that
+  names its account (its build, and the Secrets of its SOPS files by name
+  and type) as that account: the policy refuses none;
+- the CI test "own account": a child outside the class names no account
+  but its own, and on a site of `NAMED` each one names it;
+- the CI test "only the accounts": the spec that Flux applies to each child
+  outside the class is the spec without the patches of `accounts.py`, but
+  for its account and the account patches after the patches it had.
+
+Site 2 has it first. A revert of the pull request puts the children back
+on `kustomize-controller`, as before.
+
 ## The tests of git
 
 `observability/tests/test_flux_lockdown.py` reads each Kustomization and
@@ -162,7 +212,9 @@ its parent, and for the root the patches of
 | The map | Each encrypted file that a Kustomization of a site builds holds the public key of the Secret that it names (`KEYS` in `lockdown.py`, by site) | 1, 2d, 3 |
 | The keys of the map | Each is an age public key and a recipient of a rule of `kubernetes/` in `.sops.yaml` | 1 |
 | The rules of the keys | The rule of `.sops.yaml` that sops takes for each encrypted file under `kubernetes/` gives a file of the class the class key of each site that builds it, and a file outside the class the apps key of each site that builds it. No file of the class gets an apps key, and no file outside the class a class key. A new file in a folder of the class or of a child outside it gets the same | 1 |
-| The class account | Once the root of a site names `kustomize-controller`, `cluster-apps` and each Kustomization of the class do too. No child outside the class names an account of the controllers | 2b |
+| The class account | Once the root of a site names `kustomize-controller`, `cluster-apps` and each Kustomization of the class do too, and no child of the class names it before the root does. No child outside the class names an account of the controllers | 2b |
+| The own account | A Kustomization or a HelmRelease outside the class names no account but its own (`flux-child-<name>`, `flux-release-<name>`); on a site of `accounts.NAMED` each one names its own, as `accounts.py write` writes the patches of the parent | 2c |
+| Only the accounts | The spec that Flux applies to each child outside the class, with the patches of `accounts.py`, is the spec without them, but for its account and the patches that give its HelmReleases theirs, after the patches that it had (of its file and of its site) | 2c |
 | The flag | A controller of a site has `--default-service-account` only when each Kustomization (kustomize-controller) or each HelmRelease (helm-controller) of the site names an account. Each account that an object names is a ServiceAccount of git in the namespace of the object | 2a, 2c, 2e |
 | The flags that stay off | No `--sops-age-secret`, `--default-decryption-service-account` or `--no-cross-namespace-refs` | all |
 | The accounts | `accounts.yaml` of each site is what `accounts.py` writes: an account for each child outside the class, with its bindings. No token is mounted | 2a |

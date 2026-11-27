@@ -9,8 +9,13 @@ the Python of the repository (observability), writes:
   Flux install of the clusters;
 - kustomizations.json and helmreleases.json: each Flux Kustomization and
   HelmRelease of both sites in git (classlist.py walks the trees), with the
-  Kustomization that applies it, after the substitution of the settings of
-  the site;
+  Kustomization that applies it and the user that it applies as, with the
+  account that the patches of its parent give it (lockdown.py), after the
+  substitution of the settings of the site;
+- owned.json: each other object of a child outside the class that names
+  its own account (step 2c), with that account as the user: the objects of
+  its build, and each Secret of its SOPS files by its name, namespace and
+  type only, with a placeholder for its data (no value is read);
 - names.json: the names of the children that the test cases use.
 
   python3 render.py <output directory>
@@ -25,8 +30,11 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parent.parent / "lockdown"))
 
+import accounts
 import classlist
+import lockdown
 
 ROOT = classlist.ROOT
 CRDS = (
@@ -49,6 +57,33 @@ OPERATOR_KINDS = (
     ("postgresql.cnpg.io", "v1", "ScheduledBackup", "scheduledbackups"),
     ("barmancloud.cnpg.io", "v1", "ObjectStore", "objectstores"),
 )
+
+
+# The kinds of the Prometheus operator in the builds of the children
+# outside the class (owned.json).
+OWNED_KINDS = (
+    ("monitoring.coreos.com", "v1", "PrometheusRule", "prometheusrules"),
+    ("monitoring.coreos.com", "v1", "ServiceMonitor", "servicemonitors"),
+)
+KUSTOMIZE = "system:serviceaccount:flux-system:kustomize-controller"
+
+
+def sops_secrets(child: classlist.Child) -> list[dict]:
+    """The Secrets of the SOPS files of a child, as the policy sees them:
+    the name, the namespace and the type, which SOPS leaves in the clear,
+    and a placeholder for the data. No value is read or kept."""
+    out = []
+    namespaces = accounts.encrypted_namespaces(ROOT / child.path)
+    for path in sorted(lockdown.encrypted_of(child)):
+        for d in classlist.load(ROOT / path):
+            if d.get("kind") != "Secret":
+                continue
+            meta = d.get("metadata") or {}
+            namespace = next(iter(namespaces)) if len(namespaces) == 1 else meta.get("namespace")
+            out.append({"apiVersion": "v1", "kind": "Secret",
+                        "metadata": {"name": meta["name"], "namespace": namespace},
+                        "type": d.get("type", "Opaque"), "stringData": {"placeholder": "a placeholder of the test"}})
+    return out
 
 
 def operator_crd(group: str, version: str, kind: str, plural: str) -> dict:
@@ -87,17 +122,31 @@ def main(out: Path) -> None:
             if d and d.get("kind") == "CustomResourceDefinition" and d["metadata"]["name"] in CRDS]
     assert len(crds) == len(CRDS), [d["metadata"]["name"] for d in crds]
     crds += [operator_crd(*k) for k in OPERATOR_KINDS]
+    # The kinds of the Prometheus operator that children outside the class apply.
+    crds += [operator_crd(*k) for k in OWNED_KINDS]
     data = classlist.lists()
-    kustomizations, helmreleases = [], []
+    kustomizations, helmreleases, owned = [], [], []
     for site in classlist.SITES:
         settings = settings_of(site)
-        for child in classlist.walk(site).values():
-            kustomizations.append({"site": site, "parent": child.parent, "doc": substitute(child.doc, settings)})
+        children = classlist.walk(site)
+        for child in children.values():
+            spec = lockdown.spec_of(child, children)
+            user = KUSTOMIZE
+            if spec.get("serviceAccountName") not in (None, "kustomize-controller"):
+                user = f"system:serviceaccount:flux-system:{spec['serviceAccountName']}"
+            kustomizations.append({"site": site, "parent": child.parent,
+                                   "doc": substitute({**child.doc, "spec": spec}, settings)})
             for d in child.build.docs:
+                d = substitute(d, settings)
+                d["metadata"]["namespace"] = classlist.namespace_of(d, child)
                 if classlist.is_kind(d, classlist.HELM_GROUP, "HelmRelease"):
-                    d = substitute(d, settings)
-                    d["metadata"]["namespace"] = classlist.namespace_of(d, child)
-                    helmreleases.append({"site": site, "applier": child.key, "doc": d})
+                    # The account that the patches of the child give it (2c).
+                    d = lockdown.patched(d, spec.get("patches"))
+                    helmreleases.append({"site": site, "applier": child.key, "user": user, "doc": d})
+                elif user != KUSTOMIZE:
+                    owned.append({"site": site, "applier": child.key, "user": user, "doc": d})
+            if user != KUSTOMIZE:
+                owned += [{"site": site, "applier": child.key, "user": user, "doc": d} for d in sops_secrets(child)]
     class_k = data["classKustomizations"]
     names = {
         "outsideK": "flux-system/mealie",
@@ -120,6 +169,7 @@ def main(out: Path) -> None:
     (out / "crds.json").write_text(json.dumps(crds))
     (out / "kustomizations.json").write_text(json.dumps(kustomizations))
     (out / "helmreleases.json").write_text(json.dumps(helmreleases))
+    (out / "owned.json").write_text(json.dumps(owned))
     (out / "names.json").write_text(json.dumps(names))
 
 

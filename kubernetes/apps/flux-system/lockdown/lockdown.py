@@ -15,6 +15,7 @@ public recipients of the sops block only.
 
 from __future__ import annotations
 
+import copy
 import re
 import sys
 from pathlib import Path
@@ -92,12 +93,18 @@ def json_patch(doc: dict, ops: list) -> dict:
 
 
 def targets_install(target: dict, doc: dict) -> bool:
+    """A target of a patch against an object, by its group, kind and name.
+    A target that could match the object and has a version, a namespace or
+    a selector stops the read."""
     meta = doc.get("metadata") or {}
-    return all((
+    hit = all((
         target.get("group", classlist.api_group(doc)) == classlist.api_group(doc),
         target.get("kind", doc.get("kind")) == doc.get("kind"),
         re.fullmatch(target.get("name", ".*"), meta.get("name", "")),
     ))
+    if hit and set(target) - {"group", "kind", "name"}:
+        raise ValueError(f"a target of a patch that this module does not read: {target}")
+    return hit
 
 
 def install(site: str, file: str) -> list[dict]:
@@ -198,14 +205,45 @@ def kustomizations(site: str) -> list[tuple[str, dict, set[str], bool]]:
     return out
 
 
+def patched(doc: dict, patches: list) -> dict:
+    """An object of the build of a Kustomization with the account that the
+    patches of its spec give it (as Flux applies them, step 2c): a JSON
+    patch of /spec/serviceAccountName, or a strategic merge patch of the
+    spec. The other operations of a JSON patch do not touch the account."""
+    doc = copy.deepcopy(doc)
+    field = "/spec/serviceAccountName"
+    for patch in patches or []:
+        body = yaml.safe_load(patch["patch"])
+        if isinstance(body, list):
+            if not (patch.get("target") and targets_install(patch["target"], doc)):
+                continue
+            for op in body:
+                if op.get("path") == field and op.get("op") in ("add", "replace"):
+                    doc.setdefault("spec", {})["serviceAccountName"] = op["value"]
+                elif op.get("path") == field and op.get("op") == "remove":
+                    doc.get("spec", {}).pop("serviceAccountName", None)
+                elif str(op.get("path", "")).startswith(field) or op.get("path") in ("/spec", ""):
+                    raise ValueError(f"a JSON patch of the account that this module does not read: {op}")
+            continue
+        if not isinstance(body, dict) or "metadata" not in body:
+            raise ValueError(f"a patch of a Kustomization that this module does not read: {patch}")
+        target = patch.get("target") or {"kind": body.get("kind"), "name": re.escape(body["metadata"]["name"])}
+        if targets_install(target, doc) and "serviceAccountName" in (body.get("spec") or {}):
+            doc.setdefault("spec", {})["serviceAccountName"] = body["spec"]["serviceAccountName"]
+    return doc
+
+
 def helmreleases(site: str) -> list[tuple[str, dict, bool]]:
-    """Each HelmRelease of a site: its namespace/name, its spec, and whether
-    a Kustomization of the class applies it."""
+    """Each HelmRelease of a site: its namespace/name, its spec as Flux
+    applies it (with the patches of the Kustomization that applies it), and
+    whether a Kustomization of the class applies it."""
     out = []
-    for c in classlist.walk(site).values():
+    children = classlist.walk(site)
+    for c in children.values():
+        patches = spec_of(c, children).get("patches")
         for d in c.build.docs:
             if classlist.is_kind(d, classlist.HELM_GROUP, "HelmRelease"):
-                out.append((f"{classlist.namespace_of(d, c)}/{d['metadata']['name']}", d["spec"],
+                out.append((f"{classlist.namespace_of(d, c)}/{d['metadata']['name']}", patched(d, patches)["spec"],
                             classlist.is_class_path(c.path)))
     return out
 

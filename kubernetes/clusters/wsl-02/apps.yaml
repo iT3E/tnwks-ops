@@ -107,3 +107,476 @@ spec:
         # BEGIN classlist.py: written by classlist.py write, do not edit by hand.
         name: actions-runner-controller|actions-runner-controller-monitoring|agents-main-cluster-mcp-site2|agents-main-flux-mcp-site2|agents-main-read-access-site2|agents-main-site2-services|alertmanager|aws-backup-credentials|cert-manager|cert-manager-issuers|cilium|cilium-bgp|cilium-clustermesh|cilium-config|cloudnative-pg-app|cloudnative-pg-plugin-barman-cloud|finance-sync-db|firefly-db|flux-accounts|flux-admission|flux-substitution|grafana|grafana-db|home-assistant-db|ingress-nginx-certificates|ingress-nginx-internal|ingress-nginx-internal-shared-vip|kopiur|kopiur-policies|kopiur-repository|kopiur-standby-repository|kube-prometheus-stack|kube-prometheus-stack-addons|local-path-provisioner|loki|mealie-db|metrics-server|node-exporter|observability-dashboards|observability-evidence|observability-garage|observability-pki|observability-rules|plausible-db|pyrra|pyrra-crds|qbittorrent|reloader|security-api-checks|security-aws-credentials|security-converter|security-loki-proxy|security-prowler|security-registry-rules|security-trail-copy|security-trivy-operator|security-wazuh|security-wazuh-accounts|security-wazuh-server|security-wazuh-settings|site-lease-fence|standby-restore|thanos-metrics|thanos-metrics-archive|tnwks-ops-runner|transcriber-db|unifi|unifi-inform-vip|unpoller|vector-agent|vector-aggregator|vector-audit-reader
         # END classlist.py
+    # Each child outside the class names its own account (step 2c of
+    # docs/operations/flux-lockdown.md): flux-child-<name>, and
+    # flux-release-<name> for each HelmRelease of its build, by a patch of
+    # its own Kustomization. The ks.yaml files are shared with the other
+    # site, so the accounts go here.
+    # BEGIN accounts.py: written by accounts.py write, do not edit by hand.
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-changedetection
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-changedetection
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: changedetection
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: changedetection
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-finance-sync
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-finance-sync
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: finance-sync
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: finance-sync
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-firefly
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-firefly
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: firefly
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: firefly
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-home-assistant
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-home-assistant
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: home-assistant
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: home-assistant
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-immich
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-immich
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: immich
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: immich
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-immich-sync
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: immich-sync
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-immichframe
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-immichframe
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: immichframe
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: immichframe
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-jellyfin
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-jellyfin
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: jellyfin
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: jellyfin
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-kitchen-screensaver
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-kitchen-screensaver
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: kitchen-screensaver
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: kitchen-screensaver
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-mealie
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-mealie
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: mealie
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: mealie
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-mosquitto
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-mosquitto
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: mosquitto
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: mosquitto
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-mosquitto-shared-vip
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: mosquitto-shared-vip
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-ombi
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-ombi
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: ombi
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: ombi
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-ombi-f
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-ombi-f
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: ombi-f
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: ombi-f
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-plausible
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-plausible
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: plausible
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: plausible
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-prowlarr
+          patches:
+          - target:
+              kind: HelmRelease
+            patch: |-
+              - op: add
+                path: /spec/install
+                value:
+                  disableWait: true
+              - op: add
+                path: /spec/upgrade
+                value:
+                  disableWait: true
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-prowlarr
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: prowlarr
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: prowlarr
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-radarr
+          patches:
+          - target:
+              kind: HelmRelease
+            patch: |-
+              - op: add
+                path: /spec/install
+                value:
+                  disableWait: true
+              - op: add
+                path: /spec/upgrade
+                value:
+                  disableWait: true
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-radarr
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: radarr
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: radarr
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-recyclarr
+          patches:
+          - target:
+              kind: HelmRelease
+            patch: |-
+              - op: add
+                path: /spec/install
+                value:
+                  disableWait: true
+              - op: add
+                path: /spec/upgrade
+                value:
+                  disableWait: true
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-recyclarr
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: recyclarr
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: recyclarr
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-sonarr
+          patches:
+          - target:
+              kind: HelmRelease
+            patch: |-
+              - op: add
+                path: /spec/install
+                value:
+                  disableWait: true
+              - op: add
+                path: /spec/upgrade
+                value:
+                  disableWait: true
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-sonarr
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: sonarr
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: sonarr
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-transcriber
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-transcriber
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: transcriber
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: transcriber
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-valheim
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-valheim
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: valheim
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: valheim
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: flux-child-wizarr
+          patches:
+          - patch: |-
+              - op: add
+                path: /spec/serviceAccountName
+                value: flux-release-wizarr
+            target:
+              group: helm.toolkit.fluxcd.io
+              kind: HelmRelease
+              name: wizarr
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
+        name: wizarr
+    # END accounts.py

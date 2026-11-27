@@ -9,8 +9,15 @@ For each site in SITES, it writes kubernetes/apps/flux-system/accounts/<site>/ac
 - for each HelmRelease outside the class, the account flux-release-<name> in
   its namespace, and a RoleBinding to flux-child there.
 
-The account default of flux-system gets no binding. No child names an
-account until step 2c.
+The account default of flux-system gets no binding.
+
+For each site in NAMED (step 2c), it also writes the patches of the parent
+of the apps (kubernetes/clusters/<site>/apps.yaml, between the markers of
+this script) that make each child outside the class name its own account:
+spec.serviceAccountName flux-child-<name>, and a patch of the Kustomization
+that gives each HelmRelease of its build flux-release-<name>. The
+ks.yaml files of the apps are shared by the sites, so the accounts go in
+the files of the site.
 
   python3 kubernetes/apps/flux-system/lockdown/accounts.py write | check
 
@@ -20,6 +27,7 @@ children is written.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -36,6 +44,11 @@ ROOT = lockdown.ROOT
 # The sites whose accounts are in git: site 2 first (step 2a goes site by
 # site).
 SITES = ("wsl-02",)
+# The sites whose children outside the class name their accounts (step 2c),
+# each in SITES.
+NAMED = ("wsl-02",)
+BEGIN = "# BEGIN accounts.py: written by accounts.py write, do not edit by hand."
+END = "# END accounts.py"
 ROLE = "flux-child"
 HEADER = """---
 # The accounts of the Flux children outside the class of {site}
@@ -134,11 +147,86 @@ def render(site: str) -> str:
         yaml.safe_dump(d, sort_keys=False, default_flow_style=False) for d in manifests(site))
 
 
+def parent_path(site: str) -> Path:
+    return ROOT / f"kubernetes/clusters/{site}/apps.yaml"
+
+
+class Literal(yaml.SafeDumper):
+    """A dumper that writes a text of more than one line as a block, as the
+    patches of the parent are written by hand."""
+
+
+Literal.add_representer(str, lambda d, v: d.represent_scalar(
+    "tag:yaml.org,2002:str", v, style="|" if "\n" in v else None))
+
+
+def dump(value) -> str:
+    return yaml.dump(value, Dumper=Literal, sort_keys=False, default_flow_style=False, width=1000).rstrip("\n")
+
+
+def patch_of(name: str, helmreleases: list[str], existing: list | None = None) -> dict:
+    """The patch of the parent of the apps for one child outside the class:
+    its own account, and the account of each HelmRelease of its build. A
+    strategic merge of spec.patches replaces the list, so the patches that
+    the child has before (from its file or from a patch of its site, as the
+    build of the parent makes it) come first, unchanged."""
+    spec = {"serviceAccountName": f"flux-child-{name}"}
+    if helmreleases or existing:
+        spec["patches"] = [*(existing or []), *({
+            "patch": dump([{"op": "add", "path": "/spec/serviceAccountName", "value": f"flux-release-{hr}"}]),
+            "target": {"group": classlist.HELM_GROUP, "kind": "HelmRelease", "name": hr},
+        } for hr in helmreleases)]
+    body = {"apiVersion": f"{classlist.KUSTOMIZE_GROUP}/v1", "kind": "Kustomization",
+            "metadata": {"name": "not-used"}, "spec": spec}
+    return {"patch": dump(body),
+            "target": {"group": classlist.KUSTOMIZE_GROUP, "kind": "Kustomization", "name": name}}
+
+
+def patches(site: str) -> list[dict]:
+    """The patches of the parent of the apps of a site in NAMED, one for
+    each Kustomization outside the class, by name."""
+    out = []
+    for child in sorted(classlist.walk(site).values(), key=lambda c: c.key):
+        if classlist.is_class_path(child.path):
+            continue
+        if child.parent != classlist.APPS_PARENT[site]:
+            raise ValueError(f"{child.key}: outside the class, and not a child of the parent of the apps")
+        names = [d["metadata"]["name"] for d in child.build.docs
+                 if classlist.is_kind(d, classlist.HELM_GROUP, "HelmRelease")]
+        if len(set(names)) != len(names) or any(not re.fullmatch(r"[a-z0-9-]+", n)
+                                                for n in [*names, child.key.split("/")[1]]):
+            raise ValueError(f"{child.key}: HelmRelease names that this module does not target: {names}")
+        out.append(patch_of(child.key.split("/")[1], sorted(names), child.doc["spec"].get("patches")))
+    return out
+
+
+def render_patches(site: str, indent: str) -> str:
+    body = [indent + line if line else line for line in dump(patches(site)).split("\n")]
+    return "\n".join([indent + BEGIN, *body, indent + END])
+
+
+def parent_text(site: str) -> tuple[str, str]:
+    """The text of the parent of the apps of a site, and the text it should
+    have."""
+    path = parent_path(site)
+    text = path.read_text(encoding="utf-8")
+    m = re.search(r"^( *)" + re.escape(BEGIN) + r".*?^ *" + re.escape(END) + r"$", text, re.MULTILINE | re.DOTALL)
+    if not m:
+        raise SystemExit(f"{path}: no block of accounts.py")
+    return text, text[: m.start()] + render_patches(site, m.group(1)) + text[m.end():]
+
+
 def main(argv: list[str]) -> int:
     if argv[1:] not in (["write"], ["check"]):
         print(__doc__)
         return 2
     stale = []
+    for site in NAMED:
+        text, want = parent_text(site)
+        if argv[1] == "write":
+            parent_path(site).write_text(want, encoding="utf-8")
+        elif text != want:
+            stale.append(str(parent_path(site).relative_to(ROOT)))
     for site in SITES:
         text = render(site)
         path = path_of(site)

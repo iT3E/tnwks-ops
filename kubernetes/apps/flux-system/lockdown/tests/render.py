@@ -16,7 +16,9 @@ the Python of the repository (observability), writes:
   Deployment and a StatefulSet with no replicas for each of two waits, and
   no secret (its one Secret holds a placeholder), and a folder of two
   child Kustomizations for a parent that patches one of them, as the parent
-  of the apps of a site does (step 2b);
+  of the apps of a site does (step 2b), and a folder of two more for a
+  parent with the patches of accounts.py (step 2c), with a HelmRelease;
+- patches.json: the patches that accounts.py writes for those two;
 - role.json: the role flux-child of git
   (kubernetes/apps/flux-system/accounts/role/clusterrole.yaml), and
   role-noread.json: the same role less its reads of ReplicaSets and Pods,
@@ -37,6 +39,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
+import accounts
 import lockdown
 
 # The test tree: a folder for each case, with a kustomization.yaml.
@@ -124,6 +127,13 @@ def noread(role: dict) -> dict:
 # the first one by a patch, as the parent of the apps of a site does for its
 # direct children of the class.
 PATCHED = ("who-patched", "who-unpatched")
+# The children of a parent with the patches of accounts.py (step 2c): each
+# names its own account, and the HelmRelease of the first its own.
+NAMED = {"named-hr": ("./census-hr", ["census-hr"]), "named-probe": ("./probe", [])}
+# A patch that the first one has from its site before (as the wait of the
+# media apps of site 2): the patch of accounts.py keeps it.
+SITE_PATCHES = [{"target": {"kind": "HelmRelease"}, "patch": yaml.safe_dump(
+    [{"op": "add", "path": "/spec/install", "value": {"disableWait": True}}])}]
 
 
 def tree() -> dict[str, str]:
@@ -134,6 +144,23 @@ def tree() -> dict[str, str]:
          "spec": {"interval": "1m", "retryInterval": "5s", "timeout": "30s", "path": "./probe", "prune": True,
                   "wait": False, "sourceRef": {"kind": "GitRepository", "name": "flux-system"}}}
         for name in PATCHED])
+    files["parent-named/children.yaml"] = yaml.safe_dump_all([
+        {"apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+         "metadata": {"name": name, "namespace": "flux-system"},
+         "spec": {"interval": "1m", "retryInterval": "5s", "timeout": "30s", "path": path, "prune": True,
+                  "wait": False, "sourceRef": {"kind": "GitRepository", "name": "flux-system"}}}
+        for name, (path, _) in NAMED.items()])
+    files["census-hr/helmrelease.yaml"] = yaml.safe_dump({**CENSUS[-1], "metadata": {"name": "census-hr"}})
+    for folder, resource in (("parent-named", "children.yaml"), ("census-hr", "helmrelease.yaml")):
+        files[f"{folder}/kustomization.yaml"] = yaml.safe_dump({
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+            **({"namespace": "tenant"} if folder == "census-hr" else {}), "resources": [resource]})
+    # The patch of the site, in the kustomization.yaml of the parent.
+    files["parent-named/kustomization.yaml"] = yaml.safe_dump({
+        "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["children.yaml"],
+        "patches": [{"target": {"kind": "Kustomization", "name": "named-hr"}, "patch": yaml.safe_dump({
+            "apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+            "metadata": {"name": "not-used"}, "spec": {"patches": SITE_PATCHES}})}]})
     files["parent/kustomization.yaml"] = yaml.safe_dump({
         "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["children.yaml"]})
     files["census/objects.yaml"] = yaml.safe_dump_all(CENSUS)
@@ -195,6 +222,8 @@ def main(out: Path) -> None:
     (doc,) = [d for d in yaml.safe_load_all(role.read_text()) if d]
     (out / "in/role.json").write_text(json.dumps(doc))
     (out / "in/role-noread.json").write_text(json.dumps(noread(doc)))
+    (out / "in/patches.json").write_text(json.dumps([
+        accounts.patch_of(n, hrs, SITE_PATCHES if n == "named-hr" else None) for n, (_, hrs) in NAMED.items()]))
     (out / "in/digest.txt").write_text("sha256:" + hashlib.sha256(data).hexdigest())
     (out / "image.txt").write_text(image + "\n")
     (out / "args.txt").write_text("\n".join(kept) + "\n")
