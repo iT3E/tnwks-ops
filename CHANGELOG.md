@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.329.0 - 2026-11-27
+
+### Changed
+
+* flux: rename the Flux Kustomization of things-api to the name of its folder; its objects stay, with a new owner label
+
 ## v2.328.0 - 2026-11-27
 
 ### Added
