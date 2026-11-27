@@ -1,3 +1,0 @@
-kind: Changed
-body: 'security: the two Windows hosts and the two WSL distros list the source wazuh in the registry, so SecurityResultLate watches the time of the last result of each Wazuh agent (late after 30 minutes), with behind_site on the systems of site 1'
-time: 2026-11-27T09:00:00.000000000-08:00

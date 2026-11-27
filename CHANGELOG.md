@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.337.0 - 2026-11-27
+
+### Changed
+
+* security: the two Windows hosts and the two WSL distros list the source wazuh in the registry, so SecurityResultLate watches the time of the last result of each Wazuh agent (late after 30 minutes), with behind_site on the systems of site 1
+
 ## v2.336.1 - 2026-11-27
 
 ### Fixed
