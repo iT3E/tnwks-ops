@@ -99,6 +99,7 @@ its parent, and for the root the patches of
 | --- | --- | --- |
 | The map | Each encrypted file that a Kustomization of a site builds holds the public key of the Secret that it names (`KEYS` in `lockdown.py`, by site) | 1, 2d, 3 |
 | The keys of the map | Each is an age public key and a recipient of a rule of `kubernetes/` in `.sops.yaml` | 1 |
+| The rules of the keys | The rule of `.sops.yaml` that sops takes for each encrypted file under `kubernetes/` gives a file of the class the class key of each site that builds it, and a file outside the class the apps key of each site that builds it. No file of the class gets an apps key, and no file outside the class a class key. A new file in a folder of the class or of a child outside it gets the same | 1 |
 | The class account | Once the root of a site names `kustomize-controller`, `cluster-apps` and each Kustomization of the class do too. No child outside the class names an account of the controllers | 2b |
 | The flag | A controller of a site has `--default-service-account` only when each Kustomization (kustomize-controller) or each HelmRelease (helm-controller) of the site names an account. Each account that an object names is a ServiceAccount of git in the namespace of the object | 2a, 2c, 2e |
 | The flags that stay off | No `--sops-age-secret`, `--default-decryption-service-account` or `--no-cross-namespace-refs` | all |
@@ -108,6 +109,21 @@ The map holds the public keys only: git never holds a private key, and the
 test reads the public recipients of the sops block of each file, no value.
 Step 1 adds the class key and the apps key of each site to `KEYS` and to
 `.sops.yaml`; step 3 removes `sops-age`.
+
+In `.sops.yaml`, the general rule of `kubernetes/` is for the class, so it
+gets the class keys of both sites. Two rules come before it:
+
+- the folders of the apps outside the class
+  (`kubernetes/apps/{cache,default,home-automation,media,production,selfhosted}/`)
+  get the apps keys of both sites, and no class key;
+- the folders of the class inside those namespaces (the entries of
+  `CLASS_PATHS` there: the four apps that need a right of the class, and
+  the database folders) come first again, with the class keys.
+
+The rule of `kubernetes/clusters/wsl-02/` gets the class key of site 2.
+After the merge, the owner runs `sops updatekeys` over the encrypted files
+under `kubernetes/`, so each file holds the keys of its rule. Until then
+nothing reads the new keys: each Kustomization still names `sops-age`.
 
 ## The flags on the Flux of git
 

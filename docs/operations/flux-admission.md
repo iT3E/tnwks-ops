@@ -406,18 +406,26 @@ a child of the class. To read a failure:
 
 ## Break-glass
 
-When the policy refuses an apply that must go through now, the owner, by
-hand:
+When a policy refuses an apply that must go through now, the owner, by
+hand. Two bindings can refuse it: `flux-child-scope` (the rules above) and
+`flux-child-pods` (a pod that runs as the account of a Flux child). The
+message names the policy: `flux-child-scope/<rule>` or
+`flux-child-pods/pod-account`. Act on that binding only.
+
+`<site>` is the kube context of the site. Name it on each line: the
+default context of the workstation is site 1. On both sites the
+Kustomization that applies the policies is `flux-system/flux-admission`.
 
 1. Stops Flux from making the binding again:
-   `flux suspend kustomization flux-admission -n flux-system`.
-2. Turns the binding to a warning only, or deletes it:
-   `kubectl patch validatingadmissionpolicybinding flux-child-scope --type merge -p '{"spec":{"validationActions":["Audit","Warn"]}}'`
-   or `kubectl delete validatingadmissionpolicybinding flux-child-scope`.
-3. Reconciles the child: `flux reconcile kustomization <name> -n flux-system --with-source`.
+   `flux --context <site> suspend kustomization flux-admission -n flux-system`.
+2. Turns the binding to a warning only, or deletes it (`<binding>` is
+   `flux-child-scope` or `flux-child-pods`):
+   `kubectl --context <site> patch validatingadmissionpolicybinding <binding> --type merge -p '{"spec":{"validationActions":["Audit","Warn"]}}'`
+   or `kubectl --context <site> delete validatingadmissionpolicybinding <binding>`.
+3. Reconciles the child: `flux --context <site> reconcile kustomization <name> -n flux-system --with-source`.
 4. Fixes the cause in git (the class, the lists or the manifest), then
-   `flux resume kustomization flux-admission -n flux-system`, which applies
-   the binding of `main` again.
+   `flux --context <site> resume kustomization flux-admission -n flux-system`,
+   which applies both bindings of `main` again.
 
 An agent never suspends or resumes a Kustomization.
 

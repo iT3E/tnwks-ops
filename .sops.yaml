@@ -10,6 +10,14 @@
 #     and nothing else.
 #   * Ansible CI age — the tnwks-ansible runner's key
 #     (docs/operations/ansible.md). Only on infrastructure/ansible secrets.
+#   * Flux class age, one per WSL site: the key of the Secret sops-age-class
+#     in flux-system. Only on the files of the "ask first" class under
+#     kubernetes/ (docs/operations/flux-lockdown.md).
+#   * Flux apps age, one per WSL site: the key of the Secret sops-age-apps in
+#     flux-system. Only on the files of the Flux children outside the class,
+#     never on a file of the class. The KEYS of
+#     kubernetes/apps/flux-system/lockdown/lockdown.py name all four, and
+#     observability/tests/test_flux_lockdown.py checks which rule gives which.
 creation_rules:
   # EdgeOS devices (infrastructure/edgeos): same recipients as the MikroTik
   # secrets, including the CI age key, so the same runner can manage them.
@@ -59,25 +67,57 @@ creation_rules:
   # homelab-wsl-02's own files: also its Flux age key (sops-age, from
   # ~/.config/sops/age/homelab-wsl-02.txt on WSL-02's distro; 03-sops-keys.yml).
   # Before the general kubernetes/ rule. A shared app that moves to this
-  # cluster gets this key on its files too (sops updatekeys).
+  # cluster gets this key on its files too (sops updatekeys). The folder is
+  # of the class, so it also has the Flux class key of homelab-wsl-02.
   - path_regex: kubernetes/clusters/wsl-02/.*\.sops\.ya?ml
     encrypted_regex: "^(data|stringData)$"
     age: >-
       age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
       age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,
       age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx,
-      age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53
+      age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53,
+      age1g7c0eg586wlen6s0dgprcvtahx0cqq3zl35xdg64vdr8wpg0n3cqcgp967
+    kms: 'arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc+arn:aws:iam::654654220436:role/iam-role-sops'
+  # The folders of the class in the namespaces of the apps outside it
+  # (CLASS_PATHS of kubernetes/apps/flux-system/admission/classlist.py): the
+  # Flux class keys of both sites, as the general kubernetes/ rule below.
+  # Before the rule of the apps outside the class, which would match them.
+  - path_regex: kubernetes/apps/(default/hajimari|production/frigate|home-automation/zwave-js-ui|media/qbittorrent|home-automation/home-assistant/db|production/(finance-sync|firefly|mealie|packing-api|things-api|transcriber|vaultwarden)/db|selfhosted/plausible/db)/.*\.sops\.ya?ml
+    encrypted_regex: "^(data|stringData)$"
+    age: >-
+      age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
+      age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,
+      age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx,
+      age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53,
+      age1lpt37nvkct4l296q7wtueg79msn5x2ul0pcwaclzx2slyv2pnecs4nm6g6,
+      age1g7c0eg586wlen6s0dgprcvtahx0cqq3zl35xdg64vdr8wpg0n3cqcgp967
+    kms: 'arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc+arn:aws:iam::654654220436:role/iam-role-sops'
+  # The apps outside the "ask first" class: the Flux apps keys of both sites,
+  # and no Flux class key. Before the general kubernetes/ rule.
+  - path_regex: kubernetes/apps/(cache|default|home-automation|media|production|selfhosted)/.*\.sops\.ya?ml
+    encrypted_regex: "^(data|stringData)$"
+    age: >-
+      age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
+      age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,
+      age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx,
+      age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53,
+      age184eetlfw0vdmxy9ydz532rnar54qt9f39l8xy0jx6w7pp4qksecqqexgpm,
+      age1whse4sy99860h8kne626effqnrmsjny7vshpql60ealvwh7mh5vqv7ukhx
     kms: 'arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc+arn:aws:iam::654654220436:role/iam-role-sops'
   # Shared apps (kubernetes/apps): also homelab-wsl-02's Flux key, since every
   # movable app is deployed on both clusters (docs/wsl/multi-site.md). A file
   # gets it on its next edit, or `sops updatekeys` when wsl-02 starts using it.
+  # Each file here is of the class, so it also has the Flux class keys of
+  # both sites.
   - path_regex: kubernetes/.*\.sops\.ya?ml
     encrypted_regex: "^(data|stringData)$"
     age: >-
       age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
       age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,
       age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx,
-      age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53
+      age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53,
+      age1lpt37nvkct4l296q7wtueg79msn5x2ul0pcwaclzx2slyv2pnecs4nm6g6,
+      age1g7c0eg586wlen6s0dgprcvtahx0cqq3zl35xdg64vdr8wpg0n3cqcgp967
     kms: 'arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc+arn:aws:iam::654654220436:role/iam-role-sops'
   # Ansible inventory secrets (infrastructure/ansible): also the Ansible CI
   # age key, so the tnwks-ansible runner can read the host vars
