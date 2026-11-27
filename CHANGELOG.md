@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.339.0 - 2026-11-27
+
+### Added
+
+* security: the alert SecurityWazuhReadFailing fires when the converter can not read the Wazuh indexer for 15 minutes, and Alertmanager holds SecurityResultLate of the source wazuh while it fires; SecurityWazuhValuesUnknown fires when the Wazuh state has an SCA result or a severity that is not of the pinned release; the converter counts a severity that is not of the release as high, with its own series; SecurityHostUnreachable keeps firing for 20 minutes after the host comes back
+
 ## v2.338.0 - 2026-11-27
 
 ### Changed
