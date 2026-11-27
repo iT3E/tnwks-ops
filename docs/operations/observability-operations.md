@@ -41,6 +41,15 @@ WSL-02, which has that cluster's kubeconfig
   request that the rule refused. If the pod is NotReady, look first for a
   403 to the host on `/-/ready` or `/-/healthy`. The quick way back is a
   revert of the rule's PR.
+- **A client can not reach Grafana** (a board or the UI times out, the
+  health probe of Grafana fails): the network policy of Grafana
+  (`kubernetes/apps/monitoring/grafana/app/networkpolicy.yaml`) admits on
+  port 3000 only the internal ingress of each site, and Prometheus, the
+  evidence and the image renderer of its own site, and the kubelet probes.
+  `hubble observe --to-namespace monitoring --to-label
+  app.kubernetes.io/name=grafana --verdict DROPPED` names the source. A new
+  client gets a line in the policy, and `observability/tests/test_grafana_policy.py`
+  lists it. The quick way back is a revert of the policy's PR.
 - **Flux object not Ready:** `FluxResourceNotReady` (group
   `homelab.evidence`, `observability/rules.py`): a Kustomization,
   HelmRelease or source of Flux on one site has had Ready False for one

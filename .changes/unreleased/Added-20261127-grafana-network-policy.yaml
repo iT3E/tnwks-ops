@@ -1,0 +1,3 @@
+kind: Added
+body: 'monitoring: a network policy for Grafana, on both sites; it admits the known clients of the Grafana pod on its port'
+time: 2026-11-27T09:30:00.000000000+00:00

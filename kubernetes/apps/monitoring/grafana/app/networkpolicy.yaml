@@ -1,0 +1,86 @@
+---
+# Grafana of this site: who may open a connection to its pod, and on which
+# port. Port 3000 only: the gossip port (9094) has no peer (no HA cluster of
+# Grafana), and the profiling port (6060) has no client.
+#
+# The clients, from git and from the flow log of Cilium (Hubble, both sites,
+# 2026-11-27):
+#   - the internal ingress of each site: the Service of Grafana is global
+#     (helmrelease.yaml, service.annotations), and the Ingresses go through it
+#     (service-upstream), so the ingress of the other site reaches this pod
+#     over the mesh. The UI host and the kiosk host (ingress-embed.yaml)
+#     both arrive this way;
+#   - Prometheus of this site, for the scrape of the ServiceMonitor;
+#   - the observability evidence of this site, for the health page
+#     (observability/inventory.py, PROBES). Only the site that runs Grafana
+#     probes it (collector.py, services), and the Service sends a client to
+#     a pod of its own site first (affinity local);
+#   - the image renderer of this site, for its callback to Grafana
+#     (GF_RENDERING_CALLBACK_URL, set by the chart);
+#   - the kubelet probes, from the local host.
+# The sidecars of the pod call Grafana on its loopback, which no rule sees,
+# and so does a kubectl port-forward.
+#
+# Egress is not in this rule, so it stays as it is: the datasources, the
+# database and the sidecars' calls to the API server. The image renderer
+# has its own policy from the chart (imageRenderer.networkPolicy).
+#
+# Both WSL clusters are one Cilium Cluster Mesh. A selector without the
+# cluster label selects this cluster only (policy-default-local-cluster), so
+# each selector names its cluster.
+#
+# A new client of Grafana adds its pod below in the same PR. Without it, its
+# calls are dropped, and Hubble shows them as POLICY_DENIED.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: grafana
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+      app.kubernetes.io/instance: grafana
+  ingress:
+    - fromEndpoints:
+        # The internal ingress of this site.
+        - matchLabels:
+            io.kubernetes.pod.namespace: networking
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/instance: ingress-nginx-internal
+            app.kubernetes.io/component: controller
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The internal ingress of the other site, over the mesh.
+        - matchLabels:
+            io.kubernetes.pod.namespace: networking
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/instance: ingress-nginx-internal
+            app.kubernetes.io/component: controller
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+        # Prometheus of this site: the scrape.
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+            operator.prometheus.io/name: kube-prometheus-stack-prometheus
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The observability evidence of this site: the health page.
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: observability-evidence
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The image renderer of this site: its callback.
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: grafana-image-renderer
+            app.kubernetes.io/instance: grafana
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    # The kubelet probes (GET /api/health on 3000), from the local host.
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
