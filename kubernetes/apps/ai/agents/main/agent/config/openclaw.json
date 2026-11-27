@@ -62,6 +62,22 @@
       "flux__read_flux_doc",
       "flux__search_flux_docs",
       "flux__trace_kubernetes_resource",
+      "cluster2__api_resources_list",
+      "cluster2__events_list",
+      "cluster2__namespaces_list",
+      "cluster2__pods_get",
+      "cluster2__pods_list_in_namespace",
+      "cluster2__pods_log",
+      "cluster2__resources_get",
+      "cluster2__resources_list",
+      "flux2__get_kubernetes_api_versions",
+      "flux2__get_kubernetes_events",
+      "flux2__get_kubernetes_logs",
+      "flux2__get_kubernetes_metrics",
+      "flux2__get_kubernetes_resources",
+      "flux2__read_flux_doc",
+      "flux2__search_flux_docs",
+      "flux2__trace_kubernetes_resource",
       "terraform__get_latest_module_version",
       "terraform__get_latest_provider_version",
       "terraform__get_module_details",
@@ -154,6 +170,40 @@
       },
       "flux": {
         "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-flux/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "get_kubernetes_api_versions",
+            "get_kubernetes_events",
+            "get_kubernetes_logs",
+            "get_kubernetes_metrics",
+            "get_kubernetes_resources",
+            "read_flux_doc",
+            "search_flux_docs",
+            "trace_kubernetes_resource"
+          ]
+        }
+      },
+      "cluster2": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-cluster-site2/mcp",
+        "transport": "streamable-http",
+        "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
+        "toolFilter": {
+          "include": [
+            "api_resources_list",
+            "events_list",
+            "namespaces_list",
+            "pods_get",
+            "pods_list_in_namespace",
+            "pods_log",
+            "resources_get",
+            "resources_list"
+          ]
+        }
+      },
+      "flux2": {
+        "url": "http://mcp-gateway.ai.svc.cluster.local:3000/main-flux-site2/mcp",
         "transport": "streamable-http",
         "headers": {"Authorization": "Bearer ${MCP_GATEWAY_KEY}"},
         "toolFilter": {

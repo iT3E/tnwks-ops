@@ -1,0 +1,15 @@
+---
+# The copy of the Flux server of main at site 2 (docs/apps/mcp-gateway.md,
+# "Site 2"): the files of ../../../flux-mcp/app with -site2 on each name and
+# on the pod label, which no pod of site 1 carries, so the global Service
+# flux-mcp-site2 (../../services) has no local endpoint at site 1 and
+# Cluster Mesh sends each call of the gateway here. It runs in the cluster
+# of site 2 as its own account there; no key of site 2 leaves site 2 (R2).
+# observability/tests/test_main_read_servers_site2.py holds each file to its
+# file of site 1 but for those names, so a change of one without the other
+# fails; Renovate bumps the image of both.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./deployment.yaml
+  - ./networkpolicy.yaml

@@ -189,12 +189,15 @@ before the create, and fails a run that leaves its own record.
   (R6): the policy of that vault server or the keys of that route are
   wrong; fix it before the next run. Both probes also try the read servers
   of main straight (`cluster-mcp in agents-main, direct from a pod that is
-  not the gateway`, and the same for `flux-mcp`, `terraform-mcp` and `github-mcp`).
+  not the gateway`, and the same for `flux-mcp`, `terraform-mcp` and `github-mcp`),
+  and the copies of the cluster and Flux servers at site 2
+  (`cluster-mcp-site2` and `flux-mcp-site2`, over Cluster Mesh).
   Only `blocked: TimeoutError` passes there, and at `vault server` and
   `other vault server` too. `connected`: the policy of that server lets in
   more than the gateway; fix it before the next run. `refused`: the
   Service had no ready pod (the server was down or rolling) or the port is
-  closed, so the check proved nothing; look at the server pod.
+  closed, so the check proved nothing; look at the server pod (for a copy
+  at site 2, the pod at site 2).
   `unresolved`: the Service of that server is gone; find out why.
 
 ### WorkflowProvidersStale
@@ -2780,6 +2783,21 @@ client, never the arguments or the result.
 | `sum by (k8s_cluster, route, status) (increase(agentgateway_requests_total{route=~"default/main-(cluster\|flux\|terraform)"}[1h]))`, through thanos-query | A 200 series for each route, on site 1. No 5xx series |
 | The board ([observability-operations.md](../operations/observability-operations.md)): the rows of the parts of main | Cluster, Flux and Terraform MCP server healthy. The code host MCP server has no row until its step |
 | The next run of the gateway probe of main (`kubectl -n agents-main get jobs -l app.kubernetes.io/component=mcp-gateway-probe`) | Complete. It covers the vault route only, with its own key |
+
+#### The copies at site 2
+
+The cluster and Flux servers of main have copies at site 2 behind the
+gateway of site 1 ([mcp-gateway.md](mcp-gateway.md), "Site 2"). After the
+merge, each read below takes no chat content.
+
+| Read | Pass rule |
+| --- | --- |
+| At site 2: `kubectl -n flux-system get kustomizations agents-main-site2-services agents-main-read-access-site2 agents-main-cluster-mcp-site2 agents-main-flux-mcp-site2` | Each `Ready` |
+| At site 2: `kubectl -n agents-main get deploy cluster-mcp-site2 flux-mcp-site2` | Each ready, with no restart |
+| At site 1: `kubectl -n agents-main get endpointslices -l kubernetes.io/service-name=cluster-mcp-site2` and the same for `flux-mcp-site2` | No endpoint of site 1: the Service has no local backend |
+| The owner asks the agent for the state of one Flux Kustomization of site 2 and for the namespaces of site 2 | The agent answers through `flux2` and `cluster2`, and the answer is of site 2 |
+| At site 1: the access log of the gateway, as for the read step above | `default/main-cluster-site2` and `default/main-flux-site2`: a `tools/list` and a `tools/call` with a kept tool name, status 200 |
+| The next runs of the gateway probes of finance and of main | `cluster-mcp-site2` and `flux-mcp-site2`: `blocked: TimeoutError` |
 
 #### The code host server of main
 

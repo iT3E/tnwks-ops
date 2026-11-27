@@ -20,7 +20,9 @@
 #   Terraform, code host), to the browser and to the host server times out:
 #   only the gateway may reach them (the networkpolicy.yaml of
 #   ../../cluster-mcp, ../../flux-mcp, ../../terraform-mcp, ../../github-mcp
-#   and ../../host-mcp, and the one of the browser). This pod
+#   and ../../host-mcp, and the one of the browser), and so does a straight
+#   connection to the copies of the cluster and Flux servers at site 2
+#   (../../site2), over Cluster Mesh. This pod
 #   is a pod of the agent's namespace that is not the gateway; the agent pod
 #   is another such pod, and the policy of each server names the gateway
 #   only.
@@ -111,7 +113,7 @@ spec:
                 - name: BROWSER_ROUTE
                   value: main-browser
                 - name: GATEWAY_ONLY_SERVERS
-                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080,playwright-mcp.ai.svc.cluster.local:8000,host-mcp.agents-main.svc.cluster.local:8080
+                  value: cluster-mcp.agents-main.svc.cluster.local:8080,flux-mcp.agents-main.svc.cluster.local:8080,terraform-mcp.agents-main.svc.cluster.local:8080,github-mcp.agents-main.svc.cluster.local:8080,playwright-mcp.ai.svc.cluster.local:8000,host-mcp.agents-main.svc.cluster.local:8080,cluster-mcp-site2.agents-main.svc.cluster.local:8080,flux-mcp-site2.agents-main.svc.cluster.local:8080
               # PROBE_KEY, once the lead makes the Secret.
               envFrom:
                 - secretRef:
@@ -201,6 +203,17 @@ spec:
             io.kubernetes.pod.namespace: agents-main
             app.kubernetes.io/name: host-mcp
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        # The copies of the cluster and Flux servers of main at site 2
+        # (agents/main/site2), over Cluster Mesh: their own policy must drop
+        # this try, as the policy of each server here does.
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: cluster-mcp-site2
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: flux-mcp-site2
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
       toPorts:
         - ports:
             - port: "8080"

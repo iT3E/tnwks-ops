@@ -1,0 +1,19 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-main-cluster-mcp-site2
+  namespace: flux-system
+spec:
+  targetNamespace: agents-main
+  path: ./kubernetes/apps/ai/agents/main/site2/cluster-mcp/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: agents-main-read-access-site2
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

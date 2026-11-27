@@ -1,0 +1,101 @@
+---
+# The service account of the copy at site 2. Its rights are the role view
+# in each namespace of site 2 but ai and security, and the list of the
+# namespaces (../../read-access/app/rbac.yaml): the role view takes in the
+# read of the Flux kinds. No patch. Its token is in this pod only (R2).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-mcp-site2
+  labels:
+    app.kubernetes.io/name: flux-mcp-site2
+automountServiceAccountToken: false
+---
+# The Flux server of main (Design Doc, section 4.2.6): the Flux MCP server
+# of the Flux Operator, from its upstream image at a release and a digest,
+# unmodified (AGPL-3.0), in HTTP mode on /mcp. --read-only turns off each
+# tool that writes, the reconcile too; the step of the reconcile takes it
+# out. --mask-secrets (the default, set here so a change of the default
+# does not change it) masks the values of a Secret in an answer; the role
+# view reads no Secret anyway. The central MCP gateway is its one client
+# (networkpolicy.yaml), and it refuses each tool that its route main-flux
+# does not name.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flux-mcp-site2
+  labels:
+    app.kubernetes.io/name: flux-mcp-site2
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: flux-mcp-site2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: flux-mcp-site2
+        # No DNS: in a pod the server calls the API server at the address in
+        # its environment (KUBERNETES_SERVICE_HOST, the in-cluster config of
+        # client-go), and its docs are in the image. So the pod is out of the
+        # namespace's DNS rule (../../../namespace.yaml) and has none of its own.
+        agents.home.arpa/dns: none
+    spec:
+      serviceAccountName: flux-mcp-site2
+      # The token of the service account is the credential of the server
+      # at the API server. Only this pod mounts it.
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The user of the image.
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          # v0.63.0 of 2026-11-20, AGPL-3.0, the newest release on
+          # 2026-11-21. The digest is the one of the image index.
+          image: ghcr.io/controlplaneio-fluxcd/flux-operator-mcp:v0.63.0@sha256:d0700196e3e89bf35bc3b375ff72dc11e23dd82c0050957f5c54b72bbf81fa0a
+          imagePullPolicy: IfNotPresent
+          args: ["serve", "--transport", "http", "--port", "8080", "--read-only", "--mask-secrets=true"]
+          env:
+            # The discovery cache of client-go, on the scratch volume: the
+            # root file system is read only.
+            - name: HOME
+              value: /tmp
+          ports:
+            - name: mcp
+              containerPort: 8080
+              protocol: TCP
+          # The server has no health path: a TCP check of its port.
+          readinessProbe:
+            tcpSocket:
+              port: mcp
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            tcpSocket:
+              port: mcp
+            periodSeconds: 30
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

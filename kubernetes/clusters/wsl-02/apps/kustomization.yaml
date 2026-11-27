@@ -40,6 +40,11 @@ resources:
   # homelab-wsl only (docs/apps/playwright-mcp.md), and Flux does not prune
   # this namespace (prune: disabled).
   - ../../../apps/ai/namespace.yaml
+  # The copies of the cluster and Flux servers of main, in agents-main here,
+  # behind the central MCP gateway of homelab-wsl (docs/apps/mcp-gateway.md,
+  # "Site 2"). No other part of agents-main runs here.
+  - ../../../apps/ai/agents/main/namespace.yaml
+  - ../../../apps/ai/agents/main/site2
   # Monitoring of this cluster: Prometheus (kube-prometheus-stack) and
   # Alertmanager to the War Room, alerts labelled cluster=homelab-wsl-02.
   - ../../../apps/monitoring/namespace.yaml

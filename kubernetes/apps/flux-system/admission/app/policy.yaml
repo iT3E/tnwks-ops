@@ -139,13 +139,17 @@ spec:
           'flux-system/agents-main-agent': ['flux-system/cluster-apps'],
           'flux-system/agents-main-checks': ['flux-system/cluster-apps'],
           'flux-system/agents-main-cluster-mcp': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-cluster-mcp-site2': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/agents-main-fetch-proxy': ['flux-system/cluster-apps'],
           'flux-system/agents-main-flux-mcp': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-flux-mcp-site2': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/agents-main-github-mcp': ['flux-system/cluster-apps'],
           'flux-system/agents-main-github-token': ['flux-system/cluster-apps'],
           'flux-system/agents-main-host-mcp': ['flux-system/cluster-apps'],
           'flux-system/agents-main-read-access': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-read-access-site2': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/agents-main-sandbox-gateway': ['flux-system/cluster-apps'],
+          'flux-system/agents-main-site2-services': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/agents-main-terraform-mcp': ['flux-system/cluster-apps'],
           'flux-system/agents-main-vault-backup': ['flux-system/cluster-apps'],
           'flux-system/agents-main-vault-server': ['flux-system/cluster-apps'],
@@ -456,6 +460,8 @@ spec:
             'NetworkPolicy/security/default-deny'
           ],
           'flux-system/cluster-apps-wsl-02': [
+            'CiliumNetworkPolicy/agents-main/allow-dns',
+            'Namespace//agents-main',
             'Namespace//ai',
             'Namespace//cert-manager',
             'Namespace//databases',
@@ -470,6 +476,7 @@ spec:
             'Namespace//security',
             'Namespace//selfhosted',
             'Namespace//tools',
+            'NetworkPolicy/agents-main/default-deny',
             'NetworkPolicy/security/default-deny'
           ]
         }

@@ -32,6 +32,8 @@ resources:
   # of main names each route, with the tools of the read step only.
   - ./cluster-mcp/ks.yaml
   - ./flux-mcp/ks.yaml
+  # The global Services of the copies at site 2 (./site2), on both sites.
+  - ./site2/services/ks.yaml
   - ./terraform-mcp/ks.yaml
   # After the token job of the App of main, which makes the Secret of its
   # token (github-mcp/ks.yaml, dependsOn).

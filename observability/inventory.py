@@ -88,6 +88,12 @@ AI_PARTS = [
      "workload": "cluster-mcp"},
     {"trust_domain": "main", "part": "Flux MCP server", "namespace": "agents-main", "kind": "deployment",
      "workload": "flux-mcp"},
+    # The copies at site 2 (kubernetes/apps/ai/agents/main/site2), behind the
+    # central MCP gateway of homelab-wsl.
+    {"trust_domain": "main", "part": "Cluster MCP server, site 2 copy", "namespace": "agents-main",
+     "kind": "deployment", "workload": "cluster-mcp-site2", "clusters": ["homelab-wsl-02"]},
+    {"trust_domain": "main", "part": "Flux MCP server, site 2 copy", "namespace": "agents-main",
+     "kind": "deployment", "workload": "flux-mcp-site2", "clusters": ["homelab-wsl-02"]},
     {"trust_domain": "main", "part": "Terraform MCP server", "namespace": "agents-main", "kind": "deployment",
      "workload": "terraform-mcp"},
     {"trust_domain": "main", "part": "Code host MCP server", "namespace": "agents-main", "kind": "deployment",

@@ -457,6 +457,121 @@ routes:
               policies:
                 http:
                   requestTimeout: 30s
+  # The copies of the cluster and Flux servers of main at site 2
+  # (kubernetes/apps/ai/agents/main/site2): the same rules as main-cluster
+  # and main-flux, with the key of main, at the global Service of each copy.
+  # The Service has no endpoint at site 1, so Cluster Mesh sends the call to
+  # site 2, where the copy reads as its own account of site 2. The gateway
+  # sets no credential, and no key of site 2 is at site 1.
+  - name: main-cluster-site2
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-cluster-site2/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
+            metadata: {client: main, route: main-cluster-site2}
+      # A large list or a long log can take longer than the 10 s of the
+      # gateway: 30 s, the proposal of the design. The rehearsal measures
+      # the slowest read.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The eight read tools of the design, by exact name, from the dump of
+      # the pinned image (../../tools/cluster.json). Not listed, so refused:
+      # pods_list (each namespace at once), pods_exec, pods_run,
+      # pods_delete, the writes of resources, the nodes and the top tools.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "api_resources_list",
+                "events_list",
+                "namespaces_list",
+                "pods_get",
+                "pods_list_in_namespace",
+                "pods_log",
+                "resources_get",
+                "resources_list"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: cluster-site2
+              mcp:
+                host: http://cluster-mcp-site2.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s
+  - name: main-flux-site2
+    gateways: mcp
+    matches:
+      - path:
+          pathPrefix: /main-flux-site2/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - keyHash: "sha256:029318ab625d6972ab74a74f98eb8c0595fe0c15d3b082629a828a83c16b96b9"
+            metadata: {client: main, route: main-flux-site2}
+      # A trace or a long log can take longer than the 10 s of the gateway:
+      # 30 s, as for the cluster server.
+      timeout:
+        requestTimeout: 30s
+      transformations:
+        request:
+          replace: 'request.headers.filterKeys(k, k in ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"])'
+      # The read tools of the design, by exact name, from the dump of the
+      # pinned image in its read-only mode (../../tools/flux.json). Not
+      # listed, so refused: diff_kubernetes_manifest (the design keeps it
+      # out: it needs patch on the kinds of a manifest) and get_flux_instance
+      # (this cluster has no Flux Operator, so no FluxInstance). The
+      # read-only mode of the server has no write tool.
+      mcpAuthorization:
+        rules:
+          - allow: |
+              mcp.tool.name in [
+                "get_kubernetes_api_versions",
+                "get_kubernetes_events",
+                "get_kubernetes_logs",
+                "get_kubernetes_metrics",
+                "get_kubernetes_resources",
+                "read_flux_doc",
+                "search_flux_docs",
+                "trace_kubernetes_resource"
+              ] && apiKey.client == "main"
+    backends:
+      - mcp:
+          statefulMode: stateless
+          prefixMode: conditional
+          failureMode: failClosed
+          targets:
+            # The server takes no credential from the gateway: no
+            # backendAuth.
+            - name: flux-site2
+              mcp:
+                host: http://flux-mcp-site2.agents-main.svc.cluster.local:8080/mcp
+              policies:
+                http:
+                  requestTimeout: 30s
   - name: main-terraform
     gateways: mcp
     matches:

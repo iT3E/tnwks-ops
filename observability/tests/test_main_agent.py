@@ -108,7 +108,8 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     # read servers of M7b (test_main_read_servers.py) and the browser
     # (test_main_browser.py). No finance app.
     assert next(iter(c["mcp"]["servers"])) == "vault"
-    assert set(c["mcp"]["servers"]) <= {"vault", "cluster", "flux", "terraform", "github", "browser"}
+    assert set(c["mcp"]["servers"]) <= {"vault", "cluster", "flux", "cluster2", "flux2", "terraform", "github",
+                                       "browser"}
     vault = dict(c["mcp"]["servers"]["vault"])
     assert vault.pop("url") == "http://mcp-gateway.ai.svc.cluster.local:3000/main-vault/mcp"
     other = dict(f["mcp"]["servers"]["vault"])

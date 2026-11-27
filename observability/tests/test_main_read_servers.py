@@ -101,6 +101,9 @@ SERVERS = {
         "container": "proxy",
     },
 }
+# The copies of two read servers at site 2, by the name that the agent gives
+# each (test_main_read_servers_site2.py).
+SITE2_COPIES = {"cluster": "cluster2", "flux": "flux2"}
 # A token of the form of an installation token of the code host, which is
 # no token.
 FAKE_CODE_HOST_TOKEN = "ghs_readtestnotatoken000000000000000000"
@@ -247,9 +250,10 @@ def test_the_sandbox_allow_list_names_each_kept_tool_by_its_exact_name():
     assert not [a for a in mcp if "*" in a or "?" in a]
     assert sorted(mcp) == sorted(f"{s}__{t}" for s in SERVERS
                                  for t in config["mcp"]["servers"][s]["toolFilter"]["include"])
-    # The vault of main (test_main_vault.py), the read servers and the
+    # The vault of main (test_main_vault.py), the read servers, the copies
+    # of two of them at site 2 (test_main_read_servers_site2.py) and the
     # browser (test_main_browser.py), no other.
-    assert set(config["mcp"]["servers"]) == {"vault", "browser"} | set(SERVERS)
+    assert set(config["mcp"]["servers"]) == {"vault", "browser"} | set(SERVERS) | set(SITE2_COPIES.values())
 
 
 def test_the_live_step_has_the_key_of_main_and_its_hash():
@@ -341,9 +345,11 @@ def probe_container(path: Path) -> dict:
 def test_each_gateway_probe_tries_each_read_server_straight(probe):
     env = {e["name"]: e.get("value") for e in probe_container(PROBES[probe])["env"]}
     # The browser of main follows the read servers (test_main_browser.py),
-    # then the host server of main (test_main_host_server.py).
+    # then the host server of main (test_main_host_server.py), then the
+    # copies at site 2 (test_main_read_servers_site2.py).
     assert env["GATEWAY_ONLY_SERVERS"].split(",") == [service(s) for s in SERVERS] + [
-        "playwright-mcp.ai.svc.cluster.local:8000", "host-mcp.agents-main.svc.cluster.local:8080"]
+        "playwright-mcp.ai.svc.cluster.local:8000", "host-mcp.agents-main.svc.cluster.local:8080"] + [
+        f"{SERVERS[s]['dir']}-site2.agents-main.svc.cluster.local:8080" for s in SITE2_COPIES]
     # The probe's own policy lets the try out, so a drop comes from the
     # policy of the server.
     (policy,) = [d for d in docs(PROBES[probe]) if d["kind"] == "CiliumNetworkPolicy"]
@@ -889,6 +895,14 @@ def lab():
                  "--network-alias", f"{spec['dir']}.agents-main.svc.cluster.local",
                  "-v", f"{work}/recorder.py:/recorder.py:ro", "-v", f"{work}/rec:/rec",
                  PYTHON, "python3", "-I", "/recorder.py", upstream, server, str(spec["port"])])
+            if server in SITE2_COPIES:
+                # The global Service of the copy at site 2, before the same
+                # server: the copy runs the image and the config of site 1.
+                names[server + "-site2-recorder"] = f"readsrv-{server}-site2-rec-{tag}"
+                run([tool, "run", "-d", "--name", names[server + "-site2-recorder"], "--network", back,
+                     "--network-alias", f"{spec['dir']}-site2.agents-main.svc.cluster.local",
+                     "-v", f"{work}/recorder.py:/recorder.py:ro", "-v", f"{work}/rec:/rec",
+                     PYTHON, "python3", "-I", "/recorder.py", upstream, server + "-site2", str(spec["port"])])
         run([tool, "create", "--name", names["gateway"], "--network", back,
              "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL", "--user", "65532",
              "-v", f"{work}/config.yaml:/config/config.yaml:ro",
@@ -924,11 +938,11 @@ def wait_ready(lab: dict) -> None:
             "    else:\n"
             "        raise SystemExit('not ready: ' + url)\n")
     on_front(lab, "python3", "-I", "-c", code, lab["key"],
-             *[url(s) for s in SERVERS])
+             *[url(s) for s in SERVERS], *[url(s, site2=True) for s in SITE2_COPIES])
 
 
-def url(server: str) -> str:
-    return f"http://mcp-gateway.ai.svc.cluster.local:3000/{SERVERS[server]['route']}/mcp"
+def url(server: str, site2: bool = False) -> str:
+    return f"http://mcp-gateway.ai.svc.cluster.local:3000/{SERVERS[server]['route']}{'-site2' if site2 else ''}/mcp"
 
 
 def calls(lab: dict, target: str, pairs: list, headers: dict | None = None) -> dict:
@@ -969,6 +983,27 @@ def test_no_header_or_path_of_a_client_reaches_the_server(lab, server):
         assert request["path"] == "/mcp"
         text = json.dumps(request)
         assert "read-test-header" not in text and "192.0.2.1" not in text and lab["key"] not in text
+
+
+@pytest.mark.parametrize("server", SITE2_COPIES)
+def test_the_route_of_the_copy_at_site_2_calls_the_copy_with_the_kept_tools_only(lab, server):
+    """The route of the copy keeps the tools of its server at site 1, and
+    each call that it sends on reaches the global Service of the copy, never
+    the Service of site 1."""
+    spec = SERVERS[server]
+    site1, site2 = len(recorded(lab, server)), len(recorded(lab, server + "-site2"))
+    pairs = [[spec["keep"][0], {}], *[[n, {}] for n in spec["never"]], ["zz_made_up_tool_name", {}]]
+    out = calls(lab, url(server, site2=True), pairs)
+    assert out["list"] == sorted(spec["keep"])
+    assert out[spec["keep"][0]] == "reached"
+    for name in [*spec["never"], "zz_made_up_tool_name"]:
+        assert out[name] == "refused: gateway", name
+    assert len(recorded(lab, server)) == site1
+    seen = recorded(lab, server + "-site2")[site2:]
+    assert seen
+    for request in seen:
+        assert set(request["headers"]) <= UPSTREAM_HEADERS, request["headers"]
+        assert "authorization" not in request["headers"] and request["path"] == "/mcp"
 
 
 def test_the_gateway_log_has_no_key_and_no_argument(lab):
