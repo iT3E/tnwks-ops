@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.327.0 - 2026-11-27
+
+### Added
+
+* The Flux class key and apps key of each WSL site are recipients in .sops.yaml next to the old ones: the files of the "ask first" class under kubernetes/ get the class keys, the files of the apps outside the class the apps keys and no class key (docs/operations/flux-lockdown.md); the admission break-glass now covers the binding flux-child-pods and names the kube context on each command
+
 ## v2.326.0 - 2026-11-27
 
 ### Added
