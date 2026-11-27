@@ -1,0 +1,3 @@
+kind: Changed
+body: 'flux: rename the Flux Kustomization of things-api to the name of its folder; its objects stay, with a new owner label'
+time: 2026-11-27T09:20:00.000000000+00:00
