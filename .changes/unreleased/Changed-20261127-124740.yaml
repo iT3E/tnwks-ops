@@ -1,3 +1,0 @@
-kind: Changed
-body: 'homelab-wsl: each worker node container gets 15 GiB instead of 13 GiB (memory_nodes, set live by task talos:memory:wsl), and the site-1 capacity alerts follow it; both workers had sat past 90% of 13 GiB since 2026-11-22.'
-time: 2026-11-27T12:47:40.234213704-08:00

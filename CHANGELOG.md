@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.335.0 - 2026-11-27
+
+### Changed
+
+* homelab-wsl: each worker node container gets 15 GiB instead of 13 GiB (memory_nodes, set live by task talos:memory:wsl), and the site-1 capacity alerts follow it; both workers had sat past 90% of 13 GiB since 2026-11-22.
+
 ## v2.334.0 - 2026-11-27
 
 ### Added
