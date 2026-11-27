@@ -522,13 +522,13 @@ CAPACITY_DRIVE_VOLUME = "C:"
 CAPACITY_DRIVE_FLOOR_GB = 100
 # The node containers of homelab-wsl and their Docker memory limits, in GiB:
 # memory_workers and memory_controlplanes of talos_clusters.wsl in the Ansible
-# inventory (that cluster sets no memory_nodes, so both workers have the same
-# limit). No series carries a limit, so it is stated again here, and
+# inventory (its memory_nodes give each worker that same size, so both workers
+# have the same limit). No series carries a limit, so it is stated again here, and
 # observability/tests/test_node_container_memory.py holds it equal to the
 # inventory. The kubelet of a node reports the memory of the whole WSL VM, so
 # neither the scheduler nor the evictions of the kubelet see these limits.
 SITE1_CLUSTER = "homelab-wsl"
-SITE1_WORKER_LIMIT_GIB = 13
+SITE1_WORKER_LIMIT_GIB = 15
 SITE1_CONTROLPLANE_LIMIT_GIB = 4
 # NodeContainerRssNearLimit: the share of the limit and the wait.
 SITE1_RSS_SHARE = 0.85
@@ -2519,11 +2519,11 @@ def capacity_fixtures():
         {"name": "a worker of site 1 past 90% of its limit warns after 5 minutes; the control plane and site 2 at the same figure do not",
          "interval": "1m",
          "input_series": [
-             # 12 of 13 GiB: 92%.
-             site1_node("lab-worker-1", int(12 * gib)),
-             site1_node("lab-worker-2", int(11 * gib)),
-             site1_node("lab-controlplane-1", int(12 * gib)),
-             node("other-worker-1", int(12 * gib)),
+             # 92% of the limit; worker 2 at 85%.
+             site1_node("lab-worker-1", int(0.92 * SITE1_WORKER_LIMIT_GIB * gib)),
+             site1_node("lab-worker-2", int(0.85 * SITE1_WORKER_LIMIT_GIB * gib)),
+             site1_node("lab-controlplane-1", int(0.92 * SITE1_WORKER_LIMIT_GIB * gib)),
+             node("other-worker-1", int(0.92 * SITE1_WORKER_LIMIT_GIB * gib)),
          ], "alert_rule_test": [
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "4m", "exp_alerts": []},
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": [
@@ -2531,8 +2531,8 @@ def capacity_fixtures():
          ]},
         {"name": "a worker of site 1 past 95% of its limit is critical after 2 minutes, and also warns after 5", "interval": "1m",
          "input_series": [
-             # 12.5 of 13 GiB: 96%.
-             site1_node("lab-worker-1", int(12.5 * gib)),
+             # 96% of the limit.
+             site1_node("lab-worker-1", int(0.96 * SITE1_WORKER_LIMIT_GIB * gib)),
          ], "alert_rule_test": [
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "1m", "exp_alerts": []},
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "3m", "exp_alerts": [

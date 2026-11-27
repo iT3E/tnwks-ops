@@ -65,7 +65,8 @@
     # Resource sizing notes (host has 64GiB RAM; WSL VM gets 40GiB via .wslconfig):
     #   * 4 CPU / 4 GiB on the CP — etcd + apiserver + flux-system pods that
     #     don't tolerate the worker taint comfortably fit here.
-    #   * 4 CPU / 13 GiB per worker. 8 GiB was too small: frigate alone sets
+    #   * 4 CPU / 15 GiB per worker (13 GiB until 2026-11-27, when both
+    #     workers sat past 90% of it). 8 GiB was too small: frigate alone sets
     #     requests == limits == 8Gi, which equals an entire worker's whole cap.
     #     kubelet advertises node capacity from the *host* (~39 GiB) because it
     #     cannot see this docker cgroup limit, so the scheduler happily packed
@@ -77,13 +78,14 @@
     #     host /proc/vmstat and the single signal gets triple-counted.
     #     (2026-08-17 incident. Raising the cap to 13 GiB took the rate to
     #     ~27/sec, zeroed the breaches, and cleared PSI stalls.)
-    #   * Total Talos footprint is ~30 GiB of *caps* (4 + 13 + 13). Docker
+    #   * Total Talos footprint is ~34 GiB of *caps* (4 + 15 + 15). Docker
     #     memory limits are ceilings, not reservations, so this coexists with
     #     the Docker daemon, WSL services, and qmd's CUDA address reservation
     #     inside the 40GiB VM. Raising these further needs a `.wslconfig` bump.
     #   * --memory-workers is one size for every worker. A node with a size of
     #     its own (talos_cluster.memory_nodes: homelab-wsl-02's worker 1, in
-    #     WSL-02's larger VM) gets it right after, below.
+    #     WSL-02's larger VM, and homelab-wsl's workers, at the size of
+    #     memory_workers) gets it right after, below.
     - name: Create the Talos Docker cluster
       ansible.builtin.command: >-
         talosctl cluster create docker
@@ -295,7 +297,7 @@
                 read_only: true
                 shm_size: 64M
                 # Keep whatever the running container has (the create task
-                # above sets 13GiB per worker); a hardcoded 8G here used to
+                # above sets memory_workers); a hardcoded 8G here used to
                 # shrink worker-2 on every augmentation recreate.
                 memory: "{{ w2_info.container.HostConfig.Memory }}"
                 cpus: "{{ (w2_info.container.HostConfig.NanoCpus | int) / 1000000000 }}"

@@ -12,7 +12,8 @@
 # it, when the limits grow.
 #
 # Run via:
-#   task talos:memory:wsl-02
+#   task talos:memory:wsl        (homelab-wsl, on its distro)
+#   task talos:memory:wsl-02     (homelab-wsl-02, on WSL-02's distro)
 #   ansible-playbook playbooks/06-talos-node-memory.yml -e talos_target=wsl-02
 #
 # To go back: give the node its old size in memory_nodes and run it again.

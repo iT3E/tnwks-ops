@@ -48,7 +48,7 @@ nodeSelector:
 | Cluster | `SECURITY_NODE` (cluster-settings) | Limit of that node container |
 | --- | --- | --- |
 | homelab-wsl-02 | `homelab-wsl-02-worker-1` | 22 GiB (`talos_clusters.wsl-02.memory_nodes`) |
-| homelab-wsl | `homelab-wsl-worker-2` | 13 GiB |
+| homelab-wsl | `homelab-wsl-worker-2` | 15 GiB (`talos_clusters.wsl`) |
 
 A Job, a CronJob and the pods a controller makes (the scan jobs of Trivy
 Operator) carry the selector too. A chart takes it through its values.

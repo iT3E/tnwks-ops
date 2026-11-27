@@ -5,7 +5,7 @@
 #     --name homelab-wsl \
 #     --workers 2 \
 #     --cpus-controlplanes 4.0 --cpus-workers 4.0 \
-#     --memory-controlplanes 4GiB --memory-workers 13GiB \
+#     --memory-controlplanes 4GiB --memory-workers 15GiB \
 #     --kubernetes-version <kubernetes from talos/wsl/versions.yaml> \
 #     --image ghcr.io/siderolabs/talos:<talos from talos/wsl/versions.yaml> \
 #     --config-patch @talos/wsl/cluster-config.yaml \
