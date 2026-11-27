@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.328.0 - 2026-11-27
+
+### Added
+
+* monitoring: a network policy for Grafana, on both sites; it admits the known clients of the Grafana pod on its port
+
 ## v2.327.0 - 2026-11-27
 
 ### Added
