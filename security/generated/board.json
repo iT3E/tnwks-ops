@@ -420,7 +420,8 @@
       "site": "homelab-wsl",
       "domain": "infrastructure",
       "sources": [
-        "host-check"
+        "host-check",
+        "wazuh"
       ]
     },
     {
@@ -429,7 +430,8 @@
       "site": "homelab-wsl-02",
       "domain": "infrastructure",
       "sources": [
-        "host-check"
+        "host-check",
+        "wazuh"
       ]
     },
     {
@@ -438,7 +440,8 @@
       "site": "homelab-wsl",
       "domain": "infrastructure",
       "sources": [
-        "host-check"
+        "host-check",
+        "wazuh"
       ]
     },
     {
@@ -447,7 +450,8 @@
       "site": "homelab-wsl-02",
       "domain": "infrastructure",
       "sources": [
-        "host-check"
+        "host-check",
+        "wazuh"
       ]
     },
     {
@@ -614,9 +618,19 @@
       "late_after_seconds": 43200
     },
     {
+      "source": "wazuh",
+      "system": "DESKTOP-HKE05KI",
+      "late_after_seconds": 1800
+    },
+    {
       "source": "host-check",
       "system": "WSL-02",
       "late_after_seconds": 43200
+    },
+    {
+      "source": "wazuh",
+      "system": "WSL-02",
+      "late_after_seconds": 1800
     },
     {
       "source": "host-check",
@@ -624,9 +638,19 @@
       "late_after_seconds": 43200
     },
     {
+      "source": "wazuh",
+      "system": "DESKTOP-HKE05KI-ubuntu",
+      "late_after_seconds": 1800
+    },
+    {
       "source": "host-check",
       "system": "WSL-02-ubuntu",
       "late_after_seconds": 43200
+    },
+    {
+      "source": "wazuh",
+      "system": "WSL-02-ubuntu",
+      "late_after_seconds": 1800
     },
     {
       "source": "stream",

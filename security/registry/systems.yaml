@@ -61,26 +61,26 @@
   site: homelab-wsl
   domain: infrastructure
   behind_site: homelab-wsl
-  sources: [host-check]
+  sources: [host-check, wazuh]
   wazuh_agent: windows-site1
 - name: WSL-02
   type: windows-host
   site: homelab-wsl-02
   domain: infrastructure
-  sources: [host-check]
+  sources: [host-check, wazuh]
   wazuh_agent: windows-site2
 - name: DESKTOP-HKE05KI-ubuntu
   type: wsl-distro
   site: homelab-wsl
   domain: infrastructure
   behind_site: homelab-wsl
-  sources: [host-check]
+  sources: [host-check, wazuh]
   wazuh_agent: wsl-site1
 - name: WSL-02-ubuntu
   type: wsl-distro
   site: homelab-wsl-02
   domain: infrastructure
-  sources: [host-check]
+  sources: [host-check, wazuh]
   wazuh_agent: wsl-site2
 - name: sce-rtr01
   type: router

@@ -780,9 +780,18 @@ for a change of the registry or of the host variables
 - The state of an agent that is not in the agent list (an agent that was
   removed) is not read into a result.
 
-The wazuh source joins `sources` of a system in `registry/systems.yaml` in
-a pull request after its first result is on the board (`../README.md`,
-"How to change the registry").
+Each system that names an agent lists `wazuh` in `sources` of
+`registry/systems.yaml`, so the rule for a late result (`SecurityResultLate`)
+watches the time of its last result, the newest `last_seen` of its agent,
+with the `late_after` of the source, 30 minutes. The manager writes a
+snapshot each 600 seconds and the converter reads each 5 minutes, so the
+time is about 15 minutes old at most while the agent reports. The rule
+fires when the agent stops reporting, or when a read of the source fails
+and the converter serves no time. A system with `behind_site` carries it on
+that alert, so Alertmanager holds it while `SecurityHostUnreachable` fires
+for its site (`../README.md`, "The rules"). A new system with an agent
+lists `wazuh` in the pull request after its first result is on the board
+(`../README.md`, "How to change the registry").
 
 ### When the converter serves no result
 
