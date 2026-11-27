@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.338.0 - 2026-11-27
+
+### Changed
+
+* homelab-wsl-02: each Flux Kustomization of the "ask first" class decrypts with the class key (Secret sops-age-class), and each one outside the class with the apps key (Secret sops-age-apps); the root moves to the class key in a later step, and sops-age stays on the site (docs/operations/flux-lockdown.md, "The decryption Secrets")
+
 ## v2.337.0 - 2026-11-27
 
 ### Changed

@@ -1,3 +1,0 @@
-kind: Changed
-body: 'homelab-wsl-02: each Flux Kustomization of the "ask first" class decrypts with the class key (Secret sops-age-class), and each one outside the class with the apps key (Secret sops-age-apps); the root moves to the class key in a later step, and sops-age stays on the site (docs/operations/flux-lockdown.md, "The decryption Secrets")'
-time: 2026-11-27T22:00:00.000000000+00:00
