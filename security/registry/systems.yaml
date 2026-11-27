@@ -13,6 +13,11 @@
 # alerts carry it, and Alertmanager holds them while homelab-wsl-02 can not
 # scrape the host of that site (SecurityHostUnreachable).
 #
+# `wazuh_agent` is the name of the Wazuh agent of the system, as the Ansible
+# role of the agent sets it (`windows_wazuh_rollout_name` and
+# `wsl_wazuh_rollout_name` in the inventory). The converter serves the results
+# of that agent under the name of the system.
+#
 # `sources` lists the sources that report on the system today. The rule for a
 # late result watches each of them. A source joins this list in the pull
 # request that starts it, or, when it needs hours for its first result, in
@@ -57,22 +62,26 @@
   domain: infrastructure
   behind_site: homelab-wsl
   sources: [host-check]
+  wazuh_agent: windows-site1
 - name: WSL-02
   type: windows-host
   site: homelab-wsl-02
   domain: infrastructure
   sources: [host-check]
+  wazuh_agent: windows-site2
 - name: DESKTOP-HKE05KI-ubuntu
   type: wsl-distro
   site: homelab-wsl
   domain: infrastructure
   behind_site: homelab-wsl
   sources: [host-check]
+  wazuh_agent: wsl-site1
 - name: WSL-02-ubuntu
   type: wsl-distro
   site: homelab-wsl-02
   domain: infrastructure
   sources: [host-check]
+  wazuh_agent: wsl-site2
 - name: sce-rtr01
   type: router
   site: none

@@ -238,7 +238,7 @@ only in the container of the part that logs in with it.
 | `wazuh-accounts-user` | `../wazuh-settings/accounts` | `username`, `password` | The account user (see "Accounts") | Step 1 only |
 | `wazuh-accounts-hashes` | `../wazuh-settings/accounts` | `tnwks-settings`, `tnwks-converter`: one key for each user of `accounts.json` | The bcrypt hash of the password of that user | Step 1 only |
 | `wazuh-settings-user` | `../wazuh-settings/app` | `password` | The password of `tnwks-settings` | Step 2 only |
-| `wazuh-converter-reader` | `../converter` | `password` | The password of `tnwks-converter` | The converter only. Its SOPS file is in `../converter/app`, and no kustomization lists it: the change that adds the Wazuh source to the converter lists it and mounts it |
+| `wazuh-converter-reader` | `../converter` | `password` | The password of `tnwks-converter` | The converter only. Its SOPS file is in `../converter/app`, whose kustomization lists it. The pod of the converter mounts the key at `/wazuh/password` (`security/converter/README.md`, "The Wazuh source") |
 
 The password rule of the Wazuh images: 12 to 64 characters from
 `A-Z a-z 0-9 . , _ + : @ % ^ = ~ -`, with at least one lowercase letter,
@@ -948,7 +948,7 @@ by the tests below. The first run on site 2 shows these points:
   the images by digest, the node selector and the memory lines against the
   table above, nothing privileged, no `0.0.0.0/0` and no `world` egress, the
   Secrets that nothing in git holds and the SOPS file of each, the Secret of
-  the converter that no kustomization lists yet, no substitution of Flux in
+  the converter that only the converter lists, no substitution of Flux in
   the hashes ("Secrets"), and the configuration of the manager.
   A render of `server/` with the patches of `ks.yaml` runs when `kustomize`
   is installed.

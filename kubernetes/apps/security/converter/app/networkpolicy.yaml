@@ -1,9 +1,11 @@
 ---
 # The converter. In: Prometheus scrapes its metrics port, and the kubelet's
 # probes come from the host. Out: this site's Loki gateway (the queries of the
-# stream source, and the push of the stream findings), and DNS through
-# Cilium's DNS proxy. Nothing else: no API server, no other namespace, no
-# host outside the cluster. default-deny (../../namespace.yaml) denies the rest.
+# stream source, and the push of the stream findings), the Wazuh indexer on
+# 9200 (the Wazuh source; the indexer lets the converter in by its rule
+# wazuh-indexer-readers), and DNS through Cilium's DNS proxy. Nothing else: no
+# API server, no other namespace, no host outside the cluster. default-deny
+# (../../namespace.yaml) denies the rest.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -54,4 +56,14 @@ spec:
       toPorts:
         - ports:
             - port: "8080"
+              protocol: TCP
+    # The Wazuh indexer of this cluster (kubernetes/apps/security/wazuh).
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: security
+            app: wazuh-indexer
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "9200"
               protocol: TCP

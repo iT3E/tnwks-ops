@@ -72,6 +72,11 @@
           "behind_site": {
             "description": "The site whose Windows host or link the results of the system pass through to homelab-wsl-02 (Design Doc 0004, section 5.5). The late alert of the system carries it as the label behind_site, and Alertmanager holds that alert while SecurityHostUnreachable fires for the same site.",
             "enum": ["homelab-wsl", "homelab-wsl-02"]
+          },
+          "wazuh_agent": {
+            "description": "The name of the Wazuh agent of the system: the agent name that the Ansible role of the agent sets (wazuh_agent_name). The converter serves the results of that agent under the name of the system (security/converter/README.md, \"The Wazuh source\").",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$"
           }
         }
       }
