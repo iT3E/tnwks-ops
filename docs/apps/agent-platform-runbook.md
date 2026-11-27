@@ -197,7 +197,11 @@ before the create, and fails a run that leaves its own record.
   more than the gateway; fix it before the next run. `refused`: the
   Service had no ready pod (the server was down or rolling) or the port is
   closed, so the check proved nothing; look at the server pod (for a copy
-  at site 2, the pod at site 2).
+  at site 2, the pod at site 2). While a copy at site 2 has no ready pod
+  (a loss of site 2, a drill of site 2, a rollout there), the probes of
+  both domains fail on that row, the probe of finance too, though finance
+  never calls the copy. That failure is expected for as long as the copy is
+  down; the next run after the copy is back passes.
   `unresolved`: the Service of that server is gone; find out why.
 
 ### WorkflowProvidersStale
@@ -2795,7 +2799,7 @@ merge, each read below takes no chat content.
 | At site 2: `kubectl -n flux-system get kustomizations agents-main-site2-services agents-main-read-access-site2 agents-main-cluster-mcp-site2 agents-main-flux-mcp-site2` | Each `Ready` |
 | At site 2: `kubectl -n agents-main get deploy cluster-mcp-site2 flux-mcp-site2` | Each ready, with no restart |
 | At site 1: `kubectl -n agents-main get endpointslices -l kubernetes.io/service-name=cluster-mcp-site2` and the same for `flux-mcp-site2` | No endpoint of site 1: the Service has no local backend |
-| The owner asks the agent for the state of one Flux Kustomization of site 2 and for the namespaces of site 2 | The agent answers through `flux2` and `cluster2`, and the answer is of site 2 |
+| The owner asks the agent for the HelmRelease `monitoring/security-loki-proxy` and for the Flux Kustomization `flux-system/security-loki-proxy`, which only the app list of site 2 holds | Each is found through the copy (`cluster2` on `main-cluster-site2`, `flux2` on `main-flux-site2`) and not found through site 1 (`cluster` on `main-cluster`, `flux` on `main-flux`) |
 | At site 1: the access log of the gateway, as for the read step above | `default/main-cluster-site2` and `default/main-flux-site2`: a `tools/list` and a `tools/call` with a kept tool name, status 200 |
 | The next runs of the gateway probes of finance and of main | `cluster-mcp-site2` and `flux-mcp-site2`: `blocked: TimeoutError` |
 
