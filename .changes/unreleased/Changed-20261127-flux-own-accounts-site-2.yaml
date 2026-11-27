@@ -1,3 +1,0 @@
-kind: Changed
-body: 'homelab-wsl-02: each Flux Kustomization outside the "ask first" class runs as its own account flux-child-<name>, and each of their HelmReleases as flux-release-<name>, with the role flux-child in their own namespaces (docs/operations/flux-lockdown.md, "The own accounts")'
-time: 2026-11-27T20:30:00.000000000+00:00

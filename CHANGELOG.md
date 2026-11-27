@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.336.0 - 2026-11-27
+
+### Changed
+
+* homelab-wsl-02: each Flux Kustomization outside the "ask first" class runs as its own account flux-child-<name>, and each of their HelmReleases as flux-release-<name>, with the role flux-child in their own namespaces (docs/operations/flux-lockdown.md, "The own accounts")
+
 ## v2.335.0 - 2026-11-27
 
 ### Changed
