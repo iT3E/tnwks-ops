@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.331.0 - 2026-11-27
+
+### Changed
+
+* security: the vulnerabilities line of the Wazuh source always has the severity high and counts the vulnerabilities at high or critical, 0 when an agent has none of those, so SecurityFindingNew reads it at each value; medium and low stay in homelab_security_wazuh_vulnerabilities
+
 ## v2.330.0 - 2026-11-27
 
 ### Added

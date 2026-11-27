@@ -1,3 +1,0 @@
-kind: Changed
-body: 'security: the vulnerabilities line of the Wazuh source always has the severity high and counts the vulnerabilities at high or critical, 0 when an agent has none of those, so SecurityFindingNew reads it at each value; medium and low stay in homelab_security_wazuh_vulnerabilities'
-time: 2026-11-27T06:00:00.000000000-08:00
