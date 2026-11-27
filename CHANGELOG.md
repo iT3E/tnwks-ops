@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.332.0 - 2026-11-27
+
+### Added
+
+* homelab-wsl-02 gets an account for each Flux child outside the class (flux-child-<name> in flux-system for a Kustomization, flux-release-<name> in its namespace for a HelmRelease), bound to the new role flux-child in the namespaces where the child applies objects; no child names one yet (docs/operations/flux-lockdown.md, "The accounts")
+
 ## v2.331.0 - 2026-11-27
 
 ### Changed
