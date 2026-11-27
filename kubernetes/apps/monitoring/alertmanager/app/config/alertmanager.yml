@@ -143,3 +143,13 @@ inhibit_rules:
     target_matchers:
       - alertname = "PeerSiteUnreachable"
     equal: ["k8s_cluster"]
+  # The security converter can not read the Wazuh indexer
+  # (SecurityWazuhReadFailing, observability/rules.py): it serves no time of
+  # the source wazuh, so each system that lists it is late for the same cause.
+  # The same Prometheus raises both (the external label cluster).
+  - source_matchers:
+      - alertname = "SecurityWazuhReadFailing"
+    target_matchers:
+      - alertname = "SecurityResultLate"
+      - source = "wazuh"
+    equal: ["cluster"]

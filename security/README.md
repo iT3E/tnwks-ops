@@ -515,7 +515,15 @@ with `behind_site` in `windows-exporter-security` fails for 5 minutes. Two
 inhibit rules of Alertmanager (`alertmanager.yml`) hold, while it fires,
 each `SecurityResultLate` with the same `behind_site`, and
 `PeerSiteUnreachable` with the same `k8s_cluster`. So a loss of site 1 gives
-one alert, and a stop of the cluster of site 1 alone holds nothing.
+one alert, and a stop of the cluster of site 1 alone holds nothing. It keeps
+firing for 20 minutes after the first scrape that passes (`keep_firing_for`),
+so the late alerts that it holds do not page while the results of that site
+come back.
+
+A third inhibit rule holds each `SecurityResultLate` of the source `wazuh`
+while `SecurityWazuhReadFailing` of the same Prometheus fires: the converter
+can not read the Wazuh indexer, so it serves no time of `wazuh` for any
+system ([`converter/README.md`](converter/README.md), "The Wazuh source").
 
 The query window of each rule is 10 minutes. A rule reads the newest sample
 in the window, so one missed scrape or a restart of a source is no gap. An

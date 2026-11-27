@@ -2475,6 +2475,136 @@ tests:
   - alertname: SecurityAcceptedEntriesSkipped
     eval_time: 90m
     exp_alerts: []
+- name: a read of the Wazuh indexer that fails for 15 minutes alerts
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="results"}
+    values: 1+0x10 0+0x40 1+0x20
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="index-stats"}
+    values: 1+0x70
+  alert_rule_test:
+  - alertname: SecurityWazuhReadFailing
+    eval_time: 25m
+    exp_alerts: []
+  - alertname: SecurityWazuhReadFailing
+    eval_time: 27m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+      exp_annotations:
+        summary: The security converter on homelab-wsl-02 can not read the Wazuh indexer
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitywazuhreadfailing
+        description: 'The reads of the Wazuh source of the security converter fail in each cycle, so the converter
+          serves no result and no time of wazuh for any system: the board shows no evidence for them. The late alerts
+          of wazuh are held while this fires. The log of the converter has the kind of the fault and the status,
+          and security/converter/README.md, "When the converter serves no result", has the cases. The alert ends
+          in the cycle after a read passes.'
+  - alertname: SecurityWazuhReadFailing
+    eval_time: 50m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+      exp_annotations:
+        summary: The security converter on homelab-wsl-02 can not read the Wazuh indexer
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitywazuhreadfailing
+        description: 'The reads of the Wazuh source of the security converter fail in each cycle, so the converter
+          serves no result and no time of wazuh for any system: the board shows no evidence for them. The late alerts
+          of wazuh are held while this fires. The log of the converter has the kind of the fault and the status,
+          and security/converter/README.md, "When the converter serves no result", has the cases. The alert ends
+          in the cycle after a read passes.'
+  - alertname: SecurityWazuhReadFailing
+    eval_time: 52m
+    exp_alerts: []
+- name: a failed read of the index stats only, or a read that passes again within 15 minutes, does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="results"}
+    values: 1+0x10 0+0x10 1+0x40
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="index-stats"}
+    values: 0+0x60
+  alert_rule_test:
+  - alertname: SecurityWazuhReadFailing
+    eval_time: 25m
+    exp_alerts: []
+  - alertname: SecurityWazuhReadFailing
+    eval_time: 60m
+    exp_alerts: []
+- name: a federated copy of the read of the Wazuh indexer does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",source_site="homelab-wsl-02",query="results"}
+    values: 0+0x40
+  alert_rule_test:
+  - alertname: SecurityWazuhReadFailing
+    eval_time: 40m
+    exp_alerts: []
+- name: an SCA result that the converter does not know alerts after 30 minutes
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_sca_other_results{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 2+0x60
+  - series: homelab_security_converter_wazuh_vulnerability_other_severities{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 0+0x60
+  alert_rule_test:
+  - alertname: SecurityWazuhValuesUnknown
+    eval_time: 29m
+    exp_alerts: []
+  - alertname: SecurityWazuhValuesUnknown
+    eval_time: 31m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+      exp_annotations:
+        summary: The Wazuh state on homelab-wsl-02 has values that the converter does not know
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitywazuhvaluesunknown
+        description: 'Documents of the Wazuh state have a value that is not one of the pinned release: an SCA result
+          that is not Passed, Failed or Not applicable, whose check then has no result, or a severity of a vulnerability
+          that is not critical, high, medium, low or -, which counts as high. The log of the converter says which
+          state. security/converter/README.md, "The Wazuh source", has the values. The alert ends in the cycle after
+          the converter reads the new values.'
+- name: a severity that the converter does not know alerts after 30 minutes
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_sca_other_results{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 0+0x60
+  - series: homelab_security_converter_wazuh_vulnerability_other_severities{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 1+0x60
+  alert_rule_test:
+  - alertname: SecurityWazuhValuesUnknown
+    eval_time: 29m
+    exp_alerts: []
+  - alertname: SecurityWazuhValuesUnknown
+    eval_time: 31m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+      exp_annotations:
+        summary: The Wazuh state on homelab-wsl-02 has values that the converter does not know
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitywazuhvaluesunknown
+        description: 'Documents of the Wazuh state have a value that is not one of the pinned release: an SCA result
+          that is not Passed, Failed or Not applicable, whose check then has no result, or a severity of a vulnerability
+          that is not critical, high, medium, low or -, which counts as high. The log of the converter says which
+          state. security/converter/README.md, "The Wazuh source", has the values. The alert ends in the cycle after
+          the converter reads the new values.'
+- name: no value that the converter does not know does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_sca_other_results{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 0+0x60
+  - series: homelab_security_converter_wazuh_vulnerability_other_severities{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 0+0x60
+  alert_rule_test:
+  - alertname: SecurityWazuhValuesUnknown
+    eval_time: 60m
+    exp_alerts: []
 - name: a control of the CIS report gives its failed resources, or 0; a control with no input gives nothing
   interval: 1m
   input_series:

@@ -312,7 +312,7 @@ tests:
     exp_alerts: []
   - eval_time: 16m
     alertname: SecurityHostUnreachable
-    exp_alerts:
+    exp_alerts: &id003
     - exp_labels:
         severity: warning
         job: windows-exporter-security
@@ -324,9 +324,26 @@ tests:
         description: 'The scrape of windows_exporter on far-host fails: homelab-wsl is away (its power or its link),
           the link between the sites is down, or windows_exporter on that host stopped. The results of the systems
           behind homelab-wsl wait, and their late alerts, and PeerSiteUnreachable of that site, are held while this
-          fires.'
+          fires. It fires for 20 minutes more after the first scrape that passes, while those results come back.'
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
         runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityhostunreachable
+- name: a host behind another site keeps the alert for 20 minutes after the first scrape that passes
+  interval: 1m
+  external_labels:
+    cluster: site
+  input_series:
+  - series: up{job="windows-exporter-security",instance="far-host",k8s_cluster="homelab-wsl",behind_site="homelab-wsl"}
+    values: 1+0x10 0+0x30 1+0x40
+  alert_rule_test:
+  - eval_time: 40m
+    alertname: SecurityHostUnreachable
+    exp_alerts: *id003
+  - eval_time: 55m
+    alertname: SecurityHostUnreachable
+    exp_alerts: *id003
+  - eval_time: 63m
+    alertname: SecurityHostUnreachable
+    exp_alerts: []
 - name: a host behind another site that this site scrapes, or a host of this site, does not alert
   interval: 1m
   external_labels:
