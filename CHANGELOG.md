@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.333.0 - 2026-11-27
+
+### Changed
+
+* homelab-wsl-02: the root Flux Kustomization and each Flux Kustomization of the "ask first" class name the account kustomize-controller, the user they apply as today, so their rights do not change (docs/operations/flux-lockdown.md, "The class account")
+
 ## v2.332.0 - 2026-11-27
 
 ### Added
