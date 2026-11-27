@@ -11,8 +11,9 @@ controller applies as.
 
 python3 test_flux_lockdown.py Setup | NoFlag | Flag
 
-- Setup: the CRDs of Flux, the namespaces, the accounts, two decryption
-  Secrets that hold a placeholder (no key), the GitRepository flux-system
+- Setup: the CRDs of Flux, the namespaces, the accounts, the two
+  decryption Secrets with the age keys of the run (keys.json, never a key
+  of a site), the GitRepository flux-system
   with the artifact of the test tree, and the probe policy.
 - NoFlag, with the arguments of git:
   1. A Kustomization with no account applies as kustomize-controller, and
@@ -38,6 +39,12 @@ python3 test_flux_lockdown.py Setup | NoFlag | Flag
      the class (step 2b): that child has the account in its spec and
      applies as kustomize-controller, and so does the other child, which
      names none.
+  10. Each side decrypts with its own key (step 2d): a child of the class
+     with sops-age-class builds a file encrypted to the class key; a child
+     outside the class, with the role flux-child of git, builds one of the
+     apps key with sops-age-apps, and with sops-age-class it can not
+     decrypt a file of the apps key and applies nothing. The admission
+     policy also refuses sops-age-class outside the class.
   9. A parent with the patches that accounts.py writes (step 2c): each
      child names its own account, flux-child-<name>, with the role
      flux-child of git in tenant. One applies its HelmRelease, which then
@@ -82,10 +89,12 @@ def read(name):
         return f.read()
 
 
-def call(method, path, body=None, content_type="application/json"):
+def call(method, path, body=None, content_type="application/json", accept=None):
     data = None if body is None else json.dumps(body).encode()
     request = urllib.request.Request(API + path, data=data, method=method)
     request.add_header("Content-Type", content_type)
+    if accept:
+        request.add_header("Accept", accept)
     try:
         with urllib.request.urlopen(request, context=CONTEXT, timeout=30) as response:
             return response.status, parse(response.read())
@@ -183,6 +192,12 @@ def exists(namespace, name):
     return call("GET", f"/api/v1/namespaces/{namespace}/configmaps/{name}")[0] == 200
 
 
+def secret_exists(namespace, name):
+    """By its metadata only: the test never reads the data of a Secret."""
+    return call("GET", f"/api/v1/namespaces/{namespace}/secrets/{name}",
+                accept="application/json;as=PartialObjectMetadata;g=meta.k8s.io;v=v1")[0] == 200
+
+
 def inventory(name):
     return [e["id"] for e in ((ks(name).get("status") or {}).get("inventory") or {}).get("entries") or []]
 
@@ -243,12 +258,10 @@ class Setup(unittest.TestCase):
                 x["type"] == "Established" and x["status"] == "True"
                 for x in (call("GET", f"/apis/apiextensions.k8s.io/v1/customresourcedefinitions/{n}")[1]
                           .get("status") or {}).get("conditions") or []))
-        # The decryption Secrets hold a placeholder under a name that the
-        # controller does not read as a key: the tree has no encrypted file.
-        placeholder = base64.b64encode(b"a placeholder of the test, not a key").decode()
-        for name in ("sops-age-apps", "sops-age-class"):
-            make("/api/v1/namespaces/flux-system/secrets",
-                 obj("v1", "Secret", name, "flux-system", data={"README": placeholder}))
+        # The decryption Secrets hold the age keys of the run (step 2d).
+        for name, key in json.loads(read("keys.json")).items():
+            make("/api/v1/namespaces/flux-system/secrets", obj(
+                "v1", "Secret", name, "flux-system", data={"age.agekey": base64.b64encode(key.encode()).decode()}))
         make(GITREPOSITORY.rsplit("/", 1)[0], obj(
             "source.toolkit.fluxcd.io/v1", "GitRepository", "flux-system", "flux-system",
             spec={"interval": "1h", "url": "https://source.invalid/tree", "ref": {"branch": "main"}}))
@@ -384,6 +397,26 @@ class NoFlag(unittest.TestCase):
         self.assertEqual(hr["spec"].get("serviceAccountName"), "flux-release-census-hr")
         self.assertEqual(hr["spec"].get("install"), {"disableWait": True})
         wait_ready("named-probe", "False", 'User "system:serviceaccount:flux-system:flux-child-named-probe" cannot')
+
+    def test_10_each_side_decrypts_with_its_own_key(self):
+        def key(name):
+            return {"provider": "sops", "secretRef": {"name": name}}
+        kustomization("dec-class-file", "./dec-class-file", serviceAccountName="kustomize-controller",
+                      decryption=key("sops-age-class"))
+        kustomization("dec-apps-file", "./dec-apps-file", serviceAccountName=ROLE_ACCOUNT,
+                      decryption=key("sops-age-apps"))
+        wait_ready("dec-class-file", "True")
+        wait_ready("dec-apps-file", "True")
+        # The API server takes the data of a Secret only as base64, so a
+        # Secret that sops did not decrypt is not applied.
+        self.assertTrue(secret_exists("tenant", "class-file") and secret_exists("tenant", "apps-file"))
+        # Outside the class, the class Secret opens no file of the apps key.
+        kustomization("dec-apps-other", "./dec-apps-other", serviceAccountName=ROLE_ACCOUNT,
+                      decryption=key("sops-age-class"))
+        _, message = wait_ready("dec-apps-other", "False", "decrypt")
+        print("dec-apps-other:", message[:300])
+        self.assertNotIn("forbidden", message)
+        self.assertFalse(secret_exists("tenant", "apps-other"))
 
     def test_7_the_role_reads_what_the_wait_reads(self):
         kustomization("census-wait", "./census-wait", serviceAccountName=ROLE_ACCOUNT, wait=True)

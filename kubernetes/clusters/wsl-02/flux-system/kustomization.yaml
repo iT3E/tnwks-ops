@@ -8,6 +8,9 @@ resources:
 # so cluster-secrets.sops.yaml gets decrypted before being applied as a Secret
 # (otherwise the Secret keeps the ENC[...] strings and substituteFrom in
 # downstream Kustomizations templates the encrypted text into manifests).
+# The root stays on sops-age in step 2d of docs/operations/flux-lockdown.md:
+# it moves to the class key (step 2d-root) once the children of the class
+# decrypt with that key, as it must decrypt its own build to apply a revert.
 patches:
 - patch: |-
     - op: add

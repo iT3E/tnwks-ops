@@ -17,7 +17,7 @@ key. Two controls close them:
 The steps: 0 the proofs and tests (this page); 1 the new public keys in
 `.sops.yaml`; 2a the accounts; 2b the class runs as `kustomize-controller`;
 2c the children outside the class name their accounts; 2d the decryption
-Secrets; 2e the flag; 3 the old recipients leave `.sops.yaml`; then the old
+Secrets (the root last, in 2d-root); 2e the flag; 3 the old recipients leave `.sops.yaml`; then the old
 Secret `sops-age` goes. Steps 1 and 3 are for the whole repository, step 2
 goes site by site, site 2 first.
 
@@ -44,6 +44,7 @@ shows the user that the controller applies as.
 | A Kustomization that comes to name a missing account | Its apply fails ("forbidden"), its inventory stays, and no object is pruned. A delete of it removes no object | A missing account in 2c or 2e stalls one child and keeps its running objects. Do not delete such a child to fix it: its objects stay with no owner |
 | A Kustomization whose account has only the role `flux-child` of git | It applies an object of each kind of the role (12 objects). A Role or a Pod fails its apply ("cannot create") | The role is enough for the builds outside the class, and it grants no more than its kinds |
 | The same account with `wait: true`, on a Deployment and a StatefulSet | It is Ready. With the role less its reads of ReplicaSets and Pods, the wait fails ("replicasets.apps is forbidden") | Both controllers read the ReplicaSets and Pods of a workload as the account when they wait for its health, so the role must read them |
+| Each side with its own key (step 2d), with age keys made for the run and Secrets of placeholders that sops encrypts to them | A child of the class with `sops-age-class` builds a file of the class key. A child outside the class, with the role `flux-child`, builds a file of the apps key with `sops-age-apps`. With `sops-age-class` it can not decrypt that file ("decryption failed"), and applies nothing | Each file opens only with the Secret of its side. With the policy, which refuses `sops-age-class` outside the class, a child outside the class can not use the class key |
 | The flag `--default-service-account=default`, after a restart | A Kustomization with no account applies as `flux-system/default`. One that applied before the flag and names no account fails and prunes nothing. The ones that name an account apply as before | 2e merges only when each object of the site names an account (the test below) |
 
 Two reads of the source of the controllers of git add to this:
@@ -200,6 +201,37 @@ The proofs:
 Site 2 has it first. A revert of the pull request puts the children back
 on `kustomize-controller`, as before.
 
+## The decryption Secrets
+
+Step 2d, site by site: each Kustomization that decrypts names the Secret
+of its side.
+
+- The parent of the apps and each child of the class: `sops-age-class`.
+- Each child outside the class: `sops-age-apps`.
+- The root stays on `sops-age` until step 2d-root.
+- The Secret `sops-age` stays on the site until step 3 has soaked, so a
+  revert decrypts again.
+
+The files of the site set them: the spec of the parent of the apps, and its
+two patches of substitution. The first patch gives each child the apps key;
+the second, for the children of the class only, gives the class key after
+it. The ks.yaml files that both sites share do not change. `KEYED` in
+`lockdown.py` lists the sites of step 2d.
+
+The root goes last, in its own pull request (step 2d-root): the patch of
+the root in `kubernetes/clusters/<site>/flux-system/kustomization.yaml`
+names `sops-age-class`, and `KEYED_ROOTS` in `lockdown.py` lists the site.
+No read can show that the private key in `sops-age-class` matches its public
+key in `KEYS`, and a root that can not decrypt its own build can not apply
+the revert either. So 2d-root merges only once the children of the class
+decrypt with the class key on the site (each one Ready at the merge commit
+of 2d). If it still fails, use the break-glass "The root can not decrypt".
+
+Before the merge, the map test shows that each encrypted file that a
+Kustomization builds holds the public key of the Secret that it names (the
+recipients of phase 1). Both Secrets must be on the site, with the key
+`age.agekey` (the command in "Break-glass").
+
 ## The tests of git
 
 `observability/tests/test_flux_lockdown.py` reads each Kustomization and
@@ -212,6 +244,7 @@ its parent, and for the root the patches of
 | The map | Each encrypted file that a Kustomization of a site builds holds the public key of the Secret that it names (`KEYS` in `lockdown.py`, by site) | 1, 2d, 3 |
 | The keys of the map | Each is an age public key and a recipient of a rule of `kubernetes/` in `.sops.yaml` | 1 |
 | The rules of the keys | The rule of `.sops.yaml` that sops takes for each encrypted file under `kubernetes/` gives a file of the class the class key of each site that builds it, and a file outside the class the apps key of each site that builds it. No file of the class gets an apps key, and no file outside the class a class key. A new file in a folder of the class or of a child outside it gets the same | 1 |
+| The keyed site | On a site of `lockdown.KEYED`, each Kustomization that names a decryption Secret, or builds an encrypted file, names `sops-age-class` in the class and `sops-age-apps` outside it, and none names `sops-age`. The root names `sops-age-class` on a site of `lockdown.KEYED_ROOTS`, and `sops-age` on another. On a site not keyed, none names the new Secrets | 2d, 2d-root |
 | The class account | Once the root of a site names `kustomize-controller`, `cluster-apps` and each Kustomization of the class do too, and no child of the class names it before the root does. No child outside the class names an account of the controllers | 2b |
 | The own account | A Kustomization or a HelmRelease outside the class names no account but its own (`flux-child-<name>`, `flux-release-<name>`); on a site of `accounts.NAMED` each one names its own, as `accounts.py write` writes the patches of the parent | 2c |
 | Only the accounts | The spec that Flux applies to each child outside the class, with the patches of `accounts.py`, is the spec without them, but for its account and the patches that give its HelmReleases theirs, after the patches that it had (of its file and of its site) | 2c |
@@ -302,6 +335,20 @@ kubectl --context <site> -n flux-system get secret sops-age-class sops-age-apps 
 
 Then revert 2d. The old Secret `sops-age` stays on each site until both
 sites have soaked after step 3, so a revert of 2d decrypts again.
+
+**The root can not decrypt after 2d-root.** The root fails its own build,
+so it can not apply the revert. Revert the pull request of 2d-root, then:
+
+1. `flux --context <site> suspend kustomization flux-system -n flux-system`
+2. Put the root back on the old Secret:
+   ```bash
+   kubectl --context <site> -n flux-system patch kustomization flux-system --type merge \
+     -p '{"spec":{"decryption":{"secretRef":{"name":"sops-age"}}}}'
+   ```
+3. After the revert is on `main`:
+   `flux --context <site> resume kustomization flux-system -n flux-system`.
+   The root then applies the revert with `sops-age`, and the parent and the
+   children follow.
 
 **The policy refuses a child of the class.** Use the break-glass of
 [`flux-admission.md`](flux-admission.md#break-glass).
