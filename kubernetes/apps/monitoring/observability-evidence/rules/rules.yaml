@@ -804,3 +804,33 @@ spec:
           in the form, and take an entry whose source or system is not in the registry. The log of the converter
           has the number of each entry and why. security/converter/README.md, "An entry that the converter skips",
           has the rules. The alert ends in the cycle after the list is fixed.'
+    - alert: SecurityWazuhReadFailing
+      expr: max by (k8s_cluster) (homelab_security_converter_wazuh_query_success{source_site="",query="results"})
+        == 0
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: The security converter on {{ $labels.k8s_cluster }} can not read the Wazuh indexer
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitywazuhreadfailing
+        description: 'The reads of the Wazuh source of the security converter fail in each cycle, so the converter
+          serves no result and no time of wazuh for any system: the board shows no evidence for them. The late alerts
+          of wazuh are held while this fires. The log of the converter has the kind of the fault and the status,
+          and security/converter/README.md, "When the converter serves no result", has the cases. The alert ends
+          in the cycle after a read passes.'
+    - alert: SecurityWazuhValuesUnknown
+      expr: max by (k8s_cluster) (homelab_security_converter_wazuh_sca_other_results{source_site=""}) > 0 or max
+        by (k8s_cluster) (homelab_security_converter_wazuh_vulnerability_other_severities{source_site=""}) > 0
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: The Wazuh state on {{ $labels.k8s_cluster }} has values that the converter does not know
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securitywazuhvaluesunknown
+        description: 'Documents of the Wazuh state have a value that is not one of the pinned release: an SCA result
+          that is not Passed, Failed or Not applicable, whose check then has no result, or a severity of a vulnerability
+          that is not critical, high, medium, low or -, which counts as high. The log of the converter says which
+          state. security/converter/README.md, "The Wazuh source", has the values. The alert ends in the cycle after
+          the converter reads the new values.'

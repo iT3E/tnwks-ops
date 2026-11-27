@@ -161,6 +161,7 @@ the contract of the registry.
 | `homelab_security_converter_wazuh_query_success` | `query` (`results`, `index-stats`) | 1 when the reads of the Wazuh source gave an answer that fits in the last cycle, 0 when one failed ([The Wazuh source](#the-wazuh-source)) |
 | `homelab_security_converter_wazuh_unmapped_agents` | None | The number of agents in the agent list whose name the registry maps to no system, the manager not counted |
 | `homelab_security_converter_wazuh_sca_other_results` | None | The number of documents of the SCA state whose result is not `Passed`, `Failed` or `Not applicable`. Their checks have no result ([The Wazuh source](#the-wazuh-source)) |
+| `homelab_security_converter_wazuh_vulnerability_other_severities` | None | The number of documents of the vulnerability state whose severity is not `Critical`, `High`, `Medium`, `Low` or `-`. They count as high ([The Wazuh source](#the-wazuh-source)) |
 | `homelab_security_converter_accepted_list_read` | None | 1 when the converter read the list of accepted findings in its last cycle, or found no list. 0 when it gave no entry of a list that is there ([A file that gives no entry](#a-file-that-gives-no-entry)) |
 | `homelab_security_converter_accepted_skipped_entries` | None | The number of entries of the list of accepted findings that the converter skipped in its last cycle ([An entry that the converter skips](#an-entry-that-the-converter-skips)) |
 
@@ -718,7 +719,12 @@ What the release writes in those fields:
   case (`Critical`, `High`, `Medium`, `Low`), or `-` when the feed has none
   ([the field](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/vulnerability_scanner/src/scanOrchestrator/factory/eventDetailsBuilder.hpp#L137-L138),
   [the dash](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/vulnerability_scanner/src/scanOrchestrator/fieldAlertHelper.hpp#L39)).
-  Each document is one vulnerability of one package.
+  Each document is one vulnerability of one package. A vulnerability with
+  `-` or no severity has no score: it is `unknown`, and it does not fail the
+  line. Another value counts as high, so a new value of the feed fails the
+  line and is never left out. It counts in
+  `homelab_security_converter_wazuh_vulnerability_other_severities`, with
+  one line in the log that does not hold the value.
 
 ### The series
 
@@ -738,8 +744,8 @@ homelab_security_wazuh_index_size_bytes{index="wazuh-states-sca"} 2048
 | `homelab_security_wazuh_vulnerabilities` | `system`, `severity` | The vulnerabilities of the agent of one severity, `medium` and `low` too. Not in the contract of the registry |
 | `homelab_security_wazuh_index_size_bytes` | `index` | The bytes of one index of Wazuh. Not in the contract of the registry |
 
-A severity of the feed is in lower case, and a value that is not one of the
-list (`-`, no severity) is `unknown`. The line `vulnerabilities` has one
+A severity of the feed is in lower case. `-` and no severity are `unknown`,
+and any other value is `high`. The line `vulnerabilities` has one
 severity, `high`, whatever its value, so the rule of a new finding of high
 severity (`SecurityFindingNew`) reads each of its values, 0 too. The rule
 fires when the value is above each value of the day before, or after an
@@ -804,6 +810,12 @@ lists `wazuh` in the pull request after its first result is on the board
 | An agent has no `last_seen`, or one more than 5 minutes in the future | No result and no time for that agent |
 | The index stats fail, or a shard of the stats failed | No size, and `homelab_security_converter_wazuh_query_success{query="index-stats"}` 0. The results stay |
 | A fault of the converter itself | The same as a read that fails, and the log names the kind of the fault |
+
+`SecurityWazuhReadFailing` fires when the reads of the results fail for 15
+minutes, and Alertmanager holds the late alerts of `wazuh` while it fires.
+`SecurityWazuhValuesUnknown` fires when a count of the values that are not
+of the release is above 0 for 30 minutes
+([the runbook](../../docs/apps/security-platform-runbook.md#securitywazuhreadfailing)).
 
 A cycle reads all three again, and a result goes away in the cycle in which a
 read fails, so a result that the converter serves is always from the reads of

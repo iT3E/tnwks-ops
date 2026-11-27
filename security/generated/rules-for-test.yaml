@@ -3783,6 +3783,7 @@ groups:
   - alert: SecurityHostUnreachable
     expr: up{job="windows-exporter-security",behind_site!=""} == 0
     for: 5m
+    keep_firing_for: 20m
     labels:
       severity: warning
     annotations:
@@ -3790,7 +3791,8 @@ groups:
       description: 'The scrape of windows_exporter on {{ $labels.instance }} fails: {{ $labels.behind_site }} is
         away (its power or its link), the link between the sites is down, or windows_exporter on that host stopped.
         The results of the systems behind {{ $labels.behind_site }} wait, and their late alerts, and PeerSiteUnreachable
-        of that site, are held while this fires.'
+        of that site, are held while this fires. It fires for 20 minutes more after the first scrape that passes,
+        while those results come back.'
       dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster
         }}
       runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#securityhostunreachable

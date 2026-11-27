@@ -721,6 +721,13 @@ AUDIT_SINK_WINDOW = "15m"
 # the converter skips"). The converter runs on homelab-wsl-02 only.
 ACCEPTED_LIST_READ = "homelab_security_converter_accepted_list_read"
 ACCEPTED_SKIPPED = "homelab_security_converter_accepted_skipped_entries"
+# The series of the Wazuh source of the converter (security/converter/README.md, "The
+# Wazuh source"): whether its reads of the indexer gave an answer, and the documents
+# with a value that is not one of the release.
+WAZUH_QUERY_SUCCESS = "homelab_security_converter_wazuh_query_success"
+WAZUH_SCA_OTHER = "homelab_security_converter_wazuh_sca_other_results"
+WAZUH_SEVERITY_OTHER = "homelab_security_converter_wazuh_vulnerability_other_severities"
+WAZUH_READ_FAILING_FOR = "15m"
 
 # The source `trivy` of the security registry (security/README.md, "The
 # series"): Trivy Operator on each cluster (kubernetes/apps/security/trivy-operator).
@@ -1175,6 +1182,35 @@ def security_alerts():
                                          " entries that are not in the form, and take an entry whose source or system is not in"
                                          " the registry. The log of the converter has the number of each entry and why. security/converter/README.md, \"An entry that the"
                                          " converter skips\", has the rules. The alert ends in the cycle after the list is fixed.")}},
+        # A failed read gives each system that lists wazuh a late result. While this
+        # fires, Alertmanager holds SecurityResultLate of the source wazuh
+        # (alertmanager.yml), so one failed read gives one alert with its cause. It
+        # fires before the late alerts: those wait 10 minutes for the window and 10 more.
+        {"alert": "SecurityWazuhReadFailing",
+         "expr": f'max by (k8s_cluster) ({WAZUH_QUERY_SUCCESS}{{source_site="",query="results"}}) == 0',
+         "for": WAZUH_READ_FAILING_FOR, "labels": {"severity": "warning"},
+         "annotations": {"summary": "The security converter on {{ $labels.k8s_cluster }} can not read the Wazuh indexer",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityWazuhReadFailing"),
+                         "description": ("The reads of the Wazuh source of the security converter fail in each cycle, so the"
+                                         " converter serves no result and no time of wazuh for any system: the board shows no"
+                                         " evidence for them. The late alerts of wazuh are held while this fires. The log of"
+                                         " the converter has the kind of the fault and the status, and security/converter/README.md,"
+                                         " \"When the converter serves no result\", has the cases. The alert ends in the cycle"
+                                         " after a read passes.")}},
+        {"alert": "SecurityWazuhValuesUnknown",
+         "expr": (f'max by (k8s_cluster) ({WAZUH_SCA_OTHER}{{source_site=""}}) > 0'
+                  f' or max by (k8s_cluster) ({WAZUH_SEVERITY_OTHER}{{source_site=""}}) > 0'),
+         "for": "30m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The Wazuh state on {{ $labels.k8s_cluster }} has values that the converter does not know",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "runbook_url": security_runbook("SecurityWazuhValuesUnknown"),
+                         "description": ("Documents of the Wazuh state have a value that is not one of the pinned release:"
+                                         " an SCA result that is not Passed, Failed or Not applicable, whose check then has"
+                                         " no result, or a severity of a vulnerability that is not critical, high, medium,"
+                                         " low or -, which counts as high. The log of the converter says which state."
+                                         " security/converter/README.md, \"The Wazuh source\", has the values. The alert"
+                                         " ends in the cycle after the converter reads the new values.")}},
     ]
 
 
@@ -1669,6 +1705,7 @@ def fixtures():
         *wazuh_vulnerability_fixtures(),
         *audit_sink_fixtures(),
         *accepted_list_fixtures(),
+        *wazuh_converter_fixtures(),
         *(test for test in trivy_fixtures() if test["name"] != TRIVY_BY_REFERENCE_WEEK_TEST),
     ]}
 
@@ -1867,6 +1904,52 @@ def audit_sink_fixtures():
         {"name": "a refused request of another sink does not alert", "interval": "1m",
          "input_series": [errors("_x20 1+1x40", component="loki_kubernetes")],
          "alert_rule_test": [at(20, []), at(30, [])]},
+    ]
+
+
+def wazuh_converter_fixtures():
+    """SecurityWazuhReadFailing and SecurityWazuhValuesUnknown, from the series of the
+    Wazuh source of the converter (security/tests/test_converter_wazuh.py serves them)."""
+    site = "homelab-wsl-02"
+    target = f'k8s_cluster="{site}",job="security-converter",namespace="security",service="security-converter"'
+
+    def fires(name):
+        rule = next(rule for rule in security_alerts() if rule["alert"] == name)
+        annotations = {key: text.replace("{{ $labels.k8s_cluster }}", site) for key, text in rule["annotations"].items()}
+        return [{"exp_labels": {"severity": "warning", "k8s_cluster": site}, "exp_annotations": annotations}]
+
+    def success(query, values, labels=target):
+        return {"series": f'{WAZUH_QUERY_SUCCESS}{{{labels},query="{query}"}}', "values": values}
+
+    def others(sca, severity, labels=target):
+        return [{"series": f"{WAZUH_SCA_OTHER}{{{labels}}}", "values": sca},
+                {"series": f"{WAZUH_SEVERITY_OTHER}{{{labels}}}", "values": severity}]
+
+    def at(name, minute, exp_alerts):
+        return {"alertname": name, "eval_time": f"{minute}m", "exp_alerts": exp_alerts}
+
+    failing, unknown = "SecurityWazuhReadFailing", "SecurityWazuhValuesUnknown"
+    return [
+        {"name": "a read of the Wazuh indexer that fails for 15 minutes alerts", "interval": "1m",
+         "input_series": [success("results", "1+0x10 0+0x40 1+0x20"), success("index-stats", "1+0x70")],
+         "alert_rule_test": [at(failing, 25, []), at(failing, 27, fires(failing)), at(failing, 50, fires(failing)),
+                             at(failing, 52, [])]},
+        {"name": "a failed read of the index stats only, or a read that passes again within 15 minutes, does not alert",
+         "interval": "1m",
+         "input_series": [success("results", "1+0x10 0+0x10 1+0x40"), success("index-stats", "0+0x60")],
+         "alert_rule_test": [at(failing, 25, []), at(failing, 60, [])]},
+        {"name": "a federated copy of the read of the Wazuh indexer does not alert", "interval": "1m",
+         "input_series": [success("results", "0+0x40", labels=f'{target},source_site="homelab-wsl-02"')],
+         "alert_rule_test": [at(failing, 40, [])]},
+        {"name": "an SCA result that the converter does not know alerts after 30 minutes", "interval": "1m",
+         "input_series": others("2+0x60", "0+0x60"),
+         "alert_rule_test": [at(unknown, 29, []), at(unknown, 31, fires(unknown))]},
+        {"name": "a severity that the converter does not know alerts after 30 minutes", "interval": "1m",
+         "input_series": others("0+0x60", "1+0x60"),
+         "alert_rule_test": [at(unknown, 29, []), at(unknown, 31, fires(unknown))]},
+        {"name": "no value that the converter does not know does not alert", "interval": "1m",
+         "input_series": others("0+0x60", "0+0x60"),
+         "alert_rule_test": [at(unknown, 60, [])]},
     ]
 
 

@@ -8,6 +8,7 @@ the paging of a composite aggregation. Each agent, check and count here is inven
 test reaches a cluster or an indexer."""
 
 import base64
+import importlib.util
 import json
 import logging
 import re
@@ -272,6 +273,8 @@ def test_each_sca_check_the_vulnerabilities_and_the_time_of_each_agent_that_maps
     # The manager (000) is no agent of a system, and is not counted.
     assert served(part, converter.WAZUH_UNMAPPED) == {(): 0}
     assert served(part, converter.WAZUH_SCA_OTHER) == {(): 0}
+    # "-" and no severity are values of the release: unknown, and not counted apart.
+    assert served(part, converter.WAZUH_SEVERITY_OTHER) == {(): 0}
     text = part.render().decode()
     assert f'{RESULT}{{check="26001",severity="unknown",source="wazuh",system="host-one"}} 1' in text
     assert f'{LAST}{{source="wazuh",system="host-one"}} {NOW - 90:.3f}' in text
@@ -310,17 +313,50 @@ def test_the_vulnerabilities_line_rises_for_a_new_high_or_critical_and_not_for_a
     assert seen == [(1, "high"), (1, "high"), (2, "high"), (3, "high"), (0, "high"), (1, "high")]
 
 
-def test_the_severities_counted_together_are_those_of_the_rule_of_a_new_finding(monkeypatch):
-    import importlib.util
-
-    # rules.py imports its neighbours (inventory.py): last on the path.
+def observability_rules(monkeypatch):
+    """observability/rules.py. It imports its neighbours (inventory.py): last on the path,
+    so no module of security/ resolves there."""
     monkeypatch.setattr(sys, "path", [*sys.path, str(ROOT / "observability")])
     spec = importlib.util.spec_from_file_location("observability_rules_for_wazuh", ROOT / "observability/rules.py")
     rules = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(rules)
+    return rules
+
+
+def test_the_severities_counted_together_are_those_of_the_rule_of_a_new_finding(monkeypatch):
+    rules = observability_rules(monkeypatch)
     # The line counts the severities of the rule, under a label that the rule reads.
     assert tuple(rules.SECURITY_FINDING_SEVERITY.split("|")) == converter.FINDING_LEVELS
     assert converter.VULNERABILITIES_SEVERITY in converter.FINDING_LEVELS
+
+
+@pytest.mark.parametrize("value", ["Severe", "informational", "", "HIGH "])
+def test_a_severity_that_is_not_a_value_of_the_release_counts_as_high_and_apart(indexer, tmp_path, caplog, value):
+    """A new value of the feed makes the line fail, and is never left out."""
+    indexer.docs[converter.VULNERABILITIES_INDEX] = [vulnerability_doc("002", "Low"), vulnerability_doc("002", value),
+                                                     vulnerability_doc("002", value)]
+    part = source_for(indexer, tmp_path)
+    with caplog.at_level(logging.INFO, logger="converter"):
+        part.cycle()
+        part.cycle()
+    assert results(part)[("vulnerabilities", "distro-one")] == (2, "high")
+    assert {dict(key)["severity"]: value for key, value in served(part, converter.WAZUH_VULNERABILITIES).items()} == {
+        "high": 2, "low": 1}
+    assert served(part, converter.WAZUH_SEVERITY_OTHER) == {(): 2}
+    # One line in the log, with a fixed text: never the value.
+    notes = [record.getMessage() for record in caplog.records if "not a value of the release" in record.getMessage()]
+    assert notes == ["the vulnerability state has severities that are not a value of the release: they count as high"]
+
+
+@pytest.mark.parametrize("value", ["-", None])
+def test_a_vulnerability_with_no_score_does_not_fail_the_line_and_is_not_counted_apart(indexer, tmp_path, value):
+    indexer.docs[converter.VULNERABILITIES_INDEX] = [vulnerability_doc("002", value), vulnerability_doc("002", "Medium")]
+    part = source_for(indexer, tmp_path)
+    part.cycle()
+    assert results(part)[("vulnerabilities", "distro-one")] == (0, "high")
+    assert {dict(key)["severity"]: value for key, value in served(part, converter.WAZUH_VULNERABILITIES).items()} == {
+        "unknown": 1, "medium": 1}
+    assert served(part, converter.WAZUH_SEVERITY_OTHER) == {(): 0}
 
 
 def test_an_sca_result_that_is_not_a_value_of_the_release_is_counted_and_has_no_result(indexer, tmp_path, caplog):
@@ -783,3 +819,61 @@ def test_the_network_policy_lets_the_converter_reach_the_indexer_on_9200_only():
                if doc["metadata"]["name"] == "wazuh-indexer-readers"]
     (rule,) = readers[0]["spec"]["ingress"]
     assert {"app.kubernetes.io/name": "security-converter"} in [item["matchLabels"] for item in rule["fromEndpoints"]]
+
+
+# --- The alerts of the Wazuh source -----------------------------------------------------
+
+ALERTMANAGER = ROOT / "kubernetes/apps/monitoring/alertmanager/app/config/alertmanager.yml"
+
+
+def held(alert: dict, sources: list[dict]) -> bool:
+    """Whether Alertmanager holds `alert` while each of `sources` fires: the matchers of
+    an inhibit rule, and the same value (or no value on both) of each `equal` label."""
+    def matches(labels, matchers):
+        for matcher in matchers:
+            name, value = re.fullmatch(r'(\w+) = "([^"]*)"', matcher).groups()
+            if labels.get(name, "") != value:
+                return False
+        return True
+
+    for rule in yaml.safe_load(ALERTMANAGER.read_text())["inhibit_rules"]:
+        if not matches(alert, rule["target_matchers"]):
+            continue
+        for source in sources:
+            if matches(source, rule["source_matchers"]) and all(
+                    alert.get(name, "") == source.get(name, "") for name in rule.get("equal", [])):
+                return True
+    return False
+
+
+# The labels that the Prometheus of homelab-wsl-02 gives each alert, with its external
+# label `cluster`.
+FAILING = {"alertname": "SecurityWazuhReadFailing", "severity": "warning", "k8s_cluster": "homelab-wsl-02",
+           "cluster": "homelab-wsl-02"}
+
+
+def late(source, system, cluster="homelab-wsl-02", **labels):
+    return {"alertname": "SecurityResultLate", "severity": "warning", "source": source, "system": system,
+            "cluster": cluster, **labels}
+
+
+def test_a_failed_read_of_the_indexer_holds_the_late_alerts_of_wazuh_only():
+    for alert in (late("wazuh", "host-one"), late("wazuh", "host-two", behind_site="homelab-wsl")):
+        assert held(alert, [FAILING]), alert
+    for alert in (late("host-check", "host-one"), late("prowler", "aws-prod"),
+                  late("wazuh", "host-one", cluster="homelab-wsl")):
+        assert not held(alert, [FAILING]), alert
+    assert not held(FAILING, [late("wazuh", "host-one")])
+
+
+def test_the_read_alert_fires_before_the_late_alerts_that_it_holds(monkeypatch):
+    """A failed read serves no time: the late rule waits its window and its `for`."""
+    rules = observability_rules(monkeypatch)
+    (failing,) = [rule for rule in rules.security_alerts() if rule["alert"] == "SecurityWazuhReadFailing"]
+    late_rule = generate.late_rule("")
+
+    def minutes(text):
+        return int(text.rstrip("m"))
+
+    assert minutes(failing["for"]) < minutes(generate.WINDOW) + minutes(late_rule["for"])
+    assert 'query="results"' in failing["expr"] and 'source_site=""' in failing["expr"]

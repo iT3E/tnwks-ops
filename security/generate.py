@@ -54,6 +54,11 @@ HOST_SCRAPE_JOB = "windows-exporter-security"
 BEHIND = "behind_site"
 WAZUH_AGENT = "wazuh_agent"
 HOST_UNREACHABLE_FOR = "5m"
+# SecurityHostUnreachable keeps firing this long after the first scrape that passes, so
+# the late alerts that it holds do not page while the results of the systems behind the
+# site come back: the time of a Wazuh agent comes with the next snapshot of the
+# manager (each 600 seconds) and the next cycle of the converter (each 5 minutes).
+HOST_UNREACHABLE_KEEP = "20m"
 
 TYPES = ("aws-account", "cloudflare-account", "github-organization",
          "terraform-cloud-organization", "cluster", "windows-host", "wsl-distro", "laptop",
@@ -369,16 +374,18 @@ def host_unreachable_rule():
     """The alert for a host that this site can not scrape, for a host target that sits
     behind another site. It carries behind_site from its target. While it fires,
     Alertmanager holds each SecurityResultLate with the same behind_site, and
-    PeerSiteUnreachable of the same k8s_cluster (alertmanager.yml)."""
+    PeerSiteUnreachable of the same k8s_cluster (alertmanager.yml). It keeps firing for
+    HOST_UNREACHABLE_KEEP after the host comes back."""
     return {"alert": "SecurityHostUnreachable",
             "expr": f'up{{job="{HOST_SCRAPE_JOB}",{BEHIND}!=""}} == 0',
-            "for": HOST_UNREACHABLE_FOR, "labels": {"severity": "warning"},
+            "for": HOST_UNREACHABLE_FOR, "keep_firing_for": HOST_UNREACHABLE_KEEP, "labels": {"severity": "warning"},
             "annotations": {
                 "summary": "This site can not scrape the exporter of {{ $labels.instance }}",
                 "description": ("The scrape of windows_exporter on {{ $labels.instance }} fails: {{ $labels.behind_site }} "
                                 "is away (its power or its link), the link between the sites is down, or windows_exporter "
                                 "on that host stopped. The results of the systems behind {{ $labels.behind_site }} wait, "
-                                "and their late alerts, and PeerSiteUnreachable of that site, are held while this fires."),
+                                "and their late alerts, and PeerSiteUnreachable of that site, are held while this fires. "
+                                "It fires for 20 minutes more after the first scrape that passes, while those results come back."),
                 "dashboard_url": BOARD_LINK,
                 "runbook_url": runbook_link("SecurityHostUnreachable")}}
 
@@ -680,6 +687,13 @@ def host_unreachable_fixtures(registry):
          "alert_rule_test": [
              {"eval_time": "14m", "alertname": rule["alert"], "exp_alerts": []},
              {"eval_time": "16m", "alertname": rule["alert"], "exp_alerts": fires}]},
+        {"name": "a host behind another site keeps the alert for 20 minutes after the first scrape that passes",
+         "interval": "1m", "external_labels": {"cluster": "site"},
+         "input_series": [up("1+0x10 0+0x30 1+0x40", **{BEHIND: site})],
+         "alert_rule_test": [
+             {"eval_time": "40m", "alertname": rule["alert"], "exp_alerts": fires},
+             {"eval_time": "55m", "alertname": rule["alert"], "exp_alerts": fires},
+             {"eval_time": "63m", "alertname": rule["alert"], "exp_alerts": []}]},
         {"name": "a host behind another site that this site scrapes, or a host of this site, does not alert",
          "interval": "1m", "external_labels": {"cluster": "site"},
          "input_series": [up("1+0x40", **{BEHIND: site}), series("up", "0+0x40", job=HOST_SCRAPE_JOB, **near)],

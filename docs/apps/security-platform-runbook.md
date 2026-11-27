@@ -48,12 +48,12 @@ own section here (`runbook_url`).
 
 ## The alerts
 
-15 alerts cover the platform:
+17 alerts cover the platform:
 
 - the 3 rules that `security/generate.py` writes from the registry
   (`SecurityResultLate`, `SecurityHostUnreachable`,
   `SecurityAcceptedFindingExpired`);
-- the 8 rules of the group `homelab.security` in `observability/rules.py`;
+- the 10 rules of the group `homelab.security` in `observability/rules.py`;
 - 3 rules of the group `homelab.capacity` in `observability/rules.py` for
   the room of site 2, where the platform runs (`NodeContainerMemoryNearLimit`,
   `LokiSecurityIngestAbovePlan`, `WslDriveSpaceLow`);
@@ -62,7 +62,7 @@ own section here (`runbook_url`).
   which `SecurityHostUnreachable` holds.
 
 The generated rule tests (`promtool test rules`, the `rule-tests` job) are
-the proof of each expression of the first 14. The text of an alert names no
+the proof of each expression of the first 16. The text of an alert names no
 check, finding or value ([`security/README.md`](../../security/README.md#the-text-of-an-alert)).
 
 ### SecurityResultLate
@@ -73,7 +73,8 @@ that rest on it show "No evidence" on the board. The labels name the system
 and the source. The limit of each source is in
 `security/registry/sources.yaml` ([`security/README.md`](../../security/README.md#the-cycle-of-each-source)).
 While `SecurityHostUnreachable` fires, Alertmanager holds the late alerts of
-the systems behind that site.
+the systems behind that site. While `SecurityWazuhReadFailing` fires, it
+holds the late alerts of the source `wazuh`.
 
 **First reads.**
 
@@ -136,8 +137,12 @@ of that host); a read on the host is owner approval. A
 change of either is an apply of the Windows play (owner approval,
 [`docs/wsl/windows-ansible.md`](../wsl/windows-ansible.md)).
 
-**When it ends.** At the first scrape that passes. The held alerts then
-show if their cause is still there.
+**When it ends.** 20 minutes after the first scrape that passes
+(`keep_firing_for`), so the results of the systems behind the site come
+back before the hold ends: the time of a Wazuh agent comes with the next
+snapshot of the manager and the next cycle of the converter. The held
+alerts then show if their cause is still there. `PeerSiteUnreachable` of
+that site is held for those 20 minutes too.
 
 **Who decides.** The owner: the power and the link of a site, and each
 apply on a host.
@@ -197,6 +202,63 @@ in the registry.
 **When it ends.** In the cycle after the list is fixed.
 
 **Who decides.** The owner only.
+
+### SecurityWazuhReadFailing
+
+**What it means.** The security converter on homelab-wsl-02 can not read
+the Wazuh indexer, for 15 minutes
+(`homelab_security_converter_wazuh_query_success{query="results"}` at 0).
+It serves no result and no time of `wazuh` for any system, so the board
+shows no evidence for them. While it fires, Alertmanager holds
+`SecurityResultLate` of the source `wazuh` (`alertmanager.yml`), so a
+failed read gives one alert. It fires before those late alerts.
+
+**First reads.**
+
+1. The log of the converter, `{namespace="security", app="security-converter"}`.
+   It says the kind of the fault and the status, and never an answer of the
+   indexer.
+2. The pods of the indexer and their log
+   (`kubernetes/apps/security/wazuh/README.md`).
+3. `security/converter/README.md`, "When the converter serves no result":
+   a refusal, an answer that does not fit, a bound or the deadline, the
+   password or the CA file.
+
+**The fix.** Through git: the indexer, the account `tnwks-converter`, or the
+converter. A restart of a pod is owner approval.
+
+**When it ends.** In the cycle after a read passes. The late alerts of
+`wazuh` end in the same cycle, as the converter serves the time again.
+
+**Who decides.** The reads are open. The owner merges each fix and approves
+a restart.
+
+### SecurityWazuhValuesUnknown
+
+**What it means.** For 30 minutes, documents of the Wazuh state have a value
+that is not one of the pinned release:
+
+- an SCA result that is not `Passed`, `Failed` or `Not applicable`
+  (`homelab_security_converter_wazuh_sca_other_results` above 0). The check
+  of such a document has no result, so its line shows no evidence;
+- a severity of a vulnerability that is not `Critical`, `High`, `Medium`,
+  `Low` or `-`
+  (`homelab_security_converter_wazuh_vulnerability_other_severities` above
+  0). Such a vulnerability counts as high, so the line `vulnerabilities`
+  fails.
+
+**First reads.** The log of the converter,
+`{namespace="security", app="security-converter"}`: one line says which
+state has the new values, and not the values. The release of the manager
+and of the agents (`kubernetes/apps/security/wazuh/README.md`).
+
+**The fix.** Through git: the converter takes the new values of the release
+(`security/converter/README.md`, "The Wazuh source"), with their source
+upstream.
+
+**When it ends.** In the cycle after the converter reads the new values.
+
+**Who decides.** The owner merges the change.
 
 ### SecurityFindingNew
 

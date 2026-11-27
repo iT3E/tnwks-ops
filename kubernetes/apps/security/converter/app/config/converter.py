@@ -76,6 +76,7 @@ WAZUH_INDICES_TIME = "homelab_security_wazuh_indices_timestamp_seconds"
 WAZUH_QUERY_SUCCESS = "homelab_security_converter_wazuh_query_success"
 WAZUH_UNMAPPED = "homelab_security_converter_wazuh_unmapped_agents"
 WAZUH_SCA_OTHER = "homelab_security_converter_wazuh_sca_other_results"
+WAZUH_SEVERITY_OTHER = "homelab_security_converter_wazuh_vulnerability_other_severities"
 WAZUH_VULNERABILITIES = "homelab_security_wazuh_vulnerabilities"
 WAZUH_INDEX_SIZE = "homelab_security_wazuh_index_size_bytes"
 
@@ -1390,19 +1391,43 @@ def sca_results(buckets) -> tuple[dict[tuple[str, str], int], int]:
     return results, other
 
 
-def vulnerability_counts(buckets) -> dict[str, dict[str, int]]:
-    """{agent ID: {severity: count}} from the buckets of the vulnerability state. Each
-    document is one vulnerability of one package. The severity is in lower case, and a
-    value that is not one of the list ("-" for none) is `unknown`."""
+# The severities that the vulnerability scanner of the release writes, in lower case,
+# and the value it writes when the feed gives none.
+VULNERABILITY_LEVELS = ("critical", "high", "medium", "low")
+NO_SEVERITY = "-"
+# The severity of a value that is not one of the release: it counts as high, so a new
+# value of the feed makes the line fail and is never left out.
+OTHER_SEVERITY = "high"
+
+
+def vulnerability_severity(value: object) -> tuple[str, bool]:
+    """The severity of one value of `vulnerability.severity`, and whether the value is
+    not one of the release. "-" and no value are `unknown`: the feed gives that
+    vulnerability no score, and it does not fail the line."""
+    if value is None or value == NO_SEVERITY:
+        return "unknown", False
+    text = value.lower() if isinstance(value, str) else ""
+    if text in VULNERABILITY_LEVELS:
+        return text, False
+    return OTHER_SEVERITY, True
+
+
+def vulnerability_counts(buckets) -> tuple[dict[str, dict[str, int]], int]:
+    """{agent ID: {severity: count}} from the buckets of the vulnerability state, and the
+    count of the documents whose severity is not a value of the release. Each document
+    is one vulnerability of one package."""
     counts: dict[str, dict[str, int]] = {}
+    other = 0
     for bucket in buckets:
         agent = bucket["key"]["agent"]
         if not isinstance(agent, str):
             continue
-        level = severity(bucket["key"]["severity"])
+        level, unknown_value = vulnerability_severity(bucket["key"]["severity"])
+        if unknown_value:
+            other += bucket["doc_count"]
         by_level = counts.setdefault(agent, {})
         by_level[level] = by_level.get(level, 0) + bucket["doc_count"]
-    return counts
+    return counts, other
 
 
 # The severities of SecurityFindingNew (observability/rules.py, SECURITY_FINDING_SEVERITY),
@@ -1442,8 +1467,8 @@ class WazuhSource(Loop):
         self.time_series = registry["series"]["last_result"]
         self.agents_of = dict(registry.get("wazuh_agents", {}))
         self.noted: set[str] = set()
-        # (results, times, vulnerabilities, unmapped, other SCA results, sizes, success of
-        # each query, read at)
+        # (results, times, vulnerabilities, unmapped, (other SCA results, other severities),
+        # sizes, success of each query, read at)
         self.result: tuple | None = None
 
     def note(self, text: str):
@@ -1492,7 +1517,7 @@ class WazuhSource(Loop):
                         {"check": {"terms": {"field": "check.id"}}},
                         {"result": {"terms": {"field": "check.result"}}}],
             {"match_all": {}}, in_time=in_time))
-        vulnerabilities = vulnerability_counts(self.indexer.composite(
+        vulnerabilities, severity_other = vulnerability_counts(self.indexer.composite(
             VULNERABILITIES_INDEX, [{"agent": {"terms": {"field": "wazuh.agent.id"}}},
                                     {"severity": {"terms": {"field": "vulnerability.severity",
                                                             "missing_bucket": True}}}],
@@ -1520,21 +1545,24 @@ class WazuhSource(Loop):
         if sca_other:
             self.note("the SCA state has results that are not Passed, Failed or Not applicable: "
                       "their checks have no result")
-        return results, times, by_severity, unmapped, sca_other
+        if severity_other:
+            self.note("the vulnerability state has severities that are not a value of the release: "
+                      "they count as high")
+        return results, times, by_severity, unmapped, (sca_other, severity_other)
 
     def step(self):
         now = self.clock()
         deadline = self.monotonic() + WAZUH_DEADLINE_SECONDS
         success = {}
         try:
-            results, times, by_severity, unmapped, sca_other = self.read_results(now, deadline)
+            results, times, by_severity, unmapped, others = self.read_results(now, deadline)
             success["results"] = 1
         except IndexerError as error:
             logger.warning("no result of Wazuh in this cycle: %s", error)
-            results, times, by_severity, unmapped, sca_other, success["results"] = [], [], [], None, None, 0
+            results, times, by_severity, unmapped, others, success["results"] = [], [], [], None, None, 0
         except Exception as error:  # noqa: BLE001 - a fault here must not keep an old result
             logger.error("the read of the results of Wazuh failed: %s", type(error).__name__)
-            results, times, by_severity, unmapped, sca_other, success["results"] = [], [], [], None, None, 0
+            results, times, by_severity, unmapped, others, success["results"] = [], [], [], None, None, 0
         try:
             sizes = self.indexer.sizes()
             success["index-stats"] = 1
@@ -1545,20 +1573,21 @@ class WazuhSource(Loop):
             logger.error("the read of the index stats of Wazuh failed: %s", type(error).__name__)
             sizes, success["index-stats"] = {}, 0
         with self.lock:
-            self.result = results, times, by_severity, unmapped, sca_other, sizes, success, self.monotonic()
+            self.result = results, times, by_severity, unmapped, others, sizes, success, self.monotonic()
 
     def collect(self, metrics: Metrics, now: float):
         with self.lock:
             result = self.result
         if result is None or not self.fresh(result[-1], now):
             return
-        results, times, by_severity, unmapped, sca_other, sizes, success, _ = result
+        results, times, by_severity, unmapped, others, sizes, success, _ = result
         for query, value in sorted(success.items()):
             metrics.add(WAZUH_QUERY_SUCCESS, value, query=query)
         if unmapped is not None:
             metrics.add(WAZUH_UNMAPPED, unmapped)
-        if sca_other is not None:
-            metrics.add(WAZUH_SCA_OTHER, sca_other)
+        if others is not None:
+            metrics.add(WAZUH_SCA_OTHER, others[0])
+            metrics.add(WAZUH_SEVERITY_OTHER, others[1])
         for system, moment in times:
             metrics.add(self.time_series, float(moment), source=WAZUH_SOURCE, system=system)
         for check, system, failed, level in results:
