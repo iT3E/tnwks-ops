@@ -33,6 +33,11 @@ python3 test_flux_lockdown.py Setup | NoFlag | Flag
      StatefulSet: the controller reads their ReplicaSets and Pods as the
      account when it waits. With the role less those reads, the wait fails
      "forbidden".
+  8. A parent that names kustomize-controller in one of its children by a
+     patch, as the parent of the apps of a site does for its children of
+     the class (step 2b): that child has the account in its spec and
+     applies as kustomize-controller, and so does the other child, which
+     names none.
 - Flag, after a restart with --default-service-account=default (step 2e):
   1. A Kustomization with no account applies as flux-system/default (which
      has no right in the namespace of the probe, so RBAC names it).
@@ -340,6 +345,20 @@ class NoFlag(unittest.TestCase):
         for name in ("census-role", "census-pod"):
             kustomization(name, f"./{name}", serviceAccountName=ROLE_ACCOUNT)
             wait_ready(name, "False", f"User \"system:serviceaccount:flux-system:{ROLE_ACCOUNT}\" cannot")
+
+    def test_8_a_patch_of_the_parent_names_the_controller_in_its_child(self):
+        patch = {"apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+                 "metadata": {"name": "not-used"}, "spec": {"serviceAccountName": "kustomize-controller"}}
+        kustomization("parent", "./parent", serviceAccountName="kustomize-controller", patches=[{
+            "patch": json.dumps(patch),
+            "target": {"group": "kustomize.toolkit.fluxcd.io", "kind": "Kustomization", "name": "who-patched"}}])
+        wait_ready("parent", "True")
+        wait_for("the children of parent", lambda: all(call("GET", f"{KUSTOMIZATIONS}/{n}")[0] == 200
+                                                       for n in ("who-patched", "who-unpatched")))
+        self.assertEqual(ks("who-patched")["spec"].get("serviceAccountName"), "kustomize-controller")
+        self.assertNotIn("serviceAccountName", ks("who-unpatched")["spec"])
+        for name in ("who-patched", "who-unpatched"):
+            wait_ready(name, "False", "identity-probe user=" + CONTROLLER + " end")
 
     def test_7_the_role_reads_what_the_wait_reads(self):
         kustomization("census-wait", "./census-wait", serviceAccountName=ROLE_ACCOUNT, wait=True)

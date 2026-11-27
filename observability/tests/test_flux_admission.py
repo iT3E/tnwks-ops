@@ -337,13 +337,17 @@ def substitution_of(site, child):
     labels = child.doc["metadata"].get("labels") or {}
     sources = (child.doc["spec"].get("postBuild") or {}).get("substituteFrom")
     for patch in parent["spec"]["patches"]:
+        body = yaml.safe_load(patch["patch"])
+        if "postBuild" not in (body.get("spec") or {}):
+            # Another patch, such as the account of the class (step 2b).
+            continue
         target = patch["target"]
         assert target["labelSelector"] == "substitution.flux.home.arpa/disabled notin (true)"
         if labels.get("substitution.flux.home.arpa/disabled") == "true":
             continue
         if "name" in target and not re.fullmatch(target["name"], child.doc["metadata"]["name"]):
             continue
-        sources = yaml.safe_load(patch["patch"])["spec"]["postBuild"]["substituteFrom"]
+        sources = body["spec"]["postBuild"]["substituteFrom"]
     return [(s["kind"], s["name"]) for s in sources or []]
 
 

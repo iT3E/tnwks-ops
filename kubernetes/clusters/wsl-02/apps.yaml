@@ -8,6 +8,10 @@ metadata:
   name: cluster-apps-wsl-02
   namespace: flux-system
 spec:
+  # Of the class: it runs as kustomize-controller, with the rights of today
+  # (docs/operations/flux-lockdown.md, step 2b). So does each of its direct
+  # children of the class, by the last patch below.
+  serviceAccountName: kustomize-controller
   interval: 30m
   path: ./kubernetes/clusters/wsl-02/apps
   prune: true
@@ -85,6 +89,21 @@ spec:
         kind: Kustomization
         labelSelector: substitution.flux.home.arpa/disabled notin (true)
         # The direct children of the class.
+        # BEGIN classlist.py: written by classlist.py write, do not edit by hand.
+        name: actions-runner-controller|actions-runner-controller-monitoring|alertmanager|aws-backup-credentials|cert-manager|cert-manager-issuers|cilium|cilium-bgp|cilium-clustermesh|cilium-config|cloudnative-pg-app|cloudnative-pg-plugin-barman-cloud|finance-sync-db|firefly-db|flux-accounts|flux-admission|flux-substitution|grafana|grafana-db|home-assistant-db|ingress-nginx-certificates|ingress-nginx-internal|ingress-nginx-internal-shared-vip|kopiur|kopiur-policies|kopiur-repository|kopiur-standby-repository|kube-prometheus-stack|kube-prometheus-stack-addons|local-path-provisioner|loki|mealie-db|metrics-server|node-exporter|observability-dashboards|observability-evidence|observability-garage|observability-pki|observability-rules|plausible-db|pyrra|pyrra-crds|qbittorrent|reloader|security-api-checks|security-aws-credentials|security-converter|security-loki-proxy|security-prowler|security-registry-rules|security-trail-copy|security-trivy-operator|security-wazuh|security-wazuh-accounts|security-wazuh-server|security-wazuh-settings|site-lease-fence|standby-restore|thanos-metrics|thanos-metrics-archive|tnwks-ops-runner|transcriber-db|unifi|unifi-inform-vip|unpoller|vector-agent|vector-aggregator|vector-audit-reader
+        # END classlist.py
+    # The direct children of the class run as kustomize-controller (step 2b),
+    # with or without the label that turns off their substitution.
+    - patch: |-
+        apiVersion: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        metadata:
+          name: not-used
+        spec:
+          serviceAccountName: kustomize-controller
+      target:
+        group: kustomize.toolkit.fluxcd.io
+        kind: Kustomization
         # BEGIN classlist.py: written by classlist.py write, do not edit by hand.
         name: actions-runner-controller|actions-runner-controller-monitoring|alertmanager|aws-backup-credentials|cert-manager|cert-manager-issuers|cilium|cilium-bgp|cilium-clustermesh|cilium-config|cloudnative-pg-app|cloudnative-pg-plugin-barman-cloud|finance-sync-db|firefly-db|flux-accounts|flux-admission|flux-substitution|grafana|grafana-db|home-assistant-db|ingress-nginx-certificates|ingress-nginx-internal|ingress-nginx-internal-shared-vip|kopiur|kopiur-policies|kopiur-repository|kopiur-standby-repository|kube-prometheus-stack|kube-prometheus-stack-addons|local-path-provisioner|loki|mealie-db|metrics-server|node-exporter|observability-dashboards|observability-evidence|observability-garage|observability-pki|observability-rules|plausible-db|pyrra|pyrra-crds|qbittorrent|reloader|security-api-checks|security-aws-credentials|security-converter|security-loki-proxy|security-prowler|security-registry-rules|security-trail-copy|security-trivy-operator|security-wazuh|security-wazuh-accounts|security-wazuh-server|security-wazuh-settings|site-lease-fence|standby-restore|thanos-metrics|thanos-metrics-archive|tnwks-ops-runner|transcriber-db|unifi|unifi-inform-vip|unpoller|vector-agent|vector-aggregator|vector-audit-reader
         # END classlist.py
