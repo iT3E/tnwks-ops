@@ -1,0 +1,39 @@
+---
+# No pod runs as the account of a Flux child outside the class
+# (docs/operations/flux-lockdown.md): flux-child-<name> in flux-system and
+# flux-release-<name> in the namespace of a HelmRelease. Flux applies the
+# objects of a child as that account, so a pod of that account could act as
+# the child. Unlike flux-child-scope, this policy matches the pods of each
+# user, as the multi-tenancy example of Flux does for its account
+# (fluxcd/flux2-multi-tenancy, "Flux service account restriction"). It reads
+# only the account of the pod, so an error is unlikely; failurePolicy Fail
+# refuses the pod on one.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: flux-child-pods
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  validations:
+    - expression: >-
+        !object.spec.?serviceAccountName.orValue('').matches('^flux-(child|release)-') &&
+        !object.spec.?serviceAccount.orValue('').matches('^flux-(child|release)-')
+      messageExpression: >-
+        'flux-child-pods/pod-account: the pod ' + object.metadata.?name.orValue(object.metadata.?generateName.orValue('')) +
+        ' may not run as ' + object.spec.?serviceAccountName.orValue(object.spec.?serviceAccount.orValue('')) +
+        ', the account of a Flux child'
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: flux-child-pods
+spec:
+  policyName: flux-child-pods
+  validationActions: ["Deny", "Audit"]

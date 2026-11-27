@@ -847,6 +847,68 @@ def test_the_policy_matches_the_two_controllers_and_fails_closed():
         assert f"system:serviceaccount:flux-system:{account}" in condition["expression"]
 
 
+def test_the_policy_matches_the_accounts_of_the_children():
+    (condition,) = docs()["ValidatingAdmissionPolicy"]["spec"]["matchConditions"]
+    assert "startsWith('system:serviceaccount:flux-system:flux-child-')" in condition["expression"]
+    assert "matches('^system:serviceaccount:[^:]+:flux-release-[^:]+$')" in condition["expression"]
+
+
+def pod_policy():
+    return {d["kind"]: d for d in yaml.safe_load_all((ADMISSION / "app/pods.yaml").read_text()) if d}
+
+
+def test_the_pod_policy_matches_each_pod_and_fails_closed():
+    """No pod of any user runs as the account of a child: the policy has no
+    match condition on the user, and it denies."""
+    policy, binding = pod_policy()["ValidatingAdmissionPolicy"], pod_policy()["ValidatingAdmissionPolicyBinding"]
+    assert policy["spec"]["failurePolicy"] == "Fail"
+    assert "matchConditions" not in policy["spec"]
+    assert policy["spec"]["matchConstraints"]["resourceRules"] == [
+        {"apiGroups": [""], "apiVersions": ["v1"], "operations": ["CREATE", "UPDATE"], "resources": ["pods"]}]
+    assert binding["spec"] == {"policyName": "flux-child-pods", "validationActions": ["Deny", "Audit"]}
+    assert "- ./pods.yaml" in (ADMISSION / "app/kustomization.yaml").read_text()
+
+
+# The accounts of the children outside the class.
+CHILD_ACCOUNT = re.compile(r"^flux-(child|release)-")
+
+
+def pod_specs(doc):
+    """Each pod spec of a document of a build: a pod, or the template of a
+    workload."""
+    spec = doc.get("spec") or {}
+    if not isinstance(spec, dict):
+        return []
+    found = [spec] if doc.get("kind") == "Pod" else []
+    for template in (spec.get("template"), (spec.get("jobTemplate") or {}).get("spec", {}).get("template")):
+        if isinstance(template, dict) and isinstance(template.get("spec"), dict):
+            found.append(template["spec"])
+    return found
+
+
+@pytest.mark.parametrize("site", classlist.SITES)
+def test_the_class_names_no_account_of_a_child(site):
+    """No Kustomization or HelmRelease of the class, and no pod spec of any
+    build, names the account of a child outside the class; a Kustomization
+    or HelmRelease outside the class names its own account or none."""
+    found = []
+    for child in classlist.walk(site).values():
+        in_class = classlist.is_class_path(child.path)
+        for doc in child.build.docs:
+            account = (doc.get("spec") or {}).get("serviceAccountName", "") if isinstance(doc.get("spec"), dict) else ""
+            name = doc.get("metadata", {}).get("name", "")
+            if classlist.is_kind(doc, classlist.KUSTOMIZE_GROUP, "Kustomization") or \
+                    classlist.is_kind(doc, classlist.HELM_GROUP, "HelmRelease"):
+                own = ("flux-child-" if doc["kind"] == "Kustomization" else "flux-release-") + name
+                if CHILD_ACCOUNT.match(account) and (in_class or account != own):
+                    found.append((child.key, doc["kind"], name, account))
+            for spec in pod_specs(doc):
+                for field in ("serviceAccountName", "serviceAccount"):
+                    if CHILD_ACCOUNT.match(str(spec.get(field, ""))):
+                        found.append((child.key, doc.get("kind"), name, spec[field]))
+    assert not found, found
+
+
 def test_the_binding_denies_and_audits():
     # It was Audit and Warn until a read of the audit counts of both sites
     # (docs/operations/flux-admission.md, "Roll-out"). Audit keeps the
