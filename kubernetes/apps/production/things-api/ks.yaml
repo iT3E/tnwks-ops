@@ -45,14 +45,7 @@ metadata:
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/production/things-api/app
-  # Prune off for the rename of this Kustomization to things-api (task 6.26,
-  # three pull requests). While its name changes, the parent deletes the
-  # old Kustomization, and with prune off and Orphan that delete leaves the
-  # app's objects in place for the new name to take over. Both stay until
-  # the last pull request turns prune on again. No other change to this
-  # folder until then: an object that left git would stay with no owner.
-  prune: false
-  deletionPolicy: Orphan
+  prune: true
   sourceRef:
     kind: GitRepository
     name: flux-system
