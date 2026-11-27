@@ -18,6 +18,9 @@ resources:
   # The reduced substitution Secret of the children outside the class, with
   # this cluster's template (the keys of its cluster-secrets).
   - ./flux-substitution-ks.yaml
+  # The accounts of the Flux children outside the class and their role
+  # (docs/operations/flux-lockdown.md, step 2a).
+  - ../../../apps/flux-system/accounts/ks-wsl-02.yaml
   - ../../../apps/kube-system/namespace.yaml
   # CNI and LoadBalancer IPs (Cilium LB IPAM + L2), instead of Flannel and
   # MetalLB on homelab-wsl.

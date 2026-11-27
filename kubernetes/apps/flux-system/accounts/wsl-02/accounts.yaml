@@ -1,0 +1,885 @@
+---
+# The accounts of the Flux children outside the class of wsl-02
+# (docs/operations/flux-lockdown.md, step 2a). Written by
+# kubernetes/apps/flux-system/lockdown/accounts.py write: do not edit by hand.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-changedetection
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-changedetection
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-changedetection
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-finance-sync
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-finance-sync
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-finance-sync
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-firefly
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-firefly
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-firefly
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-home-assistant
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-home-assistant
+  namespace: home-automation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-home-assistant
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-immich
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-immich
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-immich
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-immich-sync
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-immich-sync
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-immich-sync
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-immichframe
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-immichframe
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-immichframe
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-jellyfin
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-jellyfin
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-jellyfin
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-kitchen-screensaver
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-kitchen-screensaver
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-kitchen-screensaver
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-mealie
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-mealie
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-mealie
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-mosquitto
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-mosquitto
+  namespace: home-automation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-mosquitto
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-mosquitto-shared-vip
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-mosquitto-shared-vip
+  namespace: home-automation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-mosquitto-shared-vip
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-ombi
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-ombi
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-ombi
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-ombi-f
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-ombi-f
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-ombi-f
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-plausible
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-plausible
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-plausible
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-prowlarr
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-prowlarr
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-prowlarr
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-radarr
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-radarr
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-radarr
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-recyclarr
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-recyclarr
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-recyclarr
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-sonarr
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-sonarr
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-sonarr
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-transcriber
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-transcriber
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-transcriber
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-valheim
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-valheim
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-valheim
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-child-wizarr
+  namespace: flux-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-child-wizarr
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-child-wizarr
+  namespace: flux-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-home-assistant
+  namespace: home-automation
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-home-assistant
+  namespace: home-automation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-home-assistant
+  namespace: home-automation
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-mosquitto
+  namespace: home-automation
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-mosquitto
+  namespace: home-automation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-mosquitto
+  namespace: home-automation
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-prowlarr
+  namespace: media
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-prowlarr
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-prowlarr
+  namespace: media
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-radarr
+  namespace: media
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-radarr
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-radarr
+  namespace: media
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-recyclarr
+  namespace: media
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-recyclarr
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-recyclarr
+  namespace: media
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-sonarr
+  namespace: media
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-sonarr
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-sonarr
+  namespace: media
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-changedetection
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-changedetection
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-changedetection
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-finance-sync
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-finance-sync
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-finance-sync
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-firefly
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-firefly
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-firefly
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-jellyfin
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-jellyfin
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-jellyfin
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-mealie
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-mealie
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-mealie
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-ombi
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-ombi
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-ombi
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-ombi-f
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-ombi-f
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-ombi-f
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-transcriber
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-transcriber
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-transcriber
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-wizarr
+  namespace: production
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-wizarr
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-wizarr
+  namespace: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-immich
+  namespace: selfhosted
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-immich
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-immich
+  namespace: selfhosted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-immichframe
+  namespace: selfhosted
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-immichframe
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-immichframe
+  namespace: selfhosted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-kitchen-screensaver
+  namespace: selfhosted
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-kitchen-screensaver
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-kitchen-screensaver
+  namespace: selfhosted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-plausible
+  namespace: selfhosted
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-plausible
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-plausible
+  namespace: selfhosted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-release-valheim
+  namespace: selfhosted
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flux-release-valheim
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-child
+subjects:
+- kind: ServiceAccount
+  name: flux-release-valheim
+  namespace: selfhosted

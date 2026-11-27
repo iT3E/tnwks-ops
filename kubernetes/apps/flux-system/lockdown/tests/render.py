@@ -11,7 +11,14 @@ the Python of the repository (observability), writes:
   server does not need;
 - srv/source.tar.gz and digest.txt: the artifact of a test tree, which a
   plain HTTP server gives to the controller as the GitRepository of
-  flux-system would. It holds ConfigMaps and one ClusterRole, and no secret.
+  flux-system would. It holds ConfigMaps and one ClusterRole, an object of
+  each kind of the role flux-child (step 2a), and a Role and a Pod, a
+  Deployment and a StatefulSet with no replicas for each of two waits, and
+  no secret (its one Secret holds a placeholder);
+- role.json: the role flux-child of git
+  (kubernetes/apps/flux-system/accounts/role/clusterrole.yaml), and
+  role-noread.json: the same role less its reads of ReplicaSets and Pods,
+  as the control of the wait.
 
   python3 render.py <output directory>
 """
@@ -42,8 +49,91 @@ CONFIGMAPS = {
 }
 
 
+# An object of each kind that the role flux-child grants, in the namespace
+# tenant, for the account of a child with that role only.
+CENSUS = [
+    {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "census"}, "data": {"a": "b"}},
+    {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": "census"},
+     "stringData": {"README": "a placeholder of the test, not a secret"}},
+    {"apiVersion": "v1", "kind": "Service", "metadata": {"name": "census"},
+     "spec": {"selector": {"app": "census"}, "ports": [{"port": 80}]}},
+    {"apiVersion": "v1", "kind": "PersistentVolumeClaim", "metadata": {"name": "census"},
+     "spec": {"accessModes": ["ReadWriteOnce"], "resources": {"requests": {"storage": "1Gi"}}}},
+    {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "census"},
+     "spec": {"selector": {"matchLabels": {"app": "census"}}, "template": {
+         "metadata": {"labels": {"app": "census"}},
+         "spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1"}]}}}},
+    {"apiVersion": "apps/v1", "kind": "StatefulSet", "metadata": {"name": "census"},
+     "spec": {"serviceName": "census", "selector": {"matchLabels": {"app": "census-set"}}, "template": {
+         "metadata": {"labels": {"app": "census-set"}},
+         "spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1"}]}}}},
+    {"apiVersion": "batch/v1", "kind": "CronJob", "metadata": {"name": "census"},
+     "spec": {"schedule": "0 0 * * *", "jobTemplate": {"spec": {"template": {"spec": {
+         "restartPolicy": "Never", "containers": [{"name": "app", "image": "registry.invalid/app:1"}]}}}}}},
+    {"apiVersion": "networking.k8s.io/v1", "kind": "Ingress", "metadata": {"name": "census"},
+     "spec": {"rules": [{"host": "census.invalid", "http": {"paths": [{"path": "/", "pathType": "Prefix", "backend": {
+         "service": {"name": "census", "port": {"number": 80}}}}]}}]}},
+    {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": {"name": "census"},
+     "spec": {"podSelector": {}, "policyTypes": ["Ingress"]}},
+    {"apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule", "metadata": {"name": "census"},
+     "spec": {"groups": []}},
+    {"apiVersion": "monitoring.coreos.com/v1", "kind": "ServiceMonitor", "metadata": {"name": "census"},
+     "spec": {"selector": {"matchLabels": {"app": "census"}}, "endpoints": []}},
+    {"apiVersion": "helm.toolkit.fluxcd.io/v2", "kind": "HelmRelease", "metadata": {"name": "census"},
+     "spec": {"interval": "30m", "chart": {"spec": {"chart": "app-template", "version": "4.0.0",
+              "sourceRef": {"kind": "HelmRepository", "name": "bjw-s", "namespace": "flux-system"}}}}},
+]
+# The kinds of the test that the role does not grant.
+NOT_GRANTED = {
+    "census-role": {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role", "metadata": {"name": "census"},
+                    "rules": []},
+    "census-pod": {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "census"},
+                   "spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1"}]}},
+}
+
+# For a wait on health: a Deployment and a StatefulSet with no replicas, so
+# that kube-controller-manager makes them Ready with no node. The status
+# readers still list their ReplicaSets and Pods.
+WAIT = ("census-wait", "census-noread")
+# The reads that the wait needs, which role-noread.json drops.
+WAIT_READS = {("apps", "replicasets"), ("", "pods")}
+
+
+def wait_objects(name: str) -> list[dict]:
+    pods = {"metadata": {"labels": {"app": name}},
+            "spec": {"containers": [{"name": "app", "image": "registry.invalid/app:1"}]}}
+    return [
+        {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": name},
+         "spec": {"replicas": 0, "selector": {"matchLabels": {"app": name}}, "template": pods}},
+        {"apiVersion": "apps/v1", "kind": "StatefulSet", "metadata": {"name": name + "-set"},
+         "spec": {"replicas": 0, "serviceName": name, "selector": {"matchLabels": {"app": name + "-set"}},
+                  "template": {**pods, "metadata": {"labels": {"app": name + "-set"}}}}},
+    ]
+
+
+def noread(role: dict) -> dict:
+    rules = [r for r in role["rules"]
+             if not {(g, x) for g in r["apiGroups"] for x in r["resources"]} <= WAIT_READS]
+    assert len(rules) < len(role["rules"]), "the role of git has no reads for the wait"
+    return {**role, "metadata": {"name": "flux-child-noread"}, "rules": rules}
+
+
 def tree() -> dict[str, str]:
     files = {}
+    files["census/objects.yaml"] = yaml.safe_dump_all(CENSUS)
+    files["census/kustomization.yaml"] = yaml.safe_dump({
+        "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "namespace": "tenant",
+        "resources": ["objects.yaml"]})
+    for folder in WAIT:
+        files[f"{folder}/objects.yaml"] = yaml.safe_dump_all(wait_objects(folder))
+        files[f"{folder}/kustomization.yaml"] = yaml.safe_dump({
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "namespace": "tenant",
+            "resources": ["objects.yaml"]})
+    for folder, doc in NOT_GRANTED.items():
+        files[f"{folder}/object.yaml"] = yaml.safe_dump(doc)
+        files[f"{folder}/kustomization.yaml"] = yaml.safe_dump({
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "namespace": "tenant",
+            "resources": ["object.yaml"]})
     for folder, (namespace, name) in CONFIGMAPS.items():
         files[f"{folder}/configmap.yaml"] = yaml.safe_dump({
             "apiVersion": "v1", "kind": "ConfigMap",
@@ -85,6 +175,10 @@ def main(out: Path) -> None:
     (out / "srv/source.tar.gz").write_bytes(data)
     (out / "in").mkdir()
     (out / "in/crds.json").write_text(json.dumps(crds))
+    role = lockdown.ROOT / "kubernetes/apps/flux-system/accounts/role/clusterrole.yaml"
+    (doc,) = [d for d in yaml.safe_load_all(role.read_text()) if d]
+    (out / "in/role.json").write_text(json.dumps(doc))
+    (out / "in/role-noread.json").write_text(json.dumps(noread(doc)))
     (out / "in/digest.txt").write_text("sha256:" + hashlib.sha256(data).hexdigest())
     (out / "image.txt").write_text(image + "\n")
     (out / "args.txt").write_text("\n".join(kept) + "\n")

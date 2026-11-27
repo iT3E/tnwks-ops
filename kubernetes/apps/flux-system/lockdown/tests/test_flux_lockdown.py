@@ -26,6 +26,13 @@ python3 test_flux_lockdown.py Setup | NoFlag | Flag
      reads "not found", not "forbidden".
   4. A Kustomization that comes to name a missing account fails its apply
      and prunes nothing; a delete of it then removes no object.
+  6. A child whose account has only the role flux-child of git (step 2a)
+     applies an object of each kind of that role, and fails on a Role and
+     on a Pod, which the role does not grant.
+  7. The same account with wait: true is Ready on a Deployment and a
+     StatefulSet: the controller reads their ReplicaSets and Pods as the
+     account when it waits. With the role less those reads, the wait fails
+     "forbidden".
 - Flag, after a restart with --default-service-account=default (step 2e):
   1. A Kustomization with no account applies as flux-system/default (which
      has no right in the namespace of the probe, so RBAC names it).
@@ -51,6 +58,10 @@ GITREPOSITORY = "/apis/source.toolkit.fluxcd.io/v1/namespaces/flux-system/gitrep
 ADMISSION = "/apis/admissionregistration.k8s.io/v1"
 CONTROLLER = "system:serviceaccount:flux-system:kustomize-controller"
 CHILD_ACCOUNTS = ("child-own", "child-dec")
+# The account of a child with the role flux-child of git only, and one with
+# that role less its reads of ReplicaSets and Pods (role-noread.json).
+ROLE_ACCOUNT = "flux-child-census"
+NOREAD_ACCOUNT = "flux-child-noread"
 
 
 def read(name):
@@ -185,7 +196,7 @@ class Setup(unittest.TestCase):
         # The accounts of flux-system: the controller (cluster-admin, as in
         # the install of git), default, and two of children outside the
         # class with admin in the namespaces of the test only.
-        for name in ("kustomize-controller", "default", *CHILD_ACCOUNTS):
+        for name in ("kustomize-controller", "default", *CHILD_ACCOUNTS, ROLE_ACCOUNT, NOREAD_ACCOUNT):
             make("/api/v1/namespaces/flux-system/serviceaccounts", obj("v1", "ServiceAccount", name, "flux-system"))
         make("/apis/rbac.authorization.k8s.io/v1/clusterrolebindings", obj(
             "rbac.authorization.k8s.io/v1", "ClusterRoleBinding", "cluster-reconciler-flux-system",
@@ -196,6 +207,27 @@ class Setup(unittest.TestCase):
                 "rbac.authorization.k8s.io/v1", "RoleBinding", "children-admin", namespace,
                 roleRef={"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "admin"},
                 subjects=[{"kind": "ServiceAccount", "name": n, "namespace": "flux-system"} for n in CHILD_ACCOUNTS]))
+        # The role of the children of git, bound in tenant as accounts.py
+        # binds it; and the CRDs of its kinds of the Prometheus operator.
+        for account, role in ((ROLE_ACCOUNT, "role.json"), (NOREAD_ACCOUNT, "role-noread.json")):
+            role = json.loads(read(role))
+            make("/apis/rbac.authorization.k8s.io/v1/clusterroles", role)
+            make("/apis/rbac.authorization.k8s.io/v1/namespaces/tenant/rolebindings", obj(
+                "rbac.authorization.k8s.io/v1", "RoleBinding", account, "tenant",
+                roleRef={"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole",
+                         "name": role["metadata"]["name"]},
+                subjects=[{"kind": "ServiceAccount", "name": account, "namespace": "flux-system"}]))
+        for kind, plural in (("PrometheusRule", "prometheusrules"), ("ServiceMonitor", "servicemonitors")):
+            crd = obj("apiextensions.k8s.io/v1", "CustomResourceDefinition", f"{plural}.monitoring.coreos.com", spec={
+                "group": "monitoring.coreos.com", "scope": "Namespaced",
+                "names": {"kind": kind, "plural": plural, "singular": kind.lower(), "listKind": kind + "List"},
+                "versions": [{"name": "v1", "served": True, "storage": True, "schema": {"openAPIV3Schema": {
+                    "type": "object", "x-kubernetes-preserve-unknown-fields": True}}}]})
+            make("/apis/apiextensions.k8s.io/v1/customresourcedefinitions", crd)
+            wait_for(f"CRD {plural}", lambda n=crd["metadata"]["name"]: any(
+                x["type"] == "Established" and x["status"] == "True"
+                for x in (call("GET", f"/apis/apiextensions.k8s.io/v1/customresourcedefinitions/{n}")[1]
+                          .get("status") or {}).get("conditions") or []))
         # The decryption Secrets hold a placeholder under a name that the
         # controller does not read as a key: the tree has no encrypted file.
         placeholder = base64.b64encode(b"a placeholder of the test, not a key").decode()
@@ -299,6 +331,23 @@ class NoFlag(unittest.TestCase):
         kustomization("flagged", "./kept2")
         wait_ready("flagged", "True")
         self.assertTrue(exists("tenant", "kept2"))
+
+
+    def test_6_the_role_of_the_children_applies_their_kinds(self):
+        kustomization("census", "./census", serviceAccountName=ROLE_ACCOUNT)
+        wait_ready("census", "True")
+        self.assertEqual(len(inventory("census")), 12, inventory("census"))
+        for name in ("census-role", "census-pod"):
+            kustomization(name, f"./{name}", serviceAccountName=ROLE_ACCOUNT)
+            wait_ready(name, "False", f"User \"system:serviceaccount:flux-system:{ROLE_ACCOUNT}\" cannot")
+
+    def test_7_the_role_reads_what_the_wait_reads(self):
+        kustomization("census-wait", "./census-wait", serviceAccountName=ROLE_ACCOUNT, wait=True)
+        _, message = wait_ready("census-wait", "True")
+        self.assertNotIn("forbidden", message)
+        self.assertEqual(len(inventory("census-wait")), 2, inventory("census-wait"))
+        kustomization("census-noread", "./census-noread", serviceAccountName=NOREAD_ACCOUNT, wait=True)
+        wait_ready("census-noread", "False", "replicasets.apps is forbidden")
 
 
 class Flag(unittest.TestCase):
