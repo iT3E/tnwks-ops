@@ -5,6 +5,9 @@ metadata:
   name: cluster-meta-wsl-02
   namespace: flux-system
 spec:
+  # Of the class: it runs as kustomize-controller, with the rights of today
+  # (docs/operations/flux-lockdown.md, step 2b).
+  serviceAccountName: kustomize-controller
   interval: 30m
   path: ./kubernetes/flux/meta
   prune: true

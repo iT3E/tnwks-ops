@@ -14,7 +14,9 @@ the Python of the repository (observability), writes:
   flux-system would. It holds ConfigMaps and one ClusterRole, an object of
   each kind of the role flux-child (step 2a), and a Role and a Pod, a
   Deployment and a StatefulSet with no replicas for each of two waits, and
-  no secret (its one Secret holds a placeholder);
+  no secret (its one Secret holds a placeholder), and a folder of two
+  child Kustomizations for a parent that patches one of them, as the parent
+  of the apps of a site does (step 2b);
 - role.json: the role flux-child of git
   (kubernetes/apps/flux-system/accounts/role/clusterrole.yaml), and
   role-noread.json: the same role less its reads of ReplicaSets and Pods,
@@ -118,8 +120,22 @@ def noread(role: dict) -> dict:
     return {**role, "metadata": {"name": "flux-child-noread"}, "rules": rules}
 
 
+# The children of a parent (step 2b): it names the account of the class in
+# the first one by a patch, as the parent of the apps of a site does for its
+# direct children of the class.
+PATCHED = ("who-patched", "who-unpatched")
+
+
 def tree() -> dict[str, str]:
     files = {}
+    files["parent/children.yaml"] = yaml.safe_dump_all([
+        {"apiVersion": "kustomize.toolkit.fluxcd.io/v1", "kind": "Kustomization",
+         "metadata": {"name": name, "namespace": "flux-system"},
+         "spec": {"interval": "1m", "retryInterval": "5s", "timeout": "30s", "path": "./probe", "prune": True,
+                  "wait": False, "sourceRef": {"kind": "GitRepository", "name": "flux-system"}}}
+        for name in PATCHED])
+    files["parent/kustomization.yaml"] = yaml.safe_dump({
+        "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["children.yaml"]})
     files["census/objects.yaml"] = yaml.safe_dump_all(CENSUS)
     files["census/kustomization.yaml"] = yaml.safe_dump({
         "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "namespace": "tenant",

@@ -20,6 +20,17 @@ patches:
     group: kustomize.toolkit.fluxcd.io
     kind: Kustomization
     name: flux-system
+# The root runs as kustomize-controller, with the rights of today
+# (docs/operations/flux-lockdown.md, step 2b). Each Kustomization of the
+# class names that account too (observability/tests/test_flux_lockdown.py).
+- patch: |-
+    - op: add
+      path: /spec/serviceAccountName
+      value: kustomize-controller
+  target:
+    group: kustomize.toolkit.fluxcd.io
+    kind: Kustomization
+    name: flux-system
 # The flux-system Namespace is owned by cluster-apps
 # (kubernetes/apps/flux-system/namespace.yaml). Two Kustomizations applying it
 # would keep relabelling it, so drop it from this build.

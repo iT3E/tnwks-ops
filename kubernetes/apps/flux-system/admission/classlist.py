@@ -453,11 +453,13 @@ def render_names(names: list[str], indent: str) -> str:
 
 
 def replace_block(path: Path, render) -> tuple[str, str]:
+    """Each generated block of a file, written again (apps.yaml has one in
+    each patch that targets the direct children of the class)."""
     text = path.read_text(encoding="utf-8")
-    m = re.search(r"^( *)" + re.escape(BEGIN) + r".*?^ *" + re.escape(END) + r"$", text, re.MULTILINE | re.DOTALL)
-    if not m:
+    block = re.compile(r"^( *)" + re.escape(BEGIN) + r".*?^ *" + re.escape(END) + r"$", re.MULTILINE | re.DOTALL)
+    if not block.search(text):
         raise SystemExit(f"{path}: no generated block")
-    return text, text[: m.start()] + render(m.group(1)) + text[m.end():]
+    return text, block.sub(lambda m: render(m.group(1)), text)
 
 
 def targets() -> list[tuple[Path, str, str]]:

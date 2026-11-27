@@ -38,6 +38,7 @@ shows the user that the controller applies as.
 | Proof | Result | What it means for the steps |
 | --- | --- | --- |
 | A Kustomization with no account, and one that names `kustomize-controller` | Both apply as `system:serviceaccount:flux-system:kustomize-controller`, with its rights (a ClusterRole applies) | 2b changes nothing: the user and the rights stay, and the policy matches that user as before |
+| A parent that names `kustomize-controller` in one of its children by a patch, as the parent of the apps does in 2b | That child has the account in its spec and applies as `kustomize-controller`; its sibling with no account applies as the same user | The patch of the parent reaches its children of the class, and the user does not change |
 | A Kustomization that names an account of its own | It applies as that account | The policy matches the two controllers by user name, so it does not see that account. Before 2c, the policy must match the accounts of the children, and its rule `kustomization-spec` must allow an account of the child |
 | Which identity reads the decryption Secret | The controller, as itself. A child account with no right on Secrets of `flux-system` builds with `sops-age-apps` and with `sops-age-class`, and a missing Secret reads "not found", not "forbidden" | An account outside the class needs no `get` on the apps Secret. An account does not hold the class key back, so the policy refuses `sops-age-class` in a Kustomization outside the class (below) |
 | A Kustomization that comes to name a missing account | Its apply fails ("forbidden"), its inventory stays, and no object is pruned. A delete of it removes no object | A missing account in 2c or 2e stalls one child and keeps its running objects. Do not delete such a child to fix it: its objects stay with no owner |
@@ -121,6 +122,33 @@ for each site in its `SITES`. Run
 `python3 kubernetes/apps/flux-system/lockdown/accounts.py write` after a
 change of the children outside the class. The Kustomization
 `flux-accounts` of the site (`accounts/ks-<site>.yaml`) applies them.
+
+## The class account
+
+Step 2b, site by site: the class names `kustomize-controller`. Without the
+flag of 2e that account is the user that Flux applies as today, with the
+same rights, so nothing changes on the site. After 2e, a Kustomization of
+the class with no account would run as `default` and fail.
+
+On a site, three places name it, all in the files of that site:
+
+- the root `flux-system`: a patch of the Flux install
+  (`kubernetes/clusters/<site>/flux-system/kustomization.yaml`);
+- the two children of the root, the parent of the apps and the meta
+  Kustomization: `spec.serviceAccountName` in their files
+  (`apps.yaml`, `meta.yaml`);
+- each direct child of the class of the parent of the apps: a patch of
+  that parent that targets their names. `classlist.py write` writes the
+  names (the same generated list as the patch of `cluster-secrets`), and
+  the patch has no label selector, so it also reaches the children that
+  turn off their substitution.
+
+The ks.yaml files of the apps are shared by both sites, so 2b changes none
+of them. The test "The class account" holds it: once the root of a site
+names the account, each Kustomization of the class does too.
+
+Site 2 has it first. Site 1 follows with the same three places in
+`kubernetes/clusters/wsl/`.
 
 ## The tests of git
 
