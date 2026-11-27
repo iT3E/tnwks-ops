@@ -1,6 +1,6 @@
 ---
 # Declarative database creation for the Raine's Things storefront backend
-# (raines-things-api, production ns).
+# (things-api, production ns).
 #
 # Sibling of database-vantrip.yaml (packing-api). The Database CRD reconciles
 # continuously, so adding a database to an already-running cluster is pure
