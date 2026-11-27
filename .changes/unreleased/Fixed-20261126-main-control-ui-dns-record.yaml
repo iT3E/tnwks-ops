@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'dns: a DNS record for the Control UI of the main agent, on the shared VIP of site 1; a test holds each internal Ingress host of site 1 to a site record of the router'
-time: 2026-11-26T21:30:00.000000000+00:00

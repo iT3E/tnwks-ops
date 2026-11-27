@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.325.1 - 2026-11-27
+
+### Fixed
+
+* dns: a DNS record for the Control UI of the main agent, on the shared VIP of site 1; a test holds each internal Ingress host of site 1 to a site record of the router
+
 ## v2.325.0 - 2026-11-26
 
 ### Changed
