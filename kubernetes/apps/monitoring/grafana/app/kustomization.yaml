@@ -10,6 +10,8 @@ resources:
   - ./dashboard
   - ../upstream
   - ./ingress-embed.yaml
+  # Who may reach the Grafana pod (networkpolicy.yaml).
+  - ./networkpolicy.yaml
 configMapGenerator:
   # Public key for the kiosk JWT (auth.jwt in helmrelease.yaml). The private
   # key is in Ori's credentials store, not here.
