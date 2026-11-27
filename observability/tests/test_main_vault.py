@@ -100,8 +100,9 @@ def test_the_server_gets_no_dns_rule_of_the_namespace_of_main():
 def test_no_other_pod_of_main_has_the_dns_label():
     """The label takes a pod out of the DNS of the namespace: only the vault
     server, which calls nothing, the host server, which calls addresses
-    only (test_main_host_server.py), the read servers, each with a DNS rule
-    of its own for the names it needs (test_main_read_servers.py), and the
+    only (test_main_host_server.py), the read servers and their copies at
+    site 2, each with a DNS rule of its own for the names it needs
+    (test_main_read_servers.py, test_main_read_servers_site2.py), and the
     token job of the App, with a DNS rule for the API of the code host only
     (test_main_github_token.py), and the sign-in check of the Control UI,
     with a DNS rule for its two Services only (test_main_ui_proxy.py), may
@@ -119,6 +120,7 @@ def test_no_other_pod_of_main_has_the_dns_label():
                                "cluster-mcp/app/deployment.yaml", "flux-mcp/app/deployment.yaml",
                                "github-mcp/app/deployment.yaml", "github-token/app/cronjob.yaml",
                                "host-mcp/app/deployment.yaml",
+                               "site2/cluster-mcp/app/deployment.yaml", "site2/flux-mcp/app/deployment.yaml",
                                "terraform-mcp/app/deployment.yaml", "vault-server/app/deployment.yaml"]
 
 

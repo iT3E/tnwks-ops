@@ -55,7 +55,7 @@ FORM = re.compile(r"[0-9a-f]{64}")
 # A key line of a route of main: the hash, then its metadata on the next line.
 LINE = re.compile(
     r'(?m)^(?P<head>\s*- keyHash: ")(?P<hash>sha256:[0-9a-f]{64})'
-    r'(?P<tail>"\n\s*metadata: \{client: main, route: (?P<route>main-[a-z]+)\})$')
+    r'(?P<tail>"\n\s*metadata: \{client: main, route: (?P<route>main-[a-z0-9]+(?:-[a-z0-9]+)*)\})$')
 OTHER = re.compile(r'keyHash: "(sha256:[0-9a-f]{64})"\n\s*metadata: \{client: (?!main,)')
 
 

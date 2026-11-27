@@ -1,0 +1,263 @@
+---
+# The read rights of the copies of the read servers of main at site 2
+# (../../cluster-mcp, ../../flux-mcp), each as its own service account of
+# site 2: the role view in each namespace of site 2 but ai and security,
+# and the list of the namespaces. Nothing else. The form of the rights of
+# site 1 (../../../read-access/app/rbac.yaml).
+#
+# Not bound at site 2:
+# - ai: the namespace of the central gateway and its log, as at site 1;
+# - security: at site 2 it is the home of the security platform, whose pod
+#   logs, events and reports describe open weaknesses (the tools design).
+# Site 2 has no agents-finance namespace.
+#
+# A namespace that comes later at site 2 gets no binding until a PR adds it
+# here: observability/tests/test_main_read_servers_site2.py lists each
+# namespace of the app list of site 2 with no binding, and fails for any
+# but those two.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agents-main-read-namespaces-site2
+rules:
+  # namespaces_list: the names and the labels of the namespaces.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agents-main-read-namespaces-site2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agents-main-read-namespaces-site2
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: agents-main
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: cert-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: databases
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: flux-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: home-automation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: kopiur-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: networking
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: selfhosted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agents-main-read-site2
+  namespace: tools
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: cluster-mcp-site2
+    namespace: agents-main
+  - kind: ServiceAccount
+    name: flux-mcp-site2
+    namespace: agents-main

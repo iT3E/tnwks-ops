@@ -1,0 +1,44 @@
+---
+# The Services of the copies of the cluster and Flux servers of main at
+# site 2 (../../cluster-mcp, ../../flux-mcp). Each exists on both sites,
+# marked global, as security-loki does
+# (kubernetes/apps/monitoring/observability-pki/app/security-loki-service.yaml):
+# Cluster Mesh merges the endpoints of both sites. Each selects the label of
+# its copy, which only the pods of site 2 carry, so at site 1 a Service has
+# no local endpoint and the gateway's call goes to site 2
+# (observability/tests/test_main_read_servers_site2.py checks that no pod of
+# site 1 carries the label). With no ready copy at site 2, a call is
+# refused at once and never answered by site 1.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster-mcp-site2
+  labels:
+    app.kubernetes.io/name: cluster-mcp-site2
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app.kubernetes.io/name: cluster-mcp-site2
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-mcp-site2
+  labels:
+    app.kubernetes.io/name: flux-mcp-site2
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app.kubernetes.io/name: flux-mcp-site2
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

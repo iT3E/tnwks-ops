@@ -237,10 +237,19 @@ def test_the_log_of_host_names_stays_on_the_pod():
     assert shared["extra_label_selector"] == "${VECTOR_AGENT_POD_SELECTOR:=}"
     settings = yaml.safe_load((ROOT / "kubernetes/clusters/wsl/cluster-settings.yaml").read_text())
     assert settings["data"]["VECTOR_AGENT_POD_SELECTOR"] == "batch.kubernetes.io/job-name"
-    # The agents run on this cluster only: MS-01 ships every pod.
+    # The agents run on this cluster only: MS-01 ships every pod. Site 2
+    # runs the namespace of main and the copies of two read servers
+    # (test_main_read_servers_site2.py), no proxy, and its shared agent takes
+    # Job pods only too.
     clusters = ROOT / "kubernetes/clusters"
+    site2 = {"../../../apps/ai/agents/main/namespace.yaml", "../../../apps/ai/agents/main/site2"}
     for path in clusters.glob("*/apps/kustomization.yaml"):
-        if path.parts[-3] != "wsl":
+        entries = {e for e in yaml.safe_load(path.read_text())["resources"] if "apps/ai/agents" in e}
+        if path.parts[-3] == "wsl-02":
+            assert entries == site2, path
+            other = yaml.safe_load((clusters / "wsl-02/cluster-settings.yaml").read_text())
+            assert other["data"]["VECTOR_AGENT_POD_SELECTOR"] == "batch.kubernetes.io/job-name"
+        elif path.parts[-3] != "wsl":
             assert "apps/ai/agents" not in path.read_text(), path
     ai = yaml.safe_load((ROOT / "kubernetes/apps/ai/kustomization.yaml").read_text())["resources"]
     assert not any("agents" in r for r in ai)

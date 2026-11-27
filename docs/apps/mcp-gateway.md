@@ -83,6 +83,8 @@ the MCP server and checks the headers that arrive.
 | `/main-vault/` | `main-probe` | the nine tools of the vault | `get_file_info` only |
 | `/main-cluster/` | `main` | the eight kept reads of the cluster server | the eight kept reads of the cluster server |
 | `/main-flux/` | `main` | the eight kept reads of the Flux server | the eight kept reads of the Flux server |
+| `/main-cluster-site2/` | `main` | the eight kept reads of the cluster server, at site 2 | the eight kept reads of the cluster server, at site 2 |
+| `/main-flux-site2/` | `main` | the eight kept reads of the Flux server, at site 2 | the eight kept reads of the Flux server, at site 2 |
 | `/main-terraform/` | `main` | the nine tools of the registry | the nine tools of the registry |
 | `/main-github/` | `main` | the 17 kept reads of the code host server | the 17 kept reads, for the ops repository only |
 | `/main-browser/` | `main` | the 21 kept tools of the browser | the 21 kept tools of the browser |
@@ -235,6 +237,55 @@ so the agent pod reaches the gateway on its MCP port, and no sandbox does.
 pods, the network rules, the bindings and the config of the agent, and
 runs the pinned gateway with the pinned servers in containers.
 
+## Site 2
+
+The cluster server and the Flux server of main have a copy at site 2
+(`kubernetes/apps/ai/agents/main/site2`), so the agent reads the objects
+and the Flux state of site 2 too. The gateway stays the one central
+gateway at site 1; the copies are two more targets behind it, on routes of
+their own:
+
+- `/main-cluster-site2/` and `/main-flux-site2/` are copies of
+  `/main-cluster/` and `/main-flux/`: the same key of main, the same kept
+  tools, the same 30 s, no credential on the target. Their target is the
+  global Service `cluster-mcp-site2` or `flux-mcp-site2` in `agents-main`
+  (`service.cilium.io/global: "true"`), which both sites apply, as the
+  Loki of the security platform has one. The agent names them `cluster2`
+  and `flux2`, with the tools as `cluster2__<tool>` and `flux2__<tool>`.
+- **Each copy is the app of site 1 with `-site2` on its names.** Its
+  files are the files of `cluster-mcp/app` and `flux-mcp/app` with
+  `-site2` on each name and on the pod label, and no Service (the global
+  one takes its place). The cluster server reads the config file of site 1.
+  Renovate bumps the image of both, and
+  `observability/tests/test_main_read_servers_site2.py` renders each copy
+  and its app of site 1 and fails on any other difference.
+- **No call of a site 2 route gets an answer of site 1.** A global Service
+  sends to the pods of each cluster that match its selector. No pod of
+  site 1 carries the label `cluster-mcp-site2` or `flux-mcp-site2` (a test
+  walks the app list of site 1 for it), so at site 1 the Service has no
+  local endpoint and Cluster Mesh sends each call to site 2. With the copy
+  at site 2 down, a call fails; it never falls back to site 1.
+- **Each copy reads as its own account at site 2.** It runs in the cluster
+  of site 2 with the in-cluster token of its service account, in its own
+  pod (R2). No kubeconfig, no token and no key of site 2 is at site 1.
+  The account has the role `view` in each namespace of site 2 but `ai` and
+  `security`, and the list of the namespaces
+  (`agents/main/site2/read-access`). A namespace that comes later at site 2
+  fails a test until it gets a binding or is named as left out.
+- **Only the gateway of site 1 reaches a copy.** The policy of each copy
+  lets in the pods `mcp-gateway` of `ai` in the other cluster
+  (`io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}`) and the kubelet,
+  and nothing else; out, the API server of site 2 only, as at site 1. The
+  gateway has an egress rule and a DNS name for each copy. The gateway
+  probes of both domains try each copy straight (item 7 of "The probe").
+  While a copy has no ready pod, the Service refuses at once, so that try
+  fails and the probes of both domains fail until the copy is back.
+- **At site 2 the Kustomizations** are `agents-main-site2-services`,
+  `agents-main-read-access-site2`, `agents-main-cluster-mcp-site2` and
+  `agents-main-flux-mcp-site2`, listed in the app list of site 2 with the
+  namespace `agents-main` of main. Site 1 applies the services
+  Kustomization only, from `agents/main/kustomization.yaml`.
+
 **The pilot and the workflow agents get no key.** No key is the safer
 default. A key with no tool still authenticates: it opens a connection,
 gets the server's name and its instructions, and becomes a key with tools
@@ -291,7 +342,7 @@ its place for the container tests.
 | `finance` | `MCP_GATEWAY_KEY` of `agent-secret` (`agents/finance/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `finance-probe` | `PROBE_KEY` of `agents/finance/checks/app/secret-mcp-gateway-probe.sops.yaml` | `config.yaml`, routes `finance` and `finance-vault` (the same hash) |
 | `no-tools` | `NO_TOOLS_KEY` of the same file | `config.yaml`, route `finance` |
-| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux`, `main-terraform`, `main-github` and `main-browser` (the same hash; `metadata: {client: main, route: <the route>}`) |
+| `main` | `MCP_GATEWAY_KEY` of `agent-secret` of main (`agents/main/agent/app/secret.sops.yaml`, for the agent pod only) | `config.yaml`, each route of main: `main-vault`, `main-cluster`, `main-flux`, `main-cluster-site2`, `main-flux-site2`, `main-terraform`, `main-github` and `main-browser` (the same hash; `metadata: {client: main, route: <the route>}`) |
 | `main-probe` | `PROBE_KEY` of `agents/main/checks/app/secret-mcp-gateway-probe.sops.yaml`, made on 2026-11-20 and listed in that `kustomization.yaml` | `config.yaml`, routes `main-vault` and `main-browser` (the same hash) |
 | `main-host` | `MCP_HOST_KEY` of `agent-secret` of main, a key of its own for the host approval plugin, made by `host-mcp-store.py gateway-key` of the lead | `config.yaml`, route `main-host` (`metadata: {client: main-host, route: main-host}`) ([host-mcp.md](host-mcp.md#the-go-live)) |
 
@@ -338,7 +389,8 @@ config of the agent has a route with another hash than `main-vault`.
   keep their one way to the app, the read port of the proxy.
 - **Out:** the MCP server of each route (`firefly-mcp` in `agents-finance`,
   port 3000, and `vault-server` in `agents-finance` and in `agents-main`,
-  port 8080), and DNS for those names only. The pod sets `ndots` to 1, so it
+  port 8080, and the other servers of main, with the copies at site 2 in
+  the other cluster), and DNS for those names only. The pod sets `ndots` to 1, so it
   asks for the full name as it is.
 - **The MCP server of finance** takes the gateway only. The agent pod has no
   way to it any more, and the gateway probe checks that a pod that is not
@@ -452,7 +504,8 @@ agent does, with two keys of its own and none of the agent's:
 7. The read servers, the browser and the host server of main
    (`GATEWAY_ONLY_SERVERS`: `cluster-mcp`, `flux-mcp`, `terraform-mcp`,
    `github-mcp` and `host-mcp` in `agents-main`, port 8080, and
-   `playwright-mcp` in `ai`, port 8000): a straight
+   `playwright-mcp` in `ai`, port 8000), and the copies at site 2
+   (`cluster-mcp-site2` and `flux-mcp-site2`, over Cluster Mesh): a straight
    connection from its pod to each fails. No key is used. A time out passes:
    a policy drop in this cluster is silent. A refusal fails, since a
    Service with no ready pod refuses at once and so proves nothing; an

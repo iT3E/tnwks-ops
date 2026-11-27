@@ -1,0 +1,17 @@
+---
+# The read servers of main at site 2, listed by the app list of site 2 only
+# (kubernetes/clusters/wsl-02/apps), with the namespace file of agents-main
+# (../namespace.yaml, listed there too). Site 1 lists ./services/ks.yaml
+# only (../kustomization.yaml): the global Services exist on both sites.
+#
+# The cluster and Flux servers of main, each a copy in-cluster at site 2 with
+# an account of its own there, behind the central MCP gateway at site 1 on
+# a route of its own (main-cluster-site2, main-flux-site2). No key of site 2
+# leaves site 2 (R2). docs/apps/mcp-gateway.md, "Site 2".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./services/ks.yaml
+  - ./read-access/ks.yaml
+  - ./cluster-mcp/ks.yaml
+  - ./flux-mcp/ks.yaml

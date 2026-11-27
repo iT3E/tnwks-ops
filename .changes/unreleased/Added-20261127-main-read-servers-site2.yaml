@@ -1,0 +1,3 @@
+kind: Added
+body: 'The main agent reads site 2: copies of its cluster and Flux servers run at site 2 as their own accounts there (the role view in each namespace of site 2 but ai and security), behind the central MCP gateway on the routes main-cluster-site2 and main-flux-site2, through global Services that have no endpoint at site 1; no key of site 2 is at site 1 (docs/apps/mcp-gateway.md, "Site 2")'
+time: 2026-11-27T20:00:00.000000000+00:00

@@ -109,6 +109,26 @@ spec:
         - ports:
             - port: "8080"
               protocol: TCP
+    # The copies of the cluster and Flux servers of main at site 2
+    # (agents/main/site2), over Cluster Mesh: the pods of the other cluster.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: cluster-mcp-site2
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            app.kubernetes.io/name: flux-mcp-site2
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
     - toEndpoints:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-main
@@ -165,6 +185,8 @@ spec:
               - matchName: vault-server.agents-main.svc.cluster.local
               - matchName: cluster-mcp.agents-main.svc.cluster.local
               - matchName: flux-mcp.agents-main.svc.cluster.local
+              - matchName: cluster-mcp-site2.agents-main.svc.cluster.local
+              - matchName: flux-mcp-site2.agents-main.svc.cluster.local
               - matchName: terraform-mcp.agents-main.svc.cluster.local
               - matchName: github-mcp.agents-main.svc.cluster.local
               - matchName: playwright-mcp.ai.svc.cluster.local

@@ -13,6 +13,7 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -51,26 +52,34 @@ def resource(target, namespace=""):
             yield doc["metadata"].get("namespace") or namespace, doc
 
 
-def applied():
-    entries = [entry for entry in yaml.safe_load((SITE_APPS / "kustomization.yaml").read_text())["resources"]
-               if (SITE_APPS / entry).resolve().is_relative_to(AI)]
+# The app list of each site, by the cluster name of the inventory. The AI
+# domain runs at homelab-wsl; homelab-wsl-02 runs the copies of two read
+# servers of main (kubernetes/apps/ai/agents/main/site2).
+SITES = {"homelab-wsl": SITE_APPS, "homelab-wsl-02": ROOT / "kubernetes/clusters/wsl-02/apps"}
+
+
+def applied(site_apps=SITE_APPS):
+    entries = [entry for entry in yaml.safe_load((site_apps / "kustomization.yaml").read_text())["resources"]
+               if (site_apps / entry).resolve().is_relative_to(AI)]
     assert entries
     seen = {}
     for entry in entries:
-        for namespace, doc in resource((SITE_APPS / entry).resolve()):
+        for namespace, doc in resource((site_apps / entry).resolve()):
             seen[(namespace, doc["kind"], doc["metadata"]["name"])] = doc
     return seen
 
 
-def test_each_applied_workload_of_the_ai_domain_is_a_declared_part():
+@pytest.mark.parametrize("site", SITES)
+def test_each_applied_workload_of_the_ai_domain_is_a_declared_part(site):
     found = set()
-    for namespace, kind, name in applied():
+    for namespace, kind, name in applied(SITES[site]):
         if kind in WORKLOADS:
             found.add((namespace, WORKLOADS[kind], name))
         elif kind == "HelmRelease":
             assert name in CHARTS, name
             found.add((namespace, *CHARTS[name]))
-    declared = {(part["namespace"], part["kind"], part["workload"]) for part in AI_PARTS}
+    declared = {(part["namespace"], part["kind"], part["workload"]) for part in AI_PARTS
+                if site in part.get("clusters", ["homelab-wsl"])}
     assert found == declared, (sorted(found - declared), sorted(declared - found))
 
 
