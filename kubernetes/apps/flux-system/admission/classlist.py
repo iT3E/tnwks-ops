@@ -27,8 +27,10 @@ child gets the reduced Secret cluster-secrets-apps.
 
 It reads no SOPS file: a file with ".sops." in its name is skipped. It
 follows the resources of a kustomization.yaml, its patches that delete an
-object, and its patches that change the spec.path of a Flux Kustomization,
-which is what the trees of the clusters use; a feature it does not
+object, its patches that change the spec.path of a Flux Kustomization,
+and its other patches of the spec of a Flux Kustomization (so each child is
+what the build of its parent makes), which is what the trees of the
+clusters use; a feature it does not
 read stops it (UnreadKustomization), and so does a child of the walk
 whose source is not this repository or whose path is not in it. observability/tests/test_flux_admission.py
 checks that the lists of the policy are the ones of git.
@@ -40,6 +42,7 @@ checks that the lists of the policy are the ones of git.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import sys
@@ -261,7 +264,94 @@ def build(path: Path) -> Build:
                     d.get("kind") == body.get("kind") and d.get("metadata", {}).get("name") == body["metadata"]["name"])]
             else:
                 apply_path_patch(rel(k), patch, body, out.docs)
+                apply_spec_patch(rel(k), patch, body, out.docs)
     return out
+
+
+def matches(where: str, target: dict, doc: dict) -> bool:
+    """A target of a kustomize patch against an object of the build, by the
+    fields that this module reads: group, version, kind, name and namespace
+    (regular expressions that match the whole value, as kustomize reads
+    them). A selector stops it."""
+    if set(target) - {"group", "version", "kind", "name", "namespace"}:
+        raise UnreadKustomization(f"{where}: a target of a patch with {sorted(set(target))}")
+    meta = doc.get("metadata") or {}
+    group, version = api_group(doc), str(doc.get("apiVersion", "")).rpartition("/")[2]
+    return all((
+        target.get("group", group) == group,
+        target.get("version", version) == version,
+        target.get("kind", doc.get("kind")) == doc.get("kind"),
+        re.fullmatch(target.get("name", ".*"), meta.get("name", "")),
+        re.fullmatch(target.get("namespace", ".*"), meta.get("namespace", "")),
+    ))
+
+
+def merge(where: str, doc, body):
+    """A strategic merge patch of a Flux object: maps merge, a list or a
+    value replaces, and null removes a key. A directive stops it."""
+    if not isinstance(doc, dict) or not isinstance(body, dict):
+        return copy.deepcopy(body)
+    out = dict(doc)
+    for key, value in body.items():
+        if str(key).startswith("$"):
+            raise UnreadKustomization(f"{where}: a directive {key} in a patch of a Flux Kustomization")
+        if value is None:
+            out.pop(key, None)
+        else:
+            out[key] = merge(where, doc.get(key), value)
+    return out
+
+
+def json_ops(where: str, doc: dict, ops: list) -> None:
+    """The add, replace and remove operations of a JSON patch on an object;
+    another operation stops it."""
+    for op in ops:
+        parts = [p.replace("~1", "/").replace("~0", "~") for p in str(op.get("path", "")).split("/")[1:]]
+        if op.get("op") not in ("add", "replace", "remove") or not parts:
+            raise UnreadKustomization(f"{where}: a JSON patch operation that this module does not read: {op}")
+        where_ = doc
+        for part in parts[:-1]:
+            where_ = where_[int(part)] if isinstance(where_, list) else where_[part]
+        last = parts[-1]
+        if isinstance(where_, list):
+            if op["op"] == "remove":
+                where_.pop(int(last))
+            elif last == "-":
+                where_.append(copy.deepcopy(op["value"]))
+            elif op["op"] == "add":
+                where_.insert(int(last), copy.deepcopy(op["value"]))
+            else:
+                where_[int(last)] = copy.deepcopy(op["value"])
+        elif op["op"] == "remove":
+            del where_[last]
+        else:
+            where_[last] = copy.deepcopy(op["value"])
+
+
+def apply_spec_patch(where: str, patch: dict, body, docs: list[dict]) -> None:
+    """A patch of a kustomization.yaml that changes a Flux Kustomization of
+    its build, other than its spec.path (apply_path_patch): the walk applies
+    it, so that each child is what the build of its parent makes, with the
+    patches of its site (its spec.patches among them)."""
+    target = patch.get("target")
+    for d in flux_kustomizations(docs):
+        if isinstance(body, list):
+            if target and matches(where, target, d):
+                json_ops(where, d, body)
+            continue
+        if not is_kind(body, KUSTOMIZE_GROUP, "Kustomization"):
+            if target and target.get("kind") in (None, "Kustomization") and matches(where, target, d):
+                raise UnreadKustomization(f"{where}: a patch of another kind that targets a Flux Kustomization")
+            continue
+        meta = body.get("metadata") or {}
+        hit = matches(where, target, d) if target else (
+            d["metadata"].get("name") == meta.get("name")
+            and d["metadata"].get("namespace") == meta.get("namespace", d["metadata"].get("namespace")))
+        if hit:
+            spec = {k: v for k, v in (body.get("spec") or {}).items() if k != "path" or target}
+            d["spec"] = merge(where, d.get("spec") or {}, spec)
+            if set(body) - {"apiVersion", "kind", "metadata", "spec"}:
+                raise UnreadKustomization(f"{where}: a patch of a Flux Kustomization beyond its spec")
 
 
 def apply_path_patch(where: str, patch: dict, body, docs: list[dict]) -> None:

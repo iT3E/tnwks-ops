@@ -11,7 +11,10 @@ object is made, except the few that the cases of an update need.
    outside the class refused, and the same object from a child of the class
    or from a person let through.
 2. Each Flux Kustomization and HelmRelease of both sites in git, from the
-   Kustomization that applies it: none refused.
+   Kustomization that applies it, as the user that it applies as (the
+   account that git names for it, step 2c): none refused. And each other
+   object of a child that names its own account, as that account: none
+   refused (test 11).
 3. The binding of git (Deny and Audit) refuses each deny case; Audit and
    Warn, the action of the break-glass path, lets it pass with a warning.
 4. Each rule switched off in turn: at least one of its own cases passes, so
@@ -53,6 +56,9 @@ GIT_ACTIONS = ["Deny", "Audit"]
 CRDS = read("crds")
 GIT_KUSTOMIZATIONS = read("kustomizations")
 GIT_HELMRELEASES = read("helmreleases")
+GIT_OWNED = read("owned")
+# The accounts of the children that git names (step 2c), as users.
+GIT_ACCOUNTS = sorted({e["user"] for e in GIT_HELMRELEASES + GIT_OWNED} - {KUSTOMIZE})
 NAMES = read("names")
 
 # kind: (plural, namespaced)
@@ -61,6 +67,11 @@ KINDS = {
     "Secret": ("secrets", True),
     "Namespace": ("namespaces", False),
     "PersistentVolume": ("persistentvolumes", False),
+    "PersistentVolumeClaim": ("persistentvolumeclaims", True),
+    "Service": ("services", True),
+    "Ingress": ("ingresses", True),
+    "PrometheusRule": ("prometheusrules", True),
+    "ServiceMonitor": ("servicemonitors", True),
     "Pod": ("pods", True),
     "Event": ("events", True),
     "ClusterRole": ("clusterroles", False),
@@ -93,6 +104,7 @@ KINDS = {
 }
 VERSIONS = {
     "ConfigMap": "v1", "Secret": "v1", "Namespace": "v1", "PersistentVolume": "v1", "Pod": "v1",
+    "PersistentVolumeClaim": "v1", "Service": "v1", "Ingress": "networking.k8s.io/v1",
     "Event": "v1", "ClusterRole": "rbac.authorization.k8s.io/v1",
     "ClusterRoleBinding": "rbac.authorization.k8s.io/v1", "Role": "rbac.authorization.k8s.io/v1",
     "RoleBinding": "rbac.authorization.k8s.io/v1", "CustomResourceDefinition": "apiextensions.k8s.io/v1",
@@ -675,7 +687,7 @@ class FluxAdmission(unittest.TestCase):
                 .get("status", {}).get("conditions", [])))
         namespaces = {"ai", "flux-system", "production", "home-automation", "media", "selfhosted", "kube-system",
                       "agents-main", "databases", "tools"}
-        namespaces |= {e["doc"]["metadata"]["namespace"] for e in GIT_HELMRELEASES}
+        namespaces |= {e["doc"]["metadata"]["namespace"] for e in GIT_HELMRELEASES + GIT_OWNED}
         namespaces |= {e["doc"]["metadata"].get("namespace", "flux-system") for e in GIT_KUSTOMIZATIONS}
         for namespace in sorted(namespaces):
             status, _, _ = create(obj("Namespace", namespace), dry=False)
@@ -690,7 +702,7 @@ class FluxAdmission(unittest.TestCase):
         # The accounts of the children: bound to cluster-admin here, so the
         # policy is what refuses their requests (on the clusters, the role
         # flux-child limits them first).
-        for user in ACCOUNTS:
+        for user in (*ACCOUNTS, *GIT_ACCOUNTS):
             name = "account-" + user.rsplit(":", 1)[1]
             status, _, _ = create(obj("ClusterRoleBinding", name,
                 roleRef={"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "cluster-admin"},
@@ -752,12 +764,28 @@ class FluxAdmission(unittest.TestCase):
         for entry in GIT_HELMRELEASES:
             doc = copy.deepcopy(entry["doc"])
             doc["metadata"]["labels"] = dict(doc["metadata"].get("labels", {}), **k_labels(entry["applier"]))
-            status, body, _ = create(doc, KUSTOMIZE)
+            status, body, _ = create(doc, entry["user"])
             if status != 201:
                 failures.append(f"{entry['site']} HelmRelease {doc['metadata']['name']}: {status} {body.get('message')}")
         self.assertEqual(failures, [], "\n" + "\n".join(failures))
         self.assertGreater(len(GIT_KUSTOMIZATIONS), 200)
         self.assertGreater(len(GIT_HELMRELEASES), 100)
+
+    def test_11_each_child_applies_what_it_owns_as_its_account(self):
+        """Step 2c: each object of a child outside the class that names its
+        own account passes the policy as that account, as the child applies
+        it: the objects of its build and the Secrets of its SOPS files."""
+        failures = []
+        for entry in GIT_OWNED:
+            doc = copy.deepcopy(entry["doc"])
+            doc["metadata"]["labels"] = dict(doc["metadata"].get("labels", {}), **k_labels(entry["applier"]))
+            status, body, _ = create(doc, entry["user"])
+            if status != 201:
+                failures.append(f"{entry['site']} {doc['kind']} {doc['metadata'].get('namespace')}/"
+                                f"{doc['metadata']['name']} as {entry['user']}: {status} {body.get('message')}")
+        self.assertEqual(failures, [], "\n" + "\n".join(failures))
+        if GIT_ACCOUNTS:
+            self.assertGreater(len(GIT_OWNED), 10)
 
     def test_5_admission_objects_are_out_of_reach(self):
         # The API server runs no admission policy on an admission object, so

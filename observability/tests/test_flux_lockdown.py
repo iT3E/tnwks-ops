@@ -155,6 +155,11 @@ def test_the_class_runs_as_the_controller_once_its_root_does(site):
     ks = lockdown.kustomizations(site)
     root = account(ks[0][1])
     assert root in (None, "kustomize-controller"), root
+    # And the other way: a child of the class names the account only once
+    # the root does, so the root never runs as the default account of 2e
+    # while its children name the controller.
+    named = [key for key, spec, _, in_class in ks[1:] if in_class and account(spec) == "kustomize-controller"]
+    assert root or not named, f"the root of {site} names no account, but {named[:3]} do"
     wrong = []
     for key, spec, _, in_class in ks:
         if in_class and account(spec) not in (None, "kustomize-controller"):
@@ -164,6 +169,75 @@ def test_the_class_runs_as_the_controller_once_its_root_does(site):
         if not in_class and account(spec) in lockdown.CONTROLLERS:
             wrong.append(f"{key} is outside the class and runs as {account(spec)}")
     assert not wrong, "\n".join(wrong)
+
+
+@pytest.mark.parametrize("site", SITES)
+def test_a_child_outside_the_class_names_only_its_own_account(site):
+    """Step 2c. A Kustomization outside the class names no account or
+    flux-child-<its name>, and a HelmRelease outside the class none or
+    flux-release-<its name>, as the admission policy allows; on a site of
+    accounts.NAMED, each of them names its own, as accounts.py writes it."""
+    wrong = []
+    named = site in accounts.NAMED
+    for key, spec, _, in_class in lockdown.kustomizations(site):
+        own = f"flux-child-{key.split('/')[1]}"
+        if not in_class and account(spec) not in ((own,) if named else (None, own)):
+            wrong.append(f"Kustomization {key} runs as {account(spec)}, not {own}")
+    for key, spec, in_class in lockdown.helmreleases(site):
+        own = f"flux-release-{key.split('/')[1]}"
+        if not in_class and account(spec) not in ((own,) if named else (None, own)):
+            wrong.append(f"HelmRelease {key} runs as {account(spec)}, not {own}")
+    assert not wrong, "\n".join(wrong)
+
+
+@pytest.mark.parametrize("site", SITES)
+def test_the_account_patches_change_nothing_but_the_accounts(site):
+    """The patch that accounts.py writes for a child replaces its
+    spec.patches (a strategic merge of a list). So the spec that Flux
+    applies to each child outside the class, with that patch, is the spec
+    without it, but for the account of the child and the patches that give
+    its HelmReleases theirs, after the patches that it had (of its file and
+    of its site, such as the wait of the media apps)."""
+    children = classlist.walk(site)
+    parent = children[classlist.APPS_PARENT[site]]
+
+    def is_account_patch(p):
+        body = yaml.safe_load(p["patch"])
+        return str((body.get("spec") or {}).get("serviceAccountName", "")).startswith("flux-child-")
+
+    base = dict(children)
+    base[parent.key] = classlist.Child(parent.key, parent.parent, parent.path, {
+        **parent.doc, "spec": {**parent.doc["spec"], "patches": [
+            p for p in parent.doc["spec"].get("patches") or [] if not is_account_patch(p)]}}, parent.build)
+    wrong = []
+    for child in children.values():
+        if classlist.is_class_path(child.path):
+            continue
+        before, after = lockdown.spec_of(child, base), lockdown.spec_of(child, children)
+        old, new = before.get("patches") or [], after.get("patches") or []
+        added = new[len(old):]
+        if new[:len(old)] != old:
+            wrong.append(f"{child.key}: the patch of its account drops or changes its patches")
+        for p in added:
+            ops = yaml.safe_load(p["patch"])
+            if p["target"].get("kind") != "HelmRelease" or [o["path"] for o in ops] != ["/spec/serviceAccountName"]:
+                wrong.append(f"{child.key}: an added patch that sets more than the account of a HelmRelease")
+        rest = {k: v for k, v in after.items() if k not in ("serviceAccountName", "patches")}
+        if rest != {k: v for k, v in before.items() if k not in ("serviceAccountName", "patches")}:
+            wrong.append(f"{child.key}: the patch of its account changes more of its spec")
+    assert not wrong, "\n".join(wrong)
+
+
+def test_the_parent_names_the_accounts_as_accounts_py_writes_them():
+    """accounts.py write has run for each site of NAMED: the patches of the
+    parent of the apps are the ones it writes, and the sites of NAMED have
+    their accounts (SITES)."""
+    assert set(accounts.NAMED) <= set(accounts.SITES)
+    for site in accounts.NAMED:
+        text, want = accounts.parent_text(site)
+        assert text == want, "run kubernetes/apps/flux-system/lockdown/accounts.py write"
+    for site in set(SITES) - set(accounts.NAMED):
+        assert accounts.BEGIN not in accounts.parent_path(site).read_text()
 
 
 @pytest.mark.parametrize("site", SITES)

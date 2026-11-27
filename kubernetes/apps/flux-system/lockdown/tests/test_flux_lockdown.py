@@ -38,6 +38,12 @@ python3 test_flux_lockdown.py Setup | NoFlag | Flag
      the class (step 2b): that child has the account in its spec and
      applies as kustomize-controller, and so does the other child, which
      names none.
+  9. A parent with the patches that accounts.py writes (step 2c): each
+     child names its own account, flux-child-<name>, with the role
+     flux-child of git in tenant. One applies its HelmRelease, which then
+     names flux-release-<its name> and keeps the patch that its site gave
+     it before (install.disableWait); the other applies as its account
+     (RBAC names it in the namespace of the probe, where it has no role).
 - Flag, after a restart with --default-service-account=default (step 2e):
   1. A Kustomization with no account applies as flux-system/default (which
      has no right in the namespace of the probe, so RBAC names it).
@@ -67,6 +73,8 @@ CHILD_ACCOUNTS = ("child-own", "child-dec")
 # that role less its reads of ReplicaSets and Pods (role-noread.json).
 ROLE_ACCOUNT = "flux-child-census"
 NOREAD_ACCOUNT = "flux-child-noread"
+# The accounts of the children of test 9, with the role of git in tenant.
+NAMED_ACCOUNTS = ("flux-child-named-hr", "flux-child-named-probe")
 
 
 def read(name):
@@ -201,7 +209,8 @@ class Setup(unittest.TestCase):
         # The accounts of flux-system: the controller (cluster-admin, as in
         # the install of git), default, and two of children outside the
         # class with admin in the namespaces of the test only.
-        for name in ("kustomize-controller", "default", *CHILD_ACCOUNTS, ROLE_ACCOUNT, NOREAD_ACCOUNT):
+        for name in ("kustomize-controller", "default", *CHILD_ACCOUNTS, ROLE_ACCOUNT, NOREAD_ACCOUNT,
+                     *NAMED_ACCOUNTS):
             make("/api/v1/namespaces/flux-system/serviceaccounts", obj("v1", "ServiceAccount", name, "flux-system"))
         make("/apis/rbac.authorization.k8s.io/v1/clusterrolebindings", obj(
             "rbac.authorization.k8s.io/v1", "ClusterRoleBinding", "cluster-reconciler-flux-system",
@@ -214,7 +223,8 @@ class Setup(unittest.TestCase):
                 subjects=[{"kind": "ServiceAccount", "name": n, "namespace": "flux-system"} for n in CHILD_ACCOUNTS]))
         # The role of the children of git, bound in tenant as accounts.py
         # binds it; and the CRDs of its kinds of the Prometheus operator.
-        for account, role in ((ROLE_ACCOUNT, "role.json"), (NOREAD_ACCOUNT, "role-noread.json")):
+        for account, role in ((ROLE_ACCOUNT, "role.json"), (NOREAD_ACCOUNT, "role-noread.json"),
+                              *((a, "role.json") for a in NAMED_ACCOUNTS)):
             role = json.loads(read(role))
             make("/apis/rbac.authorization.k8s.io/v1/clusterroles", role)
             make("/apis/rbac.authorization.k8s.io/v1/namespaces/tenant/rolebindings", obj(
@@ -359,6 +369,21 @@ class NoFlag(unittest.TestCase):
         self.assertNotIn("serviceAccountName", ks("who-unpatched")["spec"])
         for name in ("who-patched", "who-unpatched"):
             wait_ready(name, "False", "identity-probe user=" + CONTROLLER + " end")
+
+    def test_9_the_patches_of_accounts_py_name_the_own_accounts(self):
+        kustomization("parent-named", "./parent-named", serviceAccountName="kustomize-controller",
+                      patches=json.loads(read("patches.json")))
+        wait_ready("parent-named", "True")
+        wait_for("the children of parent-named", lambda: all(
+            call("GET", f"{KUSTOMIZATIONS}/{n}")[0] == 200 for n in ("named-hr", "named-probe")))
+        for name in ("named-hr", "named-probe"):
+            self.assertEqual(ks(name)["spec"].get("serviceAccountName"), f"flux-child-{name}")
+        wait_ready("named-hr", "True")
+        status, hr = call("GET", "/apis/helm.toolkit.fluxcd.io/v2/namespaces/tenant/helmreleases/census-hr")
+        self.assertEqual(status, 200)
+        self.assertEqual(hr["spec"].get("serviceAccountName"), "flux-release-census-hr")
+        self.assertEqual(hr["spec"].get("install"), {"disableWait": True})
+        wait_ready("named-probe", "False", 'User "system:serviceaccount:flux-system:flux-child-named-probe" cannot')
 
     def test_7_the_role_reads_what_the_wait_reads(self):
         kustomization("census-wait", "./census-wait", serviceAccountName=ROLE_ACCOUNT, wait=True)
