@@ -104,9 +104,10 @@ WSL-02, which has that cluster's kubeconfig
   homelab-wsl, scraped on that site: the kubelet's
   `node_memory_working_set_bytes`, and cAdvisor's `container_memory_rss` of
   the root cgroup of the node (`id="/"`). Each node
-  container has a Docker memory limit: 13 GiB for a worker
-  (`memory_workers` of `talos_clusters` in the Ansible inventory) and 4 GiB
-  for the control plane (`memory_controlplanes`).
+  container has a Docker memory limit: 15 GiB for a worker
+  (`memory_workers` of `talos_clusters` in the Ansible inventory, and the
+  `memory_nodes` entries that move the running workers to that size) and
+  4 GiB for the control plane (`memory_controlplanes`).
   `observability/tests/test_node_container_memory.py` holds the rules equal
   to the inventory.
   - `WorkerContainerMemoryNearLimit`: a worker past 90% of its limit for 5
@@ -129,9 +130,10 @@ WSL-02, which has that cluster's kubeconfig
     pods by their requests against the memory of the VM, and the kubelet
     does not evict, because it sees free memory.
   - The scheduler has no stop at the memory limit of a worker. The pod
-    limit of the kubelet (110) stops it on worker 1 today, near 92% at
-    today's pod sizes. It does not stop it on worker 2, whose pods are
-    larger. A higher pod limit removes the one stop on worker 1.
+    limit of the kubelet (110) stops it on worker 1, which had 99 pods at
+    12 of its then 13 GiB on 2026-11-27. It does not stop it on worker 2,
+    whose pods are larger. A higher pod limit removes the one stop on
+    worker 1.
   - These alerts warn. They do not stop the scheduler, and a rollout or a
     burst of Jobs can cross from 90% to the limit in minutes; that is why
     the rules of a worker wait 5 and 2 minutes.
@@ -192,7 +194,8 @@ WSL-02, which has that cluster's kubeconfig
      memory request raised.
 
   More memory for a node is a size of its own in `memory_nodes`, set on the
-  running container by `06-talos-node-memory.yml`, within the memory of the
+  running container by `06-talos-node-memory.yml` (`task talos:memory:wsl`),
+  within the memory of the
   WSL VM. The rules then need that size too (the test fails until they
   have it).
 - **Certificates of the security platform:** `SecurityCertificateExpiring`

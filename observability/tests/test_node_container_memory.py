@@ -48,8 +48,14 @@ def test_the_limits_of_site_1_are_the_ones_of_the_inventory():
     cluster = talos_clusters()[CLUSTERS[rules.SITE1_CLUSTER]]
     assert gib(cluster["memory_workers"]) == rules.SITE1_WORKER_LIMIT_GIB
     assert gib(cluster["memory_controlplanes"]) == rules.SITE1_CONTROLPLANE_LIMIT_GIB
-    # No node with a limit of its own: the rules give each role one limit.
-    assert not cluster.get("memory_nodes")
+    # The rules give each role one limit, so a node with a size of its own
+    # (memory_nodes, which moves a running node) must have that same limit.
+    nodes = cluster.get("memory_nodes") or {}
+    for node, size in nodes.items():
+        role = re.fullmatch(r"(worker|controlplane)-\d+", node)
+        assert role, node
+        limit = rules.SITE1_WORKER_LIMIT_GIB if role[1] == "worker" else rules.SITE1_CONTROLPLANE_LIMIT_GIB
+        assert gib(size) == limit, node
 
 
 def test_the_limit_of_worker_1_of_site_2_is_the_one_of_the_inventory():

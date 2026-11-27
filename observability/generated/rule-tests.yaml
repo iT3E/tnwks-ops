@@ -1602,13 +1602,13 @@ tests:
   interval: 1m
   input_series:
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-1"}
-    values: 12884901888+0x30
+    values: 14817637171+0x30
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-2"}
-    values: 11811160064+0x30
+    values: 13690208256+0x30
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-controlplane-1"}
-    values: 12884901888+0x30
+    values: 14817637171+0x30
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl-02",node="other-worker-1"}
-    values: 12884901888+0x30
+    values: 14817637171+0x30
   alert_rule_test:
   - alertname: WorkerContainerMemoryNearLimit
     eval_time: 4m
@@ -1623,7 +1623,7 @@ tests:
       exp_annotations:
         summary: lab-worker-1 is above 90% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: 'The node container of a worker of homelab-wsl has a memory limit of 13 GiB (memory_workers
+        description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
           of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
           it, because the node reports the memory of the whole WSL VM: the scheduler places pods against the memory
           of the VM. This alert warns; it stops nothing. Find the largest pods of the node, and move or shrink one.
@@ -1632,7 +1632,7 @@ tests:
   interval: 1m
   input_series:
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-1"}
-    values: 13421772800+0x30
+    values: 15461882265+0x30
   alert_rule_test:
   - alertname: WorkerContainerMemoryNearLimit
     eval_time: 1m
@@ -1647,7 +1647,7 @@ tests:
       exp_annotations:
         summary: lab-worker-1 is above 95% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: 'The node container of a worker of homelab-wsl has a memory limit of 13 GiB (memory_workers
+        description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
           of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
           it, because the node reports the memory of the whole WSL VM: the scheduler places pods against the memory
           of the VM. This alert warns; it stops nothing. At the limit, the kernel kills processes inside the node
@@ -1663,7 +1663,7 @@ tests:
       exp_annotations:
         summary: lab-worker-1 is above 90% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: 'The node container of a worker of homelab-wsl has a memory limit of 13 GiB (memory_workers
+        description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
           of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
           it, because the node reports the memory of the whole WSL VM: the scheduler places pods against the memory
           of the VM. This alert warns; it stops nothing. Find the largest pods of the node, and move or shrink one.
@@ -1675,7 +1675,7 @@ tests:
       exp_annotations:
         summary: lab-worker-1 is above 95% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: 'The node container of a worker of homelab-wsl has a memory limit of 13 GiB (memory_workers
+        description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
           of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
           it, because the node reports the memory of the whole WSL VM: the scheduler places pods against the memory
           of the VM. This alert warns; it stops nothing. At the limit, the kernel kills processes inside the node
@@ -1685,7 +1685,7 @@ tests:
   interval: 1m
   input_series:
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-1"}
-    values: 12423192903+0x30
+    values: 14334453350+0x30
   alert_rule_test:
   - alertname: WorkerContainerMemoryNearLimit
     eval_time: 20m
@@ -1738,11 +1738,11 @@ tests:
   - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
     values: 3178275799+0x40
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-1"}
-    values: 12004433592+0x30
+    values: 13851269529+0x30
   - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-1",id="/",container="",image="",name="",namespace="",pod=""}
-    values: 7398081167+0x40
+    values: 8536247500+0x40
   - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-2",id="/",container="",image="",name="",namespace="",pod=""}
-    values: 8793945538+0x40
+    values: 10146860236+0x40
   alert_rule_test:
   - alertname: NodeContainerRssNearLimit
     eval_time: 30m
@@ -1754,7 +1754,7 @@ tests:
   - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-controlplane-1",id="/",container="",image="",name="",namespace="",pod=""}
     values: 3865470566+0x40
   - series: container_memory_rss{k8s_cluster="homelab-wsl",job="kubelet",metrics_path="/metrics/cadvisor",node="lab-worker-2",id="/",container="",image="",name="",namespace="",pod=""}
-    values: 12283606466+0x40
+    values: 14173392076+0x40
   alert_rule_test:
   - alertname: NodeContainerRssNearLimit
     eval_time: 14m
@@ -1769,7 +1769,7 @@ tests:
       exp_annotations:
         summary: lab-controlplane-1 has more than 85% of the memory limit of its node container in resident memory
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: 'The resident memory of the node container is past 85% of its limit (13 GiB for a worker, 4
+        description: 'The resident memory of the node container is past 85% of its limit (15 GiB for a worker, 4
           GiB for the control plane: memory_workers and memory_controlplanes of talos_clusters in the Ansible inventory).
           It is a floor of the memory that the kernel can not take back: at the limit, the kernel kills processes
           inside the node container, and neither the scheduler nor the kubelet sees that limit. Find what grew.
@@ -1781,7 +1781,7 @@ tests:
       exp_annotations:
         summary: lab-worker-2 has more than 85% of the memory limit of its node container in resident memory
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
-        description: 'The resident memory of the node container is past 85% of its limit (13 GiB for a worker, 4
+        description: 'The resident memory of the node container is past 85% of its limit (15 GiB for a worker, 4
           GiB for the control plane: memory_workers and memory_controlplanes of talos_clusters in the Ansible inventory).
           It is a floor of the memory that the kernel can not take back: at the limit, the kernel kills processes
           inside the node container, and neither the scheduler nor the kubelet sees that limit. Find what grew.

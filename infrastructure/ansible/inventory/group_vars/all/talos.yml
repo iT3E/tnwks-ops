@@ -51,7 +51,15 @@ talos_clusters:
     cpus_controlplanes: "4.0"
     cpus_workers: "4.0"
     memory_controlplanes: 4GiB
-    memory_workers: 13GiB
+    memory_workers: 15GiB
+    # memory_workers sizes the workers of a cluster that talosctl creates;
+    # these entries move the running node containers to the same size
+    # (06-talos-node-memory.yml sets only the nodes named here). Both workers
+    # sat past 90% of 13 GiB from 2026-11-22. The limits add to 34 GiB
+    # (4 + 15 + 15) inside the 40 GB .wslconfig (wsl_memory).
+    memory_nodes:
+      worker-1: 15GiB
+      worker-2: 15GiB
     # The multi-document form, which the pinned Talos needs at create. The
     # live node keeps its v1alpha1 config until its conversion, so the
     # v1alpha1 files stay for its `talosctl patch mc` commands (talos/README.md).
