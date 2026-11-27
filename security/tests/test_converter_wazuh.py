@@ -259,10 +259,9 @@ def test_each_sca_check_the_vulnerabilities_and_the_time_of_each_agent_that_maps
         # "Not applicable" has no result, as a check with no PASS and no FAIL.
         ("35500", "distro-one"): (0, "unknown"),
         ("35501", "distro-one"): (1, "unknown"),
-        # Each document is one vulnerability of one package. The severity is the highest.
-        ("vulnerabilities", "host-one"): (5, "high"),
-        # No document is a count of 0.
-        ("vulnerabilities", "distro-one"): (0, "unknown"),
+        # The count at the highest severity, under that severity.
+        ("vulnerabilities", "host-one"): (1, "high"),
+        # No document of the vulnerability state is no line: no evidence, not a pass.
     }
     # The time of the last report: the newest last_seen of the snapshots of the agent.
     assert times(part) == {"host-one": NOW - 90, "distro-one": NOW - 30}
@@ -272,9 +271,67 @@ def test_each_sca_check_the_vulnerabilities_and_the_time_of_each_agent_that_maps
     assert success(part) == {"results": 1, "index-stats": 1}
     # The manager (000) is no agent of a system, and is not counted.
     assert served(part, converter.WAZUH_UNMAPPED) == {(): 0}
+    assert served(part, converter.WAZUH_SCA_OTHER) == {(): 0}
     text = part.render().decode()
     assert f'{RESULT}{{check="26001",severity="unknown",source="wazuh",system="host-one"}} 1' in text
     assert f'{LAST}{{source="wazuh",system="host-one"}} {NOW - 90:.3f}' in text
+
+
+@pytest.mark.parametrize("levels, line", [
+    (["Low", "Low", "Medium"], (1, "medium")),
+    (["High", "Low", "Low", "Low"], (1, "high")),
+    # High and critical are one count: the rule takes the line under either label, so
+    # a new critical on an agent with two highs raises the value from 2 to 3.
+    (["Critical", "High", "High", "Medium"], (3, "critical")),
+    (["-", None], (2, "unknown")),
+], ids=["medium", "a high and lows", "a critical and highs", "no severity"])
+def test_the_vulnerabilities_line_is_the_count_at_the_highest_severity(indexer, tmp_path, levels, line):
+    """The rule of a new finding compares the values of a line of high or critical
+    severity: a new low on an agent with a high leaves that value as it was."""
+    indexer.docs[converter.VULNERABILITIES_INDEX] = [vulnerability_doc("002", level) for level in levels]
+    part = source_for(indexer, tmp_path)
+    part.cycle()
+    assert results(part)[("vulnerabilities", "distro-one")] == line
+    assert ("vulnerabilities", "host-one") not in results(part)
+    by_severity = {dict(key)["severity"]: value for key, value in served(part, converter.WAZUH_VULNERABILITIES).items()}
+    assert sum(by_severity.values()) == len(levels)
+
+
+def test_the_vulnerabilities_line_rises_for_a_new_high_or_critical_and_not_for_a_new_low(indexer, tmp_path):
+    """The values that observability/rules.py (wazuh_vulnerability_fixtures) runs through
+    SecurityFindingNew."""
+    part = source_for(indexer, tmp_path)
+    seen = []
+    for levels in (["High"], ["High", "Low"], ["High", "Low", "High"], ["High", "Low", "High", "Critical"]):
+        indexer.docs[converter.VULNERABILITIES_INDEX] = [vulnerability_doc("001", level) for level in levels]
+        part.cycle()
+        seen.append(results(part)[("vulnerabilities", "host-one")])
+    assert seen == [(1, "high"), (1, "high"), (2, "high"), (3, "critical")]
+
+
+def test_the_severities_counted_together_are_those_of_the_rule_of_a_new_finding(monkeypatch):
+    import importlib.util
+
+    # rules.py imports its neighbours (inventory.py): last on the path.
+    monkeypatch.setattr(sys, "path", [*sys.path, str(ROOT / "observability")])
+    spec = importlib.util.spec_from_file_location("observability_rules_for_wazuh", ROOT / "observability/rules.py")
+    rules = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rules)
+    assert tuple(rules.SECURITY_FINDING_SEVERITY.split("|")) == converter.FINDING_LEVELS
+
+
+def test_an_sca_result_that_is_not_a_value_of_the_release_is_counted_and_has_no_result(indexer, tmp_path, caplog):
+    indexer.docs[converter.SCA_INDEX] = [sca_doc("001", "26001", "passed"), sca_doc("001", "26002", "Failed"),
+                                         sca_doc("001", "26003", "Not applicable"), sca_doc("002", "35500", "Error")]
+    part = source_for(indexer, tmp_path)
+    with caplog.at_level(logging.INFO, logger="converter"):
+        part.cycle()
+        part.cycle()
+    sca = {key: value for key, value in results(part).items() if key[0] != "vulnerabilities"}
+    assert sca == {("26002", "host-one"): (1, "unknown")}
+    assert served(part, converter.WAZUH_SCA_OTHER) == {(): 2}
+    notes = [record for record in caplog.records if "not Passed, Failed or Not applicable" in record.getMessage()]
+    assert len(notes) == 1 and "Error" not in notes[0].getMessage()
 
 
 def test_the_size_of_each_index_of_wazuh(indexer, tmp_path):
@@ -328,8 +385,22 @@ def test_an_agent_with_two_names_in_the_window_has_no_result(indexer, tmp_path):
     assert {system for _, system in results(part)} == {"host-one"}
 
 
-@pytest.mark.parametrize("seen_ago", [None, -600], ids=["no report", "a report in the future"])
-def test_an_agent_with_no_time_of_a_report_has_no_result_and_no_time(indexer, tmp_path, seen_ago):
+@pytest.mark.parametrize("seen_ago", [None, -600, "text"], ids=["no report", "a report in the future",
+                                                                  "a time that is not a number"])
+def test_an_agent_with_no_time_of_a_report_has_no_result_and_no_time(indexer, tmp_path, monkeypatch, seen_ago):
+    if seen_ago == "text":
+        # The max aggregation gives a number or null: a text in its place is no time.
+        real = converter.composite_page
+
+        def text_time(payload, names):
+            buckets, after = real(payload, names)
+            for bucket in buckets:
+                if bucket["key"].get("agent") == "001" and "last_seen" in bucket:
+                    bucket["last_seen"]["value"] = "1800000000000"
+            return buckets, after
+
+        monkeypatch.setattr(converter, "composite_page", text_time)
+        seen_ago = 60
     indexer.docs[converter.AGENTS_INDEX] = [agent_doc("001", "agent-one", seen_ago=seen_ago),
                                             agent_doc("002", "agent-two")]
     part = source_for(indexer, tmp_path)
@@ -379,6 +450,11 @@ FAULTS = {
                                           "no aggregation", "a check that is not a check ID",
                                           "a check that ends in a line feed", "a count that is not a number")},
 }
+# The agent list: an agent ID that is not digits makes the whole read fail.
+AGENT_FAULTS = {
+    "an agent ID that is not an agent ID": "agent one", "an agent ID with a line feed": "001\n",
+    "an agent ID that is not a text": 1,
+}
 
 
 @pytest.mark.parametrize("path", [converter.AGENTS_INDEX, converter.SCA_INDEX, converter.VULNERABILITIES_INDEX])
@@ -396,6 +472,35 @@ def test_a_read_that_fails_gives_no_result_and_no_time_for_any_agent(indexer, tm
     # The size read is apart: its result stays.
     assert len(served(part, converter.WAZUH_INDEX_SIZE)) == 3
     assert all("html" not in record.getMessage() and STAND_IN not in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.parametrize("agent", AGENT_FAULTS.values(), ids=AGENT_FAULTS.keys())
+def test_an_agent_id_that_does_not_have_the_form_gives_no_result(indexer, tmp_path, agent):
+    indexer.docs[converter.AGENTS_INDEX] = [agent_doc("001", "agent-one"), agent_doc(agent, "agent-two")]
+    part = source_for(indexer, tmp_path)
+    part.cycle()
+    assert results(part) == {} and times(part) == {}
+    assert success(part) == {"results": 0, "index-stats": 1}
+
+
+@pytest.mark.parametrize("case", ["a full page with no key of the next page", "a page above the size asked"])
+def test_a_page_that_does_not_fit_the_paging_gives_no_result(indexer, tmp_path, monkeypatch, case):
+    monkeypatch.setattr(converter, "PAGE_SIZE", 2)
+    indexer.docs[converter.SCA_INDEX] = [sca_doc("001", str(26000 + n), "Passed") for n in range(5)]
+    real = composite_answer
+
+    def answer(docs, body):
+        found = real(docs, dict(body, aggs={"items": dict(body["aggs"]["items"], composite=dict(
+            body["aggs"]["items"]["composite"], size=3 if case.startswith("a page above") else 2))}))
+        if case.startswith("a full page"):
+            found["aggregations"]["items"].pop("after_key", None)
+        return found
+
+    monkeypatch.setattr(sys.modules[__name__], "composite_answer", answer)
+    part = source_for(indexer, tmp_path)
+    part.cycle()
+    assert results(part) == {} and times(part) == {}
+    assert success(part)["results"] == 0
 
 
 def test_a_result_goes_away_in_the_cycle_in_which_a_read_fails(indexer, tmp_path):
@@ -447,10 +552,14 @@ def test_a_read_past_its_deadline_gives_no_result(indexer, tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize("stats", [
-    403, b"x", {"indices": []}, {"indices": {"Bad Name": {"total": {"store": {"size_in_bytes": 1}}}}},
-    {"indices": {"wazuh-a": {"total": {"store": {"size_in_bytes": -1}}}}},
-    {"indices": {"wazuh-a": {"total": {"store": {"size_in_bytes": True}}}}},
-], ids=["a refusal", "not JSON", "not a map", "a name that is not an index name", "a negative size", "a bool"])
+    403, b"x", {"_shards": STATS["_shards"], "indices": []},
+    {"_shards": STATS["_shards"], "indices": {"Bad Name": {"total": {"store": {"size_in_bytes": 1}}}}},
+    {"_shards": STATS["_shards"], "indices": {"wazuh-a": {"total": {"store": {"size_in_bytes": -1}}}}},
+    {"_shards": STATS["_shards"], "indices": {"wazuh-a": {"total": {"store": {"size_in_bytes": True}}}}},
+    {"_shards": {"total": 3, "successful": 2, "failed": 1}, "indices": STATS["indices"]},
+    {"indices": STATS["indices"]},
+], ids=["a refusal", "not JSON", "not a map", "a name that is not an index name", "a negative size", "a bool",
+        "a shard failed", "no shards"])
 def test_a_size_read_that_fails_gives_no_size_and_leaves_the_results(indexer, tmp_path, stats):
     indexer.answers["/" + converter.SIZE_PATTERNS + "/_stats/store"] = stats
     part = source_for(indexer, tmp_path)
@@ -600,7 +709,8 @@ def test_a_read_of_many_agents_and_checks_stays_small(tmp_path, monkeypatch):
     part.cycle()
     peak = tracemalloc.get_traced_memory()[1]
     tracemalloc.stop()
-    assert len(results(part)) == 20 * 2001
+    # The SCA checks: the vulnerability state of this test has no document, so no line.
+    assert len(results(part)) == 20 * 2000
     assert peak < 16 * 1024 * 1024, f"{peak / 2**20:.1f} MiB"
 
 

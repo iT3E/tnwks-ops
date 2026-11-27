@@ -1661,6 +1661,7 @@ def fixtures():
         *capacity_fixtures(),
         *security_fixtures(),
         *high_check_fixtures(),
+        *wazuh_vulnerability_fixtures(),
         *audit_sink_fixtures(),
         *accepted_list_fixtures(),
         *(test for test in trivy_fixtures() if test["name"] != TRIVY_BY_REFERENCE_WEEK_TEST),
@@ -1758,6 +1759,55 @@ def high_check_fixtures():
              {"alertname": rule["alert"], "eval_time": "15m", "exp_alerts": [fires(source, system)]},
          ]}
         for source, check, system in checks
+    ]
+
+
+def wazuh_vulnerability_fixtures():
+    """The `vulnerabilities` line of the Wazuh source (security/converter/README.md, "The
+    Wazuh source"): its value is the count at its severity, and high and critical count
+    together. A new low does not move a line of high severity, and a new high or a new
+    critical raises it (security/tests/test_converter_wazuh.py serves these values)."""
+    rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityFindingNew")
+    site, system = "homelab-wsl-02", "example-host"
+
+    def line(severity, values):
+        return {"series": (f'homelab_security_check_result{{k8s_cluster="{site}",source="wazuh",'
+                           f'check="vulnerabilities",system="{system}",severity="{severity}"}}'),
+                "values": values}
+
+    def by_severity(severity, values):
+        return {"series": (f'homelab_security_wazuh_vulnerabilities{{k8s_cluster="{site}",system="{system}",'
+                           f'severity="{severity}"}}'),
+                "values": values}
+
+    labels = {"k8s_cluster": site, "source": "wazuh", "system": system}
+    annotations = {}
+    for key, text in rule["annotations"].items():
+        for label, value in labels.items():
+            text = text.replace("{{ $labels." + label + " }}", value)
+        annotations[key] = text
+    fires = [{"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}]
+
+    def at(minute, exp_alerts):
+        return {"alertname": rule["alert"], "eval_time": f"{minute}m", "exp_alerts": exp_alerts}
+
+    # One day and one hour of a steady value, then a change at minute 1500.
+    before, after = 1500, 120
+    return [
+        {"name": "a new low vulnerability on an agent with a high does not start SecurityFindingNew",
+         "interval": "1m",
+         "input_series": [line("high", f"1+0x{before + after}"),
+                          by_severity("high", f"1+0x{before + after}"),
+                          by_severity("low", f"2+0x{before} 3+0x{after}")],
+         "alert_rule_test": [at(before + 15, []), at(before + 60, [])]},
+        {"name": "a new high vulnerability on an agent with a high starts SecurityFindingNew",
+         "interval": "1m",
+         "input_series": [line("high", f"1+0x{before} 2+0x{after}")],
+         "alert_rule_test": [at(before - 10, []), at(before + 5, []), at(before + 15, fires), at(before + 70, [])]},
+        {"name": "a new critical vulnerability on an agent with two highs starts SecurityFindingNew",
+         "interval": "1m",
+         "input_series": [line("high", f"2+0x{before} _x{after}"), line("critical", f"_x{before} 3+0x{after}")],
+         "alert_rule_test": [at(before - 10, []), at(before + 15, fires), at(before + 70, [])]},
     ]
 
 

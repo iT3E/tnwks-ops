@@ -75,6 +75,7 @@ WAZUH_INDICES_TIME = "homelab_security_wazuh_indices_timestamp_seconds"
 # The Wazuh source (README, "The Wazuh source").
 WAZUH_QUERY_SUCCESS = "homelab_security_converter_wazuh_query_success"
 WAZUH_UNMAPPED = "homelab_security_converter_wazuh_unmapped_agents"
+WAZUH_SCA_OTHER = "homelab_security_converter_wazuh_sca_other_results"
 WAZUH_VULNERABILITIES = "homelab_security_wazuh_vulnerabilities"
 WAZUH_INDEX_SIZE = "homelab_security_wazuh_index_size_bytes"
 
@@ -1179,8 +1180,10 @@ AGENTS_WINDOW = "now-1h"
 # Agent 000 is the manager itself: it has no system of the registry.
 MANAGER_AGENT = "000"
 # The SCA module of the agent writes "Passed", "Failed" and "Not applicable", and
-# never indexes "Not run". A check with no "Passed" and no "Failed" has no result.
-SCA_PASSED, SCA_FAILED = "Passed", "Failed"
+# never indexes "Not run". A check with no "Passed" and no "Failed" has no result. A
+# document with another value is counted apart (WAZUH_SCA_OTHER), so a change of the
+# values upstream shows, and its check has no result.
+SCA_PASSED, SCA_FAILED, SCA_NOT_APPLICABLE = "Passed", "Failed", "Not applicable"
 # The bounds of a read: the buckets of one page of a composite aggregation, the pages,
 # the buckets of one read, the agents, the checks of one agent, the indices of the size
 # read, and the seconds of the whole read of one cycle.
@@ -1299,9 +1302,13 @@ class Indexer:
 
     def sizes(self) -> dict[str, int]:
         """{index: bytes} of each index of Wazuh, from the index stats: the store size of
-        the primaries and the replicas. The stats show no content."""
+        the primaries and the replicas. The stats show no content. A stats answer in
+        which a shard failed is no size: its sizes are not whole."""
         query = urllib.parse.urlencode({"level": "indices", "expand_wildcards": "open,hidden"})
         payload = self.call("GET", f"/{SIZE_PATTERNS}/_stats/store?{query}")
+        shards = payload.get("_shards")
+        if not isinstance(shards, dict) or shards.get("failed") != 0:
+            raise IndexerError("a shard of the index stats failed")
         indices = payload.get("indices")
         if not isinstance(indices, dict) or len(indices) > MAX_INDICES:
             raise IndexerError("the index stats have no indices, or more than the limit")
@@ -1316,8 +1323,8 @@ class Indexer:
 
 def composite_page(payload: dict, names: list[str]) -> tuple[list[dict], dict | None]:
     """The buckets of one page of the composite aggregation `items`, and the key of the
-    next page. IndexerError for a search that is not whole, or a bucket whose key does
-    not name each source."""
+    next page. IndexerError for a search that is not whole, a page with more than
+    PAGE_SIZE buckets, or a bucket whose key does not name each source."""
     shards = payload.get("_shards")
     if payload.get("timed_out") is not False or not isinstance(shards, dict) or shards.get("failed") != 0:
         raise IndexerError("the search timed out, or a shard failed")
@@ -1328,6 +1335,8 @@ def composite_page(payload: dict, names: list[str]) -> tuple[list[dict], dict | 
         raise IndexerError("the answer has no composite aggregation") from None
     if not isinstance(buckets, list) or not (after is None or isinstance(after, dict)):
         raise IndexerError("the buckets of the answer are not a list")
+    if len(buckets) > PAGE_SIZE:
+        raise IndexerError("a page has more buckets than the size the converter asked for")
     for bucket in buckets:
         key = bucket.get("key") if isinstance(bucket, dict) else None
         if not isinstance(key, dict) or set(key) != set(names) or not whole(bucket.get("doc_count")):
@@ -1360,21 +1369,25 @@ def agent_list(buckets, now: float) -> dict[str, tuple[str, float | None]]:
     return agents
 
 
-def sca_results(buckets) -> dict[tuple[str, str], int]:
-    """{(agent ID, check): checks that fail} from the buckets of the SCA state. A check
-    with "Passed" or "Failed" has a result: the number of its documents with "Failed",
-    which is 1 for one policy. A check ID that is not a check ID makes the read fail:
-    leaving one check out could make a line pass."""
+def sca_results(buckets) -> tuple[dict[tuple[str, str], int], int]:
+    """{(agent ID, check): checks that fail} from the buckets of the SCA state, and the
+    count of the documents whose result is not one of the three values of the release.
+    A check with "Passed" or "Failed" has a result: the number of its documents with
+    "Failed", which is 1 for one policy. A check ID that is not a check ID makes the
+    read fail: leaving one check out could make a line pass."""
     results: dict[tuple[str, str], int] = {}
+    other = 0
     for bucket in buckets:
         agent, check, result = bucket["key"]["agent"], bucket["key"]["check"], bucket["key"]["result"]
         if result not in (SCA_PASSED, SCA_FAILED):
+            if result != SCA_NOT_APPLICABLE:
+                other += bucket["doc_count"]
             continue
         if not isinstance(check, str) or not CHECK_ID.fullmatch(check) or not isinstance(agent, str):
             raise IndexerError("a check of the SCA state is not a check ID")
         key = agent, check
         results[key] = results.get(key, 0) + (bucket["doc_count"] if result == SCA_FAILED else 0)
-    return results
+    return results, other
 
 
 def vulnerability_counts(buckets) -> dict[str, dict[str, int]]:
@@ -1390,6 +1403,22 @@ def vulnerability_counts(buckets) -> dict[str, dict[str, int]]:
         by_level = counts.setdefault(agent, {})
         by_level[level] = by_level.get(level, 0) + bucket["doc_count"]
     return counts
+
+
+# The severities of SecurityFindingNew (observability/rules.py, SECURITY_FINDING_SEVERITY).
+FINDING_LEVELS = ("high", "critical")
+
+
+def vulnerabilities_value(levels: dict[str, int], top: str) -> int:
+    """The value of the `vulnerabilities` line of an agent whose highest severity is
+    `top`: the count at that severity, and at high or critical the count at both. The
+    rule of a new finding takes the line under any severity of the two, and fires when
+    its value is above each value of the day before: a new low leaves the value as it
+    was, and a new high or a new critical raises it, also when the label goes from high
+    to critical. The count of each severity is in WAZUH_VULNERABILITIES."""
+    if top in FINDING_LEVELS:
+        return sum(levels.get(level, 0) for level in FINDING_LEVELS)
+    return levels[top]
 
 
 class WazuhSource(Loop):
@@ -1412,7 +1441,8 @@ class WazuhSource(Loop):
         self.time_series = registry["series"]["last_result"]
         self.agents_of = dict(registry.get("wazuh_agents", {}))
         self.noted: set[str] = set()
-        # (results, times, vulnerabilities, unmapped, success of each query, read at)
+        # (results, times, vulnerabilities, unmapped, other SCA results, sizes, success of
+        # each query, read at)
         self.result: tuple | None = None
 
     def note(self, text: str):
@@ -1456,7 +1486,7 @@ class WazuhSource(Loop):
             {"name": {"terms": {"field": "wazuh.agent.name", "size": 2}},
              "last_seen": {"max": {"field": "wazuh.agent.last_seen"}}}, in_time), now)
         systems, unmapped = self.systems(agents)
-        sca = sca_results(self.indexer.composite(
+        sca, sca_other = sca_results(self.indexer.composite(
             SCA_INDEX, [{"agent": {"terms": {"field": "wazuh.agent.id"}}},
                         {"check": {"terms": {"field": "check.id"}}},
                         {"result": {"terms": {"field": "check.result"}}}],
@@ -1480,24 +1510,30 @@ class WazuhSource(Loop):
                 raise IndexerError("an agent has more SCA checks than the limit")
             results += [(check, system, failed, "unknown") for check, failed in checks]
             levels = vulnerabilities.get(agent, {})
-            top = max(levels, key=SEVERITIES.index, default="unknown")
-            results.append((VULNERABILITIES_CHECK, system, sum(levels.values()), top))
+            if levels:
+                top = max(levels, key=SEVERITIES.index)
+                results.append((VULNERABILITIES_CHECK, system, vulnerabilities_value(levels, top), top))
+            # An agent with no document of the vulnerability state has no line: 0 would
+            # read as a pass for an agent that the manager has not scanned.
             by_severity += [(system, level, count) for level, count in sorted(levels.items())]
-        return results, times, by_severity, unmapped
+        if sca_other:
+            self.note("the SCA state has results that are not Passed, Failed or Not applicable: "
+                      "their checks have no result")
+        return results, times, by_severity, unmapped, sca_other
 
     def step(self):
         now = self.clock()
         deadline = self.monotonic() + WAZUH_DEADLINE_SECONDS
         success = {}
         try:
-            results, times, by_severity, unmapped = self.read_results(now, deadline)
+            results, times, by_severity, unmapped, sca_other = self.read_results(now, deadline)
             success["results"] = 1
         except IndexerError as error:
             logger.warning("no result of Wazuh in this cycle: %s", error)
-            results, times, by_severity, unmapped, success["results"] = [], [], [], None, 0
+            results, times, by_severity, unmapped, sca_other, success["results"] = [], [], [], None, None, 0
         except Exception as error:  # noqa: BLE001 - a fault here must not keep an old result
             logger.error("the read of the results of Wazuh failed: %s", type(error).__name__)
-            results, times, by_severity, unmapped, success["results"] = [], [], [], None, 0
+            results, times, by_severity, unmapped, sca_other, success["results"] = [], [], [], None, None, 0
         try:
             sizes = self.indexer.sizes()
             success["index-stats"] = 1
@@ -1508,18 +1544,20 @@ class WazuhSource(Loop):
             logger.error("the read of the index stats of Wazuh failed: %s", type(error).__name__)
             sizes, success["index-stats"] = {}, 0
         with self.lock:
-            self.result = results, times, by_severity, unmapped, sizes, success, self.monotonic()
+            self.result = results, times, by_severity, unmapped, sca_other, sizes, success, self.monotonic()
 
     def collect(self, metrics: Metrics, now: float):
         with self.lock:
             result = self.result
         if result is None or not self.fresh(result[-1], now):
             return
-        results, times, by_severity, unmapped, sizes, success, _ = result
+        results, times, by_severity, unmapped, sca_other, sizes, success, _ = result
         for query, value in sorted(success.items()):
             metrics.add(WAZUH_QUERY_SUCCESS, value, query=query)
         if unmapped is not None:
             metrics.add(WAZUH_UNMAPPED, unmapped)
+        if sca_other is not None:
+            metrics.add(WAZUH_SCA_OTHER, sca_other)
         for system, moment in times:
             metrics.add(self.time_series, float(moment), source=WAZUH_SOURCE, system=system)
         for check, system, failed, level in results:

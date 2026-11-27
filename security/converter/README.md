@@ -160,6 +160,7 @@ the contract of the registry.
 | `homelab_security_converter_files_skipped` | `source` (`prowler`, `api-check`, and `wazuh-settings` when a count file does not fit) | The number of files that the converter skipped in its last cycle: the newest OCSF file of a system, the result file, or a count file, that does not fit ([A file that does not fit](#a-file-that-does-not-fit)) |
 | `homelab_security_converter_wazuh_query_success` | `query` (`results`, `index-stats`) | 1 when the reads of the Wazuh source gave an answer that fits in the last cycle, 0 when one failed ([The Wazuh source](#the-wazuh-source)) |
 | `homelab_security_converter_wazuh_unmapped_agents` | None | The number of agents in the agent list whose name the registry maps to no system, the manager not counted |
+| `homelab_security_converter_wazuh_sca_other_results` | None | The number of documents of the SCA state whose result is not `Passed`, `Failed` or `Not applicable`. Their checks have no result ([The Wazuh source](#the-wazuh-source)) |
 | `homelab_security_converter_accepted_list_read` | None | 1 when the converter read the list of accepted findings in its last cycle, or found no list. 0 when it gave no entry of a list that is there ([A file that gives no entry](#a-file-that-gives-no-entry)) |
 | `homelab_security_converter_accepted_skipped_entries` | None | The number of entries of the list of accepted findings that the converter skipped in its last cycle ([An entry that the converter skips](#an-entry-that-the-converter-skips)) |
 
@@ -704,6 +705,10 @@ What the release writes in those fields:
   so the converter joins the three reads by the agent ID.
 - **The result of an SCA check.** `Passed`, `Failed` or `Not applicable`
   ([the values](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/sca/sca_impl/src/sca_utils.cpp#L207-L227)).
+  The converter compares the text as it is: a document with another value
+  gives its check no result, and counts in
+  `homelab_security_converter_wazuh_sca_other_results`, with one line in the
+  log that does not hold the value.
   The agent indexes no check that has not run (`Not run`,
   [the agent](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/sca/sca_impl/src/sca_event_handler.cpp#L538-L545)).
   `check.id` is the ID of the policy file, such as `26001`
@@ -719,7 +724,7 @@ What the release writes in those fields:
 
 ```text
 homelab_security_check_result{source="wazuh",check="26001",system="example-host",severity="unknown"} 1
-homelab_security_check_result{source="wazuh",check="vulnerabilities",system="example-host",severity="high"} 5
+homelab_security_check_result{source="wazuh",check="vulnerabilities",system="example-host",severity="high"} 2
 homelab_security_last_result_timestamp_seconds{source="wazuh",system="example-host"} 1794550000.000
 homelab_security_wazuh_vulnerabilities{system="example-host",severity="low"} 4
 homelab_security_wazuh_index_size_bytes{index="wazuh-states-sca"} 2048
@@ -728,7 +733,7 @@ homelab_security_wazuh_index_size_bytes{index="wazuh-states-sca"} 2048
 | Series | Labels | Value |
 | --- | --- | --- |
 | `homelab_security_check_result`, an SCA check | `source` `wazuh`, `check` the `check.id`, `system`, `severity` `unknown` | The documents of the check with `Failed`: 1 for a check that fails, 0 for one that passes. A check with `Not applicable` only has no series |
-| `homelab_security_check_result`, `vulnerabilities` | `source` `wazuh`, `check` `vulnerabilities`, `system`, `severity` the highest of its documents | The vulnerabilities of the agent: one for each vulnerability of each package. 0 when it has none |
+| `homelab_security_check_result`, `vulnerabilities` | `source` `wazuh`, `check` `vulnerabilities`, `system`, `severity` the highest of its documents | The vulnerabilities of the agent at that severity, one for each vulnerability of each package. At `high` or `critical`, the vulnerabilities at both. An agent with no document of the vulnerability state has no series |
 | `homelab_security_last_result_timestamp_seconds` | `source` `wazuh`, `system` | The newest `last_seen` of the agent, the time of its last report |
 | `homelab_security_wazuh_vulnerabilities` | `system`, `severity` | The vulnerabilities of the agent of one severity. Not in the contract of the registry |
 | `homelab_security_wazuh_index_size_bytes` | `index` | The bytes of one index of Wazuh. Not in the contract of the registry |
@@ -736,7 +741,13 @@ homelab_security_wazuh_index_size_bytes{index="wazuh-states-sca"} 2048
 A severity of the feed is in lower case, and a value that is not one of the
 list (`-`, no severity) is `unknown`. The rule of a new finding of high
 severity (`SecurityFindingNew`) reads `vulnerabilities` when its highest
-severity is `high` or `critical`. An SCA check has `unknown`, because the
+severity is `high` or `critical`, under either label, and fires when its
+value is above each value of the day before. So the value counts high and
+critical together: a new low leaves it as it was, and a new high or a new
+critical raises it. A high that is fixed on the day that a new high comes
+leaves it as it was, as for each source of the rule. The cases in
+`observability/rules.py` (`wazuh_vulnerability_fixtures`) run these values
+through the rule. An SCA check has `unknown`, because the
 policy gives a check no severity: a check that fails shows on the board and
 in the state of its safeguard, and it does not fire that rule.
 
@@ -748,7 +759,9 @@ Ansible role of the agent (`windows_wazuh_rollout_name` and
 The system of that host in `registry/systems.yaml` names it in
 `wazuh_agent`, and `security/generate.py` writes the map to `registry.json`
 (`wazuh_agents`). `../tests/test_converter_wazuh.py` fails when the inventory
-and the registry do not name the same agents for the same hosts.
+and the registry do not name the same agents for the same hosts. CI runs it
+for a change of the registry or of the host variables
+(`.github/ci/domains.toml`, the domain `observability`).
 
 | Agent name | System |
 | --- | --- |
@@ -779,7 +792,7 @@ a pull request after its first result is on the board (`../README.md`,
 | A read above a bound: more than 1 000 buckets on a page, 100 pages or 50 000 buckets in one read, 1 000 agents, 5 000 SCA checks of one agent, 1 MiB in one answer, or 120 seconds for the reads of one cycle | The same |
 | The password file is missing or empty, or the CA file is missing or is not a certificate | The same, and the converter sends no request |
 | An agent has no `last_seen`, or one more than 5 minutes in the future | No result and no time for that agent |
-| The index stats fail | No size, and `homelab_security_converter_wazuh_query_success{query="index-stats"}` 0. The results stay |
+| The index stats fail, or a shard of the stats failed | No size, and `homelab_security_converter_wazuh_query_success{query="index-stats"}` 0. The results stay |
 | A fault of the converter itself | The same as a read that fails, and the log names the kind of the fault |
 
 A cycle reads all three again, and a result goes away in the cycle in which a
@@ -787,11 +800,14 @@ read fails, so a result that the converter serves is always from the reads of
 the last 10 minutes. The log says the kind of a fault and the status, and
 never an answer of the indexer.
 
-**What a count of 0 can not tell.** The vulnerability state holds what the
+**No document is no evidence.** The vulnerability state holds what the
 manager found, not that it looked. An agent that the manager has not yet
-scanned, or a manager whose feed is not loaded, gives 0 vulnerabilities.
-The state of the feed is in `.wazuh-cti-consumers`, which this source does
-not read yet.
+scanned, or a manager whose feed is not loaded, has no document, the same as
+an agent with no vulnerability. So an agent with no document has no
+`vulnerabilities` series, and its safeguard shows no evidence, never a pass.
+A later change can read the state of the feed in `.wazuh-cti-consumers`
+and the scan of each agent, and serve 0 for an agent that the manager
+scanned with a loaded feed.
 
 ### The memory of a read
 
