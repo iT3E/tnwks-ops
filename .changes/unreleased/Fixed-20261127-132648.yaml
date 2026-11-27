@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'WorkerContainerMemoryNearLimit on homelab-wsl warns past 98% for 15m and is critical past 99% for 2m (was 90%/5m and 95%/2m): a worker''s working set counts file cache that grows into the limit, so the old thresholds fired with half the memory reclaimable.'
+time: 2026-11-27T13:26:48.991975065-08:00

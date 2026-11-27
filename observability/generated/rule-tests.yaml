@@ -1597,21 +1597,21 @@ tests:
   - alertname: NodeContainerMemoryNearLimit
     eval_time: 20m
     exp_alerts: []
-- name: a worker of site 1 past 90% of its limit warns after 5 minutes; the control plane and site 2 at the same
+- name: a worker of site 1 past 98% of its limit warns after 15 minutes; the control plane and site 2 at the same
     figure do not
   interval: 1m
   input_series:
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-1"}
-    values: 14817637171+0x30
+    values: 15864535449+0x30
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-2"}
-    values: 13690208256+0x30
+    values: 15622943539+0x30
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-controlplane-1"}
-    values: 14817637171+0x30
+    values: 15864535449+0x30
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl-02",node="other-worker-1"}
-    values: 14817637171+0x30
+    values: 15864535449+0x30
   alert_rule_test:
   - alertname: WorkerContainerMemoryNearLimit
-    eval_time: 4m
+    eval_time: 14m
     exp_alerts: []
   - alertname: WorkerContainerMemoryNearLimit
     eval_time: 20m
@@ -1621,18 +1621,18 @@ tests:
         k8s_cluster: homelab-wsl
         node: lab-worker-1
       exp_annotations:
-        summary: lab-worker-1 is above 90% of the memory limit of its node container
+        summary: lab-worker-1 is above 98% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
         description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
           of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
           it, because the node reports the memory of the whole WSL VM: the scheduler places pods against the memory
           of the VM. This alert warns; it stops nothing. Find the largest pods of the node, and move or shrink one.
           docs/operations/observability-operations.md, Room on site 1, has the steps.'
-- name: a worker of site 1 past 95% of its limit is critical after 2 minutes, and also warns after 5
+- name: a worker of site 1 past 99% of its limit is critical after 2 minutes, and also warns after 15
   interval: 1m
   input_series:
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-1"}
-    values: 15461882265+0x30
+    values: 16025596723+0x30
   alert_rule_test:
   - alertname: WorkerContainerMemoryNearLimit
     eval_time: 1m
@@ -1645,7 +1645,7 @@ tests:
         k8s_cluster: homelab-wsl
         node: lab-worker-1
       exp_annotations:
-        summary: lab-worker-1 is above 95% of the memory limit of its node container
+        summary: lab-worker-1 is above 99% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
         description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
           of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
@@ -1654,14 +1654,30 @@ tests:
           container, BestEffort pods first, and the kubelet does not evict before. Move a large pod off the node
           now. docs/operations/observability-operations.md, Room on site 1, has the steps.'
   - alertname: WorkerContainerMemoryNearLimit
-    eval_time: 6m
+    eval_time: 14m
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        k8s_cluster: homelab-wsl
+        node: lab-worker-1
+      exp_annotations:
+        summary: lab-worker-1 is above 99% of the memory limit of its node container
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
+        description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
+          of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
+          it, because the node reports the memory of the whole WSL VM: the scheduler places pods against the memory
+          of the VM. This alert warns; it stops nothing. At the limit, the kernel kills processes inside the node
+          container, BestEffort pods first, and the kubelet does not evict before. Move a large pod off the node
+          now. docs/operations/observability-operations.md, Room on site 1, has the steps.'
+  - alertname: WorkerContainerMemoryNearLimit
+    eval_time: 16m
     exp_alerts:
     - exp_labels:
         severity: warning
         k8s_cluster: homelab-wsl
         node: lab-worker-1
       exp_annotations:
-        summary: lab-worker-1 is above 90% of the memory limit of its node container
+        summary: lab-worker-1 is above 98% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
         description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
           of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
@@ -1673,7 +1689,7 @@ tests:
         k8s_cluster: homelab-wsl
         node: lab-worker-1
       exp_annotations:
-        summary: lab-worker-1 is above 95% of the memory limit of its node container
+        summary: lab-worker-1 is above 99% of the memory limit of its node container
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl
         description: 'The node container of a worker of homelab-wsl has a memory limit of 15 GiB (memory_workers
           of talos_clusters in the Ansible inventory). The scheduler and the evictions of the kubelet do not see
@@ -1681,11 +1697,11 @@ tests:
           of the VM. This alert warns; it stops nothing. At the limit, the kernel kills processes inside the node
           container, BestEffort pods first, and the kubelet does not evict before. Move a large pod off the node
           now. docs/operations/observability-operations.md, Room on site 1, has the steps.'
-- name: a worker of site 1 at 89% of its limit does not alert
+- name: a worker of site 1 at 95% of its limit does not alert
   interval: 1m
   input_series:
   - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl",node="lab-worker-1"}
-    values: 14334453350+0x30
+    values: 15300820992+0x30
   alert_rule_test:
   - alertname: WorkerContainerMemoryNearLimit
     eval_time: 20m

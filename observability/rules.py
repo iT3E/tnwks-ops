@@ -598,21 +598,26 @@ def capacity_alerts():
                                          " because the node reports the memory of the whole WSL VM. Find the largest pods of the node,"
                                          " and move or shrink one. The limit is memory_nodes of talos_clusters in the Ansible inventory.")}},
         # The same figure for the nodes of homelab-wsl, scraped there
-        # (kubernetes/clusters/wsl/apps). A worker can fill in minutes (a
-        # rollout, or Jobs that all land on it), so its rules wait less. One
-        # name with two severities: Alertmanager's inhibit rule holds the
+        # (kubernetes/clusters/wsl/apps). Like the control plane's, the
+        # working set of a worker counts active file pages (the data files of
+        # Prometheus, Loki and the databases), which grow into the limit: at
+        # 15 GiB, worker 1 sat at 92-95% with 7.7 GiB of anonymous memory
+        # (2026-11-27). So the warning waits for 98% for 15 minutes, where the
+        # kernel has almost no file pages left to take back, and the critical
+        # one for 99%: a worker can fill in minutes (a rollout, or Jobs that
+        # all land on it), so it waits 2. One name with two severities: Alertmanager's inhibit rule holds the
         # warning back while the critical one fires. It does not compare the
         # node, so it holds the warning of the other worker back too.
         {"alert": "WorkerContainerMemoryNearLimit",
-         "expr": site1_memory("worker", SITE1_WORKER_LIMIT_GIB, 0.9),
-         "for": "5m", "labels": {"severity": "warning"},
-         "annotations": {"summary": "{{ $labels.node }} is above 90% of the memory limit of its node container",
+         "expr": site1_memory("worker", SITE1_WORKER_LIMIT_GIB, 0.98),
+         "for": "15m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "{{ $labels.node }} is above 98% of the memory limit of its node container",
                          "dashboard_url": board("tnwks-kubernetes"),
                          "description": (worker_limit + " Find the largest pods of the node, and move or shrink one." + steps)}},
         {"alert": "WorkerContainerMemoryNearLimit",
-         "expr": site1_memory("worker", SITE1_WORKER_LIMIT_GIB, 0.95),
+         "expr": site1_memory("worker", SITE1_WORKER_LIMIT_GIB, 0.99),
          "for": "2m", "labels": {"severity": "critical"},
-         "annotations": {"summary": "{{ $labels.node }} is above 95% of the memory limit of its node container",
+         "annotations": {"summary": "{{ $labels.node }} is above 99% of the memory limit of its node container",
                          "dashboard_url": board("tnwks-kubernetes"),
                          "description": (worker_limit + " At the limit, the kernel kills processes inside the node container,"
                                          " BestEffort pods first, and the kubelet does not evict before. Move a large pod off"
@@ -2516,35 +2521,39 @@ def capacity_fixtures():
              {"alertname": "NodeContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
          ]},
         # Made-up node names of the form of Talos in Docker.
-        {"name": "a worker of site 1 past 90% of its limit warns after 5 minutes; the control plane and site 2 at the same figure do not",
+        {"name": "a worker of site 1 past 98% of its limit warns after 15 minutes; the control plane and site 2 at the same figure do not",
          "interval": "1m",
          "input_series": [
-             # 92% of the limit; worker 2 at 85%.
-             site1_node("lab-worker-1", int(0.92 * SITE1_WORKER_LIMIT_GIB * gib)),
-             site1_node("lab-worker-2", int(0.85 * SITE1_WORKER_LIMIT_GIB * gib)),
-             site1_node("lab-controlplane-1", int(0.92 * SITE1_WORKER_LIMIT_GIB * gib)),
-             node("other-worker-1", int(0.92 * SITE1_WORKER_LIMIT_GIB * gib)),
+             # 98.5% of the limit; worker 2 at 97%.
+             site1_node("lab-worker-1", int(0.985 * SITE1_WORKER_LIMIT_GIB * gib)),
+             site1_node("lab-worker-2", int(0.97 * SITE1_WORKER_LIMIT_GIB * gib)),
+             site1_node("lab-controlplane-1", int(0.985 * SITE1_WORKER_LIMIT_GIB * gib)),
+             node("other-worker-1", int(0.985 * SITE1_WORKER_LIMIT_GIB * gib)),
          ], "alert_rule_test": [
-             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "4m", "exp_alerts": []},
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "14m", "exp_alerts": []},
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": [
                  expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1")]},
          ]},
-        {"name": "a worker of site 1 past 95% of its limit is critical after 2 minutes, and also warns after 5", "interval": "1m",
+        {"name": "a worker of site 1 past 99% of its limit is critical after 2 minutes, and also warns after 15", "interval": "1m",
          "input_series": [
-             # 96% of the limit.
-             site1_node("lab-worker-1", int(0.96 * SITE1_WORKER_LIMIT_GIB * gib)),
+             # 99.5% of the limit.
+             site1_node("lab-worker-1", int(0.995 * SITE1_WORKER_LIMIT_GIB * gib)),
          ], "alert_rule_test": [
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "1m", "exp_alerts": []},
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "3m", "exp_alerts": [
                  expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1",
                           severity="critical")]},
-             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "6m", "exp_alerts": [
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "14m", "exp_alerts": [
+                 expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1",
+                          severity="critical")]},
+             {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "16m", "exp_alerts": [
                  expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1"),
                  expected("WorkerContainerMemoryNearLimit", k8s_cluster=SITE1_CLUSTER, node="lab-worker-1",
                           severity="critical")]},
          ]},
-        {"name": "a worker of site 1 at 89% of its limit does not alert", "interval": "1m",
-         "input_series": [site1_node("lab-worker-1", int(0.89 * SITE1_WORKER_LIMIT_GIB * gib))],
+        # Where the file pages hold a busy worker.
+        {"name": "a worker of site 1 at 95% of its limit does not alert", "interval": "1m",
+         "input_series": [site1_node("lab-worker-1", int(0.95 * SITE1_WORKER_LIMIT_GIB * gib))],
          "alert_rule_test": [
              {"alertname": "WorkerContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
          ]},
