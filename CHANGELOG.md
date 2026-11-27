@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.330.0 - 2026-11-27
+
+### Added
+
+* security: the converter reads the Wazuh indexer as its read-only user (the result of each SCA check, the vulnerabilities and the time of the last report of each agent, and the size of each index) and serves them as the source wazuh, by the agent name that systems.yaml maps to each system; it also serves the count file of indices off their retention policy, with two alerts on it
+
 ## v2.329.0 - 2026-11-27
 
 ### Changed
