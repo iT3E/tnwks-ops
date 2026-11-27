@@ -52,6 +52,7 @@ BOARD = "tnwks-security"
 # when its scrape fails for HOST_UNREACHABLE_FOR (Design Doc 0004, section 5.5).
 HOST_SCRAPE_JOB = "windows-exporter-security"
 BEHIND = "behind_site"
+WAZUH_AGENT = "wazuh_agent"
 HOST_UNREACHABLE_FOR = "5m"
 
 TYPES = ("aws-account", "cloudflare-account", "github-organization",
@@ -178,6 +179,12 @@ def consistency(registry):
             if source not in sources_of(registry, system["type"]):
                 errors.append(f"the system {system['name']} lists the source {source}, "
                               f"which has no check for the type {system['type']}")
+        if WAZUH_AGENT in system and "wazuh" not in sources_of(registry, system["type"]):
+            errors.append(f"the system {system['name']} names a Wazuh agent, and wazuh has no check "
+                          f"for the type {system['type']}")
+    agents = [system[WAZUH_AGENT] for system in registry["systems"] if WAZUH_AGENT in system]
+    errors += [f"the Wazuh agent {agent} is in systems.yaml two times"
+               for agent in sorted({agent for agent in agents if agents.count(agent) > 1})]
     return errors
 
 
@@ -502,12 +509,15 @@ def stream_map(registry):
 def converter_registry(registry):
     """The names of the registry that the converter takes a value of a file against: a
     line of the list of accepted findings names a source and a system of the registry,
-    and an OCSF file of a provider of Prowler names a system of the type of the provider."""
+    and an OCSF file of a provider of Prowler names a system of the type of the provider.
+    And the system of each Wazuh agent, by the name of the agent."""
     return {"series": {"result": RESULT, "last_result": LAST_RESULT, "accepted": ACCEPTED},
             "sources": [source["name"] for source in registry["sources"]],
             "systems": [system["name"] for system in registry["systems"]],
             "prowler": {provider: [system["name"] for system in registry["systems"] if system["type"] == system_type]
-                        for system_type, provider in PROWLER_PROVIDERS.items()}}
+                        for system_type, provider in PROWLER_PROVIDERS.items()},
+            "wazuh_agents": {system[WAZUH_AGENT]: system["name"] for system in registry["systems"]
+                             if WAZUH_AGENT in system}}
 
 
 # --- The tests of the rules -------------------------------------------------------------

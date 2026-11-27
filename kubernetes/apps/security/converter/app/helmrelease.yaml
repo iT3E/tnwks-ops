@@ -2,8 +2,9 @@
 # The converter (security/converter/README.md), in the form of the evidence
 # collector (monitoring/observability-evidence): the pinned Python image, with
 # its code and its maps from a ConfigMap, the list of accepted findings from
-# its Secret, and the volume of results. Reloader restarts it when the
-# ConfigMap or the Secret changes.
+# its Secret, the volume of results, and the read-only user of the Wazuh
+# indexer with the CA of the server. Reloader restarts it when the ConfigMap
+# or a Secret changes.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -21,7 +22,8 @@ spec:
         namespace: flux-system
   values:
     defaultPodOptions:
-      # The converter asks Loki, and never the API server: no token.
+      # The converter asks Loki and the Wazuh indexer, and never the API
+      # server: no token.
       automountServiceAccountToken: false
       # Placement and memory: ../../README.md.
       nodeSelector:
@@ -48,6 +50,11 @@ spec:
               # This site's Loki, through its gateway, as Grafana reads it.
               # Loki asks for no login inside the cluster (auth_enabled: false).
               LOKI_URL: http://loki-gateway.monitoring.svc.cluster.local
+              # The Wazuh indexer (kubernetes/apps/security/wazuh/README.md,
+              # "Contract"). The converter logs in as tnwks-converter with the
+              # password at /wazuh/password, and checks the indexer with the CA
+              # at /wazuh-ca/ca.crt.
+              WAZUH_INDEXER_URL: https://wazuh-indexer.security.svc.cluster.local:9200
             securityContext:
               readOnlyRootFilesystem: true
               allowPrivilegeEscalation: false
@@ -107,6 +114,37 @@ spec:
         existingClaim: security-results
         globalMounts:
           - path: /results
+            readOnly: true
+      # The password of tnwks-converter, the read-only user of the Wazuh
+      # indexer (security/converter/README.md, "The Wazuh source"). Only this
+      # pod mounts it. The default mode: the kubelet makes the file for root,
+      # and the converter runs as 65534.
+      wazuh:
+        type: custom
+        volumeSpec:
+          secret:
+            secretName: wazuh-converter-reader
+            items:
+              - key: password
+                path: password
+        globalMounts:
+          - path: /wazuh
+            readOnly: true
+      # The CA certificate of the Wazuh server, which checks the certificate of
+      # the indexer. The key `ca.crt` only: the key of the CA never reaches
+      # this pod. Optional: the Secret is of the Wazuh server, and without it
+      # the Wazuh source has no result while the other parts go on.
+      wazuh-ca:
+        type: custom
+        volumeSpec:
+          secret:
+            secretName: wazuh-ca
+            optional: true
+            items:
+              - key: ca.crt
+                path: ca.crt
+        globalMounts:
+          - path: /wazuh-ca
             readOnly: true
     serviceMonitor:
       app:

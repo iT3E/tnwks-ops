@@ -55,6 +55,7 @@ One line for each system.
 | `domain` | The domain of the system. It names no person and no age group |
 | `sources` | Optional. The sources that report on the system today. The rule for a late result watches each of them |
 | `behind_site` | Optional. The site whose Windows host or link the results of the system pass through on their way to homelab-wsl-02: the host of site 1, its distro and the router. Their late alerts carry it as a label, and Alertmanager holds them while `SecurityHostUnreachable` fires for that site |
+| `wazuh_agent` | Optional. The name of the Wazuh agent of the system, as the Ansible role of the agent sets it. The converter serves the results of that agent under the name of the system ([`converter/README.md`](converter/README.md), "The Wazuh source"). One agent names one system, and only a type with a check of `wazuh` has one |
 
 The types are fixed: `aws-account`, `cloudflare-account`,
 `github-organization`, `terraform-cloud-organization`, `cluster`,

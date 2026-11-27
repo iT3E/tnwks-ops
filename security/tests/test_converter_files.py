@@ -179,6 +179,92 @@ def test_wazuh_channel_count_and_its_time_are_served_only_for_a_valid_result(tmp
     assert served(part, converter.WAZUH_ACTIVE_CHANNELS_TIME) == ({(): NOW - 30} if valid else {})
 
 
+def index_counts(**changes):
+    """An invented count file of step 2, in the form of the README."""
+    streams = {"events": {"indices": 4, "off_policy": 1, "no_policy": 0, "failed": 0},
+               "metrics": {"indices": 2, "off_policy": 1, "no_policy": 1, "failed": 1}}
+    document = {"version": 1, "source": "wazuh-settings", "time": NOW - 30, "moves": "applied",
+                "indices": 6, "off_policy": 2, "no_policy": 1, "failed": 1, "streams": streams,
+                "documents": {"wazuh-events-raw-v5": 0, "wazuh-active-responses": 3}}
+    return json.dumps(document | changes)
+
+
+def by_label(part, name, label):
+    return {dict(key)[label]: value for key, value in served(part, name).items()}
+
+
+def test_the_index_counts_of_each_stream_and_their_time_are_served(tmp_path):
+    write(tmp_path, converter.WAZUH_INDICES_FILE, index_counts())
+    part = files_for(tmp_path)
+    part.cycle()
+    assert by_label(part, converter.WAZUH_INDICES, "stream") == {"events": 4, "metrics": 2}
+    assert by_label(part, converter.WAZUH_INDICES_OFF_POLICY, "stream") == {"events": 1, "metrics": 1}
+    assert by_label(part, converter.WAZUH_INDICES_NO_POLICY, "stream") == {"events": 0, "metrics": 1}
+    assert by_label(part, converter.WAZUH_INDICES_FAILED, "stream") == {"events": 0, "metrics": 1}
+    assert by_label(part, converter.WAZUH_STREAM_DOCUMENTS, "data_stream") == {
+        "wazuh-events-raw-v5": 0, "wazuh-active-responses": 3}
+    assert served(part, converter.WAZUH_INDICES_TIME) == {(): NOW - 30}
+    assert skipped(part) == {"prowler": 0, "api-check": 0}
+
+
+def test_the_count_file_that_step_2_writes_is_read(tmp_path):
+    """The document of settings.py, as count_indices and count_documents build it."""
+    sys.path.insert(0, str(ROOT / "kubernetes/apps/security/wazuh-settings/app/scripts"))
+    try:
+        import settings
+    finally:
+        sys.path.pop(0)
+    streams = {name: {"indices": 1, "off_policy": 0, "no_policy": 0, "failed": 0}
+               for name in ("events", "findings", "raw-events", "metrics")}
+    document = {"version": 1, "source": settings.SOURCE, "time": int(NOW - 60), "moves": "applied",
+                "indices": 4, "off_policy": 0, "no_policy": 0, "failed": 0, "streams": streams,
+                "documents": {name: 0 for name in settings.EMPTY_STREAMS}}
+    settings.write_results(tmp_path, document)
+    part = files_for(tmp_path)
+    part.cycle()
+    assert by_label(part, converter.WAZUH_INDICES_OFF_POLICY, "stream") == {name: 0 for name in streams}
+    assert served(part, converter.WAZUH_INDICES_TIME) == {(): NOW - 60}
+
+
+INDEX_COUNTS_BAD = {
+    "not JSON": "{",
+    "another source": index_counts(source="api-check"),
+    "another version": index_counts(version=2),
+    "no time": index_counts(time=None),
+    "a time that is a float": index_counts(time=NOW - 30.5),
+    "a time in the future": index_counts(time=NOW + 600),
+    "no state of the moves": index_counts(moves="done"),
+    "a total that is not the sum": index_counts(off_policy=0),
+    "a negative count": json.dumps(json.loads(index_counts()) | {"streams": {
+        "events": {"indices": -1, "off_policy": 0, "no_policy": 0, "failed": 0}}, "indices": -1, "off_policy": 0,
+        "no_policy": 0, "failed": 0}),
+    "a count that is a bool": json.dumps(json.loads(index_counts()) | {"documents": {"wazuh-events-raw-v5": True}}),
+    "a stream with a fifth count": json.dumps(json.loads(index_counts()) | {"streams": {
+        "events": {"indices": 0, "off_policy": 0, "no_policy": 0, "failed": 0, "more": 0}},
+        "indices": 0, "off_policy": 0, "no_policy": 0, "failed": 0}),
+    "a stream name that is no name": json.dumps(json.loads(index_counts()) | {"documents": {"Bad Name": 0}}),
+    "larger than the limit": index_counts() + " " * converter.MAX_WAZUH_SETTINGS_BYTES,
+}
+
+
+@pytest.mark.parametrize("content", INDEX_COUNTS_BAD.values(), ids=INDEX_COUNTS_BAD.keys())
+def test_a_count_file_that_does_not_fit_gives_no_count_and_no_time_and_is_counted(tmp_path, content):
+    write(tmp_path, converter.WAZUH_INDICES_FILE, content)
+    part = files_for(tmp_path)
+    part.cycle()
+    assert served(part, converter.WAZUH_INDICES_OFF_POLICY) == {}
+    assert served(part, converter.WAZUH_INDICES_TIME) == {}
+    assert skipped(part) == {"prowler": 0, "api-check": 0, "wazuh-settings": 1}
+
+
+def test_both_count_files_that_do_not_fit_count_two_times(tmp_path):
+    write(tmp_path, converter.WAZUH_INDICES_FILE, "{")
+    write(tmp_path, converter.WAZUH_CHANNEL_FILE, "{")
+    part = files_for(tmp_path)
+    part.cycle()
+    assert skipped(part)["wazuh-settings"] == 2
+
+
 BAD = {
     "half written": prowler_text(RECORDS)[:-40],
     "empty": "",

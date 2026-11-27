@@ -18,6 +18,7 @@ writes is the security stream `findings`, in the Loki of its site.
 | `../tests/test_converter_accepted.py` | The tests of the list of accepted findings, and of the loop of the parts |
 | `../tests/test_converter_files.py` | The tests of the files of results, with invented OCSF files and result files |
 | `../tests/test_converter_findings.py` | The tests of the stream `findings`, with a fake push API of Loki |
+| `../tests/test_converter_wazuh.py` | The tests of the Wazuh source, with a fake indexer on the loopback address, and of its map of the agents and its manifests |
 | `kubernetes/apps/security/converter/` | The Flux Kustomization, the HelmRelease and the network policy |
 | `kubernetes/apps/security/converter/app/config/` | What the pod runs: the copy of `converter.py`, `streams.json`, and `registry.json` (the names of the sources, the systems and the series). `security/generate.py` writes them, so never edit them there |
 
@@ -27,7 +28,8 @@ writes is the security stream `findings`, in the Loki of its site.
 | The list of accepted findings | Here. [The list of accepted findings](#the-list-of-accepted-findings) |
 | The OCSF files of Prowler, and the result file of the API checks | Here. [The files of results](#the-files-of-results). The converter reads them from the volume `security-results` |
 | The lines of the failed findings | Here. [The stream `findings`](#the-stream-findings) |
-| The state of the Wazuh indexer | Step 2 of the platform |
+| The state of the Wazuh indexer | Here. [The Wazuh source](#the-wazuh-source) |
+| The count files of the settings of the Wazuh indexer | Here. [The count file of the Wazuh settings](#the-count-file-of-the-wazuh-settings) |
 
 ## The stream source
 
@@ -155,7 +157,9 @@ the contract of the registry.
 | `homelab_security_converter_streams` | None | The number of entries in the map |
 | `homelab_security_converter_last_cycle_timestamp_seconds` | None | The Unix time at which the last cycle ended |
 | `homelab_security_converter_stream_query_success` | `source`, `check`, `system` | 1 when Loki gave an answer in the last cycle, with a line or with none. 0 for an error or no answer |
-| `homelab_security_converter_files_skipped` | `source` (`prowler`, `api-check`) | The number of files that the converter skipped in its last cycle: the newest OCSF file of a system, or the result file, that does not fit ([A file that does not fit](#a-file-that-does-not-fit)) |
+| `homelab_security_converter_files_skipped` | `source` (`prowler`, `api-check`, and `wazuh-settings` when a count file does not fit) | The number of files that the converter skipped in its last cycle: the newest OCSF file of a system, the result file, or a count file, that does not fit ([A file that does not fit](#a-file-that-does-not-fit)) |
+| `homelab_security_converter_wazuh_query_success` | `query` (`results`, `index-stats`) | 1 when the reads of the Wazuh source gave an answer that fits in the last cycle, 0 when one failed ([The Wazuh source](#the-wazuh-source)) |
+| `homelab_security_converter_wazuh_unmapped_agents` | None | The number of agents in the agent list whose name the registry maps to no system, the manager not counted |
 | `homelab_security_converter_accepted_list_read` | None | 1 when the converter read the list of accepted findings in its last cycle, or found no list. 0 when it gave no entry of a list that is there ([A file that gives no entry](#a-file-that-gives-no-entry)) |
 | `homelab_security_converter_accepted_skipped_entries` | None | The number of entries of the list of accepted findings that the converter skipped in its last cycle ([An entry that the converter skips](#an-entry-that-the-converter-skips)) |
 
@@ -260,8 +264,8 @@ and no alert fires.
 ## The loop of the parts
 
 One loop runs the parts of the converter one after the other, each 5
-minutes: the stream source, the list of accepted findings, then the files of
-results. A fault of
+minutes: the stream source, the list of accepted findings, the files of
+results, then the Wazuh source. A fault of
 one part does not stop the others: the part serves nothing in that cycle,
 and the log says the kind of the fault. Each part keeps the result of its last
 cycle only, and serves nothing that no cycle replaced in 10 minutes.
@@ -277,14 +281,17 @@ cycle only, and serves nothing that no cycle replaced in 10 minutes.
 | Port | 9877: `/metrics` and `/healthz` |
 | Scrape | The ServiceMonitor `security-converter`, each minute, by the Prometheus of homelab-wsl-02. The rules of the registry run there |
 | Service account | The default one of the namespace, with no token in the pod. The converter does not ask the API server |
-| Credentials | None. The pod mounts the Secret `security-accepted-findings`, read-only and optional: the list holds no credential |
+| Credentials | The password of `tnwks-converter`, the read-only user of the Wazuh indexer: the key `password` of the Secret `wazuh-converter-reader` (a SOPS file that `kubernetes/apps/security/converter/app/kustomization.yaml` lists), at `/wazuh/password`. The CA certificate of the Wazuh server: the key `ca.crt` of the Secret `wazuh-ca` only, at `/wazuh-ca/ca.crt`, so the key of the CA never reaches the pod. That mount is optional, as the Secret is of the Wazuh server: without it the Wazuh source has no result, and the other parts go on. The pod also mounts the Secret `security-accepted-findings`, read-only and optional: the list holds no credential |
 | Memory | A request of 32 MiB and a limit of 128 MiB, the line of the converter in `kubernetes/apps/security/README.md` |
 
 The CiliumNetworkPolicy `security-converter` names each path. In: the
 metrics port, from the Prometheus pods of this cluster and from the host (the
 probes of the kubelet). Out: the gateway pods of this cluster's Loki on port
 8080, for the queries of the stream source and the push of the stream
-`findings`, and DNS. `default-deny` of the namespace denies each other path.
+`findings`, the pod of the Wazuh indexer of this cluster on port 9200, for
+the Wazuh source, and DNS. The indexer lets the converter in by its rule
+`wazuh-indexer-readers` (`kubernetes/apps/security/wazuh/README.md`,
+"Network"). `default-deny` of the namespace denies each other path.
 
 ## Run the tests
 
@@ -304,7 +311,7 @@ reads as late.
 
 This is the contract for the jobs that write files for the converter: the
 Prowler job and the API checks job, and step 2 of the settings of the Wazuh
-indexer for the Wazuh source. Each runs on homelab-wsl-02. The
+indexer. Each runs on homelab-wsl-02. The
 converter reads the files each 5 minutes, and serves
 `homelab_security_check_result` and the time of the last result:
 
@@ -475,10 +482,7 @@ The alert uses the count and checks separately for a missing or stale sample.
 One file, `wazuh-settings/indices.json`, from step 2 of the settings of the
 Wazuh indexer (`kubernetes/apps/security/wazuh/README.md`, "Retention"). Each
 run writes `wazuh-settings/indices.json.tmp` and moves it to that name. The
-converter does not read it yet: the change that adds the Wazuh source to the
-converter reads it, serves the count of indices that are not on their policy
-of tnwks as a result series, and adds this file to the table of
-[A file that does not fit](#a-file-that-does-not-fit).
+converter reads it each 5 minutes, and serves its counts by stream:
 
 ```json
 {
@@ -515,6 +519,29 @@ of tnwks as a result series, and adds this file to the table of
 
 The file holds counts and stream names only: no index content, no secret.
 
+| Series | Labels | Value |
+| --- | --- | --- |
+| `homelab_security_wazuh_indices` | `stream` (a key of `streams`) | `indices` of the stream |
+| `homelab_security_wazuh_indices_off_policy` | `stream` | `off_policy` of the stream |
+| `homelab_security_wazuh_indices_no_policy` | `stream` | `no_policy` of the stream |
+| `homelab_security_wazuh_indices_failed` | `stream` | `failed` of the stream |
+| `homelab_security_wazuh_stream_documents` | `data_stream` (a key of `documents`) | The documents of a stream that must hold none |
+| `homelab_security_wazuh_indices_timestamp_seconds` | None | `time` |
+
+```text
+homelab_security_wazuh_indices_off_policy{stream="events"} 0
+homelab_security_wazuh_indices_timestamp_seconds 1794550000
+```
+
+These series are not in the contract of the registry: an index off its
+policy is not a check of a system. Two alerts of
+`kubernetes/apps/security/wazuh-settings/app/alerts.yaml` read them, with
+their cases in `observability/rule-tests/wazuh-settings.yaml`:
+`WazuhIndicesOffPolicy` when the sum of `off_policy` is above 0, and
+`WazuhIndicesCountStale` when the time is missing or older than 26 hours for
+15 minutes. The daily run of step 2 writes the file, so a count older than a
+day and two hours is a run that did not end well.
+
 ### A file that does not fit
 
 A file that the converter can not read, or that does not fit its contract,
@@ -528,6 +555,8 @@ of the converter names the file and the reason, with no value of the file.
 | --- | --- |
 | The newest OCSF file of a system | It is not UTF-8, or not one JSON array of objects: a file that a run left half written, an empty file, a comma at the end, text after the array. A record has no `metadata.event_code` that is a check ID, or no `status_code` as text. A record is larger than 4 MiB, the file is larger than 256 MiB, or it has more than 200 000 records or 5 000 checks |
 | `api-check/results.json` | It is not JSON, `version` is not 1, `source` is not `api-check`, `time` is not a time up to 5 minutes in the future, or an entry does not have the form of the table above: a `check` that is not a check ID too. The file is larger than 16 MiB, or it has more than 5 000 results |
+| `wazuh-settings/channels.json` | It is not JSON, `version` is not 1, `source` is not `wazuh-settings`, `time` is not a whole number of a time up to 5 minutes in the future, or `active_channels` is not a whole number of 0 or more. The file is larger than 4 KiB |
+| `wazuh-settings/indices.json` | It is not JSON, `version` is not 1, `source` is not `wazuh-settings`, `time` is not a whole number of a time up to 5 minutes in the future, or `moves` is not one of its three values. A stream does not have the four counts, each a whole number of 0 or more, a document count is not one, a name of a stream is not lower-case letters, digits, `.` and `-`, or a total is not the sum of its streams. The file is larger than 64 KiB, or it has more than 64 streams. A count file that does not fit counts in `homelab_security_converter_files_skipped` with `source="wazuh-settings"`, and its series go away, so the alert for a stale count fires |
 | Each of them | It is not a regular file: a link, a FIFO, a directory |
 | The directory of a provider | It can not be read: it counts as one file of `prowler` that does not fit, and the other providers and the API checks go on |
 
@@ -630,3 +659,155 @@ A day with a few hundred findings that fail is a few hundred kB in Loki.
 | `homelab_security_converter_findings_pending` | `source`, `system` | 1 when the lines of the newest file of the system wait for Loki, 0 when Loki has them |
 | `homelab_security_converter_findings_lines_sent_total` | `source` | The lines that Loki took, since the start |
 | `homelab_security_converter_findings_lines_refused_total` | `source` | The lines that Loki refused, since the start |
+
+## The Wazuh source
+
+The converter asks the Wazuh indexer of homelab-wsl-02 each 5 minutes for
+the state of each agent, and serves it as the source `wazuh`
+([`../README.md`](../README.md), "The series"). It asks for counts only: a
+search with a composite aggregation and no document (`size` 0), and the
+index stats. No document of the indexer reaches the converter, a series or
+a log.
+
+| What | Value |
+| --- | --- |
+| Indexer | `https://wazuh-indexer.security.svc.cluster.local:9200` (`WAZUH_INDEXER_URL`), checked with the CA of the server, TLS 1.2 or later, no proxy and no redirect |
+| User | `tnwks-converter`, the read-only user of `kubernetes/apps/security/wazuh-settings/app/config/accounts.json`: a read of the three indices below, of the agent snapshots only the fields of the agent list, and the index stats of the indices of Wazuh |
+| Password | Read from `/wazuh/password` at each request, so a new password counts from the next cycle. It is in no log |
+| Requests | Three searches (`POST /<index>/_search`) and one `GET` of the index stats, each cycle. Each request waits 10 seconds at most, an answer is 1 MiB at most, and the reads of one cycle take 120 seconds at most |
+
+### What it reads
+
+The index names are the contract of the server
+(`kubernetes/apps/security/wazuh/README.md`, "Contract"). The field names
+are those of the pinned release, v5.0.0-rc2.
+
+| Read | Index | Fields | What the converter counts |
+| --- | --- | --- | --- |
+| The agent list | `wazuh-metrics-agents`, the snapshots of the last hour | `wazuh.agent.id`, `wazuh.agent.name`, `wazuh.agent.last_seen` ([fields](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/wcs/stateless/metrics/agents/docs/fields.csv)) | For each agent ID: its name, and the newest `last_seen` (a `max` aggregation) |
+| The SCA state | `wazuh-states-sca` | `wazuh.agent.id`, `check.id`, `check.result` ([fields](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/wcs/stateful/sca/docs/fields.csv)) | The documents of each agent, check and result |
+| The vulnerability state | `wazuh-states-vulnerabilities` | `wazuh.agent.id`, `vulnerability.severity` ([fields](https://github.com/wazuh/wazuh-indexer-plugins/blob/v5.0.0-rc2/wcs/stateful/vulnerabilities/docs/fields.csv)) | The documents of each agent and severity |
+| The size of each index | `wazuh-*`, `.ds-wazuh-*`, `.wazuh-*` (`expand_wildcards=open,hidden`) | `_stats/store`: `total.store.size_in_bytes` of each index | The bytes of each index, with its replicas |
+
+What the release writes in those fields:
+
+- **The time of the last report.** The manager writes a snapshot of each
+  agent each 600 seconds or more
+  ([`DEFAULT_METRICS_FREQUENCY`](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/framework/wazuh/core/indexer/metrics_snapshot.py#L121)),
+  with `last_seen` from the last keepalive of the agent
+  ([the document](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/framework/wazuh/core/indexer/metrics_snapshot.py#L428-L442)).
+  The agent ID has three digits or more
+  ([the snapshot](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/framework/wazuh/core/indexer/metrics_snapshot.py#L413)),
+  as the manager writes it on each state document
+  ([the state](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/inventory_sync_server/src/sync/sessionProcessor.cpp#L166),
+  [the form](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/inventory_sync_server/src/common/agentId.hpp#L20-L21)),
+  so the converter joins the three reads by the agent ID.
+- **The result of an SCA check.** `Passed`, `Failed` or `Not applicable`
+  ([the values](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/sca/sca_impl/src/sca_utils.cpp#L207-L227)).
+  The agent indexes no check that has not run (`Not run`,
+  [the agent](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/sca/sca_impl/src/sca_event_handler.cpp#L538-L545)).
+  `check.id` is the ID of the policy file, such as `26001`
+  ([the policy](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/ruleset/sca/windows/cis_win11_enterprise.yml#L88)),
+  the IDs of `../catalog/wazuh.json`. A check has no severity.
+- **The severity of a vulnerability.** The severity of the feed in sentence
+  case (`Critical`, `High`, `Medium`, `Low`), or `-` when the feed has none
+  ([the field](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/vulnerability_scanner/src/scanOrchestrator/factory/eventDetailsBuilder.hpp#L137-L138),
+  [the dash](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/src/wazuh_modules/vulnerability_scanner/src/scanOrchestrator/fieldAlertHelper.hpp#L39)).
+  Each document is one vulnerability of one package.
+
+### The series
+
+```text
+homelab_security_check_result{source="wazuh",check="26001",system="example-host",severity="unknown"} 1
+homelab_security_check_result{source="wazuh",check="vulnerabilities",system="example-host",severity="high"} 5
+homelab_security_last_result_timestamp_seconds{source="wazuh",system="example-host"} 1794550000.000
+homelab_security_wazuh_vulnerabilities{system="example-host",severity="low"} 4
+homelab_security_wazuh_index_size_bytes{index="wazuh-states-sca"} 2048
+```
+
+| Series | Labels | Value |
+| --- | --- | --- |
+| `homelab_security_check_result`, an SCA check | `source` `wazuh`, `check` the `check.id`, `system`, `severity` `unknown` | The documents of the check with `Failed`: 1 for a check that fails, 0 for one that passes. A check with `Not applicable` only has no series |
+| `homelab_security_check_result`, `vulnerabilities` | `source` `wazuh`, `check` `vulnerabilities`, `system`, `severity` the highest of its documents | The vulnerabilities of the agent: one for each vulnerability of each package. 0 when it has none |
+| `homelab_security_last_result_timestamp_seconds` | `source` `wazuh`, `system` | The newest `last_seen` of the agent, the time of its last report |
+| `homelab_security_wazuh_vulnerabilities` | `system`, `severity` | The vulnerabilities of the agent of one severity. Not in the contract of the registry |
+| `homelab_security_wazuh_index_size_bytes` | `index` | The bytes of one index of Wazuh. Not in the contract of the registry |
+
+A severity of the feed is in lower case, and a value that is not one of the
+list (`-`, no severity) is `unknown`. The rule of a new finding of high
+severity (`SecurityFindingNew`) reads `vulnerabilities` when its highest
+severity is `high` or `critical`. An SCA check has `unknown`, because the
+policy gives a check no severity: a check that fails shows on the board and
+in the state of its safeguard, and it does not fire that rule.
+
+### The map from an agent to a system
+
+The name of each agent is the rollout name that the inventory gives to the
+Ansible role of the agent (`windows_wazuh_rollout_name` and
+`wsl_wazuh_rollout_name` in `infrastructure/ansible/inventory/host_vars`).
+The system of that host in `registry/systems.yaml` names it in
+`wazuh_agent`, and `security/generate.py` writes the map to `registry.json`
+(`wazuh_agents`). `../tests/test_converter_wazuh.py` fails when the inventory
+and the registry do not name the same agents for the same hosts.
+
+| Agent name | System |
+| --- | --- |
+| `windows-site1` | `DESKTOP-HKE05KI` |
+| `windows-site2` | `WSL-02` |
+| `wsl-site1` | `DESKTOP-HKE05KI-ubuntu` |
+| `wsl-site2` | `WSL-02-ubuntu` |
+
+- Agent `000` is the manager. It has no system.
+- An agent whose name the registry does not map has no result, and counts
+  in `homelab_security_converter_wazuh_unmapped_agents`. The log names its
+  ID one time.
+- Two agents with the name of one system give that system no result, and
+  an agent with two names in the hour of the window has no result.
+- The state of an agent that is not in the agent list (an agent that was
+  removed) is not read into a result.
+
+The wazuh source joins `sources` of a system in `registry/systems.yaml` in
+a pull request after its first result is on the board (`../README.md`,
+"How to change the registry").
+
+### When the converter serves no result
+
+| Case | What the converter serves |
+| --- | --- |
+| One of the three reads gives an error, a refusal, no index, no answer in time, an answer that is not JSON or does not have the form, a search that timed out or in which a shard failed | No result and no time for any agent in that cycle, and `homelab_security_converter_wazuh_query_success{query="results"}` 0. The rule for a late result fires for each system that lists `wazuh` |
+| A check that is not a check ID in the SCA state | The same: a check left out could let a line pass |
+| A read above a bound: more than 1 000 buckets on a page, 100 pages or 50 000 buckets in one read, 1 000 agents, 5 000 SCA checks of one agent, 1 MiB in one answer, or 120 seconds for the reads of one cycle | The same |
+| The password file is missing or empty, or the CA file is missing or is not a certificate | The same, and the converter sends no request |
+| An agent has no `last_seen`, or one more than 5 minutes in the future | No result and no time for that agent |
+| The index stats fail | No size, and `homelab_security_converter_wazuh_query_success{query="index-stats"}` 0. The results stay |
+| A fault of the converter itself | The same as a read that fails, and the log names the kind of the fault |
+
+A cycle reads all three again, and a result goes away in the cycle in which a
+read fails, so a result that the converter serves is always from the reads of
+the last 10 minutes. The log says the kind of a fault and the status, and
+never an answer of the indexer.
+
+**What a count of 0 can not tell.** The vulnerability state holds what the
+manager found, not that it looked. An agent that the manager has not yet
+scanned, or a manager whose feed is not loaded, gives 0 vulnerabilities.
+The state of the feed is in `.wazuh-cti-consumers`, which this source does
+not read yet.
+
+### The memory of a read
+
+The converter keeps one page of an answer (1 000 buckets, some hundred kB)
+and the counts of the agents, not the buckets. A test read of 20 agents with
+2 000 SCA checks each, 40 000 buckets on 40 pages, took 10 MiB at its peak in
+Python. Four agents with the 482 checks of the Windows policy took about
+1 MiB. The limit of the pod stays 128 MiB.
+
+### Not yet proven on a cluster
+
+The source is built from the field definitions and the code of the release.
+These points show at its first cycle on homelab-wsl-02:
+
+- The read of the index stats with the three patterns: whether the security
+  plugin of the indexer lets the role read the stats of a data stream by its
+  name and its backing indices (`.ds-...`) with one request.
+- The aggregations on the agent snapshots under field-level security, for
+  the fields that the role names.

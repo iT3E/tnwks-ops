@@ -1,0 +1,107 @@
+# Cases for the alerts of the settings of the Wazuh indexer
+# (kubernetes/apps/security/wazuh-settings/app/alerts.yaml), from the series
+# that the converter serves from the two count files of step 2
+# (security/converter/README.md, "The count file of the Wazuh settings"): the
+# active-response channels, and the indices that are not on their policy of
+# tnwks. Each count here is invented.
+rule_files:
+  - kubernetes/apps/security/wazuh-settings/app/alerts.yaml
+evaluation_interval: 1m
+tests:
+  - name: each index on its policy, and a fresh count
+    interval: 1m
+    input_series:
+      - series: homelab_security_wazuh_indices_off_policy{stream="events"}
+        values: 0x30
+      - series: homelab_security_wazuh_indices_off_policy{stream="metrics"}
+        values: 0x30
+      - series: homelab_security_wazuh_indices_timestamp_seconds
+        values: 0x30
+    alert_rule_test:
+      - alertname: WazuhIndicesOffPolicy
+        eval_time: 30m
+        exp_alerts: []
+      - alertname: WazuhIndicesCountStale
+        eval_time: 30m
+        exp_alerts: []
+
+  - name: one index of one stream is off its policy
+    interval: 1m
+    input_series:
+      - series: homelab_security_wazuh_indices_off_policy{stream="events"}
+        values: 0x30
+      - series: homelab_security_wazuh_indices_off_policy{stream="metrics"}
+        values: 0x4 1x26
+      - series: homelab_security_wazuh_indices_timestamp_seconds
+        values: 0x30
+    alert_rule_test:
+      - alertname: WazuhIndicesOffPolicy
+        eval_time: 3m
+        exp_alerts: []
+      - alertname: WazuhIndicesOffPolicy
+        eval_time: 6m
+        exp_alerts:
+          - exp_labels: {severity: warning}
+
+  - name: no count at all
+    interval: 1m
+    input_series:
+      - series: homelab_security_wazuh_indices_off_policy{stream="events"}
+        values: _x30
+    alert_rule_test:
+      - alertname: WazuhIndicesCountStale
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: WazuhIndicesCountStale
+        eval_time: 16m
+        exp_alerts:
+          - exp_labels: {severity: warning}
+      - alertname: WazuhIndicesOffPolicy
+        eval_time: 16m
+        exp_alerts: []
+
+  - name: an index count older than a day and two hours
+    interval: 1m
+    input_series:
+      - series: homelab_security_wazuh_indices_off_policy{stream="events"}
+        values: 0x1660
+      - series: homelab_security_wazuh_indices_timestamp_seconds
+        values: 0x1660
+    alert_rule_test:
+      - alertname: WazuhIndicesCountStale
+        eval_time: 1550m
+        exp_alerts: []
+      - alertname: WazuhIndicesCountStale
+        eval_time: 1660m
+        exp_alerts:
+          - exp_labels: {severity: warning}
+
+  - name: an active-response channel
+    interval: 1m
+    input_series:
+      - series: homelab_security_wazuh_active_response_channels
+        values: 0x4 1x10
+      - series: homelab_security_wazuh_active_response_channels_timestamp_seconds
+        values: 0x14
+    alert_rule_test:
+      - alertname: WazuhActiveResponseChannel
+        eval_time: 3m
+        exp_alerts: []
+      - alertname: WazuhActiveResponseChannel
+        eval_time: 8m
+        exp_alerts:
+          - exp_labels: {severity: critical}
+      - alertname: WazuhActiveResponseChannelCountStale
+        eval_time: 14m
+        exp_alerts: []
+
+  - name: no channel count at all
+    interval: 1m
+    input_series:
+      - series: homelab_security_wazuh_indices_timestamp_seconds
+        values: 0x20
+    alert_rule_test:
+      - alertname: WazuhActiveResponseChannelCountStale
+        eval_time: 16m
+        exp_alerts:
+          - exp_labels: {severity: warning}
