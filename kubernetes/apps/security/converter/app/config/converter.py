@@ -1405,20 +1405,21 @@ def vulnerability_counts(buckets) -> dict[str, dict[str, int]]:
     return counts
 
 
-# The severities of SecurityFindingNew (observability/rules.py, SECURITY_FINDING_SEVERITY).
+# The severities of SecurityFindingNew (observability/rules.py, SECURITY_FINDING_SEVERITY),
+# and the one label of the `vulnerabilities` line.
 FINDING_LEVELS = ("high", "critical")
+VULNERABILITIES_SEVERITY = "high"
 
 
-def vulnerabilities_value(levels: dict[str, int], top: str) -> int:
-    """The value of the `vulnerabilities` line of an agent whose highest severity is
-    `top`: the count at that severity, and at high or critical the count at both. The
-    rule of a new finding takes the line under any severity of the two, and fires when
-    its value is above each value of the day before: a new low leaves the value as it
-    was, and a new high or a new critical raises it, also when the label goes from high
-    to critical. The count of each severity is in WAZUH_VULNERABILITIES."""
-    if top in FINDING_LEVELS:
-        return sum(levels.get(level, 0) for level in FINDING_LEVELS)
-    return levels[top]
+def vulnerabilities_value(levels: dict[str, int]) -> int:
+    """The value of the `vulnerabilities` line of an agent: the count of its documents at
+    high or critical, and 0 when it has none at those severities. The line always has
+    the severity `high`, as the line `image-vulnerabilities` of Trivy has one severity:
+    the rule of a new finding reads it at each value, so a value that goes to 0 is a 0
+    of that rule, and a new high or a new critical later is above it. A new low or
+    medium leaves the value as it was. The count of each severity is in
+    WAZUH_VULNERABILITIES."""
+    return sum(levels.get(level, 0) for level in FINDING_LEVELS)
 
 
 class WazuhSource(Loop):
@@ -1511,8 +1512,8 @@ class WazuhSource(Loop):
             results += [(check, system, failed, "unknown") for check, failed in checks]
             levels = vulnerabilities.get(agent, {})
             if levels:
-                top = max(levels, key=SEVERITIES.index)
-                results.append((VULNERABILITIES_CHECK, system, vulnerabilities_value(levels, top), top))
+                results.append((VULNERABILITIES_CHECK, system, vulnerabilities_value(levels),
+                                VULNERABILITIES_SEVERITY))
             # An agent with no document of the vulnerability state has no line: 0 would
             # read as a pass for an agent that the manager has not scanned.
             by_severity += [(system, level, count) for level, count in sorted(levels.items())]
