@@ -1764,9 +1764,10 @@ def high_check_fixtures():
 
 def wazuh_vulnerability_fixtures():
     """The `vulnerabilities` line of the Wazuh source (security/converter/README.md, "The
-    Wazuh source"): its value is the count at its severity, and high and critical count
-    together. A new low does not move a line of high severity, and a new high or a new
-    critical raises it (security/tests/test_converter_wazuh.py serves these values)."""
+    Wazuh source"): it always has the severity high, and its value is the count at high
+    or critical, 0 when there is none. A new low does not move it, a new high or a new
+    critical raises it, and a new high after an hour at 0 starts the rule again
+    (security/tests/test_converter_wazuh.py serves these values)."""
     rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityFindingNew")
     site, system = "homelab-wsl-02", "example-host"
 
@@ -1806,8 +1807,17 @@ def wazuh_vulnerability_fixtures():
          "alert_rule_test": [at(before - 10, []), at(before + 5, []), at(before + 15, fires), at(before + 70, [])]},
         {"name": "a new critical vulnerability on an agent with two highs starts SecurityFindingNew",
          "interval": "1m",
-         "input_series": [line("high", f"2+0x{before} _x{after}"), line("critical", f"_x{before} 3+0x{after}")],
+         "input_series": [line("high", f"2+0x{before} 3+0x{after}"),
+                          by_severity("high", f"2+0x{before + after}"),
+                          by_severity("critical", f"_x{before} 1+0x{after}")],
          "alert_rule_test": [at(before - 10, []), at(before + 15, fires), at(before + 70, [])]},
+        # Three highs, each fixed after ten hours: the line goes to 0 and stays. A new
+        # high on the next day is below the highest value of the day before, and
+        # starts the rule after the hour at 0.
+        {"name": "a new high vulnerability after each high was fixed starts SecurityFindingNew",
+         "interval": "1m",
+         "input_series": [line("high", f"3+0x600 0+0x{before - 601} 1+0x{after}")],
+         "alert_rule_test": [at(before - 10, []), at(before + 5, []), at(before + 15, fires), at(before + 70, [])]},
     ]
 
 

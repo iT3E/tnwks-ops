@@ -119,7 +119,7 @@ evidence" for it.
 | `host-check` | The name of one test of the host check, such as `firewall-enabled` |
 | `api-check` | The name of one test of the API checks, such as `routeros-firmware` |
 | `stream` | The value of the Loki label `security_stream`: `k8s-audit`, `routeros`, `cloudtrail` |
-| `wazuh` | The ID of a check of the Wazuh SCA policy of the host, such as `26001`. `inventory-hardware`, `inventory-packages` and `vulnerabilities` are the state that the agent reports apart from SCA |
+| `wazuh` | The ID of a check of the Wazuh SCA policy of the host, such as `26001`. `inventory-hardware`, `inventory-packages` and `vulnerabilities` are the state that the agent reports apart from SCA. `vulnerabilities` has the severity `high` and counts the vulnerabilities at high or critical: a pass means no high or critical vulnerability. Like `image-vulnerabilities` of Trivy, the line has one severity whatever its value. An agent with no document of the vulnerability state has no result ([`converter/README.md`](converter/README.md), "The Wazuh source") |
 
 ## The series
 

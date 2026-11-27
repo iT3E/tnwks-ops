@@ -733,21 +733,22 @@ homelab_security_wazuh_index_size_bytes{index="wazuh-states-sca"} 2048
 | Series | Labels | Value |
 | --- | --- | --- |
 | `homelab_security_check_result`, an SCA check | `source` `wazuh`, `check` the `check.id`, `system`, `severity` `unknown` | The documents of the check with `Failed`: 1 for a check that fails, 0 for one that passes. A check with `Not applicable` only has no series |
-| `homelab_security_check_result`, `vulnerabilities` | `source` `wazuh`, `check` `vulnerabilities`, `system`, `severity` the highest of its documents | The vulnerabilities of the agent at that severity, one for each vulnerability of each package. At `high` or `critical`, the vulnerabilities at both. An agent with no document of the vulnerability state has no series |
+| `homelab_security_check_result`, `vulnerabilities` | `source` `wazuh`, `check` `vulnerabilities`, `system`, `severity` `high` always | The vulnerabilities of the agent at `high` or `critical`, one for each vulnerability of each package. 0 when the agent has documents and none of them is high or critical: a pass means no high or critical vulnerability. Like `image-vulnerabilities` of Trivy, the line has one severity whatever its value. An agent with no document of the vulnerability state has no series |
 | `homelab_security_last_result_timestamp_seconds` | `source` `wazuh`, `system` | The newest `last_seen` of the agent, the time of its last report |
-| `homelab_security_wazuh_vulnerabilities` | `system`, `severity` | The vulnerabilities of the agent of one severity. Not in the contract of the registry |
+| `homelab_security_wazuh_vulnerabilities` | `system`, `severity` | The vulnerabilities of the agent of one severity, `medium` and `low` too. Not in the contract of the registry |
 | `homelab_security_wazuh_index_size_bytes` | `index` | The bytes of one index of Wazuh. Not in the contract of the registry |
 
 A severity of the feed is in lower case, and a value that is not one of the
-list (`-`, no severity) is `unknown`. The rule of a new finding of high
-severity (`SecurityFindingNew`) reads `vulnerabilities` when its highest
-severity is `high` or `critical`, under either label, and fires when its
-value is above each value of the day before. So the value counts high and
-critical together: a new low leaves it as it was, and a new high or a new
-critical raises it. A high that is fixed on the day that a new high comes
-leaves it as it was, as for each source of the rule. The cases in
-`observability/rules.py` (`wazuh_vulnerability_fixtures`) run these values
-through the rule. An SCA check has `unknown`, because the
+list (`-`, no severity) is `unknown`. The line `vulnerabilities` has one
+severity, `high`, whatever its value, so the rule of a new finding of high
+severity (`SecurityFindingNew`) reads each of its values, 0 too. The rule
+fires when the value is above each value of the day before, or after an
+hour at 0: a new low or medium leaves the value as it was, a new high or a
+new critical raises it, and a new high after each high and critical was
+fixed starts the rule again. A high that is fixed on the day that a new
+high comes leaves the value as it was, as for each source of the rule. The
+cases in `observability/rules.py` (`wazuh_vulnerability_fixtures`) run
+these values through the rule. An SCA check has `unknown`, because the
 policy gives a check no severity: a check that fails shows on the board and
 in the state of its safeguard, and it does not fire that rule.
 

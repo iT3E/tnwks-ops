@@ -259,7 +259,7 @@ def test_each_sca_check_the_vulnerabilities_and_the_time_of_each_agent_that_maps
         # "Not applicable" has no result, as a check with no PASS and no FAIL.
         ("35500", "distro-one"): (0, "unknown"),
         ("35501", "distro-one"): (1, "unknown"),
-        # The count at the highest severity, under that severity.
+        # The count at high or critical, always under the severity high.
         ("vulnerabilities", "host-one"): (1, "high"),
         # No document of the vulnerability state is no line: no evidence, not a pass.
     }
@@ -278,16 +278,15 @@ def test_each_sca_check_the_vulnerabilities_and_the_time_of_each_agent_that_maps
 
 
 @pytest.mark.parametrize("levels, line", [
-    (["Low", "Low", "Medium"], (1, "medium")),
+    # Documents with none at high or critical: a line of 0, a pass.
+    (["Low", "Low", "Medium"], (0, "high")),
     (["High", "Low", "Low", "Low"], (1, "high")),
-    # High and critical are one count: the rule takes the line under either label, so
-    # a new critical on an agent with two highs raises the value from 2 to 3.
-    (["Critical", "High", "High", "Medium"], (3, "critical")),
-    (["-", None], (2, "unknown")),
-], ids=["medium", "a high and lows", "a critical and highs", "no severity"])
-def test_the_vulnerabilities_line_is_the_count_at_the_highest_severity(indexer, tmp_path, levels, line):
-    """The rule of a new finding compares the values of a line of high or critical
-    severity: a new low on an agent with a high leaves that value as it was."""
+    (["Critical", "High", "High", "Medium"], (3, "high")),
+    (["-", None], (0, "high")),
+], ids=["medium and lows", "a high and lows", "a critical and highs", "no severity"])
+def test_the_vulnerabilities_line_is_the_count_at_high_or_critical(indexer, tmp_path, levels, line):
+    """The line always has the severity high, as the line image-vulnerabilities of
+    Trivy has one severity, and its value is the count at high or critical."""
     indexer.docs[converter.VULNERABILITIES_INDEX] = [vulnerability_doc("002", level) for level in levels]
     part = source_for(indexer, tmp_path)
     part.cycle()
@@ -302,11 +301,13 @@ def test_the_vulnerabilities_line_rises_for_a_new_high_or_critical_and_not_for_a
     SecurityFindingNew."""
     part = source_for(indexer, tmp_path)
     seen = []
-    for levels in (["High"], ["High", "Low"], ["High", "Low", "High"], ["High", "Low", "High", "Critical"]):
+    for levels in (["High"], ["High", "Low"], ["High", "Low", "High"], ["High", "Low", "High", "Critical"],
+                   # Each high and critical fixed, then a new high.
+                   ["Low"], ["Low", "High"]):
         indexer.docs[converter.VULNERABILITIES_INDEX] = [vulnerability_doc("001", level) for level in levels]
         part.cycle()
         seen.append(results(part)[("vulnerabilities", "host-one")])
-    assert seen == [(1, "high"), (1, "high"), (2, "high"), (3, "critical")]
+    assert seen == [(1, "high"), (1, "high"), (2, "high"), (3, "high"), (0, "high"), (1, "high")]
 
 
 def test_the_severities_counted_together_are_those_of_the_rule_of_a_new_finding(monkeypatch):
@@ -317,7 +318,9 @@ def test_the_severities_counted_together_are_those_of_the_rule_of_a_new_finding(
     spec = importlib.util.spec_from_file_location("observability_rules_for_wazuh", ROOT / "observability/rules.py")
     rules = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(rules)
+    # The line counts the severities of the rule, under a label that the rule reads.
     assert tuple(rules.SECURITY_FINDING_SEVERITY.split("|")) == converter.FINDING_LEVELS
+    assert converter.VULNERABILITIES_SEVERITY in converter.FINDING_LEVELS
 
 
 def test_an_sca_result_that_is_not_a_value_of_the_release_is_counted_and_has_no_result(indexer, tmp_path, caplog):
