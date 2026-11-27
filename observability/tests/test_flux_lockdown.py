@@ -75,6 +75,31 @@ def test_each_encrypted_file_holds_the_key_of_the_secret_that_decrypts_it(site):
 
 
 @pytest.mark.parametrize("site", SITES)
+def test_a_keyed_site_decrypts_with_the_class_key_and_the_apps_key(site):
+    """Step 2d, site by site: on a site of lockdown.KEYED, each Kustomization
+    that names a decryption Secret, or builds an encrypted file, names the
+    class key in the class and the apps key outside it, and none names the
+    old sops-age, but the root until its site is in lockdown.KEYED_ROOTS
+    (step 2d-root). On another site, none names the new Secrets yet. The
+    map test above checks that each file holds the key of the Secret named."""
+    assert set(lockdown.KEYED_ROOTS) <= set(lockdown.KEYED)
+    wrong = []
+    for key, spec, files, in_class in lockdown.kustomizations(site):
+        secret = secret_of(spec)
+        if key == "flux-system/flux-system":
+            want = CLASS_KEY if site in lockdown.KEYED_ROOTS else "sops-age"
+            if secret != want:
+                wrong.append(f"{key}: names {secret}, not {want}")
+        elif site in lockdown.KEYED:
+            want = CLASS_KEY if in_class else APPS_KEY
+            if (secret or files) and secret != want:
+                wrong.append(f"{key}: names {secret}, not {want}")
+        elif secret in (CLASS_KEY, APPS_KEY):
+            wrong.append(f"{key}: names {secret} before step 2d of {site}")
+    assert not wrong, "\n".join(wrong)
+
+
+@pytest.mark.parametrize("site", SITES)
 def test_the_map_finds_the_encrypted_files_of_the_site(site):
     """The map test reads files: the root builds the Secret of the cluster,
     and more than ten children build encrypted files."""
@@ -304,9 +329,10 @@ def test_the_flags_that_stay_off(site):
 @pytest.mark.parametrize("site", SITES)
 def test_the_install_of_git_reads_as_flux_applies_it(site):
     """The reads of lockdown.py on the install of git: the root decrypts with
-    the Secret of the patch, and kustomize-controller has the patch that
+    the Secret of the patch (the class key once the root of its site is
+    keyed, step 2d-root), and kustomize-controller has the patch that
     refuses remote bases."""
-    assert secret_of(lockdown.root(site)["spec"]) == "sops-age"
+    assert secret_of(lockdown.root(site)["spec"]) == (CLASS_KEY if site in lockdown.KEYED_ROOTS else "sops-age")
     assert lockdown.flag(lockdown.controller_args(site, "kustomize-controller"), "--no-remote-bases") == "true"
 
 

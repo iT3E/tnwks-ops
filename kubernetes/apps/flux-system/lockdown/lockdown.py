@@ -53,6 +53,15 @@ KEYS = {
     },
 }
 AGE_PUBLIC_KEY = re.compile(r"^age1[02-9ac-hj-np-z]{58}$")
+# The sites whose Kustomizations decrypt with the class key and the apps
+# key (step 2d, site by site): each one of the class that decrypts names
+# sops-age-class, each one outside the class sops-age-apps, and none names
+# sops-age, but the root. The other sites name sops-age until their step 2d.
+KEYED = ("wsl-02",)
+# The sites whose root decrypts with the class key too (step 2d-root, after
+# the children of the class have decrypted with it): until then the root
+# names sops-age, so it can decrypt its own build and apply a revert.
+KEYED_ROOTS = ()
 
 # The two accounts of Flux that apply, in flux-system. The root and each
 # Kustomization of the class run as kustomize-controller (phase 2b).

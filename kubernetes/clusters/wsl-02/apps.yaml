@@ -21,10 +21,11 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
+  # Of the class: the class key (step 2d).
   decryption:
     provider: sops
     secretRef:
-      name: sops-age
+      name: sops-age-class
   # No cluster-secrets here: this build reads the ks.yaml of the children
   # outside the class, and none of its files needs a key of that Secret.
   postBuild:
@@ -41,7 +42,10 @@ spec:
   # the children outside the class use, kubernetes/apps/flux-system/
   # substitution); the second patch gives the children of the class the full
   # cluster-secrets. The admission policy flux-child-scope refuses
-  # cluster-secrets in a Kustomization outside the class.
+  # cluster-secrets in a Kustomization outside the class. The same two
+  # patches give the decryption Secret (step 2d): each child the apps key,
+  # and the children of the class the class key, which the policy refuses
+  # outside the class.
   patches:
     - patch: |-
         apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -52,7 +56,7 @@ spec:
           decryption:
             provider: sops
             secretRef:
-              name: sops-age
+              name: sops-age-apps
           postBuild:
             substituteFrom:
               - kind: ConfigMap
@@ -75,6 +79,10 @@ spec:
         metadata:
           name: not-used
         spec:
+          decryption:
+            provider: sops
+            secretRef:
+              name: sops-age-class
           postBuild:
             substituteFrom:
               - kind: ConfigMap

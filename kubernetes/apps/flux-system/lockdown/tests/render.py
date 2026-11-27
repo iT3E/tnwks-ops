@@ -19,17 +19,25 @@ the Python of the repository (observability), writes:
   of the apps of a site does (step 2b), and a folder of two more for a
   parent with the patches of accounts.py (step 2c), with a HelmRelease;
 - patches.json: the patches that accounts.py writes for those two;
+- with "keys" first (step 2d): keys.json, two age keys made for the run
+  (a class key and an apps key, never a key of a site), and in plain/ three
+  Secrets of placeholders with the public key that run.sh encrypts each
+  one to with sops (one to the class key, two to the apps key); the next
+  run puts them in the tree, encrypted, as sops makes them;
 - role.json: the role flux-child of git
   (kubernetes/apps/flux-system/accounts/role/clusterrole.yaml), and
   role-noread.json: the same role less its reads of ReplicaSets and Pods,
   as the control of the wait.
 
+  python3 render.py keys <output directory>
   python3 render.py <output directory>
 """
 
+import base64
 import hashlib
 import io
 import json
+import secrets
 import sys
 import tarfile
 from pathlib import Path
@@ -52,6 +60,82 @@ CONFIGMAPS = {
     "kept2": ("tenant", "kept2"),
     "other": ("tenant", "other"),
 }
+
+
+# The folders of step 2d: each holds one Secret of a placeholder, encrypted
+# to the key of the run that it names.
+ENCRYPTED = {"dec-class-file": ("sops-age-class", "class-file"),
+             "dec-apps-file": ("sops-age-apps", "apps-file"),
+             "dec-apps-other": ("sops-age-apps", "apps-other")}
+
+# X25519 (RFC 7748) and Bech32 (BIP 173), the key format of age, with the
+# standard library: the test makes its own keys.
+P = 2**255 - 19
+BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def x25519(scalar: bytes, u: int = 9) -> bytes:
+    k = bytearray(scalar)
+    k[0] &= 248
+    k[31] = (k[31] & 127) | 64
+    n = int.from_bytes(k, "little")
+    x2, z2, x3, z3, swap = 1, 0, u, 1, 0
+    for t in reversed(range(255)):
+        bit = (n >> t) & 1
+        if swap ^ bit:
+            x2, x3, z2, z3 = x3, x2, z3, z2
+        swap = bit
+        a, b, c, d = (x2 + z2) % P, (x2 - z2) % P, (x3 + z3) % P, (x3 - z3) % P
+        aa, bb, da, cb = a * a % P, b * b % P, d * a % P, c * b % P
+        e = (aa - bb) % P
+        x3, z3 = (da + cb) ** 2 % P, u * (da - cb) ** 2 % P
+        x2, z2 = aa * bb % P, e * (aa + 121665 * e) % P
+    if swap:
+        x2, z2 = x3, z3
+    return (x2 * pow(z2, P - 2, P) % P).to_bytes(32, "little")
+
+
+def bech32(hrp: str, data: bytes) -> str:
+    acc, bits, words = 0, 0, []
+    for byte in data:
+        acc, bits = (acc << 8) | byte, bits + 8
+        while bits >= 5:
+            bits -= 5
+            words.append((acc >> bits) & 31)
+    if bits:
+        words.append((acc << (5 - bits)) & 31)
+
+    def polymod(values):
+        chk = 1
+        for v in values:
+            top = chk >> 25
+            chk = (chk & 0x1FFFFFF) << 5 ^ v
+            for i, g in enumerate((0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)):
+                chk ^= g if (top >> i) & 1 else 0
+        return chk
+
+    expanded = [ord(c) >> 5 for c in hrp] + [0] + [ord(c) & 31 for c in hrp]
+    check = polymod(expanded + words + [0] * 6) ^ 1
+    words += [(check >> 5 * (5 - i)) & 31 for i in range(6)]
+    return hrp + "1" + "".join(BECH32[w] for w in words)
+
+
+def age_key() -> tuple[str, str]:
+    """A new age key: (the private key, the public key)."""
+    scalar = secrets.token_bytes(32)
+    return bech32("age-secret-key-", scalar).upper(), bech32("age", x25519(scalar))
+
+
+def keys(out: Path) -> None:
+    made = {name: age_key() for name in ("sops-age-class", "sops-age-apps")}
+    (out / "in").mkdir(exist_ok=True)
+    (out / "in/keys.json").write_text(json.dumps({name: private for name, (private, _) in made.items()}))
+    (out / "plain").mkdir()
+    for folder, (secret, name) in ENCRYPTED.items():
+        (out / f"plain/{folder}.yaml").write_text(yaml.safe_dump({
+            "apiVersion": "v1", "kind": "Secret", "metadata": {"name": name}, "type": "Opaque",
+            "data": {"case": base64.b64encode(f"a placeholder of the test, {folder}".encode()).decode()}}))
+        (out / f"plain/{folder}.age").write_text(made[secret][1])
 
 
 # An object of each kind that the role flux-child grants, in the namespace
@@ -202,6 +286,20 @@ def artifact(files: dict[str, str]) -> bytes:
     return out.getvalue()
 
 
+def encrypted(out: Path) -> dict[str, str]:
+    """The folders of step 2d, with the files that sops encrypted (run.sh)."""
+    files = {}
+    for folder in ENCRYPTED:
+        text = (out / f"enc/{folder}.sops.yaml").read_text()
+        # The value is encrypted, and the file holds the public key only.
+        assert "case: ENC[AES256_GCM" in text and "AGE-SECRET-KEY" not in text, folder
+        files[f"{folder}/secret.sops.yaml"] = text
+        files[f"{folder}/kustomization.yaml"] = yaml.safe_dump({
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "namespace": "tenant",
+            "resources": ["secret.sops.yaml"]})
+    return files
+
+
 def main(out: Path) -> None:
     components = lockdown.flux_system("wsl-02") / "gotk-components.yaml"
     docs = [d for d in yaml.safe_load_all(components.read_text()) if d]
@@ -213,10 +311,10 @@ def main(out: Path) -> None:
     assert len({tuple(a) for a in args.values()}) == 1, args
     kept = [a for a in args["wsl-02"] if not a.startswith(("--events-addr", "--enable-leader-election"))]
     assert lockdown.flag(kept, "--default-service-account") is None, "git has the flag: the case without it is gone"
-    data = artifact(tree())
+    data = artifact({**tree(), **encrypted(out)})
     (out / "srv").mkdir()
     (out / "srv/source.tar.gz").write_bytes(data)
-    (out / "in").mkdir()
+    (out / "in").mkdir(exist_ok=True)
     (out / "in/crds.json").write_text(json.dumps(crds))
     role = lockdown.ROOT / "kubernetes/apps/flux-system/accounts/role/clusterrole.yaml"
     (doc,) = [d for d in yaml.safe_load_all(role.read_text()) if d]
@@ -230,4 +328,7 @@ def main(out: Path) -> None:
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]))
+    if sys.argv[1] == "keys":
+        keys(Path(sys.argv[2]))
+    else:
+        main(Path(sys.argv[1]))

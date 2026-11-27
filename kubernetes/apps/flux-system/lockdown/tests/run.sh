@@ -19,8 +19,11 @@
 #
 # Nothing touches a real cluster: no kubeconfig of the workstation goes into
 # a container, the network has no route out, and the tree holds no secret
-# and no key. Each container, the network and the certificates go at the
-# end. KEEP=1 keeps them after a failure.
+# and no key of a site. The two age keys of step 2d are made for the run;
+# sops encrypts placeholders to their public keys only, with no network,
+# and never decrypts. Each container, the network, the keys and the
+# certificates go at the end. KEEP=1 keeps them after a failure, the keys
+# among them: they are throwaway keys of the run, for no site.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,6 +33,8 @@ version="${KUBE_VERSION:-$(sed -nE 's/^ +version: (v[0-9]+\.[0-9]+\.[0-9]+)$/\1/
 etcd_image="${ETCD_IMAGE:-registry.k8s.io/etcd:3.6.6-0}"
 # The Python image of the checks of the agent platform.
 python_image="docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928"
+# sops, the version of .github/workflows/terraform.yaml.
+sops_image="ghcr.io/getsops/sops:v3.13.3@sha256:857f5a151ac0b2bfc55c1e4e5581d66fb8e268e4d106b38e74191f3bac9d58ea"
 
 id="flux-lockdown-test-$$"
 work="$(mktemp -d)"
@@ -54,6 +59,16 @@ finish() {
 }
 trap finish EXIT
 
+# Step 2d: the keys of the run, and the Secrets of placeholders encrypted to
+# their public keys, as the files of the sites are.
+"${PYTHON:-python3}" "${here}/render.py" keys "${work}"
+mkdir -p "${work}/enc"
+for plain in "${work}"/plain/*.yaml; do
+  folder="$(basename "${plain}" .yaml)"
+  docker run --rm --network none --read-only --user "$(id -u):$(id -g)" -v "${work}/plain:/plain:ro" \
+    "${sops_image}" encrypt --age "$(cat "${work}/plain/${folder}.age")" --encrypted-regex '^(data|stringData)$' \
+    --input-type yaml --output-type yaml "/plain/${folder}.yaml" >"${work}/enc/${folder}.sops.yaml"
+done
 "${PYTHON:-python3}" "${here}/render.py" "${work}"
 image="$(cat "${work}/image.txt")"
 mapfile -t args <"${work}/args.txt"
