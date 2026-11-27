@@ -110,8 +110,8 @@ WSL-02, which has that cluster's kubeconfig
   4 GiB for the control plane (`memory_controlplanes`).
   `observability/tests/test_node_container_memory.py` holds the rules equal
   to the inventory.
-  - `WorkerContainerMemoryNearLimit`: a worker past 90% of its limit for 5
-    minutes is a warning, and past 95% for 2 minutes it is critical. While
+  - `WorkerContainerMemoryNearLimit`: a worker past 98% of its limit for 15
+    minutes is a warning, and past 99% for 2 minutes it is critical. While
     the critical one fires, the inhibit rule of Alertmanager holds back the
     warning of the same name. It does not compare the node, so it also holds
     back the warning of the other worker: read both nodes (step 1).
@@ -135,8 +135,8 @@ WSL-02, which has that cluster's kubeconfig
     whose pods are larger. A higher pod limit removes the one stop on
     worker 1.
   - These alerts warn. They do not stop the scheduler, and a rollout or a
-    burst of Jobs can cross from 90% to the limit in minutes; that is why
-    the rules of a worker wait 5 and 2 minutes.
+    burst of Jobs can cross to the limit in minutes; that is why the
+    critical rule of a worker waits only 2 minutes.
   - At the limit, the kernel kills processes inside the node container by
     their score (BestEffort pods first, then Burstable ones). The kubelet
     does not evict first.
@@ -147,6 +147,11 @@ WSL-02, which has that cluster's kubeconfig
     there the kernel has almost nothing left to take back. At the time of
     this change the control plane was past 90% and under 98%, so the rule is
     quiet. The working set less the resident memory is mostly file pages.
+  - A worker's working set counts file pages the same way (the data files
+    of Prometheus, Loki and the databases), and they grow into whatever
+    limit the worker has: on 2026-11-27, at 15 GiB, worker 1 sat at 92-95%
+    with 7.7 GiB of anonymous memory. So its rules wait for 98% and 99%,
+    and `NodeContainerRssNearLimit` is the early sign of real pressure.
   - The resident memory is the anonymous memory of the node container,
     which the kernel can not take back (the nodes have no swap). It is
     `rssBytes` in the summary of the kubelet (step 1), and the series

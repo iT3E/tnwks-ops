@@ -68,8 +68,8 @@ def test_each_alert_reads_its_site_and_states_its_limit():
     alerts = {(rule["alert"], rule["labels"]["severity"]): rule for rule in rules.capacity_alerts()}
     assert len(alerts) == len(rules.capacity_alerts())
     for name, severity, role, share, limit, wait in [
-            ("WorkerContainerMemoryNearLimit", "warning", "worker", 0.9, rules.SITE1_WORKER_LIMIT_GIB, "5m"),
-            ("WorkerContainerMemoryNearLimit", "critical", "worker", 0.95, rules.SITE1_WORKER_LIMIT_GIB, "2m"),
+            ("WorkerContainerMemoryNearLimit", "warning", "worker", 0.98, rules.SITE1_WORKER_LIMIT_GIB, "15m"),
+            ("WorkerContainerMemoryNearLimit", "critical", "worker", 0.99, rules.SITE1_WORKER_LIMIT_GIB, "2m"),
             ("ControlPlaneContainerMemoryNearLimit", "warning", "controlplane", 0.98,
              rules.SITE1_CONTROLPLANE_LIMIT_GIB, "15m")]:
         rule = alerts[name, severity]
