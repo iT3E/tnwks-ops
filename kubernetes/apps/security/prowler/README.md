@@ -97,6 +97,13 @@ The claim `security-results` is in `../converter/app/pvc.yaml`.
    memory of its process. The peak of memory of the container is the last
    line.
 
+**The canary.** With `--canary`, a run that moves a file adds one test
+record to it, after the records of the parts: the check `tnwks-canary`, a
+`FAIL` of severity `High` on the resource `tnwks-canary`, which names nothing
+of the account (`security/README.md`, "The canary"). The log says so in one
+line. A run that moves no file adds none. The flag is off, except while a
+test runs: today it is off.
+
 **Nothing goes to the vendor.** No run has `--push-to-cloud`, and Prowler
 looks for a new release only with `-v`. The network policy names no host of
 the vendor.

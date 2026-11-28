@@ -659,6 +659,49 @@ def test_each_check_of_the_job_is_a_line_of_the_registry_for_its_system():
     assert "api-check" not in systems[checks.TFC_ORGANIZATION].get("sources", [])
 
 
+# --- The canary -------------------------------------------------------------------------
+
+def test_the_canary_writes_one_test_result_of_the_router_that_the_converter_reads(tmp_path, monkeypatch):
+    code, document = run(tmp_path, monkeypatch, fake(), None, "--canary")
+    assert code == 0
+    canary = by_check(document)["tnwks-canary"]
+    assert canary == {"check": "tnwks-canary", "system": "sce-rtr01", "failed": 1, "severity": "high", "findings": [{
+        "resource": "tnwks-canary",
+        "message": "A test finding of the security platform (the canary): nothing of the router fails."}]}
+    assert by_check(document)["routeros-firmware"]["failed"] == 0
+    with (tmp_path / "results/api-check/results.json").open("rb") as file:
+        _, results = converter.read_api(file, NOW.timestamp())
+    assert ("tnwks-canary", "sce-rtr01", 1, "high") in {
+        (r["check"], r["system"], r["failed"], r.get("severity")) for r in results}
+    (line,) = [json.loads(text) for text in converter.api_lines(results, "sce-rtr01", NOW.timestamp())]
+    assert line["metadata"] == {"event_code": "tnwks-canary"} and line["severity"] == "High"
+
+
+def test_the_canary_writes_nothing_when_the_router_has_no_result(tmp_path, monkeypatch):
+    """So the canary never gives the router a time of a result that the run did not make."""
+    code, document = run(tmp_path, monkeypatch, fake(running=(503, b"")), None, "--canary")
+    assert code == 1
+    assert document["results"] == []
+
+
+def test_the_accepted_list_does_not_mute_the_canary(tmp_path, monkeypatch):
+    accepted(tmp_path, [entry(check="tnwks-canary")])
+    _, document = run(tmp_path, monkeypatch, fake(), None, "--canary")
+    assert by_check(document)["tnwks-canary"]["failed"] == 1
+
+
+def test_without_the_flag_there_is_no_canary(tmp_path, monkeypatch):
+    _, document = run(tmp_path, monkeypatch, fake())
+    assert "tnwks-canary" not in by_check(document)
+
+
+def test_the_check_of_the_canary_is_no_line_of_the_registry():
+    controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
+    named = {item["check"] for line in controls for items in line["checks"].values() for item in items}
+    assert checks.CANARY not in named
+    assert checks.CHECK.fullmatch(checks.CANARY)
+
+
 # --- The manifests ----------------------------------------------------------------------
 
 def manifests(name):

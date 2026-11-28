@@ -135,6 +135,15 @@ The job reads the list (the Secret `security-accepted-findings`, key
 sets that result to 0 with no finding. A list that can not be read stops the
 run, which writes no file.
 
+## The canary
+
+With `--canary`, a run with a result of `routeros-firmware` also writes one
+test result for the router: the check `tnwks-canary`, 1 resource that fails,
+severity `high`, and one finding that says it is the canary
+(`security/README.md`, "The canary"). A run with no result of the router
+writes none, and the list of accepted findings does not mute it. The flag is
+off, except while a test runs: today it is off.
+
 ## The token of Terraform Cloud
 
 The owner makes the token. Nothing here makes one.
