@@ -706,7 +706,7 @@ the pull request that ends it.
 | --- | --- | --- |
 | `prowler` | `--canary` in the arguments of one CronJob of `kubernetes/apps/security/prowler` | One record of the check `tnwks-canary` in the OCSF file of each run, a `FAIL` of severity `High` on the resource `tnwks-canary`. Only in a run that moves a file |
 | `api-check` | `--canary` in the arguments of the CronJob of `kubernetes/apps/security/api-checks` | One result of the check `tnwks-canary` for the router, 1 resource that fails, severity `high`. Only in a run with a result of the router |
-| `trivy` | `app/canary.yaml` in the resources of `kubernetes/apps/security/trivy-operator` | A Role that fails the control 5.1.8 of the report `k8s-cis-1.23`. It grants nothing (the comment of the file says why) |
+| `trivy` | `app/canary.yaml` in the resources of `kubernetes/apps/security/trivy-operator`, while a test runs. The pull request that ends a test deletes the file, and the one that starts the next test adds it again | A Role that fails the control 5.1.8 of the report `k8s-cis-1.23`. It grants nothing: no binding names it, and the API server asks for the impersonation of a group with no namespace, which a Role can not give |
 
 So the converter, the generated rules, `SecurityFindingNew` and
 Alertmanager see the test finding as any other: the alert says the system

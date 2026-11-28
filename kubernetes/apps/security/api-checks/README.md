@@ -142,7 +142,7 @@ test result for the router: the check `tnwks-canary`, 1 resource that fails,
 severity `high`, and one finding that says it is the canary
 (`security/README.md`, "The canary"). A run with no result of the router
 writes none, and the list of accepted findings does not mute it. The flag is
-off, except while a test runs: today it is on.
+off, except while a test runs: today it is off.
 
 ## The token of Terraform Cloud
 

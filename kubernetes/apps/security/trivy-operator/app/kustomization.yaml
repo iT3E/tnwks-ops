@@ -7,5 +7,3 @@ resources:
   - ./pvc.yaml
   - ./networkpolicy.yaml
   - ./rbac.yaml
-  # The test finding of the canary (security/README.md, "The canary").
-  - ./canary.yaml
