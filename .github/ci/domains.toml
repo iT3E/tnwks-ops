@@ -192,9 +192,13 @@ root = "prod/cloudflare"
 runner = "tnwks-ops-runner"
 backend = "local"
 lock = "cloudflare-terraform"
+# The provider credentials (the zone values in secrets.sops.yaml are not all
+# long enough to mask).
+mask_sops = ["credentials.sops.yaml"]
 paths = [
   "infrastructure/terraform/environments/prod/cloudflare/**",
   "infrastructure/terraform/modules/cloudflare/**",
+  ".github/scripts/sops-mask.py",
   ".github/workflows/terraform.yaml",
 ]
 
