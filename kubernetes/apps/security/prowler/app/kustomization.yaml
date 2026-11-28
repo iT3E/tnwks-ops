@@ -3,16 +3,17 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: security
 # Nothing of a provider runs before its credentials exist (../README.md, "To
-# start a provider"). The owner names the files of a provider here, after
-# that step:
-#   - ./secret-cloudflare.sops.yaml
-#   - ./lease-cloudflare-token.yaml
-#   - ./cronjob-cloudflare.yaml
+# start a provider").
 # GitHub has no run: the API checks take its lines (../README.md, "GitHub").
 resources:
   - ./networkpolicy.yaml
   # The AWS session Secret aws-security-audit-sts exists (../../aws-credentials).
   - ./cronjob-aws.yaml
+  # The owner's Cloudflare token (../README.md, "Cloudflare"), its review
+  # date, and the run.
+  - ./secret-cloudflare.sops.yaml
+  - ./lease-cloudflare-token.yaml
+  - ./cronjob-cloudflare.yaml
 configMapGenerator:
   # The script of each run. Tests: security/tests/test_prowler.py.
   - name: prowler-scripts

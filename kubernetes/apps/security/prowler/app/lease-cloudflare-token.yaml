@@ -11,4 +11,6 @@ kind: Lease
 metadata:
   name: prowler-cloudflare-token
 spec:
-  renewTime: "2000-01-01T00:00:00.000000Z"
+  # The token has no end date: this is its review date, one year after it
+  # was made on 2026-11-28 (../README.md, "A token with no end date").
+  renewTime: "2027-11-28T00:00:00.000000Z"

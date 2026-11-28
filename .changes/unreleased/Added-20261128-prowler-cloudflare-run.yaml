@@ -1,0 +1,3 @@
+kind: Added
+body: 'Prowler: the daily run of the Cloudflare account, with the owner''s read-only token in a SOPS Secret and its review date in a Lease.'
+time: 2026-11-28T11:30:00.000000000-08:00
