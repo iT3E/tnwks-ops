@@ -44,10 +44,6 @@ spec:
                 - --provider=cloudflare
                 - --system=cloudflare
                 - --checks=/config/checks-cloudflare.json
-                # The canary: one test finding of severity high in each run,
-                # until the pull request that ends the test (security/README.md,
-                # "The canary").
-                - --canary
               env:
                 - name: HOME
                   value: /tmp

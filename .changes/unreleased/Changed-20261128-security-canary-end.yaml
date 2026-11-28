@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Security platform: the canary test ends; each switch of the canary is off, and the test Role of Trivy Operator is gone.'
+time: 2026-11-28T12:20:00.000000000-08:00

@@ -53,10 +53,6 @@ spec:
                 # The Loki of this site, with the hourly version line of the
                 # router (Design Doc 0004, section 5.5).
                 - --loki=http://loki-gateway.monitoring.svc.cluster.local
-                # The canary: one test finding of severity high in each run,
-                # until the pull request that ends the test (security/README.md,
-                # "The canary").
-                - --canary
               env:
                 - name: PYTHONDONTWRITEBYTECODE
                   value: "1"
