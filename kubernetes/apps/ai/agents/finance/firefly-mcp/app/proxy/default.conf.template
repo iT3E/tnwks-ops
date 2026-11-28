@@ -62,15 +62,17 @@ map "$request_method $uri" $firefly_allowed {
     "~^PUT /api/v1/tags/[^/]+$" 1;
 }
 
-# A method override. The framework of the app (Laravel 12 on Symfony 7.4)
+# A method override. The framework of the app (Laravel 13 on Symfony 8.1)
 # routes a POST as the method of the header X-HTTP-Method-Override, or of a
 # "_method" argument in the query, a form body or a JSON body. The proxy
 # drops the header and its variants (below), refuses a write with a query
 # string (the server sends none on a kept write), and lets through a write
 # only with a JSON body, so no form body. A JSON
-# body with "_method" still reaches the app: at 6.5.9 the app has only GET
-# and POST routes on the paths where the list allows a POST, so such a POST
-# gets a 405 or a read (docs/apps/agent-platform.md, "The finance app").
+# body with "_method" still reaches the app: at 6.7.12 the app has only GET
+# and POST routes on the paths where the list allows a POST, so a "_method"
+# of PUT, PATCH or DELETE gets a 405, and one of GET or HEAD is ignored and
+# stays the POST that the list allows (docs/apps/agent-platform.md, "The
+# finance app").
 map "$request_method$is_args" $firefly_args_ok {
     default 1;
     "POST?" 0;
