@@ -214,30 +214,26 @@ spec:
     - record: homelab:ai_plan_observed_timestamp_seconds
       expr: max by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d]))
     - record: homelab:ai_plan_utilization_ratio
-      expr: (max by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_utilization_ratio[8d]) and on
-        (k8s_cluster, window, namespace, pod) (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
+      expr: (max by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_utilization_ratio[8d]) and (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
         == on (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds)) >= 0) and on (k8s_cluster,
         window) (((max by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_reset_timestamp_seconds[8d])
-        and on (k8s_cluster, window, namespace, pod) (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
-        == on (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds))) > time()) or (((max
-        by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_reset_timestamp_seconds[8d]) and on (k8s_cluster,
-        window, namespace, pod) (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d]) == on
-        (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds))) <= 0) and on (k8s_cluster,
+        and (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d]) == on (k8s_cluster, window)
+        group_left () homelab:ai_plan_observed_timestamp_seconds))) > time()) or (((max by (k8s_cluster, window)
+        (last_over_time(homelab_model_bridge_plan_reset_timestamp_seconds[8d]) and (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
+        == on (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds))) <= 0) and on (k8s_cluster,
         window) ((time() - homelab:ai_plan_observed_timestamp_seconds) < 21600)))
     - record: homelab:ai_plan_reset_timestamp_seconds
       expr: max by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_reset_timestamp_seconds[8d])
-        and on (k8s_cluster, window, namespace, pod) (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
-        == on (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds)) > time()
+        and (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d]) == on (k8s_cluster, window)
+        group_left () homelab:ai_plan_observed_timestamp_seconds)) > time()
     - record: homelab:ai_plan_state
-      expr: clamp_min(max by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_status[8d]) and on
-        (k8s_cluster, window, namespace, pod) (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
+      expr: clamp_min(max by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_status[8d]) and (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
         == on (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds)) + 1, 0) and on (k8s_cluster,
         window) (((max by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_reset_timestamp_seconds[8d])
-        and on (k8s_cluster, window, namespace, pod) (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
-        == on (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds))) > time()) or (((max
-        by (k8s_cluster, window) (last_over_time(homelab_model_bridge_plan_reset_timestamp_seconds[8d]) and on (k8s_cluster,
-        window, namespace, pod) (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d]) == on
-        (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds))) <= 0) and on (k8s_cluster,
+        and (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d]) == on (k8s_cluster, window)
+        group_left () homelab:ai_plan_observed_timestamp_seconds))) > time()) or (((max by (k8s_cluster, window)
+        (last_over_time(homelab_model_bridge_plan_reset_timestamp_seconds[8d]) and (last_over_time(homelab_model_bridge_plan_observed_timestamp_seconds[8d])
+        == on (k8s_cluster, window) group_left () homelab:ai_plan_observed_timestamp_seconds))) <= 0) and on (k8s_cluster,
         window) ((time() - homelab:ai_plan_observed_timestamp_seconds) < 21600)))
     - record: homelab:network_path_state
       expr: (label_replace(label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site1"}) < bool 180), "k8s_cluster",

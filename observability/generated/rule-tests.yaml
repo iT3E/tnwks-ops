@@ -1111,6 +1111,22 @@ tests:
     values: 2x6 _x30
   - series: homelab_model_bridge_plan_observed_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day_opus",pod="vector-agent-platform-a"}
     values: 0x6 _x30
+  - series: homelab_model_bridge_plan_utilization_ratio{k8s_cluster="one",namespace="monitoring",window="seven_day_sonnet",pod="vector-agent-platform-c",instance="old"}
+    values: 0.99x6 _x30
+  - series: homelab_model_bridge_plan_reset_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day_sonnet",pod="vector-agent-platform-c",instance="old"}
+    values: 7200x6 _x30
+  - series: homelab_model_bridge_plan_status{k8s_cluster="one",namespace="monitoring",window="seven_day_sonnet",pod="vector-agent-platform-c",instance="old"}
+    values: 1x6 _x30
+  - series: homelab_model_bridge_plan_observed_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day_sonnet",pod="vector-agent-platform-c",instance="old"}
+    values: 0x6 _x30
+  - series: homelab_model_bridge_plan_utilization_ratio{k8s_cluster="one",namespace="monitoring",window="seven_day_sonnet",pod="vector-agent-platform-c",instance="new"}
+    values: _x6 0.2x6 _x24
+  - series: homelab_model_bridge_plan_reset_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day_sonnet",pod="vector-agent-platform-c",instance="new"}
+    values: _x6 864000x6 _x24
+  - series: homelab_model_bridge_plan_status{k8s_cluster="one",namespace="monitoring",window="seven_day_sonnet",pod="vector-agent-platform-c",instance="new"}
+    values: _x6 0x6 _x24
+  - series: homelab_model_bridge_plan_observed_timestamp_seconds{k8s_cluster="one",namespace="monitoring",window="seven_day_sonnet",pod="vector-agent-platform-c",instance="new"}
+    values: _x6 3600x6 _x24
   promql_expr_test:
   - expr: homelab:ai_plan_utilization_ratio
     eval_time: 4h
@@ -1119,6 +1135,8 @@ tests:
       value: 0.6
     - labels: homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day"}
       value: 0.1
+    - labels: homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day_sonnet"}
+      value: 0.2
   - expr: homelab:ai_plan_state
     eval_time: 4h
     exp_samples:
@@ -1128,12 +1146,16 @@ tests:
       value: 1
     - labels: homelab:ai_plan_state{k8s_cluster="one",window="seven_day_opus"}
       value: 3
+    - labels: homelab:ai_plan_state{k8s_cluster="one",window="seven_day_sonnet"}
+      value: 1
   - expr: homelab:ai_plan_reset_timestamp_seconds
     eval_time: 4h
     exp_samples:
     - labels: homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="five_hour"}
       value: 18000
     - labels: homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="seven_day"}
+      value: 864000
+    - labels: homelab:ai_plan_reset_timestamp_seconds{k8s_cluster="one",window="seven_day_sonnet"}
       value: 864000
   - expr: homelab:ai_plan_observed_timestamp_seconds
     eval_time: 4h
@@ -1144,16 +1166,22 @@ tests:
       value: 0
     - labels: homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="seven_day_opus"}
       value: 0
+    - labels: homelab:ai_plan_observed_timestamp_seconds{k8s_cluster="one",window="seven_day_sonnet"}
+      value: 3600
   - expr: homelab:ai_plan_state
     eval_time: 370m
     exp_samples:
     - labels: homelab:ai_plan_state{k8s_cluster="one",window="seven_day"}
+      value: 1
+    - labels: homelab:ai_plan_state{k8s_cluster="one",window="seven_day_sonnet"}
       value: 1
   - expr: homelab:ai_plan_utilization_ratio
     eval_time: 370m
     exp_samples:
     - labels: homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day"}
       value: 0.1
+    - labels: homelab:ai_plan_utilization_ratio{k8s_cluster="one",window="seven_day_sonnet"}
+      value: 0.2
 - name: AI restore results keep their time after the line is gone
   interval: 1m
   input_series:
