@@ -139,7 +139,7 @@ jobs:
       # image, shim/Dockerfile) and unpacks the pinned downloads. Done here,
       # where Docker and apt work; the runner gets the result and the play
       # finds everything in place (creates:, checksums). The controller cache
-      # only changes with the three roles that fill it and the play. Restored
+      # only changes with the roles that fill it and the play. Restored
       # from the Actions cache, a run skips the toolchain image and GitHub's
       # Ubuntu mirror, whose downloads stalled whole runs on 2026-11-06.
       - name: Restore the controller cache
@@ -147,7 +147,12 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/tnwks-ops
-          key: controller-cache-${{ hashFiles('infrastructure/ansible/playbooks/windows-host.yml', 'infrastructure/ansible/roles/windows_coral_detector/**', 'infrastructure/ansible/roles/windows_monitoring/**', 'infrastructure/ansible/roles/windows_usb_attach/**') }}
+          key: controller-cache-${{ hashFiles('infrastructure/ansible/playbooks/windows-host.yml', 'infrastructure/ansible/roles/windows_coral_detector/**', 'infrastructure/ansible/roles/windows_monitoring/**', 'infrastructure/ansible/roles/windows_usb_attach/**', 'infrastructure/ansible/roles/windows_wsl_rehearsal/**', 'infrastructure/ansible/roles/windows_wsl_move_rehearsal/**') }}
+          # On a miss, the newest older cache: the play then fetches only what
+          # changed (checksums, creates:), and with the same shim inputs it
+          # finds the shim in shim-<id> and builds no toolchain image.
+          restore-keys: |
+            controller-cache-
 
       - name: Controller tools
         if: steps.controller-cache.outputs.cache-hit != 'true'
