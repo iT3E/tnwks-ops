@@ -34,24 +34,30 @@ spec:
             image:
               repository: ghcr.io/philosowaffle/peloton-to-garmin
               pullPolicy: IfNotPresent
-              tag: v3.6.1
+              # The headless console flavor. Since v4 the tags carry the
+              # flavor (console-, api-, webui-); the plain vX.Y.Z tags end at
+              # v3.6.1, which was the console flavor too
+              # (docs/apps/peloton-to-garmin.md).
+              tag: console-v6.1.0@sha256:9cba234cac029a05439439f474c61a848b5a4f67f4f7f81b602bab88210ebd3b
             envFrom:
               - secretRef:
                   name: peloton-to-garmin-it-secrets
             env:
               - name: TZ
                 value: America/Los_Angeles
+              # Also the default of the config file in the image; set here so
+              # the console keeps polling if that file changes.
+              - name: P2G_APP__ENABLEPOLLING
+                value: "true"
               - name: P2G_APP__POLLINGINTERVALSECONDS
                 value: "7200"
               - name: P2G_APP__CHECKFORUPDATES
                 value: "false"
               - name: P2G_PELOTON__NUMWORKOUTSTODOWNLOAD
                 value: "8"
+              # v4 removed UploadStrategy: the native upload is the only one.
               - name: P2G_GARMIN__UPLOAD
                 value: "true"
-                #https://philosowaffle.github.io/peloton-to-garmin/configuration/json.html#upload-strategies
-              - name: P2G_GARMIN__UPLOADSTRATEGY
-                value: "2"
               - name: P2G_OBSERVABILITY__PROMETHEUS__ENABLED
                 value: "true"
               - name: P2G_OBSERVABILITY__PROMETHEUS__PORT
@@ -83,17 +89,24 @@ spec:
                 enabled: false
               readiness:
                 enabled: false
+    # The console flavor serves no HTTP; the one listener is the Prometheus
+    # endpoint (/metrics on P2G_OBSERVABILITY__PROMETHEUS__PORT).
     service:
       app:
         controller: peloton-to-garmin-it
         ports:
-          http:
-            port: 80
+          metrics:
+            port: 4000
     persistence:
+      # The app's data directory (/app/data): the settings, Garmin and sync
+      # state files (*Db.json), with the Garmin tokens that P2G keeps and
+      # refreshes since v4.3. Nothing read /config; the volume keeps its
+      # name so the PVC stays. The image runs as p2g (1015), and local-path
+      # makes the directory 0777.
       config:
         enabled: true
         accessMode: ReadWriteOnce
         size: 1Gi
         storageClass: "${STORAGE_CLASS_DEFAULT}"
         globalMounts:
-          - path: /config
+          - path: /app/data

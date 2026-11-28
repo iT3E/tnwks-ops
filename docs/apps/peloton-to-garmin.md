@@ -1,86 +1,102 @@
-# peloton-to-garmin: pinned to a dead image, do not bump blindly
+# peloton-to-garmin
 
-**Status:** known-broken, intentionally parked (2026-09-17).
-**Symptom:** both instances fail every sync cycle with `403 Forbidden` (previously `429`) on `POST https://api.onepeloton.com/auth/login`.
+Two headless instances in `home-automation`, `peloton-to-garmin-it` and
+`peloton-to-garmin-mh` (`kubernetes/apps/home-automation/peloton-to-garmin/`),
+one for each Peloton and Garmin account. Each polls Peloton every 7200 s,
+converts the newest 8 workouts to FIT and uploads them to Garmin Connect.
+Credentials are in each instance's `secrets.sops.yaml`.
 
-Both `peloton-to-garmin-it` and `peloton-to-garmin-mh` in `home-automation`
-are pinned to `ghcr.io/philosowaffle/peloton-to-garmin:v3.6.1`, which was
-published **2023-11-11**. Peloton has since retired that authentication
-endpoint entirely:
+**Status:** moved from `v3.6.1` to `console-v6.1.0` on 2026-11-28, fix
+forward. `v3.6.1` had stopped syncing:
+Peloton retired the login endpoint it used
+([#798](https://github.com/philosowaffle/peloton-to-garmin/issues/798));
+v6.0.0 has the new Peloton login
+([#795](https://github.com/philosowaffle/peloton-to-garmin/issues/795)).
 
-```
-{"status":403,"message":"Access forbidden. Endpoint no longer accepting requests."}
-```
+## Image
 
-The pods run, stay `1/1 Running`, log the failure, and sleep 7200s. Nothing
-crashes, so this fails quietly. **No workouts have been syncing.**
-
-Upstream tracking: [#798](https://github.com/philosowaffle/peloton-to-garmin/issues/798)
-(the exact 403) and [#795](https://github.com/philosowaffle/peloton-to-garmin/issues/795)
-(the auth-flow rewrite). Current upstream release is **v6.1.0** (2026-04-10).
-
-## Why Renovate never flagged it
-
-Upstream changed its tag scheme. Plain semver tags **stop at `v3.6.1`** —
-only 9 plain `vX.Y.Z` tags were ever published, all `<= 3.6.1`. Everything
-modern is prefixed by flavor:
+`ghcr.io/philosowaffle/peloton-to-garmin:console-v6.1.0`, by tag and digest.
+Since v4.0.0 every tag carries its flavor:
 
 | Flavor | Tag pattern | What it is |
 | ------ | ----------- | ---------- |
-| `console-*` | `console-v6.1.0`, `console-stable` | **headless sync — what we run** |
+| `console-*` | `console-v6.1.0`, `console-stable` | **headless sync: what we run** |
 | `api-*` | `api-v6.1.0` | REST API backend |
 | `webui-*` | `webui-v6.1.0` | web UI frontend |
 
-Renovate compares against plain semver, finds nothing newer than `v3.6.1`,
-and has reported the image as up to date for roughly three years. A green
-Renovate dashboard is **not** evidence that a dependency is current when the
-upstream tag scheme changes underneath it.
+The plain `vX.Y.Z` tags stop at `v3.6.1`, which was the console flavor.
 
-Any real fix therefore needs two things:
+## Renovate does not see it
 
-1. Repoint the image tag to `console-vX.Y.Z`.
-2. Add a Renovate `packageRules` entry so it tracks the `console-` prefix
-   going forward (otherwise it silently freezes again at whatever we pin).
+Renovate's `docker` versioning reads the text before the first hyphen as the
+version. `v3.6.1` parsed, but every newer tag starts with `console-`, `api-`
+or `webui-`, which is no version, so Renovate found nothing newer than
+`v3.6.1` and showed it as current. No rule in `.github/renovate.json5` or
+`.github/renovate/` names this image or turns it off.
 
-## Why this is not a one-line bump
+`console-v6.1.0` does not parse either, so Renovate now skips the image
+entirely. To get updates again it needs a `packageRules` entry for
+`ghcr.io/philosowaffle/peloton-to-garmin` with regex versioning on the
+`console-v` prefix, for example
+`"versioning": "regex:^console-v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"`.
+Don't let it automerge a major: v4, v5 and v6 each had their own migration
+guide.
 
-- `v4.0.0`, `v5.0.0` and `v6.0.0` each ship breaking changes with their own
-  migration guides. `v5` fully removed `DeviceInfoPath` in favour of
-  `DeviceInfoSettings`.
-- `v6.1.0` added a Garmin **service ticket** auth path for when Cloudflare
-  blocks the standard SSO login. Obtaining that ticket is a **manual,
-  one-time, human step**, and the resulting DI OAuth2 token lasts only
-  ~30 days. See the
-  [service ticket docs](https://philosowaffle.github.io/peloton-to-garmin/authentication/garmin-service-ticket).
-  That means the upgrade cannot be fully driven from git, and a token
-  refresh will eventually be needed out-of-band.
-- The credentials in `peloton-to-garmin-mh-secrets` have never successfully
-  authenticated against Peloton (see below), so they are unverified.
+## What v4 to v6 changed here
 
-Because of the manual token step, **do not** let Renovate automerge a major
-bump here. Treat any version change as a hands-on migration.
+From the release notes and the migration guides (v3 to v4, v4 to v5, v5 to v6):
 
-## Related fix already landed
+- **v4.0.0:** `Garmin.UploadStrategy` is gone (native upload only), so the
+  env var is gone. The API and web UI flavors bind port 8080; the console
+  serves no HTTP. The Service lists the one listener, the Prometheus
+  endpoint on 4000.
+- **v4.3.0:** P2G keeps and refreshes its Garmin tokens in its data
+  directory, so `/app/data` (the `*Db.json` files) is on the PVC. Nothing
+  read the old `/config` mount; the volume kept its name, so the PVC stayed.
+- **v5.0.0:** .NET 9, and the image runs as `p2g` (uid and gid 1015).
+  local-path makes each volume directory `0777`, so the PVC is writable.
+  `DeviceInfoPath` became `DeviceInfoSettings`; we set neither.
+- **v6.0.0:** the new Peloton login (Auth0, email and password, as before).
+  `SessionId` is gone; we never set it. Some users had to delete `data/`
+  before the new login worked: deleting the PVC's files resets P2G.
+- Env vars keep the `P2G_SECTION__PROPERTY` form, and they override the
+  `configuration.local.json` that the image ships.
 
-Until 2026-09-17 the `-mh` HelmRelease loaded `envFrom` from
+## Garmin login
+
+P2G signs in to Garmin SSO with the email and password. When Cloudflare
+blocks that, v6.1.0 has a fallback: a one-time **service ticket** from a
+browser login, which P2G exchanges for a token of about 30 days
+([docs](https://philosowaffle.github.io/peloton-to-garmin/authentication/garmin-service-ticket)).
+The ticket can expire within a minute, so it can't go through git and Flux
+(a `P2G_GARMIN__SERVICETICKET` key in the Secret would arrive too late, and
+it stays in the env after it is used). If the SSO login fails, the way is
+the `webui-v6.1.0` flavor, where the ticket is pasted into the settings
+page, with the same data directory. Garmin accounts with two-step
+verification need the same.
+
+## The `-mh` credentials
+
+Until 2026-09-17 the `-mh` HelmRelease read `envFrom` from
 `peloton-to-garmin-mh-secrets` but then overrode all four credential vars via
 explicit `env` → `secretKeyRef` → **`peloton-to-garmin-it-secrets`**. Explicit
 `env` beats `envFrom`, so `-mh` was a duplicate of `-it`: it logged into the
-`it` Peloton account and uploaded to the `it` Garmin account. Two pods
-authenticating as the same user on the same 7200s interval is also the likely
-source of the earlier `429 Too Many Requests`.
+`it` Peloton account and uploaded to the `it` Garmin account.
 
-Fixed in [#1344](https://github.com/iT3E/tnwks-ops/pull/1344). Consequence
-worth remembering: the `-mh` credentials have never actually been exercised
-end-to-end, so when the version upgrade happens, expect to validate the `-mh`
+Fixed in [#1344](https://github.com/iT3E/tnwks-ops/pull/1344). So the `-mh`
+credentials have never been used end to end: expect to check the `-mh`
 account's Peloton *and* Garmin logins from scratch.
 
-## Options when picking this back up
+## Checking it
 
-1. **Upgrade to `console-v6.1.0`** — the real fix. Budget time for the v4→v5→v6
-   migration guides plus manual Garmin service-ticket setup for both users.
-2. **Retire the two deployments** — if the Peloton→Garmin sync is not worth the
-   maintenance, delete the apps rather than leaving them failing on a loop.
+The pods have no probes (the console serves no health route). Read the logs
+of each pod after a start: a Peloton login, the workouts it found, and a
+Garmin upload or the reason it failed. With
+`P2G_OBSERVABILITY__PROMETHEUS__ENABLED`, `:4000/metrics` answers on the
+Service (no ServiceMonitor scrapes it).
 
-Doing nothing is also fine, the failure is contained to these two pods, but it
-should be a decision rather than an oversight. That is what this doc is for.
+## Retiring it
+
+If the sync is not worth keeping, delete the two apps (the `ks.yaml` entry in
+`kubernetes/apps/home-automation/kustomization.yaml` and the cluster overlay)
+rather than leave them failing on a loop.
