@@ -4,7 +4,7 @@
 # (nginx off NFS); this is the stateful piece: products + images (Postgres),
 # orders, Stripe Checkout, and buyer email.
 #
-# Source + image build: github.com/iT3E/tnwks-raines-things-api. Pinned to a release
+# Source + image build: github.com/iT3E/tnwks-things-api. Pinned to a release
 # (<version>@sha256); every release becomes a Renovate PR here that
 # automerges behind Build Success (docs/operations/renovate.md).
 apiVersion: apps/v1
@@ -32,7 +32,7 @@ spec:
       containers:
         - name: raines-things-api
           # A release, by digest: what runs only changes through git.
-          image: ghcr.io/it3e/tnwks-raines-things-api:0.1.2@sha256:e27e74f5ea60f7302f1f2ce6bd06b0fc7e0fafe5c4352ad51483e4c4347cc57a
+          image: ghcr.io/it3e/tnwks-things-api:0.2.0@sha256:daddb293499208feab040e8dc4f726ae0e5c87f5a17dfe72d559b2f9d15f1e03
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
