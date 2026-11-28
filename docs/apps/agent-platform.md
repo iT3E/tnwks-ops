@@ -1384,11 +1384,14 @@ The limits of the walls:
   agent's tool does not do it; a script could, and so a sandbox reaches
   only the read port. What is left: a bad release of the server, and
   the restore below.
-- **A `_method` in a JSON body** still reaches the app, and the framework
-  applies it to a POST. At 6.7.12, as at 6.5.9, the app has only `GET` and
-  `POST` routes on the paths where the allow list lets through a POST
-  (`routes/api.php`), and http-foundation 8.1 no longer turns a POST into a
-  `GET`, so such a POST gets a 405. A new release of the app with
+- **A `_method` in a JSON body** still reaches the app. At 6.7.12 the
+  framework (http-foundation 8.1) applies a `_method` of `PUT`, `PATCH` or
+  `DELETE` to a POST, and ignores a `_method` of `GET` or `HEAD`: that
+  request stays a POST. On the paths where the allow list lets through a
+  POST, the app has only `GET` and `POST` routes (`routes/api.php`, the
+  same at 6.5.9). So a POST with a `_method` of `PUT`, `PATCH` or `DELETE`
+  gets a 405, and one with `GET` or `HEAD` is the POST that the list
+  allows. A new release of the app with
   another route there opens a way: check the routes of those paths when the
   app moves to a new minor release.
 
