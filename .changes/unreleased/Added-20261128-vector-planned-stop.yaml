@@ -1,3 +1,0 @@
-kind: Added
-body: 'Each security sink of the Vector aggregator reads its own Loki address (SECURITY_LOKI_AUDIT_ENDPOINT, SECURITY_LOKI_ROUTEROS_ENDPOINT), so a planned stop of one sink on one cluster is one line of cluster-settings. The load of a planned stop of the audit sink (planned-stop/, ks-planned-stop.yaml) is a Job that a cluster lists for the time of its stop only (kubernetes/apps/monitoring/vector/README.md, "A planned stop of a security sink")'
-time: 2026-11-28T20:40:00.000000000+00:00
