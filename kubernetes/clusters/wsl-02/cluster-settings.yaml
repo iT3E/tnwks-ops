@@ -66,6 +66,11 @@ data:
   VECTOR_LB_ADDR: "10.6.0.205"
   # vector-agent ships only Job pods' logs here (see vector/agent/config).
   VECTOR_AGENT_POD_SELECTOR: "batch.kubernetes.io/job-name"
+  # A planned stop of the audit sink of the aggregator: an address that
+  # refuses each connection, so the sink waits and the audit files wait on the
+  # node (kubernetes/apps/monitoring/vector/README.md, "A planned stop of a
+  # security sink"). Its end is the revert of this line.
+  SECURITY_LOKI_AUDIT_ENDPOINT: "http://127.0.0.1:9"
   # UniFi inform/STUN/API, behind the LAN bridge like homelab-wsl's 10.5.0.206.
   UNIFI_LB_ADDR: "10.6.0.206"
   # homelab-wsl federates from this Prometheus (port 9090, admitted only from
