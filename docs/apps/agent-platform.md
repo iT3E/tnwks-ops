@@ -1118,6 +1118,12 @@ pod makes the jobs of the product equal to that list.
   with another key, or with none (made in a chat), stays. A change of the
   list starts the pod again (the ConfigMap gets a new name, so the pod
   template changes), and the pass at the start applies it.
+- **A failed pass comes again soon.** After a failed pass the next one is
+  60 seconds later, then twice as long each time, up to an hour. At a start
+  of the pod the gateway answers on loopback some seconds before it takes
+  a change of a job (OpenClaw 2026.11.10 refuses an add with "Agent main
+  has not completed startup inspection"), so the first pass can fail; on
+  2026-11-28 it did, at the rollout of agent image 0.5.4.
 - **A broken list changes nothing.** With no file, the sync declares
   nothing (`result=none`). A file that does not parse, with no `jobs`
   list, or with one bad entry stops the pass with
@@ -1146,7 +1152,8 @@ pod makes the jobs of the product equal to that list.
   or `result=failed`, and one for each pass,
   `automations-sync result=ok jobs=<n>` or
   `automations-sync result=failed reason=<reason>`. With no `TZ` or no chat
-  id, the sync changes nothing and prints the failed line again each hour,
+  id, the sync changes nothing and prints the failed line again each hour
+  (that check fails before a pass, so it has no retry),
   so the alert holds until the pod starts with them. The pass line fires
   `AgentAutomationsSyncFailed` ([Alerts](#alerts)).
 - **Turn the jobs off, and the way back.** The jobs are in the state
