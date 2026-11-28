@@ -94,7 +94,7 @@ spec:
               # recreated since 2026-04-05, which is how its Passport keypair
               # ended up unmanaged in a container writable layer.
               # Bump this only as its own PR, never alongside a platform change.
-              tag: version-6.5.9
+              tag: version-6.7.12@sha256:99319a6ce1370eba9e85f78e4d506e76267af0e7acc40fb4189b34d5fe83c874
             securityContext:
               allowPrivilegeEscalation: false
               capabilities:
@@ -111,6 +111,9 @@ spec:
                 value: "false"
               - name: APP_LOG_LEVEL
                 value: "notice"
+              # Keeps the 6.5.9 ceiling of 256M per request; the image default rose to 512M.
+              - name: PHP_MEMORY_LIMIT
+                value: "256M"
               # Firefly builds redirects and cookie scope from APP_URL. With a
               # stale value behind an ingress it emits broken redirects and the
               # UI login-loops. The old stack had http://localhost:8083.

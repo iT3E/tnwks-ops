@@ -1273,8 +1273,8 @@ sandbox --> its supervisor (by the sandbox policy) -----------------------------
   segment, an encoded dot, slash or backslash, a double slash or a `;` is
   refused before the match, since nginx matches the path it normalizes and
   the app reads the raw one. A method override is refused or dropped: the
-  framework of the app (Laravel 12.55 on Symfony http-foundation 7.4,
-  `Request::getMethod`) routes a POST as the method of the header
+  framework of the app (at 6.7.12, Laravel 13.44 on Symfony http-foundation
+  8.1, `Request::getMethod`) routes a POST as the method of the header
   `X-HTTP-Method-Override`, or of a `_method` argument in the query, a form
   body or a JSON body. The proxy drops that header and its variants
   `X-HTTP-Method` and `X-Method-Override`, refuses a write with any query
@@ -1401,7 +1401,7 @@ The limits of the walls:
   `update_transaction`. The proxy can not tell them apart; the rule of the
   gateway and the deny of the agent stop the bulk tool. What it can do is what many single updates
   can do.
-- **An update can remove a split.** At the app's release 6.5.9, an update
+- **An update can remove a split.** At the app's releases 6.5.9 and 6.7.12, an update
   of a transaction group that has two or more splits deletes each split
   that the update does not list (`GroupUpdateService::update`, the
   `array_diff` of the stored and the updated ids). The proxy can not see
@@ -1411,10 +1411,14 @@ The limits of the walls:
   agent's tool does not do it; a script could, and so a sandbox reaches
   only the read port. What is left: a bad release of the server, and
   the restore below.
-- **A `_method` in a JSON body** still reaches the app, and the framework
-  applies it to a POST. At 6.5.9 the app has only `GET` and `POST` routes
-  on the paths where the allow list lets through a POST (`routes/api.php`),
-  so such a POST gets a 405 or a read. A new release of the app with
+- **A `_method` in a JSON body** still reaches the app. At 6.7.12 the
+  framework (http-foundation 8.1) applies a `_method` of `PUT`, `PATCH` or
+  `DELETE` to a POST, and ignores a `_method` of `GET` or `HEAD`: that
+  request stays a POST. On the paths where the allow list lets through a
+  POST, the app has only `GET` and `POST` routes (`routes/api.php`, the
+  same at 6.5.9). So a POST with a `_method` of `PUT`, `PATCH` or `DELETE`
+  gets a 405, and one with `GET` or `HEAD` is the POST that the list
+  allows. A new release of the app with
   another route there opens a way: check the routes of those paths when the
   app moves to a new minor release.
 
