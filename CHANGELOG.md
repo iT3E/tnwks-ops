@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.346.0 - 2026-11-28
+
+### Added
+
+* Prowler: the daily run of the Cloudflare account, with the owner's read-only token in a SOPS Secret and its review date in a Lease.
+
+### Fixed
+
+* Firefly: new personal access tokens for the finance agent proxy and finance-sync after the 6.7.12 update, and the proxy notes name the framework of 6.7.12.
+
 ## v2.345.0 - 2026-11-28
 
 ### Changed
