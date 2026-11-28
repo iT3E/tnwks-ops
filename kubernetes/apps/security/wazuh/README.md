@@ -87,6 +87,8 @@ The patches of `security-wazuh-server`:
   for the indexer (Design Doc 0004, section 10.1), and the vendor's 1 GiB
   PVC of the dashboard's configuration (`wazuh-dashboard-config`). The class
   enforces no size, so the drive of the site is the real limit.
+  `WazuhIndexerVolumeNearFull` (`observability/rules.py`) warns when the
+  indices take more than 80% of the claim of the indexer.
 
 A strategic merge patch of a list puts the init containers that it names
 first. None of them reads what another one writes.
