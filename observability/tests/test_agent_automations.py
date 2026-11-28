@@ -17,6 +17,8 @@ import shutil
 import subprocess
 import time
 import uuid
+from datetime import datetime
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -595,3 +597,63 @@ def test_the_log_holds_keys_and_results_only(lab):
     for line in lines:
         assert pattern.fullmatch(line), line
         assert CHAT not in line and TOKEN not in line
+
+
+# A failed pass comes again soon
+
+FAKE_CLI = r"""#!/bin/sh
+# `node` for the sync script: the CLI of the product is a fake whose first
+# FAIL_ADDS adds fail (a gateway that has not done its startup inspection);
+# each other use is the node of the image.
+if [ "$1" != /app/openclaw.mjs ]; then exec /usr/local/bin/node "$@"; fi
+case "$2 $3" in
+  "automations status") exit 0 ;;
+  "automations list") echo '{"jobs": [], "hasMore": false}' ;;
+  "automations add")
+    n=$(cat /tmp/adds 2>/dev/null || echo 0)
+    echo $((n + 1)) > /tmp/adds
+    [ "$n" -ge "$FAIL_ADDS" ] || exit 1
+    echo '{"job": {"id": "job-1", "enabled": true}}' ;;
+  *) exit 0 ;;
+esac
+"""
+
+
+def test_a_failed_pass_comes_again_after_retry_then_twice_as_long():
+    tool = docker()
+    work = scratch()
+    for sub in ("config", "scripts", "bin"):
+        (work / sub).mkdir()
+        (work / sub).chmod(0o755)
+    (work / "config/automations.json").write_text(json.dumps({"jobs": JOBS[:1]}))
+    text = SCRIPT.read_text()
+    assert text.count("\nRETRY=60\n") == 1
+    (work / "scripts/automations-sync.sh").write_text(text.replace("\nRETRY=60\n", "\nRETRY=1\n"))
+    (work / "bin/node").write_text(FAKE_CLI)
+    for path in work.rglob("*"):
+        if path.is_file():
+            path.chmod(0o755)
+    name = f"automations-retry-{uuid.uuid4().hex[:8]}"
+    try:
+        run([tool, "run", "-d", "--quiet", "--name", name, "--network", "none", "--read-only",
+             "--cap-drop", "ALL", "--tmpfs", "/tmp:uid=1000,gid=1000",
+             "-e", "PATH=/fake:/usr/local/bin:/usr/bin:/bin", "-e", f"TZ={ZONE}",
+             "-e", f"TELEGRAM_ALLOW_FROM={CHAT}", "-e", "FAIL_ADDS=3",
+             "-v", f"{work}/config:/home/node/config:ro", "-v", f"{work}/scripts:/scripts:ro",
+             "-v", f"{work}/bin:/fake:ro", "--entrypoint", "sh", IMAGE, "/scripts/automations-sync.sh"])
+        deadline = time.monotonic() + 60
+        while True:
+            lines = run([tool, "logs", "-t", name]).stdout.splitlines()
+            passes = [line.split(" ", 1) for line in lines if " automations-sync result=" in line]
+            if len(passes) >= 4 or time.monotonic() > deadline:
+                break
+            time.sleep(1)
+    finally:
+        run([tool, "rm", "-f", name], check=False)
+    assert [p[1] for p in passes[:4]] == ["automations-sync result=failed reason=job jobs=1 failed=1"] * 3 + [
+        "automations-sync result=ok jobs=1"], lines
+    stamps = [datetime.fromisoformat(p[0]).timestamp() for p in passes[:4]]
+    gaps = [b - a for a, b in pairwise(stamps)]
+    # RETRY (1 s), then 2 s, then 4 s, each plus the time of a pass.
+    for gap, pause in zip(gaps, (1, 2, 4)):
+        assert pause <= gap < pause + 5, gaps

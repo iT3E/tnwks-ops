@@ -742,7 +742,7 @@ homelab_security_wazuh_index_size_bytes{index="wazuh-states-sca"} 2048
 | `homelab_security_check_result`, `vulnerabilities` | `source` `wazuh`, `check` `vulnerabilities`, `system`, `severity` `high` always | The vulnerabilities of the agent at `high` or `critical`, one for each vulnerability of each package. 0 when the agent has documents and none of them is high or critical: a pass means no high or critical vulnerability. Like `image-vulnerabilities` of Trivy, the line has one severity whatever its value. An agent with no document of the vulnerability state has no series |
 | `homelab_security_last_result_timestamp_seconds` | `source` `wazuh`, `system` | The newest `last_seen` of the agent, the time of its last report |
 | `homelab_security_wazuh_vulnerabilities` | `system`, `severity` | The vulnerabilities of the agent of one severity, `medium` and `low` too. Not in the contract of the registry |
-| `homelab_security_wazuh_index_size_bytes` | `index` | The bytes of one index of Wazuh. Not in the contract of the registry |
+| `homelab_security_wazuh_index_size_bytes` | `index` | The bytes of one index of Wazuh. Not in the contract of the registry. `WazuhIndexerVolumeNearFull` (`observability/rules.py`) compares their sum with the claim of the indexer |
 
 A severity of the feed is in lower case. `-` and no severity are `unknown`,
 and any other value is `high`. The line `vulnerabilities` has one
