@@ -76,6 +76,9 @@ resources:
   # The audit log of this cluster's API server, as the security stream
   # "k8s-audit" (apps/monitoring/vector/README.md).
   - ../../../apps/monitoring/vector/ks-audit-reader.yaml
+  # The marked requests of the planned stop of the audit sink, for the time
+  # of the stop only (apps/monitoring/vector/README.md).
+  - ../../../apps/monitoring/vector/ks-planned-stop.yaml
   # Follows the UniFi controller (UNIFI_REPLICAS).
   - ../../../apps/monitoring/unpoller/ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the
