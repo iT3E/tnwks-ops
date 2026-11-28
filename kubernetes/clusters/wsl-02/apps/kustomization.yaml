@@ -142,6 +142,9 @@ resources:
   # The security platform's namespace (kubernetes/apps/security/README.md):
   # baseline Pod Security, deny by default. Its apps join one by one.
   - ../../../apps/security/namespace.yaml
+  # The list of accepted findings (security/README.md, "Accepted findings"):
+  # the converter and each scanner read it from the Secret.
+  - ../../../apps/security/accepted-findings/ks.yaml
   # The AWS sessions of the security platform: two certificates for IAM Roles
   # Anywhere -> two read-only sessions in Secrets (security/aws-credentials/README.md).
   - ../../../apps/security/aws-credentials/ks.yaml
