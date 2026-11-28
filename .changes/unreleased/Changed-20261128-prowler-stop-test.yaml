@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Prowler: the stop test of the source prowler; the run of the AWS management account is suspended until the test ends.'
+time: 2026-11-28T12:50:00.000000000-08:00
