@@ -198,6 +198,7 @@ mask_sops = ["credentials.sops.yaml"]
 paths = [
   "infrastructure/terraform/environments/prod/cloudflare/**",
   "infrastructure/terraform/modules/cloudflare/**",
+  ".github/scripts/sops-mask.py",
   ".github/workflows/terraform.yaml",
 ]
 
