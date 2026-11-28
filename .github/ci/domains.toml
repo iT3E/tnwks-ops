@@ -227,6 +227,8 @@ root = "prod/healthchecks"
 runner = "tnwks-ops-runner"
 backend = "local"
 lock = "healthchecks-terraform"
+# The provider API key.
+mask_sops = ["secrets.sops.yaml"]
 paths = [
   "infrastructure/terraform/environments/prod/healthchecks/**",
   "infrastructure/terraform/modules/healthchecks/**",
