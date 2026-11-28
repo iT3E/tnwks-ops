@@ -554,6 +554,14 @@ def account_cases():
          helmrelease(NAMES["outsideHR"], OUT_K, serviceAccountName="flux-release-other")),
         ("helmrelease-spec", "the account of another HelmRelease, from the account of a Kustomization", CHILD,
          "deny", helmrelease(NAMES["outsideHR"], None, serviceAccountName="flux-release-other")),
+        # A missing account: refused from the account of a child (after the
+        # 2c of its site), where it would run as helm-controller; it still
+        # passes from kustomize-controller, as on a site before its 2c ("a
+        # plain HelmRelease" above).
+        ("helmrelease-spec", "no account, from the account of a Kustomization", CHILD, "deny",
+         helmrelease(NAMES["outsideHR"], None)),
+        ("helmrelease-spec", "no account, from the account of a HelmRelease", RELEASE, "deny",
+         helmrelease(NAMES["outsideHR"], None)),
         ("kustomization-spec", "its own account", KUSTOMIZE, "allow",
          kustomization("new-app", APP_PATH, PARENT, serviceAccountName="flux-child-new-app")),
         ("kustomization-spec", "the account of another child", KUSTOMIZE, "deny",

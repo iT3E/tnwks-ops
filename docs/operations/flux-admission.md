@@ -101,7 +101,7 @@ A child outside the class may not:
 | `class-namespace` | an object in a namespace of the class. The HelmChart that the helm controller makes beside its chart source is its own work |
 | `rbac` | a Role or a RoleBinding |
 | `flux-kinds` | a Flux Kustomization or an ImageUpdateAutomation |
-| `helmrelease-spec` | a HelmRelease with a service account other than its own (`flux-release-<its name>`), a kubeconfig, a release name, a target or storage namespace, or the post render strategy `nohooks` |
+| `helmrelease-spec` | a HelmRelease with a service account other than its own (`flux-release-<its name>`), a kubeconfig, a release name, a target or storage namespace, or the post render strategy `nohooks`; and from the account of a child (after the 2c of its site), a HelmRelease that names no account |
 | `privileged-pod` | a pod spec with `privileged`, a host path, the host network, PID or IPC namespace, a host port or an added capability, in any namespace |
 | `operator-pods` | an object from which an operator makes a pod of its own template: a runner set (`actions.github.com`), a sandbox (`agents.x-k8s.io`, `extensions.agents.x-k8s.io`), and each object of the database operator and of its backup plugin (`postgresql.cnpg.io`, `barmancloud.cnpg.io`): a cluster, a pooler, a backup, a scheduled backup, an object store. The database folders are in the class (above), so no child outside it needs one |
 | `takeover` | a change of an object whose owner labels name a child of the class |
