@@ -249,6 +249,7 @@ spec:
           'flux-system/qbittorrent': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/reflector': ['flux-system/cluster-apps'],
           'flux-system/reloader': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/security-accepted-findings': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/security-api-checks': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/security-aws-credentials': ['flux-system/cluster-apps-wsl-02'],
           'flux-system/security-converter': ['flux-system/cluster-apps-wsl-02'],

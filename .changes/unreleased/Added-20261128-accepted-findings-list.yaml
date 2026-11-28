@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: the first list of accepted findings, encrypted, with an end date for each line; Flux makes the Secret security-accepted-findings on homelab-wsl-02'
+time: 2026-11-27T19:00:00.000000000-08:00
