@@ -8,5 +8,5 @@
 
 provider "github" {
   owner = "iT3E"
-  token = data.sops_file.secrets.data["github_token"]
+  token = ephemeral.sops_file.secrets.data["github_token"]
 }

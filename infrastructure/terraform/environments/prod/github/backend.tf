@@ -16,5 +16,6 @@ terraform {
       name = "tnwks-github-prod"
     }
   }
-  required_version = ">= 1.9"
+  # Ephemeral resources (data.tf) need Terraform 1.10 or later.
+  required_version = ">= 1.10"
 }
