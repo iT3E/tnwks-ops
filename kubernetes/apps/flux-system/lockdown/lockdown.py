@@ -11,6 +11,13 @@ The tests of observability/tests/test_flux_lockdown.py read these, and
 tests/render.py gives the controller of the throwaway API server the
 arguments of git. It reads no SOPS value: of an encrypted file it reads the
 public recipients of the sops block only.
+
+  python3 kubernetes/apps/flux-system/lockdown/lockdown.py list <site>
+
+prints one row for each Kustomization of a site, as the reads before and
+after a step compare them with the site: class or outside, the account,
+the decryption Secret, the number of encrypted files that it builds, and
+its name ("-" for none).
 """
 
 from __future__ import annotations
@@ -62,6 +69,11 @@ KEYED = ("wsl-02",)
 # the children of the class have decrypted with it): until then the root
 # names sops-age, so it can decrypt its own build and apply a revert.
 KEYED_ROOTS = ("wsl-02",)
+# The sites whose kustomize-controller has --default-service-account=default
+# (step 2e, site by site): a Kustomization that names no account runs as
+# flux-system/default, which has no right. The value of the flag of git.
+FLAGGED = ("wsl-02",)
+DEFAULT_ACCOUNT = "default"
 
 # The two accounts of Flux that apply, in flux-system. The root and each
 # Kustomization of the class run as kustomize-controller (phase 2b).
@@ -262,3 +274,20 @@ def recipients(path: str) -> set[str]:
     block of each document, and no value."""
     return {r["recipient"] for d in classlist.load(ROOT / path)
             for r in ((d.get("sops") or {}).get("age") or [])}
+
+
+def rows(site: str) -> list[str]:
+    """The rows of list: class or outside, account, decryption Secret,
+    number of encrypted files, name."""
+    out = []
+    for key, spec, files, in_class in kustomizations(site):
+        secret = ((spec.get("decryption") or {}).get("secretRef") or {}).get("name")
+        out.append(" ".join(("class" if in_class else "outside", spec.get("serviceAccountName") or "-",
+                             secret or "-", str(len(files)), key.split("/", 1)[1])))
+    return out
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3 or sys.argv[1] != "list" or sys.argv[2] not in classlist.SITES:
+        sys.exit(f"usage: lockdown.py list <{'|'.join(classlist.SITES)}>")
+    print("\n".join(rows(sys.argv[2])))

@@ -51,12 +51,18 @@ python3 test_flux_lockdown.py Setup | NoFlag | Flag
      names flux-release-<its name> and keeps the patch that its site gave
      it before (install.disableWait); the other applies as its account
      (RBAC names it in the namespace of the probe, where it has no role).
-- Flag, after a restart with --default-service-account=default (step 2e):
+- Flag, after a restart with the arguments of git of a site with the flag
+  (step 2e, --default-service-account=default):
   1. A Kustomization with no account applies as flux-system/default (which
      has no right in the namespace of the probe, so RBAC names it).
   2. One that applied before the flag and names no account fails and
      prunes nothing.
   3. The ones that name an account apply as before.
+  4. The shapes of the sites apply as before: the parents that name
+     kustomize-controller and their children that name an account (the
+     class with its patch, the own accounts of accounts.py), the role of
+     git, and both keys of step 2d. A child that its parent names no
+     account for now runs as flux-system/default, and RBAC refuses it.
 """
 
 import base64
@@ -450,6 +456,19 @@ class Flag(unittest.TestCase):
         self.assertIn("identity-probe user=" + CONTROLLER + " end", message)
         _, message = reconcile("who-own")
         self.assertIn(user("child-own"), message)
+
+    def test_4_the_shapes_of_the_sites_apply_as_before(self):
+        for name in ("parent", "parent-named", "named-hr", "census", "dec-class-file", "dec-apps-file"):
+            status, message = reconcile(name)
+            self.assertEqual(status, "True", (name, message))
+        _, message = reconcile("who-patched")
+        self.assertIn("identity-probe user=" + CONTROLLER + " end", message)
+        _, message = reconcile("named-probe")
+        self.assertIn('User "system:serviceaccount:flux-system:flux-child-named-probe" cannot', message)
+        # The sibling that the parent names no account: the default account.
+        status, message = reconcile("who-unpatched")
+        self.assertEqual(status, "False", message)
+        self.assertIn('User "system:serviceaccount:flux-system:default" cannot', message)
 
 
 if __name__ == "__main__":
