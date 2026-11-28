@@ -9,6 +9,7 @@ listens and what it reports about itself.
 | The agent | `agent/` (`ks-agent.yaml`) | Each cluster that lists it, one pod on each node | Reads pod logs on its node and sends them to the aggregator. On the WSL clusters, Job pods only (`VECTOR_AGENT_POD_SELECTOR`) |
 | The platform agent | `agent-platform/` (`ks-agent-platform.yaml`) | homelab-wsl, one pod on each node | Reads the logs of the long-running pods of the agent platform on an allowlist (pod label `logs.home.arpa/ship=true`) and of the sandbox supervisors of a namespace labeled `logs.home.arpa/ship-supervisors=true`. Drops what can hold content from the gateway's and the supervisors' lines on the node, and sends the rest to the aggregator. Serves two gauges for the alerts of the platform on its port 9598 (`docs/apps/agent-platform.md`, "Logs"). Keeps its read positions in the host path `/var/lib/vector-agent-platform`, so a new pod goes on where the last one stopped |
 | The audit reader | `audit-reader/` (`ks-audit-reader.yaml`) | Each cluster that lists it, one pod on the control plane node | Reads the audit log of the API server on its node and sends it to the audit source of the aggregator |
+| The load of a planned stop | `planned-stop/` (`ks-planned-stop.yaml`) | A cluster that lists it for the time of its stop, one Job | Asks the API server for a Secret that it may not read, 12 times a second for 3 hours, so that the audit log has marked lines to count after the stop ([A planned stop of a security sink](#a-planned-stop-of-a-security-sink)) |
 
 The config of the aggregator is one file, `aggregator/config/vector.yaml`,
 for every cluster. A value that differs between clusters is a variable of
@@ -58,8 +59,11 @@ system.
 | The Loki of the security streams, from homelab-wsl-02 | `http://loki-gateway.monitoring.svc.cluster.local` |
 | The same Loki, from homelab-wsl | `https://security-loki.monitoring.svc.cluster.local`, with the client certificate `security-loki-client` (`../security-loki-proxy/README.md`) |
 
-The aggregator takes the Loki address from `SECURITY_LOKI_ENDPOINT` of
-`cluster-settings`. A cluster that does not set it writes to its own Loki.
+Each security sink of the aggregator takes its Loki address from a line of
+`cluster-settings` of its own: `SECURITY_LOKI_AUDIT_ENDPOINT` for
+`loki_security_audit`, and `SECURITY_LOKI_ROUTEROS_ENDPOINT` for
+`loki_security_routeros`. A cluster that does not set one writes that stream
+to its own Loki. homelab-wsl sets both to the TLS path above.
 
 The two streams of Vector behave in two ways when that Loki is away, and
 each way is on purpose:
@@ -82,6 +86,54 @@ Three rules keep the other logs safe:
   `vector_component_errors_total{component_id="loki_security_audit",error_type="request_failed"}`.
   The audit reader sends the oldest file first, so a backlog arrives in the
   order of its events.
+
+## A planned stop of a security sink
+
+A planned stop shows what the design says a sink does when its Loki is away
+(the table above): the audit sink waits and loses no line while the audit
+files last, the second sink of the router log drops, and each other log of
+the cluster goes on. The stop is a merge that gives one sink of one cluster
+an address that fails, and its end is the revert of that merge. The other
+sink and the other cluster keep their addresses.
+
+| Stop | The change | The load |
+| --- | --- | --- |
+| The audit sink of homelab-wsl-02 | `SECURITY_LOKI_AUDIT_ENDPOINT: "http://127.0.0.1:9"` in `kubernetes/clusters/wsl-02/cluster-settings.yaml`: an address that refuses each connection at once | `ks-planned-stop.yaml` in the apps of the cluster |
+| The audit sink of homelab-wsl | `SECURITY_LOKI_AUDIT_ENDPOINT: "https://192.0.2.1"` in `kubernetes/clusters/wsl/cluster-settings.yaml`: an address of the documentation range (RFC 5737) that no host answers, so each request waits for its timeout | The same |
+| The second sink of the router log of homelab-wsl | `SECURITY_LOKI_ROUTEROS_ENDPOINT: "https://192.0.2.1"` in the same file | None: the router sends its own lines |
+
+The address must fail before HTTP. Vector sends a request again after a
+refused connection or a timeout, and does not count it as an error of the
+sink. A request that a server answers with an HTTP error of 4xx, such as a
+wrong path on a real Loki, is not sent again, and its lines do not reach
+Loki (`SecurityAuditLinesRefused`).
+
+Each change of the config restarts the aggregator of its cluster, at the
+start and at the end of the stop. Its other logs have a gap of some seconds
+each time: the router log uses UDP, and a line that comes while the pod
+starts is lost.
+
+**The load.** `planned-stop/load.py` runs as the Job
+`vector-planned-stop-load` in `monitoring`. Its account has no Role. It asks
+for the Secret `vector-planned-stop-marker`, which it may not read, 12 times a
+second for 3 hours (129,600 requests). The API server keeps each request on a
+Secret, a refused one too (`talos/README.md`, "The audit policy"), as one line
+of about 1.3 KB (an estimate). With the lines that each cluster writes in 3
+hours (about 60 MB on homelab-wsl-02 and 90 MB on homelab-wsl, from the bytes
+that each aggregator took in on 2026-11-28), the audit file grows more than
+the 200 MB of two rotations of 100 MB. The User-Agent of each
+request is `vector-planned-stop/<cluster>/<number>`, so the lines of a stop
+are `{security_stream="k8s-audit"} |= "vector-planned-stop/"` in the Loki of
+homelab-wsl-02. The script stops at the first of these, with exit code 0:
+
+- it has sent its 129,600 requests;
+- 3 hours and 5 minutes have passed;
+- 30 answers in a row were not 403 or 404, or did not come: the API server
+  is not well.
+
+The end of the stop deletes the Job, and a running script with it. Its log
+is `{namespace="monitoring", app="vector-planned-stop-load"}` in the Loki of
+its cluster, with one line of counts each 10 minutes and one at its end.
 
 ## The audit reader
 

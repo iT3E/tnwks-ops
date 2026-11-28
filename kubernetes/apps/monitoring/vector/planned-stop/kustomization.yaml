@@ -1,0 +1,14 @@
+---
+# The marked requests of a planned stop of the audit sink (../README.md,
+# "A planned stop of a security sink"). A cluster lists ../ks-planned-stop.yaml
+# for the time of its stop only, and the change that ends the stop takes it
+# out again, so Flux deletes the Job.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - ./job.yaml
+configMapGenerator:
+  - name: vector-planned-stop-load
+    files:
+      - load.py=./load.py
