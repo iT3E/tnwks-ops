@@ -148,11 +148,19 @@ jobs:
         with:
           path: ~/.cache/tnwks-ops
           key: controller-cache-${{ hashFiles('infrastructure/ansible/playbooks/windows-host.yml', 'infrastructure/ansible/roles/windows_coral_detector/**', 'infrastructure/ansible/roles/windows_monitoring/**', 'infrastructure/ansible/roles/windows_usb_attach/**', 'infrastructure/ansible/roles/windows_wsl_rehearsal/**', 'infrastructure/ansible/roles/windows_wsl_move_rehearsal/**') }}
-          # On a miss, the newest older cache: the play then fetches only what
-          # changed (checksums, creates:), and with the same shim inputs it
-          # finds the shim in shim-<id> and builds no toolchain image.
+          # On a miss, the newest older cache: the play then downloads only
+          # what changed (checksums), and with the same shim inputs it finds
+          # the shim in shim-<id> and builds no toolchain image.
           restore-keys: |
             controller-cache-
+
+      # The unpack tasks of windows_coral_detector skip on a `creates:` path
+      # that has no version in it. After a restore that is not an exact match,
+      # drop those unpacked files, so the play unpacks them again from the
+      # checksummed downloads of the cache.
+      - name: Drop the unpacked files of an older cache
+        if: steps.controller-cache.outputs.cache-hit != 'true'
+        run: rm -rf ~/.cache/tnwks-ops/windows-coral-detector/{uv,libusb,edgetpu_runtime}
 
       - name: Controller tools
         if: steps.controller-cache.outputs.cache-hit != 'true'
