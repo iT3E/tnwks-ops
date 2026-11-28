@@ -46,7 +46,11 @@
 #
 # At the start it waits for the gateway on loopback, at most WAIT seconds.
 # Then it does the sync, and again each EVERY seconds, so a change made in a
-# chat goes back to git within EVERY seconds. A change of the list starts
+# chat goes back to git within EVERY seconds. A pass that fails comes again
+# after RETRY seconds, then after twice as long each time, up to EVERY: at a
+# start of the pod the gateway answers on loopback some seconds before it
+# takes a change of a job (OpenClaw 2026.11.10: "Agent main has not
+# completed startup inspection"), so the first pass can fail. A change of the list starts
 # the pod again (the ConfigMap gets a new name, so the pod template
 # changes), so it is in at once. The CLI output can hold the
 # chat id and the message, so it goes nowhere. The lines:
@@ -64,6 +68,7 @@ set -u
 LIST=/home/node/config/automations.json
 WAIT=600
 EVERY=3600
+RETRY=60
 PREFIX="flux:"
 
 oc() { timeout 60 node /app/openclaw.mjs "$@"; }
@@ -240,7 +245,21 @@ until oc automations status > /dev/null 2>&1; do
   sleep 10
 done
 
+# The wait after a failed pass: RETRY, twice as long each time, at most EVERY.
+first_pause() { if [ "$RETRY" -lt "$EVERY" ]; then echo "$RETRY"; else echo "$EVERY"; fi; }
+pause=$(first_pause)
 while true; do
-  sync
-  sleep "$EVERY"
+  lines=$(sync)
+  printf '%s\n' "$lines"
+  case "$(printf '%s\n' "$lines" | tail -n 1)" in
+    "automations-sync result=failed"*)
+      sleep "$pause"
+      pause=$((pause * 2))
+      if [ "$pause" -gt "$EVERY" ]; then pause=$EVERY; fi
+      ;;
+    *)
+      pause=$(first_pause)
+      sleep "$EVERY"
+      ;;
+  esac
 done

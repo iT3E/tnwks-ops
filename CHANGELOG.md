@@ -3,6 +3,30 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.350.0 - 2026-11-28
+
+### Changed
+
+* things-api: the storefront backend runs release 0.2.0 from its new image path, ghcr.io/it3e/tnwks-things-api, pinned by digest. The release has the new names in the code, and its mail subjects and sign-off say "Things". The Deployment sets each setting itself, so the new defaults change nothing here.
+
+## v2.349.0 - 2026-11-28
+
+### Changed
+
+* homelab-wsl has an address for each security sink of the Vector aggregator in cluster-settings (SECURITY_LOKI_AUDIT_ENDPOINT, SECURITY_LOKI_ROUTEROS_ENDPOINT), the same TLS path as SECURITY_LOKI_ENDPOINT. Nothing reads them yet
+
+## v2.348.0 - 2026-11-28
+
+### Added
+
+* monitoring: the alert WazuhIndexerVolumeNearFull warns when the indices of the Wazuh indexer on homelab-wsl-02 take more than 80% of the request of its claim for an hour. It reads the index stats that the security converter serves against the claim in kube-state-metrics, because the class local-path enforces no size and gives the volume no series of its use. WazuhIndexStatsFailing warns when the converter can not read those index stats for an hour while its read of the results passes, so the first alert does not go blind. A promtool fixture for each case, and a section in the security platform runbook for each alert.
+
+## v2.347.1 - 2026-11-28
+
+### Fixed
+
+* agents: a failed pass of automations-sync comes again after 60 s, then twice as long each time up to an hour, so the pass at a pod start that the OpenClaw 2026.11.10 gateway refuses before its startup inspection no longer leaves the jobs unsynced and AgentAutomationsSyncFailed firing for an hour.
+
 ## v2.347.0 - 2026-11-28
 
 ### Changed
