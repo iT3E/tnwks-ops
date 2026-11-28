@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.344.0 - 2026-11-28
+
+### Changed
+
+* renovate: track the version- tags of Firefly III (7 days after release, every update reviewed and approved by the owner) and the console-v tags of peloton-to-garmin (3 days after release)
+
 ## v2.343.0 - 2026-11-28
 
 ### Changed
