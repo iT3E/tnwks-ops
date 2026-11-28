@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.340.0 - 2026-11-28
+
+### Added
+
+* security: the first list of accepted findings, encrypted, with an end date for each line; Flux makes the Secret security-accepted-findings on homelab-wsl-02
+
 ## v2.339.0 - 2026-11-27
 
 ### Added
