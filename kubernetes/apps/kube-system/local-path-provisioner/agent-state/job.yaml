@@ -1,0 +1,81 @@
+---
+# The sticky bit on the root of each agent-state volume (the claim
+# agent-state of an agents-* namespace) on the node of the agent pods.
+#
+# The root of a local-path volume is mode 0777, owned by root. OpenClaw
+# (2026.11.10) refuses a state directory below a group or world writable
+# directory with no sticky bit, and asks its owner for `chmod +t`. The agent
+# pods mount the volume at its root (a subPath doesn't work with local-path
+# on this cluster, talos/wsl/README.md) and run as uid 1000, so they can't.
+# The setup script of the provisioner (../app/helmrelease.yaml) makes a new
+# agent-state volume 1777; this Job does the same to the volumes made before
+# it. With the sticky bit, the uid of the pods can still make, rename and
+# remove its own entries in the root (the restore Jobs rename state/ there).
+#
+# It is root (the owner of the directories; chmod needs no capability), with
+# no network use, no token and a read-only root file system. It only does
+# `chmod +t` on directories that match the name of an agent-state volume, so
+# it is safe to run again. It prints one line for each directory and one
+# result line:
+#   agent-state-sticky dir=<volume directory> mode=1777
+#   agent-state-sticky result=ok dirs=<n>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: agent-state-sticky
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: agent-state-sticky
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The node of the agent pods and their volumes
+      # (kubernetes/apps/ai/agents/*/agent/app/deployment.yaml).
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-2
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sticky
+          image: docker.io/library/busybox:1.38@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              n=0
+              for d in /storage/pvc-*_agents-*_agent-state; do
+                [ -d "$d" ] || continue
+                chmod +t "$d"
+                n=$((n + 1))
+                echo "agent-state-sticky dir=${d#/storage/} mode=$(stat -c %a "$d")"
+              done
+              echo "agent-state-sticky result=ok dirs=$n"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+      volumes:
+        # The root of the local-path StorageClass on that node
+        # (../app/helmrelease.yaml, nodePathMap).
+        - name: storage
+          hostPath:
+            path: /var/lib/rancher/k3s/storage
+            type: Directory

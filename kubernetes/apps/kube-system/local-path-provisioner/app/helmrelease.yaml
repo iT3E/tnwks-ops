@@ -112,6 +112,12 @@ spec:
         esac
         mkdir -m 0777 -p ${absolutePath}
         chmod 701 ${absolutePath}/..
+        # An agent-state volume gets the sticky bit: OpenClaw refuses a state
+        # directory below a world writable directory with none
+        # (../agent-state/job.yaml does the same to the older volumes).
+        case "${absolutePath}" in
+          */pvc-*_agents-*_agent-state) chmod 1777 "${absolutePath}" ;;
+        esac
       teardown: |-
         #!/bin/sh
         while getopts "m:s:p:" opt

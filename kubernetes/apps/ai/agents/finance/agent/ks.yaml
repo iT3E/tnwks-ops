@@ -21,6 +21,8 @@ spec:
     kind: GitRepository
     name: flux-system
   dependsOn:
+    # The sticky bit on the root of its state volume (OpenClaw 2026.11.10).
+    - name: local-path-agent-state
     # The client certificate, and the gateway of the sandboxes.
     - name: agents-finance-sandbox-gateway
   wait: false

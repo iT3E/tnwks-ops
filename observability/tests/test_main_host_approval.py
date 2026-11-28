@@ -61,7 +61,8 @@ def test_the_image_has_the_plugin():
     (image,) = images
     # 0.5.2: the browser form tools take the requester check of the host
     # tools, so they run only in the direct chat of the approver (D188).
-    assert re.fullmatch(r"ghcr\.io/it3e/tnwks-agent-image:0\.5\.2@sha256:[0-9a-f]{64}", image)
+    # 0.5.4 (OpenClaw 2026.11.10) keeps the plugin as it is.
+    assert re.fullmatch(r"ghcr\.io/it3e/tnwks-agent-image:0\.5\.4@sha256:[0-9a-f]{64}", image)
     for name in ("restore-job.yaml", "state-inbox.yaml"):
         assert image in (APP / name).read_text(), name
 

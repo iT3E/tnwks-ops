@@ -121,6 +121,7 @@ configMapGenerator:
       - archive-state.sh=../../../pilot/agent/config/scripts/archive-state.sh
       - daily-backup.sh=../../../pilot/agent/config/scripts/daily-backup.sh
       - memory-index.sh=../../../pilot/agent/config/scripts/memory-index.sh
+      - recover-lock.sh=../../../pilot/agent/config/scripts/recover-lock.sh
       - sandbox-start.sh=../../../pilot/agent/config/scripts/sandbox-start.sh
     # The sandbox gateway of this trust domain, for sandbox-start.sh (the
     # same address as the openshell entry of openclaw.json). It is in the

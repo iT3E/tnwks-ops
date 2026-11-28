@@ -139,8 +139,10 @@ def test_the_official_plugins_step_runs_with_the_debug_flag_and_no_secret(agent)
     assert list(env.values()) == init(pod, "archive")["env"]
     assert step.get("envFrom", []) == ([{"configMapRef": {"name": "agent-ui-settings"}}] if agent == "main" else [])
     assert all("valueFrom" not in e for e in step["env"])
+    # After doctor: OpenClaw 2026.11.10 refuses a CLI command on the state of
+    # an older release until doctor migrates it.
     names = [c["name"] for c in pod["initContainers"]]
-    assert names.index("official-plugins") < names.index("doctor")
+    assert names.index("doctor") < names.index("official-plugins")
 
 
 def test_the_debug_flag_makes_the_cli_print_the_reason():

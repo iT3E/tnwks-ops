@@ -217,6 +217,7 @@ spec:
           'flux-system/kube-prometheus-stack-addons': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/litellm': ['flux-system/cluster-apps'],
           'flux-system/litellm-db': ['flux-system/cluster-apps'],
+          'flux-system/local-path-agent-state': ['flux-system/cluster-apps'],
           'flux-system/local-path-provisioner': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/loki': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/mcp-gateway': ['flux-system/cluster-apps'],

@@ -59,7 +59,7 @@ spec:
           # agent/app/deployment.yaml: GNU find, sort, comm and sha256sum.
           # Renovate reads every YAML file under kubernetes/, listed or not,
           # so one update PR moves both lines together.
-          image: ghcr.io/it3e/tnwks-agent-image:0.4.1@sha256:d1c0247dbdfb5cb9e9f7e5dfe1bf6cd335032e02acf022e132879cd1695b17dd
+          image: ghcr.io/it3e/tnwks-agent-image:0.5.4@sha256:6a9272ad060c0998d416dcef26b70bf8dad494c1e48259d6a5c7068ca9f8da6a
           command: ["sh", "-c"]
           env:
             # The snapshot of ../restore/restore.yaml (the same name). Its
