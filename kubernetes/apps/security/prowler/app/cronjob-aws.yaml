@@ -120,6 +120,11 @@ kind: CronJob
 metadata:
   name: prowler-aws-management
 spec:
+  # The stop test of the source prowler: no run while this is true, so the
+  # newest result of aws-management ages until SecurityResultLate fires, 36
+  # hours after it and 10 minutes of the rule. The pull request that ends the
+  # test removes this line (README.md, "The stop test").
+  suspend: true
   schedule: "17 5 * * *"
   timeZone: Etc/UTC
   concurrencyPolicy: Forbid
