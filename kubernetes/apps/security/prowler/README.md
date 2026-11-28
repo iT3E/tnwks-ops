@@ -33,7 +33,7 @@ The times keep one run at a time on the node.
 | `app/cronjob-aws.yaml` | The two runs of AWS |
 | `app/cronjob-cloudflare.yaml` | The run of the Cloudflare account |
 | `app/lease-cloudflare-token.yaml` | The end date of the Cloudflare token ("When a token ends") |
-| `app/secret-cloudflare.sops.yaml` | The owner's token, encrypted. Not in git until the owner makes it |
+| `app/secret-cloudflare.sops.yaml` | The owner's token, encrypted |
 | `app/scripts/run.py` | One run: the mutelist, Prowler for each part, the file for the converter, the files older than 14 days, the peak of memory. Tests: `security/tests/test_prowler.py` |
 | `app/config/checks-<provider>.json` | The scan list of each provider that has a run (`aws`, `cloudflare`), in the form of `--checks-file`. `security/generate.py` writes them from the registry; never edit them |
 | `app/networkpolicy.yaml` | What a run of each provider can reach |
@@ -284,7 +284,13 @@ CronJob until the owner names it in `app/kustomization.yaml`.
 Secret has a time). The runs are at 03:17 and 05:17 UTC. To run one now:
 `kubectl -n security create job --from=cronjob/prowler-aws-prod prowler-aws-prod-first`.
 
-**Cloudflare.** The token is the owner's, read-only, with the least scope
+**Cloudflare.** Started on 2026-11-28: `app/kustomization.yaml` names the
+Secret, the Lease and the CronJob. The token has no end date, so the Lease
+holds its review date ("A token with no end date"). The run is at 07:17 UTC.
+To run one now:
+`kubectl -n security create job --from=cronjob/prowler-cloudflare prowler-cloudflare-first`.
+
+The token is the owner's, read-only, with the least scope
 that its checks need. Prowler reads it from the environment, and the run
 never prints it. In one pull request:
 
