@@ -91,7 +91,7 @@ WSL-02, which has that cluster's kubeconfig
   halted (`thanos_compact_halted`) and how many compactions it has left. Then
   check the sidecars' upload errors. `observability/verify_live_archive.py`
   proves Store-only history per site (read-only).
-- **Room on site 2:** four alerts of the group `homelab.capacity`
+- **Room on site 2:** five alerts of the group `homelab.capacity`
   (`observability/rules.py`). `NodeContainerMemoryNearLimit`: worker 1 of
   homelab-wsl-02 is past 90% of the memory limit of its node container (the
   kubelet's `node_memory_working_set_bytes`, scraped on that site).
@@ -101,7 +101,8 @@ WSL-02, which has that cluster's kubeconfig
   100 GB free (evaluated by site 1, which scrapes both Windows hosts).
   `WazuhIndexerVolumeNearFull`: the indices of the Wazuh indexer take more
   than 80% of the request of its claim, by the index stats that the security
-  converter serves.
+  converter serves. `WazuhIndexStatsFailing`: the converter can not read
+  those index stats for an hour, while its read of the results passes.
 - **Room on site 1:** four alerts of the group `homelab.capacity`
   (`observability/rules.py`) on the memory of each node container of
   homelab-wsl, scraped on that site: the kubelet's

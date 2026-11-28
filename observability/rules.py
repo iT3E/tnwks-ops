@@ -530,10 +530,13 @@ CAPACITY_DRIVE_FLOOR_GB = 100
 # the bytes of the indices from the index stats that the security converter
 # serves (security/converter/README.md, "The Wazuh source"), against the request
 # of the claim from kube-state-metrics. The flood stage of the indexer acts at
-# 95% of the drive, not of the claim (Design Doc 0004, section 7, row 10), so
-# this alert comes first.
+# 95% of the file system of its data path, the disk of the WSL VM (the nodes'
+# /var), not of the claim (Design Doc 0004, section 7, row 10), so this alert
+# comes first. WazuhIndexStatsFailing warns when that read fails, so this
+# alert does not go blind with no sign.
 WAZUH_INDEXER_CLAIM = "wazuh-indexer-wazuh-indexer-0"
 WAZUH_INDEXER_SHARE = 0.8
+WAZUH_INDEX_STATS_FAILING_FOR = "1h"
 # The node containers of homelab-wsl and their Docker memory limits, in GiB:
 # memory_workers and memory_controlplanes of talos_clusters.wsl in the Ansible
 # inventory (its memory_nodes give each worker that same size, so both workers
@@ -719,8 +722,22 @@ def capacity_alerts():
                          "runbook_url": security_runbook("WazuhIndexerVolumeNearFull"),
                          "description": (f"The bytes of the indices of the Wazuh indexer, by the index stats that the security converter reads,"
                                          f" are above {WAZUH_INDEXER_SHARE:.0%} of the request of its claim for an hour. The class of the claim"
-                                         " enforces no size, so the indexer goes on writing until the drive reaches its flood stage."
+                                         " enforces no size, so the indexer goes on writing until the disk of the WSL VM reaches its flood stage."
                                          " Find the stream that grew, then lower its age or raise the claim through git.")}},
+        # The read of the index stats fails while the read of the results passes. A
+        # failed read of the results is SecurityWazuhReadFailing, and the converter
+        # then often fails both reads, so this alert stays out of that case.
+        {"alert": "WazuhIndexStatsFailing",
+         "expr": (f'max by (k8s_cluster) ({WAZUH_QUERY_SUCCESS}{{source_site="",query="index-stats"}}) == 0'
+                  f' unless on (k8s_cluster) max by (k8s_cluster) ({WAZUH_QUERY_SUCCESS}{{source_site="",query="results"}}) == 0'),
+         "for": WAZUH_INDEX_STATS_FAILING_FOR, "labels": {"severity": "warning"},
+         "annotations": {"summary": "The security converter on {{ $labels.k8s_cluster }} can not read the index stats of the Wazuh indexer",
+                         "dashboard_url": board("tnwks-security"),
+                         "runbook_url": security_runbook("WazuhIndexStatsFailing"),
+                         "description": ("The read of the index stats of the Wazuh source of the security converter fails in each"
+                                         " cycle for an hour, while the read of the results passes. The converter serves no size of"
+                                         " the indices, so WazuhIndexerVolumeNearFull can not fire. The log of the converter has the"
+                                         " kind of the fault. The alert ends in the cycle after a read passes.")}},
     ]
 
 
@@ -2620,6 +2637,12 @@ def capacity_fixtures():
                            f'namespace="security",service="security-converter",index="{index}"{extra}}}'),
                 "values": f"{size}+0x80"}
 
+    def read(query, values, extra=""):
+        """Whether one read of the Wazuh source of the security converter passed."""
+        return {"series": (f'{WAZUH_QUERY_SUCCESS}{{k8s_cluster="{site}",job="security-converter",namespace="security",'
+                           f'service="security-converter",query="{query}"{extra}}}'),
+                "values": values}
+
     def claim(name, size):
         """The request of one claim, as kube-state-metrics serves it."""
         return {"series": (f'kube_persistentvolumeclaim_resource_requests_storage_bytes{{k8s_cluster="{site}",'
@@ -2875,6 +2898,28 @@ def capacity_fixtures():
          "input_series": [index_size("wazuh-states-sca", int(0.9 * 30 * gib))],
          "alert_rule_test": [
              {"alertname": "WazuhIndexerVolumeNearFull", "eval_time": "70m", "exp_alerts": []},
+         ]},
+        {"name": "a read of the index stats that fails for an hour while the results pass alerts", "interval": "1m",
+         "input_series": [read("index-stats", "0+0x80"), read("results", "1+0x80")],
+         "alert_rule_test": [
+             {"alertname": "WazuhIndexStatsFailing", "eval_time": "59m", "exp_alerts": []},
+             {"alertname": "WazuhIndexStatsFailing", "eval_time": "61m", "exp_alerts": [
+                 expected("WazuhIndexStatsFailing")]},
+         ]},
+        {"name": "a read of the index stats that fails with the read of the results does not alert", "interval": "1m",
+         "input_series": [read("index-stats", "0+0x80"), read("results", "0+0x80")],
+         "alert_rule_test": [
+             {"alertname": "WazuhIndexStatsFailing", "eval_time": "70m", "exp_alerts": []},
+         ]},
+        {"name": "a read of the index stats that passes again within the hour does not alert", "interval": "1m",
+         "input_series": [read("index-stats", "0+0x40 1+0x40"), read("results", "1+0x80")],
+         "alert_rule_test": [
+             {"alertname": "WazuhIndexStatsFailing", "eval_time": "70m", "exp_alerts": []},
+         ]},
+        {"name": "a federated copy of a failed read of the index stats does not alert", "interval": "1m",
+         "input_series": [read("index-stats", "0+0x80", extra=',source_site="homelab-wsl-02"')],
+         "alert_rule_test": [
+             {"alertname": "WazuhIndexStatsFailing", "eval_time": "70m", "exp_alerts": []},
          ]},
     ]
 

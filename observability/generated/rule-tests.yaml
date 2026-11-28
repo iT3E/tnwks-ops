@@ -2121,8 +2121,8 @@ tests:
         runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#wazuhindexervolumenearfull
         description: The bytes of the indices of the Wazuh indexer, by the index stats that the security converter
           reads, are above 80% of the request of its claim for an hour. The class of the claim enforces no size,
-          so the indexer goes on writing until the drive reaches its flood stage. Find the stream that grew, then
-          lower its age or raise the claim through git.
+          so the indexer goes on writing until the disk of the WSL VM reaches its flood stage. Find the stream that
+          grew, then lower its age or raise the claim through git.
 - name: the indices of the Wazuh indexer at 79% of its claim do not alert
   interval: 1m
   input_series:
@@ -2156,6 +2156,62 @@ tests:
     values: 28991029248+0x80
   alert_rule_test:
   - alertname: WazuhIndexerVolumeNearFull
+    eval_time: 70m
+    exp_alerts: []
+- name: a read of the index stats that fails for an hour while the results pass alerts
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="index-stats"}
+    values: 0+0x80
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="results"}
+    values: 1+0x80
+  alert_rule_test:
+  - alertname: WazuhIndexStatsFailing
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: WazuhIndexStatsFailing
+    eval_time: 61m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+      exp_annotations:
+        summary: The security converter on homelab-wsl-02 can not read the index stats of the Wazuh indexer
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#wazuhindexstatsfailing
+        description: The read of the index stats of the Wazuh source of the security converter fails in each cycle
+          for an hour, while the read of the results passes. The converter serves no size of the indices, so WazuhIndexerVolumeNearFull
+          can not fire. The log of the converter has the kind of the fault. The alert ends in the cycle after a
+          read passes.
+- name: a read of the index stats that fails with the read of the results does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="index-stats"}
+    values: 0+0x80
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="results"}
+    values: 0+0x80
+  alert_rule_test:
+  - alertname: WazuhIndexStatsFailing
+    eval_time: 70m
+    exp_alerts: []
+- name: a read of the index stats that passes again within the hour does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="index-stats"}
+    values: 0+0x40 1+0x40
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="results"}
+    values: 1+0x80
+  alert_rule_test:
+  - alertname: WazuhIndexStatsFailing
+    eval_time: 70m
+    exp_alerts: []
+- name: a federated copy of a failed read of the index stats does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_wazuh_query_success{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",query="index-stats",source_site="homelab-wsl-02"}
+    values: 0+0x80
+  alert_rule_test:
+  - alertname: WazuhIndexStatsFailing
     eval_time: 70m
     exp_alerts: []
 - name: a certificate with 29 days left alerts; one with 40 days, another lease and another namespace do not

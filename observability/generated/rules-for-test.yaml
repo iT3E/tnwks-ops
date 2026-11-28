@@ -593,8 +593,23 @@ groups:
       runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#wazuhindexervolumenearfull
       description: The bytes of the indices of the Wazuh indexer, by the index stats that the security converter
         reads, are above 80% of the request of its claim for an hour. The class of the claim enforces no size, so
-        the indexer goes on writing until the drive reaches its flood stage. Find the stream that grew, then lower
-        its age or raise the claim through git.
+        the indexer goes on writing until the disk of the WSL VM reaches its flood stage. Find the stream that grew,
+        then lower its age or raise the claim through git.
+  - alert: WazuhIndexStatsFailing
+    expr: max by (k8s_cluster) (homelab_security_converter_wazuh_query_success{source_site="",query="index-stats"})
+      == 0 unless on (k8s_cluster) max by (k8s_cluster) (homelab_security_converter_wazuh_query_success{source_site="",query="results"})
+      == 0
+    for: 1h
+    labels:
+      severity: warning
+    annotations:
+      summary: The security converter on {{ $labels.k8s_cluster }} can not read the index stats of the Wazuh indexer
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+      runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#wazuhindexstatsfailing
+      description: The read of the index stats of the Wazuh source of the security converter fails in each cycle
+        for an hour, while the read of the results passes. The converter serves no size of the indices, so WazuhIndexerVolumeNearFull
+        can not fire. The log of the converter has the kind of the fault. The alert ends in the cycle after a read
+        passes.
 - name: homelab.security
   interval: 1m
   rules:
