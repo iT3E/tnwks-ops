@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.342.0 - 2026-11-28
+
+### Changed
+
+* agents: the agents run agent image 0.5.4 (OpenClaw 2026.11.10). The heartbeat moves to a job that doctor makes, doctor runs before the plugin install, a lock step recovers the state lock of a pod that did not stop cleanly, and the root of each agent-state volume gets the sticky bit.
+
 ## v2.341.0 - 2026-11-28
 
 ### Changed
