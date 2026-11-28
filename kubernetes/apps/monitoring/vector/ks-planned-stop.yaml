@@ -1,0 +1,19 @@
+---
+# The marked requests of a planned stop of the audit sink (README.md, "A
+# planned stop of a security sink"): a Job of 3 hours. A cluster lists this
+# file only for the time of its stop. The Job does not hold this
+# Kustomization (wait: false), and the change that ends the stop takes the
+# file out of the list of the cluster, so Flux deletes the Job.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: vector-planned-stop
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: "./kubernetes/apps/monitoring/vector/planned-stop"
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false

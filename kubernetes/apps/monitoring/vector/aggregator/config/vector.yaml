@@ -170,9 +170,14 @@ sinks:
 
   # The security streams (../README.md). Both sinks write to the Loki that
   # keeps a stream with the label security_stream for 90 days: the Loki of
-  # this cluster by default, and on a cluster that sets SECURITY_LOKI_ENDPOINT
-  # the TLS path to it (../../security-loki-proxy). The client certificate is
-  # for that path. A sink with a plain http address does not use it.
+  # this cluster by default, and the address of cluster-settings on a cluster
+  # that sets one. Each sink has an address of its own
+  # (SECURITY_LOKI_AUDIT_ENDPOINT, SECURITY_LOKI_ROUTEROS_ENDPOINT), so a
+  # planned stop of one sink on one cluster changes one line there
+  # (../README.md, "A planned stop of a security sink"). homelab-wsl sets
+  # both to the TLS path to the Loki of homelab-wsl-02
+  # (../../security-loki-proxy). The client certificate is for that path. A
+  # sink with a plain http address does not use it.
 
   # The audit log. Acknowledgements go from Loki back to the reader, so the
   # reader moves its position in the audit file only for a line that Loki
@@ -181,7 +186,7 @@ sinks:
     type: loki
     inputs:
       - audit_time
-    endpoint: "${SECURITY_LOKI_ENDPOINT:=http://loki-gateway.monitoring.svc.cluster.local}"
+    endpoint: "${SECURITY_LOKI_AUDIT_ENDPOINT:=http://loki-gateway.monitoring.svc.cluster.local}"
     tls: &security_loki_tls
       ca_file: /etc/vector/security-loki-client/ca.crt
       crt_file: /etc/vector/security-loki-client/tls.crt
@@ -202,7 +207,7 @@ sinks:
     type: loki
     inputs:
       - routeros_security
-    endpoint: "${SECURITY_LOKI_ENDPOINT:=http://loki-gateway.monitoring.svc.cluster.local}"
+    endpoint: "${SECURITY_LOKI_ROUTEROS_ENDPOINT:=http://loki-gateway.monitoring.svc.cluster.local}"
     tls: *security_loki_tls
     encoding:
       codec: json
