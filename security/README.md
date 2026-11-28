@@ -442,11 +442,13 @@ file deleted, the next run counts each pending upgrade as old, so
 
 ### Where Wazuh covers a check of the host check
 
-The host check leaves a line of the registry only where Wazuh gives that
-safeguard an equal or better result (Design Doc 0004, section 9, phase 5).
-Equal means three things: Wazuh reads the same state, it fails in each case
-in which the host check fails, and a fail alerts in the same way. The host
-check keeps safeguard 10.2 in any case.
+Design Doc 0004 (section 9, phase 5) says: "The host check retires where
+Wazuh covers it, and keeps the check of safeguard 10.2." This README reads
+"covers" as an equal or better result for the safeguard, and takes it to
+mean three things: Wazuh reads the same state, it fails in each case in
+which the host check fails, and a fail alerts in the same way. That test is
+the reading of this README, not a quote of the design. The host check keeps
+safeguard 10.2 in any case.
 
 No line meets that at the pinned release, v5.0.0-rc2, so each line keeps its
 check of the host check, beside the Wazuh checks that the line has. Two
@@ -458,7 +460,7 @@ sources on one line count once: one fresh source is enough, and a fail wins
 | 3.3 | `windows-host` | `wsl-disk-rules` | No check of the disk file of a distro | No other source reads the owner and the rules of that file |
 | 4.4 | `windows-host` | `firewall-enabled` | No check. The SCA checks of the firewall state are on line 4.5 | No other source on this type |
 | 4.5 | `windows-host` | `firewall-enabled` | SCA checks 26116, 26123 and 26130, the firewall state of the Domain, Private and Public profiles | Each one reads the group policy key `EnableFirewall` of its profile, and passes when no policy sets it ([the policy, rc2](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/ruleset/sca/windows/cis_win11_enterprise.yml)). A profile turned off outside a policy passes. The host check reads the state that runs |
-| 7.3 | `windows-host` | `updates-pending`, `updates-held` | SCA checks 26368, 26441, 26473 to 26475 and 26477 to 26481, the settings of Windows Update | They read the policy of Windows Update, not an update that waits. `vulnerabilities` is on line 7.4, counts only high and critical CVEs, and does not see a hidden update or the age of 14 days |
+| 7.3 | `windows-host` | `updates-pending`, `updates-held` | SCA checks 26368, 26441, 26473 to 26475, 26477 and 26479 to 26481: the update settings of Windows Update, Delivery Optimization and the Store | They read the policy of those settings, not an update that waits. `vulnerabilities` is on line 7.4, counts only high and critical CVEs, and does not see a hidden update or the age of 14 days |
 | 7.3 | `wsl-distro` | `updates-pending`, `updates-held` | No check | No other source on this type |
 | 10.1 | `windows-host` | `defender-enabled` | SCA checks 26393 to 26395 and 26401 to 26403, the policy of Defender. 26395 is real-time protection, and 26403 the antivirus | 26395 and 26403 read the group policy keys `DisableRealtimeMonitoring` and `DisableAntiSpyware`, and pass when no policy sets them. Protection turned off outside a policy passes. The host check reads the state that runs (`Get-MpComputerStatus`) |
 | 10.2 | `windows-host` | `defender-signatures` | No check | The design keeps it |
