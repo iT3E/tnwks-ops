@@ -1,7 +1,9 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## DATA
+## secrets.sops.yaml holds only the provider's API key: an ephemeral
+## resource reads it at each run and never writes it to state.
 ## ---------------------------------------------------------------------------------------------------------------------
 
-data "sops_file" "secrets" {
+ephemeral "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
 }

@@ -5,5 +5,5 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 
 provider "healthchecksio" {
-  api_key = data.sops_file.secrets.data["api_key"]
+  api_key = ephemeral.sops_file.secrets.data["api_key"]
 }

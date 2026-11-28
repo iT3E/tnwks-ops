@@ -8,9 +8,12 @@
 ## environment's variables. Those three files are masked in CI's log
 ## (mask_sops); unmasked.sops.yaml holds values too short to mask, which CI
 ## decrypts but doesn't mask (docs/operations/github.md, The mask).
+## secrets.sops.yaml holds only the provider's token: an ephemeral resource
+## reads it at each run and never writes it to state. The other three feed
+## resources, so they stay data sources.
 ## ---------------------------------------------------------------------------------------------------------------------
 
-data "sops_file" "secrets" {
+ephemeral "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
 }
 
