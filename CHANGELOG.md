@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.350.0 - 2026-11-28
+
+### Changed
+
+* things-api: the storefront backend runs release 0.2.0 from its new image path, ghcr.io/it3e/tnwks-things-api, pinned by digest. The release has the new names in the code, and its mail subjects and sign-off say "Things". The Deployment sets each setting itself, so the new defaults change nothing here.
+
 ## v2.349.0 - 2026-11-28
 
 ### Changed

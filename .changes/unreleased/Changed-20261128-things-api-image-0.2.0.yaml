@@ -1,3 +1,0 @@
-kind: Changed
-body: 'things-api: the storefront backend runs release 0.2.0 from its new image path, ghcr.io/it3e/tnwks-things-api, pinned by digest. The release has the new names in the code, and its mail subjects and sign-off say "Things". The Deployment sets each setting itself, so the new defaults change nothing here.'
-time: 2026-11-28T13:10:00.000000000-08:00
