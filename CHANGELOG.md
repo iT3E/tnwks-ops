@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.341.0 - 2026-11-28
+
+### Changed
+
+* peloton-to-garmin: both instances run console-v6.1.0, pinned by tag and digest, with the data directory on the PVC, the Service on the metrics port and the removed upload strategy setting gone
+
 ## v2.340.1 - 2026-11-28
 
 ### Fixed

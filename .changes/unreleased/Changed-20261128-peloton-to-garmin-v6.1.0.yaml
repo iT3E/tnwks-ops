@@ -1,3 +1,0 @@
-kind: Changed
-body: 'peloton-to-garmin: both instances run console-v6.1.0, pinned by tag and digest, with the data directory on the PVC, the Service on the metrics port and the removed upload strategy setting gone'
-time: 2026-11-28T11:00:00.000000000-08:00
