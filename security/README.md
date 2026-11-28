@@ -714,6 +714,11 @@ and the source, and the stream `findings` has one line with the check
 `tnwks-canary`. The canary never gives a system a time of a result that its
 source did not make.
 
+While a test finding is present, the panel "Failing checks" of the board
+counts one more check for each system that has it. No safeguard, no
+control and no IG1 count moves: no line of the registry names the check of
+a test finding.
+
 - **The time of a page.** The next run of the source, then up to 5 minutes
   for the converter, one scrape, and the 10 minutes of `for`. For Trivy
   Operator, the next tick of the compliance report (00:00, 06:00, 12:00 and
