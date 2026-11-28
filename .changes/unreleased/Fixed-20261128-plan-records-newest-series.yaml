@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'observability: the records homelab:ai_plan_* take a reading only from the series that holds the newest one. A Vector pod that got a new IP kept its old series under the same pod name, so the old use of a window (99% of the week) outlived its reset and ModelPlanNearLimit kept firing.'
-time: 2026-11-28T09:30:00.000000000-08:00

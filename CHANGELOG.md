@@ -3,6 +3,20 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.343.0 - 2026-11-28
+
+### Changed
+
+* firefly: run Firefly III 6.7.12, pinned by tag and digest; it migrates the database on start and replaces the OAuth tables, so each API client needs a new personal access token
+
+### Fixed
+
+* observability: the records homelab:ai_plan_* take a reading only from the series that holds the newest one. A Vector pod that got a new IP kept its old series under the same pod name, so the old use of a window (99% of the week) outlived its reset and ModelPlanNearLimit kept firing.
+
+### Security
+
+* healthchecks and GitHub Terraform: each provider reads its credential through an ephemeral resource, so a run never writes it to state.
+
 ## v2.342.1 - 2026-11-28
 
 ### Security
