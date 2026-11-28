@@ -59,6 +59,13 @@ host_check_distro_system: >-
   {{ groups['wsl_distros'] | map('extract', hostvars) | selectattr('wsl_distro_windows_host', 'defined')
   | selectattr('wsl_distro_windows_host', 'equalto', inventory_hostname) | map(attribute='inventory_hostname') | first }}
 
+# The canary (security/README.md, "The host check"): each run with a result also
+# writes the test finding tnwks-canary, at the severity high, for the alert
+# path. A change of it changes the task, so the check runs at once. Off,
+# except in the pull request that starts a test and until the one that ends
+# it: today it is off.
+host_check_canary: false
+
 # The limits of the checks (Design Doc 0004, section 4.1.4). Defender counts
 # signatures as out of date after 7 days by default.
 host_check_signature_max_age_days: 7
