@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.342.1 - 2026-11-28
+
+### Security
+
+* Cloudflare Terraform: the provider reads its credentials from their own SOPS file through an ephemeral resource, so a run never writes them to state.
+
 ## v2.342.0 - 2026-11-28
 
 ### Changed
