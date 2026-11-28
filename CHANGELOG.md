@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.348.0 - 2026-11-28
+
+### Added
+
+* monitoring: the alert WazuhIndexerVolumeNearFull warns when the indices of the Wazuh indexer on homelab-wsl-02 take more than 80% of the request of its claim for an hour. It reads the index stats that the security converter serves against the claim in kube-state-metrics, because the class local-path enforces no size and gives the volume no series of its use. WazuhIndexStatsFailing warns when the converter can not read those index stats for an hour while its read of the results passes, so the first alert does not go blind. A promtool fixture for each case, and a section in the security platform runbook for each alert.
+
 ## v2.347.1 - 2026-11-28
 
 ### Fixed
