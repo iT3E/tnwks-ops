@@ -408,8 +408,9 @@ Cloudflare account lists it in the pull request after its first result
 
 ## The stop test
 
-The test that a stopped scanner raises the alert for a late result: the
-CronJob `prowler-aws-management` has `suspend: true`, so it starts no run.
+The test that a stopped scanner raises the alert for a late result. It ran
+once, and the CronJob runs again. To run it: give the CronJob
+`prowler-aws-management` the line `suspend: true`, so it starts no run.
 The converter keeps serving the time of the newest file of
 `aws-management`, and `SecurityResultLate` fires for the system and the
 source `prowler` 36 hours after that time (`late_after` in
