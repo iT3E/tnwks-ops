@@ -84,6 +84,15 @@ The policy also matches the accounts of the children outside the class
   children outside the class applies to it.
 - A Kustomization outside the class may name only its own account, and a
   HelmRelease outside the class only its own.
+- A HelmRelease that the account of a child applies must name its own
+  account (`helmrelease-spec`). One with none would run as helm-controller,
+  which has cluster-admin, and the chart could read any object of the
+  cluster. The rule holds where the children apply as their accounts: on
+  site 2 since its step 2c. On site 1 the children still apply as
+  kustomize-controller and name no account, so a missing account passes
+  there until the 2c of site 1. The CI test "a HelmRelease of a child with
+  its own account" holds git to it. This, not the flag on helm-controller,
+  is what holds the HelmReleases outside the class to their accounts.
 - The account of a HelmRelease may write the storage of its own release,
   in its own namespace: the Secret `sh.helm.release.v1.<its name>.v<n>`,
   where `<n>` is digits only. No account of a child writes a token Secret.

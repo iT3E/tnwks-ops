@@ -34,7 +34,11 @@
 # - helmrelease-spec: give a HelmRelease a service account other than its
 #   own (flux-release-<its name>), a kubeconfig, a release name, a target or
 #   storage namespace, or the post render strategy "nohooks" (hooks with no
-#   owner labels);
+#   owner labels). From the account of a child (step 2c of its site), a
+#   HelmRelease must name its own account: one with none would run as
+#   helm-controller. Before the 2c of a site, its children apply as
+#   kustomize-controller and name no account, so there a missing account
+#   still passes;
 # - privileged-pod: make a pod spec with privileged, a host path, the host
 #   network, PID or IPC namespace, a host port or an added capability, in
 #   any namespace;
@@ -652,7 +656,7 @@ spec:
       reason: Forbidden
     - expression: >-
         !variables.outside || !variables.isHelmRelease || (
-          object.spec.?serviceAccountName.orValue('flux-release-' + object.metadata.name) ==
+          object.spec.?serviceAccountName.orValue(variables.account ? '' : 'flux-release-' + object.metadata.name) ==
             'flux-release-' + object.metadata.name &&
           !has(object.spec.kubeConfig) &&
           !has(object.spec.releaseName) && !has(object.spec.targetNamespace) &&
@@ -661,6 +665,7 @@ spec:
       messageExpression: >-
         'flux-child-scope/helmrelease-spec: ' + variables.child + ' is outside the class, so ' + variables.what +
         ' may have no service account but flux-release-' + object.metadata.name +
+        (variables.account ? ' (and must name it)' : '') +
         ', no kubeconfig, release name, target or storage namespace, or post render strategy nohooks'
       reason: Forbidden
     - expression: "!variables.outside || !variables.privileged"

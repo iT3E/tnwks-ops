@@ -216,6 +216,31 @@ def test_a_child_outside_the_class_names_only_its_own_account(site):
 
 
 @pytest.mark.parametrize("site", SITES)
+def test_a_helmrelease_of_a_child_with_its_own_account_names_its_own(site):
+    """The rule helmrelease-spec refuses a HelmRelease outside the class
+    that names no account when the account of a child applies it (after
+    the 2c of its site): it would run as helm-controller. So each
+    HelmRelease of a child that names its own account names
+    flux-release-<its name> in git, and on a site of accounts.NAMED each
+    child outside the class does. A child that applies as
+    kustomize-controller (a site before its 2c) is not held to it."""
+    children = classlist.walk(site)
+    wrong, held = [], 0
+    for child in children.values():
+        spec = lockdown.spec_of(child, children)
+        if classlist.is_class_path(child.path) or not str(account(spec) or "").startswith("flux-child-"):
+            continue
+        for d in child.build.docs:
+            if classlist.is_kind(d, classlist.HELM_GROUP, "HelmRelease"):
+                held += 1
+                own = f"flux-release-{d['metadata']['name']}"
+                if account(lockdown.patched(d, spec.get("patches"))["spec"]) != own:
+                    wrong.append(f"HelmRelease {d['metadata']['name']} of {child.key} names no {own}: the policy refuses it")
+    assert not wrong, "\n".join(wrong)
+    assert held > 0 if site in accounts.NAMED else held == 0, (site, held)
+
+
+@pytest.mark.parametrize("site", SITES)
 def test_the_account_patches_change_nothing_but_the_accounts(site):
     """The patch that accounts.py writes for a child replaces its
     spec.patches (a strategic merge of a list). So the spec that Flux
