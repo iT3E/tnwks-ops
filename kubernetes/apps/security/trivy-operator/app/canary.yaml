@@ -1,0 +1,24 @@
+---
+# The canary of Trivy Operator: one test finding of severity high for the
+# alert path (security/README.md, "The canary"). It is here until the pull
+# request that ends the test.
+#
+# Its one rule fails the control 5.1.8 of the compliance report k8s-cis-1.23
+# (the check AVD-KSV-0043 of the operator: a role with impersonate on groups,
+# in each API group). The role grants nothing: no binding names it, and a Role
+# can not grant the impersonation of a group at all, as the API server asks
+# for that right with no namespace, which only a ClusterRoleBinding gives.
+# resourceNames limits the rule to a group that does not exist, a second
+# bound; the check reads only apiGroups, resources and verbs, so the rule
+# still fails it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: security-canary-trivy
+  labels:
+    security.tnwks.us/canary: "true"
+rules:
+  - apiGroups: ["*"]
+    resources: [groups]
+    verbs: [impersonate]
+    resourceNames: ["tnwks-canary-none"]

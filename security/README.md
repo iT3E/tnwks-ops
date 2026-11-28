@@ -733,6 +733,42 @@ and the reader can start again. The cost: an entry that the owner takes out
 of the list before its end date stays muted on the board for up to a day.
 The end date still holds, as it is the value of the series.
 
+## The canary
+
+The canary is the test of the alert path for a new finding of high
+severity (Design Doc 0004, section 4.1.4: a finding reaches the owner in one
+cycle of its check). Each source has a switch that makes one test finding,
+which no line of the registry names, so no state of a safeguard changes. The
+switches are off, except in the pull request that starts a test and until
+the pull request that ends it.
+
+| Source | The switch | The test finding |
+| --- | --- | --- |
+| `prowler` | `--canary` in the arguments of one CronJob of `kubernetes/apps/security/prowler` | One record of the check `tnwks-canary` in the OCSF file of each run, a `FAIL` of severity `High` on the resource `tnwks-canary`. Only in a run that moves a file |
+| `api-check` | `--canary` in the arguments of the CronJob of `kubernetes/apps/security/api-checks` | One result of the check `tnwks-canary` for the router, 1 resource that fails, severity `high`. Only in a run with a result of the router |
+| `trivy` | `app/canary.yaml` in the resources of `kubernetes/apps/security/trivy-operator` | A Role that fails the control 5.1.8 of the report `k8s-cis-1.23`. It grants nothing (the comment of the file says why) |
+
+So the converter, the generated rules, `SecurityFindingNew` and
+Alertmanager see the test finding as any other: the alert says the system
+and the source, and the stream `findings` has one line with the check
+`tnwks-canary`. The canary never gives a system a time of a result that its
+source did not make.
+
+While a test finding is present, the panel "Failing checks" of the board
+counts one more check for each system that has it. No safeguard, no
+control and no IG1 count moves: no line of the registry names the check of
+a test finding.
+
+- **The time of a page.** The next run of the source, then up to 5 minutes
+  for the converter, one scrape, and the 10 minutes of `for`. For Trivy
+  Operator, the next tick of the compliance report (00:00, 06:00, 12:00 and
+  18:00 UTC), then the same.
+- **The end.** The alert ends after one hour, as for each finding. The pull
+  request that ends the test turns each switch off, and the next run of the
+  source has no test finding.
+- **A second test** of one source and system alerts only after a day with no
+  test finding: the alert reads the day before.
+
 ## How to change the registry
 
 Each change is a pull request, and the owner reviews each line.

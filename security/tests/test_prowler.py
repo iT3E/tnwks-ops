@@ -19,6 +19,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "kubernetes/apps/security/prowler/app"
+sys.path.insert(0, str(ROOT / "security/converter"))
+import converter
+
 UTC = datetime.UTC
 NOW = datetime.datetime(2026, 11, 13, 4, 30, 0, tzinfo=UTC)
 
@@ -170,12 +173,12 @@ def fake_prowler(code=0, write=True, content=None, peak=2 * 2**20):
 CHECKS = ["s3_bucket_one", "ec2_instance_one", "iam_user_one", "ec2_instance_two"]
 
 
-def args(run, tmp_path, *extra, checks=CHECKS):
+def args(run, tmp_path, *extra, checks=CHECKS, canary=False):
     (tmp_path / "work").mkdir(exist_ok=True)
     (tmp_path / "checks.json").write_text(json.dumps({"aws": checks}))
     return run.parse(["--provider=aws", "--system=aws-prod", f"--checks={tmp_path / 'checks.json'}",
                       f"--results={tmp_path / 'results'}", f"--accepted={tmp_path / 'accepted.json'}",
-                      f"--work={tmp_path / 'work'}", "--", *extra])
+                      f"--work={tmp_path / 'work'}", *(["--canary"] if canary else []), "--", *extra])
 
 
 def test_the_scan_list_runs_in_one_part_for_each_service(run, tmp_path):
@@ -281,6 +284,43 @@ def test_a_part_with_no_record_adds_nothing(run, tmp_path, content):
     assert json.loads(path.read_text()) == [record(c) for c in ["ec2_instance_one", "ec2_instance_two", "s3_bucket_one"]]
 
 
+def test_the_canary_adds_one_test_record_that_the_converter_reads_as_a_high_fail(run, tmp_path, capsys):
+    call, _ = fake_prowler()
+    assert run.run(args(run, tmp_path, canary=True), now=lambda: NOW, call=call) == 0
+    (path,) = (tmp_path / "results/prowler/aws").glob("*.ocsf.json")
+    records = json.loads(path.read_text())
+    # The records of the parts as they were, then the test record.
+    assert records[:-1] == [record(c) for c in ["ec2_instance_one", "ec2_instance_two", "iam_user_one", "s3_bucket_one"]]
+    assert records[-1]["metadata"] == {"event_code": "tnwks-canary"}
+    assert records[-1]["resources"] == [{"uid": "tnwks-canary", "name": "tnwks-canary", "type": "Canary"}]
+    with path.open("rb") as file:
+        checks = converter.read_ocsf(file)
+    assert checks["tnwks-canary"] == (1, "high"), "SecurityFindingNew reads high and critical"
+    assert checks["iam_user_one"] == (1, "unknown")
+    (line,) = [json.loads(text) for text in converter.ocsf_lines(path) if "tnwks-canary" in text]
+    assert line["metadata"] == {"event_code": "tnwks-canary"} and line["severity"] == "High"
+    assert line["time"] == int(NOW.timestamp())
+    assert "the canary: one test record of the check tnwks-canary" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("code,write,content", [({"iam": 1}, True, None), (0, False, None), (0, True, "[]")])
+def test_the_canary_adds_nothing_to_a_run_that_moves_no_file(run, tmp_path, code, write, content):
+    """So the canary never gives a system a time of a result that the run did not make."""
+    call, _ = fake_prowler(code=code, write=write, content=content)
+    assert run.run(args(run, tmp_path, canary=True), now=lambda: NOW, call=call) != 0
+    directory = tmp_path / "results/prowler/aws"
+    assert not directory.exists() or not any(path.is_file() for path in directory.rglob("*"))
+
+
+def test_the_check_of_the_canary_is_no_check_of_prowler_and_no_line_of_the_registry(run):
+    catalog = json.loads((ROOT / "security/catalog/prowler.json").read_text())
+    assert all(run.CANARY not in checks for checks in catalog["checks"].values())
+    controls = yaml.safe_load((ROOT / "security/registry/controls.yaml").read_text())
+    named = {item["check"] for line in controls for items in line["checks"].values() for item in items}
+    assert run.CANARY not in named
+    assert run.CHECK.fullmatch(run.CANARY) and converter.CHECK_ID.fullmatch(run.CANARY)
+
+
 def test_the_records_are_copied_in_chunks_with_the_space_around_them(run, tmp_path, monkeypatch):
     monkeypatch.setattr(run, "CHUNK", 3)
     parts = ["  \n[\n" + json.dumps(record("a_one"), indent=4) + ",\n" + json.dumps(record("a_two")) + "\n]\n\n  ",
@@ -349,7 +389,10 @@ def test_each_cronjob_runs_one_system_of_the_registry_with_its_scan_list():
         pod = job["spec"]["jobTemplate"]["spec"]["template"]
         (container,) = pod["spec"]["containers"]
         own = container["args"][:container["args"].index("--")] if "--" in container["args"] else container["args"]
-        flags = dict(arg.removeprefix("--").split("=", 1) for arg in own)
+        # --canary is the one flag with no value (security/README.md, "The canary").
+        flags = dict(arg.removeprefix("--").split("=", 1) for arg in own if arg != "--canary")
+        extra = container["args"][len(own):]
+        assert "--canary" not in extra, "after --, the flag would go to Prowler"
         provider, system = flags["provider"], flags["system"]
         assert providers[systems[system]] == provider, job["metadata"]["name"]
         assert flags["checks"] == f"/config/checks-{provider}.json"
