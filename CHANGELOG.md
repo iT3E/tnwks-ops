@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.345.0 - 2026-11-28
+
+### Changed
+
+* homelab-wsl-02: kustomize-controller runs with --default-service-account=default, so a Flux Kustomization that names no account applies nothing; each Kustomization of the site names one (docs/operations/flux-lockdown.md, "The flag")
+
 ## v2.344.0 - 2026-11-28
 
 ### Changed
