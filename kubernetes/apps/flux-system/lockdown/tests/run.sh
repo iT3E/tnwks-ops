@@ -14,8 +14,9 @@
 # aggregated roles (admin, which the children get) and the controllers of
 # Deployments, ReplicaSets and StatefulSets (so a wait on health ends). It
 # runs test_flux_lockdown.py in a plain Python image on that network, in
-# three steps: Setup; NoFlag, with the arguments of git; and
-# Flag, after a restart of the controller with --default-service-account.
+# three steps: Setup; NoFlag, with the arguments of a site with no flag; and
+# Flag, after a restart with the arguments of a site with the flag of step
+# 2e (--default-service-account, as git sets it).
 #
 # Nothing touches a real cluster: no kubeconfig of the workstation goes into
 # a container, the network has no route out, and the tree holds no secret
@@ -72,6 +73,8 @@ done
 "${PYTHON:-python3}" "${here}/render.py" "${work}"
 image="$(cat "${work}/image.txt")"
 mapfile -t args <"${work}/args.txt"
+# The arguments of a site with the flag of step 2e (git's own value).
+mapfile -t args_flag <"${work}/args-flag.txt"
 
 # Throwaway certificates: a CA, the API server, the admin of the test, the
 # controller (the user name and groups of its service account), the token key.
@@ -175,17 +178,17 @@ tests() {
     --entrypoint python3 "${python_image}" /tests/test_flux_lockdown.py "$@"
 }
 
-# The controller of git, with more arguments if given. RUNTIME_NAMESPACE is
+# The controller of git, with the arguments given. RUNTIME_NAMESPACE is
 # what the Deployment of git sets from its namespace.
 controller() {
   docker rm -f "${id}-controller" >/dev/null 2>&1 || true
   docker run -d --name "${id}-controller" --network "${id}" --read-only --tmpfs /tmp \
     -e KUBECONFIG=/pki/controller.kubeconfig -e RUNTIME_NAMESPACE=flux-system \
-    -v "${pki}:/pki:ro" "${image}" "${args[@]}" "$@" >/dev/null
+    -v "${pki}:/pki:ro" "${image}" "$@" >/dev/null
 }
 
 tests Setup
-controller
+controller "${args[@]}"
 tests NoFlag
-controller --default-service-account=default
+controller "${args_flag[@]}"
 tests Flag

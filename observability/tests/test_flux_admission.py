@@ -23,8 +23,10 @@ from test_hand_written_rules import ROOT, docker
 
 ADMISSION = ROOT / "kubernetes/apps/flux-system/admission"
 sys.path.insert(0, str(ADMISSION))
+sys.path.insert(0, str(ROOT / "kubernetes/apps/flux-system/lockdown"))
 
 import classlist
+import lockdown
 from classlist import flux_text as text_of
 from classlist import flux_variables, substitution_off
 
@@ -946,7 +948,10 @@ def test_kustomize_controller_refuses_remote_bases(site):
     patches = yaml.safe_load((ROOT / f"kubernetes/clusters/{site}/flux-system/kustomization.yaml").read_text())["patches"]
     args = [op["value"] for p in patches if (p.get("target") or {}).get("name") == "kustomize-controller"
             for op in yaml.safe_load(p["patch"])]
-    assert args == ["--no-remote-bases=true"]
+    # And on a site of step 2e, the flag of the default account
+    # (observability/tests/test_flux_lockdown.py).
+    flag = [f"--default-service-account={lockdown.DEFAULT_ACCOUNT}"] if site in lockdown.FLAGGED else []
+    assert args == ["--no-remote-bases=true", *flag]
 
 
 def test_no_build_of_flux_uses_a_remote_source():

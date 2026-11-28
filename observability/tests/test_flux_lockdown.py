@@ -315,6 +315,31 @@ def test_the_flag_is_on_only_when_each_object_of_the_site_names_an_account_of_gi
 
 
 @pytest.mark.parametrize("site", SITES)
+def test_the_flag_of_kustomize_controller_is_on_a_flagged_site_only(site):
+    """Step 2e, site by site: kustomize-controller of a site of
+    lockdown.FLAGGED has --default-service-account=default, so a
+    Kustomization that names no account runs as flux-system/default, which
+    has no right (the test of the default account); on another site it has
+    no flag. The test above holds it to each Kustomization naming an
+    account. helm-controller has no flag: each HelmRelease of the class
+    would need an account with cluster rights in its own namespace, which
+    is more paths to cluster-admin, not fewer (the runbook, "The flag")."""
+    ks_flag = lockdown.flag(lockdown.controller_args(site, "kustomize-controller"), "--default-service-account")
+    assert ks_flag == (lockdown.DEFAULT_ACCOUNT if site in lockdown.FLAGGED else None), (site, ks_flag)
+    assert lockdown.flag(lockdown.controller_args(site, "helm-controller"), "--default-service-account") is None
+
+
+@pytest.mark.parametrize("site", SITES)
+def test_the_list_of_lockdown_py_prints_each_kustomization(site):
+    """lockdown.py list, which the reads of a step compare with the site:
+    one row for each Kustomization, with its side, account and Secret."""
+    rows = lockdown.rows(site)
+    assert len(rows) == len(lockdown.kustomizations(site))
+    assert all(len(r.split()) == 5 and r.split()[0] in ("class", "outside") for r in rows)
+    assert any(r.endswith(" flux-system") for r in rows)
+
+
+@pytest.mark.parametrize("site", SITES)
 def test_the_flags_that_stay_off(site):
     """--sops-age-secret would give each Kustomization that names no Secret a
     key; --default-decryption-service-account would give each one an account

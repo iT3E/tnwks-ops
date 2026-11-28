@@ -5,8 +5,8 @@ The Flux lockdown closes two gaps that the admission policy
 object, and a child outside the "ask first" class decrypts with the main
 key. Two controls close them:
 
-- **Accounts.** The flag `--default-service-account` of the Flux
-  controllers. The root and each Kustomization of the class run as
+- **Accounts.** The flag `--default-service-account` of kustomize-controller
+  (helm-controller does not get it, "The flag"). The root and each Kustomization of the class run as
   `kustomize-controller`. Each child outside the class runs as an account
   of its own with the role `flux-child` in the namespaces where it applies
   objects, and each HelmRelease outside the class as an account in its own
@@ -45,7 +45,7 @@ shows the user that the controller applies as.
 | A Kustomization whose account has only the role `flux-child` of git | It applies an object of each kind of the role (12 objects). A Role or a Pod fails its apply ("cannot create") | The role is enough for the builds outside the class, and it grants no more than its kinds |
 | The same account with `wait: true`, on a Deployment and a StatefulSet | It is Ready. With the role less its reads of ReplicaSets and Pods, the wait fails ("replicasets.apps is forbidden") | Both controllers read the ReplicaSets and Pods of a workload as the account when they wait for its health, so the role must read them |
 | Each side with its own key (step 2d), with age keys made for the run and Secrets of placeholders that sops encrypts to them | A child of the class with `sops-age-class` builds a file of the class key. A child outside the class, with the role `flux-child`, builds a file of the apps key with `sops-age-apps`. With `sops-age-class` it can not decrypt that file ("decryption failed"), and applies nothing | Each file opens only with the Secret of its side. With the policy, which refuses `sops-age-class` outside the class, a child outside the class can not use the class key |
-| The flag `--default-service-account=default`, after a restart | A Kustomization with no account applies as `flux-system/default`. One that applied before the flag and names no account fails and prunes nothing. The ones that name an account apply as before | 2e merges only when each object of the site names an account (the test below) |
+| The flag `--default-service-account=default`, after a restart with the arguments of git of a flagged site | A Kustomization with no account applies as `flux-system/default`. One that applied before the flag and names no account fails and prunes nothing. The ones that name an account apply as before: the parents that name `kustomize-controller` and their children, the own accounts of `accounts.py`, the role `flux-child` and both keys of 2d | 2e merges only when each object of the site names an account (the test below) |
 
 Two reads of the source of the controllers of git add to this:
 
@@ -57,8 +57,9 @@ Two reads of the source of the controllers of git add to this:
   namespace of the HelmRelease (`kube.WithImpersonate(obj.Spec.ServiceAccountName,
   obj.GetNamespace())`). The account `helm-controller` is in `flux-system`,
   so a HelmRelease of the class in another namespace can not name it.
-  Before the flag goes on helm-controller, each HelmRelease of the class
-  needs an account in its own namespace with the rights of its chart.
+  So the flag on helm-controller would need an account in the namespace
+  of each HelmRelease of the class, with the rights of its chart, which
+  is why helm-controller does not get it ("The flag").
 
 ## The policy
 
@@ -226,11 +227,41 @@ key in `KEYS`, and a root that can not decrypt its own build can not apply
 the revert either. So 2d-root merges only once the children of the class
 decrypt with the class key on the site (each one Ready at the merge commit
 of 2d). If it still fails, use the break-glass "The root can not decrypt".
+`lockdown.py list <site>` names them: the rows that start with `class`, name
+`sops-age-class`, and build one or more encrypted files (the fourth column).
 
 Before the merge, the map test shows that each encrypted file that a
 Kustomization builds holds the public key of the Secret that it names (the
 recipients of phase 1). Both Secrets must be on the site, with the key
 `age.agekey` (the command in "Break-glass").
+
+## The flag
+
+Step 2e, site by site: kustomize-controller gets
+`--default-service-account=default`, by a patch of the Flux install in
+`kubernetes/clusters/<site>/flux-system/kustomization.yaml`. A Kustomization
+that names no account then runs as `flux-system/default`, which no binding
+of git names, so it applies nothing. Its apply fails and prunes nothing.
+`FLAGGED` in `lockdown.py` lists the sites.
+
+- Each Kustomization of the site names an account before the flag: the
+  root, the parent of the apps, the meta Kustomization and each child of
+  the class name `kustomize-controller` (2b), and each child outside the
+  class names `flux-child-<name>` (2c). The CI test "the flag" holds it.
+- The Kustomizations that name an account apply as before (the harness,
+  Flag test 4), so the merge changes no object of the site.
+- helm-controller does not get the flag. It acts as the account of a
+  HelmRelease in the namespace of the HelmRelease, and the HelmReleases of
+  the class name none: under the flag they would run as `default` of their
+  namespace and fail. Each would need an account with the rights of its
+  chart in its own namespace, which for most charts of the class means
+  cluster rights, in 31 namespaces on site 2. Anyone who can make a pod in
+  a namespace gets the rights of its accounts, so that is more paths to
+  cluster-admin, not fewer. The HelmReleases outside the class already
+  run as their own accounts (2c).
+
+`lockdown.py list <site>` prints the account that git gives each
+Kustomization, for the reads before and after the merge.
 
 ## The tests of git
 
@@ -249,6 +280,8 @@ its parent, and for the root the patches of
 | The own account | A Kustomization or a HelmRelease outside the class names no account but its own (`flux-child-<name>`, `flux-release-<name>`); on a site of `accounts.NAMED` each one names its own, as `accounts.py write` writes the patches of the parent | 2c |
 | Only the accounts | The spec that Flux applies to each child outside the class, with the patches of `accounts.py`, is the spec without them, but for its account and the patches that give its HelmReleases theirs, after the patches that it had (of its file and of its site) | 2c |
 | The flag | A controller of a site has `--default-service-account` only when each Kustomization (kustomize-controller) or each HelmRelease (helm-controller) of the site names an account. Each account that an object names is a ServiceAccount of git in the namespace of the object | 2a, 2c, 2e |
+| The flag of a flagged site | kustomize-controller of a site of `lockdown.FLAGGED` has `--default-service-account=default`, and of another site none. helm-controller has none | 2e |
+| The list | `lockdown.py list <site>` prints a row for each Kustomization: side, account, decryption Secret, encrypted files, name | 2d, 2e |
 | The flags that stay off | No `--sops-age-secret`, `--default-decryption-service-account` or `--no-cross-namespace-refs` | all |
 | The accounts | `accounts.yaml` of each site is what `accounts.py` writes: an account for each child outside the class, with its bindings. No token is mounted | 2a |
 | The role | `flux-child` has the kinds of the builds outside the class and of the charts of their HelmReleases, and nothing else | 2a |
@@ -287,8 +320,12 @@ Flux v2.10.0, from `gotk-components.yaml` of both sites:
 | `--default-decryption-service-account` | yes | no |
 
 The install of git has no source-watcher: no Deployment and no account,
-only a subject in the ClusterRoleBinding `crd-controller-flux-system`. So
-the flag of 2e is for kustomize-controller and helm-controller.
+only a subject in the ClusterRoleBinding `crd-controller-flux-system`.
+Step 2e puts the flag on kustomize-controller only. helm-controller does
+not get it: under the flag, each HelmRelease of the class would need an
+account with cluster rights in its own namespace (31 namespaces on site
+2), and anyone who can make a pod in a namespace gets the rights of its
+accounts. That is more paths to cluster-admin, not fewer (see "The flag").
 
 ## Break-glass
 
@@ -314,23 +351,29 @@ request, then ask for the reconcile of the parent:
 flux --context <site> reconcile kustomization <parent of the apps> -n flux-system --with-source
 ```
 
+**One child fails after 2e** ("system:serviceaccount:flux-system:default"
+in its Ready message): it names no account. Revert the pull request, or
+add the account to it in git. Do not delete it: its objects would stay
+with no owner.
+
 **Many children fail after 2e.** Revert the pull request of the flag. The
 root applies the Deployments of Flux as `kustomize-controller` (2b), so the
 revert goes through. If the root itself fails:
 
 1. `flux --context <site> suspend kustomization flux-system -n flux-system`
 2. `kubectl --context <site> -n flux-system edit deployment kustomize-controller`
-   (and `helm-controller`): remove the argument
+   (and `helm-controller`, if it has the flag): remove the argument
    `--default-service-account=default`. The controller restarts without it.
 3. After the revert is on `main`:
    `flux --context <site> resume kustomization flux-system -n flux-system`.
 
 **A build can not decrypt after 2d.** Check that both Secrets are on the
-site, by key name only (each must print `age.agekey`):
+site. The default table of kubectl comes from the API server as metadata
+only, so no data reaches the client: each row must show `Opaque` and 1 key
+(the key name `age.agekey` was checked when the Secret was made):
 
 ```bash
-kubectl --context <site> -n flux-system get secret sops-age-class sops-age-apps \
-  -o go-template='{{range .items}}{{.metadata.name}}{{" "}}{{range $k, $v := .data}}{{$k}}{{end}}{{"\n"}}{{end}}'
+kubectl --context <site> -n flux-system get secret sops-age-class sops-age-apps
 ```
 
 Then revert 2d. The old Secret `sops-age` stays on each site until both

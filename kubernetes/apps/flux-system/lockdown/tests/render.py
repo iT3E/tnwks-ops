@@ -5,10 +5,12 @@ the Python of the repository (observability), writes:
 
 - crds.json: each CRD of the Flux install of git, which the controller
   watches;
-- image.txt and args.txt: the image of kustomize-controller and the
-  arguments of its container in git (the same on both sites), less the
-  address of the events and the leader election, which the throwaway API
-  server does not need;
+- image.txt, args.txt and args-flag.txt: the image of kustomize-controller
+  and the arguments of its container in git, less the address of the
+  events and the leader election, which the throwaway API server does not
+  need: args.txt those of a site with no flag, and args-flag.txt those of a
+  site of lockdown.FLAGGED (step 2e), the same with
+  --default-service-account;
 - srv/source.tar.gz and digest.txt: the artifact of a test tree, which a
   plain HTTP server gives to the controller as the GitRepository of
   flux-system would. It holds ConfigMaps and one ClusterRole, an object of
@@ -307,10 +309,19 @@ def main(out: Path) -> None:
     assert any(d["metadata"]["name"] == "kustomizations.kustomize.toolkit.fluxcd.io" for d in crds)
     (deploy,) = [d for d in docs if d.get("kind") == "Deployment" and d["metadata"]["name"] == "kustomize-controller"]
     image = deploy["spec"]["template"]["spec"]["containers"][0]["image"]
-    args = {site: lockdown.controller_args(site, "kustomize-controller") for site in lockdown.classlist.SITES}
-    assert len({tuple(a) for a in args.values()}) == 1, args
-    kept = [a for a in args["wsl-02"] if not a.startswith(("--events-addr", "--enable-leader-election"))]
-    assert lockdown.flag(kept, "--default-service-account") is None, "git has the flag: the case without it is gone"
+    args = {site: [a for a in lockdown.controller_args(site, "kustomize-controller")
+                   if not a.startswith(("--events-addr", "--enable-leader-election"))]
+            for site in lockdown.classlist.SITES}
+    flag = f"--default-service-account={lockdown.DEFAULT_ACCOUNT}"
+    # Once each site is in FLAGGED (the 2e of site 1), no site gives the
+    # plain set: NoFlag then needs a set of its own, the flagged one less
+    # the flag.
+    plain = {tuple(a) for site, a in args.items() if site not in lockdown.FLAGGED}
+    flagged = {tuple(a) for site, a in args.items() if site in lockdown.FLAGGED}
+    assert len(plain) == 1 and len(flagged) == 1, args
+    (kept,), (kept_flag,) = plain, flagged
+    assert lockdown.flag(list(kept), "--default-service-account") is None, "the case without the flag is gone"
+    assert [a for a in kept_flag if a != flag] == list(kept) and flag in kept_flag, (kept, kept_flag)
     data = artifact({**tree(), **encrypted(out)})
     (out / "srv").mkdir()
     (out / "srv/source.tar.gz").write_bytes(data)
@@ -325,6 +336,7 @@ def main(out: Path) -> None:
     (out / "in/digest.txt").write_text("sha256:" + hashlib.sha256(data).hexdigest())
     (out / "image.txt").write_text(image + "\n")
     (out / "args.txt").write_text("\n".join(kept) + "\n")
+    (out / "args-flag.txt").write_text("\n".join(kept_flag) + "\n")
 
 
 if __name__ == "__main__":

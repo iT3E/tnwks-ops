@@ -57,6 +57,21 @@ patches:
     group: apps
     kind: Deployment
     name: kustomize-controller
+# A Kustomization that names no account runs as flux-system/default, which
+# has no right, so it can apply nothing (step 2e of
+# docs/operations/flux-lockdown.md). Each Kustomization of the site names
+# one: kustomize-controller for the class (2b), flux-child-<name> outside
+# it (2c). helm-controller does not get the flag: its HelmReleases of the
+# class would each need an account with cluster rights in its own
+# namespace, which is more paths to cluster-admin, not fewer.
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --default-service-account=default
+  target:
+    group: apps
+    kind: Deployment
+    name: kustomize-controller
 # Flux owns its CRDs now. Never let a prune remove them (deleting a CRD
 # deletes every object of that kind) if this directory ever drops out of the
 # build.
