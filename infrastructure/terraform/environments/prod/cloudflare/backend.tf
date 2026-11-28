@@ -14,5 +14,6 @@ terraform {
       name = "tnwks-cloudflare-prod"
     }
   }
-  required_version = ">= 1.2.2"
+  # Ephemeral resources (providers.tf) need Terraform 1.10 or later.
+  required_version = ">= 1.10"
 }
