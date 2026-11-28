@@ -32,6 +32,12 @@ pass:
                        0004 (section 7, row 27), is missing, or can not be
                        read; only with -WslDisk (below)
 
+With -Canary, a run in which no query failed also writes the result of the
+check tnwks-canary: 1, at the severity high. It is the test finding of the
+alert path (security/README.md, "The host check"), and no line of the registry
+names its check. A run with a failed query writes no result, the canary too,
+so the canary never gives the host a time of a result that it did not make.
+
 The check wsl-disk-rules runs only when -WslDisk names the disk file of the
 distro: the role gives it from the done switch of the host on
 (wsl_start_unelevated_done). It opens the file once, as SYSTEM with no
@@ -92,6 +98,8 @@ param(
     [string]$WslDisk = '',
     [string]$WslDiskAccount = '',
     [string]$WslCapabilitySid = '',
+    # The test finding of the canary (security/README.md, "The host check").
+    [switch]$Canary,
     # The relay of the document of the WSL distro; -System is then the name of
     # the distro.
     [switch]$Relay,
@@ -144,6 +152,10 @@ $script:Severity = [ordered]@{
     'updates-held'        = 'high'
     'wsl-disk-rules'      = 'high'
 }
+# The test finding of -Canary: a check that no line of the registry names, at a
+# severity that SecurityFindingNew reads.
+$script:CanaryCheck = 'tnwks-canary'
+$script:CanaryLevel = 'high'
 $script:Profiles = @('Domain', 'Private', 'Public')
 
 # What the relay takes from the document of a distro.
@@ -591,7 +603,8 @@ function Format-TnwksHostCheck {
     }
     if ($Measure.Failed.Count -eq 0) {
         foreach ($check in $Measure.Results.Keys) {
-            Add-Line 'homelab_security_check_result' (Format-TnwksSeries 'homelab_security_check_result' ([ordered]@{ source = $script:Source; check = $check; system = $System; severity = $script:Severity[$check] }) $Measure.Results[$check])
+            $level = $(if ($check -ceq $script:CanaryCheck) { $script:CanaryLevel } else { $script:Severity[$check] })
+            Add-Line 'homelab_security_check_result' (Format-TnwksSeries 'homelab_security_check_result' ([ordered]@{ source = $script:Source; check = $check; system = $System; severity = $level }) $Measure.Results[$check])
         }
         Add-Line 'homelab_security_last_result_timestamp_seconds' (Format-TnwksSeries 'homelab_security_last_result_timestamp_seconds' ([ordered]@{ source = $script:Source; system = $System }) (ConvertTo-TnwksUnixTime $Now))
     }
@@ -913,11 +926,13 @@ function Invoke-TnwksRelay {
 
 function Invoke-TnwksHostCheck {
     param([string]$System, [string]$TextfileDir, [string]$FileName, [int]$SignatureMaxAgeDays, [int]$UpdatesMaxAgeDays,
-        [string]$WslDisk = '', [string]$WslDiskAccount = '', [string]$WslCapabilitySid = '')
+        [string]$WslDisk = '', [string]$WslDiskAccount = '', [string]$WslCapabilitySid = '', [switch]$Canary)
     if (-not $System) { throw 'no -System: the name of this host in security/registry/systems.yaml' }
     if ($WslDisk -and -not $WslDiskAccount) { throw 'no -WslDiskAccount: the account that owns the distro' }
     $measure = Measure-TnwksHostCheck -Now (Get-Date) -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays `
         -TextfileDir $TextfileDir -WslDisk $WslDisk -WslDiskAccount $WslDiskAccount -WslCapabilitySid $WslCapabilitySid
+    # Only in a run with a result: a failed query writes no result, the canary too.
+    if ($Canary -and $measure.Failed.Count -eq 0) { $measure.Results[$script:CanaryCheck] = 1 }
     $now = Get-Date
     Write-TnwksTextfile $TextfileDir $FileName (Format-TnwksHostCheck -System $System -Measure $measure -Now $now)
     # The names of the queries only: no value that the host gave.
@@ -935,6 +950,6 @@ if (-not $Library) {
     } else {
         Invoke-TnwksHostCheck -System $System -TextfileDir $TextfileDir -FileName $FileName `
             -SignatureMaxAgeDays $SignatureMaxAgeDays -UpdatesMaxAgeDays $UpdatesMaxAgeDays `
-            -WslDisk $WslDisk -WslDiskAccount $WslDiskAccount -WslCapabilitySid $WslCapabilitySid
+            -WslDisk $WslDisk -WslDiskAccount $WslDiskAccount -WslCapabilitySid $WslCapabilitySid -Canary:$Canary
     }
 }

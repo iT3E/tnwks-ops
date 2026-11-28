@@ -424,6 +424,19 @@ late result would fire at once. The results reach the lines of the registry
 without it: `sources` only says which sources the rule for a late result
 watches.
 
+**The canary of the host check.** The test of the alert path for a new
+finding of high severity (Design Doc 0004, section 4.1.4). With
+`host_check_canary` on in the defaults of role `windows_host_check`, the task
+runs the script with `-Canary`, and each run in which no query failed also
+writes the result of the check `tnwks-canary`: 1, at the severity `high`.
+No line of the registry names that check, so no state of a safeguard
+changes, and `SecurityFindingNew` fires for the host as for any new finding.
+A run with a failed query writes no result, the canary too. A change of the
+switch changes the task, so the role runs the check at once after its apply.
+The alert ends after one hour, and a second test of one host alerts only
+after a day with no test finding. The switch is off, except in the pull
+request that starts a test and until the one that ends it.
+
 To run it now on a host: `Start-ScheduledTask -TaskName tnwks-host-check`.
 In a distro: `sudo systemctl start tnwks-host-check.service`, then on its
 host `Start-ScheduledTask -TaskName tnwks-host-check-relay`.
