@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.347.0 - 2026-11-28
+
+### Changed
+
+* The Flux admission policy refuses a HelmRelease outside the "ask first" class that names no account when the account of a child applies it (homelab-wsl-02 now; homelab-wsl with its step 2c), so it can not run as helm-controller (docs/operations/flux-lockdown.md, "The policy")
+
 ## v2.346.0 - 2026-11-28
 
 ### Added

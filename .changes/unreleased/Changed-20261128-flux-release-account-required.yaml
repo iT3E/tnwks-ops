@@ -1,3 +1,0 @@
-kind: Changed
-body: 'The Flux admission policy refuses a HelmRelease outside the "ask first" class that names no account when the account of a child applies it (homelab-wsl-02 now; homelab-wsl with its step 2c), so it can not run as helm-controller (docs/operations/flux-lockdown.md, "The policy")'
-time: 2026-11-28T05:30:00.000000000+00:00
