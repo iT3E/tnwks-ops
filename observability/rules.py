@@ -524,6 +524,16 @@ SECURITY_INGEST_PLAN_GB = 1.2
 CAPACITY_DRIVE_HOST = "WSL-02"
 CAPACITY_DRIVE_VOLUME = "C:"
 CAPACITY_DRIVE_FLOOR_GB = 100
+# The claim of the Wazuh indexer there (kubernetes/apps/security/wazuh/ks.yaml),
+# and the share of its request at which the indices warn. The class local-path
+# enforces no size and gives the volume no series of its use, so the rule reads
+# the bytes of the indices from the index stats that the security converter
+# serves (security/converter/README.md, "The Wazuh source"), against the request
+# of the claim from kube-state-metrics. The flood stage of the indexer acts at
+# 95% of the drive, not of the claim (Design Doc 0004, section 7, row 10), so
+# this alert comes first.
+WAZUH_INDEXER_CLAIM = "wazuh-indexer-wazuh-indexer-0"
+WAZUH_INDEXER_SHARE = 0.8
 # The node containers of homelab-wsl and their Docker memory limits, in GiB:
 # memory_workers and memory_controlplanes of talos_clusters.wsl in the Ansible
 # inventory (its memory_nodes give each worker that same size, so both workers
@@ -697,6 +707,20 @@ def capacity_alerts():
                          "runbook_url": security_runbook("WslDriveSpaceLow"),
                          "description": ("{{ $labels.volume }} of {{ $labels.instance }} holds the WSL disk file of its cluster, and WSL stops when that drive is full."
                                          " The stores of the cluster delete at a set age: lower the age of the largest one, or free space on the drive.")}},
+        {"alert": "WazuhIndexerVolumeNearFull",
+         "expr": ('sum by (k8s_cluster) (homelab_security_wazuh_index_size_bytes{source_site=""})'
+                  ' / max by (k8s_cluster) (kube_persistentvolumeclaim_resource_requests_storage_bytes'
+                  f'{{namespace="security",persistentvolumeclaim="{WAZUH_INDEXER_CLAIM}",source_site=""}})'
+                  f' > {WAZUH_INDEXER_SHARE}'),
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": (f"The indices of the Wazuh indexer on {{{{ $labels.k8s_cluster }}}} take more than"
+                                     f" {WAZUH_INDEXER_SHARE:.0%} of its volume"),
+                         "dashboard_url": board("tnwks-security"),
+                         "runbook_url": security_runbook("WazuhIndexerVolumeNearFull"),
+                         "description": (f"The bytes of the indices of the Wazuh indexer, by the index stats that the security converter reads,"
+                                         f" are above {WAZUH_INDEXER_SHARE:.0%} of the request of its claim for an hour. The class of the claim"
+                                         " enforces no size, so the indexer goes on writing until the drive reaches its flood stage."
+                                         " Find the stream that grew, then lower its age or raise the claim through git.")}},
     ]
 
 
@@ -2590,6 +2614,18 @@ def capacity_fixtures():
         return {"series": f'windows_logical_disk_free_bytes{{k8s_cluster="{site}",instance="{instance}",volume="{volume}"}}',
                 "values": f"{free}+0x30"}
 
+    def index_size(index, size, extra=""):
+        """The bytes of one index, as the security converter serves them."""
+        return {"series": (f'homelab_security_wazuh_index_size_bytes{{k8s_cluster="{site}",job="security-converter",'
+                           f'namespace="security",service="security-converter",index="{index}"{extra}}}'),
+                "values": f"{size}+0x80"}
+
+    def claim(name, size):
+        """The request of one claim, as kube-state-metrics serves it."""
+        return {"series": (f'kube_persistentvolumeclaim_resource_requests_storage_bytes{{k8s_cluster="{site}",'
+                           f'job="kube-state-metrics",namespace="security",persistentvolumeclaim="{name}"}}'),
+                "values": f"{size}+0x80"}
+
     return [
         {"name": "a node container past 90% of its memory limit alerts; another node at the same figure does not", "interval": "1m",
          "input_series": [
@@ -2805,6 +2841,40 @@ def capacity_fixtures():
          "input_series": [drive(CAPACITY_DRIVE_HOST, CAPACITY_DRIVE_VOLUME, 110_000_000_000)],
          "alert_rule_test": [
              {"alertname": "WslDriveSpaceLow", "eval_time": "20m", "exp_alerts": []},
+         ]},
+        # Two indices at 41% and 40% of the claim of 30 GiB: 81% together. The
+        # claim of the manager (15 GiB) is in the same namespace and does not count.
+        {"name": "the indices of the Wazuh indexer past 80% of its claim for an hour alert", "interval": "1m",
+         "input_series": [
+             index_size("wazuh-states-sca", int(0.41 * 30 * gib)),
+             index_size(".ds-wazuh-events-v5-system-activity-000001", int(0.40 * 30 * gib)),
+             claim(WAZUH_INDEXER_CLAIM, 30 * gib),
+             claim("wazuh-manager-master-wazuh-manager-master-0", 15 * gib),
+         ], "alert_rule_test": [
+             {"alertname": "WazuhIndexerVolumeNearFull", "eval_time": "59m", "exp_alerts": []},
+             {"alertname": "WazuhIndexerVolumeNearFull", "eval_time": "61m", "exp_alerts": [
+                 expected("WazuhIndexerVolumeNearFull")]},
+         ]},
+        {"name": "the indices of the Wazuh indexer at 79% of its claim do not alert", "interval": "1m",
+         "input_series": [
+             index_size("wazuh-states-sca", int(0.39 * 30 * gib)),
+             index_size(".ds-wazuh-events-v5-system-activity-000001", int(0.40 * 30 * gib)),
+             claim(WAZUH_INDEXER_CLAIM, 30 * gib),
+             claim("wazuh-manager-master-wazuh-manager-master-0", 15 * gib),
+         ], "alert_rule_test": [
+             {"alertname": "WazuhIndexerVolumeNearFull", "eval_time": "70m", "exp_alerts": []},
+         ]},
+        {"name": "a federated copy of the indices of the Wazuh indexer does not alert", "interval": "1m",
+         "input_series": [
+             index_size("wazuh-states-sca", int(0.9 * 30 * gib), extra=',source_site="homelab-wsl-02"'),
+             claim(WAZUH_INDEXER_CLAIM, 30 * gib),
+         ], "alert_rule_test": [
+             {"alertname": "WazuhIndexerVolumeNearFull", "eval_time": "70m", "exp_alerts": []},
+         ]},
+        {"name": "the indices of the Wazuh indexer with no claim in kube-state-metrics do not alert", "interval": "1m",
+         "input_series": [index_size("wazuh-states-sca", int(0.9 * 30 * gib))],
+         "alert_rule_test": [
+             {"alertname": "WazuhIndexerVolumeNearFull", "eval_time": "70m", "exp_alerts": []},
          ]},
     ]
 

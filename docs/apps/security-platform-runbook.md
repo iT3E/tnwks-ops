@@ -48,21 +48,22 @@ own section here (`runbook_url`).
 
 ## The alerts
 
-17 alerts cover the platform:
+18 alerts cover the platform:
 
 - the 3 rules that `security/generate.py` writes from the registry
   (`SecurityResultLate`, `SecurityHostUnreachable`,
   `SecurityAcceptedFindingExpired`);
 - the 10 rules of the group `homelab.security` in `observability/rules.py`;
-- 3 rules of the group `homelab.capacity` in `observability/rules.py` for
+- 4 rules of the group `homelab.capacity` in `observability/rules.py` for
   the room of site 2, where the platform runs (`NodeContainerMemoryNearLimit`,
-  `LokiSecurityIngestAbovePlan`, `WslDriveSpaceLow`);
+  `LokiSecurityIngestAbovePlan`, `WslDriveSpaceLow`,
+  `WazuhIndexerVolumeNearFull`);
 - `PeerSiteUnreachable`, in
   `kubernetes/apps/monitoring/kube-prometheus-stack/app/peer-rules.yaml`,
   which `SecurityHostUnreachable` holds.
 
 The generated rule tests (`promtool test rules`, the `rule-tests` job) are
-the proof of each expression of the first 16. The text of an alert names no
+the proof of each expression of the first 17. The text of an alert names no
 check, finding or value ([`security/README.md`](../../security/README.md#the-text-of-an-alert)).
 
 ### SecurityResultLate
@@ -521,6 +522,46 @@ distro. The compaction is owner approval.
 
 **Who decides.** The owner: the age of a store, the space on the drive, and
 each compaction.
+
+### WazuhIndexerVolumeNearFull
+
+**What it means.** The indices of the Wazuh indexer on homelab-wsl-02 have
+taken more than 80% of the request of its claim for an hour
+(`WAZUH_INDEXER_SHARE` and `WAZUH_INDEXER_CLAIM` in `observability/rules.py`).
+The request is 30 GiB (`kubernetes/apps/security/wazuh/ks.yaml`). The bytes
+are those of the index stats that the security converter reads each 5
+minutes, with the replicas
+([`security/converter/README.md`](../../security/converter/README.md),
+"The Wazuh source"), and not the whole volume: the write log of each shard
+is not in them. The class `local-path` enforces no size, so the indexer goes
+on writing past the claim. It stops writes only at its flood stage, 95% of
+the drive under the WSL disk, and then events drop (Design Doc 0004,
+section 7, rows 10 and 14).
+
+The alert reads the index stats only. While
+`homelab_security_converter_wazuh_query_success{query="index-stats"}` is 0,
+the converter serves no size, and this alert can not fire.
+
+**First reads.**
+
+1. In the Prometheus of site 2, the largest indices first:
+   `sort_desc(homelab_security_wazuh_index_size_bytes)`.
+2. The share of the claim:
+   `sum(homelab_security_wazuh_index_size_bytes) / max(kube_persistentvolumeclaim_resource_requests_storage_bytes{namespace="security",persistentvolumeclaim="wazuh-indexer-wazuh-indexer-0"})`.
+3. The growth of a day:
+   `sum(homelab_security_wazuh_index_size_bytes) - sum(homelab_security_wazuh_index_size_bytes offset 1d)`.
+
+**The fix.** Each stream of host events, findings and metrics deletes at
+its age, by the policies of tnwks
+([`kubernetes/apps/security/wazuh/README.md`](../../kubernetes/apps/security/wazuh/README.md)).
+Lower the age of the stream that grew, or raise the claim, in a pull
+request. A lower age deletes data, so its merge is the owner's (R4). The
+content of the feed is held twice while the indexer rebuilds it, so a
+rebuild can raise the share for a while.
+
+**When it ends.** When the indices take 80% of the claim or less.
+
+**Who decides.** The owner: each age and the size of the claim.
 
 ### PeerSiteUnreachable
 

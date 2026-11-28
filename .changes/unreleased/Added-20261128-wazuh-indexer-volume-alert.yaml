@@ -1,0 +1,3 @@
+kind: Added
+body: 'monitoring: the alert WazuhIndexerVolumeNearFull warns when the indices of the Wazuh indexer on homelab-wsl-02 take more than 80% of the request of its claim for an hour. It reads the index stats that the security converter serves against the claim in kube-state-metrics, because the class local-path enforces no size and gives the volume no series of its use. A promtool fixture for each case, and a section in the security platform runbook.'
+time: 2026-11-28T20:30:00.000000000+00:00

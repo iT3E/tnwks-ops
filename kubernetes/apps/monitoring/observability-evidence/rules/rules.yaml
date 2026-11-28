@@ -599,6 +599,21 @@ spec:
         description: '{{ $labels.volume }} of {{ $labels.instance }} holds the WSL disk file of its cluster, and
           WSL stops when that drive is full. The stores of the cluster delete at a set age: lower the age of the
           largest one, or free space on the drive.'
+    - alert: WazuhIndexerVolumeNearFull
+      expr: sum by (k8s_cluster) (homelab_security_wazuh_index_size_bytes{source_site=""}) / max by (k8s_cluster)
+        (kube_persistentvolumeclaim_resource_requests_storage_bytes{namespace="security",persistentvolumeclaim="wazuh-indexer-wazuh-indexer-0",source_site=""})
+        > 0.8
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: The indices of the Wazuh indexer on {{ $labels.k8s_cluster }} take more than 80% of its volume
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        runbook_url: https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/security-platform-runbook.md#wazuhindexervolumenearfull
+        description: The bytes of the indices of the Wazuh indexer, by the index stats that the security converter
+          reads, are above 80% of the request of its claim for an hour. The class of the claim enforces no size,
+          so the indexer goes on writing until the drive reaches its flood stage. Find the stream that grew, then
+          lower its age or raise the claim through git.
   - name: homelab.security
     interval: 1m
     rules:
