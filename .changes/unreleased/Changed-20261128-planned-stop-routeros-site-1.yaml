@@ -1,0 +1,3 @@
+kind: Changed
+body: 'The planned stop of the second sink of the router log of homelab-wsl starts, for 30 minutes: the sink gets an address that no host answers and drops when its buffer is full, while the router log goes on to the Loki of homelab-wsl. Its end is the revert of this change (kubernetes/apps/monitoring/vector/README.md, "A planned stop of a security sink")'
+time: 2026-11-28T21:00:00.000000000+00:00
