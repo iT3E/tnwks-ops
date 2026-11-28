@@ -74,7 +74,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | [`apps/immich.md`](apps/immich.md) | Immich: photo library for the kitchen screensaver, its storage, login and break-glass |
 | [`apps/kitchen-screensaver.md`](apps/kitchen-screensaver.md) | Kitchen screensaver: the page the kitchen display's screensaver shows (photos, time, weather, events, dinner, stars), its API, accounts and how to switch back |
 | [`apps/immichframe.md`](apps/immichframe.md) | ImmichFrame: the kitchen display's screensaver (photos, clock, today's events), its settings and the tablet setup |
-| [`apps/peloton-to-garmin.md`](apps/peloton-to-garmin.md) | peloton-to-garmin: the dead-auth v3.6.1 pin and why Renovate can't see it |
+| [`apps/peloton-to-garmin.md`](apps/peloton-to-garmin.md) | peloton-to-garmin: the console-v6.1.0 image, what v4 to v6 changed, the Garmin login, and why Renovate does not see it |
 | [`apps/litellm.md`](apps/litellm.md) | LiteLLM: local models and Claude on Bedrock, the Roles Anywhere credentials, per-app keys |
 | [`apps/mcp-gateway.md`](apps/mcp-gateway.md) | The MCP gateway of the agent platform: the keys of the agents, the tool rule of each trust domain, its probe |
 | [`apps/playwright-mcp.md`](apps/playwright-mcp.md) | The browser tool: the Playwright MCP server, its network policy and what is left before an agent uses it |
