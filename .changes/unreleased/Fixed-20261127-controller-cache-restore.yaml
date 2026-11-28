@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Ansible Hosts: on a miss of the controller cache key, restore the newest older cache, drop its unpacked files that carry no version, and key the cache on both rehearsal roles that fill it too.'
+time: 2026-11-27T12:00:00.000000000-08:00
