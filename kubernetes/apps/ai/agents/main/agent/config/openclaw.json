@@ -316,14 +316,7 @@
       "model": {"primary": "litellm/agents-main"},
       "thinkingDefault": "high",
       "modelPolicy": {"allow": ["litellm/agents-main"]},
-      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw", "sessionToolsVisibility": "all"},
-      "heartbeat": {
-        "every": "24h",
-        "target": "none",
-        "isolatedSession": true,
-        "lightContext": true,
-        "prompt": "This is the daily scheduled check of the platform. Run the shell command `date -u` one time, then reply with its output and nothing else."
-      }
+      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw", "sessionToolsVisibility": "all"}
     }
   },
   "models": {
@@ -354,6 +347,7 @@
       "enabled": true,
       "dmPolicy": "allowlist",
       "allowFrom": ["${TELEGRAM_ALLOW_FROM}"],
+      "groupAllowFrom": ["${TELEGRAM_ALLOW_FROM}"],
       "groupPolicy": "allowlist",
       "groups": {"$include": "./telegram-groups.json"},
       "historyLimit": 15,
@@ -368,8 +362,10 @@
       "brave",
       "diagnostics-otel",
       "host-approval",
+      "litellm",
       "memory-core",
       "openshell",
+      "skill-workshop",
       "telegram"
     ],
     "load": {
@@ -423,6 +419,7 @@
         }
       },
       "diagnostics-otel": {"enabled": true},
+      "litellm": {"enabled": true},
       "active-memory": {
         "enabled": true,
         "config": {
@@ -449,5 +446,6 @@
       "logs": false,
       "sampleRate": 1.0
     }
-  }
+  },
+  "meta": {"migrations": {"skillWorkshopPlugin": true}}
 }

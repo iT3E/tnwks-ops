@@ -700,7 +700,14 @@ keys in the secret. Then link the number (below).
 Each container mounts a volume at its root, with no `subPath`: on this
 cluster a `subPath` of a `local-path` volume comes out owned by root
 (`talos/wsl/README.md`). The `prepare` init container makes the two
-directories as the pod user, with mode 0700. The archives are outside the
+directories as the pod user, with mode 0700. The root of the volume is
+mode 1777, owned by root: OpenClaw (from 2026.11.10) refuses a state
+directory below a world writable directory with no sticky bit, and the pod
+user can't set it. The setup script of the local-path provisioner sets it on
+a new `agent-state` volume, and the Job
+`kube-system/agent-state-sticky` (Flux Kustomization
+`local-path-agent-state`, a dependency of each agent Kustomization) sets it
+on the older ones. The archives are outside the
 state directory, so they are in no backup of the product and in no sandbox:
 the sandbox plugin copies the workspace only.
 
@@ -914,7 +921,7 @@ the sandbox plugin copies the workspace only.
 
 | When | What | Kept |
 | --- | --- | --- |
-| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `official-plugins` installs the Brave plugin again from the image (it stops the start on a plugin in the state that the image did not put there), `doctor` migrates the state, on a copy of the config, and `memory-index` brings the memory index up to date (see "The index at each start" above) | 14 days |
+| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `recover-lock` recovers the state lock of an earlier pod that did not stop cleanly (below), `doctor` migrates the state, on a copy of the config, `official-plugins` installs the Brave plugin again from the image (it stops the start on a plugin in the state that the image did not put there), and `memory-index` brings the memory index up to date (see "The index at each start" above) | 14 days |
 | Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): once the gateway is ready, `openclaw backup create --verify` to `archives/daily/`. The command checks that the gateway owns the state, and it can only see the gateway process in the same PID namespace, so the pod shares one (`shareProcessNamespace: true`). The command also captures each file of the config, and it refuses an include file that is a link; in the projected volume of the config each file is a link. So in the main agent, whose config includes the group file, the container runs the script on a copy of the two files in `/tmp/backup-config/` (regular files, made at each start of the container), and the archive holds that copy | The last 7 |
 | Each day, after that backup | The same container: the SHA-256 of `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md` and each file under `skills/`, compared with the list of the day before (`archives/instruction-files/`). One log line for each file that is new, changed or gone, then `instruction-check result=...` | 30 days of lists |
 | Each start of the Signal daemon | `archive` init container: a `tar.gz` of `data` in `archives/start/`, with the signal-cli release | 14 days |
@@ -971,16 +978,36 @@ writer. A rolling update would run two gateways on one state. The guarantee
 holds for a rollout only: a pod deleted by hand gets its replacement at
 once, while the old one still stops (the same page).
 
+**The state lock.** The gateway holds a lock on its state, with the PID and
+PID namespace of its process. OpenClaw 2026.11.10 takes over a lock only
+when it can prove that its holder stopped, and a process of another PID
+namespace (another pod) proves nothing. So after a pod that did not stop
+cleanly (a SIGKILL, a node or host restart), doctor and the gateway of the
+next pod wait for the lock and fail, at each try. The `recover-lock` init
+container (`agent/config/scripts/recover-lock.sh`) runs before doctor. With
+`Recreate`, one node and a `ReadWriteOnce` volume, a lock of another pod is
+a dead one. It still recovers only when each holder is of another pod (its
+host is not the name of this pod) and was renewed 60 seconds ago or more,
+with the product's own `openclaw gateway recover-lock --confirm`, for the
+fingerprint of its own inspection (the product refuses it if the lock
+changed). A restart of the gateway container in the same pod needs no step:
+the pod shares one PID namespace (`shareProcessNamespace`), so the product
+sees that the old process is gone. The grace period of the pod is 345
+seconds: after SIGTERM the gateway lets running work end for up to 330
+seconds (its stop policy) and then gives the lock back, so a rollout never
+kills it before that.
+
 **What a rollout costs.** The agent is away from the stop of the old pod
 until the new pod is ready: the init steps, then the start of the gateway.
 Measured on 2026-11-16 (pilot) and 2026-11-17 (finance), about 2 minutes:
 
 | Step | Time |
 | --- | --- |
-| `values-check` (finance only), `prepare` | Under 2 seconds |
+| `values-check` (finance and main), `prepare` | Under 2 seconds |
 | `archive` | 2 to 4 seconds |
-| `official-plugins` | About 22 seconds |
+| `recover-lock` | A few seconds, and up to 60 more for a lock renewed less than 60 seconds before |
 | `doctor` | About 33 seconds |
+| `official-plugins` | About 22 seconds |
 | `memory-index` | 7 to 9 seconds for an update of the index; a full rebuild takes longer, up to its limit of 180 seconds |
 | The gateway, to ready | About 45 seconds |
 
@@ -1957,7 +1984,7 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 | The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
 | The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
 | A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
-| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `official-plugins`: the output of the product's installer (the install paths in the state directory), on a failure the reason and the stack of its CLI (`[openclaw] Reason: ...`, from `OPENCLAW_DEBUG=1`; the step has no secret), and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed`. `automations-sync` (finance): `automations-sync key=<key> result=ok state=on\|off\|stopped`, `result=removed\|failed`, and one `automations-sync result=ok jobs=<n>\|failed reason=<reason>` line for each pass | Some KB, most of it at a start of the pod |
+| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `recover-lock`: `recover-lock result=none\|same-pod\|recovered holders=<n>`, or `recover-lock result=failed reason=<reason>`. `official-plugins`: the output of the product's installer (the install paths in the state directory), on a failure the reason and the stack of its CLI (`[openclaw] Reason: ...`, from `OPENCLAW_DEBUG=1`; the step has no secret), and `official-plugins id=brave version=... result=installed\|failed`, or `official-plugins result=failed reason=...`. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `memory-index`: `memory-index result=ok\|failed`. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed`. `automations-sync` (finance): `automations-sync key=<key> result=ok state=on\|off\|stopped`, `result=removed\|failed`, and one `automations-sync result=ok jobs=<n>\|failed reason=<reason>` line for each pass | Some KB, most of it at a start of the pod |
 | The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
 
 Not in Loki, on purpose:
@@ -2148,7 +2175,7 @@ policy that `observability/inventory.py` declares
 
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |
-| `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive`, `official-plugins` or `doctor` init container, or a lock on the state volume. Revert the last image if it came with an update |
+| `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive`, `recover-lock`, `doctor` or `official-plugins` init container, or a lock on the state volume (`recover-lock result=failed`: run `openclaw gateway recover-lock` in a debug container of the pod and read its holders). Revert the last image if it came with an update |
 | `AgentPlatformCronJobFailed` | The last run of a CronJob of a trust domain failed, and no run passed since: the providers job, the sweep, a daily check. It resolves at the next good run | none | Its log in Loki (below). A `result=failed` line of the providers job names the step |
 | `WorkflowProvidersStale` | No good run of `workflow-providers` in 35 minutes, or the CronJob is gone. A token of the reviewer lives one hour, so about 25 minutes are left | 5m | `kubectl -n agents-workflows get cronjob,jobs`, then the log of the last run |
 | `WorkflowAppDrift` | An `app-drift result=drift` line in the last 20 minutes: the App or its installation has more permissions than the list in git | none | The `detail=` of the line names each one. Set the App back, or change the list by a pull request |
@@ -2220,9 +2247,15 @@ policy that `observability/inventory.py` declares
   `KopiurBackupStale` (48 hours), `KopiurSnapshotFailed`,
   `KopiurBackupConsecutiveFailures`, and `KopiurRestoreFailed` for a restore.
   They have no runbook link; the runbook has a section for each.
-- **The heartbeat check** reads one span of each agent's heartbeat trace:
-  `openclaw.run` with `openclaw.trigger=heartbeat` and
-  `openclaw.outcome=completed`, for each service in its env `SERVICES`
+- **The heartbeat check** reads two spans of each agent's heartbeat trace:
+  `openclaw.run` with `openclaw.trigger` `heartbeat` or `cron` and
+  `openclaw.outcome=completed`, and a completed `openclaw.exec` in the
+  sandbox (the `date -u` of the heartbeat). From OpenClaw 2026.11.10 the
+  heartbeat is an automation job, "Proactive check (main)", which doctor
+  makes from the `agents.defaults.heartbeat` that the doctor init container
+  puts in its copy of the config only (the gateway refuses that key). Its
+  run has `trigger=cron`, as each automation run has, so the `openclaw.exec`
+  tells it from the others. The check runs for each service in its env `SERVICES`
   (comma separated:
   `openclaw-agents-pilot,openclaw-agents-finance,openclaw-agents-main` now).
   Add a service after the first heartbeat of a new agent is in Tempo; a

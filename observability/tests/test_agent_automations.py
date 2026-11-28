@@ -46,6 +46,11 @@ def container(name: str) -> dict:
     return only
 
 
+def init_container(name: str) -> dict:
+    (only,) = [c for c in agent_pod()["initContainers"] if c["name"] == name]
+    return only
+
+
 IMAGE = container("agent")["image"]
 
 
@@ -296,6 +301,10 @@ def lab():
     for path in work.rglob("*"):
         if path.is_file():
             path.chmod(0o644)
+    # The state volume: its root has the mode of the claim (1777, the sticky
+    # bit of kube-system/local-path-provisioner).
+    (work / "data").mkdir()
+    (work / "data").chmod(0o1777)
     tag = uuid.uuid4().hex[:8]
     net = f"automations-{tag}"
     names = {n: f"automations-{n}-{tag}" for n in ("fake", "gateway", "sync", "nolist")}
@@ -310,11 +319,22 @@ def lab():
              "--network-alias", "mcp-gateway.ai.svc.cluster.local",
              "--read-only", "--cap-drop", "ALL", "--user", "65534", "-e", f"MARKERS={json.dumps(MARKERS)}",
              "-v", f"{work}/fake/fake.py:/fake.py:ro", python_image(), "python3", "-I", "-u", "/fake.py"])
+        # The doctor step of the pod, with its command and env: it makes the
+        # job of the heartbeat ("Proactive check (main)").
+        doctor = init_container("doctor")
+        run([tool, "run", "--rm", "--network", net, *base,
+             *[a for e in doctor["env"] for a in ("-e", f"{e['name']}={e['value']}")],
+             "-e", f"OPENCLAW_GATEWAY_TOKEN={TOKEN}", "-e", f"TELEGRAM_ALLOW_FROM={CHAT}",
+             "-e", "LITELLM_API_KEY=test", "-e", "TELEGRAM_BOT_TOKEN=123456:test",
+             "-e", "MCP_GATEWAY_KEY=test", "-e", "BRAVE_API_KEY=test",
+             "--tmpfs", "/home/node/.config:uid=1000,gid=1000",
+             "-v", f"{work}/config:/home/node/config:ro", "-v", f"{work}/data:/home/node/data",
+             "--entrypoint", doctor["command"][0], IMAGE, *doctor["command"][1:]])
         # The gateway as in the pod: no TZ, so it runs in UTC.
         run([tool, "run", "-d", "--quiet", "--name", names["gateway"], "--network", net, *base, *env,
              "--tmpfs", "/home/node/.config:uid=1000,gid=1000",
              "-v", f"{work}/config:/home/node/config:ro",
-             "--tmpfs", "/home/node/data:uid=1000,gid=1000",
+             "-v", f"{work}/data:/home/node/data",
              "-e", "OPENCLAW_STATE_DIR=/home/node/data/state",
              "-e", "XDG_CACHE_HOME=/home/node/data/state/.cache",
              "-e", "LITELLM_API_KEY=test", "-e", "TELEGRAM_BOT_TOKEN=123456:test",
@@ -378,7 +398,7 @@ def test_the_sync_removes_a_dropped_job_and_keeps_each_job_it_does_not_own(lab):
     jobs = lab.jobs()
     assert "flux:dropped" not in jobs
     assert "made-in-a-chat" in jobs
-    assert "heartbeat:main" in jobs
+    assert "Proactive check (main)" in jobs  # the heartbeat, made by doctor
     assert "automations-sync key=dropped result=removed" in lab.first
 
 

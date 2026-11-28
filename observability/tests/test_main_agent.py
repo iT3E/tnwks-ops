@@ -143,7 +143,9 @@ def test_the_config_has_the_tools_of_the_first_step_of_m7a():
     # As the account of main on the host: the last 15 messages of a group as
     # context, and the reply streamed as it is written.
     assert telegram["historyLimit"] == 15 and telegram["streaming"] == {"mode": "partial"}
-    assert "groupAllowFrom" not in telegram  # the senders of the group: allowFrom
+    # The senders of the group: the owner. From OpenClaw 2026.11.10 a group
+    # allowlist no longer falls back to allowFrom, so it is set on its own.
+    assert telegram["groupAllowFrom"] == ["${TELEGRAM_ALLOW_FROM}"]
     # The owner set "high" on 2026-11-20. The host has "off", and the model of
     # the platform does not take "off": the product then used "low" and said
     # so in each run.

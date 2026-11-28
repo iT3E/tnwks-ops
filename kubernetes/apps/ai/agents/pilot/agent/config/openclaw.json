@@ -37,14 +37,7 @@
       "workspace": "/home/node/data/state/workspace",
       "model": {"primary": "litellm/agents-pilot"},
       "modelPolicy": {"allow": ["litellm/agents-pilot"]},
-      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw"},
-      "heartbeat": {
-        "every": "24h",
-        "target": "none",
-        "isolatedSession": true,
-        "lightContext": true,
-        "prompt": "This is the daily scheduled check of the platform. Run the shell command `date -u` one time, then reply with its output and nothing else."
-      }
+      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw"}
     }
   },
   "models": {
@@ -83,8 +76,10 @@
     "allow": [
       "brave",
       "diagnostics-otel",
+      "litellm",
       "memory-core",
       "openshell",
+      "skill-workshop",
       "telegram"
     ],
     "load": {
@@ -104,7 +99,8 @@
         }
       },
       "brave": {"enabled": true},
-      "diagnostics-otel": {"enabled": true}
+      "diagnostics-otel": {"enabled": true},
+      "litellm": {"enabled": true}
     }
   },
   "diagnostics": {
@@ -118,5 +114,6 @@
       "logs": false,
       "sampleRate": 1.0
     }
-  }
+  },
+  "meta": {"migrations": {"skillWorkshopPlugin": true}}
 }

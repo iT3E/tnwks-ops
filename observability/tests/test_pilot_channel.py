@@ -46,9 +46,14 @@ def test_the_channel_of_the_pilot_is_off_and_the_one_of_main_is_on():
 
 
 def test_the_pilot_still_runs_its_scheduled_turn_with_no_channel():
-    heartbeat = config("pilot")["agents"]["defaults"]["heartbeat"]
-    assert heartbeat["target"] == "none"
-    assert heartbeat["every"] == "24h"
+    # OpenClaw 2026.11.10 has no heartbeat in the config: the doctor step
+    # puts it in its own copy, and doctor makes the job of it, with no
+    # delivery (target none).
+    assert "heartbeat" not in config("pilot")["agents"]["defaults"]
+    (doc,) = [d for d in yaml.safe_load_all((PILOT / "app/deployment.yaml").read_text()) if d]
+    (doctor,) = [c for c in doc["spec"]["template"]["spec"]["initContainers"] if c["name"] == "doctor"]
+    command = " ".join(doctor["command"])
+    assert 'c.agents.defaults.heartbeat = {every: "24h", target: "none"' in command
 
 
 def log_of(tool: str, name: str) -> str:
@@ -62,8 +67,10 @@ def test_the_gateway_of_the_pilot_starts_no_telegram_account():
     (base / "state").mkdir()
     (base / "cfg").mkdir()
     (base / "cfg/openclaw.json").write_text((PILOT / "config/openclaw.json").read_text())
-    for path in (base / "state", base / "cfg"):
-        path.chmod(0o777)
+    # The state root has the mode of the claim: 1777 (OpenClaw 2026.11.10
+    # refuses a world writable one with no sticky bit).
+    (base / "state").chmod(0o1777)
+    (base / "cfg").chmod(0o777)
     (base / "cfg/openclaw.json").chmod(0o644)
     name = f"pilot-channel-{uuid.uuid4().hex[:8]}"
     env = {

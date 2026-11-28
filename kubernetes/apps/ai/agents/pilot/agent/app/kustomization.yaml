@@ -32,6 +32,7 @@ configMapGenerator:
       - archive-state.sh=../config/scripts/archive-state.sh
       - daily-backup.sh=../config/scripts/daily-backup.sh
       - memory-index.sh=../config/scripts/memory-index.sh
+      - recover-lock.sh=../config/scripts/recover-lock.sh
       - sandbox-start.sh=../config/scripts/sandbox-start.sh
     # The sandbox gateway of this trust domain, for sandbox-start.sh (the
     # same address as the openshell entry of openclaw.json). It is in the

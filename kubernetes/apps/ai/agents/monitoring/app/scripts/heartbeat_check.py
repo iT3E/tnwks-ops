@@ -1,10 +1,14 @@
 """Daily check of the scheduled turn (heartbeat) of each personal agent.
 
-The heartbeat of the product runs once a day in its own session and writes
-a trace to Tempo through the collector. For each service in SERVICES, this
-asks Tempo for a completed heartbeat run (a span `openclaw.run` with
-`openclaw.trigger=heartbeat` and `openclaw.outcome=completed`) in the last
-WINDOW_HOURS. It prints one line for each service:
+The heartbeat runs once a day in its own session and writes a trace to Tempo
+through the collector. From OpenClaw 2026.11.10 it is an automation job
+("Proactive check (main)"), and its run has `openclaw.trigger=cron`; before,
+it had `openclaw.trigger=heartbeat`. The run span names no job, and other
+automations run with the same trigger, so the trace must also hold the one
+command of the heartbeat: a completed `openclaw.exec` in the sandbox. For
+each service in SERVICES, this asks Tempo for such a trace (a completed
+`openclaw.run` of either trigger and a completed sandbox `openclaw.exec`) in
+the last WINDOW_HOURS. It prints one line for each service:
 
     heartbeat-check result=ok service=<name> last=<time of the newest run>
     heartbeat-check result=missing service=<name>
@@ -13,7 +17,7 @@ WINDOW_HOURS. It prints one line for each service:
 and exits 1 when a service is missing or Tempo could not answer, which fails
 its Job. A missing run or an error is asked again ATTEMPTS times in all,
 WAIT_SECONDS apart, before it counts: one short break of Tempo must not fail
-the day's check. It reads span names and two attributes only, never a span's
+the day's check. It reads span names and a few attributes only, never a span's
 text.
 """
 
@@ -38,7 +42,9 @@ ERRORS = (urllib.error.URLError, TimeoutError, ValueError, KeyError)
 def query(service: str) -> str:
     return (
         f'{{resource.service.name="{service}" && name="openclaw.run"'
-        ' && span.openclaw.trigger="heartbeat" && span.openclaw.outcome="completed"}'
+        ' && span.openclaw.trigger=~"heartbeat|cron" && span.openclaw.outcome="completed"}'
+        f' && {{resource.service.name="{service}" && name="openclaw.exec"'
+        ' && span.openclaw.exec.target="sandbox" && span.openclaw.outcome="completed"}'
     )
 
 

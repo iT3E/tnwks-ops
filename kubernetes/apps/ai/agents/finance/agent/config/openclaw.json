@@ -75,14 +75,7 @@
       "workspace": "/home/node/data/state/workspace",
       "model": {"primary": "litellm/agents-finance"},
       "modelPolicy": {"allow": ["litellm/agents-finance"]},
-      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw"},
-      "heartbeat": {
-        "every": "24h",
-        "target": "none",
-        "isolatedSession": true,
-        "lightContext": true,
-        "prompt": "This is the daily scheduled check of the platform. Run the shell command `date -u` one time, then reply with its output and nothing else."
-      }
+      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw"}
     }
   },
   "models": {
@@ -122,8 +115,10 @@
       "active-memory",
       "brave",
       "diagnostics-otel",
+      "litellm",
       "memory-core",
       "openshell",
+      "skill-workshop",
       "telegram"
     ],
     "load": {
@@ -145,6 +140,7 @@
       },
       "brave": {"enabled": true},
       "diagnostics-otel": {"enabled": true},
+      "litellm": {"enabled": true},
       "active-memory": {
         "enabled": true,
         "config": {
@@ -171,5 +167,6 @@
       "logs": false,
       "sampleRate": 1.0
     }
-  }
+  },
+  "meta": {"migrations": {"skillWorkshopPlugin": true}}
 }

@@ -94,7 +94,9 @@ def test_the_gateway_admits_only_the_user_of_the_key():
             data, tmp = work / "data", work / "tmp"
             for path in (data, tmp):
                 path.mkdir()
-                path.chmod(0o777)
+                # The mode of the claim root: OpenClaw 2026.11.10 refuses a
+                # world writable ancestor with no sticky bit.
+                path.chmod(0o1777)
             env = {k: v for k, v in base_env.items() if key == "set" or k != "OPENCLAW_UI_ALLOW_USER"}
             mounts = [(config, "/home/node/config", True), (data, "/home/node/data", False),
                       (tmp, "/tmp", False)]

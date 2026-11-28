@@ -16,3 +16,26 @@ spec:
   interval: 30m
   retryInterval: 1m
   timeout: 5m
+---
+# The sticky bit on the root of the agent-state volumes (agent-state/job.yaml).
+# The agent Kustomizations depend on it, so a pod of OpenClaw 2026.11.10
+# never starts on a volume without it. force: a Job is immutable, so a change
+# of it recreates it.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: local-path-agent-state
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  path: ./kubernetes/apps/kube-system/local-path-provisioner/agent-state
+  prune: true
+  force: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

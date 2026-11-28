@@ -81,6 +81,10 @@ spec:
       # then; the pilot runs on the second worker.
       nodeSelector:
         kubernetes.io/hostname: homelab-wsl-worker-2
+      # The gateway drains running work for up to 330 seconds after SIGTERM
+      # (its stop policy, OpenClaw 2026.11.10). A SIGKILL before that leaves
+      # its state lock, which the next pod's lock step has to recover.
+      terminationGracePeriodSeconds: 345
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -111,7 +115,7 @@ spec:
         # Init:CrashLoopBackOff, not ready, and AgentPlatformWorkloadNotReady
         # fires after 10 minutes.
         - name: values-check
-          image: &image ghcr.io/it3e/tnwks-agent-image:0.5.2@sha256:769ac72c4b7892ca23513312db6520014f89242a4833562b208960c1d6224727
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.5.4@sha256:6a9272ad060c0998d416dcef26b70bf8dad494c1e48259d6a5c7068ca9f8da6a
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -261,14 +265,155 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
+        # The lock step (scripts/recover-lock.sh): it recovers the Gateway
+        # state lock that an earlier pod left when it did not stop cleanly,
+        # which OpenClaw 2026.11.10 never takes over from another PID
+        # namespace. It acts only on a stale lock of another pod, and only
+        # with the fingerprint of its own inspection. It runs before doctor,
+        # which would wait on that lock and fail. It prints
+        # `recover-lock result=none|same-pod|recovered` or
+        # `recover-lock result=failed reason=...`. It needs no secret.
+        - name: recover-lock
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/recover-lock.sh"]
+          env:
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/data
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+        # Doctor of the product, on a copy of the config (the image README):
+        # it migrates the state for a new release.
+        # The daily scheduled check of the platform (the heartbeat, which
+        # agent-heartbeat-check reads in Tempo) is an automation job in the
+        # state from OpenClaw 2026.11.10, and the gateway refuses the retired
+        # agents.defaults.heartbeat key. Doctor converts that key into the job
+        # ("Proactive check (main)"), so only its copy gets the key. Doctor
+        # keeps an existing job as it is and never makes a second one.
+        # It runs before official-plugins: from 2026.11.10 the CLI refuses a
+        # state of an older release until doctor has migrated it, so the
+        # first start of a new release would stop at official-plugins.
+        # Doctor upgrades the Brave plugin of the state with npm, so its npm
+        # reads the npm cache of the image, offline, as official-plugins
+        # does: the pod has no route to the npm registry.
+        - name: doctor
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - >-
+              mkdir -p /tmp/doctor
+              && cp /home/node/config/openclaw.json /home/node/config/telegram-groups.json /tmp/doctor/
+              && node -e 'const fs = require("fs");
+              const p = "/tmp/doctor/openclaw.json";
+              const c = JSON.parse(fs.readFileSync(p, "utf8"));
+              c.agents.defaults.heartbeat = {every: "24h", target: "none",
+              isolatedSession: true, lightContext: true,
+              prompt: "This is the daily scheduled check of the platform.
+              Run the shell command `date -u` one time, then reply with its
+              output and nothing else."};
+              fs.writeFileSync(p, JSON.stringify(c, null, 2));'
+              && cp -R /opt/openclaw/npm-cache /tmp/doctor/npm-cache
+              && printf 'cache=/tmp/doctor/npm-cache\noffline=true\n' > /tmp/doctor/npmrc
+              && NPM_CONFIG_USERCONFIG=/tmp/doctor/npmrc npm_config_offline=true
+              exec node /app/openclaw.mjs doctor --fix --non-interactive
+          env:
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /tmp/doctor/openclaw.json
+            - name: XDG_CACHE_HOME
+              value: /home/node/data/state/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
+              value: "1"
+            # Trusted-proxy mode rejects a configured token. Keep the same
+            # credential for pod-local CLI access as a gateway password.
+            - &clearGatewayToken
+              name: OPENCLAW_GATEWAY_TOKEN
+              value: ""
+            - &localGatewayPassword
+              name: OPENCLAW_GATEWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agent-secret
+                  key: OPENCLAW_GATEWAY_TOKEN
+          envFrom: &secrets
+            - secretRef:
+                name: agent-secret
+            - &uiSettings
+              configMapRef:
+                name: agent-ui-settings
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts: &stateMounts
+            - name: state
+              mountPath: /home/node/data
+            # The share of main, read only (../../vault-share), at its root
+            # (no subPath): the index reads it, and memory_get. The path is
+            # the one of the vault server, so a path from a search works in
+            # a vault tool call.
+            - name: vault
+              mountPath: /vault
+              readOnly: true
+            - name: config
+              mountPath: /home/node/config
+              readOnly: true
+            # /tmp with mode 0700: the sandbox plugin refuses a temp dir that
+            # others can write with no sticky bit, as an emptyDir is.
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
         # The official plugins step of the image (the image README, "The
         # official plugins"): it installs the Brave plugin from the npm cache
         # of the image, with no network, as a verified official install, in
         # the state directory. A sandboxed session uses a search provider
         # only when it is bundled or a verified official install, and each
-        # session of this agent is sandboxed. It runs before doctor, which
-        # would try to install a missing configured plugin from the npm
-        # registry. It installs the plugin again at each start, and stops
+        # session of this agent is sandboxed. It runs after doctor, which
+        # migrates the state of an older release first (doctor reads the
+        # same npm cache, offline). It installs the plugin again at each start, and stops
         # the start on a plugin in the state that the image did not put
         # there. It prints `official-plugins id=brave version=...
         # result=installed|failed` or `official-plugins result=failed
@@ -323,9 +468,7 @@ spec:
             - name: OPENCLAW_DEBUG
               value: "1"
           envFrom:
-            - &uiSettings
-              configMapRef:
-                name: agent-ui-settings
+            - *uiSettings
           securityContext: *containerSecurity
           resources:
             requests:
@@ -339,73 +482,6 @@ spec:
             - name: config
               mountPath: /home/node/config
               readOnly: true
-            - name: tmp
-              mountPath: /tmp
-              subPath: tmp
-            - name: user-config
-              mountPath: /home/node/.config
-        # Doctor of the product, on a copy of the config (the image README):
-        # it migrates the state for a new release.
-        - name: doctor
-          image: *image
-          imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -c
-            - >-
-              mkdir -p /tmp/doctor
-              && cp /home/node/config/openclaw.json /home/node/config/telegram-groups.json /tmp/doctor/
-              && exec node /app/openclaw.mjs doctor --fix --non-interactive
-          env:
-            - name: OPENCLAW_STATE_DIR
-              value: /home/node/data/state
-            - name: OPENCLAW_CONFIG_PATH
-              value: /tmp/doctor/openclaw.json
-            - name: XDG_CACHE_HOME
-              value: /home/node/data/state/.cache
-            - name: OPENCLAW_NO_AUTO_UPDATE
-              value: "1"
-            - name: DO_NOT_TRACK
-              value: "1"
-            - name: OPENCLAW_OFFLINE
-              value: "1"
-            # Trusted-proxy mode rejects a configured token. Keep the same
-            # credential for pod-local CLI access as a gateway password.
-            - &clearGatewayToken
-              name: OPENCLAW_GATEWAY_TOKEN
-              value: ""
-            - &localGatewayPassword
-              name: OPENCLAW_GATEWAY_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: agent-secret
-                  key: OPENCLAW_GATEWAY_TOKEN
-          envFrom: &secrets
-            - secretRef:
-                name: agent-secret
-            - *uiSettings
-          securityContext: *containerSecurity
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 2Gi
-          volumeMounts: &stateMounts
-            - name: state
-              mountPath: /home/node/data
-            # The share of main, read only (../../vault-share), at its root
-            # (no subPath): the index reads it, and memory_get. The path is
-            # the one of the vault server, so a path from a search works in
-            # a vault tool call.
-            - name: vault
-              mountPath: /vault
-              readOnly: true
-            - name: config
-              mountPath: /home/node/config
-              readOnly: true
-            # /tmp with mode 0700: the sandbox plugin refuses a temp dir that
-            # others can write with no sticky bit, as an emptyDir is.
             - name: tmp
               mountPath: /tmp
               subPath: tmp

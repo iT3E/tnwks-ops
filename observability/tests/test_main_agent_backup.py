@@ -138,7 +138,9 @@ def test_the_backup_passes_with_the_config_in_a_projected_volume():
     data, tmp, scripts = base / "data", base / "tmp", base / "scripts"
     for path in (data, tmp, scripts):
         path.mkdir()
-        path.chmod(0o777)
+        # The mode of the claim root: OpenClaw 2026.11.10 refuses a world
+        # writable ancestor with no sticky bit.
+        path.chmod(0o1777)
     shutil.copy(SCRIPTS / "daily-backup.sh", scripts / "daily-backup.sh")
     (scripts / "daily-backup.sh").chmod(0o644)
     agent, backup = container("agent"), container("backup")
