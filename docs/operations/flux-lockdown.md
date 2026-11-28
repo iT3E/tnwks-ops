@@ -208,7 +208,7 @@ of its side.
 
 - The parent of the apps and each child of the class: `sops-age-class`.
 - Each child outside the class: `sops-age-apps`.
-- The root stays on `sops-age` until step 2d-root.
+- The root: `sops-age-class` too, in step 2d-root (below).
 - The Secret `sops-age` stays on the site until step 3 has soaked, so a
   revert decrypts again.
 

@@ -770,11 +770,10 @@ class FluxAdmission(unittest.TestCase):
         self.assertEqual(failures, [], "\n" + "\n".join(failures))
         self.assertGreater(len(GIT_KUSTOMIZATIONS), 200)
         self.assertGreater(len(GIT_HELMRELEASES), 100)
-        # Step 2d of site 2: the Kustomizations above name the class key and
-        # the apps key, and none the old Secret (the root moves in 2d-root).
+        # Steps 2d and 2d-root of site 2: the Kustomizations above name the
+        # class key and the apps key, and none the old Secret.
         secrets = {(e["doc"]["spec"].get("decryption") or {}).get("secretRef", {}).get("name")
-                   for e in GIT_KUSTOMIZATIONS
-                   if e["site"] == "wsl-02" and e["doc"]["metadata"]["name"] != "flux-system"}
+                   for e in GIT_KUSTOMIZATIONS if e["site"] == "wsl-02"}
         self.assertEqual(secrets - {None}, {"sops-age-class", "sops-age-apps"})
 
     def test_11_each_child_applies_what_it_owns_as_its_account(self):

@@ -8,9 +8,10 @@ resources:
 # so cluster-secrets.sops.yaml gets decrypted before being applied as a Secret
 # (otherwise the Secret keeps the ENC[...] strings and substituteFrom in
 # downstream Kustomizations templates the encrypted text into manifests).
-# The root stays on sops-age in step 2d of docs/operations/flux-lockdown.md:
-# it moves to the class key (step 2d-root) once the children of the class
-# decrypt with that key, as it must decrypt its own build to apply a revert.
+# The root is of the class, so it decrypts with the class key (step 2d-root
+# of docs/operations/flux-lockdown.md, after the children of the class
+# decrypted with it in step 2d). If it can not decrypt its own build, it can
+# not apply a revert: the runbook has the break-glass.
 patches:
 - patch: |-
     - op: add
@@ -18,7 +19,7 @@ patches:
       value:
         provider: sops
         secretRef:
-          name: sops-age
+          name: sops-age-class
   target:
     group: kustomize.toolkit.fluxcd.io
     kind: Kustomization

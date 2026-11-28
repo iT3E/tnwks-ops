@@ -61,7 +61,7 @@ KEYED = ("wsl-02",)
 # The sites whose root decrypts with the class key too (step 2d-root, after
 # the children of the class have decrypted with it): until then the root
 # names sops-age, so it can decrypt its own build and apply a revert.
-KEYED_ROOTS = ()
+KEYED_ROOTS = ("wsl-02",)
 
 # The two accounts of Flux that apply, in flux-system. The root and each
 # Kustomization of the class run as kustomize-controller (phase 2b).
