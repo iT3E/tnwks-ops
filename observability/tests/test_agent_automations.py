@@ -18,6 +18,7 @@ import subprocess
 import time
 import uuid
 from datetime import datetime
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -651,8 +652,8 @@ def test_a_failed_pass_comes_again_after_retry_then_twice_as_long():
         run([tool, "rm", "-f", name], check=False)
     assert [p[1] for p in passes[:4]] == ["automations-sync result=failed reason=job jobs=1 failed=1"] * 3 + [
         "automations-sync result=ok jobs=1"], lines
-    stamps = [datetime.fromisoformat(p[0].replace("Z", "+00:00")).timestamp() for p in passes[:4]]
-    gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+    stamps = [datetime.fromisoformat(p[0]).timestamp() for p in passes[:4]]
+    gaps = [b - a for a, b in pairwise(stamps)]
     # RETRY (1 s), then 2 s, then 4 s, each plus the time of a pass.
     for gap, pause in zip(gaps, (1, 2, 4)):
         assert pause <= gap < pause + 5, gaps
