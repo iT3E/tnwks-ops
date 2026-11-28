@@ -12,7 +12,6 @@ resources:
   - ./database-app.yaml
   - ./database-vaultwarden.yaml
   - ./database-vantrip.yaml
-  - ./database-things-api.yaml
   - ./database-home-assistant.yaml
   - ./database-grafana.yaml
   - ./objectstore.yaml

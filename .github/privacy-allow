@@ -5,4 +5,3 @@
 # The storefront app is public under its own name (owner's call, 2026-10-31);
 # its folder line moved with the folder on 2026-11-22 (owner's yes).
 kubernetes/apps/production/things-api/**
-kubernetes/apps/databases/cloudnative-pg/cluster/database-things-api.yaml
