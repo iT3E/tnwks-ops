@@ -290,6 +290,11 @@ critical severity that fails alerts one time.
    kubectl -n <namespace> get vulnerabilityreports
    ```
 
+A line of the stream `findings` with the check `tnwks-canary`, or the
+control 5.1.8 of Trivy Operator while `app/canary.yaml` is in its resources,
+is the test finding of the canary
+([`security/README.md`](../../security/README.md#the-canary)): no fix.
+
 **The fix.** Fix the cause through git, or the owner accepts the finding in
 the encrypted list with a reason and an end date
 ([`security/README.md`](../../security/README.md#accepted-findings)). The

@@ -46,6 +46,13 @@ result file of the API checks"):
   finding. A list that can not be read stops the run, which writes nothing.
 - No token and no answer of an API as it came goes into the file or the log.
 
+With --canary, a run that has the result of routeros-firmware also writes one test
+result for the router: the check `tnwks-canary`, 1 resource that fails, at severity
+high (security/README.md, "The canary"). It is the test finding of the alert path,
+and no line of the registry names its check. A run with no result of the router
+writes no test result, so the canary never gives the router a time of a result
+that the run did not make.
+
 The run exits 1 when a test that should run did not, so KubeJobFailed fires.
 Tests: security/tests/test_api_checks.py.
 """
@@ -92,6 +99,9 @@ LINE_LIMIT = 30
 
 
 RELEASES = "routeros-releases.json"
+# The test finding of --canary (security/README.md, "The canary"): a check ID that
+# no line of the registry names.
+CANARY = "tnwks-canary"
 
 
 class QueryError(Exception):
@@ -476,6 +486,18 @@ def apply_accepted(results: list[dict], accepted: set[tuple[str, str]]) -> list[
     return out
 
 
+def canary(results: list[dict], router: str) -> list[dict]:
+    """The test result of --canary, after the result of the router: only when the run
+    has a result of routeros-firmware, so the router gets no time that the run did
+    not make. The accepted list does not mute it."""
+    if not any(entry["check"] == "routeros-firmware" and entry["system"] == router for entry in results):
+        return results
+    return [*results, {"check": CANARY, "system": router, "failed": 1, "severity": "high", "findings": [{
+        "resource": CANARY,
+        "message": "A test finding of the security platform (the canary): nothing of the router fails.",
+    }]}]
+
+
 def write_json(results_dir: Path, name: str, document: dict) -> Path:
     """api-check/<name>, through <name>.tmp: one move, so no reader sees half a file.
     Mode 0755 and 0644, so the converter (another user) reads it."""
@@ -499,6 +521,8 @@ def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), get=ht
         return 2
     results, missed = tests(args, started, get)
     results = apply_accepted(results, accepted)
+    if args.canary:
+        results = canary(results, args.router)
     document = {"version": 1, "source": SOURCE, "time": int(now().timestamp()), "results": results}
     final = write_json(args.results, "results.json", document)
     print(f"wrote {final.relative_to(args.results)}: {len(results)} results, {len(accepted)} accepted tests,"
@@ -516,6 +540,8 @@ def parse(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--tfc-organization", default=TFC_ORGANIZATION)
     parser.add_argument("--accepted", type=Path, default=Path("/accepted/accepted.json"))
     parser.add_argument("--results", type=Path, default=Path("/results"))
+    parser.add_argument("--canary", action="store_true",
+                        help=f"write the test result of the check {CANARY} for the router")
     return parser.parse_args(argv)
 
 

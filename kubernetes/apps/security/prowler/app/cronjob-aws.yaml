@@ -48,6 +48,10 @@ spec:
                 - --provider=aws
                 - --system=aws-prod
                 - --checks=/config/checks-aws.json
+                # The canary: one test finding of severity high in each run,
+                # until the pull request that ends the test (security/README.md,
+                # "The canary").
+                - --canary
               env:
                 - name: HOME
                   value: /tmp

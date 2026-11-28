@@ -31,6 +31,7 @@ HelmReleases of this repository do, so Renovate finds them.
 | `app/pvc.yaml` | `trivy-cache`, 4 GiB: the vulnerability databases for the scan jobs. The scan cache is in the memory of each scan |
 | `app/networkpolicy.yaml` | What the operator and a scan job can reach |
 | `app/rbac.yaml` | The Role that lets the operator create and delete Jobs, and read pod logs, in `security` only ("Its roles") |
+| `app/canary.yaml` | The test finding of the canary, while a test runs (`security/README.md`, "The canary"). A Role that grants nothing |
 
 The operator and its scan jobs run in the namespace `security`, on
 `SECURITY_NODE` (`../README.md`, "Placement").

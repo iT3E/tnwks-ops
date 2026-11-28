@@ -24,6 +24,13 @@ provider and one system. The script:
 5. Prints a line when each part starts and one when it ends, with the peak of
    its process, and the peak of memory of the container at the end.
 
+With --canary, a run whose file goes to the converter also holds one test record:
+the check `tnwks-canary`, a FAIL of severity High on the resource `tnwks-canary`,
+which names nothing of the account (security/README.md, "The canary"). It is the
+test finding of the alert path, and no line of the registry names its check. A
+run that moves no file adds no test record, so the canary never gives a system a
+time of a result that the run did not make.
+
 It prints no finding and no credential. Tests: security/tests/test_prowler.py.
 """
 
@@ -54,6 +61,9 @@ DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 # of its mutelist as a regex, so a check of "*", "." or "s3" would mute more than
 # one check: such an entry is skipped.
 CHECK = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}")
+# The test finding of --canary (security/README.md, "The canary"): a check ID that
+# is not a check of Prowler, and that no line of the registry names.
+CANARY = "tnwks-canary"
 
 
 class UnreadableList(Exception):
@@ -320,6 +330,25 @@ def prune(results: Path, provider: str, system: str, now: datetime.datetime) -> 
     return removed
 
 
+def canary_record(provider: str, system: str, moment: datetime.datetime) -> bytes:
+    """The test record of --canary, in the OCSF names that the converter reads: one
+    resource that fails the check CANARY at severity High. It names no resource and
+    no setting of the account."""
+    record = {
+        "class_uid": 2004,
+        "time": int(moment.timestamp()),
+        "severity": "High",
+        "status": "New",
+        "status_code": "FAIL",
+        "status_detail": "A test finding of the security platform (the canary): nothing of the account fails.",
+        "metadata": {"event_code": CANARY},
+        "finding_info": {"uid": f"{CANARY}-{system}", "title": "The canary of the security platform"},
+        "resources": [{"uid": CANARY, "name": CANARY, "type": "Canary"}],
+        "cloud": {"provider": provider},
+    }
+    return json.dumps(record, sort_keys=True).encode()
+
+
 def mib(value: int | None) -> str:
     return "unknown" if value is None else f"{value / 2**20:.0f} MiB"
 
@@ -387,6 +416,10 @@ def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), call=c
                       f" memory peak of the part: {mib(peak)}", flush=True)
                 if why is not None:
                     failed.append(piece[0])
+            if args.canary and records and not failed:
+                # After the records of the parts: a run that moves no file adds none.
+                joined.write(b"," + canary_record(args.provider, args.system, started))
+                print(f"the canary: one test record of the check {CANARY}", flush=True)
             joined.write(b"]")
         if failed:
             # A night with a part missing is no result: the converter keeps the file
@@ -417,6 +450,8 @@ def parse(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--results", type=Path, default=Path("/results"), help="the root of the volume of results")
     parser.add_argument("--accepted", type=Path, default=Path("/accepted/accepted.json"))
     parser.add_argument("--work", type=Path, default=Path("/tmp"), help="the scratch space of Prowler")
+    parser.add_argument("--canary", action="store_true",
+                        help=f"add the test record of the check {CANARY} to a file that goes to the converter")
     parser.add_argument("extra", nargs="*", help="more arguments for Prowler, after --")
     return parser.parse_args(argv)
 
