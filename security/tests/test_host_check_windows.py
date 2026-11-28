@@ -303,6 +303,45 @@ Invoke-TnwksHostCheck -System 'HOST-A' -TextfileDir '{tmp_path}' -FileName 'tnwk
 
 
 @needs_pwsh
+def test_the_canary_writes_one_test_result_of_high_severity_in_a_run_with_a_result(tmp_path):
+    """security/README.md, "The host check": a check that no line of the registry names, at a
+    severity that SecurityFindingNew reads, and only in a run that has a result."""
+    run = pwsh(FAKES + rf"""
+Invoke-TnwksHostCheck -System 'HOST-A' -TextfileDir '{tmp_path}' -FileName 'tnwks_security_host_check.prom' `
+    -SignatureMaxAgeDays 7 -UpdatesMaxAgeDays 14 -Canary
+""")
+    assert run.stdout.strip() == "host check of HOST-A: 6 checks"
+    families = textfile.parse((tmp_path / "tnwks_security_host_check.prom").read_text())
+    assert textfile.series(families, RESULT) == {
+        **{(("check", check), ("severity", SEVERITY[check]), ("source", "host-check"), ("system", "HOST-A")): 0
+           for check in CHECKS},
+        (("check", "tnwks-canary"), ("severity", "high"), ("source", "host-check"), ("system", "HOST-A")): 1}
+    assert textfile.value(families, LAST, source="host-check", system="HOST-A") is not None
+
+    failed = pwsh(FAKES + rf"""
+function Get-TnwksFirewallProfiles {{ throw 'no answer' }}
+Invoke-TnwksHostCheck -System 'HOST-A' -TextfileDir '{tmp_path}' -FileName 'tnwks_security_host_check.prom' `
+    -SignatureMaxAgeDays 7 -UpdatesMaxAgeDays 14 -Canary
+""", check=False)
+    assert failed.returncode == 1
+    families = textfile.parse((tmp_path / "tnwks_security_host_check.prom").read_text())
+    assert RESULT not in families and LAST not in families
+
+
+def test_the_canary_is_a_switch_of_the_role_that_the_task_passes_and_no_line_of_the_registry():
+    defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
+    assert isinstance(defaults["host_check_canary"], bool)
+    arguments = re.search(r"<Arguments>(.*)</Arguments>", (ROLE / "templates/host-check.xml.j2").read_text())[1]
+    assert arguments.endswith("{% if host_check_canary | bool %} -Canary{% endif %}")
+    text = SCRIPT.read_text()
+    assert "[switch]$Canary" in text and "-Canary:$Canary" in text
+    assert "$script:CanaryCheck = 'tnwks-canary'" in text and "$script:CanaryLevel = 'high'" in text
+    controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
+    named = {item["check"] for line in controls for items in line["checks"].values() for item in items}
+    assert "tnwks-canary" not in named
+
+
+@needs_pwsh
 def test_a_run_with_no_system_writes_nothing(tmp_path):
     run = pwsh(FAKES + f"Invoke-TnwksHostCheck -TextfileDir '{tmp_path}' -FileName 'x.prom'", check=False)
     assert run.returncode != 0
