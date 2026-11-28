@@ -83,7 +83,11 @@ data:
   # (kubernetes/apps/monitoring/vector/README.md, "A planned stop of a
   # security sink"). SECURITY_LOKI_ENDPOINT stays until the config of the
   # aggregator that reads these two runs on this cluster.
-  SECURITY_LOKI_AUDIT_ENDPOINT: "https://security-loki.monitoring.svc.cluster.local"
+  # A planned stop of the audit sink: an address of the documentation range
+  # (RFC 5737) that no host answers, so each request waits for its timeout,
+  # the sink waits, and the audit files wait on the node. Its end is the
+  # revert of this change.
+  SECURITY_LOKI_AUDIT_ENDPOINT: "https://192.0.2.1"
   SECURITY_LOKI_ROUTEROS_ENDPOINT: "https://security-loki.monitoring.svc.cluster.local"
   UNIFI_LB_ADDR: "10.5.0.206"
   # Peer services: reached by homelab-wsl-02 through the LAN bridge

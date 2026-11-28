@@ -1,0 +1,3 @@
+kind: Changed
+body: 'The planned stop of the audit sink of homelab-wsl starts: the sink gets an address that no host answers, and the Job vector-planned-stop-load writes marked requests for 3 hours. Its end is the revert of this change (kubernetes/apps/monitoring/vector/README.md, "A planned stop of a security sink")'
+time: 2026-11-28T20:55:00.000000000+00:00

@@ -290,6 +290,7 @@ spec:
           'flux-system/vector-agent-platform': ['flux-system/cluster-apps'],
           'flux-system/vector-aggregator': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
           'flux-system/vector-audit-reader': ['flux-system/cluster-apps', 'flux-system/cluster-apps-wsl-02'],
+          'flux-system/vector-planned-stop': ['flux-system/cluster-apps'],
           'flux-system/weave-gitops': ['flux-system/cluster-apps'],
           'flux-system/zwave-ingress-vip': ['flux-system/cluster-apps'],
           'flux-system/zwave-js-ui': ['flux-system/cluster-apps']
