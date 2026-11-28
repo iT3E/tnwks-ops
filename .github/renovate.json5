@@ -116,6 +116,36 @@
       "internalChecksFilter": "strict"
     },
     {
+      // Firefly III runs its schema migrations on start, one-way, so each
+      // update is its own reviewed PR (renovate/autoMerge.json5,
+      // docs/apps/firefly.md). Its tags are version-X.Y.Z, which the docker
+      // versioning can't read (the text before the first hyphen is no
+      // version), so Renovate skipped the image until this rule. Patch
+      // releases often follow each other within hours, so a release has to
+      // be 7 days old before its PR opens.
+      "description": "Firefly III: version- tags, 7 days after release",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["fireflyiii/core", "docker.io/fireflyiii/core"],
+      "versioning": "regex:^version-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict",
+      "prBodyNotes": [
+        "Firefly III migrates its database on start. Before the merge, check a completed backup of firefly-pg newer than 24 hours, and read the release notes since the current version (docs/apps/firefly.md, \"Image version\" and \"Restore\")."
+      ]
+    },
+    {
+      // Since v4 the tags carry the flavor (console-, api-, webui-) and the
+      // plain vX.Y.Z tags end at v3.6.1, so the docker versioning found
+      // nothing newer than v3.6.1 and now reads no version at all. Follow the
+      // headless console flavor only (docs/apps/peloton-to-garmin.md).
+      "description": "peloton-to-garmin: console-v tags, 3 days after release",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/philosowaffle/peloton-to-garmin"],
+      "versioning": "regex:^console-v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict"
+    },
+    {
       "description": "Coral: queue NumPy majors until its Windows runtime supports them",
       "matchFileNames": ["infrastructure/ansible/roles/windows_coral_detector/**"],
       "matchPackageNames": ["numpy"],
