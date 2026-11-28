@@ -111,7 +111,7 @@ spec:
                 value: "false"
               - name: APP_LOG_LEVEL
                 value: "notice"
-              # Keeps the 6.5.9 ceiling (image default now 512M): two heavy requests can not OOM the 1Gi container.
+              # Keeps the 6.5.9 ceiling of 256M per request; the image default rose to 512M.
               - name: PHP_MEMORY_LIMIT
                 value: "256M"
               # Firefly builds redirects and cookie scope from APP_URL. With a
