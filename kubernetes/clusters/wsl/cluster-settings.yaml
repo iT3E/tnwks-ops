@@ -77,6 +77,14 @@ data:
   # homelab-wsl-02, which keeps them for 90 days, through its TLS proxy
   # (kubernetes/apps/monitoring/security-loki-proxy/README.md).
   SECURITY_LOKI_ENDPOINT: "https://security-loki.monitoring.svc.cluster.local"
+  # One address for each security sink of the aggregator: the audit log, and
+  # the second copy of the router log. Both are the address above. A planned
+  # stop of one sink changes its line only
+  # (kubernetes/apps/monitoring/vector/README.md, "A planned stop of a
+  # security sink"). SECURITY_LOKI_ENDPOINT stays until the config of the
+  # aggregator that reads these two runs on this cluster.
+  SECURITY_LOKI_AUDIT_ENDPOINT: "https://security-loki.monitoring.svc.cluster.local"
+  SECURITY_LOKI_ROUTEROS_ENDPOINT: "https://security-loki.monitoring.svc.cluster.local"
   UNIFI_LB_ADDR: "10.5.0.206"
   # Peer services: reached by homelab-wsl-02 through the LAN bridge
   # (ports 8554 and 4000, admitted only from WSL-02).
