@@ -406,6 +406,19 @@ list `prowler` in `sources` of `security/registry/systems.yaml`. The
 Cloudflare account lists it in the pull request after its first result
 ("To start a provider").
 
+## The stop test
+
+The test that a stopped scanner raises the alert for a late result. It ran
+once, and the CronJob runs again. To run it: give the CronJob
+`prowler-aws-management` the line `suspend: true`, so it starts no run.
+The converter keeps serving the time of the newest file of
+`aws-management`, and `SecurityResultLate` fires for the system and the
+source `prowler` 36 hours after that time (`late_after` in
+`security/registry/sources.yaml`), and 10 minutes more for its `for`. The
+pull request that ends the test removes `suspend`. The next run is the next
+05:17 UTC, or at once when the end comes within an hour of a skipped run
+(`startingDeadlineSeconds`). The alert ends when that run writes its file.
+
 ## The way back
 
 Remove the CronJob of a provider from `app/kustomization.yaml`: Flux prunes
