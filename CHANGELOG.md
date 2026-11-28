@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.347.1 - 2026-11-28
+
+### Fixed
+
+* agents: a failed pass of automations-sync comes again after 60 s, then twice as long each time up to an hour, so the pass at a pod start that the OpenClaw 2026.11.10 gateway refuses before its startup inspection no longer leaves the jobs unsynced and AgentAutomationsSyncFailed firing for an hour.
+
 ## v2.347.0 - 2026-11-28
 
 ### Changed
