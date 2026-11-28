@@ -3,6 +3,13 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.340.1 - 2026-11-28
+
+### Fixed
+
+* Ansible Hosts: on a miss of the controller cache key, restore the newest older cache, drop its unpacked files that carry no version, and key the cache on both rehearsal roles that fill it too.
+* frigate: run Frigate 0.18.3, pinned by tag and digest; the config and the zmq detector protocol of the Windows Coral server are unchanged
+
 ## v2.340.0 - 2026-11-28
 
 ### Added

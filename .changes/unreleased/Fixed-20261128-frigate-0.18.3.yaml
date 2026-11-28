@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'frigate: run Frigate 0.18.3, pinned by tag and digest; the config and the zmq detector protocol of the Windows Coral server are unchanged'
-time: 2026-11-28T10:00:00.000000000-08:00
