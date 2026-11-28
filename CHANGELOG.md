@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.349.0 - 2026-11-28
+
+### Changed
+
+* homelab-wsl has an address for each security sink of the Vector aggregator in cluster-settings (SECURITY_LOKI_AUDIT_ENDPOINT, SECURITY_LOKI_ROUTEROS_ENDPOINT), the same TLS path as SECURITY_LOKI_ENDPOINT. Nothing reads them yet
+
 ## v2.348.0 - 2026-11-28
 
 ### Added

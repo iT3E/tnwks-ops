@@ -1,3 +1,0 @@
-kind: Changed
-body: 'homelab-wsl has an address for each security sink of the Vector aggregator in cluster-settings (SECURITY_LOKI_AUDIT_ENDPOINT, SECURITY_LOKI_ROUTEROS_ENDPOINT), the same TLS path as SECURITY_LOKI_ENDPOINT. Nothing reads them yet'
-time: 2026-11-28T20:10:00.000000000+00:00
